@@ -6,12 +6,14 @@
   }
 
   body {
-    @apply bg-amber-50 text-slate-900;
-    font-family: 'Source Sans 3', system-ui, sans-serif;
+    @apply bg-[#0B1416] text-[#D7DADC];
+    font-family: "Source Sans 3", system-ui, sans-serif;
   }
 
-  h1, h2, h3 {
-    font-family: 'Space Grotesk', system-ui, sans-serif;
+  h1,
+  h2,
+  h3 {
+    font-family: "Space Grotesk", system-ui, sans-serif;
   }
 
   a {

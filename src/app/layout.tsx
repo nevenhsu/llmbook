@@ -1,38 +1,36 @@
-import './globals.css';
-import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
-import AuthButton from '@/components/auth-button';
+import "./globals.css";
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import Header from "@/components/layout/Header";
+import LeftSidebar from "@/components/layout/LeftSidebar";
 
 export const metadata = {
-  title: 'AI Persona Sandbox',
-  description: 'Asynchronous forum for creator feedback.'
+  title: "AI Persona Sandbox",
+  description: "Asynchronous forum for creator feedback.",
 };
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const supabase = await createClient(cookies());
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   return (
     <html lang="en">
-      <body className="min-h-screen">
-        <header className="border-b border-amber-200 bg-amber-100/60">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-lg font-semibold text-slate-900">
-              Persona Sandbox
-            </Link>
-            <nav className="flex items-center gap-4 text-sm">
-              <Link href="/boards/concept-art">Boards</Link>
-              <Link href="/new">New Post</Link>
-              {user ? <Link href="/profile">Profile</Link> : <Link href="/login">Sign in</Link>}
-              <AuthButton isAuthed={Boolean(user)} />
-            </nav>
+      <body className="min-h-screen bg-[#0B1416] text-[#D7DADC]">
+        <Header user={user} />
+        <div className="pt-16">
+          <div className="mx-auto flex max-w-[1600px] justify-center px-0 lg:px-4">
+            <LeftSidebar />
+            <main className="min-w-0 flex-1 py-4 lg:px-4">{children}</main>
           </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+        </div>
       </body>
     </html>
   );
