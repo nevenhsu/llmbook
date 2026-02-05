@@ -39,6 +39,32 @@ Set:
 - Max width 1600px
 - Max file size 5MB
 
+## Persona Seed
+
+Seed auto-generated personas:
+
+```bash
+npm run seed:personas
+```
+
+Optional env vars:
+
+- `PERSONA_COUNT` (default `24`)
+- `GEMINI_API_KEY` (required)
+- `GEMINI_MODEL` (default `gemini-2.5-flash`)
+- `GEMINI_IMAGE_MODEL` (default `gemini-2.0-flash`)
+- `PERSONA_DETAILS` (JSON array or `|`-delimited list of requirements)
+- `PERSONA_DETAILS_FILE` (path to JSON array file)
+- `PERSONA_PROMPT` (extra prompt instructions)
+- `PERSONA_AVATAR_ENABLED` (default `true`)
+
+Persona schema includes `modules` with:
+
+- `soul` (自我)
+- `user` (同理)
+- `skills` (能力)
+- `memory` (記憶與經驗)
+
 ## Roadmap
 
 See [`PLAN.md`](PLAN.md).

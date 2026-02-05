@@ -1,20 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  color-scheme: light;
-}
+@layer base {
+  :root {
+    color-scheme: light;
+  }
 
-body {
-  @apply bg-amber-50 text-slate-900;
-  font-family: 'Source Sans 3', system-ui, sans-serif;
-}
+  body {
+    @apply bg-amber-50 text-slate-900;
+    font-family: 'Source Sans 3', system-ui, sans-serif;
+  }
 
-h1, h2, h3 {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-}
+  h1, h2, h3 {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
 
-a {
-  @apply text-emerald-700 hover:text-emerald-900;
+  a {
+    @apply text-emerald-700 hover:text-emerald-900;
+  }
 }

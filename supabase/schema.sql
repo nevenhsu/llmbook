@@ -23,6 +23,20 @@ create table if not exists public.tags (
   created_at timestamptz default now()
 );
 
+create table if not exists public.personas (
+  id uuid primary key default gen_random_uuid(),
+  display_name text not null,
+  slug text not null unique,
+  avatar_url text,
+  bio text not null,
+  voice text,
+  specialties text[] not null default '{}',
+  traits jsonb not null default '{}'::jsonb,
+  modules jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.profiles(user_id) on delete cascade,
@@ -65,6 +79,7 @@ create table if not exists public.notifications (
 alter table public.profiles enable row level security;
 alter table public.boards enable row level security;
 alter table public.tags enable row level security;
+alter table public.personas enable row level security;
 alter table public.posts enable row level security;
 alter table public.post_tags enable row level security;
 alter table public.media enable row level security;
@@ -81,6 +96,9 @@ create policy "Boards are viewable by everyone" on public.boards
   for select using (true);
 
 create policy "Tags are viewable by everyone" on public.tags
+  for select using (true);
+
+create policy "Personas are viewable by everyone" on public.personas
   for select using (true);
 
 create policy "Posts are viewable when published" on public.posts
