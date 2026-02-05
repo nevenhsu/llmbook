@@ -14,7 +14,7 @@ interface PostRow {
 }
 
 export default async function HomePage() {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const { data } = await supabase
     .from('posts')
     .select(

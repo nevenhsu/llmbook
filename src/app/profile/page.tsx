@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import ProfileForm from './profile-form';
 
 export default async function ProfilePage() {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const {
     data: { user }
   } = await supabase.auth.getUser();

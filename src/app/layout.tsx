@@ -11,7 +11,7 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const {
     data: { user }
   } = await supabase.auth.getUser();

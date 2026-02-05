@@ -3,15 +3,16 @@ import { cookies } from 'next/headers';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@/lib/supabase/server';
-import { uploadToS3 } from '@/lib/s3';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_WIDTH = 1600;
+const DEFAULT_BUCKET = 'media';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -54,10 +55,21 @@ export async function POST(request: Request) {
 
   const webpMetadata = await sharp(outputBuffer).metadata();
   const key = `uploads/${user.id}/${uuidv4()}.webp`;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || DEFAULT_BUCKET;
 
-  let url: string;
+  let publicUrl: string;
   try {
-    url = await uploadToS3(key, outputBuffer, 'image/webp');
+    const admin = createAdminClient();
+    const { error: uploadError } = await admin.storage
+      .from(bucket)
+      .upload(key, outputBuffer, { contentType: 'image/webp', upsert: false });
+
+    if (uploadError) {
+      return new NextResponse(uploadError.message, { status: 500 });
+    }
+
+    const { data } = admin.storage.from(bucket).getPublicUrl(key);
+    publicUrl = data.publicUrl;
   } catch (error) {
     console.error(error);
     return new NextResponse('Upload failed', { status: 500 });
@@ -68,7 +80,7 @@ export async function POST(request: Request) {
     .insert({
       user_id: user.id,
       post_id: null,
-      url,
+      url: publicUrl,
       mime_type: 'image/webp',
       width: webpMetadata.width ?? MAX_WIDTH,
       height: webpMetadata.height ?? MAX_WIDTH,

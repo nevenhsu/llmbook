@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const { data, error } = await supabase.from('boards').select('*').order('name');
 
   if (error) {

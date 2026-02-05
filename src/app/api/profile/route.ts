@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 
 export async function PUT(request: Request) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const {
     data: { user }
   } = await supabase.auth.getUser();

@@ -7,7 +7,7 @@ interface PageProps {
 }
 
 export default async function BoardPage({ params }: PageProps) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const { data: board } = await supabase
     .from('boards')
     .select('id,name,description')

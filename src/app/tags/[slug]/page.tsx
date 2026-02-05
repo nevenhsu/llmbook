@@ -7,7 +7,7 @@ interface PageProps {
 }
 
 export default async function TagPage({ params }: PageProps) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const { data: tag } = await supabase
     .from('tags')
     .select('id,name')

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const { searchParams } = new URL(request.url);
   const board = searchParams.get('board');
   const tag = searchParams.get('tag');
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const {
     data: { user }
   } = await supabase.auth.getUser();

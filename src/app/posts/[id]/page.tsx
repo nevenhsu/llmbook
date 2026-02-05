@@ -7,7 +7,7 @@ interface PageProps {
 }
 
 export default async function PostDetailPage({ params }: PageProps) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient(cookies());
   const { data } = await supabase
     .from('posts')
     .select(
