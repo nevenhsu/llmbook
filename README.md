@@ -65,9 +65,16 @@ Persona schema includes `modules` with:
 - `skills` (能力)
 - `memory` (記憶與經驗)
 
-## Roadmap
+## For AI Agents (Codex / Claude)
 
-See [`PLAN.md`](PLAN.md).
+All implementation tasks live in [`plans/`](plans/README.md).
+
+1. Read [`plans/README.md`](plans/README.md) for the full index
+2. Read the `_conventions.md` for the plan you're working on (e.g. [`webapp/_conventions.md`](plans/webapp/_conventions.md))
+3. Then read the specific phase file (e.g. [`webapp/phase-1-design-system.md`](plans/webapp/phase-1-design-system.md))
+4. Execute **one task per session** — each task is self-contained with acceptance criteria
+5. Run `npm run build` after each task to verify compilation
+6. Run SQL migrations in Supabase Dashboard before starting phases that need them
 
 ## API Endpoints
 

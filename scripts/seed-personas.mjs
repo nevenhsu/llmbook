@@ -1,44 +1,47 @@
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
-import { readFile } from 'node:fs/promises';
-import sharp from 'sharp';
+import "dotenv/config";
+import { createClient } from "@supabase/supabase-js";
+import { readFile } from "node:fs/promises";
+import sharp from "sharp";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const geminiApiKey = process.env.GEMINI_API_KEY;
-const modelName = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
-const imageModelName = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-2.0-flash';
-const generateAvatars = (process.env.PERSONA_AVATAR_ENABLED ?? 'true') !== 'false';
-const requestedCount = Number.parseInt(process.env.PERSONA_COUNT ?? '24', 10);
-const detailsInline = process.env.PERSONA_DETAILS ?? '';
-const detailsFile = process.env.PERSONA_DETAILS_FILE ?? '';
-const extraPrompt = process.env.PERSONA_PROMPT ?? '';
+const modelName = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const imageModelName = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.0-flash";
+const generateAvatars =
+  (process.env.PERSONA_AVATAR_ENABLED ?? "true") !== "false";
+const requestedCount = Number.parseInt(process.env.PERSONA_COUNT ?? "24", 10);
+const detailsInline = process.env.PERSONA_DETAILS ?? "";
+const detailsFile = process.env.PERSONA_DETAILS_FILE ?? "";
+const extraPrompt = process.env.PERSONA_PROMPT ?? "";
 
 if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  throw new Error(
+    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+  );
 }
 
 if (!geminiApiKey) {
-  throw new Error('Missing GEMINI_API_KEY');
+  throw new Error("Missing GEMINI_API_KEY");
 }
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false, autoRefreshToken: false }
+  auth: { persistSession: false, autoRefreshToken: false },
 });
 
 function slugify(value) {
   return value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
 }
 
 async function loadDetails() {
   if (detailsFile) {
-    const raw = await readFile(detailsFile, 'utf8');
+    const raw = await readFile(detailsFile, "utf8");
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed.filter(Boolean);
-    throw new Error('PERSONA_DETAILS_FILE must contain a JSON array.');
+    throw new Error("PERSONA_DETAILS_FILE must contain a JSON array.");
   }
 
   if (!detailsInline.trim()) return [];
@@ -51,36 +54,75 @@ async function loadDetails() {
   }
 
   return detailsInline
-    .split('|')
+    .split("|")
     .map((item) => item.trim())
     .filter(Boolean);
 }
 
 function buildPrompt({ count, details }) {
   const detailBlock = details.length
-    ? `Details to include (each must be satisfied by at least one persona):\n- ${details.join('\n- ')}`
-    : 'No required details. Generate a diverse, random mix.';
+    ? `Details to include (each must be satisfied by at least one persona):\n- ${details.join("\n- ")}`
+    : "No required details. Generate a diverse, random mix.";
 
   return `
-You are generating seed personas for a creator forum. Return JSON only.
+You are generating **seed personas** for a creator-focused AI forum.
 
-Output: a JSON array with exactly ${count} persona objects.
-Each object must include:
-- display_name (string, unique, 2-3 words max)
-- bio (string, 1 sentence)
-- voice (string, short style descriptor)
-- specialties (array of 1-2 strings)
-- traits (object with: tone, role, focus, quirk)
-- modules (object with: soul, user, skills, memory)
+Return **JSON only** — no markdown, no explanations.
 
-Constraints:
-- Do not use real people or trademarked character names.
-- Keep names ASCII.
-- Ensure every persona feels distinct.
+OUTPUT FORMAT
+- A JSON array with exactly ${count} persona objects.
+
+PERSONA SCHEMA (REQUIRED)
+Each persona object must include:
+
+1. display_name  
+- string  
+- unique  
+- 2–3 ASCII words maximum  
+
+2. bio  
+- string  
+- at least 1 sentence describing the persona’s identity or motivation as system prompt
+
+3. voice  
+- string  
+- short stylistic descriptor (e.g., “curious and analytical”, “direct and playful”)  
+
+4. specialties  
+- array of 1–2 strings  
+- specific domains or strengths  
+
+5. traits  
+- object with the following string fields:
+  - tone: emotional or communicative tone
+  - role: functional role in the forum (e.g., mentor, explorer, builder)
+  - focus: primary area of attention or interest
+  - quirk: a distinctive behavioral or thinking trait
+
+6. modules  
+- object representing the persona’s internal AI structure, with **all fields required**:
+
+  - soul:  
+    Core identity, values, and sense of purpose that guide the persona’s decisions and worldview.
+
+  - user:  
+    How the persona understands, empathizes with, and adapts to users or other creators.
+
+  - skills:  
+    Practical abilities, knowledge areas, and problem-solving strengths the persona can apply.
+
+  - memory:  
+    Accumulated experiences, learned patterns, and contextual knowledge that influence behavior over time.
+
+CONSTRAINTS
+- Do NOT use real people, historical figures, or trademarked characters.
+- Keep all names ASCII-only.
+- Every persona must feel clearly distinct in voice, traits, and modules.
+- Maintain internal consistency between bio, traits, and modules.
 
 ${detailBlock}
 
-${extraPrompt ? `Extra instructions:\n${extraPrompt}` : ''}
+${extraPrompt ? `Extra instructions:\n${extraPrompt}` : ""}
 `.trim();
 }
 
@@ -88,58 +130,64 @@ async function fetchPersonas(promptText) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': geminiApiKey
+        "Content-Type": "application/json",
+        "x-goog-api-key": geminiApiKey,
       },
       body: JSON.stringify({
         contents: [
           {
-            role: 'user',
-            parts: [{ text: promptText }]
-          }
+            role: "user",
+            parts: [{ text: promptText }],
+          },
         ],
         generationConfig: {
-          response_mime_type: 'application/json',
+          response_mime_type: "application/json",
           response_schema: {
-            type: 'ARRAY',
+            type: "ARRAY",
             items: {
-              type: 'OBJECT',
+              type: "OBJECT",
               properties: {
-                display_name: { type: 'STRING' },
-                bio: { type: 'STRING' },
-                voice: { type: 'STRING' },
+                display_name: { type: "STRING" },
+                bio: { type: "STRING" },
+                voice: { type: "STRING" },
                 specialties: {
-                  type: 'ARRAY',
-                  items: { type: 'STRING' }
+                  type: "ARRAY",
+                  items: { type: "STRING" },
                 },
                 traits: {
-                  type: 'OBJECT',
+                  type: "OBJECT",
                   properties: {
-                    tone: { type: 'STRING' },
-                    role: { type: 'STRING' },
-                    focus: { type: 'STRING' },
-                    quirk: { type: 'STRING' }
-                  }
-                }
-                ,
+                    tone: { type: "STRING" },
+                    role: { type: "STRING" },
+                    focus: { type: "STRING" },
+                    quirk: { type: "STRING" },
+                  },
+                },
                 modules: {
-                  type: 'OBJECT',
+                  type: "OBJECT",
                   properties: {
-                    soul: { type: 'STRING' },
-                    user: { type: 'STRING' },
-                    skills: { type: 'STRING' },
-                    memory: { type: 'STRING' }
-                  }
-                }
+                    soul: { type: "STRING" },
+                    user: { type: "STRING" },
+                    skills: { type: "STRING" },
+                    memory: { type: "STRING" },
+                  },
+                },
               },
-              required: ['display_name', 'bio', 'voice', 'specialties', 'traits', 'modules']
-            }
-          }
-        }
-      })
-    }
+              required: [
+                "display_name",
+                "bio",
+                "voice",
+                "specialties",
+                "traits",
+                "modules",
+              ],
+            },
+          },
+        },
+      }),
+    },
   );
 
   if (!response.ok) {
@@ -151,7 +199,7 @@ async function fetchPersonas(promptText) {
   const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!text) {
-    throw new Error('Gemini API response missing text payload.');
+    throw new Error("Gemini API response missing text payload.");
   }
 
   return JSON.parse(text);
@@ -159,16 +207,16 @@ async function fetchPersonas(promptText) {
 
 function normalizePersonas(items) {
   if (!Array.isArray(items)) {
-    throw new Error('Gemini response must be a JSON array of personas.');
+    throw new Error("Gemini response must be a JSON array of personas.");
   }
 
   const seen = new Set();
   return items.map((item, index) => {
-    if (!item || typeof item !== 'object') {
+    if (!item || typeof item !== "object") {
       throw new Error(`Persona at index ${index} is invalid.`);
     }
 
-    const displayName = String(item.display_name ?? '').trim();
+    const displayName = String(item.display_name ?? "").trim();
     if (!displayName) {
       throw new Error(`Persona at index ${index} is missing display_name.`);
     }
@@ -181,25 +229,27 @@ function normalizePersonas(items) {
     return {
       display_name: displayName,
       slug: slugify(displayName),
-      bio: String(item.bio ?? '').trim(),
-      voice: String(item.voice ?? '').trim(),
+      bio: String(item.bio ?? "").trim(),
+      voice: String(item.voice ?? "").trim(),
       specialties: Array.isArray(item.specialties) ? item.specialties : [],
       traits: item.traits ?? {},
-      modules: item.modules ?? {}
+      modules: item.modules ?? {},
     };
   });
 }
 
 function buildAvatarPrompt(persona) {
-  const specialties = Array.isArray(persona.specialties) ? persona.specialties.join(', ') : '';
-  const role = persona.traits?.role ? `Role: ${persona.traits.role}.` : '';
-  const tone = persona.traits?.tone ? `Tone: ${persona.traits.tone}.` : '';
+  const specialties = Array.isArray(persona.specialties)
+    ? persona.specialties.join(", ")
+    : "";
+  const role = persona.traits?.role ? `Role: ${persona.traits.role}.` : "";
+  const tone = persona.traits?.tone ? `Tone: ${persona.traits.tone}.` : "";
 
   return `
 Create a square, head-and-shoulders portrait avatar for a fictional creator persona.
 Name: ${persona.display_name}.
 ${role} ${tone}
-Specialties: ${specialties || 'creative storytelling'}.
+Specialties: ${specialties || "creative storytelling"}.
 Style: clean background, modern illustrative realism, soft lighting, high detail, no text, no logos.
 `.trim();
 }
@@ -208,25 +258,27 @@ async function fetchAvatarImage(promptText) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${imageModelName}:generateContent`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': geminiApiKey
+        "Content-Type": "application/json",
+        "x-goog-api-key": geminiApiKey,
       },
       body: JSON.stringify({
         contents: [
           {
-            role: 'user',
-            parts: [{ text: promptText }]
-          }
-        ]
-      })
-    }
+            role: "user",
+            parts: [{ text: promptText }],
+          },
+        ],
+      }),
+    },
   );
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`Gemini image API error: ${message || response.statusText}`);
+    throw new Error(
+      `Gemini image API error: ${message || response.statusText}`,
+    );
   }
 
   const payload = await response.json();
@@ -235,31 +287,33 @@ async function fetchAvatarImage(promptText) {
   const inlineData = imagePart?.inline_data ?? imagePart?.inlineData;
 
   if (!inlineData?.data) {
-    throw new Error('Gemini image response missing inline image data.');
+    throw new Error("Gemini image response missing inline image data.");
   }
 
   return {
     data: inlineData.data,
-    mimeType: inlineData.mime_type ?? inlineData.mimeType ?? 'image/png'
+    mimeType: inlineData.mime_type ?? inlineData.mimeType ?? "image/png",
   };
 }
 
 async function uploadAvatar({ slug, imageData, mimeType }) {
-  const extension = 'webp';
+  const extension = "webp";
   const key = `avatars/${slug}.${extension}`;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'media';
-  const buffer = Buffer.from(imageData, 'base64');
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "media";
+  const buffer = Buffer.from(imageData, "base64");
 
   const compressedBuffer = await sharp(buffer)
     .rotate()
-    .resize({ width: 768, height: 768, fit: 'cover' })
+    .resize({ width: 768, height: 768, fit: "cover" })
     .webp({ quality: 82 })
     .toBuffer();
 
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(key, compressedBuffer, {
-    contentType: 'image/webp',
-    upsert: true
-  });
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(key, compressedBuffer, {
+      contentType: "image/webp",
+      upsert: true,
+    });
 
   if (uploadError) {
     throw uploadError;
@@ -270,7 +324,8 @@ async function uploadAvatar({ slug, imageData, mimeType }) {
 }
 
 async function main() {
-  const count = Number.isFinite(requestedCount) && requestedCount > 0 ? requestedCount : 24;
+  const count =
+    Number.isFinite(requestedCount) && requestedCount > 0 ? requestedCount : 24;
   const details = await loadDetails();
   const prompt = buildPrompt({ count, details });
   const rawPersonas = await fetchPersonas(prompt);
@@ -284,13 +339,13 @@ async function main() {
         const avatarUrl = await uploadAvatar({
           slug: persona.slug,
           imageData: data,
-          mimeType
+          mimeType,
         });
         persona.avatar_url = avatarUrl;
       } catch (error) {
         console.warn(
           `Avatar generation failed for ${persona.display_name}:`,
-          error?.message ?? error
+          error?.message ?? error,
         );
       }
     }
@@ -306,9 +361,9 @@ async function main() {
   });
 
   const { data, error } = await supabase
-    .from('personas')
-    .upsert(cleanedPersonas, { onConflict: 'slug' })
-    .select('id, slug');
+    .from("personas")
+    .upsert(cleanedPersonas, { onConflict: "slug" })
+    .select("id, slug");
 
   if (error) {
     throw error;
@@ -318,6 +373,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Persona seed failed:', error.message ?? error);
+  console.error("Persona seed failed:", error.message ?? error);
   process.exit(1);
 });

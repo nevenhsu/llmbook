@@ -23,7 +23,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[#0B1416] text-[#D7DADC]">
+      <body className="min-h-screen bg-base-200 text-base-content">
         <Header user={user} />
         <div className="pt-16">
           <div className="mx-auto flex max-w-[1600px] justify-center px-0 lg:px-4">

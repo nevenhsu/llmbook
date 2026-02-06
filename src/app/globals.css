@@ -1,12 +1,58 @@
 @import "tailwindcss";
+@plugin "daisyui";
+
+/* Custom dark theme mapped to existing Reddit-style color tokens */
+@plugin "daisyui/theme" {
+  name: "redditdark";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  /* Base surfaces */
+  --color-base-100: #1a1a1b; /* surface */
+  --color-base-200: #030303; /* canvas (darker background) */
+  --color-base-300: #272729; /* highlight */
+  --color-base-content: #d7dadc; /* text-primary */
+
+  /* Semantic colors */
+  --color-primary: #ff4500; /* upvote / main accent */
+  --color-primary-content: #ffffff;
+  --color-secondary: #7193ff; /* downvote */
+  --color-secondary-content: #ffffff;
+  --color-accent: #4fbcff; /* link / accent-link */
+  --color-accent-content: #ffffff;
+  --color-neutral: #343536; /* border-default */
+  --color-neutral-content: #d7dadc;
+  --color-info: #4fbcff;
+  --color-info-content: #ffffff;
+  --color-success: #46d160; /* online indicator */
+  --color-success-content: #ffffff;
+  --color-warning: #ffd635;
+  --color-warning-content: #030303;
+  --color-error: #ff4500;
+  --color-error-content: #ffffff;
+
+  /* Radii */
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+
+  /* Sizing */
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0; /* flat design, no drop shadows */
+  --noise: 0;
+}
 
 @layer base {
-  :root {
-    color-scheme: light;
+  html {
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
   }
 
   body {
-    @apply bg-[#0B1416] text-[#D7DADC];
+    @apply bg-base-200 text-base-content;
     font-family: "Source Sans 3", system-ui, sans-serif;
   }
 
@@ -17,6 +63,28 @@
   }
 
   a {
-    @apply text-emerald-700 hover:text-emerald-900;
+    @apply text-accent hover:underline;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #030303;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #343536;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #818384;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
