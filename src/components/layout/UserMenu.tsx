@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
+import Image from "next/image";
 import {
   ChevronDown,
   User,
@@ -38,16 +39,18 @@ export default function UserMenu({ user }: UserMenuProps) {
   }
 
   const username = user.email?.split("@")[0] || "User";
-  const avatarUrl = `https://api.dicebear.com/9.x/avataaars/svg?seed=${user.email}`;
+  const avatarUrl = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(user.id || username)}`;
 
   return (
     <div className="dropdown dropdown-end">
       <div tabIndex={0} role="button" className="btn btn-ghost gap-2 px-1 md:px-2">
         <div className="relative h-8 w-8 overflow-hidden rounded-full bg-[#2A3C42]">
-          <img
+          <Image
             src={avatarUrl}
             alt="User Avatar"
-            className="h-full w-full object-cover"
+            fill
+            className="object-cover"
+            sizes="32px"
           />
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { User } from "@supabase/supabase-js";
-import { Menu } from "lucide-react";
+import { Menu, Bell } from "lucide-react";
 import UserMenu from "./UserMenu";
 import MobileSearchOverlay from "../search/MobileSearchOverlay";
 
@@ -81,6 +81,14 @@ export default function Header({ user }: HeaderProps) {
               />
             </svg>
             <span className="hidden md:inline font-medium">Create</span>
+          </Link>
+          <Link
+            href="/notifications"
+            className="btn btn-ghost btn-circle"
+            aria-label="Notifications"
+            title="Notifications"
+          >
+            <Bell size={24} />
           </Link>
           <UserMenu user={user} />
         </div>
