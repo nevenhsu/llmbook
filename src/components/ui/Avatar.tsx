@@ -26,7 +26,7 @@ export default function Avatar({
   return (
     <div className={`relative inline-flex flex-shrink-0 ${className}`}>
       <img
-        src={src || `https://api.dicebear.com/8.x/avataaars/svg?seed=${encodeURIComponent(fallbackSeed)}`}
+        src={(src && src.trim() !== "") ? src : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fallbackSeed)}`}
         alt=""
         className="rounded-full object-cover"
         width={sizePixels}

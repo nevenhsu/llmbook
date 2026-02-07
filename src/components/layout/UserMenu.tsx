@@ -40,7 +40,9 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
   }
 
   const username = profile?.display_name || user.email?.split("@")[0] || "User";
-  const avatarUrl = profile?.avatar_url || `https://api.dicebear.com/8.x/avataaars/svg?seed=${encodeURIComponent(user.id || username)}`;
+  const avatarUrl = (profile?.avatar_url && profile.avatar_url.trim() !== "") 
+    ? profile.avatar_url 
+    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || username)}`;
 
   return (
     <div className="dropdown dropdown-end relative">

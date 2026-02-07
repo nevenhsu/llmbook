@@ -94,28 +94,28 @@ export default function CreatePostForm({ boards, tags }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-[740px] pb-20 sm:pb-10">
+    <div className="mx-auto max-w-[740px] pb-20 sm:pb-10 px-4 sm:px-0">
       {/* Header */}
       <div className="flex items-center justify-between py-6">
-        <h1 className="text-2xl font-bold text-base-content">Create post</h1>
-        <button className="text-xs font-bold text-base-content hover:underline uppercase tracking-wider">
+        <h1 className="text-2xl font-bold text-text-primary">Create post</h1>
+        <button className="text-xs font-bold text-text-primary hover:underline uppercase tracking-wider">
           Drafts
         </button>
       </div>
 
       {/* Community Selector */}
       <div className="mb-6">
-        <div className="inline-flex h-10 items-center gap-2 rounded-full border border-transparent bg-[#1A1A1B] py-1 pl-1 pr-3 hover:bg-[#2A2A2B] cursor-pointer group relative">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+        <div className="inline-flex h-10 items-center gap-2 rounded-full border border-border-default bg-surface py-1 pl-1 pr-3 hover:bg-surface-hover cursor-pointer group relative">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-highlight">
             <svg
               viewBox="0 0 20 20"
               fill="currentColor"
-              className="h-5 w-5 text-[#D7DADC]"
+              className="h-5 w-5 text-text-primary"
             >
               <path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm5.21 13.91a4.93 4.93 0 0 1-3.6 1.76c-2.3 0-3.8-1.57-3.8-1.57s-1.5 1.57-3.8 1.57a4.93 4.93 0 0 1-3.6-1.76 2.05 2.05 0 0 1-.36-2.5 5.56 5.56 0 0 1 3.52-2.58 3.32 3.32 0 0 1 .44-.29 3.86 3.86 0 0 1-1.09-2.73 3.61 3.61 0 1 1 5.95-2.15 3.62 3.62 0 1 1 5.97 2.14 3.86 3.86 0 0 1-1.1 2.73 3.32 3.32 0 0 1 .45.3 5.56 5.56 0 0 1 3.52 2.58 2.05 2.05 0 0 1-.36 2.5Z" />
             </svg>
           </div>
-          <span className="text-sm font-bold text-[#D7DADC]">
+          <span className="text-sm font-bold text-text-primary">
             {boards.find((b) => b.id === boardId)?.name
               ? `r/${boards.find((b) => b.id === boardId)?.name}`
               : "Select a community"}
@@ -126,7 +126,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
             viewBox="0 0 24 24"
             strokeWidth={2.5}
             stroke="currentColor"
-            className="h-4 w-4 text-[#D7DADC]"
+            className="h-4 w-4 text-text-primary"
           >
             <path
               strokeLinecap="round"
@@ -154,35 +154,32 @@ export default function CreatePostForm({ boards, tags }: Props) {
 
       {/* Main Form Area */}
       <div>
-        {/* Tabs - DaisyUI standard */}
+        {/* Tabs - DaisyUI standard style structure but with custom buttons */}
         <div
           role="tablist"
-          className="tabs tabs-bordered mb-6 overflow-x-auto scrollbar-hide"
+          className="flex border-b border-border-default mb-6 overflow-x-auto scrollbar-hide"
         >
+          {([
+            { key: "text", label: "Text" },
+            { key: "media", label: "Images & Video" },
+            { key: "link", label: "Link" },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              role="tab"
+              className={`px-6 py-3 text-sm font-bold whitespace-nowrap transition-colors border-b-2 ${
+                activeTab === tab.key
+                  ? "text-text-primary border-upvote"
+                  : "text-text-secondary border-transparent hover:text-text-primary"
+              }`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
           <button
             role="tab"
-            className={`tab whitespace-nowrap ${activeTab === "text" ? "tab-active" : ""}`}
-            onClick={() => setActiveTab("text")}
-          >
-            Text
-          </button>
-          <button
-            role="tab"
-            className={`tab whitespace-nowrap ${activeTab === "media" ? "tab-active" : ""}`}
-            onClick={() => setActiveTab("media")}
-          >
-            Images & Video
-          </button>
-          <button
-            role="tab"
-            className={`tab whitespace-nowrap ${activeTab === "link" ? "tab-active" : ""}`}
-            onClick={() => setActiveTab("link")}
-          >
-            Link
-          </button>
-          <button
-            role="tab"
-            className="tab whitespace-nowrap opacity-50"
+            className="px-6 py-3 text-sm font-bold whitespace-nowrap opacity-50 cursor-not-allowed text-text-secondary border-transparent"
             disabled
           >
             Poll
@@ -200,22 +197,22 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
                 maxLength={300}
-                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-[#818384] hover:border-base-content focus:border-base-content focus:outline-none transition-colors"
+                className="w-full rounded-[20px] border border-border-default bg-surface p-4 text-sm text-text-primary placeholder-text-muted hover:border-border-hover focus:border-text-primary focus:outline-none transition-colors"
               />
               {!title && (
-                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-primary text-sm">
+                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-upvote text-sm">
                   *
                 </span>
               )}
             </div>
-            <div className="text-right text-xs text-[#818384]">
+            <div className="text-right text-xs text-text-secondary">
               {title.length}/300
             </div>
           </div>
 
-          {/* Tags */}
+          {/* Tags Placeholder */}
           <div>
-            <button className="btn btn-ghost btn-xs rounded-full bg-base-300">
+            <button className="px-4 py-1 text-xs font-bold rounded-full bg-highlight text-text-secondary hover:text-text-primary transition-colors">
               Add tags
             </button>
           </div>
@@ -231,11 +228,11 @@ export default function CreatePostForm({ boards, tags }: Props) {
             )}
 
             {activeTab === "media" && (
-              <div className="flex h-40 sm:h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-neutral bg-base-100 p-4 text-center">
-                <p className="mb-2 text-base-content">
+              <div className="flex h-40 sm:h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-border-default bg-surface p-4 text-center">
+                <p className="mb-2 text-text-primary">
                   Drag and drop images or
                 </p>
-                <label className="cursor-pointer btn btn-outline btn-sm rounded-full">
+                <label className="cursor-pointer px-6 py-2 rounded-full border border-text-primary text-text-primary text-sm font-bold hover:bg-highlight transition-colors">
                   Upload
                   <input
                     type="file"
@@ -262,7 +259,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                   {media.map((m) => (
                     <div
                       key={m.mediaId}
-                      className="relative h-16 w-16 overflow-hidden rounded bg-base-300"
+                      className="relative h-16 w-16 overflow-hidden rounded bg-highlight"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -280,22 +277,22 @@ export default function CreatePostForm({ boards, tags }: Props) {
               <input
                 type="text"
                 placeholder="Url"
-                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-[#818384] focus:border-base-content focus:outline-none"
+                className="w-full rounded-[20px] border border-border-default bg-surface p-4 text-sm text-text-primary placeholder-text-muted focus:border-text-primary focus:outline-none"
               />
             )}
           </div>
         </div>
 
-        {/* Footer Actions - Sticky mobile bar */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 mt-6 flex justify-end gap-2 border-t border-neutral bg-base-200 p-3 sm:relative sm:border-0 sm:p-0">
-          <button type="button" className="btn btn-ghost btn-sm rounded-full">
+        {/* Footer Actions - Fixed on mobile, relative on desktop */}
+        <div className="fixed bottom-[64px] left-0 right-0 z-[101] flex justify-end gap-2 border-t border-border-default bg-canvas/95 p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:border-0 sm:p-0 sm:bg-transparent sm:mt-8 sm:backdrop-blur-none">
+          <button type="button" className="px-6 py-2 rounded-full text-text-secondary font-bold text-sm hover:bg-surface transition-colors">
             Save Draft
           </button>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!title || !boardId || loading}
-            className="btn btn-primary btn-sm rounded-full px-6"
+            className="px-8 py-2 rounded-full bg-text-primary text-canvas text-sm font-bold hover:bg-opacity-90 disabled:opacity-50 transition-colors"
           >
             {loading ? "Posting..." : "Post"}
           </button>
@@ -303,7 +300,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
       </div>
 
       {error && (
-        <div className="mt-4 rounded bg-red-900/50 p-3 text-sm text-red-200 border border-red-500/50">
+        <div className="mt-4 rounded bg-red-900/20 p-3 text-sm text-red-400 border border-red-500/30">
           {error}
         </div>
       )}

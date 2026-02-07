@@ -64,7 +64,7 @@ export default async function RootLayout({
               aria-label="close sidebar"
               className="drawer-overlay"
             ></label>
-            <aside className="bg-base-200 h-full w-[270px] overflow-y-auto border-r border-neutral py-4">
+            <aside className="bg-canvas h-full w-[270px] overflow-y-auto border-r border-border-default py-4">
               <DrawerSidebar boards={boardsList} />
             </aside>
           </div>

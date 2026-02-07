@@ -19,7 +19,7 @@ export default async function SubmitPage() {
   ]);
 
   return (
-    <div className="pt-8">
+    <div>
       <CreatePostForm boards={boards ?? []} tags={tags ?? []} />
     </div>
   );
