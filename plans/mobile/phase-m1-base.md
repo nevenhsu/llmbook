@@ -1,5 +1,7 @@
 # PHASE M1 — Viewport + DaisyUI Drawer Navigation
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Read [_conventions.md](_conventions.md). Execute alongside or after webapp Phase 1.
 
 ## Task M1.1: Install DaisyUI and configure theme

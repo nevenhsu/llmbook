@@ -1,5 +1,7 @@
 # PHASE M4 — Post Detail + Comments
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Complete M1, M3. Read [_conventions.md](_conventions.md). Execute alongside or after webapp Phase 3.
 
 ## Task M4.1: Post detail page mobile layout

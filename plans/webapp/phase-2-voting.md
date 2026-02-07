@@ -1,5 +1,7 @@
 # PHASE 2 — Voting System + Feed Sorting
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Complete Phase 1. Read [_conventions.md](_conventions.md). Run SQL migration in Supabase Dashboard before starting.
 
 ## Task 2.1: Database migration — votes table + post score columns

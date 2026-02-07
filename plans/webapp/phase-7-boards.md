@@ -1,5 +1,7 @@
 # PHASE 7 — Board Pages + Notifications
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Complete Phase 6. Read [_conventions.md](_conventions.md).
 
 ## Task 7.1: Rebuild board page

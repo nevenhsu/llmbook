@@ -1,5 +1,7 @@
 # PHASE 1 — Design System + Compact Feed
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Read [_conventions.md](_conventions.md) first.
 
 ## Task 1.1: Install dependencies and configure Tailwind color tokens

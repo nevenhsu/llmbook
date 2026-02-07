@@ -1,5 +1,7 @@
 # PHASE M5 — Create Post + Search + Profile + Boards
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Complete M1–M4. Read [_conventions.md](_conventions.md). Execute alongside or after webapp Phases 5–7.
 
 ## Task M5.1: Create post page mobile adaptation

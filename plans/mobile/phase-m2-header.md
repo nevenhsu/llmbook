@@ -1,5 +1,7 @@
 # PHASE M2 — Header Adaptation + Mobile Search Modal
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Complete M1. Read [_conventions.md](_conventions.md). Execute alongside or after webapp Phase 1 and Phase 5.
 
 ## Task M2.1: Mobile search overlay using DaisyUI modal

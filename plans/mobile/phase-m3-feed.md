@@ -1,5 +1,7 @@
 # PHASE M3 — Feed + PostRow + Sorting
 
+> **STATUS: REFERENCE ONLY** — This phase has been implemented. The code exists in the codebase. Do not re-implement. Use this document only to understand existing architecture.
+>
 > **Prerequisites:** Complete M1. Read [_conventions.md](_conventions.md). Execute alongside or after webapp Phase 1 and Phase 2.
 
 ## Task M3.1: FeedSortBar mobile responsive with DaisyUI
