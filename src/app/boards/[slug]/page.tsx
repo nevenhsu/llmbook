@@ -4,6 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import JoinButton from "@/components/board/JoinButton";
+import MobileJoinButton from "@/components/board/MobileJoinButton";
+import BoardInfoCard from "@/components/board/BoardInfoCard";
+import BoardRulesCard from "@/components/board/BoardRulesCard";
+import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
+import Avatar from "@/components/ui/Avatar";
+import { Archive } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -14,7 +20,7 @@ export default async function BoardPage({ params }: PageProps) {
   const supabase = await createClient(cookies());
   const { data: board } = await supabase
     .from("boards")
-    .select("id,name,slug,description")
+    .select("id,name,slug,description,icon_url,banner_url,member_count,post_count,created_at,is_archived,rules")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -77,47 +83,92 @@ export default async function BoardPage({ params }: PageProps) {
     isJoined = !!membership;
   }
 
+  // Get moderators
+  const { data: moderators } = await supabase
+    .from('board_moderators')
+    .select(`
+      user_id,
+      role,
+      profiles:user_id (
+        display_name,
+        avatar_url
+      )
+    `)
+    .eq('board_id', board.id)
+    .order('created_at', { ascending: true });
+
   return (
     <div className="flex flex-col lg:flex-row gap-4">
       <div className="flex-1 min-w-0">
-        <div className="w-full h-[120px] sm:h-[160px] bg-surface rounded-md overflow-hidden relative border border-border-default mb-4">
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full border-4 border-canvas bg-upvote flex items-center justify-center text-white text-2xl font-bold">
-                r/
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-text-primary">
-                  r/{board.name}
-                </h1>
-                <p className="text-text-secondary text-sm">r/{board.slug}</p>
-              </div>
+        {/* Archived Banner */}
+        {board.is_archived && (
+          <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Archive size={18} className="text-warning shrink-0" />
+              <p className="text-sm text-warning">
+                This community has been archived and is read-only
+              </p>
             </div>
           </div>
+        )}
+
+        {/* Mobile Board Header */}
+        <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
+          <div className="flex items-start gap-3 mb-3">
+            <Avatar
+              src={board.icon_url}
+              fallbackSeed={board.name}
+              size="lg"
+            />
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-bold">r/{board.slug}</h1>
+              <p className="text-xs text-[#818384]">{board.member_count} members</p>
+            </div>
+          </div>
+          
+          {!board.is_archived && (
+            <MobileJoinButton slug={slug} isJoined={isJoined} />
+          )}
+          
+          {/* Expandable description */}
+          {board.description && (
+            <details className="mt-3">
+              <summary className="text-sm text-accent cursor-pointer">About this community</summary>
+              <p className="text-sm text-[#818384] mt-2">{board.description}</p>
+            </details>
+          )}
+
+          {/* Rules drawer */}
+          {board.rules && board.rules.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-sm font-medium cursor-pointer">
+                Community Rules ({board.rules.length})
+              </summary>
+              <ol className="list-decimal list-inside text-sm text-[#818384] mt-2 space-y-1">
+                {board.rules.map((rule: any, idx: number) => (
+                  <li key={idx}>{rule.title}</li>
+                ))}
+              </ol>
+            </details>
+          )}
         </div>
 
         <FeedSortBar basePath={`/boards/${slug}`} />
         <FeedContainer initialPosts={posts} userId={user?.id} />
       </div>
 
-      <aside className="hidden lg:block w-[312px] space-y-4">
-        <div className="bg-surface rounded-md border border-border-default p-4">
-          <h3 className="font-bold text-text-primary mb-2">
-            About r/{board.name}
-          </h3>
-          <p className="text-sm text-text-secondary mb-4">{board.description}</p>
-          <div className="flex items-center justify-between text-xs text-text-primary border-t border-border-default pt-4">
-            <div className="flex flex-col">
-              <span className="font-bold">1.2k</span>
-              <span className="text-text-secondary">Members</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold">42</span>
-              <span className="text-text-secondary">Online</span>
-            </div>
-          </div>
-          <JoinButton slug={slug} isJoined={isJoined} />
-        </div>
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:block w-[312px]">
+        <BoardInfoCard
+          board={board}
+          isMember={isJoined}
+          memberCount={board.member_count}
+        />
+        <BoardRulesCard rules={board.rules || []} />
+        <BoardModeratorsCard moderators={(moderators || []).map((mod: any) => ({
+          ...mod,
+          profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles
+        }))} />
       </aside>
     </div>
   );

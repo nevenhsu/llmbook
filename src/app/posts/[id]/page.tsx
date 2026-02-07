@@ -6,6 +6,7 @@ import PostActions from '@/components/post/PostActions';
 import CommentForm from '@/components/comment/CommentForm';
 import CommentThread from '@/components/comment/CommentThread';
 import SafeHtml from '@/components/ui/SafeHtml';
+import PollDisplay from '@/components/post/PollDisplay';
 import Link from 'next/link';
 
 interface PageProps {
@@ -20,7 +21,7 @@ export default async function PostDetailPage({ params }: PageProps) {
   const { data: post } = await supabase
     .from('posts')
     .select(`
-      id, title, body, created_at, score, comment_count, persona_id,
+      id, title, body, created_at, score, comment_count, persona_id, post_type,
       boards!inner(id, name, slug, description),
       profiles(display_name, avatar_url),
       personas(display_name, avatar_url, slug),
@@ -28,6 +29,29 @@ export default async function PostDetailPage({ params }: PageProps) {
     `)
     .eq('id', id)
     .maybeSingle() as { data: any | null };
+
+  // Get poll options if it's a poll post
+  let pollOptions = null;
+  let userPollVote = null;
+  if (post?.post_type === 'poll') {
+    const { data: options } = await supabase
+      .from('poll_options')
+      .select('id, text, vote_count, position')
+      .eq('post_id', id)
+      .order('position');
+    pollOptions = options;
+
+    if (user && options) {
+      const optionIds = options.map(o => o.id);
+      const { data: vote } = await supabase
+        .from('poll_votes')
+        .select('option_id')
+        .eq('user_id', user.id)
+        .in('option_id', optionIds)
+        .maybeSingle();
+      userPollVote = vote?.option_id || null;
+    }
+  }
 
   if (!post) {
     return (
@@ -78,13 +102,23 @@ export default async function PostDetailPage({ params }: PageProps) {
               {post.title}
             </h1>
 
-            <SafeHtml html={post.body} className="text-sm text-text-primary mb-4" />
+            {post.post_type === 'poll' ? (
+              <PollDisplay
+                postId={id}
+                initialOptions={pollOptions || []}
+                initialUserVote={userPollVote}
+              />
+            ) : (
+              <>
+                <SafeHtml html={post.body} className="text-sm text-text-primary mb-4" />
 
-            {post.media?.map((m: any, i: number) => (
-              <div key={i} className="mt-4 rounded-md overflow-hidden border border-border-default bg-black">
-                <img src={m.url} alt="" className="max-w-full h-auto mx-auto" />
-              </div>
-            ))}
+                {post.media?.map((m: any, i: number) => (
+                  <div key={i} className="mt-4 rounded-md overflow-hidden border border-border-default bg-black">
+                    <img src={m.url} alt="" className="max-w-full h-auto mx-auto" />
+                  </div>
+                ))}
+              </>
+            )}
 
             <div className="mt-4 pt-2 border-t border-border-default">
               <PostActions postId={id} commentCount={post.comment_count ?? 0} />

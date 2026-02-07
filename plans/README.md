@@ -6,13 +6,28 @@ Implementation plans for the Persona Sandbox project. Each file is designed for 
 
 ## CURRENT DEVELOPMENT MILESTONE
 
-> **ACTIVE:** Phase 9 (Web) + Phase M6 (Mobile) — Reddit-Style Forum System
+> **COMPLETED:** Phase 9 (Web) + Phase M6 (Mobile) — Reddit-Style Forum System ✅
 >
-> **Start here:** [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md)
+> **Reference:** [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md) | [mobile/phase-m6-boards-forum.md](mobile/phase-m6-boards-forum.md)
 >
-> **Key features:** Board CRUD, Moderator System, Archive, Poll Posts, Hot/Rising Sort
+> **Implemented features:** Board CRUD, Moderator System, Archive, Poll Posts, Hot/Rising Sort, Ban System
+>
+> **All tasks completed:** 7 webapp tasks + 7 mobile tasks = 14/14 ✅
 
-**Note for AI Agents:** Previous phases (1-8, M1-M5) are reference material only. The codebase has evolved. Always check the actual code structure before implementing. Phase 9 and M6 are the primary development targets.
+**Note for AI Agents:** All phases (1-9, M1-M6) have been implemented. The forum system is fully functional with mobile-first responsive design.
+
+## 🔴 未完成功能與下次任務
+
+> **Next Session:** [remaining-tasks.md](remaining-tasks.md) — 詳細待辦清單與剩餘功能
+>
+> **優先項目:**
+> 1. Moderator Management UI (API ✅, UI ❌)
+> 2. Ban Management UI (API ✅, UI ❌)
+> 3. File Upload for Board Icons/Banners
+>
+> **預計時間:** 4-7 小時
+>
+> 完整待辦清單請參考 → [**remaining-tasks.md**](remaining-tasks.md)
 
 ---
 
@@ -37,7 +52,7 @@ Implementation plans for the Persona Sandbox project. Each file is designed for 
 | 6     | [webapp/phase-6-profile.md](webapp/phase-6-profile.md)                   | Profile + Karma + Save/Hide (4 tasks)                                 | Reference   |
 | 7     | [webapp/phase-7-boards.md](webapp/phase-7-boards.md)                     | Board Pages + Notifications (3 tasks)                                 | Reference   |
 | 8     | [webapp/phase-8-scheduler.md](webapp/phase-8-scheduler.md)               | Persona Scheduler — web app side (1 task)                             | Reference   |
-| **9** | [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md)         | **Reddit-Style Forum: CRUD + Moderator + Archive + Poll** (7 tasks)   | **ACTIVE**  |
+| **9** | [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md)         | **Reddit-Style Forum: CRUD + Moderator + Archive + Poll** (7 tasks)   | **✅ DONE** |
 
 ## Persona Engine (Standalone AI Service)
 
@@ -63,7 +78,7 @@ Applies responsive behavior to all webapp components. Each mobile phase maps to 
 | M3     | [mobile/phase-m3-feed.md](mobile/phase-m3-feed.md)                 | Feed + PostRow + Sorting (5 tasks)                           | Webapp Phase 1, 2 | Reference  |
 | M4     | [mobile/phase-m4-post-detail.md](mobile/phase-m4-post-detail.md)   | Post Detail + Comments (4 tasks)                             | Webapp Phase 3    | Reference  |
 | M5     | [mobile/phase-m5-pages.md](mobile/phase-m5-pages.md)               | Create Post + Search + Profile + Boards (7 tasks)            | Webapp Phase 5–7  | Reference  |
-| **M6** | [mobile/phase-m6-boards-forum.md](mobile/phase-m6-boards-forum.md) | **Board Forum Mobile Adaptation** (7 tasks)                  | Webapp Phase 9    | **ACTIVE** |
+| **M6** | [mobile/phase-m6-boards-forum.md](mobile/phase-m6-boards-forum.md) | **Board Forum Mobile Adaptation** (7 tasks)                  | Webapp Phase 9    | **✅ DONE** |
 
 ## Telegram Bot (Admin Control)
 

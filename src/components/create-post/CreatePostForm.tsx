@@ -38,6 +38,8 @@ export default function CreatePostForm({ boards, tags }: Props) {
   const [boardId, setBoardId] = useState("");
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [media, setMedia] = useState<UploadedMedia[]>([]);
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollDuration, setPollDuration] = useState('3');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -68,16 +70,34 @@ export default function CreatePostForm({ boards, tags }: Props) {
     setLoading(true);
 
     try {
+      const postData: any = {
+        title,
+        boardId,
+        tagIds,
+        postType: activeTab === 'poll' ? 'poll' : activeTab === 'link' ? 'link' : activeTab === 'media' ? 'image' : 'text'
+      };
+
+      if (activeTab === 'text') {
+        postData.body = body;
+      }
+
+      if (activeTab === 'media') {
+        postData.mediaIds = media.map((m) => m.mediaId);
+        postData.body = body || '';
+      }
+
+      if (activeTab === 'poll') {
+        const validOptions = pollOptions.filter(opt => opt.trim());
+        if (validOptions.length < 2) {
+          throw new Error('Poll must have at least 2 options');
+        }
+        postData.pollOptions = validOptions.map(text => ({ text }));
+      }
+
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          body,
-          boardId,
-          tagIds,
-          mediaIds: media.map((m) => m.mediaId),
-        }),
+        body: JSON.stringify(postData),
       });
 
       if (!res.ok) {
@@ -163,6 +183,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
             { key: "text", label: "Text" },
             { key: "media", label: "Images & Video" },
             { key: "link", label: "Link" },
+            { key: "poll", label: "Poll" },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -177,13 +198,6 @@ export default function CreatePostForm({ boards, tags }: Props) {
               {tab.label}
             </button>
           ))}
-          <button
-            role="tab"
-            className="px-6 py-3 text-sm font-bold whitespace-nowrap opacity-50 cursor-not-allowed text-text-secondary border-transparent"
-            disabled
-          >
-            Poll
-          </button>
         </div>
 
         {/* Content Area */}
@@ -279,6 +293,54 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 placeholder="Url"
                 className="w-full rounded-[20px] border border-border-default bg-surface p-4 text-sm text-text-primary placeholder-text-muted focus:border-text-primary focus:outline-none"
               />
+            )}
+
+            {activeTab === "poll" && (
+              <div className="space-y-2">
+                {pollOptions.map((opt, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      className="w-full rounded-[20px] border border-border-default bg-surface p-3 text-sm text-text-primary placeholder-text-muted hover:border-border-hover focus:border-text-primary focus:outline-none transition-colors flex-1"
+                      placeholder={`Option ${idx + 1}`}
+                      value={opt}
+                      onChange={(e) => {
+                        const newOptions = [...pollOptions];
+                        newOptions[idx] = e.target.value;
+                        setPollOptions(newOptions);
+                      }}
+                      maxLength={200}
+                    />
+                    {pollOptions.length > 2 && (
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-full hover:bg-surface-hover text-text-secondary transition-colors"
+                        onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="px-6 py-2 rounded-full border border-text-primary text-text-primary text-sm font-bold hover:bg-highlight transition-colors w-full mt-2"
+                  onClick={() => setPollOptions([...pollOptions, ''])}
+                  disabled={pollOptions.length >= 6}
+                >
+                  + Add Option
+                </button>
+                <select
+                  className="w-full rounded-[20px] border border-border-default bg-surface p-3 text-sm text-text-primary focus:border-text-primary focus:outline-none transition-colors mt-4"
+                  value={pollDuration}
+                  onChange={(e) => setPollDuration(e.target.value)}
+                >
+                  <option value="1">1 day</option>
+                  <option value="3">3 days</option>
+                  <option value="7">1 week</option>
+                </select>
+              </div>
             )}
           </div>
         </div>

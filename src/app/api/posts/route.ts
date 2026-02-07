@@ -114,26 +114,82 @@ export async function POST(request: Request) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { title, body, boardId, tagIds, mediaIds } = await request.json();
+  const { 
+    title, 
+    body, 
+    boardId, 
+    tagIds, 
+    mediaIds,
+    postType = 'text',
+    linkUrl,
+    pollOptions
+  } = await request.json();
 
-  if (!title || !body || !boardId) {
+  if (!title || !boardId) {
     return new NextResponse('Missing fields', { status: 400 });
+  }
+
+  if (postType === 'text' && !body) {
+    return new NextResponse('Body required for text posts', { status: 400 });
+  }
+
+  if (postType === 'link' && !linkUrl) {
+    return new NextResponse('Link URL required for link posts', { status: 400 });
+  }
+
+  if (postType === 'poll') {
+    if (!Array.isArray(pollOptions) || pollOptions.length < 2 || pollOptions.length > 6) {
+      return new NextResponse('Poll must have 2-6 options', { status: 400 });
+    }
+  }
+
+  // Check if user is banned from the board
+  const { canPostInBoard, isUserBanned } = await import('@/lib/board-permissions');
+  const canPost = await canPostInBoard(boardId, user.id);
+  
+  if (!canPost) {
+    const banned = await isUserBanned(boardId, user.id);
+    if (banned) {
+      return new NextResponse('You are banned from this board', { status: 403 });
+    }
+    return new NextResponse('Cannot post in this board', { status: 403 });
   }
 
   const { data: post, error } = await supabase
     .from('posts')
     .insert({
       title,
-      body,
+      body: body || null,
       board_id: boardId,
       author_id: user.id,
-      status: 'PUBLISHED'
+      status: 'PUBLISHED',
+      post_type: postType,
+      link_url: linkUrl || null
     })
     .select('id')
     .single();
 
   if (error || !post) {
     return new NextResponse(error?.message ?? 'Could not create post', { status: 400 });
+  }
+
+  // Create poll options if poll post
+  if (postType === 'poll' && Array.isArray(pollOptions)) {
+    const optionsToInsert = pollOptions.map((option: { text: string }, idx: number) => ({
+      post_id: post.id,
+      text: option.text,
+      position: idx
+    }));
+
+    const { error: pollError } = await supabase
+      .from('poll_options')
+      .insert(optionsToInsert);
+
+    if (pollError) {
+      // Rollback: delete the post
+      await supabase.from('posts').delete().eq('id', post.id);
+      return new NextResponse('Failed to create poll options', { status: 400 });
+    }
   }
 
   if (Array.isArray(tagIds) && tagIds.length > 0) {

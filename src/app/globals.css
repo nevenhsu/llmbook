@@ -25,6 +25,55 @@
   --color-ai-badge-text: #4fbcff;
 }
 
+/* Override DaisyUI theme colors to remove grey-blue */
+[data-theme="dark"],
+:root {
+  /* Base colors - pure grey, NO blue tint */
+  --b1: 26 26 27; /* base-100: surface #1a1a1b */
+  --b2: 3 3 3; /* base-200: canvas #030303 */
+  --b3: 39 39 41; /* base-300: highlight #272729 */
+  --bc: 215 218 220; /* base-content: text-primary #d7dadc */
+  
+  /* Primary - upvote orange */
+  --p: 255 69 0; /* primary: #ff4500 */
+  --pf: 255 69 0; /* primary-focus */
+  --pc: 255 255 255; /* primary-content: white */
+  
+  /* Secondary - downvote blue */
+  --s: 113 147 255; /* secondary: #7193ff */
+  --sf: 113 147 255; /* secondary-focus */
+  --sc: 255 255 255; /* secondary-content: white */
+  
+  /* Accent - link blue */
+  --a: 79 188 255; /* accent: #4fbcff */
+  --af: 79 188 255; /* accent-focus */
+  --ac: 255 255 255; /* accent-content: white */
+  
+  /* Neutral - border grey */
+  --n: 52 53 54; /* neutral: #343536 */
+  --nf: 52 53 54; /* neutral-focus */
+  --nc: 215 218 220; /* neutral-content */
+  
+  /* Utility colors */
+  --in: 79 188 255; /* info */
+  --su: 70 209 96; /* success */
+  --wa: 255 165 0; /* warning */
+  --er: 255 68 68; /* error */
+}
+
+/* Ensure all DaisyUI components use these exact greys */
+.bg-base-100 {
+  background-color: #1a1a1b !important;
+}
+
+.bg-base-200 {
+  background-color: #030303 !important;
+}
+
+.bg-base-300 {
+  background-color: #272729 !important;
+}
+
 @layer base {
   :root {
     color-scheme: dark;

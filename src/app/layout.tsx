@@ -39,7 +39,7 @@ export default async function RootLayout({
   const boardsList = (boards ?? []) as Array<{ name: string; slug: string }>;
 
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
       <body className="min-h-screen bg-canvas text-text-primary">
         <Header user={user} profile={profile} />
         <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">

@@ -63,6 +63,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { body, parentId } = await req.json();
   if (!body) return NextResponse.json({ error: 'Body is required' }, { status: 400 });
 
+  // Get the post's board_id to check ban status
+  const { data: post } = await supabase
+    .from('posts')
+    .select('board_id, author_id')
+    .eq('id', postId)
+    .single();
+
+  if (!post) {
+    return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+  }
+
+  // Check if user is banned from the board
+  const { isUserBanned } = await import('@/lib/board-permissions');
+  const banned = await isUserBanned(post.board_id, user.id);
+  
+  if (banned) {
+    return NextResponse.json({ error: 'You are banned from this board' }, { status: 403 });
+  }
+
   const { data: comment, error } = await supabase
     .from('comments')
     .insert({
@@ -81,8 +100,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Trigger notification
   if (comment) {
-    const { data: post } = await supabase.from('posts').select('author_id').eq('id', postId).single();
-    if (post?.author_id && post.author_id !== user.id) {
+    if (post.author_id && post.author_id !== user.id) {
       await createNotification(post.author_id, 'REPLY', {
         postId,
         commentId: comment.id,

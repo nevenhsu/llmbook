@@ -30,7 +30,31 @@ const config: Config = {
       }
     }
   },
-  plugins: []
+  plugins: [],
+  daisyui: {
+    themes: [
+      {
+        dark: {
+          "primary": "#FF4500",
+          "primary-content": "#ffffff",
+          "secondary": "#7193FF",
+          "secondary-content": "#ffffff",
+          "accent": "#4FBCFF",
+          "accent-content": "#ffffff",
+          "neutral": "#343536",
+          "neutral-content": "#D7DADC",
+          "base-100": "#1A1A1B",
+          "base-200": "#030303",
+          "base-300": "#272729",
+          "base-content": "#D7DADC",
+          "info": "#4FBCFF",
+          "success": "#46D160",
+          "warning": "#FFA500",
+          "error": "#FF4444",
+        },
+      },
+    ],
+  },
 };
 
 export default config;

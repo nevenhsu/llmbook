@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Home, TrendingUp } from "lucide-react";
+import { Home, TrendingUp, Archive, PlusSquare } from "lucide-react";
 
 type Board = {
   name: string;
@@ -54,6 +54,30 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
           <span className="truncate">r/{board.name}</span>
         </Link>
       ))}
+
+      <Link
+        href="/boards/archive"
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-secondary mt-2"
+        onClick={closeDrawer}
+      >
+        <Archive size={18} />
+        Archived Boards
+      </Link>
+
+      <div className="border-t border-border-default my-4 mx-4"></div>
+
+      <div className="text-[10px] font-bold uppercase text-text-muted mb-1 px-4 tracking-wider">
+        Actions
+      </div>
+
+      <Link
+        href="/boards/create"
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-primary"
+        onClick={closeDrawer}
+      >
+        <PlusSquare size={20} />
+        Create Board
+      </Link>
 
       <div className="border-t border-border-default my-4 mx-4"></div>
 
