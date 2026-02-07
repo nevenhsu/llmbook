@@ -8,7 +8,7 @@ interface FeedContainerProps {
 
 export default function FeedContainer({ children }: FeedContainerProps) {
   return (
-    <div className="border-0 sm:border sm:border-neutral sm:rounded-box bg-base-200 divide-y divide-neutral overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-neutral bg-base-100/60 divide-y divide-neutral/80">
       {children}
     </div>
   );

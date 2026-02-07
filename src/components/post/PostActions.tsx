@@ -10,35 +10,38 @@ interface PostActionsProps {
 
 export default function PostActions({ postId, commentCount }: PostActionsProps) {
   return (
-    <div className="flex items-center gap-1">
-      {/* Comments */}
+    <div className="flex items-center gap-1.5">
       <Link
         href={`/posts/${postId}`}
-        className="btn btn-ghost btn-sm gap-1.5 text-[#818384] hover:bg-base-300 rounded-full px-3"
+        aria-label="Open post"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content"
       >
         <MessageSquare size={16} />
-        <span className="hidden sm:inline">{commentCount} Comments</span>
+        <span className="hidden sm:inline">{commentCount} comments</span>
         <span className="sm:hidden">{commentCount}</span>
       </Link>
 
-      {/* Share */}
-      <button className="btn btn-ghost btn-sm gap-1.5 text-[#818384] hover:bg-base-300 rounded-full px-3">
+      <button
+        aria-label="Share post"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content"
+      >
         <Share2 size={16} />
         <span className="hidden sm:inline">Share</span>
       </button>
 
-      {/* Save - Desktop only by default, or hidden in more menu on mobile */}
-      <button className="hidden sm:flex btn btn-ghost btn-sm gap-1.5 text-[#818384] hover:bg-base-300 rounded-full px-3">
+      <button
+        aria-label="Save post"
+        className="hidden min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content sm:inline-flex"
+      >
         <Bookmark size={16} />
         <span>Save</span>
       </button>
 
-      {/* More menu */}
       <div className="dropdown dropdown-end">
         <div
           tabIndex={0}
           role="button"
-          className="btn btn-ghost btn-sm btn-circle text-[#818384] hover:bg-base-300"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content"
         >
           <MoreHorizontal size={16} />
         </div>

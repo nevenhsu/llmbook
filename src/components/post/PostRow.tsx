@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowBigUp, ArrowBigDown, MoreHorizontal } from "lucide-react";
+import { ArrowBigDown, ArrowBigUp } from "lucide-react";
 import PostActions from "./PostActions";
 
 interface PostRowProps {
@@ -19,31 +19,41 @@ interface PostRowProps {
 }
 
 export default function PostRow({ post }: PostRowProps) {
-  const score = post.score ?? 1066; // Placeholder if not provided
-  const commentCount = post.commentCount ?? 136;
+  const score = post.score ?? 0;
+  const commentCount = post.commentCount ?? 0;
+  const createdAt = new Date(post.created_at);
+
+  const relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const isValidDate = !Number.isNaN(createdAt.getTime());
+  const hoursAgo = isValidDate
+    ? Math.round((Date.now() - createdAt.getTime()) / (1000 * 60 * 60))
+    : 0;
+  const timeLabel =
+    isValidDate && Math.abs(hoursAgo) < 24
+      ? relativeTime.format(-hoursAgo, "hour")
+      : isValidDate
+        ? createdAt.toLocaleDateString()
+        : "recently";
 
   return (
-    <article className="group flex flex-col border-b border-neutral bg-base-100 sm:bg-transparent hover:bg-base-300 active:bg-base-300 transition-colors cursor-pointer">
+    <article className="group flex flex-col bg-base-100 transition-colors hover:bg-base-300/70 active:bg-base-300/70">
       <div className="flex">
-        {/* Left: Vote Bar (Desktop only) */}
-        <div className="hidden sm:flex flex-col items-center w-10 bg-base-100/50 py-2">
-          <button className="text-[#818384] hover:text-primary hover:bg-base-300 rounded p-1">
+        <div className="hidden w-11 flex-col items-center border-r border-neutral/80 bg-base-200/70 py-2 sm:flex">
+          <button className="rounded p-1 text-[#818384] transition-colors hover:bg-base-300 hover:text-primary">
             <ArrowBigUp size={24} />
           </button>
-          <span className="text-xs font-bold text-base-content py-1">{score}</span>
-          <button className="text-[#818384] hover:text-secondary hover:bg-base-300 rounded p-1">
+          <span className="py-1 text-xs font-bold text-base-content">{score}</span>
+          <button className="rounded p-1 text-[#818384] transition-colors hover:bg-base-300 hover:text-secondary">
             <ArrowBigDown size={24} />
           </button>
         </div>
 
-        {/* Main Content Area */}
-        <div className="flex-1 p-2 sm:p-3">
-          {/* Post Meta */}
-          <div className="flex items-center gap-1 text-xs text-[#818384] mb-1">
+        <div className="flex-1 p-3 sm:p-4">
+          <div className="mb-2 flex items-center gap-1 text-xs text-[#818384]">
             {post.boardName && (
               <Link
                 href={`/boards/${post.boardName}`}
-                className="font-bold text-base-content hover:underline"
+                className="rounded-full bg-base-300 px-2 py-0.5 font-bold text-base-content hover:no-underline"
               >
                 r/{post.boardName}
               </Link>
@@ -51,20 +61,24 @@ export default function PostRow({ post }: PostRowProps) {
             <span>•</span>
             <span>Posted by u/{post.profileName}</span>
             <span>•</span>
-            <span>{new Date(post.created_at).toLocaleDateString()}</span>
+            <span>{timeLabel}</span>
           </div>
 
-          {/* Title and Thumbnail */}
           <div className="flex gap-3">
             <div className="flex-1">
-              <Link href={`/posts/${post.id}`}>
-                <h2 className="text-sm sm:text-base font-medium text-base-content line-clamp-2 sm:line-clamp-1">
+              <Link href={`/posts/${post.id}`} className="block">
+                <h2 className="line-clamp-2 text-[15px] font-semibold leading-snug text-base-content sm:text-lg">
                   {post.title}
                 </h2>
               </Link>
+              {!post.media?.[0] && (
+                <p className="mt-1 line-clamp-2 text-xs text-[#9ca0a4] sm:text-sm">
+                  {post.body}
+                </p>
+              )}
             </div>
             {post.media?.[0] && (
-              <div className="flex-shrink-0 w-[48px] h-[36px] sm:w-[56px] sm:h-[42px] rounded-md overflow-hidden bg-base-300">
+              <div className="h-[52px] w-[68px] flex-shrink-0 overflow-hidden rounded-lg bg-base-300 sm:h-[64px] sm:w-[88px]">
                 <img
                   src={post.media[0].url}
                   alt={post.title}
@@ -74,24 +88,13 @@ export default function PostRow({ post }: PostRowProps) {
             )}
           </div>
 
-          {/* Body Preview (Desktop only or optional) */}
-          {!post.media?.[0] && (
-            <p className="mt-1 text-xs text-[#818384] line-clamp-3 hidden sm:block">
-              {post.body}
-            </p>
-          )}
-
-          {/* Mobile Vote Pill + Actions */}
-          <div className="mt-2 flex items-center gap-2">
-            {/* Mobile Vote Pill */}
-            <div className="sm:hidden join join-horizontal bg-base-300 rounded-full">
-              <button className="join-item btn btn-ghost btn-xs px-2">
+          <div className="mt-3 flex items-center gap-2">
+            <div className="inline-flex items-center rounded-full bg-base-300 sm:hidden">
+              <button className="inline-flex h-9 w-9 items-center justify-center text-[#818384] transition-colors hover:text-primary">
                 <ArrowBigUp size={18} />
               </button>
-              <span className="join-item flex items-center px-1 text-xs font-bold">
-                {score}
-              </span>
-              <button className="join-item btn btn-ghost btn-xs px-2">
+              <span className="px-1 text-xs font-bold text-base-content">{score}</span>
+              <button className="inline-flex h-9 w-9 items-center justify-center text-[#818384] transition-colors hover:text-secondary">
                 <ArrowBigDown size={18} />
               </button>
             </div>

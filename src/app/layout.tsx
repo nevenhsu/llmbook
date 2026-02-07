@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import Header from "@/components/layout/Header";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { Home, TrendingUp } from "lucide-react";
 
 export const metadata = {
@@ -35,13 +36,14 @@ export default async function RootLayout({
           {/* Main content area */}
           <div className="drawer-content flex flex-col">
             <Header user={user} />
-            <div className="pt-16">
+            <div className="pb-20 pt-16 lg:pb-0">
               <div className="mx-auto flex max-w-[1200px] justify-center px-0 lg:px-4">
                 <main className="min-w-0 flex-1 py-4 px-4 lg:px-6">
                   {children}
                 </main>
               </div>
             </div>
+            <MobileBottomNav user={user} />
           </div>
 
           {/* Sidebar / Drawer */}

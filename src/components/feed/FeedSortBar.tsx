@@ -26,11 +26,8 @@ export default function FeedSortBar() {
     { key: "all", label: "All Time" },
   ];
 
-  const timeRangeLabel =
-    timeRanges.find((r) => r.key === currentTime)?.label || "Today";
-
   return (
-    <div className="flex items-center gap-1 py-2 overflow-x-auto scrollbar-hide">
+    <div className="mb-3 flex items-center gap-1 overflow-x-auto rounded-full border border-neutral bg-base-100 p-1 scrollbar-hide">
       {sorts.map((sort) => {
         const isActive = currentSort === sort.key;
         const Icon = sort.icon;
@@ -41,14 +38,14 @@ export default function FeedSortBar() {
               <div
                 tabIndex={0}
                 role="button"
-                className="btn btn-sm bg-base-100 text-base-content rounded-full gap-1.5"
+                className="btn btn-sm rounded-full border-0 bg-base-300 text-base-content gap-1.5"
               >
                 <Icon size={16} />
                 Top <ChevronDown size={14} />
               </div>
               <ul
                 tabIndex={-1}
-                className="dropdown-content menu bg-base-100 rounded-box z-10 w-40 p-2 shadow-lg border border-neutral"
+                className="dropdown-content menu z-10 w-40 rounded-box border border-neutral bg-base-100 p-2 shadow-lg"
               >
                 <li className="menu-title text-xs font-semibold uppercase text-[#818384]">
                   Top posts from:
@@ -72,10 +69,10 @@ export default function FeedSortBar() {
           <Link
             key={sort.key}
             href={`${pathname}?sort=${sort.key}`}
-            className={`btn btn-sm rounded-full gap-1.5 ${
+            className={`btn btn-sm rounded-full border-0 gap-1.5 ${
               isActive
-                ? "bg-base-100 text-base-content"
-                : "btn-ghost text-[#818384]"
+                ? "bg-base-300 text-base-content"
+                : "bg-transparent text-[#818384] hover:bg-base-300"
             }`}
           >
             <Icon size={16} />
