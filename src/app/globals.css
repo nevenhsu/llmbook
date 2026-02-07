@@ -25,13 +25,13 @@
   --color-ai-badge-text: #4fbcff;
 }
 
-/* Override DaisyUI theme colors to remove grey-blue */
+/* Override DaisyUI theme colors to use low-saturation warm neutrals */
 [data-theme="dark"],
 :root {
-  /* Base colors - pure grey, NO blue tint */
-  --b1: 26 26 27; /* base-100: surface #1a1a1b */
-  --b2: 3 3 3; /* base-200: canvas #030303 */
-  --b3: 39 39 41; /* base-300: highlight #272729 */
+  /* Base colors - warm dark neutrals, no blue tint */
+  --b1: 27 26 24; /* base-100: #1b1a18 */
+  --b2: 17 16 15; /* base-200: #11100f */
+  --b3: 36 34 31; /* base-300: #24221f */
   --bc: 215 218 220; /* base-content: text-primary #d7dadc */
   
   /* Primary - upvote orange */
@@ -63,15 +63,15 @@
 
 /* Ensure all DaisyUI components use these exact greys */
 .bg-base-100 {
-  background-color: #1a1a1b !important;
+  background-color: #1b1a18 !important;
 }
 
 .bg-base-200 {
-  background-color: #030303 !important;
+  background-color: #11100f !important;
 }
 
 .bg-base-300 {
-  background-color: #272729 !important;
+  background-color: #24221f !important;
 }
 
 @layer base {
@@ -91,7 +91,11 @@
   }
 
   a {
-    @apply text-accent-link hover:underline;
+    @apply text-accent-link;
+  }
+
+  a:hover {
+    text-decoration: none !important;
   }
 
   ::-webkit-scrollbar {

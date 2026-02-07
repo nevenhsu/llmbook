@@ -44,7 +44,7 @@ export default function PostRow({
   return (
     <article
       onClick={() => router.push(`/posts/${id}`)}
-      className="group flex items-start gap-2 px-2 py-2 border-b border-border-default hover:bg-surface-hover cursor-pointer transition-colors"
+      className="group flex items-start gap-2 px-2 py-3 border-b border-border-default hover:bg-surface-hover cursor-pointer transition-colors"
     >
       <VotePill score={score} userVote={userVote} onVote={(v) => onVote(id, v)} size="sm" orientation="horizontal" />
 

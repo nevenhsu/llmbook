@@ -118,7 +118,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold text-text-primary">Create post</h1>
-        <button className="text-xs font-bold text-text-primary hover:underline uppercase tracking-wider">
+        <button className="text-xs font-bold text-text-primary uppercase tracking-wider">
           Drafts
         </button>
       </div>

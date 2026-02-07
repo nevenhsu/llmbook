@@ -7,7 +7,7 @@ export default function RightSidebar() {
       <div className="overflow-hidden rounded-md border border-border-default bg-canvas">
         <div className="h-8 flex items-center justify-between px-3 mt-2">
           <span className="text-xs font-bold text-text-secondary uppercase">Recent Posts</span>
-          <button className="text-xs text-accent-link hover:underline">
+          <button className="text-xs text-accent-link">
             Clear
           </button>
         </div>
@@ -53,11 +53,11 @@ export default function RightSidebar() {
 
       <div className="bg-canvas p-3 rounded-md border border-border-default sticky top-20">
         <div className="flex text-[10px] flex-wrap gap-2 text-text-secondary">
-          <Link href="/privacy" className="hover:underline">
+          <Link href="/privacy">
             Privacy Policy
           </Link>
           <span>•</span>
-          <Link href="/user-agreement" className="hover:underline">
+          <Link href="/user-agreement">
             User Agreement
           </Link>
         </div>

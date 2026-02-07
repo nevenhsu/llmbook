@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { isBoardModerator } from '@/lib/board-permissions';
+import { canManageBoardUsers } from '@/lib/board-permissions';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { slug: string; userId: string } }
+  context: { params: Promise<{ slug: string; userId: string }> }
 ) {
   const supabase = await createClient(cookies());
   const {
@@ -22,7 +22,7 @@ export async function DELETE(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { slug, userId } = params;
+  const { slug, userId } = await context.params;
 
   // Get board ID
   const { data: board } = await supabase
@@ -35,10 +35,10 @@ export async function DELETE(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  // Check if user is a moderator
-  const isMod = await isBoardModerator(board.id, user.id);
-  if (!isMod) {
-    return new NextResponse('Forbidden: Not a moderator', { status: 403 });
+  // Check if user can manage bans (owner or manage_users moderators)
+  const canManageUsers = await canManageBoardUsers(board.id, user.id);
+  if (!canManageUsers) {
+    return new NextResponse('Forbidden: Only owner or managers can edit bans', { status: 403 });
   }
 
   // Remove ban
@@ -49,7 +49,9 @@ export async function DELETE(
     .eq('user_id', userId);
 
   if (error) {
-    return new NextResponse(error.message, { status: 400 });
+    // Do not leak internal error details; log for auditing
+    console.error('Error unbanning user', { boardId: board.id, userId }, error);
+    return new NextResponse('Failed to unban user', { status: 500 });
   }
 
   return NextResponse.json({ success: true });

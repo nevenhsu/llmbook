@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
-const config: Config = {
+// Cast to any to accommodate optional plugins like daisyui in this environment
+const config: any = {
   content: [
     './src/app/**/*.{ts,tsx}',
     './src/components/**/*.{ts,tsx}'
@@ -43,9 +44,9 @@ const config: Config = {
           "accent-content": "#ffffff",
           "neutral": "#343536",
           "neutral-content": "#D7DADC",
-          "base-100": "#1A1A1B",
-          "base-200": "#030303",
-          "base-300": "#272729",
+          "base-100": "#1B1A18",
+          "base-200": "#11100F",
+          "base-300": "#24221F",
           "base-content": "#D7DADC",
           "info": "#4FBCFF",
           "success": "#46D160",

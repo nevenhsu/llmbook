@@ -11,10 +11,10 @@ export const runtime = 'nodejs';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { slug: string } }
+  context: { params: Promise<{ slug: string }> }
 ) {
   const supabase = await createClient(cookies());
-  const { slug } = params;
+  const { slug } = await context.params;
 
   // Get board ID
   const { data: board } = await supabase
@@ -57,7 +57,7 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { slug: string } }
+  context: { params: Promise<{ slug: string }> }
 ) {
   const supabase = await createClient(cookies());
   const {
@@ -68,7 +68,7 @@ export async function POST(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { slug } = params;
+  const { slug } = await context.params;
 
   // Get board ID
   const { data: board } = await supabase

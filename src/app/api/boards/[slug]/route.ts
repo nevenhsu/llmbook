@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  */
 export async function PATCH(
   request: Request,
-  { params }: { params: { slug: string } }
+  context: { params: Promise<{ slug: string }> }
 ) {
   const supabase = await createClient(cookies());
   const {
@@ -22,7 +22,7 @@ export async function PATCH(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { slug } = params;
+  const { slug } = await context.params;
 
   // Get board ID
   const { data: board } = await supabase
@@ -103,7 +103,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { slug: string } }
+  context: { params: Promise<{ slug: string }> }
 ) {
   const supabase = await createClient(cookies());
   const {
@@ -114,7 +114,7 @@ export async function DELETE(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { slug } = params;
+  const { slug } = await context.params;
 
   // Get board ID
   const { data: board } = await supabase

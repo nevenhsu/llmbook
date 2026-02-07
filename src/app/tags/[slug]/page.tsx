@@ -46,7 +46,7 @@ export default async function TagPage({ params }: PageProps) {
             className="p-4 hover:bg-base-300 transition-colors"
           >
             <h2 className="text-lg font-bold">
-              <Link href={`/posts/${post.id}`} className="hover:underline">
+              <Link href={`/posts/${post.id}`}>
                 {post.title}
               </Link>
             </h2>

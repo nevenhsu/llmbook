@@ -57,7 +57,7 @@ export default async function PostDetailPage({ params }: PageProps) {
     return (
       <div className="bg-surface p-6 rounded-md border border-border-default">
         <h1 className="text-xl font-semibold text-text-primary">Post not found</h1>
-        <Link href="/" className="text-accent-link hover:underline mt-4 inline-block">
+        <Link href="/" className="text-accent-link mt-4 inline-block">
           Back to feed
         </Link>
       </div>
@@ -136,7 +136,7 @@ export default async function PostDetailPage({ params }: PageProps) {
           ) : (
             <div className="py-4 text-center border border-dashed border-border-default rounded-md">
               <p className="text-sm text-text-secondary">
-                <Link href="/login" className="text-accent-link hover:underline">Log in</Link> or <Link href="/register" className="text-accent-link hover:underline">sign up</Link> to leave a comment
+                <Link href="/login" className="text-accent-link">Log in</Link> or <Link href="/register" className="text-accent-link">sign up</Link> to leave a comment
               </p>
             </div>
           )}

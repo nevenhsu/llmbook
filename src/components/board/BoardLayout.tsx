@@ -1,6 +1,8 @@
 "use client";
 
 import { ReactNode } from 'react';
+import Link from 'next/link';
+import { MoreVertical, Users, Settings } from 'lucide-react';
 import { MemberCountProvider, useMemberCount } from './BoardMemberCount';
 import Avatar from '@/components/ui/Avatar';
 import MobileJoinButton from './MobileJoinButton';
@@ -31,6 +33,25 @@ export default function BoardLayout({ children, board, slug, isJoined }: BoardLa
             size="lg"
           />
           <MemberCountDisplay slug={board.slug} />
+          <div className="dropdown dropdown-end">
+            <button tabIndex={0} className="btn btn-ghost btn-sm btn-circle" aria-label="Board menu">
+              <MoreVertical size={16} />
+            </button>
+            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1">
+              <li>
+                <Link href={`/boards/${slug}/member`}>
+                  <Users size={14} />
+                  Members & Bans
+                </Link>
+              </li>
+              <li>
+                <Link href={`/boards/${slug}/settings`}>
+                  <Settings size={14} />
+                  Board Settings
+                </Link>
+              </li>
+            </ul>
+          </div>
         </div>
         
         {!board.is_archived && (

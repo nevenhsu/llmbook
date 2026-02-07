@@ -36,11 +36,11 @@ export default function LoginPage() {
           <h1 className="mb-2 text-2xl font-bold text-[#D7DADC]">Log In</h1>
           <p className="text-xs text-[#D7DADC] leading-relaxed">
             By continuing, you agree to our{" "}
-            <a href="#" className="text-[#4FBCFF] hover:underline">
+            <a href="#" className="text-[#4FBCFF]">
               User Agreement
             </a>{" "}
             and acknowledge that you understand the{" "}
-            <a href="#" className="text-[#4FBCFF] hover:underline">
+            <a href="#" className="text-[#4FBCFF]">
               Privacy Policy
             </a>
             .

@@ -214,7 +214,7 @@ export default function NotificationsPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 flex-wrap">
-                      <span className="font-bold text-sm text-base-content hover:underline">
+                      <span className="font-bold text-sm text-base-content">
                         u/{notif.user}
                       </span>
                       <span className="text-[#818384] text-sm">
@@ -324,7 +324,7 @@ export default function NotificationsPage() {
           Looking for older notifications? Check out your{" "}
           <Link
             href="/notifications/archive"
-            className="text-primary hover:underline"
+            className="text-primary"
           >
             archive
           </Link>

@@ -5,6 +5,7 @@ import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import BoardLayout from "@/components/board/BoardLayout";
 import BoardInfoCard from "@/components/board/BoardInfoCard";
+import BoardManageCard from "@/components/board/BoardManageCard";
 import BoardRulesCard from "@/components/board/BoardRulesCard";
 import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
 import { Archive } from "lucide-react";
@@ -26,7 +27,7 @@ export default async function BoardPage({ params }: PageProps) {
     return (
       <div className="bg-surface p-6 rounded-md border border-border-default">
         <h1 className="text-xl font-semibold text-text-primary">Board not found</h1>
-        <Link href="/" className="text-accent-link hover:underline mt-4 inline-block">
+        <Link href="/" className="text-accent-link mt-4 inline-block">
           Back to feed
         </Link>
       </div>
@@ -95,6 +96,8 @@ export default async function BoardPage({ params }: PageProps) {
     .eq('board_id', board.id)
     .order('created_at', { ascending: true });
 
+  const canOpenSettings = !!user && (moderators || []).some((mod: any) => mod.user_id === user.id);
+
   return (
     <BoardLayout board={board} slug={slug} isJoined={isJoined}>
       <div className="flex flex-col lg:flex-row gap-4">
@@ -121,6 +124,7 @@ export default async function BoardPage({ params }: PageProps) {
             board={board}
             isMember={isJoined}
           />
+          {canOpenSettings && <BoardManageCard slug={board.slug} />}
           <BoardRulesCard rules={board.rules || []} />
           <BoardModeratorsCard moderators={(moderators || []).map((mod: any) => ({
             ...mod,

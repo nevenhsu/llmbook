@@ -1,5 +1,7 @@
 "use client";
 
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { useMemberCount } from './BoardMemberCount';
 
@@ -42,10 +44,15 @@ export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
       )}
 
       <div className="stats stats-vertical shadow bg-base-200">
-        <div className="stat py-2 px-3">
-          <div className="stat-title text-xs">Members</div>
-          <div className="stat-value text-lg">{memberCount.toLocaleString()}</div>
-        </div>
+        <Link href={`/boards/${board.slug}/member`} className="stat py-2 px-3 text-base-content hover:bg-base-100 transition-colors no-underline">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="stat-title text-xs">Members</div>
+              <div className="stat-value text-lg">{memberCount.toLocaleString()}</div>
+            </div>
+            <ChevronRight size={16} className="opacity-70" />
+          </div>
+        </Link>
         <div className="stat py-2 px-3">
           <div className="stat-title text-xs">Posts</div>
           <div className="stat-value text-lg">{board.post_count.toLocaleString()}</div>

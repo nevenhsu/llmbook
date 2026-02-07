@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
  */
 export async function POST(
   request: Request,
-  { params }: { params: { postId: string } }
+  context: { params: Promise<{ postId: string }> }
 ) {
   const supabase = await createClient(cookies());
   const {
@@ -21,7 +21,7 @@ export async function POST(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { postId } = params;
+  const { postId } = await context.params;
   const { optionId } = await request.json();
 
   if (!optionId) {
@@ -120,14 +120,14 @@ export async function POST(
  */
 export async function GET(
   request: Request,
-  { params }: { params: { postId: string } }
+  context: { params: Promise<{ postId: string }> }
 ) {
   const supabase = await createClient(cookies());
   const {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const { postId } = params;
+  const { postId } = await context.params;
 
   // Get poll options
   const { data: options, error: optionsError } = await supabase

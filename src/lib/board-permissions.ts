@@ -118,6 +118,32 @@ export async function canManageBoard(
 }
 
 /**
+ * Check if a user can manage board users (ban/kick)
+ */
+export async function canManageBoardUsers(
+  boardId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = await createServerClient(cookies());
+
+  const { data, error } = await supabase
+    .from('board_moderators')
+    .select('role, permissions')
+    .eq('board_id', boardId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+
+  if (data.role === 'owner') {
+    return true;
+  }
+
+  const permissions = data.permissions as { manage_users?: boolean };
+  return permissions.manage_users === true;
+}
+
+/**
  * Get user's role in a board (owner, moderator, or null)
  */
 export async function getUserBoardRole(
