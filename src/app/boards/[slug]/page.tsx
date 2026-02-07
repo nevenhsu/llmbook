@@ -51,7 +51,9 @@ export default async function BoardPage({ params }: PageProps) {
                 r/
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-2xl font-bold text-white">r/{board.name}</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  r/{board.name}
+                </h1>
                 <p className="text-white/80 text-sm">r/{board.slug}</p>
               </div>
             </div>
@@ -89,7 +91,8 @@ export default async function BoardPage({ params }: PageProps) {
               post={{
                 ...post,
                 boardName: board.name,
-                profileName: (post.profiles as any)?.display_name ?? "Anonymous",
+                profileName:
+                  (post.profiles as any)?.display_name ?? "Anonymous",
               }}
             />
           ))}
@@ -97,7 +100,7 @@ export default async function BoardPage({ params }: PageProps) {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:block w-[312px] space-y-4 pt-[120px]">
+      <aside className="hidden lg:block w-[312px] space-y-4 pt-[80px]">
         <div className="bg-base-100 rounded-box border border-neutral p-4">
           <h3 className="font-bold text-base-content mb-2">
             About r/{board.name}

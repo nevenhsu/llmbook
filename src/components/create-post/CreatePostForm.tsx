@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import RichTextEditor from "./RichTextEditor";
+import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 
 interface Board {
   id: string;
@@ -94,11 +94,11 @@ export default function CreatePostForm({ boards, tags }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-[740px] pb-10">
+    <div className="mx-auto max-w-[740px] pb-20 sm:pb-10">
       {/* Header */}
       <div className="flex items-center justify-between py-6">
-        <h1 className="text-2xl font-bold text-[#D7DADC]">Create post</h1>
-        <button className="text-xs font-bold text-[#D7DADC] hover:underline uppercase tracking-wider">
+        <h1 className="text-2xl font-bold text-base-content">Create post</h1>
+        <button className="text-xs font-bold text-base-content hover:underline uppercase tracking-wider">
           Drafts
         </button>
       </div>
@@ -154,52 +154,36 @@ export default function CreatePostForm({ boards, tags }: Props) {
 
       {/* Main Form Area */}
       <div>
-        {/* Tabs */}
-        <div className="mb-6 flex gap-6 overflow-x-auto border-b border-transparent">
+        {/* Tabs - DaisyUI standard */}
+        <div
+          role="tablist"
+          className="tabs tabs-bordered mb-6 overflow-x-auto scrollbar-hide"
+        >
           <button
+            role="tab"
+            className={`tab whitespace-nowrap ${activeTab === "text" ? "tab-active" : ""}`}
             onClick={() => setActiveTab("text")}
-            className={`relative pb-2 text-sm font-bold transition-colors ${
-              activeTab === "text"
-                ? "text-[#D7DADC]"
-                : "text-[#818384] hover:text-[#D7DADC]"
-            }`}
           >
             Text
-            {activeTab === "text" && (
-              <div className="absolute -bottom-px left-0 h-0.5 w-full bg-[#356FFF]" />
-            )}
           </button>
           <button
+            role="tab"
+            className={`tab whitespace-nowrap ${activeTab === "media" ? "tab-active" : ""}`}
             onClick={() => setActiveTab("media")}
-            className={`relative pb-2 text-sm font-bold transition-colors ${
-              activeTab === "media"
-                ? "text-[#D7DADC]"
-                : "text-[#818384] hover:text-[#D7DADC]"
-            }`}
           >
             Images & Video
-            {activeTab === "media" && (
-              <div className="absolute -bottom-px left-0 h-0.5 w-full bg-[#356FFF]" />
-            )}
           </button>
           <button
+            role="tab"
+            className={`tab whitespace-nowrap ${activeTab === "link" ? "tab-active" : ""}`}
             onClick={() => setActiveTab("link")}
-            className={`relative pb-2 text-sm font-bold transition-colors ${
-              activeTab === "link"
-                ? "text-[#D7DADC]"
-                : "text-[#818384] hover:text-[#D7DADC]"
-            }`}
           >
             Link
-            {activeTab === "link" && (
-              <div className="absolute -bottom-px left-0 h-0.5 w-full bg-[#356FFF]" />
-            )}
           </button>
           <button
-            onClick={() => setActiveTab("poll")}
-            className={`relative pb-2 text-sm font-bold transition-colors opacity-50 ${
-              activeTab === "poll" ? "text-[#D7DADC]" : "text-[#818384]"
-            }`}
+            role="tab"
+            className="tab whitespace-nowrap opacity-50"
+            disabled
           >
             Poll
           </button>
@@ -216,15 +200,10 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
                 maxLength={300}
-                className="w-full rounded-[20px] border border-[#343536] bg-[#0E1011] p-4 text-sm text-[#D7DADC] placeholder-[#818384] hover:border-[#D7DADC] focus:border-[#D7DADC] focus:outline-none transition-colors"
-                style={
-                  {
-                    // Reddit style input
-                  }
-                }
+                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-[#818384] hover:border-base-content focus:border-base-content focus:outline-none transition-colors"
               />
               {!title && (
-                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-[#FF4500] text-sm">
+                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-primary text-sm">
                   *
                 </span>
               )}
@@ -236,7 +215,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
 
           {/* Tags */}
           <div>
-            <button className="rounded-full bg-[#272729] px-3 py-1 text-xs font-bold text-[#D7DADC] hover:bg-[#343536] transition-colors">
+            <button className="btn btn-ghost btn-xs rounded-full bg-base-300">
               Add tags
             </button>
           </div>
@@ -244,7 +223,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
           {/* Body / Editor */}
           <div>
             {activeTab === "text" && (
-              <RichTextEditor
+              <SimpleEditor
                 content={body}
                 onChange={setBody}
                 placeholder="Body text (optional)"
@@ -252,9 +231,11 @@ export default function CreatePostForm({ boards, tags }: Props) {
             )}
 
             {activeTab === "media" && (
-              <div className="flex h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-[#343536] bg-[#0E1011] p-4 text-center">
-                <p className="mb-2 text-[#D7DADC]">Drag and drop images or</p>
-                <label className="cursor-pointer rounded-full border border-[#D7DADC] px-4 py-1 text-sm font-bold text-[#D7DADC] hover:bg-[#2A3C42]">
+              <div className="flex h-40 sm:h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-neutral bg-base-100 p-4 text-center">
+                <p className="mb-2 text-base-content">
+                  Drag and drop images or
+                </p>
+                <label className="cursor-pointer btn btn-outline btn-sm rounded-full">
                   Upload
                   <input
                     type="file"
@@ -281,7 +262,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                   {media.map((m) => (
                     <div
                       key={m.mediaId}
-                      className="relative h-16 w-16 overflow-hidden rounded bg-gray-800"
+                      className="relative h-16 w-16 overflow-hidden rounded bg-base-300"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -299,25 +280,22 @@ export default function CreatePostForm({ boards, tags }: Props) {
               <input
                 type="text"
                 placeholder="Url"
-                className="w-full rounded-[20px] border border-[#343536] bg-[#0E1011] p-4 text-sm text-[#D7DADC] placeholder-[#818384] focus:border-[#D7DADC] focus:outline-none"
+                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-[#818384] focus:border-base-content focus:outline-none"
               />
             )}
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-full bg-[#1A1A1B] px-4 py-2 text-sm font-bold text-[#818384] hover:bg-[#2A2A2B] transition-colors"
-          >
+        {/* Footer Actions - Sticky mobile bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 mt-6 flex justify-end gap-2 border-t border-neutral bg-base-200 p-3 sm:relative sm:border-0 sm:p-0">
+          <button type="button" className="btn btn-ghost btn-sm rounded-full">
             Save Draft
           </button>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!title || !boardId || loading}
-            className="rounded-full bg-[#1A1A1B] px-6 py-2 text-sm font-bold text-[#343536] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="btn btn-primary btn-sm rounded-full px-6"
           >
             {loading ? "Posting..." : "Post"}
           </button>
