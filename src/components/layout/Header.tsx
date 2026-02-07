@@ -47,11 +47,11 @@ export default function Header({ user, profile }: HeaderProps) {
         <div className="flex items-center gap-2 md:gap-4">
           <Link
             href="/submit"
-            className="flex items-center gap-2 rounded-full p-2 hover:bg-surface-hover md:px-4"
+            className="hidden md:flex items-center gap-2 rounded-full p-2 hover:bg-surface-hover md:px-4"
             title="Create Post"
           >
             <Plus size={22} />
-            <span className="hidden md:inline font-medium">Create</span>
+            <span className="font-medium">Create</span>
           </Link>
           <NotificationBell />
           <UserMenu user={user} profile={profile} />

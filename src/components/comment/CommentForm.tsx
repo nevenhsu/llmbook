@@ -6,7 +6,7 @@ interface CommentFormProps {
   postId: string;
   parentId?: string;
   onCancel?: () => void;
-  onSubmit: (comment: any) => void;
+  onSubmit?: (comment: any) => void;
   placeholder?: string;
 }
 
@@ -26,8 +26,13 @@ export default function CommentForm({ postId, parentId, onCancel, onSubmit, plac
       });
       if (!res.ok) throw new Error('Failed to post comment');
       const data = await res.json();
-      onSubmit(data.comment);
+      onSubmit?.(data.comment);
       setBody('');
+      
+      // Refresh the page to show the new comment if no onSubmit handler
+      if (!onSubmit) {
+        window.location.reload();
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to post comment');

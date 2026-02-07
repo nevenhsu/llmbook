@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import CommentItem from './CommentItem';
-import CommentSort from './CommentSort';
+import { useState, useEffect, useMemo } from "react";
+import CommentItem from "./CommentItem";
+import CommentSort from "./CommentSort";
 
 interface CommentThreadProps {
   postId: string;
@@ -12,7 +12,7 @@ interface CommentThreadProps {
 export default function CommentThread({ postId, userId }: CommentThreadProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [userVotes, setUserVotes] = useState<Record<string, number | null>>({});
-  const [sort, setSort] = useState('best');
+  const [sort, setSort] = useState("best");
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchComments = async () => {
@@ -35,53 +35,58 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
 
   const handleVote = async (commentId: string, value: 1 | -1) => {
     const oldVote = userVotes[commentId] ?? null;
-    
+
     // Optimistic update
-    setUserVotes(prev => ({ ...prev, [commentId]: oldVote === value ? null : value }));
-    
+    setUserVotes((prev) => ({
+      ...prev,
+      [commentId]: oldVote === value ? null : value,
+    }));
+
     try {
-      const res = await fetch('/api/votes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ commentId, value }),
       });
       const data = await res.json();
-      setComments(prev => prev.map(c => c.id === commentId ? { ...c, score: data.score } : c));
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, score: data.score } : c)),
+      );
     } catch (err) {
-      setUserVotes(prev => ({ ...prev, [commentId]: oldVote }));
+      setUserVotes((prev) => ({ ...prev, [commentId]: oldVote }));
     }
   };
 
   const handleNewComment = (newComment: any) => {
-    setComments(prev => [newComment, ...prev]);
+    setComments((prev) => [newComment, ...prev]);
   };
 
   const tree = useMemo(() => {
     const map: Record<string, any> = {};
-    comments.forEach(c => {
+    comments.forEach((c) => {
       map[c.id] = { ...c, children: [] };
     });
-    
+
     const roots: any[] = [];
-    comments.forEach(c => {
+    comments.forEach((c) => {
       if (c.parent_id && map[c.parent_id]) {
         map[c.parent_id].children.push(map[c.id]);
       } else {
         roots.push(map[c.id]);
       }
     });
-    
+
     return roots;
   }, [comments]);
 
   const renderComments = (nodes: any[]) => {
-    return nodes.map(node => (
-      <CommentItem 
-        key={node.id} 
-        comment={node} 
-        userVote={userVotes[node.id] as 1 | -1 | null} 
-        onVote={handleVote} 
-        postId={postId} 
+    return nodes.map((node) => (
+      <CommentItem
+        key={node.id}
+        comment={node}
+        userVote={userVotes[node.id] as 1 | -1 | null}
+        onVote={handleVote}
+        postId={postId}
         userId={userId}
         onReply={handleNewComment}
       >
@@ -94,10 +99,15 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
     ));
   };
 
-  if (isLoading) return <div className="py-10 text-center text-text-secondary">Loading comments...</div>;
+  if (isLoading)
+    return (
+      <div className="py-10 text-center text-text-secondary">
+        Loading comments...
+      </div>
+    );
 
   return (
-    <div className="mt-8">
+    <div className="mt-4">
       <CommentSort currentSort={sort} onChange={setSort} />
       <div className="space-y-4">
         {renderComments(tree)}

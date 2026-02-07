@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useMemberCount } from './BoardMemberCount';
 
 interface MobileJoinButtonProps {
   slug: string;
@@ -10,6 +11,7 @@ interface MobileJoinButtonProps {
 export default function MobileJoinButton({ slug, isJoined: initialJoined }: MobileJoinButtonProps) {
   const [isJoined, setIsJoined] = useState(initialJoined);
   const [loading, setLoading] = useState(false);
+  const { setMemberCount } = useMemberCount();
 
   const handleToggle = async () => {
     setLoading(true);
@@ -18,7 +20,11 @@ export default function MobileJoinButton({ slug, isJoined: initialJoined }: Mobi
         method: isJoined ? 'DELETE' : 'POST',
       });
       if (res.ok) {
+        const data = await res.json();
         setIsJoined(!isJoined);
+        if (data.memberCount !== undefined) {
+          setMemberCount(data.memberCount);
+        }
       }
     } catch (err) {
       console.error(err);

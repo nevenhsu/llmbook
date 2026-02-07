@@ -3,12 +3,10 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
-import JoinButton from "@/components/board/JoinButton";
-import MobileJoinButton from "@/components/board/MobileJoinButton";
+import BoardLayout from "@/components/board/BoardLayout";
 import BoardInfoCard from "@/components/board/BoardInfoCard";
 import BoardRulesCard from "@/components/board/BoardRulesCard";
 import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
-import Avatar from "@/components/ui/Avatar";
 import { Archive } from "lucide-react";
 
 interface PageProps {
@@ -98,78 +96,38 @@ export default async function BoardPage({ params }: PageProps) {
     .order('created_at', { ascending: true });
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      <div className="flex-1 min-w-0">
-        {/* Archived Banner */}
-        {board.is_archived && (
-          <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
-            <div className="flex items-center gap-2">
-              <Archive size={18} className="text-warning shrink-0" />
-              <p className="text-sm text-warning">
-                This community has been archived and is read-only
-              </p>
+    <BoardLayout board={board} slug={slug} isJoined={isJoined}>
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex-1 min-w-0">
+          {/* Archived Banner */}
+          {board.is_archived && (
+            <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Archive size={18} className="text-warning shrink-0" />
+                <p className="text-sm text-warning">
+                  This community has been archived and is read-only
+                </p>
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Mobile Board Header */}
-        <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
-          <div className="flex items-start gap-3 mb-3">
-            <Avatar
-              src={board.icon_url}
-              fallbackSeed={board.name}
-              size="lg"
-            />
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold">r/{board.slug}</h1>
-              <p className="text-xs text-[#818384]">{board.member_count} members</p>
-            </div>
-          </div>
-          
-          {!board.is_archived && (
-            <MobileJoinButton slug={slug} isJoined={isJoined} />
-          )}
-          
-          {/* Expandable description */}
-          {board.description && (
-            <details className="mt-3">
-              <summary className="text-sm text-accent cursor-pointer">About this community</summary>
-              <p className="text-sm text-[#818384] mt-2">{board.description}</p>
-            </details>
           )}
 
-          {/* Rules drawer */}
-          {board.rules && board.rules.length > 0 && (
-            <details className="mt-2">
-              <summary className="text-sm font-medium cursor-pointer">
-                Community Rules ({board.rules.length})
-              </summary>
-              <ol className="list-decimal list-inside text-sm text-[#818384] mt-2 space-y-1">
-                {board.rules.map((rule: any, idx: number) => (
-                  <li key={idx}>{rule.title}</li>
-                ))}
-              </ol>
-            </details>
-          )}
+          <FeedSortBar basePath={`/boards/${slug}`} />
+          <FeedContainer initialPosts={posts} userId={user?.id} />
         </div>
 
-        <FeedSortBar basePath={`/boards/${slug}`} />
-        <FeedContainer initialPosts={posts} userId={user?.id} />
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:block w-[312px]">
+          <BoardInfoCard
+            board={board}
+            isMember={isJoined}
+          />
+          <BoardRulesCard rules={board.rules || []} />
+          <BoardModeratorsCard moderators={(moderators || []).map((mod: any) => ({
+            ...mod,
+            profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles
+          }))} />
+        </aside>
       </div>
-
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:block w-[312px]">
-        <BoardInfoCard
-          board={board}
-          isMember={isJoined}
-          memberCount={board.member_count}
-        />
-        <BoardRulesCard rules={board.rules || []} />
-        <BoardModeratorsCard moderators={(moderators || []).map((mod: any) => ({
-          ...mod,
-          profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles
-        }))} />
-      </aside>
-    </div>
+    </BoardLayout>
   );
 }

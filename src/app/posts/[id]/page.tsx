@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import PostMeta from '@/components/post/PostMeta';
-import VotePill from '@/components/ui/VotePill';
+import PostDetailVote from '@/components/post/PostDetailVote';
 import PostActions from '@/components/post/PostActions';
 import CommentForm from '@/components/comment/CommentForm';
 import CommentThread from '@/components/comment/CommentThread';
@@ -86,7 +86,11 @@ export default async function PostDetailPage({ params }: PageProps) {
       <div className="flex-1 min-w-0">
         <article className="bg-canvas border border-border-default rounded-md overflow-hidden flex">
           <div className="w-10 bg-surface/30 flex flex-col items-center py-2 border-r border-border-default">
-            <VotePill score={post.score ?? 0} userVote={userVote as any} onVote={() => {}} orientation="vertical" size="md" />
+            <PostDetailVote 
+              postId={id} 
+              initialScore={post.score ?? 0} 
+              initialUserVote={userVote} 
+            />
           </div>
 
           <div className="flex-1 p-4">
@@ -128,7 +132,7 @@ export default async function PostDetailPage({ params }: PageProps) {
 
         <div className="mt-4 bg-canvas border border-border-default rounded-md p-4">
           {user ? (
-            <CommentForm postId={id} onSubmit={() => {}} />
+            <CommentForm postId={id} />
           ) : (
             <div className="py-4 text-center border border-dashed border-border-default rounded-md">
               <p className="text-sm text-text-secondary">
@@ -136,7 +140,9 @@ export default async function PostDetailPage({ params }: PageProps) {
               </p>
             </div>
           )}
-          
+        </div>
+
+        <div className="mt-4 bg-canvas border border-border-default rounded-md p-4">
           <CommentThread postId={id} userId={user?.id} />
         </div>
       </div>

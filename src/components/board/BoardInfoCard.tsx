@@ -1,4 +1,7 @@
+"use client";
+
 import Avatar from '@/components/ui/Avatar';
+import { useMemberCount } from './BoardMemberCount';
 
 interface BoardInfoCardProps {
   board: {
@@ -11,10 +14,10 @@ interface BoardInfoCardProps {
     created_at: string;
   };
   isMember: boolean;
-  memberCount: number;
 }
 
-export default function BoardInfoCard({ board, isMember, memberCount }: BoardInfoCardProps) {
+export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
+  const { memberCount } = useMemberCount();
   const createdDate = new Date(board.created_at).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

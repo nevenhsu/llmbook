@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useMemberCount } from './BoardMemberCount';
 
 interface JoinButtonProps {
   slug: string;
@@ -10,6 +11,7 @@ interface JoinButtonProps {
 export default function JoinButton({ slug, isJoined: initialJoined }: JoinButtonProps) {
   const [isJoined, setIsJoined] = useState(initialJoined);
   const [isLoading, setIsLoading] = useState(false);
+  const { setMemberCount } = useMemberCount();
 
   const handleToggle = async () => {
     setIsLoading(true);
@@ -18,7 +20,11 @@ export default function JoinButton({ slug, isJoined: initialJoined }: JoinButton
         method: isJoined ? 'DELETE' : 'POST',
       });
       if (res.ok) {
+        const data = await res.json();
         setIsJoined(!isJoined);
+        if (data.memberCount !== undefined) {
+          setMemberCount(data.memberCount);
+        }
       }
     } catch (err) {
       console.error(err);
