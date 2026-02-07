@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 export default function RegisterForm() {
@@ -55,48 +56,69 @@ export default function RegisterForm() {
   }
 
   return (
-    <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-      <div>
-        <label className="text-sm font-semibold text-slate-700">Display name</label>
-        <input
-          value={displayName}
-          onChange={(event) => setDisplayName(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-amber-200 px-4 py-2"
-          required
-        />
-      </div>
-      <div>
-        <label className="text-sm font-semibold text-slate-700">Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-amber-200 px-4 py-2"
-          required
-        />
-      </div>
-      <div>
-        <label className="text-sm font-semibold text-slate-700">Password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-amber-200 px-4 py-2"
-          required
-        />
-      </div>
-      {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      {notice && <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-700">{notice}</div>}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-      >
-        {loading ? 'Creating...' : 'Create account'}
-      </button>
-      <p className="text-center text-sm text-slate-500">
-        Already have an account? <a href="/login">Sign in</a>
-      </p>
-    </form>
+    <div className="space-y-4 px-4 sm:px-0">
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <div>
+          <input
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            className="input input-bordered w-full rounded-full bg-base-300 border-neutral focus:border-primary"
+            placeholder="Display name"
+            required
+          />
+        </div>
+        <div>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="input input-bordered w-full rounded-full bg-base-300 border-neutral focus:border-primary"
+            placeholder="Email"
+            required
+          />
+        </div>
+        <div>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="input input-bordered w-full rounded-full bg-base-300 border-neutral focus:border-primary"
+            placeholder="Password"
+            required
+          />
+        </div>
+
+        {error && (
+          <div className="alert alert-error text-sm py-2">
+            <span>{error}</span>
+          </div>
+        )}
+        {notice && (
+          <div className="alert alert-info text-sm py-2">
+            <span>{notice}</span>
+          </div>
+        )}
+
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary w-full rounded-full"
+          >
+            {loading ? 'Creating...' : 'Create account'}
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-[#818384] mt-4">
+          Already have an account?{' '}
+          <Link
+            href="/login"
+            className="link link-hover font-bold text-base-content"
+          >
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </div>
   );
 }

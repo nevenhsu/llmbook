@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { User } from "@supabase/supabase-js";
+import { Menu } from "lucide-react";
 import UserMenu from "./UserMenu";
+import MobileSearchOverlay from "../search/MobileSearchOverlay";
 
 interface HeaderProps {
   user: User | null;
@@ -8,23 +10,33 @@ interface HeaderProps {
 
 export default function Header({ user }: HeaderProps) {
   return (
-    <header className="fixed top-0 z-50 w-full border-b border-[#343536] bg-[#0B1416] px-4 py-2">
+    <header className="fixed top-0 z-[100] w-full border-b border-[#343536] bg-[#0B1416] px-4 py-2">
       <div className="mx-auto flex h-12 w-full items-center justify-between gap-4">
         {/* Logo Section */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FF4500]">
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-5 h-5 text-white"
-            >
-              <path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm5.21 13.91a4.93 4.93 0 0 1-3.6 1.76c-2.3 0-3.8-1.57-3.8-1.57s-1.5 1.57-3.8 1.57a4.93 4.93 0 0 1-3.6-1.76 2.05 2.05 0 0 1-.36-2.5 5.56 5.56 0 0 1 3.52-2.58 3.32 3.32 0 0 1 .44-.29 3.86 3.86 0 0 1-1.09-2.73 3.61 3.61 0 1 1 5.95-2.15 3.62 3.62 0 1 1 5.97 2.14 3.86 3.86 0 0 1-1.1 2.73 3.32 3.32 0 0 1 .45.3 5.56 5.56 0 0 1 3.52 2.58 2.05 2.05 0 0 1-.36 2.5Z" />
-            </svg>
-          </div>
-          <span className="hidden text-xl font-bold text-[#D7DADC] lg:block">
-            reddit
-          </span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="mobile-drawer"
+            className="btn btn-ghost btn-circle lg:hidden"
+            aria-label="Open navigation"
+          >
+            <Menu size={24} />
+          </label>
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FF4500]">
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-5 h-5 text-white"
+              >
+                <path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm5.21 13.91a4.93 4.93 0 0 1-3.6 1.76c-2.3 0-3.8-1.57-3.8-1.57s-1.5 1.57-3.8 1.57a4.93 4.93 0 0 1-3.6-1.76 2.05 2.05 0 0 1-.36-2.5 5.56 5.56 0 0 1 3.52-2.58 3.32 3.32 0 0 1 .44-.29 3.86 3.86 0 0 1-1.09-2.73 3.61 3.61 0 1 1 5.95-2.15 3.62 3.62 0 1 1 5.97 2.14 3.86 3.86 0 0 1-1.1 2.73 3.32 3.32 0 0 1 .45.3 5.56 5.56 0 0 1 3.52 2.58 2.05 2.05 0 0 1-.36 2.5Z" />
+              </svg>
+            </div>
+            <span className="hidden text-xl font-bold text-[#D7DADC] lg:block">
+              reddit
+            </span>
+          </Link>
+        </div>
+
 
         {/* Search Bar */}
         <div className="hidden md:flex max-w-[600px] flex-1 items-center rounded-full bg-[#1A282D] px-4 py-2 hover:bg-[#2A3C42] transition-colors border border-transparent focus-within:border-[#D7DADC] mx-4">
@@ -48,11 +60,12 @@ export default function Header({ user }: HeaderProps) {
             className="ml-2 w-full bg-transparent text-sm text-[#D7DADC] outline-none placeholder:text-[#818384]"
           />
         </div>
+        <MobileSearchOverlay />
 
         {/* Right Section: User Actions */}
         <div className="flex items-center gap-2 md:gap-4">
           {/* Chat Icon */}
-          <button className="rounded-full p-2 text-[#D7DADC] hover:bg-[#1A282D] transition-colors">
+          <button className="btn btn-ghost btn-circle">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -72,7 +85,7 @@ export default function Header({ user }: HeaderProps) {
           {/* Create Post Button */}
           <Link
             href="/submit"
-            className="flex items-center gap-2 rounded-full px-3 py-2 text-[#D7DADC] hover:bg-[#1A282D] transition-colors"
+            className="btn btn-ghost gap-2"
             title="Create Post"
           >
             <svg
@@ -93,7 +106,7 @@ export default function Header({ user }: HeaderProps) {
           </Link>
 
           {/* Notifications Icon */}
-          <button className="rounded-full p-2 text-[#D7DADC] hover:bg-[#1A282D] transition-colors">
+          <button className="btn btn-ghost btn-circle">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"

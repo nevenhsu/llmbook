@@ -4,18 +4,22 @@ import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
   const supabase = await createClient(cookies());
   const { data, error } = await supabase
-    .from('posts')
+    .from("posts")
     .select(
       `id,title,body,created_at,
        boards(name,slug),
        profiles(display_name),
        media(id,url),
-       post_tags(tag:tags(name,slug))`
+       post_tags(tag:tags(name,slug))`,
     )
-    .eq('id', params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (error || !data) {
