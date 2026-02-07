@@ -22,47 +22,48 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
   }
 
   return (
-    <nav className="menu w-full px-2">
-      <li>
-        <Link href="/" className="flex items-center gap-3" onClick={closeDrawer}>
-          <Home size={20} /> Home
-        </Link>
-      </li>
-      <li>
+    <nav className="w-full px-2 space-y-1">
+      <Link 
+        href="/" 
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm font-medium text-text-primary" 
+        onClick={closeDrawer}
+      >
+        <Home size={20} /> Home
+      </Link>
+      <Link
+        href="/popular"
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm font-medium text-text-primary"
+        onClick={closeDrawer}
+      >
+        <TrendingUp size={20} /> Popular
+      </Link>
+
+      <div className="text-[10px] font-bold uppercase text-text-muted mt-6 mb-1 px-4 tracking-wider">
+        Communities
+      </div>
+      {boards.map((board) => (
         <Link
-          href="/popular"
-          className="flex items-center gap-3"
+          key={board.slug}
+          href={`/boards/${board.slug}`}
+          className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-primary"
           onClick={closeDrawer}
         >
-          <TrendingUp size={20} /> Popular
+          <div className="h-6 w-6 rounded-full bg-highlight flex items-center justify-center text-[10px] font-bold">
+            r/
+          </div>
+          <span className="truncate">r/{board.name}</span>
         </Link>
-      </li>
-
-      <li className="menu-title text-xs font-semibold uppercase text-[#818384] mt-4">
-        Communities
-      </li>
-      {boards.map((board) => (
-        <li key={board.slug}>
-          <Link
-            href={`/boards/${board.slug}`}
-            className="flex items-center gap-3"
-            onClick={closeDrawer}
-          >
-            <div className="h-6 w-6 rounded-full bg-base-300 flex items-center justify-center text-xs">
-              r/
-            </div>
-            r/{board.name}
-          </Link>
-        </li>
       ))}
 
-      <div className="divider my-2"></div>
+      <div className="border-t border-border-default my-4 mx-4"></div>
 
-      <li>
-        <Link href="/about" onClick={closeDrawer}>
-          About Persona Sandbox
-        </Link>
-      </li>
+      <Link 
+        href="/about" 
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-secondary" 
+        onClick={closeDrawer}
+      >
+        About Persona Sandbox
+      </Link>
     </nav>
   );
 }

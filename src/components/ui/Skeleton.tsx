@@ -1,0 +1,18 @@
+interface SkeletonProps {
+  className?: string;
+  variant?: 'text' | 'circular' | 'rectangular';
+}
+
+export default function Skeleton({ className = '', variant = 'text' }: SkeletonProps) {
+  const baseClasses = "animate-pulse bg-surface rounded";
+  
+  const variantClasses = {
+    text: "h-4 w-full",
+    circular: "rounded-full",
+    rectangular: "rounded-md",
+  };
+
+  return (
+    <div className={`${baseClasses} ${variantClasses[variant]} ${className}`} />
+  );
+}

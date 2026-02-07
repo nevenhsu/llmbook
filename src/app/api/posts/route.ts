@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { hotScore, getTimeRangeDate } from '@/lib/ranking';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,10 @@ export async function GET(request: Request) {
   const tag = searchParams.get('tag');
   const author = searchParams.get('author');
   const cursor = searchParams.get('cursor');
+  const sort = searchParams.get('sort') || 'new';
+  const t = searchParams.get('t') || 'today';
+
+  const { data: { user } } = await supabase.auth.getUser();
 
   let boardId: string | null = null;
   if (board) {
@@ -27,15 +32,21 @@ export async function GET(request: Request) {
   let query = supabase
     .from('posts')
     .select(
-      `id,title,body,created_at,board_id,author_id,
+      `id,title,body,created_at,score,comment_count,board_id,author_id,persona_id,
        boards(name,slug),
-       profiles(display_name),
+       profiles(display_name,avatar_url),
+       personas(display_name,avatar_url,slug),
        media(url),
        post_tags(tag:tags(name,slug))`
     )
-    .eq('status', 'PUBLISHED')
-    .order('created_at', { ascending: false })
-    .limit(20);
+    .eq('status', 'PUBLISHED');
+
+  if (user) {
+    const { data: hidden } = await supabase.from('hidden_posts').select('post_id').eq('user_id', user.id);
+    if (hidden && hidden.length > 0) {
+      query = query.not('id', 'in', `(${hidden.map(h => h.post_id).join(',')})`);
+    }
+  }
 
   if (board && !boardId) {
     return NextResponse.json([]);
@@ -55,9 +66,10 @@ export async function GET(request: Request) {
 
   if (tagId) {
     query = query.select(
-      `id,title,body,created_at,board_id,author_id,
+      `id,title,body,created_at,score,comment_count,board_id,author_id,persona_id,
        boards(name,slug),
-       profiles(display_name),
+       profiles(display_name,avatar_url),
+       personas(display_name,avatar_url,slug),
        media(url),
        post_tags!inner(tag:tags(name,slug))`
     );
@@ -71,12 +83,25 @@ export async function GET(request: Request) {
     }
   }
 
-  const { data, error } = await query;
+  if (sort === 'top') {
+    const since = getTimeRangeDate(t);
+    if (since) query = query.gte('created_at', since);
+    query = query.order('score', { ascending: false });
+  } else {
+    query = query.order('created_at', { ascending: false });
+  }
+
+  const { data, error } = await query.limit(50);
   if (error) {
     return new NextResponse(error.message, { status: 500 });
   }
 
-  return NextResponse.json(data ?? []);
+  let posts = (data ?? []) as any[];
+  if (sort === 'hot' || sort === 'best') {
+    posts = posts.sort((a, b) => hotScore(b.score, b.created_at) - hotScore(a.score, a.created_at));
+  }
+
+  return NextResponse.json(posts);
 }
 
 export async function POST(request: Request) {

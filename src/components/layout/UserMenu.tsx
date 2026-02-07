@@ -15,9 +15,10 @@ import {
 
 interface UserMenuProps {
   user: SupabaseUser | null;
+  profile?: { display_name: string; avatar_url: string | null } | null;
 }
 
-export default function UserMenu({ user }: UserMenuProps) {
+export default function UserMenu({ user, profile }: UserMenuProps) {
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -31,57 +32,58 @@ export default function UserMenu({ user }: UserMenuProps) {
     return (
       <Link
         href="/login"
-        className="btn btn-primary btn-sm rounded-full"
+        className="bg-upvote text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-opacity-90"
       >
         Log In
       </Link>
     );
   }
 
-  const username = user.email?.split("@")[0] || "User";
-  const avatarUrl = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(user.id || username)}`;
+  const username = profile?.display_name || user.email?.split("@")[0] || "User";
+  const avatarUrl = profile?.avatar_url || `https://api.dicebear.com/8.x/avataaars/svg?seed=${encodeURIComponent(user.id || username)}`;
 
   return (
-    <div className="dropdown dropdown-end">
-      <div tabIndex={0} role="button" className="btn btn-ghost gap-2 px-1 md:px-2">
-        <div className="relative h-8 w-8 overflow-hidden rounded-full bg-[#2A3C42]">
+    <div className="dropdown dropdown-end relative">
+      <div tabIndex={0} role="button" className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:bg-surface-hover cursor-pointer">
+        <div className="relative h-6 w-6 overflow-hidden rounded-full bg-surface">
           <Image
             src={avatarUrl}
             alt="User Avatar"
             fill
             className="object-cover"
-            sizes="32px"
+            sizes="24px"
+            unoptimized={avatarUrl.endsWith('.svg') || avatarUrl.includes('dicebear')}
           />
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">
-          <span className="font-semibold text-base-content">{username}</span>
-          <span className="text-[#818384]">1 karma</span>
+          <span className="font-semibold text-text-primary">{username}</span>
+          <span className="text-text-secondary">1 karma</span>
         </div>
-        <ChevronDown size={16} className="text-[#818384]" />
+        <ChevronDown size={16} className="text-text-secondary" />
       </div>
       <ul
         tabIndex={-1}
-        className="dropdown-content menu bg-base-100 rounded-box z-50 mt-2 w-64 p-2 shadow-lg border border-neutral"
+        className="dropdown-content absolute right-0 mt-2 w-64 bg-surface border border-border-default rounded-md shadow-lg z-50 py-2"
       >
         <li>
-          <Link href="/profile" className="flex items-center gap-3">
-            <User size={18} className="text-[#818384]" /> View Profile
+          <Link href="/profile" className="flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary">
+            <User size={18} className="text-text-secondary" /> View Profile
           </Link>
         </li>
         <li>
-          <Link href="/settings/profile" className="flex items-center gap-3">
-            <Paintbrush size={18} className="text-[#818384]" /> Edit Avatar
+          <Link href="/settings/profile" className="flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary">
+            <Paintbrush size={18} className="text-text-secondary" /> Edit Avatar
           </Link>
         </li>
         <li>
-          <button className="flex items-center gap-3">
-            <Moon size={18} className="text-[#818384]" /> Display Mode
+          <button className="w-full flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary text-left">
+            <Moon size={18} className="text-text-secondary" /> Display Mode
           </button>
         </li>
-        <div className="divider my-0"></div>
+        <div className="border-t border-border-default my-1"></div>
         <li>
-          <button onClick={handleSignOut} className="flex items-center gap-3">
-            <LogOut size={18} className="text-[#818384]" /> Log Out
+          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary text-left">
+            <LogOut size={18} className="text-text-secondary" /> Log Out
           </button>
         </li>
       </ul>

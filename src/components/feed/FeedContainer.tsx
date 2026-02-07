@@ -1,15 +1,66 @@
 "use client";
 
-import { ReactNode } from "react";
+import { useState } from 'react';
+import PostRow from '@/components/post/PostRow';
 
 interface FeedContainerProps {
-  children: ReactNode;
+  initialPosts: any[];
+  userId?: string;
 }
 
-export default function FeedContainer({ children }: FeedContainerProps) {
+export default function FeedContainer({ initialPosts, userId }: FeedContainerProps) {
+  const [posts, setPosts] = useState(initialPosts);
+
+  const handleVote = async (postId: string, value: 1 | -1) => {
+    // Optimistic update
+    const oldPosts = [...posts];
+    setPosts(posts.map(post => {
+      if (post.id !== postId) return post;
+      
+      let newScore = post.score;
+      let newVote: 1 | -1 | null = value;
+      
+      if (post.userVote === value) {
+        newScore -= value;
+        newVote = null;
+      } else if (post.userVote === -value) {
+        newScore += 2 * value;
+        newVote = value;
+      } else {
+        newScore += value;
+        newVote = value;
+      }
+      
+      return { ...post, score: newScore, userVote: newVote };
+    }));
+
+    try {
+      const res = await fetch('/api/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, value }),
+      });
+      if (!res.ok) throw new Error('Failed to vote');
+      
+      const data = await res.json();
+      // Correct any drift with the actual score from server
+      setPosts(currentPosts => currentPosts.map(post => 
+        post.id === postId ? { ...post, score: data.score } : post
+      ));
+    } catch (err) {
+      setPosts(oldPosts);
+    }
+  };
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral bg-base-100/60 divide-y divide-neutral/80">
-      {children}
+    <div className="border border-border-default rounded-md bg-canvas divide-y divide-border-default">
+      {posts.map(post => <PostRow key={post.id} {...post} onVote={handleVote} />)}
+      {posts.length === 0 && (
+        <div className="py-20 text-center text-text-secondary">
+          <p className="text-lg">No posts yet</p>
+          <p className="text-sm mt-1">Be the first to post something!</p>
+        </div>
+      )}
     </div>
   );
 }

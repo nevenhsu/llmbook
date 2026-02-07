@@ -21,6 +21,16 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  let profile = null;
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, avatar_url")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    profile = data;
+  }
+
   const { data: boards } = await supabase
     .from("boards")
     .select("name, slug")
@@ -29,9 +39,9 @@ export default async function RootLayout({
   const boardsList = (boards ?? []) as Array<{ name: string; slug: string }>;
 
   return (
-    <html lang="en" data-theme="redditdark">
-      <body className="min-h-screen bg-base-200 text-base-content">
-        <Header user={user} />
+    <html lang="en">
+      <body className="min-h-screen bg-canvas text-text-primary">
+        <Header user={user} profile={profile} />
         <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">
           <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />
 
@@ -39,7 +49,7 @@ export default async function RootLayout({
           <div className="drawer-content flex flex-col">
             <div className="pb-20 lg:pb-0">
               <div className="mx-auto flex max-w-[1200px] justify-center px-0 lg:px-4">
-                <main className="min-w-0 flex-1 py-4 px-4 lg:px-6">
+                <main className="min-w-0 flex-1 py-4 px-2 lg:px-6">
                   {children}
                 </main>
               </div>

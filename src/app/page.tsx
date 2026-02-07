@@ -1,69 +1,100 @@
-import Link from "next/link";
-import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
-import RightSidebar from "@/components/layout/RightSidebar";
-import FeedSortBar from "@/components/feed/FeedSortBar";
-import FeedContainer from "@/components/feed/FeedContainer";
-import PostRow from "@/components/post/PostRow";
+import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
+import FeedSortBar from '@/components/feed/FeedSortBar';
+import FeedContainer from '@/components/feed/FeedContainer';
+import RightSidebar from '@/components/layout/RightSidebar';
+import { hotScore, getTimeRangeDate } from '@/lib/ranking';
 
-interface PostData {
-  id: string;
-  title: string;
-  body: string;
-  created_at: string;
-  boards: { name: string } | { name: string }[] | null;
-  profiles:
-    | { display_name: string | null }
-    | { display_name: string | null }[]
-    | null;
-  media: { url: string }[];
-  post_tags: { tag: { name: string } | { name: string }[] }[];
+interface PageProps {
+  searchParams?: Promise<{ sort?: string; t?: string }>;
 }
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: PageProps) {
+  const params = searchParams ? await searchParams : {};
+  const sort = params.sort ?? 'new';
+  const t = params.t ?? 'today';
   const supabase = await createClient(cookies());
-  const { data } = await supabase
-    .from("posts")
-    .select(
-      `id,title,body,created_at,
-       boards(name),
-       profiles(display_name),
-       media(url),
-       post_tags(tag:tags(name))`,
-    )
-    .eq("status", "PUBLISHED")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const posts = (data ?? []) as any[];
+  // Fetch posts
+  let query = supabase
+    .from('posts')
+    .select(`
+      id, title, body, created_at, score, comment_count, persona_id,
+      boards!inner(name, slug),
+      profiles(display_name, avatar_url),
+      personas(display_name, avatar_url, slug),
+      media(url),
+      post_tags(tag:tags(name))
+    `)
+    .eq('status', 'PUBLISHED');
 
-  function getBoardName(post: any) {
-    if (Array.isArray(post.boards)) return post.boards[0]?.name;
-    return post.boards?.name;
+  if (user) {
+    const { data: hidden } = await supabase.from('hidden_posts').select('post_id').eq('user_id', user.id);
+    if (hidden && hidden.length > 0) {
+      query = query.not('id', 'in', `(${hidden.map(h => h.post_id).join(',')})`);
+    }
   }
 
-  function getProfileName(post: any) {
-    if (Array.isArray(post.profiles)) return post.profiles[0]?.display_name;
-    return post.profiles?.display_name;
+  if (sort === 'top') {
+    const since = getTimeRangeDate(t);
+    if (since) query = query.gte('created_at', since);
+    query = query.order('score', { ascending: false });
+  } else {
+    query = query.order('created_at', { ascending: false });
   }
+
+  const { data } = await query.limit(50) as { data: any[] | null };
+
+  let posts = (data ?? []).map(post => {
+    const isPersona = !!post.persona_id;
+    const author = isPersona ? post.personas : post.profiles;
+    const authorData = Array.isArray(author) ? author[0] : author;
+    
+    return {
+      id: post.id,
+      title: post.title,
+      score: post.score ?? 0,
+      commentCount: post.comment_count ?? 0,
+      boardName: Array.isArray(post.boards) ? post.boards[0]?.name ?? '' : post.boards?.name ?? '',
+      boardSlug: Array.isArray(post.boards) ? post.boards[0]?.slug ?? '' : post.boards?.slug ?? '',
+      authorName: authorData?.display_name ?? 'Anonymous',
+      authorAvatarUrl: authorData?.avatar_url ?? null,
+      isPersona,
+      createdAt: post.created_at,
+      thumbnailUrl: post.media?.[0]?.url ?? null,
+      flairs: post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
+      userVote: null as (1 | -1 | null),
+    };
+  });
+
+  if (sort === 'hot' || sort === 'best') {
+    posts = posts.sort((a, b) => hotScore(b.score, b.createdAt) - hotScore(a.score, a.createdAt));
+  }
+
+  let userVotes: any[] = [];
+  if (user && posts.length > 0) {
+    const postIds = posts.map(p => p.id);
+    const { data: votes } = await supabase
+      .from('votes')
+      .select('post_id, value')
+      .in('post_id', postIds)
+      .eq('user_id', user.id);
+    userVotes = votes ?? [];
+  }
+
+  const voteMap = Object.fromEntries(userVotes.map(v => [v.post_id, v.value]));
+  
+  const finalPosts = posts.map(post => ({
+    ...post,
+    userVote: voteMap[post.id] ?? null
+  }));
 
   return (
-    <div className="flex gap-0 lg:gap-4">
-      <div className="flex-1 min-w-0 space-y-4">
+    <div className="flex gap-4">
+      <div className="flex-1 min-w-0">
         <FeedSortBar />
-
-        <FeedContainer>
-          {posts.map((post) => (
-            <PostRow
-              key={post.id}
-              post={{
-                ...post,
-                boardName: getBoardName(post),
-                profileName: getProfileName(post) ?? "Anonymous",
-              }}
-            />
-          ))}
-        </FeedContainer>
+        <FeedContainer initialPosts={finalPosts} userId={user?.id} />
       </div>
       <RightSidebar />
     </div>

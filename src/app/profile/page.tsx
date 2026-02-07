@@ -5,14 +5,22 @@ import {
   CalendarClock,
   Flame,
   LogOut,
-  Moon,
   Settings,
   Sparkles,
   UserRound,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import PostRow from "@/components/post/PostRow";
+import Avatar from "@/components/ui/Avatar";
 
-export default async function ProfilePage() {
+interface PageProps {
+  searchParams?: Promise<{ tab?: string }>;
+}
+
+export default async function ProfilePage({ searchParams }: PageProps) {
+  const params = searchParams ? await searchParams : {};
+  const tab = (await params).tab ?? "posts";
+
   const supabase = await createClient(cookies());
   const {
     data: { user },
@@ -24,135 +32,180 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name,avatar_url,bio")
+    .select("*")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const displayName =
-    profile?.display_name || user.email?.split("@")[0] || "Unknown";
+  const displayName = profile?.display_name || user.email?.split("@")[0] || "Unknown";
   const username = `u/${displayName.toLowerCase().replace(/\s+/g, "")}`;
+  const karma = profile?.karma ?? 0;
   const createdAt = new Date(user.created_at ?? Date.now());
-  const joinYear = Number.isNaN(createdAt.getTime())
-    ? "Now"
-    : createdAt.getFullYear();
+  const joinYear = Number.isNaN(createdAt.getTime()) ? "Now" : createdAt.getFullYear();
+
+  let posts: any[] = [];
+  if (tab === "posts") {
+    const { data } = await supabase
+      .from("posts")
+      .select(`
+        id, title, body, created_at, score, comment_count, persona_id,
+        boards(name, slug),
+        profiles(display_name, avatar_url),
+        media(url)
+      `)
+      .eq("author_id", user.id)
+      .order("created_at", { ascending: false });
+    posts = data ?? [];
+  } else if (tab === "saved") {
+    const { data } = await supabase
+      .from("saved_posts")
+      .select(`
+        post:posts(
+          id, title, body, created_at, score, comment_count, persona_id,
+          boards(name, slug),
+          profiles(display_name, avatar_url),
+          media(url)
+        )
+      `)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    posts = (data ?? []).map((d: any) => d.post).filter(Boolean);
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-4 px-0 pb-8 sm:px-2">
-      <section className="overflow-hidden rounded-2xl border border-neutral bg-base-100">
-        <div className="h-20 bg-gradient-to-r from-[#171f2a] via-[#1d2d4a] to-[#2e5ca8]" />
+      {/* Banner Section */}
+      <section className="overflow-hidden rounded-2xl border border-border-default bg-surface">
+        <div className="h-20 bg-gradient-to-r from-upvote via-orange-500 to-yellow-500" />
         <div className="-mt-8 flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-base-100 bg-base-300 text-xl font-bold text-base-content sm:h-20 sm:w-20">
-              {displayName.slice(0, 1).toUpperCase()}
+            <div className="-mt-8 mb-2">
+              <Avatar 
+                fallbackSeed={displayName} 
+                src={profile?.avatar_url} 
+                size="lg" 
+                className="border-4 border-surface rounded-full" 
+              />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-base-content sm:text-2xl">
-                {displayName}
-              </h1>
-              <p className="text-sm text-[#818384]">{username}</p>
-            </div>
-          </div>
         </div>
       </section>
 
-      <section className="overflow-x-auto rounded-full border border-neutral bg-base-100 p-1 scrollbar-hide">
+      {/* Tabs Section */}
+      <section className="overflow-x-auto rounded-full border border-border-default bg-surface p-1 scrollbar-hide">
         <div className="flex min-w-max items-center gap-1">
-          <button className="rounded-full bg-base-300 px-4 py-2 text-sm font-semibold text-base-content">
-            Overview
-          </button>
-          <button className="rounded-full px-4 py-2 text-sm font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content">
-            Posts
-          </button>
-          <button className="rounded-full px-4 py-2 text-sm font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content">
-            Comments
-          </button>
-          <button className="rounded-full px-4 py-2 text-sm font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content">
-            Saved
-          </button>
-          <button className="rounded-full px-4 py-2 text-sm font-semibold text-[#818384] transition-colors hover:bg-base-300 hover:text-base-content">
-            History
-          </button>
+          {[
+            { key: "posts", label: "Posts" },
+            { key: "comments", label: "Comments" },
+            { key: "saved", label: "Saved" },
+            { key: "hidden", label: "Hidden" },
+          ].map((t) => (
+            <Link
+              key={t.key}
+              href={`/profile?tab=${t.key}`}
+              className={`rounded-full px-6 py-2 text-sm font-bold transition-colors ${
+                tab === t.key
+                  ? "bg-highlight text-text-primary"
+                  : "text-text-secondary hover:bg-highlight hover:text-text-primary"
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
         </div>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Content Area */}
         <section className="space-y-4">
-          <div className="rounded-2xl border border-dashed border-neutral bg-base-100 px-5 py-14 text-center sm:py-20">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-base-300 text-[#818384]">
-              <Sparkles size={24} />
-            </div>
-            <h2 className="text-lg font-semibold text-base-content">
-              No posts yet
-            </h2>
-            <p className="mt-1 text-sm text-[#818384]">
-              {username} 還沒有發文，建立第一篇貼文開始互動。
-            </p>
+          <div className="bg-canvas border border-border-default rounded-2xl divide-y divide-border-default overflow-hidden">
+            {posts.length > 0 ? (
+              posts.map((post) => (
+                <PostRow
+                  key={post.id}
+                  id={post.id}
+                  title={post.title}
+                  score={post.score || 0}
+                  commentCount={post.comment_count || 0}
+                  boardName={Array.isArray(post.boards) ? post.boards[0]?.name : post.boards?.name}
+                  boardSlug={Array.isArray(post.boards) ? post.boards[0]?.slug : post.boards?.slug}
+                  authorName={displayName}
+                  createdAt={post.created_at}
+                  thumbnailUrl={post.media?.[0]?.url}
+                  onVote={() => {}}
+                />
+              ))
+            ) : (
+              <div className="rounded-2xl px-5 py-14 text-center sm:py-20">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-highlight text-text-secondary">
+                  <Sparkles size={24} />
+                </div>
+                <h2 className="text-lg font-semibold text-text-primary">
+                  No {tab} yet
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {username} 還沒有內容，開始互動來建立第一筆資料。
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
+        {/* Sidebar */}
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-neutral bg-base-100 p-4">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-[#818384]">
+          <div className="rounded-2xl border border-border-default bg-surface p-4">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-text-secondary">
               About
             </h3>
-            <p className="mt-3 text-sm text-base-content">
+            <p className="mt-3 text-sm text-text-primary">
               {profile?.bio?.trim() || "This user has not added a bio yet."}
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-xl bg-base-300 p-3">
-                <div className="font-semibold text-base-content">1</div>
-                <div className="text-xs text-[#818384]">Karma</div>
+              <div className="rounded-xl bg-highlight p-3">
+                <div className="font-semibold text-text-primary">{karma}</div>
+                <div className="text-xs text-text-secondary">Karma</div>
               </div>
-              <div className="rounded-xl bg-base-300 p-3">
-                <div className="font-semibold text-base-content">0</div>
-                <div className="text-xs text-[#818384]">Followers</div>
+              <div className="rounded-xl bg-highlight p-3">
+                <div className="font-semibold text-text-primary">0</div>
+                <div className="text-xs text-text-secondary">Followers</div>
               </div>
-              <div className="col-span-2 rounded-xl bg-base-300 p-3">
-                <div className="flex items-center gap-2 text-base-content">
+              <div className="col-span-2 rounded-xl bg-highlight p-3">
+                <div className="flex items-center gap-2 text-text-primary">
                   <CalendarClock size={16} />
                   <span className="font-semibold">Joined {joinYear}</span>
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-[#818384]">
+                <div className="mt-1 flex items-center gap-2 text-xs text-text-secondary">
                   <Flame size={14} /> Profile activity will appear here.
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-neutral bg-base-100 p-2">
+          <div className="rounded-2xl border border-border-default bg-surface p-2">
             <ul className="space-y-1">
               <li>
                 <Link
                   href="/settings/profile"
-                  className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                  className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-text-primary transition-colors hover:bg-highlight"
                 >
-                  <Settings size={16} className="text-[#818384]" />
-                  Setting
+                  <Settings size={16} className="text-text-secondary" />
+                  Settings
                 </Link>
               </li>
               <li>
                 <Link
                   href="/settings/avatar"
-                  className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                  className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-text-primary transition-colors hover:bg-highlight"
                 >
-                  <UserRound size={16} className="text-[#818384]" />
+                  <UserRound size={16} className="text-text-secondary" />
                   Update avatar
                 </Link>
-              </li>
-              <li>
-                <button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-base-content transition-colors hover:bg-base-300">
-                  <Moon size={16} className="text-[#818384]" />
-                  Theme
-                </button>
               </li>
               <li>
                 <form action="/auth/signout" method="post">
                   <button
                     type="submit"
-                    className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                    className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-text-primary transition-colors hover:bg-highlight"
                   >
-                    <LogOut size={16} className="text-[#818384]" />
+                    <LogOut size={16} className="text-text-secondary" />
                     Log out
                   </button>
                 </form>

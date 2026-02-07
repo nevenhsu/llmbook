@@ -1,85 +1,82 @@
 "use client";
 
-import { Rocket, Flame, Sun, BarChart2, ChevronDown } from "lucide-react";
-import Link from "next/link";
-import { useSearchParams, usePathname } from "next/navigation";
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Rocket, Flame, Sparkles, TrendingUp, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 
-export default function FeedSortBar() {
+interface SortOption {
+  key: string;
+  label: string;
+  icon: any;
+}
+
+const sortOptions: SortOption[] = [
+  { key: 'best', label: 'Best', icon: Rocket },
+  { key: 'hot', label: 'Hot', icon: Flame },
+  { key: 'new', label: 'New', icon: Sparkles },
+  { key: 'top', label: 'Top', icon: TrendingUp },
+];
+
+const timeRanges = [
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'year', label: 'This Year' },
+  { key: 'all', label: 'All Time' },
+];
+
+export default function FeedSortBar({ basePath = '/' }: { basePath?: string }) {
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const currentSort = searchParams.get("sort") || "best";
-  const currentTime = searchParams.get("t") || "day";
-
-  const sorts = [
-    { key: "best", label: "Best", icon: Rocket },
-    { key: "hot", label: "Hot", icon: Flame },
-    { key: "new", label: "New", icon: Sun },
-    { key: "top", label: "Top", icon: BarChart2 },
-  ];
-
-  const timeRanges = [
-    { key: "hour", label: "Now" },
-    { key: "day", label: "Today" },
-    { key: "week", label: "This Week" },
-    { key: "month", label: "This Month" },
-    { key: "year", label: "This Year" },
-    { key: "all", label: "All Time" },
-  ];
+  const currentSort = searchParams.get('sort') || 'best';
+  const currentTime = searchParams.get('t') || 'today';
+  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
 
   return (
-    <div className="mb-3 flex items-center gap-1 overflow-x-auto rounded-full border border-neutral bg-base-100 p-1 scrollbar-hide">
-      {sorts.map((sort) => {
-        const isActive = currentSort === sort.key;
-        const Icon = sort.icon;
-
-        if (sort.key === "top" && isActive) {
-          return (
-            <div key={sort.key} className="dropdown dropdown-bottom">
-              <div
-                tabIndex={0}
-                role="button"
-                className="btn btn-sm rounded-full border-0 bg-base-300 text-base-content gap-1.5"
-              >
-                <Icon size={16} />
-                Top <ChevronDown size={14} />
-              </div>
-              <ul
-                tabIndex={-1}
-                className="dropdown-content menu z-10 w-40 rounded-box border border-neutral bg-base-100 p-2 shadow-lg"
-              >
-                <li className="menu-title text-xs font-semibold uppercase text-[#818384]">
-                  Top posts from:
-                </li>
-                {timeRanges.map((range) => (
-                  <li key={range.key}>
-                    <Link
-                      href={`${pathname}?sort=top&t=${range.key}`}
-                      className={currentTime === range.key ? "active" : ""}
-                    >
-                      {range.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        }
-
+    <div className="flex items-center gap-1 py-2">
+      {sortOptions.map(({ key, label, icon: Icon }) => {
+        const isActive = currentSort === key;
         return (
           <Link
-            key={sort.key}
-            href={`${pathname}?sort=${sort.key}`}
-            className={`btn btn-sm rounded-full border-0 gap-1.5 ${
-              isActive
-                ? "bg-base-300 text-base-content"
-                : "bg-transparent text-[#818384] hover:bg-base-300"
-            }`}
+            key={key}
+            href={`${basePath}?sort=${key}`}
+            className={isActive
+              ? "bg-surface text-text-primary rounded-full px-3 py-1.5 text-sm font-bold flex items-center gap-1.5"
+              : "text-text-secondary hover:bg-surface rounded-full px-3 py-1.5 text-sm font-bold flex items-center gap-1.5"
+            }
           >
             <Icon size={16} />
-            {sort.label}
+            <span>{label}</span>
           </Link>
         );
       })}
+
+      {currentSort === 'top' && (
+        <div className="relative">
+          <button
+            onClick={() => setShowTimeDropdown(!showTimeDropdown)}
+            className="text-text-secondary text-sm flex items-center gap-1 hover:bg-surface rounded-full px-3 py-1.5 font-bold"
+          >
+            <span>{timeRanges.find(t => t.key === currentTime)?.label || 'Today'}</span>
+            <ChevronDown size={16} />
+          </button>
+
+          {showTimeDropdown && (
+            <div className="absolute top-full left-0 mt-1 bg-surface border border-border-default rounded-md shadow-lg z-10 py-1 min-w-[120px]">
+              {timeRanges.map(({ key, label }) => (
+                <Link
+                  key={key}
+                  href={`${basePath}?sort=top&t=${key}`}
+                  onClick={() => setShowTimeDropdown(false)}
+                  className="block px-3 py-1.5 text-sm hover:bg-surface-hover text-text-primary"
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
