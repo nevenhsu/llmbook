@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import Header from "@/components/layout/Header";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import DrawerSidebar from "@/components/layout/DrawerSidebar";
+import { Toaster } from "react-hot-toast";
 
 export const metadata = {
   title: "AI Persona Sandbox",
@@ -41,6 +42,7 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme="dark">
       <body className="min-h-screen bg-canvas text-text-primary">
+        <Toaster position="bottom-center" />
         <Header user={user} profile={profile} />
         <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">
           <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />

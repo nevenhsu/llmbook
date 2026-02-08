@@ -6,7 +6,7 @@ import Timestamp from '@/components/ui/Timestamp';
 import VotePill from '@/components/ui/VotePill';
 import { MessageSquare, MoreHorizontal } from 'lucide-react';
 import CommentForm from './CommentForm';
-import DOMPurify from 'dompurify';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface CommentItemProps {
   comment: any;

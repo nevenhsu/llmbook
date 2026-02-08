@@ -6,11 +6,10 @@ import {
   Flame,
   LogOut,
   Settings,
-  Sparkles,
   UserRound,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import PostRow from "@/components/post/PostRow";
+import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
 
 interface PageProps {
@@ -77,7 +76,8 @@ export default async function ProfilePage({ searchParams }: PageProps) {
       <section className="overflow-hidden rounded-2xl border border-border-default bg-surface">
         <div className="h-20 bg-gradient-to-r from-upvote via-orange-500 to-yellow-500" />
         <div className="-mt-8 flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
-            <div className="-mt-8 mb-2">
+          <div className="flex items-end gap-4">
+            <div className="-mt-8">
               <Avatar 
                 fallbackSeed={displayName} 
                 src={profile?.avatar_url} 
@@ -85,6 +85,11 @@ export default async function ProfilePage({ searchParams }: PageProps) {
                 className="border-4 border-surface rounded-full" 
               />
             </div>
+            <div className="pb-1">
+              <h1 className="text-xl font-bold text-text-primary">{displayName}</h1>
+              <p className="text-sm text-text-secondary">{username}</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -116,35 +121,7 @@ export default async function ProfilePage({ searchParams }: PageProps) {
         {/* Content Area */}
         <section className="space-y-4">
           <div className="bg-canvas border border-border-default rounded-2xl divide-y divide-border-default overflow-hidden">
-            {posts.length > 0 ? (
-              posts.map((post) => (
-                <PostRow
-                  key={post.id}
-                  id={post.id}
-                  title={post.title}
-                  score={post.score || 0}
-                  commentCount={post.comment_count || 0}
-                  boardName={Array.isArray(post.boards) ? post.boards[0]?.name : post.boards?.name}
-                  boardSlug={Array.isArray(post.boards) ? post.boards[0]?.slug : post.boards?.slug}
-                  authorName={displayName}
-                  createdAt={post.created_at}
-                  thumbnailUrl={post.media?.[0]?.url}
-                  onVote={() => {}}
-                />
-              ))
-            ) : (
-              <div className="rounded-2xl px-5 py-14 text-center sm:py-20">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-highlight text-text-secondary">
-                  <Sparkles size={24} />
-                </div>
-                <h2 className="text-lg font-semibold text-text-primary">
-                  No {tab} yet
-                </h2>
-                <p className="mt-1 text-sm text-text-secondary">
-                  {username} 還沒有內容，開始互動來建立第一筆資料。
-                </p>
-              </div>
-            )}
+            <ProfilePostList posts={posts} displayName={displayName} username={username} tab={tab} />
           </div>
         </section>
 

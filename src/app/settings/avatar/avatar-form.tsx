@@ -1,7 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { uploadImage } from "@/lib/image-upload";
+import { Upload, X, Loader2 } from "lucide-react";
+import Avatar from "@/components/ui/Avatar";
+import toast from "react-hot-toast";
 
 interface AvatarFormProps {
   currentAvatarUrl: string | null;
@@ -10,70 +14,150 @@ interface AvatarFormProps {
 
 export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: AvatarFormProps) {
   const [avatarUrl, setAvatarUrl] = useState(currentAvatarUrl ?? "");
-  const [status, setStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(currentAvatarUrl);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
-  const previewUrl = useMemo(() => avatarUrl.trim(), [avatarUrl]);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setStatus(null);
-
-    const res = await fetch("/api/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ avatarUrl }),
-    });
-
-    if (!res.ok) {
-      setStatus("Update failed");
-      setLoading(false);
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('只允許上傳圖片檔案');
       return;
     }
 
-    setStatus("Saved");
-    setLoading(false);
-    router.refresh();
-  }
+    // Validate file size (5MB limit)
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toast.error('檔案大小超過 5 MB 限制');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Upload image
+      const result = await uploadImage(file, {
+        maxWidth: 512,
+        maxBytes: maxBytes,
+        quality: 85
+      });
+
+      setAvatarUrl(result.url);
+      setPreview(result.url);
+      toast.success('圖片已上傳');
+    } catch (err: any) {
+      toast.error(err.message || '上傳失敗');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!avatarUrl) {
+      toast.error('請先上傳頭像');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl }),
+      });
+
+      if (!res.ok) {
+        throw new Error('更新失敗');
+      }
+
+      toast.success('頭像已更新');
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || '更新失敗');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemove = () => {
+    setPreview(null);
+    setAvatarUrl("");
+  };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
-      <div className="flex items-center gap-3 rounded-xl border border-neutral bg-base-200 p-3">
-        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-base-300 text-sm font-bold text-base-content">
-          {previewUrl ? (
-            <img src={previewUrl} alt="Avatar preview" className="h-full w-full object-cover" />
-          ) : (
-            currentDisplayName.slice(0, 1).toUpperCase()
-          )}
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-base-content">Avatar Preview</p>
-          <p className="text-xs text-[#818384]">Paste image URL and save to update avatar.</p>
-        </div>
-      </div>
-
-      <div>
-        <label className="text-sm font-semibold text-base-content">Avatar URL</label>
-        <input
-          type="url"
-          value={avatarUrl}
-          onChange={(event) => setAvatarUrl(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-neutral bg-base-200 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-[#818384] focus:border-base-content"
-          placeholder="https://..."
-          aria-label="Avatar URL"
+    <div className="space-y-4">
+      {/* Current Avatar Preview */}
+      <div className="flex items-center gap-4 rounded-xl border border-border-default bg-surface p-4">
+        <Avatar 
+          fallbackSeed={currentDisplayName} 
+          src={preview} 
+          size="lg" 
+          className="border-2 border-border-default" 
         />
+        <div>
+          <p className="text-sm font-semibold text-text-primary">當前頭像</p>
+          <p className="text-xs text-text-secondary">上傳圖片後點擊「儲存」套用變更</p>
+        </div>
       </div>
 
-      {status && <div className="text-sm text-[#818384]">{status}</div>}
+      {/* Upload Area */}
+      <div className="space-y-3">
+        <label className="block">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+            id="avatar-upload"
+            disabled={isUploading}
+          />
+          <div 
+            onClick={() => document.getElementById('avatar-upload')?.click()}
+            className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-border-default rounded-xl cursor-pointer hover:border-upvote hover:bg-highlight transition-colors"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 size={32} className="animate-spin text-upvote mb-2" />
+                <span className="text-sm text-text-secondary">上傳中...</span>
+              </>
+            ) : (
+              <>
+                <Upload size={32} className="text-text-secondary mb-2" />
+                <span className="text-sm text-text-primary font-semibold">點擊上傳圖片</span>
+                <span className="text-xs text-text-secondary mt-1">
+                  支援 JPG、PNG、GIF（最大 5 MB）
+                </span>
+              </>
+            )}
+          </div>
+        </label>
+
+        {preview && preview !== currentAvatarUrl && (
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary"
+          >
+            <X size={16} />
+            取消選擇
+          </button>
+        )}
+      </div>
+
+      {/* Save Button */}
       <button
-        type="submit"
-        disabled={loading}
-        className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-content transition-opacity hover:opacity-90 disabled:opacity-60"
+        type="button"
+        onClick={handleSave}
+        disabled={isSaving || isUploading || !avatarUrl || avatarUrl === currentAvatarUrl}
+        className="inline-flex min-h-10 items-center justify-center rounded-full bg-upvote px-6 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Saving..." : "Save avatar"}
+        {isSaving ? "儲存中..." : "儲存頭像"}
       </button>
-    </form>
+    </div>
   );
 }

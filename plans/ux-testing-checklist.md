@@ -244,15 +244,15 @@
 | BUG-001 | 2026-02-08 | 註冊頁面 | P3 | Create account, Theme 沒有統一 | 訪問 `/register` | 使用 dark theme，符合 Reddit 2024+ style | 白色背景色 | 待補 | ✅ 已修復 |
 | BUG-002 | 2026-02-08 | 登入頁面 | P3 | Log In Theme 沒有一致 | 訪問 `/login` | 深色主題按鈕，無未實作功能 | 按鈕顏色錯誤，有 Phone/Google 按鈕 | 待補 | 需移除未實作的登入方式 |
 | BUG-003 | 2026-02-08 | 註冊流程 | P0 | Supabase Auth 與 profiles 不同步 | 完成註冊流程 | Auth 和 profiles 都有用戶資料 | Auth 有用戶，profiles 無資料 | 待補 | ✅ Migration 009 已創建 |
-| BUG-004 | 2026-02-08 | 頭像設置 | P0 | Avatar setting 沒有上傳圖像的按鈕 | 訪問 `/settings/avatar` | 顯示頭像上傳按鈕，不支援 URL | 沒有上傳功能 | 待補 | 需整合 ImageUpload 元件 |
-| BUG-005 | 2026-02-08 | 個人資料 | P3 | /profile UI 調整 - 缺少 Display Name | 訪問 `/profile` | Avatar 旁顯示 display name | 只有 avatar 和背景 | 待補 | 需顯示用戶名稱 |
+| BUG-004 | 2026-02-08 | 頭像設置 | P0 | Avatar setting 沒有上傳圖像的按鈕 | 訪問 `/settings/avatar` | 顯示頭像上傳按鈕，不支援 URL | 沒有上傳功能 | 待補 | ✅ 已修復 (2026-02-09) - 重寫 avatar-form，使用檔案上傳 + Toast 通知 |
+| BUG-005 | 2026-02-08 | 個人資料 | P3 | /profile UI 調整 - 缺少 Display Name | 訪問 `/profile` | Avatar 旁顯示 display name | 只有 avatar 和背景 | 待補 | ✅ 已修復 (2026-02-09) - 在 banner 區域顯示 display name 和 username |
 | BUG-006 | 2026-02-08 | 資料設置 | P3 | Profile settings UI 調整 - Save 提示改用 Toast | 在 `/settings/profile` 點擊 Save | 使用 react-hot-toast 提示 | 出現 save text 導致 UI 抖動 | 待補 | 改用 Toast 通知 |
 | BUG-007 | 2026-02-08 | 首頁排序 | P1 | Hot/New/Top/Rising 邏輯不明 | 訪問 `/`，切換排序 | 邏輯分離，清楚標註各算法 | 全寫在 page，無法看出差異 | 待補 | 需重構程式碼結構 |
 | BUG-008 | 2026-02-08 | 首頁排序 | P3 | Top 時間選擇器無法使用 | 選擇 Top，點擊時間選擇器 | 展開選項並更新列表 | 只能點擊，無選項出現 | 待補 | 修復下拉選單 |
-| BUG-009 | 2026-02-08 | 評論功能 | P0 | Comment 後頁面當機 | 發布評論後 | 正常更新，無錯誤 | DOMPurify sanitize 錯誤 | 待補 | 需安裝 isomorphic-dompurify |
-| BUG-010 | 2026-02-08 | 個人資料 | P0 | `/profile` runtime error | 訪問 `/profile` | 正常顯示 UI | Event handlers cannot be passed to Client Component props | 待補 | |
+| BUG-009 | 2026-02-08 | 評論功能 | P0 | Comment 後頁面當機 | 發布評論後 | 正常更新，無錯誤 | DOMPurify sanitize 錯誤 | 待補 | ✅ 已修復 (2026-02-09) - 改用 isomorphic-dompurify |
+| BUG-010 | 2026-02-08 | 個人資料 | P0 | `/profile` runtime error | 訪問 `/profile` | 正常顯示 UI | Event handlers cannot be passed to Client Component props | 待補 | ✅ 已修復 (2026-02-09) - 創建 ProfilePostList 元件 |
 | BUG-011 | 2026-02-08 | 帖子詳情頁 | P3 | 帖子詳情頁缺少作者資訊 | 訪問 `/posts/[id]` | 顯示 avatar、name，可點擊查看 `/u/display_name` | 沒有顯示作者資訊 | 待補 | |
-| BUG-012 | 2026-02-08 | 用戶頁面 | P0 | 沒有作者/Persona 頁面 | 訪問 `/u/any_display_name` | 查看 user/ persona info，layout 類似 `/profile` | 頁面不存在 (404) | 待補 | |
+| BUG-012 | 2026-02-08 | 用戶頁面 | P0 | 沒有作者/Persona 頁面 | 訪問 `/u/any_display_name` | 查看 user/ persona info，layout 類似 `/profile` | 頁面不存在 (404) | 待補 | ✅ 已修復 (2026-02-09) - 創建 /u/[display_name] 頁面，支援 user 和 persona |
 | BUG-013 | 2026-02-08 | 板塊頁面 | P2 | Board 路徑應為 `/r` 開頭 | 訪問 `/boards/concept-art-gallery` | URL 為 `/r/concept-art-gallery` | URL 為 `/boards/concept-art-gallery` | 待補 | |
 
 ### 嚴重程度定義
@@ -303,12 +303,14 @@
 - 失敗: \_\_\_\_ 個
 - 未測試: \_\_\_\_ 個
 - Bug 數量: 13 個 (P0: 5, P1: 1, P2: 2, P3: 5)
+- 已修復: 6 個 (P0: 5, P3: 1)
+- 待修復: 7 個 (P1: 1, P2: 2, P3: 4)
 
 ### 主要問題摘要
 
-1.
-2.
-3.
+1. ✅ 所有 P0 (致命) Bug 已修復
+2. ✅ Username 功能已完整實作（Instagram 風格）
+3. ✅ Database schema 已整合為單一 schema.sql
 
 ### 優先修復建議
 

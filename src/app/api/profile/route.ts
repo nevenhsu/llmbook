@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { validateUsernameFormat } from '@/lib/username-validation';
 
 export const runtime = 'nodejs';
 
@@ -14,23 +15,65 @@ export async function PUT(request: Request) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const { displayName, avatarUrl, bio } = await request.json();
+  const { username, displayName, avatarUrl, bio } = await request.json();
 
   const { data: existingProfile } = await supabase
     .from('profiles')
-    .select('display_name,avatar_url,bio')
+    .select('username,display_name,avatar_url,bio')
     .eq('user_id', user.id)
     .maybeSingle();
 
+  // Validate and process username
+  let nextUsername = existingProfile?.username;
+  if (username !== undefined) {
+    const trimmedUsername = String(username).trim().toLowerCase();
+    
+    // Validate format
+    const validation = validateUsernameFormat(trimmedUsername, false);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    // Check if username changed and is available
+    if (trimmedUsername !== existingProfile?.username) {
+      // Check availability in profiles
+      const { data: profileExists } = await supabase
+        .from('profiles')
+        .select('username')
+        .ilike('username', trimmedUsername)
+        .neq('user_id', user.id)
+        .maybeSingle();
+
+      if (profileExists) {
+        return NextResponse.json({ error: 'Username 已被使用' }, { status: 400 });
+      }
+
+      // Check availability in personas
+      const { data: personaExists } = await supabase
+        .from('personas')
+        .select('username')
+        .ilike('username', trimmedUsername)
+        .maybeSingle();
+
+      if (personaExists) {
+        return NextResponse.json({ error: 'Username 已被使用' }, { status: 400 });
+      }
+    }
+
+    nextUsername = trimmedUsername;
+  }
+
+  // Validate and process display name
   const nextDisplayName =
     displayName !== undefined
       ? String(displayName).trim()
-      : existingProfile?.display_name ?? user.email?.split('@')[0] ?? 'Unknown';
+      : existingProfile?.display_name ?? nextUsername ?? 'Unknown';
 
   if (!nextDisplayName) {
-    return new NextResponse('Display name required', { status: 400 });
+    return NextResponse.json({ error: 'Display name 不能為空' }, { status: 400 });
   }
 
+  // Validate and process avatar URL
   let nextAvatarUrl: string | null = existingProfile?.avatar_url ?? null;
   if (avatarUrl !== undefined) {
     const trimmedAvatarUrl = String(avatarUrl).trim();
@@ -40,16 +83,18 @@ export async function PUT(request: Request) {
       try {
         new URL(trimmedAvatarUrl);
       } catch {
-        return new NextResponse('Invalid avatar URL', { status: 400 });
+        return NextResponse.json({ error: 'Avatar URL 格式錯誤' }, { status: 400 });
       }
       nextAvatarUrl = trimmedAvatarUrl;
     }
   }
 
+  // Update profile
   const { data, error } = await supabase
     .from('profiles')
     .upsert({
       user_id: user.id,
+      username: nextUsername,
       display_name: nextDisplayName,
       avatar_url: nextAvatarUrl,
       bio: bio !== undefined ? bio : existingProfile?.bio ?? null
@@ -58,8 +103,8 @@ export async function PUT(request: Request) {
     .single();
 
   if (error) {
-    return new NextResponse(error.message, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json({ success: true, data });
 }
