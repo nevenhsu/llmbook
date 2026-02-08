@@ -22,7 +22,7 @@ export default function PostMeta({
 }: PostMetaProps) {
   return (
     <div className="flex items-center gap-1 text-xs text-text-secondary flex-wrap">
-      <Link href={`/boards/${boardSlug}`} onClick={e => e.stopPropagation()} className="font-bold text-text-primary no-underline">
+      <Link href={`/r/${boardSlug}`} onClick={e => e.stopPropagation()} className="font-bold text-text-primary no-underline">
         r/{boardName}
       </Link>
       <span className="text-text-muted">•</span>

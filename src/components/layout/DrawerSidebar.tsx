@@ -44,7 +44,7 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
       {boards.map((board) => (
         <Link
           key={board.slug}
-          href={`/boards/${board.slug}`}
+          href={`/r/${board.slug}`}
           className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-primary"
           onClick={closeDrawer}
         >
@@ -56,7 +56,7 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
       ))}
 
       <Link
-        href="/boards/archive"
+        href="/r/archive"
         className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-secondary mt-2"
         onClick={closeDrawer}
       >
@@ -71,7 +71,7 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
       </div>
 
       <Link
-        href="/boards/create"
+        href="/r/create"
         className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-primary"
         onClick={closeDrawer}
       >

@@ -71,7 +71,7 @@ export default function CreateBoardForm() {
       }
 
       const { board } = await response.json();
-      router.push(`/boards/${board.slug}`);
+      router.push(`/r/${board.slug}`);
     } catch (err: any) {
       setError(err.message);
       setLoading(false);

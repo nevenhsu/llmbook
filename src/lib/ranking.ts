@@ -1,19 +1,32 @@
 /**
- * Reddit-style Hot ranking algorithm
- * hot_score = log10(max(|score|, 1)) * sign(score) + (created_at_epoch - epoch_ref) / 45000
+ * Hot ranking algorithm - 權重: Score > Comments > Time
+ * 
+ * 公式: hot_score = (score * 2) + (comment_count * 0.5) - (age_hours * 0.1)
+ * 
+ * 說明:
+ * - Score 權重最高 (乘以 2)
+ * - Comments 次要權重 (乘以 0.5)
+ * - Time 是衰減因子 (每小時扣 0.1)
+ * - 這樣高分數+高互動的帖子會排在前面
  */
-export function hotScore(score: number, createdAtIso: string): number {
-  const order = Math.log10(Math.max(Math.abs(score), 1));
-  const sign = score > 0 ? 1 : score < 0 ? -1 : 0;
-  const epoch = new Date('2024-01-01').getTime() / 1000;
-  const seconds = new Date(createdAtIso).getTime() / 1000 - epoch;
-  return sign * order + seconds / 45000;
+export function hotScore(score: number, commentCount: number, createdAtIso: string): number {
+  const now = Date.now();
+  const createdAt = new Date(createdAtIso).getTime();
+  const ageHours = (now - createdAt) / (1000 * 60 * 60);
+  
+  // 基礎分數 = (投票分 * 2) + (評論數 * 0.5)
+  const engagementScore = (score * 2) + (commentCount * 0.5);
+  
+  // 時間衰減: 每小時扣 0.1 分，最多扣 50 分 (約 20 天後不再衰減)
+  const timeDecay = Math.min(ageHours * 0.1, 50);
+  
+  return engagementScore - timeDecay;
 }
 
 /**
  * Rising score: Recent posts with velocity
  * velocity = score / hours_since_creation
- * Only for posts < 24 hours old
+ * Only for posts < 72 hours (3 days) old
  */
 export function risingScore(score: number, createdAtIso: string): number {
   const now = Date.now();
@@ -21,8 +34,8 @@ export function risingScore(score: number, createdAtIso: string): number {
   const ageMs = now - createdAt;
   const ageHours = ageMs / (1000 * 60 * 60);
   
-  // Only consider posts less than 24 hours old
-  if (ageHours > 24) return -Infinity;
+  // Only consider posts less than 72 hours (3 days) old
+  if (ageHours > 72) return -Infinity;
   
   // Avoid division by zero, use minimum 0.1 hours
   const hours = Math.max(ageHours, 0.1);
@@ -78,6 +91,7 @@ export type SortType = 'hot' | 'new' | 'top' | 'rising' | 'best';
 export interface Post {
   score: number;
   created_at: string;
+  comment_count?: number;
   upvotes?: number;
   downvotes?: number;
 }
@@ -86,14 +100,14 @@ export function sortPosts<T extends Post>(posts: T[], sort: SortType): T[] {
   switch (sort) {
     case 'hot':
       return [...posts].sort((a, b) => 
-        hotScore(b.score, b.created_at) - hotScore(a.score, a.created_at)
+        hotScore(b.score, b.comment_count || 0, b.created_at) - hotScore(a.score, a.comment_count || 0, a.created_at)
       );
     
     case 'rising':
       return [...posts]
         .filter(p => {
           const ageHours = (Date.now() - new Date(p.created_at).getTime()) / (1000 * 60 * 60);
-          return ageHours < 24;
+          return ageHours <= 72; // 3天內
         })
         .sort((a, b) => 
           risingScore(b.score, b.created_at) - risingScore(a.score, a.created_at)

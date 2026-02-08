@@ -5,7 +5,11 @@ import { hotScore, getTimeRangeDate } from '@/lib/ranking';
 
 export const runtime = 'nodejs';
 
+// Cache for 60 seconds in production
+export const revalidate = 60;
+
 export async function GET(request: Request) {
+  const startTime = Date.now();
   const supabase = await createClient(cookies());
   const { searchParams } = new URL(request.url);
   const board = searchParams.get('board');
@@ -14,42 +18,47 @@ export async function GET(request: Request) {
   const cursor = searchParams.get('cursor');
   const sort = searchParams.get('sort') || 'new';
   const t = searchParams.get('t') || 'today';
+  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50);
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Parallel execution of independent queries
+  const [{ data: { user } }, boardData, tagData] = await Promise.all([
+    supabase.auth.getUser(),
+    board ? supabase.from('boards').select('id').eq('slug', board).maybeSingle() : Promise.resolve({ data: null }),
+    tag ? supabase.from('tags').select('id').eq('slug', tag).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
 
-  let boardId: string | null = null;
-  if (board) {
-    const { data } = await supabase.from('boards').select('id').eq('slug', board).maybeSingle();
-    boardId = data?.id ?? null;
+  const boardId = boardData?.data?.id ?? null;
+  const tagId = tagData?.data?.id ?? null;
+
+  if ((board && !boardId) || (tag && !tagId)) {
+    return NextResponse.json([]);
   }
 
-  let tagId: string | null = null;
-  if (tag) {
-    const { data } = await supabase.from('tags').select('id').eq('slug', tag).maybeSingle();
-    tagId = data?.id ?? null;
-  }
-
+  // Build base query with minimal fields
+  // Exclude 'body' to reduce payload size - only fetch title and metadata
   let query = supabase
     .from('posts')
     .select(
-      `id,title,body,created_at,score,comment_count,board_id,author_id,persona_id,
-       boards(name,slug),
+      `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
+       boards!inner(name,slug),
        profiles(display_name,avatar_url),
-       personas(display_name,avatar_url,slug),
+       personas(display_name,avatar_url),
        media(url),
-       post_tags(tag:tags(name,slug))`
+       post_tags(tag:tags(name))`
     )
     .eq('status', 'PUBLISHED');
 
-  if (user) {
-    const { data: hidden } = await supabase.from('hidden_posts').select('post_id').eq('user_id', user.id);
+  // Only query hidden posts if user is logged in
+  if (user?.id) {
+    const { data: hidden } = await supabase
+      .from('hidden_posts')
+      .select('post_id')
+      .eq('user_id', user.id)
+      .limit(100); // Limit hidden posts check
+    
     if (hidden && hidden.length > 0) {
       query = query.not('id', 'in', `(${hidden.map(h => h.post_id).join(',')})`);
     }
-  }
-
-  if (board && !boardId) {
-    return NextResponse.json([]);
   }
 
   if (boardId) {
@@ -60,20 +69,17 @@ export async function GET(request: Request) {
     query = query.eq('author_id', author);
   }
 
-  if (tag && !tagId) {
-    return NextResponse.json([]);
-  }
-
   if (tagId) {
-    query = query.select(
-      `id,title,body,created_at,score,comment_count,board_id,author_id,persona_id,
-       boards(name,slug),
-       profiles(display_name,avatar_url),
-       personas(display_name,avatar_url,slug),
-       media(url),
-       post_tags!inner(tag:tags(name,slug))`
-    );
-    query = query.eq('post_tags.tag_id', tagId);
+    query = query
+      .select(
+        `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
+         boards!inner(name,slug),
+         profiles(display_name,avatar_url),
+         personas(display_name,avatar_url),
+         media(url),
+         post_tags!inner(tag:tags(name))`
+      )
+      .eq('post_tags.tag_id', tagId);
   }
 
   if (cursor) {
@@ -83,25 +89,51 @@ export async function GET(request: Request) {
     }
   }
 
+  // Apply sort-specific filters
   if (sort === 'top') {
     const since = getTimeRangeDate(t);
     if (since) query = query.gte('created_at', since);
     query = query.order('score', { ascending: false });
+  } else if (sort === 'hot') {
+    // For hot sort, only fetch recent posts (last 7 days)
+    const since = getTimeRangeDate('week');
+    if (since) query = query.gte('created_at', since);
+    query = query.order('score', { ascending: false });
+  } else if (sort === 'rising') {
+    // For rising sort, only fetch last 3 days
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte('created_at', since);
+    query = query.order('created_at', { ascending: false });
   } else {
+    // new
     query = query.order('created_at', { ascending: false });
   }
 
-  const { data, error } = await query.limit(50);
+  const { data, error } = await query.limit(limit);
+  
   if (error) {
+    console.error('API Error:', error);
     return new NextResponse(error.message, { status: 500 });
   }
 
   let posts = (data ?? []) as any[];
-  if (sort === 'hot' || sort === 'best') {
-    posts = posts.sort((a, b) => hotScore(b.score, b.created_at) - hotScore(a.score, a.created_at));
+  
+  // Apply hot ranking algorithm
+  if (sort === 'hot') {
+    posts = posts.sort((a, b) => 
+      hotScore(b.score, b.comment_count || 0, b.created_at) - 
+      hotScore(a.score, a.comment_count || 0, a.created_at)
+    );
   }
 
-  return NextResponse.json(posts);
+  const duration = Date.now() - startTime;
+  console.log(`API /posts: ${posts.length} posts in ${duration}ms (sort: ${sort})`);
+
+  return NextResponse.json(posts, {
+    headers: {
+      'X-Response-Time': `${duration}ms`,
+    },
+  });
 }
 
 export async function POST(request: Request) {

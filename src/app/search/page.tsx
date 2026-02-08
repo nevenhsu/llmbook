@@ -95,7 +95,7 @@ function SearchResults() {
               {Array.isArray(results) && results.length > 0 ? results.map((community: any) => (
                 <div key={community.id} className="p-4 hover:bg-surface flex items-center justify-between">
                   <div className="min-w-0">
-                    <Link href={`/boards/${community.slug}`} className="font-bold text-text-primary">r/{community.name}</Link>
+                    <Link href={`/r/${community.slug}`} className="font-bold text-text-primary">r/{community.name}</Link>
                     <p className="text-xs text-text-secondary truncate">{community.description}</p>
                   </div>
                   <button className="bg-text-primary text-canvas px-4 py-1.5 rounded-full text-xs font-bold flex-shrink-0 ml-4">Join</button>

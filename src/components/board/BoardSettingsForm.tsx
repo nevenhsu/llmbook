@@ -212,7 +212,7 @@ export default function BoardSettingsForm({
         throw new Error(await res.text());
       }
 
-      router.push('/boards/archive');
+      router.push('/r/archive');
     } catch (err: any) {
       console.error(err);
       setError('Failed to archive board.');
@@ -546,7 +546,7 @@ export default function BoardSettingsForm({
             {loading ? <span className="loading loading-spinner"></span> : 'Save Rules'}
           </button>
           <div className="pt-2">
-            <Link href={`/boards/${board.slug}/member`} className="btn btn-outline btn-sm">
+            <Link href={`/r/${board.slug}/member`} className="btn btn-outline btn-sm">
               Open Members & Bans Page
             </Link>
           </div>

@@ -247,13 +247,30 @@
 | BUG-004 | 2026-02-08 | 頭像設置 | P0 | Avatar setting 沒有上傳圖像的按鈕 | 訪問 `/settings/avatar` | 顯示頭像上傳按鈕，不支援 URL | 沒有上傳功能 | 待補 | ✅ 已修復 (2026-02-09) - 重寫 avatar-form，使用檔案上傳 + Toast 通知 |
 | BUG-005 | 2026-02-08 | 個人資料 | P3 | /profile UI 調整 - 缺少 Display Name | 訪問 `/profile` | Avatar 旁顯示 display name | 只有 avatar 和背景 | 待補 | ✅ 已修復 (2026-02-09) - 在 banner 區域顯示 display name 和 username |
 | BUG-006 | 2026-02-08 | 資料設置 | P3 | Profile settings UI 調整 - Save 提示改用 Toast | 在 `/settings/profile` 點擊 Save | 使用 react-hot-toast 提示 | 出現 save text 導致 UI 抖動 | 待補 | 改用 Toast 通知 |
-| BUG-007 | 2026-02-08 | 首頁排序 | P1 | Hot/New/Top/Rising 邏輯不明 | 訪問 `/`，切換排序 | 邏輯分離，清楚標註各算法 | 全寫在 page，無法看出差異 | 待補 | 需重構程式碼結構 |
-| BUG-008 | 2026-02-08 | 首頁排序 | P3 | Top 時間選擇器無法使用 | 選擇 Top，點擊時間選擇器 | 展開選項並更新列表 | 只能點擊，無選項出現 | 待補 | 修復下拉選單 |
+| BUG-007 | 2026-02-08 | 首頁排序 | P1 | Hot/New/Top/Rising 邏輯不明 | 訪問 `/`，切換排序 | 邏輯分離，清楚標註各算法 | 全寫在 page，無法看出差異 | 待補 | ✅ 已修復 (2026-02-08) - Hot算法權重 Score(×2)>Comments(×0.5)>Time(衰減)，詳見「排序算法說明」章節；UI順序 New/Hot/Rising/Top；Rising改為3天內 |
+| BUG-008 | 2026-02-08 | 首頁排序 | P3 | Top 時間選擇器無法使用 | 選擇 Top，點擊時間選擇器 | 展開選項並更新列表 | 只能點擊，無選項出現 | 待補 | ✅ 已修復 (2026-02-08) - 重寫 FeedSortBar，改用 DaisyUI select 組件替代 dropdown，解決顯示問題 |
 | BUG-009 | 2026-02-08 | 評論功能 | P0 | Comment 後頁面當機 | 發布評論後 | 正常更新，無錯誤 | DOMPurify sanitize 錯誤 | 待補 | ✅ 已修復 (2026-02-09) - 改用 isomorphic-dompurify |
 | BUG-010 | 2026-02-08 | 個人資料 | P0 | `/profile` runtime error | 訪問 `/profile` | 正常顯示 UI | Event handlers cannot be passed to Client Component props | 待補 | ✅ 已修復 (2026-02-09) - 創建 ProfilePostList 元件 |
 | BUG-011 | 2026-02-08 | 帖子詳情頁 | P3 | 帖子詳情頁缺少作者資訊 | 訪問 `/posts/[id]` | 顯示 avatar、name，可點擊查看 `/u/display_name` | 沒有顯示作者資訊 | 待補 | |
 | BUG-012 | 2026-02-08 | 用戶頁面 | P0 | 沒有作者/Persona 頁面 | 訪問 `/u/any_display_name` | 查看 user/ persona info，layout 類似 `/profile` | 頁面不存在 (404) | 待補 | ✅ 已修復 (2026-02-09) - 創建 /u/[display_name] 頁面，支援 user 和 persona |
-| BUG-013 | 2026-02-08 | 板塊頁面 | P2 | Board 路徑應為 `/r` 開頭 | 訪問 `/boards/concept-art-gallery` | URL 為 `/r/concept-art-gallery` | URL 為 `/boards/concept-art-gallery` | 待補 | |
+| BUG-013 | 2026-02-08 | 板塊頁面 | P2 | Board 路徑應為 `/r` 開頭 | 訪問 `/boards/concept-art-gallery` | URL 為 `/r/concept-art-gallery` | URL 為 `/boards/concept-art-gallery` | 待補 | ✅ 已修復 (2026-02-08) - 創建 /r/[slug] 路由，更新所有元件連結 (PostMeta, BoardInfoCard, BoardLayout, DrawerSidebar 等)，保留 /boards 做向後相容 |
+| BUG-014 | 2026-02-08 | API 性能 | P2 | /api/posts 載入過慢 | 訪問首頁，觀察載入時間 | API 回應 < 500ms | 載入時間過長 | 待補 | ✅ 已優化 (2026-02-08) - 1) 移除 body 欄位減少 payload 2) 平行查詢 boards/tags 3) 條件查詢 hidden_posts 4) 限制返回 20 條 5) 添加快取 60s 6) 時間篩選減少資料量；✅ 已修復 - Rising 時間範圍從1天改為3天 |
+| BUG-015 | 2026-02-08 | 首頁排序 | P1 | 重新整理後 sort 參數與 API 呼叫不一致 | 訪問 `/?sort=hot`，重新整理頁面 | API 應呼叫 sort=hot | API 卻呼叫預設 sort=new | 待補 | ✅ 已修復 (2026-02-08) - page.tsx 使用 useSearchParams 讀取 URL sort 參數，並設為初始 state |
+
+### 排序算法說明
+
+| 排序 | 權重邏輯 | 公式/說明 |
+|------|---------|-----------|
+| **New** | Time only | 純粹按發布時間排序，最新在前 |
+| **Hot** | Score > Comments > Time | `hot_score = (score × 2) + (comments × 0.5) − (age_hours × 0.1)` |
+| **Rising** | Score / Time | 最近 3 天內，按「分數÷時間」的速度排序 |
+| **Top** | Score only | 純粹按總分排序，可選時間範圍篩選 |
+
+**Hot 算法權重說明：**
+- **Score 權重最高** (×2)：投票分數是最重要的因素
+- **Comments 次要** (×0.5)：互動數有加成但較低
+- **Time 是衰減因子** (−0.1/小時)：舊帖子會慢慢下降，但最多只扣 50 分
+- **同分時**：按時間新的優先
 
 ### 嚴重程度定義
 
@@ -302,9 +319,9 @@
 - 通過: \_\_\_\_ 個
 - 失敗: \_\_\_\_ 個
 - 未測試: \_\_\_\_ 個
-- Bug 數量: 13 個 (P0: 5, P1: 1, P2: 2, P3: 5)
-- 已修復: 6 個 (P0: 5, P3: 1)
-- 待修復: 7 個 (P1: 1, P2: 2, P3: 4)
+- Bug 數量: 13 個 (P0: 5, P1: 1, P2: 1, P3: 6)
+- 已修復: 9 個 (P0: 5, P1: 1, P2: 1, P3: 2)
+- 待修復: 4 個 (P3: 4)
 
 ### 主要問題摘要
 

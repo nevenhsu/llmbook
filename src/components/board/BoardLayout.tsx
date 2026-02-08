@@ -39,13 +39,13 @@ export default function BoardLayout({ children, board, slug, isJoined }: BoardLa
             </button>
             <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1">
               <li>
-                <Link href={`/boards/${slug}/member`}>
+                <Link href={`/r/${slug}/member`}>
                   <Users size={14} />
                   Members & Bans
                 </Link>
               </li>
               <li>
-                <Link href={`/boards/${slug}/settings`}>
+                <Link href={`/r/${slug}/settings`}>
                   <Settings size={14} />
                   Board Settings
                 </Link>
