@@ -1,108 +1,163 @@
 # Remaining Tasks & Session Handoff
 
-> Last updated: 2026-02-07
->
+> Last updated: 2026-02-08
+> 
 > Scope: Webapp board forum (Phase 9 / M6 related)
 
 ---
 
-## Current Status (已完成)
+## Completed Tasks (已完成)
 
 ### 1) Moderator Management
 
-- ✅ Board Settings 已可新增 moderator（含搜尋使用者）
-- ✅ 已可移除 moderator（owner 不可移除）
-- ✅ 已可編輯 moderator permissions
-- ✅ API 已齊全：
+- ✅ Board Settings can add moderators (with user search)
+- ✅ Can remove moderators (owner cannot be removed)
+- ✅ Can edit moderator permissions
+- ✅ APIs complete:
   - `GET/POST /api/boards/[slug]/moderators`
   - `DELETE/PATCH /api/boards/[slug]/moderators/[userId]`
 
 ### 2) Member & Ban Management
 
-- ✅ 已搬到獨立頁：`/boards/[slug]/member`
-- ✅ Member 清單可查看（public 可看）
-- ✅ Ban 清單可查看（public 可看）
-- ✅ Kick/Ban/Unban 僅有權限者可操作
-- ✅ 權限規則：
-  - 只有 owner 或 `manage_users = true` 的 manager 可編輯 ban list / kick
-  - 無權限者可看但按鈕 disabled
+- ✅ Moved to dedicated page: `/boards/[slug]/member`
+- ✅ Member list viewable (public)
+- ✅ Ban list viewable (public)
+- ✅ Kick/Ban/Unban only for authorized users
+- ✅ Permission rules:
+  - Only owner or manager with `manage_users = true` can edit ban list / kick
+  - Unauthorized users can view but buttons are disabled
 
-### 3) Board 頁 UI 導覽
+### 3) Board Page UI Navigation
 
-- ✅ Desktop sidebar 新增獨立 `Board Management` card（獨立於 Community Rules card）
-- ✅ `Board Management` card 放在 Join 區塊後、Community Rules 前
-- ✅ Mobile board header 右側 dropdown 可快速前往 Members/Settings
-- ✅ Compact article 列表調整為上下 `padding`（避免 hover 背景衝突）
+- ✅ Desktop sidebar added independent `Board Management` card (separate from Community Rules)
+- ✅ `Board Management` card positioned after Join block, before Community Rules
+- ✅ Mobile board header dropdown for quick access to Members/Settings
+- ✅ Compact article list adjusted with vertical `padding` (avoids hover background conflict)
+
+### 4) File Upload for Board Icon/Banner
+
+- ✅ `src/lib/image-upload.ts` - Shared image processing logic
+- ✅ `src/lib/image-upload.test.ts` - Complete tests (18 unit tests + 2 integration tests)
+- ✅ `src/components/ui/ImageUpload.tsx` - Reusable upload component
+- ✅ `src/components/board/CreateBoardForm.tsx` - Integrated upload
+- ✅ `src/components/board/BoardSettingsForm.tsx` - Integrated upload
+- ✅ `src/app/api/media/upload/route.ts` - Updated to support custom maxWidth/quality
+- ✅ Features:
+  - Drag & drop upload support
+  - Real-time preview
+  - Auto compression to webp (sharp)
+  - Max width 2048px
+  - 5MB file limit
+  - Manual URL input as fallback
+- ✅ Tests:
+  - Unit tests: validateImageFile, formatBytes, getAspectRatioClass, createImagePreview, uploadImage mock
+  - Integration tests: Actual upload to Supabase (requires `RUN_INTEGRATION=1`)
+  - Auto cleanup: afterAll deletes storage files and database records
+
+### 5) Environment Configuration Refactoring
+
+- ✅ `src/lib/env.ts` (NEW) - Unified environment variable management
+  - Auto loads .env.local > .env (priority order)
+  - Distinguishes publicEnv (NEXT_PUBLIC_*) and privateEnv (server-only)
+  - Provides validation functions: validatePublicEnv, validatePrivateEnv, validateTestEnv
+  - Constants: isIntegrationTest, nodeEnv, isProduction, isDevelopment
+- ✅ Updated test files to use new env imports:
+  - `src/lib/image-upload.test.ts`
+  - `src/lib/supabase/__tests__/media-upload.integration.test.ts`
+- ✅ Benefits:
+  - All files just need `import { publicEnv, privateEnv } from '@/lib/env'`
+  - No need to repeat `dotenv.config()` in each file
+  - Type-safe, unified error handling
+  - Clear distinction between browser-safe and server-only variables
+
+### 6) Project Documentation
+
+- ✅ `AGENTS.md` (NEW) - Agent development guide with shared library references
+- ✅ Added QMD search rules with collection specification
 
 ---
 
 ## Important Behavior Notes
 
 1. `/boards/[slug]/member`
-   - 所有人可進入查看
-   - 只有 owner/manager 可執行動作（kick/ban/unban）
+   - Everyone can enter to view
+   - Only owner/manager can execute actions (kick/ban/unban)
 
 2. `/boards/[slug]/settings`
-   - 仍是 moderator/owner 可進入（一般使用者不可）
+   - Only moderator/owner can enter (regular users cannot)
 
 3. Board Management card
-   - `Members & Bans` 對所有人顯示
-   - `Board Settings` 僅對可管理者顯示（避免無權限誤導）
-
----
-
-## Remaining Tasks (下一個 session 可接著做)
-
-### High Priority
-
-1. File Upload for Board Icon/Banner
-   - `src/app/boards/create/page.tsx`
-   - `src/components/board/BoardSettingsForm.tsx`
-   - 目前只有 URL input，尚未做 upload + preview + crop + storage
-
-2. Board Statistics Dashboard
-   - 尚未建立
-   - 需求：post/member 趨勢、top contributors、activity 指標
-
-### Medium Priority
-
-3. Poll enhancement
-   - poll 到期自動關閉
-   - 倒數顯示
-
-4. Unarchive flow
-   - 目前只有 archive，無 unarchive
+   - `Members & Bans` displayed to everyone
+   - `Board Settings` only displayed to those who can manage (avoids misleading unauthorized users)
 
 ---
 
 ## Next Session Suggested Start
 
-1. 先做 Board File Upload（最影響使用者體驗）
-2. 補 API + UI（upload、preview、error/loading）
-3. 跑 `npm run build` 驗證
+### High Priority
+
+**Board Statistics Dashboard**
+- Create dashboard page: `/boards/[slug]/stats` or integrate into existing pages
+- Requirements:
+  - Post/member trend charts (last 7/30/90 days)
+  - Top contributors list
+  - Activity metrics (posts per day, comments, votes)
+  - Member growth chart
+- Technical approach:
+  - Create new API routes: `/api/boards/[slug]/stats`
+  - Use chart library (recharts or chart.js)
+  - Aggregate data from posts, votes, comments tables
+- Reference existing code pattern from `src/lib/ranking.ts` for data aggregation
+
+### Medium Priority
+
+**Poll Enhancement**
+- Auto-close polls when they expire
+- Countdown display for active polls
+- Need to add cron job or scheduled function to check expired polls
+
+**Unarchive Flow**
+- Currently only has archive, no unarchive
+- Add unarchive button for archived boards
+- API endpoint: `POST /api/boards/[slug]/unarchive`
 
 ---
 
-## Key Files Changed This Session
+## Key Files Reference
 
-- `src/app/boards/[slug]/member/page.tsx`
-- `src/components/board/BoardMemberManagement.tsx`
-- `src/components/board/BoardManageCard.tsx`
-- `src/components/board/BoardInfoCard.tsx`
-- `src/components/board/BoardLayout.tsx`
-- `src/components/board/BoardSettingsForm.tsx`
-- `src/components/post/PostRow.tsx`
-- `src/app/boards/[slug]/page.tsx`
-- `src/app/boards/[slug]/settings/page.tsx`
-- `src/app/api/boards/[slug]/members/route.ts`
-- `src/app/api/boards/[slug]/members/[userId]/route.ts`
-- `src/app/api/boards/[slug]/bans/route.ts`
-- `src/app/api/boards/[slug]/bans/[userId]/route.ts`
-- `src/lib/board-permissions.ts`
+### Shared Libraries (Use these!)
+- `src/lib/env.ts` - Environment variables ⭐
+- `src/lib/image-upload.ts` - Image upload logic ⭐
+- `src/lib/board-permissions.ts` - Board permission checks
+- `src/lib/supabase/client.ts` - Browser client
+- `src/lib/supabase/server.ts` - Server client
+- `src/lib/supabase/admin.ts` - Admin client
+
+### Components
+- `src/components/ui/ImageUpload.tsx` - Reusable image upload
+
+### Documentation
+- `AGENTS.md` - Read before each session
 
 ---
 
-## Validation Snapshot
+## Validation Commands
 
-- ✅ `npm run build` passed on latest state
-- ⚠️ daisyUI `@property` warning still appears (non-blocking)
+```bash
+# Run tests
+npm test
+
+# Build
+npm run build
+
+# Run integration tests
+RUN_INTEGRATION=1 npm test
+```
+
+---
+
+## Current Status
+
+- ✅ `npm run build` passed
+- ✅ `npm test` passed (25 passed, 5 skipped)
+- ⚠️ daisyUI `@property` warning (non-blocking)

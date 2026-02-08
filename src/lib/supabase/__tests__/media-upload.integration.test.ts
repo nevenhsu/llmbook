@@ -1,31 +1,17 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
-import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
 import sharp from "sharp";
 
 import { POST } from "@/app/api/media/upload/route";
+import { 
+  publicEnv, 
+  privateEnv, 
+  isIntegrationTest, 
+  validateTestEnv 
+} from "@/lib/env";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-dotenv.config({ path: ".env" });
-
-const runIntegration = process.env.RUN_INTEGRATION === "1";
-const integrationDescribe = runIntegration ? describe : describe.skip;
-
-const requiredEnv = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "SUPABASE_STORAGE_BUCKET",
-  "TEST_USER_EMAIL",
-  "TEST_USER_PASSWORD",
-] as const;
-
-function requireEnv() {
-  const missing = requiredEnv.filter((key) => !process.env[key]);
-  if (missing.length) {
-    throw new Error(`Missing required env vars: ${missing.join(", ")}`);
-  }
-}
+const integrationDescribe = isIntegrationTest ? describe : describe.skip;
 
 const cookieJar = new Map<string, string>();
 const cookieStore = {
@@ -42,7 +28,7 @@ vi.mock("next/headers", () => ({
 let mediaId: string | null = null;
 let publicUrl: string | null = null;
 let bucket: string;
-let admin: ReturnType<typeof createClient> | null = null;
+let admin: ReturnType<typeof createAdminClient> | null = null;
 
 function getStorageKeyFromPublicUrl(url: string, bucketName: string) {
   const marker = `/storage/v1/object/public/${bucketName}/`;
@@ -52,18 +38,17 @@ function getStorageKeyFromPublicUrl(url: string, bucketName: string) {
 }
 
 async function signInAndSeedCookies() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-  const email = process.env.TEST_USER_EMAIL!;
-  const password = process.env.TEST_USER_PASSWORD!;
-
-  const userClient = createClient(supabaseUrl, anonKey, {
+  const userClient = createClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  if (!privateEnv.testUserEmail || !privateEnv.testUserPassword) {
+    throw new Error("TEST_USER_EMAIL and TEST_USER_PASSWORD are required for integration tests");
+  }
+
   const { data, error } = await userClient.auth.signInWithPassword({
-    email,
-    password,
+    email: privateEnv.testUserEmail,
+    password: privateEnv.testUserPassword,
   });
 
   if (error || !data.session) {
@@ -72,32 +57,19 @@ async function signInAndSeedCookies() {
     );
   }
 
-  const ssrClient = createServerClient(supabaseUrl, anonKey, {
-    cookies: {
-      getAll: () => cookieStore.getAll(),
-      setAll: (cookiesToSet) => {
-        cookiesToSet.forEach(({ name, value }) => cookieStore.set(name, value));
-      },
-    },
-  });
-
-  await ssrClient.auth.setSession({
-    access_token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-  });
+  // Manually seed cookies for the mock
+  cookieJar.set("sb-access-token", data.session.access_token);
+  cookieJar.set("sb-refresh-token", data.session.refresh_token);
 }
 
 integrationDescribe("media upload (integration)", () => {
   beforeAll(async () => {
-    requireEnv();
-    bucket = process.env.SUPABASE_STORAGE_BUCKET!;
+    validateTestEnv();
+    bucket = privateEnv.storageBucket;
     await signInAndSeedCookies();
 
-    admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
+    // Use existing admin client from lib/supabase/admin
+    admin = createAdminClient();
   });
 
   afterAll(async () => {

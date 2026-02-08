@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Plus } from 'lucide-react';
+import ImageUpload from '@/components/ui/ImageUpload';
 
 interface Rule {
   title: string;
@@ -147,28 +148,24 @@ export default function CreateBoardForm() {
 
       {/* Banner & Icon */}
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
-        <div className="form-control w-full sm:w-1/2">
-          <label className="label">
-            <span className="label-text">Banner URL</span>
-          </label>
-          <input
-            type="url"
-            className="input input-bordered w-full bg-surface border-neutral"
+        <div className="w-full sm:w-1/2">
+          <ImageUpload
+            label="Banner"
             value={bannerUrl}
-            onChange={(e) => setBannerUrl(e.target.value)}
-            placeholder="https://..."
+            onChange={setBannerUrl}
+            onError={(err) => setError(err)}
+            aspectRatio="banner"
+            placeholder="上傳 Banner 圖片"
           />
         </div>
-        <div className="form-control w-full sm:w-1/2">
-          <label className="label">
-            <span className="label-text">Icon URL</span>
-          </label>
-          <input
-            type="url"
-            className="input input-bordered w-full bg-surface border-neutral"
+        <div className="w-full sm:w-1/2">
+          <ImageUpload
+            label="Icon"
             value={iconUrl}
-            onChange={(e) => setIconUrl(e.target.value)}
-            placeholder="https://..."
+            onChange={setIconUrl}
+            onError={(err) => setError(err)}
+            aspectRatio="square"
+            placeholder="上傳 Icon 圖片"
           />
         </div>
       </div>

@@ -5,8 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const MAX_BYTES = 5 * 1024 * 1024;
-const MAX_WIDTH = 1600;
+const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_WIDTH = 2048;
+const DEFAULT_QUALITY = 82;
 const DEFAULT_BUCKET = 'media';
 
 export const runtime = 'nodejs';
@@ -32,8 +33,12 @@ export async function POST(request: Request) {
     return new NextResponse('Only images are allowed', { status: 400 });
   }
 
-  if (file.size > MAX_BYTES) {
-    return new NextResponse('File exceeds 5MB limit', { status: 413 });
+  const maxBytes = parseInt(formData.get('maxBytes') as string) || DEFAULT_MAX_BYTES;
+  const maxWidth = parseInt(formData.get('maxWidth') as string) || DEFAULT_MAX_WIDTH;
+  const quality = parseInt(formData.get('quality') as string) || DEFAULT_QUALITY;
+
+  if (file.size > maxBytes) {
+    return new NextResponse(`File exceeds ${maxBytes / 1024 / 1024}MB limit`, { status: 413 });
   }
 
   const arrayBuffer = await file.arrayBuffer();
@@ -43,14 +48,14 @@ export async function POST(request: Request) {
   const metadata = await image.metadata();
 
   const resized = image.resize({
-    width: metadata.width && metadata.width > MAX_WIDTH ? MAX_WIDTH : metadata.width,
+    width: metadata.width && metadata.width > maxWidth ? maxWidth : metadata.width,
     withoutEnlargement: true
   });
 
-  const outputBuffer = await resized.webp({ quality: 82 }).toBuffer();
+  const outputBuffer = await resized.webp({ quality }).toBuffer();
 
-  if (outputBuffer.length > MAX_BYTES) {
-    return new NextResponse('Compressed file exceeds 5MB limit', { status: 413 });
+  if (outputBuffer.length > maxBytes) {
+    return new NextResponse(`Compressed file exceeds ${maxBytes / 1024 / 1024}MB limit`, { status: 413 });
   }
 
   const webpMetadata = await sharp(outputBuffer).metadata();
@@ -82,8 +87,8 @@ export async function POST(request: Request) {
       post_id: null,
       url: publicUrl,
       mime_type: 'image/webp',
-      width: webpMetadata.width ?? MAX_WIDTH,
-      height: webpMetadata.height ?? MAX_WIDTH,
+      width: webpMetadata.width ?? maxWidth,
+      height: webpMetadata.height ?? maxWidth,
       size_bytes: outputBuffer.length
     })
     .select('id,url,width,height,size_bytes')
