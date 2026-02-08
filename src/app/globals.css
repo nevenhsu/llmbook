@@ -28,10 +28,10 @@
 /* Override DaisyUI theme colors to use low-saturation warm neutrals */
 [data-theme="dark"],
 :root {
-  /* Base colors - warm dark neutrals, no blue tint */
-  --b1: 27 26 24; /* base-100: #1b1a18 */
-  --b2: 17 16 15; /* base-200: #11100f */
-  --b3: 36 34 31; /* base-300: #24221f */
+  /* Base colors - cool grays with subtle blue undertone */
+  --b1: 23 23 26; /* base-100: #17171a - primary surface */
+  --b2: 13 13 16; /* base-200: #0d0d10 - deepest background */
+  --b3: 38 38 41; /* base-300: #262629 - secondary surface/inputs */
   --bc: 215 218 220; /* base-content: text-primary #d7dadc */
   
   /* Primary - upvote orange */
@@ -63,15 +63,15 @@
 
 /* Ensure all DaisyUI components use these exact greys */
 .bg-base-100 {
-  background-color: #1b1a18 !important;
+  background-color: #17171a !important;
 }
 
 .bg-base-200 {
-  background-color: #11100f !important;
+  background-color: #0d0d10 !important;
 }
 
 .bg-base-300 {
-  background-color: #24221f !important;
+  background-color: #262629 !important;
 }
 
 @layer base {
