@@ -1,44 +1,50 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import sharp from 'sharp';
-import { v4 as uuidv4 } from 'uuid';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import sharp from "sharp";
+import { v4 as uuidv4 } from "uuid";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { privateEnv } from "@/lib/env";
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_WIDTH = 2048;
 const DEFAULT_QUALITY = 82;
-const DEFAULT_BUCKET = 'media';
+const DEFAULT_BUCKET = "media";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const supabase = await createClient(cookies());
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return new NextResponse('Unauthorized', { status: 401 });
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const formData = await request.formData();
-  const file = formData.get('file');
+  const file = formData.get("file");
 
   if (!file || !(file instanceof File)) {
-    return new NextResponse('Missing file', { status: 400 });
+    return new NextResponse("Missing file", { status: 400 });
   }
 
-  if (!file.type.startsWith('image/')) {
-    return new NextResponse('Only images are allowed', { status: 400 });
+  if (!file.type.startsWith("image/")) {
+    return new NextResponse("Only images are allowed", { status: 400 });
   }
 
-  const maxBytes = parseInt(formData.get('maxBytes') as string) || DEFAULT_MAX_BYTES;
-  const maxWidth = parseInt(formData.get('maxWidth') as string) || DEFAULT_MAX_WIDTH;
-  const quality = parseInt(formData.get('quality') as string) || DEFAULT_QUALITY;
+  const maxBytes =
+    parseInt(formData.get("maxBytes") as string) || DEFAULT_MAX_BYTES;
+  const maxWidth =
+    parseInt(formData.get("maxWidth") as string) || DEFAULT_MAX_WIDTH;
+  const quality =
+    parseInt(formData.get("quality") as string) || DEFAULT_QUALITY;
 
   if (file.size > maxBytes) {
-    return new NextResponse(`File exceeds ${maxBytes / 1024 / 1024}MB limit`, { status: 413 });
+    return new NextResponse(`File exceeds ${maxBytes / 1024 / 1024}MB limit`, {
+      status: 413,
+    });
   }
 
   const arrayBuffer = await file.arrayBuffer();
@@ -48,26 +54,30 @@ export async function POST(request: Request) {
   const metadata = await image.metadata();
 
   const resized = image.resize({
-    width: metadata.width && metadata.width > maxWidth ? maxWidth : metadata.width,
-    withoutEnlargement: true
+    width:
+      metadata.width && metadata.width > maxWidth ? maxWidth : metadata.width,
+    withoutEnlargement: true,
   });
 
   const outputBuffer = await resized.webp({ quality }).toBuffer();
 
   if (outputBuffer.length > maxBytes) {
-    return new NextResponse(`Compressed file exceeds ${maxBytes / 1024 / 1024}MB limit`, { status: 413 });
+    return new NextResponse(
+      `Compressed file exceeds ${maxBytes / 1024 / 1024}MB limit`,
+      { status: 413 },
+    );
   }
 
   const webpMetadata = await sharp(outputBuffer).metadata();
   const key = `uploads/${user.id}/${uuidv4()}.webp`;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || DEFAULT_BUCKET;
+  const bucket = privateEnv.storageBucket || DEFAULT_BUCKET;
 
   let publicUrl: string;
   try {
     const admin = createAdminClient();
     const { error: uploadError } = await admin.storage
       .from(bucket)
-      .upload(key, outputBuffer, { contentType: 'image/webp', upsert: false });
+      .upload(key, outputBuffer, { contentType: "image/webp", upsert: false });
 
     if (uploadError) {
       return new NextResponse(uploadError.message, { status: 500 });
@@ -77,25 +87,27 @@ export async function POST(request: Request) {
     publicUrl = data.publicUrl;
   } catch (error) {
     console.error(error);
-    return new NextResponse('Upload failed', { status: 500 });
+    return new NextResponse("Upload failed", { status: 500 });
   }
 
   const { data: media, error } = await supabase
-    .from('media')
+    .from("media")
     .insert({
       user_id: user.id,
       post_id: null,
       url: publicUrl,
-      mime_type: 'image/webp',
+      mime_type: "image/webp",
       width: webpMetadata.width ?? maxWidth,
       height: webpMetadata.height ?? maxWidth,
-      size_bytes: outputBuffer.length
+      size_bytes: outputBuffer.length,
     })
-    .select('id,url,width,height,size_bytes')
+    .select("id,url,width,height,size_bytes")
     .single();
 
   if (error || !media) {
-    return new NextResponse(error?.message ?? 'DB insert failed', { status: 400 });
+    return new NextResponse(error?.message ?? "DB insert failed", {
+      status: 400,
+    });
   }
 
   return NextResponse.json({
@@ -103,6 +115,6 @@ export async function POST(request: Request) {
     url: media.url,
     width: media.width,
     height: media.height,
-    sizeBytes: media.size_bytes
+    sizeBytes: media.size_bytes,
   });
 }

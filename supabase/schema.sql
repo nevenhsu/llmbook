@@ -249,6 +249,33 @@ CREATE TABLE public.persona_memory (
   UNIQUE (persona_id, key)
 );
 
+-- ----------------------------------------------------------------------------
+-- Post Rankings Cache (for Hot and Rising sorts)
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE public.post_rankings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  board_id uuid REFERENCES public.boards(id) ON DELETE CASCADE,
+
+  -- Hot ranking (30 days window)
+  hot_score numeric NOT NULL DEFAULT 0,
+  hot_rank int NOT NULL DEFAULT 0,
+
+  -- Rising ranking (7 days window)
+  rising_score numeric NOT NULL DEFAULT 0,
+  rising_rank int NOT NULL DEFAULT 0,
+
+  -- Metadata
+  score_at_calc int NOT NULL DEFAULT 0,
+  comment_count_at_calc int NOT NULL DEFAULT 0,
+  post_created_at timestamptz NOT NULL DEFAULT now(),
+  calculated_at timestamptz DEFAULT now(),
+
+  -- Composite unique constraint
+  UNIQUE(post_id)
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -292,6 +319,13 @@ CREATE INDEX idx_persona_tasks_persona ON public.persona_tasks(persona_id);
 
 -- Persona memory
 CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
+
+-- Post rankings
+CREATE INDEX idx_post_rankings_hot ON public.post_rankings(hot_rank ASC) WHERE hot_rank > 0;
+CREATE INDEX idx_post_rankings_rising ON public.post_rankings(rising_rank ASC) WHERE rising_rank > 0;
+CREATE INDEX idx_post_rankings_board_hot ON public.post_rankings(board_id, hot_rank ASC) WHERE hot_rank > 0;
+CREATE INDEX idx_post_rankings_board_rising ON public.post_rankings(board_id, rising_rank ASC) WHERE rising_rank > 0;
+CREATE INDEX idx_post_rankings_calculated_at ON public.post_rankings(calculated_at DESC);
 
 -- ============================================================================
 -- FUNCTIONS
@@ -438,6 +472,130 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ----------------------------------------------------------------------------
+-- Post Rankings Update Function
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.fn_update_post_rankings()
+RETURNS void AS $$
+DECLARE
+  v_now timestamptz := now();
+BEGIN
+  -- Clear old rankings for posts outside time windows
+  DELETE FROM public.post_rankings
+  WHERE post_id IN (
+    SELECT pr.post_id 
+    FROM public.post_rankings pr
+    JOIN public.posts p ON p.id = pr.post_id
+    WHERE p.status != 'PUBLISHED'
+       OR p.created_at < v_now - interval '30 days'
+  );
+
+  -- Insert or update rankings for posts within 30 days
+  INSERT INTO public.post_rankings (
+    post_id, board_id, hot_score, hot_rank, rising_score, rising_rank,
+    score_at_calc, comment_count_at_calc, post_created_at, calculated_at
+  )
+  WITH ranked_posts AS (
+    SELECT
+      p.id as post_id,
+      p.board_id,
+      p.score,
+      COALESCE(p.comment_count, 0) as comment_count,
+      p.created_at,
+      -- Hot score: (comments × 2) + (score × 1) − min(age_days, 30)
+      (COALESCE(p.comment_count, 0) * 2 + p.score - LEAST(
+        EXTRACT(EPOCH FROM (v_now - p.created_at)) / 86400,
+        30
+      ))::numeric as hot_score,
+      -- Rising score: score / hours (only for posts < 7 days)
+      CASE
+        WHEN p.created_at > v_now - interval '7 days' THEN
+          p.score::numeric / NULLIF(GREATEST(
+            EXTRACT(EPOCH FROM (v_now - p.created_at)) / 3600,
+            0.1
+          ), 0)
+        ELSE -999999
+      END as rising_score
+    FROM public.posts p
+    WHERE p.status = 'PUBLISHED'
+      AND p.created_at > v_now - interval '30 days'
+  ),
+  hot_ranked AS (
+    SELECT
+      post_id, board_id, hot_score, rising_score, created_at,
+      score as score_at_calc, comment_count as comment_count_at_calc,
+      ROW_NUMBER() OVER (ORDER BY hot_score DESC, created_at DESC) as hot_rank
+    FROM ranked_posts
+    WHERE hot_score > -999999
+  ),
+  rising_ranked AS (
+    SELECT
+      post_id,
+      ROW_NUMBER() OVER (
+        ORDER BY rising_score DESC, created_at DESC
+      ) as rising_rank_overall
+    FROM ranked_posts
+    WHERE rising_score > -999999
+      AND created_at > v_now - interval '7 days'
+  )
+  SELECT
+    h.post_id,
+    h.board_id,
+    h.hot_score,
+    h.hot_rank,
+    h.rising_score,
+    COALESCE(r.rising_rank_overall, 0) as rising_rank,
+    h.score_at_calc,
+    h.comment_count_at_calc,
+    h.created_at as post_created_at,
+    v_now as calculated_at
+  FROM hot_ranked h
+  LEFT JOIN rising_ranked r ON r.post_id = h.post_id
+  ON CONFLICT (post_id)
+  DO UPDATE SET
+    board_id = EXCLUDED.board_id,
+    hot_score = EXCLUDED.hot_score,
+    hot_rank = EXCLUDED.hot_rank,
+    rising_score = EXCLUDED.rising_score,
+    rising_rank = EXCLUDED.rising_rank,
+    score_at_calc = EXCLUDED.score_at_calc,
+    comment_count_at_calc = EXCLUDED.comment_count_at_calc,
+    post_created_at = EXCLUDED.post_created_at,
+    calculated_at = EXCLUDED.calculated_at;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
+-- Post Rankings Invalidation Function
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.fn_invalidate_post_ranking()
+RETURNS trigger AS $$
+DECLARE
+  v_post_id uuid;
+BEGIN
+  -- Get post_id based on trigger operation
+  IF TG_OP = 'DELETE' THEN
+    v_post_id := OLD.post_id;
+  ELSE
+    v_post_id := NEW.post_id;
+  END IF;
+  
+  -- Only proceed if we have a valid post_id
+  IF v_post_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+  
+  -- Mark the ranking as stale
+  UPDATE public.post_rankings
+  SET calculated_at = calculated_at - interval '1 hour'
+  WHERE post_id = v_post_id;
+  
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -466,6 +624,48 @@ CREATE TRIGGER trg_set_comment_depth
 CREATE TRIGGER trg_update_comment_count
   AFTER INSERT OR DELETE ON public.comments
   FOR EACH ROW EXECUTE FUNCTION public.fn_update_comment_count();
+
+-- Auto-invalidate rankings when vote changes
+CREATE TRIGGER trg_invalidate_ranking_on_vote
+  AFTER INSERT OR UPDATE OR DELETE ON public.votes
+  FOR EACH ROW 
+  EXECUTE FUNCTION public.fn_invalidate_post_ranking();
+
+-- Auto-invalidate rankings when comment changes
+CREATE TRIGGER trg_invalidate_ranking_on_comment
+  AFTER INSERT OR DELETE ON public.comments
+  FOR EACH ROW
+  EXECUTE FUNCTION public.fn_invalidate_post_ranking();
+
+-- ============================================================================
+-- VIEWS
+-- ============================================================================
+
+-- View for hot feed
+CREATE OR REPLACE VIEW public.v_hot_posts AS
+SELECT 
+  pr.post_id,
+  pr.hot_rank,
+  pr.hot_score,
+  pr.calculated_at,
+  p.*
+FROM public.post_rankings pr
+JOIN public.posts p ON p.id = pr.post_id
+WHERE pr.hot_rank > 0
+ORDER BY pr.hot_rank ASC;
+
+-- View for rising feed
+CREATE OR REPLACE VIEW public.v_rising_posts AS
+SELECT 
+  pr.post_id,
+  pr.rising_rank,
+  pr.rising_score,
+  pr.calculated_at,
+  p.*
+FROM public.post_rankings pr
+JOIN public.posts p ON p.id = pr.post_id
+WHERE pr.rising_rank > 0
+ORDER BY pr.rising_rank ASC;
 
 -- ============================================================================
 -- CONSTRAINTS
@@ -522,6 +722,20 @@ ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
+
+-- ----------------------------------------------------------------------------
+-- Post Rankings Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Post rankings are viewable by everyone" 
+  ON public.post_rankings FOR SELECT USING (true);
+
+CREATE POLICY "Only service role can modify rankings" 
+  ON public.post_rankings 
+  FOR ALL 
+  USING (false) 
+  WITH CHECK (false);
 
 -- ----------------------------------------------------------------------------
 -- Profiles Policies
@@ -704,6 +918,11 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 
 COMMENT ON COLUMN profiles.username IS 'Unique username for the user (1-30 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 4-30 chars total)';
+
+COMMENT ON TABLE public.post_rankings IS 'Cached post rankings for Hot and Rising sorts. Updated by external script via npm run update-rankings.';
+COMMENT ON COLUMN public.post_rankings.hot_score IS 'Calculated as: (comment_count × 2) + (score × 1) − min(age_days, 30)';
+COMMENT ON COLUMN public.post_rankings.rising_score IS 'Calculated as: score / hours_since_creation (only for posts < 7 days)';
+COMMENT ON FUNCTION public.fn_update_post_rankings() IS 'Recalculates all post rankings. Called by external Node.js script (npm run update-rankings).';
 
 -- ============================================================================
 -- SEED DATA

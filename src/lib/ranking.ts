@@ -1,25 +1,29 @@
 /**
- * Hot ranking algorithm - 權重: Score > Comments > Time
- * 
- * 公式: hot_score = (score * 2) + (comment_count * 0.5) - (age_hours * 0.1)
- * 
+ * Hot ranking algorithm - 權重: Comments > Score > Time
+ *
+ * 公式: hot_score = (comment_count * 2) + (score * 1) - min(age_days, 30)
+ *
  * 說明:
- * - Score 權重最高 (乘以 2)
- * - Comments 次要權重 (乘以 0.5)
- * - Time 是衰減因子 (每小時扣 0.1)
- * - 這樣高分數+高互動的帖子會排在前面
+ * - Comments 權重最高 (乘以 2) - 互動數是最重要的因素
+ * - Score 次要權重 (乘以 1) - 投票分數有加成但較低
+ * - Time 是衰減因子 (每天扣 1 分，最多扣 30 分)
+ * - 同分時按時間新的優先
+ * - 只考慮最近 30 天內的貼文
  */
 export function hotScore(score: number, commentCount: number, createdAtIso: string): number {
   const now = Date.now();
   const createdAt = new Date(createdAtIso).getTime();
-  const ageHours = (now - createdAt) / (1000 * 60 * 60);
-  
-  // 基礎分數 = (投票分 * 2) + (評論數 * 0.5)
-  const engagementScore = (score * 2) + (commentCount * 0.5);
-  
-  // 時間衰減: 每小時扣 0.1 分，最多扣 50 分 (約 20 天後不再衰減)
-  const timeDecay = Math.min(ageHours * 0.1, 50);
-  
+  const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+  // 只考慮最近 30 天內的貼文
+  if (ageDays > 30) return -Infinity;
+
+  // 基礎分數 = (評論數 * 2) + (投票分 * 1)
+  const engagementScore = (commentCount * 2) + score;
+
+  // 時間衰減: 每天扣 1 分，最多扣 30 分
+  const timeDecay = Math.min(ageDays, 30);
+
   return engagementScore - timeDecay;
 }
 
@@ -107,7 +111,7 @@ export function sortPosts<T extends Post>(posts: T[], sort: SortType): T[] {
       return [...posts]
         .filter(p => {
           const ageHours = (Date.now() - new Date(p.created_at).getTime()) / (1000 * 60 * 60);
-          return ageHours <= 72; // 3天內
+          return ageHours <= 168; // 7天內
         })
         .sort((a, b) => 
           risingScore(b.score, b.created_at) - risingScore(a.score, a.created_at)
@@ -136,5 +140,182 @@ export function sortPosts<T extends Post>(posts: T[], sort: SortType): T[] {
       return [...posts].sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
+  }
+}
+
+// ============================================================================
+// Ranking Cache Functions
+// ============================================================================
+
+/**
+ * Update post rankings cache via Supabase RPC
+ * This should be called by a cron job every 5-15 minutes
+ * 
+ * @param supabase - Supabase client (with service role for admin operations)
+ * @returns Promise<boolean> - true if update was successful
+ */
+export async function updatePostRankings(supabase: any): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('fn_update_post_rankings');
+    
+    if (error) {
+      console.error('Failed to update post rankings:', error);
+      return false;
+    }
+    
+    console.log('Post rankings updated successfully at', new Date().toISOString());
+    return true;
+  } catch (err) {
+    console.error('Error updating post rankings:', err);
+    return false;
+  }
+}
+
+/**
+ * Get posts sorted by hot rank from cache table
+ * 
+ * @param supabase - Supabase client
+ * @param options - Query options
+ * @returns Posts with hot ranking
+ */
+export async function getHotPostsFromCache(
+  supabase: any,
+  options: {
+    boardId?: string;
+    limit?: number;
+    cursor?: number;
+  } = {}
+) {
+  const { boardId, limit = 20, cursor = 0 } = options;
+  
+  let query = supabase
+    .from('post_rankings')
+    .select(`
+      hot_rank,
+      hot_score,
+      calculated_at,
+      posts!inner(
+        id, title, created_at, score, comment_count, board_id, author_id, persona_id,
+        boards!inner(name, slug),
+        profiles(display_name, avatar_url),
+        personas(display_name, avatar_url),
+        media(url),
+        post_tags(tag:tags(name))
+      )
+    `)
+    .gt('hot_rank', 0)
+    .order('hot_rank', { ascending: true })
+    .range(cursor, cursor + limit - 1);
+  
+  if (boardId) {
+    query = query.eq('board_id', boardId);
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('Error fetching hot posts from cache:', error);
+    return { posts: [], error };
+  }
+  
+  // Flatten the nested structure
+  const posts = data?.map((item: any) => ({
+    ...item.posts,
+    _rank: item.hot_rank,
+    _score: item.hot_score,
+    _calculated_at: item.calculated_at,
+  })) || [];
+  
+  return { posts, error: null };
+}
+
+/**
+ * Get posts sorted by rising rank from cache table
+ * 
+ * @param supabase - Supabase client
+ * @param options - Query options
+ * @returns Posts with rising ranking
+ */
+export async function getRisingPostsFromCache(
+  supabase: any,
+  options: {
+    boardId?: string;
+    limit?: number;
+    cursor?: number;
+  } = {}
+) {
+  const { boardId, limit = 20, cursor = 0 } = options;
+  
+  let query = supabase
+    .from('post_rankings')
+    .select(`
+      rising_rank,
+      rising_score,
+      calculated_at,
+      posts!inner(
+        id, title, created_at, score, comment_count, board_id, author_id, persona_id,
+        boards!inner(name, slug),
+        profiles(display_name, avatar_url),
+        personas(display_name, avatar_url),
+        media(url),
+        post_tags(tag:tags(name))
+      )
+    `)
+    .gt('rising_rank', 0)
+    .order('rising_rank', { ascending: true })
+    .range(cursor, cursor + limit - 1);
+  
+  if (boardId) {
+    query = query.eq('board_id', boardId);
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('Error fetching rising posts from cache:', error);
+    return { posts: [], error };
+  }
+  
+  // Flatten the nested structure
+  const posts = data?.map((item: any) => ({
+    ...item.posts,
+    _rank: item.rising_rank,
+    _score: item.rising_score,
+    _calculated_at: item.calculated_at,
+  })) || [];
+  
+  return { posts, error: null };
+}
+
+/**
+ * Check if rankings cache is stale (older than threshold)
+ * 
+ * @param supabase - Supabase client
+ * @param maxAgeMinutes - Maximum age before considered stale (default: 15)
+ * @returns Promise<boolean> - true if cache is stale or empty
+ */
+export async function isRankingCacheStale(
+  supabase: any,
+  maxAgeMinutes: number = 15
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('post_rankings')
+      .select('calculated_at')
+      .order('calculated_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error || !data) {
+      return true; // No cache or error = stale
+    }
+    
+    const lastUpdate = new Date(data.calculated_at).getTime();
+    const now = Date.now();
+    const ageMinutes = (now - lastUpdate) / (1000 * 60);
+    
+    return ageMinutes > maxAgeMinutes;
+  } catch {
+    return true;
   }
 }

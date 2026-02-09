@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { hotScore, getTimeRangeDate } from '@/lib/ranking';
+import { getTimeRangeDate, getHotPostsFromCache, getRisingPostsFromCache } from '@/lib/ranking';
 
 export const runtime = 'nodejs';
 
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const sort = searchParams.get('sort') || 'new';
   const t = searchParams.get('t') || 'today';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50);
+  const offset = cursor ? parseInt(cursor, 10) : 0;
 
   // Parallel execution of independent queries
   const [{ data: { user } }, boardData, tagData] = await Promise.all([
@@ -34,104 +35,122 @@ export async function GET(request: Request) {
     return NextResponse.json([]);
   }
 
-  // Build base query with minimal fields
-  // Exclude 'body' to reduce payload size - only fetch title and metadata
-  let query = supabase
-    .from('posts')
-    .select(
-      `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
-       boards!inner(name,slug),
-       profiles(display_name,avatar_url),
-       personas(display_name,avatar_url),
-       media(url),
-       post_tags(tag:tags(name))`
-    )
-    .eq('status', 'PUBLISHED');
+  let posts: any[] = [];
+  let useCache = false;
 
-  // Only query hidden posts if user is logged in
-  if (user?.id) {
-    const { data: hidden } = await supabase
-      .from('hidden_posts')
-      .select('post_id')
-      .eq('user_id', user.id)
-      .limit(100); // Limit hidden posts check
+  // Use cached rankings for hot and rising sorts
+  if (sort === 'hot' && !tagId && !author) {
+    // Use hot rankings cache
+    const { posts: cachedPosts, error } = await getHotPostsFromCache(supabase, {
+      boardId: boardId || undefined,
+      limit,
+      cursor: offset,
+    });
     
-    if (hidden && hidden.length > 0) {
-      query = query.not('id', 'in', `(${hidden.map(h => h.post_id).join(',')})`);
+    if (!error && cachedPosts.length > 0) {
+      posts = cachedPosts;
+      useCache = true;
+    }
+  } else if (sort === 'rising' && !tagId && !author) {
+    // Use rising rankings cache
+    const { posts: cachedPosts, error } = await getRisingPostsFromCache(supabase, {
+      boardId: boardId || undefined,
+      limit,
+      cursor: offset,
+    });
+    
+    if (!error && cachedPosts.length > 0) {
+      posts = cachedPosts;
+      useCache = true;
     }
   }
 
-  if (boardId) {
-    query = query.eq('board_id', boardId);
-  }
-
-  if (author) {
-    query = query.eq('author_id', author);
-  }
-
-  if (tagId) {
-    query = query
+  // If not using cache, query posts directly
+  if (!useCache) {
+    // Build base query with minimal fields
+    // Exclude 'body' to reduce payload size - only fetch title and metadata
+    let query = supabase
+      .from('posts')
       .select(
         `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
          boards!inner(name,slug),
          profiles(display_name,avatar_url),
          personas(display_name,avatar_url),
          media(url),
-         post_tags!inner(tag:tags(name))`
+         post_tags(tag:tags(name))`
       )
-      .eq('post_tags.tag_id', tagId);
-  }
+      .eq('status', 'PUBLISHED');
 
-  if (cursor) {
-    const date = new Date(cursor);
-    if (!Number.isNaN(date.getTime())) {
-      query = query.lt('created_at', date.toISOString());
+    // Only query hidden posts if user is logged in
+    if (user?.id) {
+      const { data: hidden } = await supabase
+        .from('hidden_posts')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .limit(100);
+
+      if (hidden && hidden.length > 0) {
+        query = query.not('id', 'in', `(${hidden.map(h => h.post_id).join(',')})`);
+      }
     }
-  }
 
-  // Apply sort-specific filters
-  if (sort === 'top') {
-    const since = getTimeRangeDate(t);
-    if (since) query = query.gte('created_at', since);
-    query = query.order('score', { ascending: false });
-  } else if (sort === 'hot') {
-    // For hot sort, only fetch recent posts (last 7 days)
-    const since = getTimeRangeDate('week');
-    if (since) query = query.gte('created_at', since);
-    query = query.order('score', { ascending: false });
-  } else if (sort === 'rising') {
-    // For rising sort, only fetch last 3 days
-    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    query = query.gte('created_at', since);
-    query = query.order('created_at', { ascending: false });
-  } else {
-    // new
-    query = query.order('created_at', { ascending: false });
-  }
+    if (boardId) {
+      query = query.eq('board_id', boardId);
+    }
 
-  const { data, error } = await query.limit(limit);
-  
-  if (error) {
-    console.error('API Error:', error);
-    return new NextResponse(error.message, { status: 500 });
-  }
+    if (author) {
+      query = query.eq('author_id', author);
+    }
 
-  let posts = (data ?? []) as any[];
-  
-  // Apply hot ranking algorithm
-  if (sort === 'hot') {
-    posts = posts.sort((a, b) => 
-      hotScore(b.score, b.comment_count || 0, b.created_at) - 
-      hotScore(a.score, a.comment_count || 0, a.created_at)
-    );
+    if (tagId) {
+      query = query
+        .select(
+          `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
+           boards!inner(name,slug),
+           profiles(display_name,avatar_url),
+           personas(display_name,avatar_url),
+           media(url),
+           post_tags!inner(tag:tags(name))`
+        )
+        .eq('post_tags.tag_id', tagId);
+    }
+
+    if (cursor) {
+      const date = new Date(cursor);
+      if (!Number.isNaN(date.getTime())) {
+        query = query.lt('created_at', date.toISOString());
+      }
+    }
+
+    // Apply sort-specific filters
+    if (sort === 'top') {
+      const since = getTimeRangeDate(t);
+      if (since) query = query.gte('created_at', since);
+      query = query.order('score', { ascending: false });
+    } else if (sort === 'new') {
+      query = query.order('created_at', { ascending: false });
+    } else {
+      // Fallback for hot/rising when cache is empty
+      query = query.order('created_at', { ascending: false });
+    }
+
+    const { data, error } = await query.limit(limit);
+
+    if (error) {
+      console.error('API Error:', error);
+      return new NextResponse(error.message, { status: 500 });
+    }
+
+    posts = (data ?? []) as any[];
   }
 
   const duration = Date.now() - startTime;
-  console.log(`API /posts: ${posts.length} posts in ${duration}ms (sort: ${sort})`);
+  console.log(`API /posts: ${posts.length} posts in ${duration}ms (sort: ${sort}, cached: ${useCache})`);
 
   return NextResponse.json(posts, {
     headers: {
       'X-Response-Time': `${duration}ms`,
+      'X-Cache-Hit': useCache ? '1' : '0',
     },
   });
 }

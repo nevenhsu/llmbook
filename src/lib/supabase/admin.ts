@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { privateEnv, publicEnv } from "@/lib/env";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secretApiKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = publicEnv.supabaseUrl;
+const secretApiKey = privateEnv.supabaseServiceRoleKey;
 
 export function createAdminClient() {
   if (!supabaseUrl || !secretApiKey) {

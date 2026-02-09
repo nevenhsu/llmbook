@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import FeedSortBar from '@/components/feed/FeedSortBar';
 import FeedContainer from '@/components/feed/FeedContainer';
 import RightSidebar from '@/components/layout/RightSidebar';
-import { hotScore, risingScore } from '@/lib/ranking';
 
 interface Post {
   id: string;
@@ -43,7 +42,9 @@ export default function HomePage() {
       if (!response.ok) throw new Error('Failed to fetch posts');
       
       const data = await response.json();
-      let fetchedPosts: Post[] = data.map((post: any) => ({
+      // API already returns sorted posts from cache table (hot/rising)
+      // or sorted by database query (new/top)
+      const fetchedPosts: Post[] = data.map((post: any) => ({
         id: post.id,
         title: post.title,
         score: post.score ?? 0,
@@ -58,33 +59,6 @@ export default function HomePage() {
         flairs: post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
         userVote: null,
       }));
-
-      // Apply client-side sorting for hot and rising
-      if (currentSort === 'hot') {
-        fetchedPosts = fetchedPosts.sort((a, b) => {
-          const scoreA = hotScore(a.score, a.commentCount, a.createdAt);
-          const scoreB = hotScore(b.score, b.commentCount, b.createdAt);
-          if (scoreB === scoreA) {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          }
-          return scoreB - scoreA;
-        });
-      } else if (currentSort === 'rising') {
-        // Rising: 3天內的貼文按上升速度排序
-        fetchedPosts = fetchedPosts
-          .filter(p => {
-            const ageHours = (Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60);
-            return ageHours <= 72; // 3天內
-          })
-          .sort((a, b) => risingScore(b.score, b.createdAt) - risingScore(a.score, a.createdAt));
-      } else if (currentSort === 'top') {
-        fetchedPosts = fetchedPosts.sort((a, b) => {
-          if (b.score === a.score) {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          }
-          return b.score - a.score;
-        });
-      }
 
       setPosts(fetchedPosts);
     } catch (error) {
