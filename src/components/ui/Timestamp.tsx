@@ -23,7 +23,7 @@ export default function Timestamp({ date, className = '' }: TimestampProps) {
   }
 
   return (
-    <time dateTime={date} title={new Date(date).toLocaleString()} className={`text-text-secondary text-xs ${className}`}>
+    <time dateTime={date} title={new Date(date).toLocaleString()} className={`text-base-content/70 text-xs ${className}`}>
       {relativeText}
     </time>
   );

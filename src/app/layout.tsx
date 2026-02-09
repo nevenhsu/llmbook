@@ -40,9 +40,9 @@ export default async function RootLayout({
   const boardsList = (boards ?? []) as Array<{ name: string; slug: string }>;
 
   return (
-    <html lang="en" data-theme="dark">
-      <body className="min-h-screen bg-canvas text-text-primary">
-        <Toaster position="bottom-center" />
+    <html lang="en">
+      <body className="min-h-screen bg-base-100 text-base-content">
+        <Toaster position="top-center" />
         <Header user={user} profile={profile} />
         <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">
           <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />
@@ -66,7 +66,7 @@ export default async function RootLayout({
               aria-label="close sidebar"
               className="drawer-overlay"
             ></label>
-            <aside className="bg-canvas h-full w-[270px] overflow-y-auto border-r border-border-default py-4">
+            <aside className="bg-base-200 h-full w-[270px] overflow-y-auto border-r border-neutral py-4">
               <DrawerSidebar boards={boardsList} />
             </aside>
           </div>

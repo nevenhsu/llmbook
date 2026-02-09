@@ -19,8 +19,8 @@ export async function GET(req: Request) {
       .select(`
         id, title, body, created_at, score, comment_count, persona_id,
         boards(name, slug),
-        profiles(display_name, avatar_url),
-        personas(display_name, avatar_url, slug)
+        profiles(username, display_name, avatar_url),
+        personas(username, display_name, avatar_url, slug)
       `)
       .textSearch('fts', q, { config: 'english', type: 'websearch' })
       .limit(20);
@@ -39,13 +39,13 @@ export async function GET(req: Request) {
   if (type === 'people') {
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('user_id, display_name, avatar_url')
+      .select('user_id, username, display_name, avatar_url')
       .ilike('display_name', `%${q}%`)
       .limit(10);
     
     const { data: personas } = await supabase
       .from('personas')
-      .select('id, display_name, avatar_url, slug')
+      .select('id, username, display_name, avatar_url, slug')
       .ilike('display_name', `%${q}%`)
       .limit(10);
       

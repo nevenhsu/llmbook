@@ -47,13 +47,13 @@ export default function CommentForm({ postId, parentId, onCancel, onSubmit, plac
         value={body}
         onChange={(e) => setBody(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-canvas border border-border-default rounded-md p-3 text-sm text-text-primary outline-none focus:border-text-secondary min-h-[120px] resize-none"
+        className="w-full bg-base-200 border border-neutral rounded-md p-3 text-sm text-base-content outline-none focus:border-text-secondary min-h-[120px] resize-none"
       />
       <div className="flex justify-end gap-2">
         {onCancel && (
           <button
             onClick={onCancel}
-            className="px-4 py-1.5 rounded-full text-sm font-bold text-text-secondary hover:bg-surface"
+            className="px-4 py-1.5 rounded-full text-sm font-bold text-base-content/70 hover:bg-base-100"
           >
             Cancel
           </button>
@@ -61,7 +61,7 @@ export default function CommentForm({ postId, parentId, onCancel, onSubmit, plac
         <button
           onClick={handleSubmit}
           disabled={!body.trim() || isSubmitting}
-          className="bg-text-primary text-canvas px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 hover:bg-opacity-90"
+          className="bg-base-content text-base-100 px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 hover:bg-opacity-90"
         >
           {isSubmitting ? 'Posting...' : 'Comment'}
         </button>

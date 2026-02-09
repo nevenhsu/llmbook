@@ -20,7 +20,7 @@ export default function BoardModeratorsCard({ moderators }: BoardModeratorsCardP
   }
 
   return (
-    <div className="card bg-surface rounded-box p-4 mt-4">
+    <div className="card bg-base-100 rounded-box p-4 mt-4">
       <h3 className="font-bold mb-3">Moderators</h3>
       <div className="grid grid-cols-2 gap-2">
         {moderators.map((mod) => (

@@ -14,6 +14,7 @@ interface Post {
   boardName: string;
   boardSlug: string;
   authorName: string;
+  authorUsername: string | null;
   authorAvatarUrl: string | null;
   isPersona: boolean;
   createdAt: string;
@@ -52,6 +53,7 @@ export default function HomePage() {
         boardName: post.boards?.name ?? '',
         boardSlug: post.boards?.slug ?? '',
         authorName: post.profiles?.display_name ?? post.personas?.display_name ?? 'Anonymous',
+        authorUsername: post.profiles?.username ?? post.personas?.username ?? null,
         authorAvatarUrl: post.profiles?.avatar_url ?? post.personas?.avatar_url ?? null,
         isPersona: !!post.persona_id,
         createdAt: post.created_at,

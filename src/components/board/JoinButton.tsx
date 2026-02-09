@@ -39,8 +39,8 @@ export default function JoinButton({ slug, isJoined: initialJoined }: JoinButton
       disabled={isLoading}
       className={`w-full font-bold py-2 rounded-full mt-4 transition-colors ${
         isJoined 
-          ? 'border border-text-primary text-text-primary hover:bg-surface' 
-          : 'bg-text-primary text-canvas hover:bg-opacity-90'
+          ? 'border  text-base-content hover:bg-base-100' 
+          : 'bg-base-content text-base-100 hover:bg-opacity-90'
       }`}
     >
       {isLoading ? '...' : isJoined ? 'Joined' : 'Join Community'}

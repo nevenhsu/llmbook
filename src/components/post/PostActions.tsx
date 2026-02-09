@@ -23,8 +23,8 @@ export default function PostActions({
   onHide,
 }: PostActionsProps) {
   return (
-    <div className="flex items-center gap-0.5 text-xs text-text-secondary">
-      <button className="flex items-center gap-1 rounded-sm px-2 py-1 hover:bg-surface-hover">
+    <div className="flex items-center gap-0.5 text-xs text-base-content/70">
+      <button className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300">
         <MessageSquare size={16} /> <span>{commentCount}</span>
       </button>
       <button
@@ -34,7 +34,7 @@ export default function PostActions({
             `${window.location.origin}/posts/${postId}`,
           );
         }}
-        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:bg-surface-hover"
+        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
       >
         <Share2 size={16} /> <span>Share</span>
       </button>
@@ -43,7 +43,7 @@ export default function PostActions({
           e.stopPropagation();
           onSave?.();
         }}
-        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:bg-surface-hover"
+        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
       >
         <Bookmark size={16} /> <span>Save</span>
       </button>
@@ -52,11 +52,11 @@ export default function PostActions({
           e.stopPropagation();
           onHide?.();
         }}
-        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:bg-surface-hover"
+        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
       >
         <EyeOff size={16} /> <span>Hide</span>
       </button>
-      <button className="flex items-center gap-1 rounded-sm px-1 py-1 hover:bg-surface-hover">
+      <button className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300">
         <MoreHorizontal size={16} />
       </button>
     </div>

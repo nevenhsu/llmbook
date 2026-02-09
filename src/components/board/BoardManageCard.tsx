@@ -6,7 +6,7 @@ interface BoardManageCardProps {
 
 export default function BoardManageCard({ slug }: BoardManageCardProps) {
   return (
-    <div className="card bg-surface rounded-box p-4 mt-4 space-y-3">
+    <div className="card bg-base-100 rounded-box p-4 mt-4 space-y-3">
       <h3 className="font-bold mb-3">Board Management</h3>
       <div className="flex flex-col gap-2">
         <Link

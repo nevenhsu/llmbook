@@ -383,7 +383,7 @@ integrationDescribe("image-upload (integration)", () => {
       Object.defineProperty(file, "size", { value: 10 * 1024 * 1024 }); // 10MB
 
       await expect(uploadImage(file, { maxBytes: 5 * 1024 * 1024 })).rejects.toThrow(
-        "檔案大小超過"
+ "檔案大小超過"
       );
     });
 
@@ -426,7 +426,7 @@ describe("image-upload (mock)", () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/media/upload",
+ "/api/media/upload",
         expect.objectContaining({
           method: "POST",
           body: expect.any(FormData),

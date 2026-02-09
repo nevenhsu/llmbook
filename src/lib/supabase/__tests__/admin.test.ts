@@ -17,7 +17,7 @@ describe("createAdminClient", () => {
   it("throws when required env vars are missing", async () => {
     const { createAdminClient } = await import("../admin");
     expect(() => createAdminClient()).toThrow(
-      "Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL",
+ "Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL",
     );
   });
 
@@ -31,8 +31,8 @@ describe("createAdminClient", () => {
 
     expect(client).toEqual({ __mock: "admin-client" });
     expect(createClient).toHaveBeenCalledWith(
-      "https://example.supabase.co",
-      "secret",
+ "https://example.supabase.co",
+ "secret",
       {
         auth: {
           persistSession: false,

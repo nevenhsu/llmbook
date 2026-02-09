@@ -117,25 +117,25 @@ export default function CreatePostForm({ boards, tags }: Props) {
     <div className="mx-auto max-w-[740px] pb-20 sm:pb-10 px-4 sm:px-0">
       {/* Header */}
       <div className="flex items-center justify-between py-6">
-        <h1 className="text-2xl font-bold text-text-primary">Create post</h1>
-        <button className="text-xs font-bold text-text-primary uppercase tracking-wider">
+        <h1 className="text-2xl font-bold text-base-content">Create post</h1>
+        <button className="text-xs font-bold text-base-content uppercase tracking-wider">
           Drafts
         </button>
       </div>
 
       {/* Community Selector */}
       <div className="mb-6">
-        <div className="inline-flex h-10 items-center gap-2 rounded-full border border-border-default bg-surface py-1 pl-1 pr-3 hover:bg-surface-hover cursor-pointer group relative">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-highlight">
+        <div className="inline-flex h-10 items-center gap-2 rounded-full border border-neutral bg-base-100 py-1 pl-1 pr-3 hover:hover:bg-base-300 cursor-pointer group relative">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-base-300">
             <svg
               viewBox="0 0 20 20"
               fill="currentColor"
-              className="h-5 w-5 text-text-primary"
+              className="h-5 w-5 text-base-content"
             >
               <path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm5.21 13.91a4.93 4.93 0 0 1-3.6 1.76c-2.3 0-3.8-1.57-3.8-1.57s-1.5 1.57-3.8 1.57a4.93 4.93 0 0 1-3.6-1.76 2.05 2.05 0 0 1-.36-2.5 5.56 5.56 0 0 1 3.52-2.58 3.32 3.32 0 0 1 .44-.29 3.86 3.86 0 0 1-1.09-2.73 3.61 3.61 0 1 1 5.95-2.15 3.62 3.62 0 1 1 5.97 2.14 3.86 3.86 0 0 1-1.1 2.73 3.32 3.32 0 0 1 .45.3 5.56 5.56 0 0 1 3.52 2.58 2.05 2.05 0 0 1-.36 2.5Z" />
             </svg>
           </div>
-          <span className="text-sm font-bold text-text-primary">
+          <span className="text-sm font-bold text-base-content">
             {boards.find((b) => b.id === boardId)?.name
               ? `r/${boards.find((b) => b.id === boardId)?.name}`
               : "Select a community"}
@@ -146,7 +146,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
             viewBox="0 0 24 24"
             strokeWidth={2.5}
             stroke="currentColor"
-            className="h-4 w-4 text-text-primary"
+            className="h-4 w-4 text-base-content"
           >
             <path
               strokeLinecap="round"
@@ -177,7 +177,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
         {/* Tabs - DaisyUI standard style structure but with custom buttons */}
         <div
           role="tablist"
-          className="flex border-b border-border-default mb-6 overflow-x-auto scrollbar-hide"
+          className="flex border-b border-neutral mb-6 overflow-x-auto scrollbar-hide"
         >
           {([
             { key: "text", label: "Text" },
@@ -190,8 +190,8 @@ export default function CreatePostForm({ boards, tags }: Props) {
               role="tab"
               className={`px-6 py-3 text-sm font-bold whitespace-nowrap transition-colors border-b-2 ${
                 activeTab === tab.key
-                  ? "text-text-primary border-upvote"
-                  : "text-text-secondary border-transparent hover:text-text-primary"
+                  ? "text-base-content border-upvote"
+                  : "text-base-content/70 border-transparent hover:text-base-content"
               }`}
               onClick={() => setActiveTab(tab.key)}
             >
@@ -211,7 +211,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
                 maxLength={300}
-                className="w-full rounded-[20px] border border-border-default bg-surface p-4 text-sm text-text-primary placeholder-text-muted hover:border-border-hover focus:border-text-primary focus:outline-none transition-colors"
+                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus: focus:outline-none transition-colors"
               />
               {!title && (
                 <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-upvote text-sm">
@@ -219,14 +219,14 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 </span>
               )}
             </div>
-            <div className="text-right text-xs text-text-secondary">
+            <div className="text-right text-xs text-base-content/70">
               {title.length}/300
             </div>
           </div>
 
           {/* Tags Placeholder */}
           <div>
-            <button className="px-4 py-1 text-xs font-bold rounded-full bg-highlight text-text-secondary hover:text-text-primary transition-colors">
+            <button className="px-4 py-1 text-xs font-bold rounded-full bg-base-300 text-base-content/70 hover:text-base-content transition-colors">
               Add tags
             </button>
           </div>
@@ -242,11 +242,11 @@ export default function CreatePostForm({ boards, tags }: Props) {
             )}
 
             {activeTab === "media" && (
-              <div className="flex h-40 sm:h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-border-default bg-surface p-4 text-center">
-                <p className="mb-2 text-text-primary">
+              <div className="flex h-40 sm:h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-neutral bg-base-100 p-4 text-center">
+                <p className="mb-2 text-base-content">
                   Drag and drop images or
                 </p>
-                <label className="cursor-pointer px-6 py-2 rounded-full border border-text-primary text-text-primary text-sm font-bold hover:bg-highlight transition-colors">
+                <label className="cursor-pointer px-6 py-2 rounded-full border  text-base-content text-sm font-bold hover:bg-base-300 transition-colors">
                   Upload
                   <input
                     type="file"
@@ -273,7 +273,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                   {media.map((m) => (
                     <div
                       key={m.mediaId}
-                      className="relative h-16 w-16 overflow-hidden rounded bg-highlight"
+                      className="relative h-16 w-16 overflow-hidden rounded bg-base-300"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -291,7 +291,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
               <input
                 type="text"
                 placeholder="Url"
-                className="w-full rounded-[20px] border border-border-default bg-surface p-4 text-sm text-text-primary placeholder-text-muted focus:border-text-primary focus:outline-none"
+                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-text-base-content/50 focus: focus:outline-none"
               />
             )}
 
@@ -300,7 +300,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 {pollOptions.map((opt, idx) => (
                   <div key={idx} className="flex gap-2">
                     <input
-                      className="w-full rounded-[20px] border border-border-default bg-surface p-3 text-sm text-text-primary placeholder-text-muted hover:border-border-hover focus:border-text-primary focus:outline-none transition-colors flex-1"
+                      className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus: focus:outline-none transition-colors flex-1"
                       placeholder={`Option ${idx + 1}`}
                       value={opt}
                       onChange={(e) => {
@@ -313,7 +313,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                     {pollOptions.length > 2 && (
                       <button
                         type="button"
-                        className="px-3 py-2 rounded-full hover:bg-surface-hover text-text-secondary transition-colors"
+                        className="px-3 py-2 rounded-full hover:hover:bg-base-300 text-base-content/70 transition-colors"
                         onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -325,14 +325,14 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 ))}
                 <button
                   type="button"
-                  className="px-6 py-2 rounded-full border border-text-primary text-text-primary text-sm font-bold hover:bg-highlight transition-colors w-full mt-2"
+                  className="px-6 py-2 rounded-full border  text-base-content text-sm font-bold hover:bg-base-300 transition-colors w-full mt-2"
                   onClick={() => setPollOptions([...pollOptions, ''])}
                   disabled={pollOptions.length >= 6}
                 >
                   + Add Option
                 </button>
                 <select
-                  className="w-full rounded-[20px] border border-border-default bg-surface p-3 text-sm text-text-primary focus:border-text-primary focus:outline-none transition-colors mt-4"
+                  className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content focus: focus:outline-none transition-colors mt-4"
                   value={pollDuration}
                   onChange={(e) => setPollDuration(e.target.value)}
                 >
@@ -346,15 +346,15 @@ export default function CreatePostForm({ boards, tags }: Props) {
         </div>
 
         {/* Footer Actions - Fixed on mobile, relative on desktop */}
-        <div className="fixed bottom-[64px] left-0 right-0 z-[101] flex justify-end gap-2 border-t border-border-default bg-canvas/95 p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:border-0 sm:p-0 sm:bg-transparent sm:mt-8 sm:backdrop-blur-none">
-          <button type="button" className="px-6 py-2 rounded-full text-text-secondary font-bold text-sm hover:bg-surface transition-colors">
+        <div className="fixed bottom-[64px] left-0 right-0 z-[101] flex justify-end gap-2 border-t border-neutral bg-base-200/95 p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:border-0 sm:p-0 sm:bg-transparent sm:mt-8 sm:backdrop-blur-none">
+          <button type="button" className="px-6 py-2 rounded-full text-base-content/70 font-bold text-sm hover:bg-base-100 transition-colors">
             Save Draft
           </button>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!title || !boardId || loading}
-            className="px-8 py-2 rounded-full bg-text-primary text-canvas text-sm font-bold hover:bg-opacity-90 disabled:opacity-50 transition-colors"
+            className="px-8 py-2 rounded-full bg-base-content text-base-100 text-sm font-bold hover:bg-opacity-90 disabled:opacity-50 transition-colors"
           >
             {loading ? "Posting..." : "Post"}
           </button>
@@ -362,7 +362,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
       </div>
 
       {error && (
-        <div className="mt-4 rounded bg-red-900/20 p-3 text-sm text-red-400 border border-red-500/30">
+        <div className="mt-4 rounded bg-error/20/20 p-3 text-sm text-error border border-error/30">
           {error}
         </div>
       )}

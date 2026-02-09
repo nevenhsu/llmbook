@@ -445,7 +445,7 @@ export default function BoardSettingsForm({
             </label>
             <input
               type="text"
-              className="input input-bordered w-full bg-surface border-neutral"
+              className="input input-bordered w-full bg-base-100 border-neutral"
               value={name}
               onChange={(e) => setName(e.target.value)}
               minLength={3}
@@ -458,7 +458,7 @@ export default function BoardSettingsForm({
               <span className="label-text">Description</span>
             </label>
             <textarea
-              className="textarea textarea-bordered w-full bg-surface border-neutral"
+              className="textarea textarea-bordered w-full bg-base-100 border-neutral"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
@@ -503,7 +503,7 @@ export default function BoardSettingsForm({
       {activeTab === 'rules' && (
         <div className="space-y-4">
           {rules.map((rule, index) => (
-            <div key={index} className="card bg-surface p-4 border border-neutral">
+            <div key={index} className="card bg-base-100 p-4 border border-neutral">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-medium">Rule {index + 1}</span>
                 <button
@@ -515,14 +515,14 @@ export default function BoardSettingsForm({
               </div>
               <input
                 type="text"
-                className="input input-bordered input-sm w-full bg-surface border-neutral mb-2"
+                className="input input-bordered input-sm w-full bg-base-100 border-neutral mb-2"
                 value={rule.title}
                 onChange={(e) => updateRule(index, 'title', e.target.value)}
                 placeholder="Rule title"
                 maxLength={100}
               />
               <textarea
-                className="textarea textarea-bordered textarea-sm w-full bg-surface border-neutral"
+                className="textarea textarea-bordered textarea-sm w-full bg-base-100 border-neutral"
                 value={rule.description}
                 onChange={(e) => updateRule(index, 'description', e.target.value)}
                 placeholder="Rule description"
@@ -558,7 +558,7 @@ export default function BoardSettingsForm({
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {moderatorsList.map((mod) => (
-              <div key={mod.id} className="card bg-surface p-3 flex flex-row items-center gap-3">
+              <div key={mod.id} className="card bg-base-100 p-3 flex flex-row items-center gap-3">
                 <Avatar
                   src={mod.profiles.avatar_url}
                   fallbackSeed={mod.profiles.display_name}
@@ -600,7 +600,7 @@ export default function BoardSettingsForm({
           </div>
 
           {expandedPermissionUserId && (
-            <div className="card bg-surface p-4 border border-neutral">
+            <div className="card bg-base-100 p-4 border border-neutral">
               {(() => {
                 const target = moderatorsList.find((mod) => mod.user_id === expandedPermissionUserId);
                 if (!target) {
@@ -728,7 +728,7 @@ export default function BoardSettingsForm({
               </label>
               <input
                 type="text"
-                className="input input-bordered w-full bg-surface border-neutral"
+                className="input input-bordered w-full bg-base-100 border-neutral"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Type at least 2 characters"

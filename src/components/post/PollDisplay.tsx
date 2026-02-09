@@ -96,7 +96,7 @@ export default function PollDisplay({
             onClick={() => handleVote(option.id)}
             disabled={hasVoted || isExpired || loading}
             className={`
-              w-full text-left p-3 rounded-box border transition-all bg-surface
+              w-full text-left p-3 rounded-box border transition-all bg-base-100
               ${hasVoted || isExpired ? 'border-neutral cursor-default' : 'border-neutral hover:border-neutral active:scale-[0.98]'}
               ${isUserChoice ? 'border-neutral ring-1 ring-neutral' : ''}
               ${loading ? 'opacity-50' : ''}
@@ -111,7 +111,7 @@ export default function PollDisplay({
               )}
             </div>
             {hasVoted && (
-              <div className="mt-2 h-1 bg-highlight rounded-full overflow-hidden">
+              <div className="mt-2 h-1 bg-base-300 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-neutral transition-all duration-300"
                   style={{ width: `${percentage}%` }}

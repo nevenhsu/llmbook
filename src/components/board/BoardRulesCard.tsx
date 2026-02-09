@@ -13,7 +13,7 @@ export default function BoardRulesCard({ rules }: BoardRulesCardProps) {
   }
 
   return (
-    <div className="card bg-surface rounded-box p-4 mt-4">
+    <div className="card bg-base-100 rounded-box p-4 mt-4">
       <h3 className="font-bold mb-3">Community Rules</h3>
       <div className="space-y-2">
         {rules.map((rule, index) => (

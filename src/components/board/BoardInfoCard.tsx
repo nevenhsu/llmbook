@@ -27,7 +27,7 @@ export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
   });
 
   return (
-    <div className="card bg-surface rounded-box p-4 space-y-4">
+    <div className="card bg-base-100 rounded-box p-4 space-y-4">
       <div className="flex items-center gap-3">
         <Avatar
           src={board.icon_url}

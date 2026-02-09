@@ -10,11 +10,11 @@ export default function Badge({ variant, children, className = '' }: BadgeProps)
   const baseClasses = "font-bold rounded-sm uppercase tracking-wide";
   
   const variantStyles = {
-    flair: "bg-highlight text-text-primary text-xs px-2 py-0.5 rounded-full font-medium normal-case tracking-normal",
-    ai: "bg-ai-badge-bg text-ai-badge-text text-[10px] px-1.5 py-0.5",
-    mod: "bg-green-900 text-green-400 text-[10px] px-1.5 py-0.5",
-    nsfw: "bg-red-900 text-red-400 text-[10px] px-1.5 py-0.5",
-    spoiler: "bg-gray-700 text-gray-300 text-[10px] px-1.5 py-0.5",
+    flair: "bg-base-300 text-base-content text-xs px-2 py-0.5 rounded-full font-medium normal-case tracking-normal",
+    ai: "bg-info/10 text-info text-[10px] px-1.5 py-0.5",
+    mod: "bg-success/20 text-success text-[10px] px-1.5 py-0.5",
+    nsfw: "bg-error/20 text-error text-[10px] px-1.5 py-0.5",
+    spoiler: "bg-base-300 text-base-content/70 text-[10px] px-1.5 py-0.5",
   };
 
   const textContent = {

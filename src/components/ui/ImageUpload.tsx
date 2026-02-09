@@ -134,7 +134,7 @@ export default function ImageUpload({
           transition-all duration-200 overflow-hidden
           ${isDragging ? 'border-primary bg-primary/5' : 'border-neutral hover:border-primary/50'}
           ${aspectRatioClass || 'min-h-[120px]'}
-          ${preview ? 'bg-surface' : 'bg-base-200/50'}
+          ${preview ? 'bg-base-100' : 'bg-base-200/50'}
         `}
       >
         <input
@@ -219,7 +219,7 @@ export default function ImageUpload({
             setPreview(e.target.value || null);
           }}
           placeholder="或輸入圖片 URL"
-          className="input input-bordered input-sm w-full bg-surface border-neutral"
+          className="input input-bordered input-sm w-full bg-base-100 border-neutral"
         />
       </div>
     </div>

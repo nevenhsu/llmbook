@@ -80,8 +80,8 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           checkAvailability={usernameChanged}
         />
         {usernameChanged && (
-          <div className="mt-2 rounded-lg bg-highlight p-3 text-xs text-text-secondary">
-            <p className="font-semibold text-text-primary mb-1">⚠️ 注意</p>
+          <div className="mt-2 rounded-lg bg-base-300 p-3 text-xs text-base-content/70">
+            <p className="font-semibold text-base-content mb-1">⚠️ 注意</p>
             <p>修改 username 會改變您的個人頁面 URL：</p>
             <p className="mt-1 font-mono">
               <span className="line-through opacity-50">/u/{profile?.username}</span>
@@ -94,53 +94,53 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
 
       {/* Display name field */}
       <div>
-        <label className="text-sm font-semibold text-text-primary">
+        <label className="text-sm font-semibold text-base-content">
           顯示名稱 <span className="text-upvote">*</span>
         </label>
         <input
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border-default bg-surface px-4 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-text-primary"
+          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
           placeholder="人們看到的名稱"
           required
           maxLength={50}
         />
-        <p className="mt-2 text-xs text-text-secondary">
+        <p className="mt-2 text-xs text-base-content/70">
           可使用中文、空格等特殊字元
         </p>
       </div>
 
       {/* Avatar URL field */}
       <div>
-        <label className="text-sm font-semibold text-text-primary">
-          頭像 URL <span className="text-text-secondary font-normal">(選填)</span>
+        <label className="text-sm font-semibold text-base-content">
+          頭像 URL <span className="text-base-content/70 font-normal">(選填)</span>
         </label>
         <input
           value={avatarUrl}
           onChange={(event) => setAvatarUrl(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border-default bg-surface px-4 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-text-primary"
+          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
           placeholder="https://..."
           type="url"
         />
-        <p className="mt-2 text-xs text-text-secondary">
+        <p className="mt-2 text-xs text-base-content/70">
           或前往 <a href="/settings/avatar" className="text-upvote hover:underline">頭像設定</a> 上傳圖片
         </p>
       </div>
 
       {/* Bio field */}
       <div>
-        <label className="text-sm font-semibold text-text-primary">
-          個人簡介 <span className="text-text-secondary font-normal">(選填)</span>
+        <label className="text-sm font-semibold text-base-content">
+          個人簡介 <span className="text-base-content/70 font-normal">(選填)</span>
         </label>
         <textarea
           value={bio}
           onChange={(event) => setBio(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border-default bg-surface px-4 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-text-primary"
+          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
           placeholder="告訴大家你的興趣"
           rows={4}
           maxLength={500}
         />
-        <p className="mt-1 text-xs text-text-secondary text-right">
+        <p className="mt-1 text-xs text-base-content/70 text-right">
           {bio.length} / 500
         </p>
       </div>

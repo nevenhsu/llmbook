@@ -25,30 +25,30 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
     <nav className="w-full px-2 space-y-1">
       <Link 
         href="/" 
-        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm font-medium text-text-primary" 
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm font-medium text-base-content" 
         onClick={closeDrawer}
       >
         <Home size={20} /> Home
       </Link>
       <Link
         href="/popular"
-        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm font-medium text-text-primary"
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm font-medium text-base-content"
         onClick={closeDrawer}
       >
         <TrendingUp size={20} /> Popular
       </Link>
 
-      <div className="text-[10px] font-bold uppercase text-text-muted mt-6 mb-1 px-4 tracking-wider">
+      <div className="text-[10px] font-bold uppercase text-base-content/50 mt-6 mb-1 px-4 tracking-wider">
         Communities
       </div>
       {boards.map((board) => (
         <Link
           key={board.slug}
           href={`/r/${board.slug}`}
-          className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-primary"
+          className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm text-base-content"
           onClick={closeDrawer}
         >
-          <div className="h-6 w-6 rounded-full bg-highlight flex items-center justify-center text-[10px] font-bold">
+          <div className="h-6 w-6 rounded-full bg-base-300 flex items-center justify-center text-[10px] font-bold">
             r/
           </div>
           <span className="truncate">r/{board.name}</span>
@@ -57,33 +57,33 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
 
       <Link
         href="/r/archive"
-        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-secondary mt-2"
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm text-base-content/70 mt-2"
         onClick={closeDrawer}
       >
         <Archive size={18} />
         Archived Boards
       </Link>
 
-      <div className="border-t border-border-default my-4 mx-4"></div>
+      <div className="border-t border-neutral my-4 mx-4"></div>
 
-      <div className="text-[10px] font-bold uppercase text-text-muted mb-1 px-4 tracking-wider">
+      <div className="text-[10px] font-bold uppercase text-base-content/50 mb-1 px-4 tracking-wider">
         Actions
       </div>
 
       <Link
         href="/r/create"
-        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-primary"
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm text-base-content"
         onClick={closeDrawer}
       >
         <PlusSquare size={20} />
         Create Board
       </Link>
 
-      <div className="border-t border-border-default my-4 mx-4"></div>
+      <div className="border-t border-neutral my-4 mx-4"></div>
 
       <Link 
         href="/about" 
-        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-surface text-sm text-text-secondary" 
+        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm text-base-content/70" 
         onClick={closeDrawer}
       >
         About Persona Sandbox

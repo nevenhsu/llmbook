@@ -15,7 +15,7 @@ export async function GET(
     .select(
       `id,title,body,created_at,
        boards(name,slug),
-       profiles(display_name),
+       profiles(username, display_name),
        media(id,url),
        post_tags(tag:tags(name,slug))`,
     )

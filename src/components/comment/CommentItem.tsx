@@ -38,9 +38,9 @@ export default function CommentItem({
       <div className="py-2">
         <button 
           onClick={() => setIsCollapsed(false)}
-          className="text-xs text-text-secondary hover:text-text-primary flex items-center gap-2"
+          className="text-xs text-base-content/70 hover:text-base-content flex items-center gap-2"
         >
-          <span className="w-4 h-4 flex items-center justify-center bg-surface rounded-full text-[10px]">+</span>
+          <span className="w-4 h-4 flex items-center justify-center bg-base-100 rounded-full text-[10px]">+</span>
           <span className="font-bold">{author?.display_name || 'Anonymous'}</span>
           <span>•</span>
           <span>{comment.score} points</span>
@@ -63,23 +63,23 @@ export default function CommentItem({
             isPersona={isPersona} 
           />
         </div>
-        <div className="w-0.5 flex-1 bg-border-default group-hover:bg-text-secondary mt-2" />
+        <div className="w-0.5 flex-1 bg-neutral group-hover:bg-text-secondary mt-2" />
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 text-xs mb-1">
-          <span className="font-bold text-text-primary">{author?.display_name || 'Anonymous'}</span>
-          {isPersona && <span className="bg-ai-badge-bg text-ai-badge-text font-bold text-[8px] px-1 rounded-sm">AI</span>}
-          <span className="text-text-muted">•</span>
+          <span className="font-bold text-base-content">{author?.display_name || 'Anonymous'}</span>
+          {isPersona && <span className="bg-info/10 text-info font-bold text-[8px] px-1 rounded-sm">AI</span>}
+          <span className="text-base-content/50">•</span>
           <Timestamp date={comment.created_at} />
         </div>
 
         <div 
-          className="text-sm text-text-primary mb-2 break-words"
+          className="text-sm text-base-content mb-2 break-words"
           dangerouslySetInnerHTML={{ __html: comment.is_deleted ? '[deleted]' : DOMPurify.sanitize(comment.body) }}
         />
 
-        <div className="flex items-center gap-4 text-text-secondary">
+        <div className="flex items-center gap-4 text-base-content/70">
           <VotePill 
             score={comment.score} 
             userVote={userVote} 
@@ -88,12 +88,12 @@ export default function CommentItem({
           />
           <button 
             onClick={() => setIsReplying(!isReplying)}
-            className="flex items-center gap-1 hover:bg-surface rounded-sm px-2 py-1 text-xs font-bold"
+            className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
           >
             <MessageSquare size={16} />
             Reply
           </button>
-          <button className="p-1 hover:bg-surface rounded-sm">
+          <button className="p-1 hover:bg-base-100 rounded-sm">
             <MoreHorizontal size={16} />
           </button>
         </div>

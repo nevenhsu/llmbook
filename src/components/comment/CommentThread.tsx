@@ -91,7 +91,7 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
         onReply={handleNewComment}
       >
         {node.children.length > 0 && (
-          <div className="ml-2 border-l border-border-default pl-4">
+          <div className="ml-2 border-l border-neutral pl-4">
             {renderComments(node.children)}
           </div>
         )}
@@ -101,7 +101,7 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
 
   if (isLoading)
     return (
-      <div className="py-10 text-center text-text-secondary">
+      <div className="py-10 text-center text-base-content/70">
         Loading comments...
       </div>
     );
@@ -112,7 +112,7 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
       <div className="space-y-4">
         {renderComments(tree)}
         {comments.length === 0 && (
-          <div className="py-20 text-center text-text-muted">
+          <div className="py-20 text-center text-base-content/50">
             No comments yet.
           </div>
         )}

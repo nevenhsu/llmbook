@@ -92,16 +92,16 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
   return (
     <div className="space-y-4">
       {/* Current Avatar Preview */}
-      <div className="flex items-center gap-4 rounded-xl border border-border-default bg-surface p-4">
+      <div className="flex items-center gap-4 rounded-xl border border-neutral bg-base-100 p-4">
         <Avatar 
           fallbackSeed={currentDisplayName} 
           src={preview} 
           size="lg" 
-          className="border-2 border-border-default" 
+          className="border-2 border-neutral" 
         />
         <div>
-          <p className="text-sm font-semibold text-text-primary">當前頭像</p>
-          <p className="text-xs text-text-secondary">上傳圖片後點擊「儲存」套用變更</p>
+          <p className="text-sm font-semibold text-base-content">當前頭像</p>
+          <p className="text-xs text-base-content/70">上傳圖片後點擊「儲存」套用變更</p>
         </div>
       </div>
 
@@ -118,18 +118,18 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
           />
           <div 
             onClick={() => document.getElementById('avatar-upload')?.click()}
-            className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-border-default rounded-xl cursor-pointer hover:border-upvote hover:bg-highlight transition-colors"
+            className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-neutral rounded-xl cursor-pointer hover:border-upvote hover:bg-base-300 transition-colors"
           >
             {isUploading ? (
               <>
                 <Loader2 size={32} className="animate-spin text-upvote mb-2" />
-                <span className="text-sm text-text-secondary">上傳中...</span>
+                <span className="text-sm text-base-content/70">上傳中...</span>
               </>
             ) : (
               <>
-                <Upload size={32} className="text-text-secondary mb-2" />
-                <span className="text-sm text-text-primary font-semibold">點擊上傳圖片</span>
-                <span className="text-xs text-text-secondary mt-1">
+                <Upload size={32} className="text-base-content/70 mb-2" />
+                <span className="text-sm text-base-content font-semibold">點擊上傳圖片</span>
+                <span className="text-xs text-base-content/70 mt-1">
                   支援 JPG、PNG、GIF（最大 5 MB）
                 </span>
               </>
@@ -141,7 +141,7 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
           <button
             type="button"
             onClick={handleRemove}
-            className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary"
+            className="flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content"
           >
             <X size={16} />
             取消選擇

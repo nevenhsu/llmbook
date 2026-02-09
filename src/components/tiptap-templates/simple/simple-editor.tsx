@@ -57,7 +57,7 @@ function ToolbarButton({
   return (
     <button
       type="button"
-      className={`p-1.5 rounded hover:bg-surface-hover transition-colors ${active ? "bg-highlight text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
+      className={`p-1.5 rounded hover:hover:bg-base-300 transition-colors ${active ? "bg-base-300 text-base-content" : "text-base-content/70 hover:text-base-content"}`}
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
@@ -109,7 +109,7 @@ function MenuBar({ editor }: { editor: Editor }) {
   }
 
   return (
-    <div className="relative z-50 flex flex-wrap items-center gap-0.5 overflow-visible border-b border-border-default bg-surface/60 px-2 py-1 backdrop-blur-sm">
+    <div className="relative z-50 flex flex-wrap items-center gap-0.5 overflow-visible border-b border-neutral bg-base-100/60 px-2 py-1 backdrop-blur-sm">
       <ToolbarButton
         label="Undo"
         onClick={() => editor.chain().focus().undo().run()}
@@ -125,13 +125,13 @@ function MenuBar({ editor }: { editor: Editor }) {
         <Redo2 size={16} />
       </ToolbarButton>
 
-      <div className="mx-1 h-6 w-px bg-border-default" />
+      <div className="mx-1 h-6 w-px bg-neutral" />
 
       <div className="dropdown dropdown-bottom">
         <button
           type="button"
           tabIndex={0}
-          className="flex items-center gap-1 p-1.5 rounded hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
+          className="flex items-center gap-1 p-1.5 rounded hover:hover:bg-base-300 text-base-content/70 hover:text-base-content transition-colors"
           aria-label="Text style"
           title="Text style"
         >
@@ -140,12 +140,12 @@ function MenuBar({ editor }: { editor: Editor }) {
         </button>
         <ul
           tabIndex={-1}
-          className="dropdown-content absolute left-0 mt-1 w-44 rounded-md border border-border-default bg-surface p-1 shadow-xl z-[110]"
+          className="dropdown-content absolute left-0 mt-1 w-44 rounded-md border border-neutral bg-base-100 p-1 shadow-xl z-[110]"
         >
           <li>
             <button
               type="button"
-              className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-surface-hover ${editor.isActive("paragraph") ? "bg-highlight text-text-primary" : "text-text-secondary"}`}
+              className={`w-full text-left px-3 py-2 text-sm rounded hover:hover:bg-base-300 ${editor.isActive("paragraph") ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
               onClick={() => editor.chain().focus().setParagraph().run()}
             >
               Paragraph
@@ -155,7 +155,7 @@ function MenuBar({ editor }: { editor: Editor }) {
             <li key={level}>
               <button
                 type="button"
-                className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-surface-hover ${editor.isActive("heading", { level }) ? "bg-highlight text-text-primary" : "text-text-secondary"}`}
+                className={`w-full text-left px-3 py-2 text-sm rounded hover:hover:bg-base-300 ${editor.isActive("heading", { level }) ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
                 onClick={() =>
                   editor.chain().focus().toggleHeading({ level }).run()
                 }
@@ -222,7 +222,7 @@ function MenuBar({ editor }: { editor: Editor }) {
         <Quote size={16} />
       </ToolbarButton>
 
-      <div className="mx-1 h-6 w-px bg-border-default" />
+      <div className="mx-1 h-6 w-px bg-neutral" />
 
       <ToolbarButton
         label="Add or edit link"
@@ -266,7 +266,7 @@ export function SimpleEditor({
       Placeholder.configure({
         placeholder: placeholder || "Text (optional)",
         emptyEditorClass:
-          "is-editor-empty before:text-text-muted before:content-[attr(data-placeholder)] before:float-left before:pointer-events-none before:h-0",
+ "is-editor-empty before:text-base-content/50 before:content-[attr(data-placeholder)] before:float-left before:pointer-events-none before:h-0",
       }),
       Link.configure({
         openOnClick: false,
@@ -284,7 +284,7 @@ export function SimpleEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-invert max-w-none p-4 min-h-[250px] sm:min-h-[200px] focus:outline-none text-sm leading-relaxed text-text-primary",
+ "prose prose-invert max-w-none p-4 min-h-[250px] sm:min-h-[200px] focus:outline-none text-sm leading-relaxed text-base-content",
       },
     },
     immediatelyRender: false,
@@ -297,7 +297,7 @@ export function SimpleEditor({
   }, [effectiveContent, editor]);
 
   return (
-    <div className="relative isolate overflow-x-auto rounded-md border border-border-default bg-surface transition-colors focus-within:border-border-hover">
+    <div className="relative isolate overflow-x-auto rounded-md border border-neutral bg-base-100 transition-colors focus-within:border-neutral">
       <div className="relative z-20">
         {editor ? <MenuBar editor={editor} /> : null}
       </div>

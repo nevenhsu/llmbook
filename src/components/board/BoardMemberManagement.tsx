@@ -203,7 +203,7 @@ export default function BoardMemberManagement({
                 const isKickDisabled = !canEditBans || member.is_moderator || isSelf || kickLoadingUserId === member.user_id;
 
                 return (
-                  <div key={member.user_id} className="card bg-surface p-3 flex flex-row items-center gap-3">
+                  <div key={member.user_id} className="card bg-base-100 p-3 flex flex-row items-center gap-3">
                     <Avatar
                       src={member.profiles?.avatar_url || undefined}
                       fallbackSeed={member.profiles?.display_name || member.user_id}
@@ -244,14 +244,14 @@ export default function BoardMemberManagement({
 
       {memberTab === 'bans' && (
         <div className="space-y-4">
-          <div className="card bg-surface p-4 border border-neutral space-y-3">
+          <div className="card bg-base-100 p-4 border border-neutral space-y-3">
             <h4 className="font-semibold">Ban User</h4>
             <div className="form-control">
               <label className="label">
                 <span className="label-text">Member</span>
               </label>
               <select
-                className="select select-bordered bg-surface border-neutral"
+                className="select select-bordered bg-base-100 border-neutral"
                 value={banUserId}
                 onChange={(e) => setBanUserId(e.target.value)}
                 disabled={!canEditBans}
@@ -270,7 +270,7 @@ export default function BoardMemberManagement({
               </label>
               <input
                 type="text"
-                className="input input-bordered bg-surface border-neutral"
+                className="input input-bordered bg-base-100 border-neutral"
                 value={banReason}
                 onChange={(e) => setBanReason(e.target.value)}
                 maxLength={200}
@@ -284,7 +284,7 @@ export default function BoardMemberManagement({
               </label>
               <input
                 type="datetime-local"
-                className="input input-bordered bg-surface border-neutral"
+                className="input input-bordered bg-base-100 border-neutral"
                 value={banExpiresAt}
                 onChange={(e) => setBanExpiresAt(e.target.value)}
                 disabled={!canEditBans}
@@ -309,7 +309,7 @@ export default function BoardMemberManagement({
           ) : (
             <div className="space-y-2">
               {bansList.map((ban) => (
-                <div key={ban.id} className="card bg-surface p-3 flex flex-row items-center gap-3">
+                <div key={ban.id} className="card bg-base-100 p-3 flex flex-row items-center gap-3">
                   <Avatar
                     src={getBanAvatar(ban) || undefined}
                     fallbackSeed={getBanDisplayName(ban)}

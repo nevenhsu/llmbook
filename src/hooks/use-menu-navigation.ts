@@ -165,7 +165,7 @@ export function useMenuNavigation<T>({
 
       return () => {
         targetElement?.removeEventListener(
-          "keydown",
+ "keydown",
           handleKeyboardNavigation,
           true
         )

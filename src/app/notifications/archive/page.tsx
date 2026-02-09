@@ -135,11 +135,11 @@ export default function NotificationArchivePage() {
                           <ArrowUp size={10} strokeWidth={4} />
                         </div>
                       ) : notif.type === "reply" ? (
-                        <div className="bg-blue-500 text-white rounded-full p-0.5">
+                        <div className="bg-info text-white rounded-full p-0.5">
                           <MessageSquare size={10} fill="currentColor" />
                         </div>
                       ) : (
-                        <div className="bg-gray-500 text-white rounded-full p-0.5">
+                        <div className="bg-neutral text-white rounded-full p-0.5">
                           <User size={10} fill="currentColor" />
                         </div>
                       )}
@@ -203,7 +203,7 @@ export default function NotificationArchivePage() {
                       Loading...
                     </>
                   ) : (
-                    "Load more"
+ "Load more"
                   )}
                 </button>
               </div>

@@ -19,15 +19,19 @@ export default async function BoardPage({ params }: PageProps) {
   const supabase = await createClient(cookies());
   const { data: board } = await supabase
     .from("boards")
-    .select("id,name,slug,description,icon_url,banner_url,member_count,post_count,created_at,is_archived,rules")
+    .select(
+      "id,name,slug,description,icon_url,banner_url,member_count,post_count,created_at,is_archived,rules",
+    )
     .eq("slug", slug)
     .maybeSingle();
 
   if (!board) {
     return (
-      <div className="bg-surface p-6 rounded-md border border-border-default">
-        <h1 className="text-xl font-semibold text-text-primary">Board not found</h1>
-        <Link href="/" className="text-accent-link mt-4 inline-block">
+      <div className="bg-base-100 p-6 rounded-md border border-neutral">
+        <h1 className="text-xl font-semibold text-base-content">
+          Board not found
+        </h1>
+        <Link href="/" className="mt-4 inline-block">
           Back to feed
         </Link>
       </div>
@@ -38,8 +42,8 @@ export default async function BoardPage({ params }: PageProps) {
     .from("posts")
     .select(
       `id,title,body,created_at,score,comment_count,persona_id,
-       profiles(display_name, avatar_url),
-       personas(display_name, avatar_url, slug),
+       profiles(username, display_name, avatar_url),
+       personas(username, display_name, avatar_url, slug),
        media(url),
        post_tags(tag:tags(name))`,
     )
@@ -59,44 +63,51 @@ export default async function BoardPage({ params }: PageProps) {
       commentCount: post.comment_count ?? 0,
       boardName: board.name,
       boardSlug: board.slug,
-      authorName: authorData?.display_name ?? 'Anonymous',
+      authorName: authorData?.display_name ?? "Anonymous",
+      authorUsername: authorData?.username ?? null,
       authorAvatarUrl: authorData?.avatar_url ?? null,
       isPersona,
       createdAt: post.created_at,
       thumbnailUrl: post.media?.[0]?.url ?? null,
-      flairs: post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
+      flairs:
+        post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
       userVote: null,
     };
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   let isJoined = false;
   if (user) {
     const { data: membership } = await supabase
-      .from('board_members')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .eq('board_id', board.id)
+      .from("board_members")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .eq("board_id", board.id)
       .maybeSingle();
     isJoined = !!membership;
   }
 
   // Get moderators
   const { data: moderators } = await supabase
-    .from('board_moderators')
-    .select(`
+    .from("board_moderators")
+    .select(
+      `
       user_id,
       role,
       profiles:user_id (
         display_name,
         avatar_url
       )
-    `)
-    .eq('board_id', board.id)
-    .order('created_at', { ascending: true });
+    `,
+    )
+    .eq("board_id", board.id)
+    .order("created_at", { ascending: true });
 
-  const canOpenSettings = !!user && (moderators || []).some((mod: any) => mod.user_id === user.id);
+  const canOpenSettings =
+    !!user && (moderators || []).some((mod: any) => mod.user_id === user.id);
 
   return (
     <BoardLayout board={board} slug={slug} isJoined={isJoined}>
@@ -120,16 +131,17 @@ export default async function BoardPage({ params }: PageProps) {
 
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block w-[312px]">
-          <BoardInfoCard
-            board={board}
-            isMember={isJoined}
-          />
+          <BoardInfoCard board={board} isMember={isJoined} />
           {canOpenSettings && <BoardManageCard slug={board.slug} />}
           <BoardRulesCard rules={board.rules || []} />
-          <BoardModeratorsCard moderators={(moderators || []).map((mod: any) => ({
-            ...mod,
-            profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles
-          }))} />
+          <BoardModeratorsCard
+            moderators={(moderators || []).map((mod: any) => ({
+              ...mod,
+              profiles: Array.isArray(mod.profiles)
+                ? mod.profiles[0]
+                : mod.profiles,
+            }))}
+          />
         </aside>
       </div>
     </BoardLayout>

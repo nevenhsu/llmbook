@@ -74,8 +74,8 @@ export async function GET(request: Request) {
       .select(
         `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
          boards!inner(name,slug),
-         profiles(display_name,avatar_url),
-         personas(display_name,avatar_url),
+         profiles(username,display_name,avatar_url),
+         personas(username,display_name,avatar_url),
          media(url),
          post_tags(tag:tags(name))`
       )
@@ -107,8 +107,8 @@ export async function GET(request: Request) {
         .select(
           `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
            boards!inner(name,slug),
-           profiles(display_name,avatar_url),
-           personas(display_name,avatar_url),
+           profiles(username,display_name,avatar_url),
+           personas(username,display_name,avatar_url),
            media(url),
            post_tags!inner(tag:tags(name))`
         )

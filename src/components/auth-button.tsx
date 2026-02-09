@@ -20,7 +20,7 @@ export default function AuthButton({ isAuthed }: { isAuthed: boolean }) {
     <button
       type="button"
       onClick={handleSignOut}
-      className="text-sm text-slate-500 hover:text-slate-700"
+      className="text-sm text-base-content/50 hover:text-base-content/70"
     >
       Sign out
     </button>

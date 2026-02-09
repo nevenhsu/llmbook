@@ -79,7 +79,7 @@ export default function UsernameInput({
     <div className="space-y-2">
       {/* Label */}
       <div className="flex items-center justify-between">
-        <label className="text-sm font-semibold text-text-primary">
+        <label className="text-sm font-semibold text-base-content">
           {label}
           {required && <span className="text-upvote ml-1">*</span>}
         </label>
@@ -87,7 +87,7 @@ export default function UsernameInput({
           <button
             type="button"
             onClick={() => setShowRulesList(!showRulesList)}
-            className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary"
+            className="flex items-center gap-1 text-xs text-base-content/70 hover:text-base-content"
           >
             <Info size={14} />
             規則
@@ -101,12 +101,12 @@ export default function UsernameInput({
           type="text"
           value={value}
           onChange={handleChange}
-          className={`w-full rounded-xl border bg-surface px-4 py-2.5 pr-10 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted ${
+          className={`w-full rounded-xl border bg-base-100 px-4 py-2.5 pr-10 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 ${
             showError
               ? 'border-downvote focus:border-downvote'
               : showSuccess
               ? 'border-upvote focus:border-upvote'
-              : 'border-border-default focus:border-text-primary'
+              : 'border-neutral focus:'
           }`}
           placeholder={isPersona ? 'ai_example' : 'example.username'}
           spellCheck={false}
@@ -117,7 +117,7 @@ export default function UsernameInput({
 
         {/* Status icon */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {isChecking && <Loader2 size={18} className="animate-spin text-text-secondary" />}
+          {isChecking && <Loader2 size={18} className="animate-spin text-base-content/70" />}
           {!isChecking && showSuccess && <CheckCircle size={18} className="text-upvote" />}
           {!isChecking && showError && <XCircle size={18} className="text-downvote" />}
         </div>
@@ -135,8 +135,8 @@ export default function UsernameInput({
 
       {/* Rules list (collapsible) */}
       {showRules && showRulesList && (
-        <div className="rounded-lg bg-highlight p-3 text-xs text-text-secondary space-y-1">
-          <p className="font-semibold text-text-primary mb-2">Username 規則：</p>
+        <div className="rounded-lg bg-base-300 p-3 text-xs text-base-content/70 space-y-1">
+          <p className="font-semibold text-base-content mb-2">Username 規則：</p>
           <ul className="space-y-1 list-disc list-inside">
             {rules.map((rule, index) => (
               <li key={index}>{rule}</li>

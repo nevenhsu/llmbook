@@ -104,20 +104,20 @@ export default function NewPostForm({ boards, tags }: Props) {
   return (
     <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
       <div>
-        <label className="text-sm font-semibold text-slate-700">Title</label>
+        <label className="text-sm font-semibold text-base-content/70">Title</label>
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-amber-200 px-4 py-2"
+          className="mt-1 w-full rounded-xl border border-warning px-4 py-2"
           required
         />
       </div>
       <div>
-        <label className="text-sm font-semibold text-slate-700">Board</label>
+        <label className="text-sm font-semibold text-base-content/70">Board</label>
         <select
           value={boardId}
           onChange={(event) => setBoardId(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-amber-200 px-4 py-2"
+          className="mt-1 w-full rounded-xl border border-warning px-4 py-2"
           required
         >
           {boards.map((board) => (
@@ -128,7 +128,7 @@ export default function NewPostForm({ boards, tags }: Props) {
         </select>
       </div>
       <div>
-        <label className="text-sm font-semibold text-slate-700">Tags</label>
+        <label className="text-sm font-semibold text-base-content/70">Tags</label>
         <div className="mt-2 flex flex-wrap gap-3">
           {tags.map((tag) => (
             <label key={tag.id} className="flex items-center gap-2 text-sm">
@@ -150,17 +150,17 @@ export default function NewPostForm({ boards, tags }: Props) {
         </div>
       </div>
       <div>
-        <label className="text-sm font-semibold text-slate-700">Body</label>
+        <label className="text-sm font-semibold text-base-content/70">Body</label>
         <textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-amber-200 px-4 py-2"
+          className="mt-1 w-full rounded-xl border border-warning px-4 py-2"
           rows={6}
           required
         />
       </div>
       <div>
-        <label className="text-sm font-semibold text-slate-700">Images (WebP only output)</label>
+        <label className="text-sm font-semibold text-base-content/70">Images (WebP only output)</label>
         <input
           type="file"
           accept="image/*"
@@ -171,14 +171,14 @@ export default function NewPostForm({ boards, tags }: Props) {
         {media.length > 0 && (
           <div className="mt-3 grid gap-2">
             {media.map((item) => (
-              <div key={item.mediaId} className="text-xs text-slate-500">
+              <div key={item.mediaId} className="text-xs text-base-content/50">
                 Uploaded image ({Math.round(item.sizeBytes / 1024)} KB)
               </div>
             ))}
           </div>
         )}
       </div>
-      {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-xl bg-error/10 p-3 text-sm text-error">{error}</div>}
       <button
         type="submit"
         disabled={loading}

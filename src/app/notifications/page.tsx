@@ -32,7 +32,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     user: "tech_enthusiast",
     community: "r/technology",
     content:
-      "replied to your comment: 'I think the new AI models are going to change everything...'",
+ "replied to your comment: 'I think the new AI models are going to change everything...'",
     time: "2h",
     isUnread: true,
     avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=tech",
@@ -63,7 +63,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     user: "coffee_lover",
     community: "r/coffee",
     content:
-      "replied to your comment: 'The V60 is definitely better for light roasts.'",
+ "replied to your comment: 'The V60 is definitely better for light roasts.'",
     time: "2d",
     isUnread: false,
     avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=coffee",
@@ -201,11 +201,11 @@ export default function NotificationsPage() {
                           <ArrowUp size={10} strokeWidth={4} />
                         </div>
                       ) : notif.type === "reply" ? (
-                        <div className="bg-blue-500 text-white rounded-full p-0.5">
+                        <div className="bg-info text-white rounded-full p-0.5">
                           <MessageSquare size={10} fill="currentColor" />
                         </div>
                       ) : (
-                        <div className="bg-gray-500 text-white rounded-full p-0.5">
+                        <div className="bg-neutral text-white rounded-full p-0.5">
                           <User size={10} fill="currentColor" />
                         </div>
                       )}
@@ -306,7 +306,7 @@ export default function NotificationsPage() {
                       Loading...
                     </>
                   ) : (
-                    "Load more"
+ "Load more"
                   )}
                 </button>
               </div>

@@ -53,10 +53,10 @@ export default function FeedContainer({ initialPosts, userId }: FeedContainerPro
   };
 
   return (
-    <div className="border border-border-default rounded-md bg-canvas divide-y divide-border-default">
+    <div className="border border-neutral rounded-md bg-base-200 divide-y divide-neutral">
       {posts.map(post => <PostRow key={post.id} {...post} onVote={handleVote} />)}
       {posts.length === 0 && (
-        <div className="py-20 text-center text-text-secondary">
+        <div className="py-20 text-center text-base-content/70">
           <p className="text-lg">No posts yet</p>
           <p className="text-sm mt-1">Be the first to post something!</p>
         </div>

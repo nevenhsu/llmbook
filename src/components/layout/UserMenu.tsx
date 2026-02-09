@@ -46,8 +46,8 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
 
   return (
     <div className="dropdown dropdown-end relative">
-      <div tabIndex={0} role="button" className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:bg-surface-hover cursor-pointer">
-        <div className="relative h-6 w-6 overflow-hidden rounded-full bg-surface">
+      <div tabIndex={0} role="button" className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:hover:bg-base-300 cursor-pointer">
+        <div className="relative h-6 w-6 overflow-hidden rounded-full bg-base-100">
           <Image
             src={avatarUrl}
             alt="User Avatar"
@@ -58,34 +58,34 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
           />
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">
-          <span className="font-semibold text-text-primary">{username}</span>
-          <span className="text-text-secondary">1 karma</span>
+          <span className="font-semibold text-base-content">{username}</span>
+          <span className="text-base-content/70">1 karma</span>
         </div>
-        <ChevronDown size={16} className="text-text-secondary" />
+        <ChevronDown size={16} className="text-base-content/70" />
       </div>
       <ul
         tabIndex={-1}
-        className="dropdown-content absolute right-0 mt-2 w-64 bg-surface border border-border-default rounded-md shadow-lg z-50 py-2"
+        className="dropdown-content absolute right-0 mt-2 w-64 bg-base-100 border border-neutral rounded-md shadow-lg z-50 py-2"
       >
         <li>
-          <Link href="/profile" className="flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary">
-            <User size={18} className="text-text-secondary" /> View Profile
+          <Link href="/profile" className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
+            <User size={18} className="text-base-content/70" /> View Profile
           </Link>
         </li>
         <li>
-          <Link href="/settings/profile" className="flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary">
-            <Paintbrush size={18} className="text-text-secondary" /> Edit Avatar
+          <Link href="/settings/profile" className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
+            <Paintbrush size={18} className="text-base-content/70" /> Edit Avatar
           </Link>
         </li>
         <li>
-          <button className="w-full flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary text-left">
-            <Moon size={18} className="text-text-secondary" /> Display Mode
+          <button className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left">
+            <Moon size={18} className="text-base-content/70" /> Display Mode
           </button>
         </li>
-        <div className="border-t border-border-default my-1"></div>
+        <div className="border-t border-neutral my-1"></div>
         <li>
-          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-surface-hover text-sm text-text-primary text-left">
-            <LogOut size={18} className="text-text-secondary" /> Log Out
+          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left">
+            <LogOut size={18} className="text-base-content/70" /> Log Out
           </button>
         </li>
       </ul>

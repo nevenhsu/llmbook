@@ -24,7 +24,7 @@ export default function NotificationBell() {
   return (
     <Link 
       href="/notifications" 
-      className="relative p-2 rounded-full hover:bg-surface-hover text-text-primary"
+      className="relative p-2 rounded-full hover:hover:bg-base-300 text-base-content"
       aria-label="Notifications"
     >
       <Bell size={22} />

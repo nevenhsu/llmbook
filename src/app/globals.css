@@ -2,114 +2,110 @@
 @import "../styles/_keyframe-animations.scss";
 
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes:
+    light,
+    black --prefersdark;
+}
 
 @theme {
+  /* Fonts */
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-body: "Source Sans 3", system-ui, sans-serif;
-
-  --color-canvas: #030303;
-  --color-surface: #1a1a1b;
-  --color-surface-hover: #2a2a2b;
-  --color-highlight: #272729;
-  --color-border-default: #343536;
-  --color-border-hover: #818384;
-  --color-text-primary: #d7dadc;
-  --color-text-secondary: #818384;
-  --color-text-muted: #6b6c6d;
-  --color-upvote: #ff4500;
-  --color-downvote: #7193ff;
-  --color-accent-link: #4fbcff;
-  --color-accent-online: #46d160;
-  --color-ai-badge-bg: #1a3a4a;
-  --color-ai-badge-text: #4fbcff;
 }
 
-/* Override DaisyUI theme colors to use low-saturation warm neutrals */
-[data-theme="dark"],
-:root {
-  /* Base colors - cool grays with subtle blue undertone */
-  --b1: 23 23 26; /* base-100: #17171a - primary surface */
-  --b2: 13 13 16; /* base-200: #0d0d10 - deepest background */
-  --b3: 38 38 41; /* base-300: #262629 - secondary surface/inputs */
-  --bc: 215 218 220; /* base-content: text-primary #d7dadc */
+/* DaisyUI theme integration - RGB format required for DaisyUI */
 
-  /* Primary - upvote orange */
-  --p: 255 69 0; /* primary: #ff4500 */
-  --pf: 255 69 0; /* primary-focus */
-  --pc: 255 255 255; /* primary-content: white */
+/* Black Theme (data-theme="black") - 使用 DaisyUI 內建 black theme */
+[data-theme="black"] {
+  /* 覆寫 DaisyUI black theme 的品牌色 */
 
-  /* Secondary - downvote blue */
-  --s: 113 147 255; /* secondary: #7193ff */
-  --sf: 113 147 255; /* secondary-focus */
-  --sc: 255 255 255; /* secondary-content: white */
+  /* Primary (upvote orange) */
+  --p: 255 69 0; /* #ff4500 */
+  --pf: 255 69 0;
+  --pc: 255 255 255;
 
-  /* Accent - link blue */
-  --a: 79 188 255; /* accent: #4fbcff */
-  --af: 79 188 255; /* accent-focus */
-  --ac: 255 255 255; /* accent-content: white */
+  /* Secondary (downvote blue) */
+  --s: 113 147 255; /* #7193ff */
+  --sf: 113 147 255;
+  --sc: 255 255 255;
 
-  /* Neutral - border grey */
-  --n: 52 53 54; /* neutral: #343536 */
-  --nf: 52 53 54; /* neutral-focus */
-  --nc: 215 218 220; /* neutral-content */
+  /* Accent (link blue) */
+  --a: 79 188 255; /* #4fbcff */
+  --af: 79 188 255;
+  --ac: 255 255 255;
+}
+
+/* Light Theme (data-theme="light") */
+[data-theme="light"] {
+  /* Base colors */
+  --b1: 255 255 255; /* #ffffff */
+  --b2: 248 249 250; /* #f8f9fa */
+  --b3: 233 236 239; /* #e9ecef */
+  --bc: 33 37 41; /* #212529 */
+
+  /* Primary (upvote orange) */
+  --p: 255 69 0; /* #ff4500 */
+  --pf: 255 69 0;
+  --pc: 255 255 255;
+
+  /* Secondary (downvote blue) */
+  --s: 113 147 255; /* #7193ff */
+  --sf: 113 147 255;
+  --sc: 255 255 255;
+
+  /* Accent (link blue - darker for light mode) */
+  --a: 0 102 204; /* #0066cc */
+  --af: 0 102 204;
+  --ac: 255 255 255;
+
+  /* Neutral (border grey) */
+  --n: 222 226 230; /* #dee2e6 */
+  --nf: 222 226 230;
+  --nc: 33 37 41;
 
   /* Utility colors */
-  --in: 79 188 255; /* info */
-  --su: 70 209 96; /* success */
-  --wa: 255 165 0; /* warning */
-  --er: 255 68 68; /* error */
-}
-
-/* Ensure all DaisyUI components use these exact greys */
-.bg-base-100 {
-  background-color: #17171a;
-}
-
-.bg-base-200 {
-  background-color: #0d0d10;
-}
-
-.bg-base-300 {
-  background-color: #262629;
+  --in: 0 102 204; /* info */
+  --su: 40 167 69; /* success */
+  --wa: 255 193 7; /* warning */
+  --er: 220 53 69; /* error */
 }
 
 @layer base {
-  :root {
-    color-scheme: dark;
-  }
-
   body {
-    @apply bg-canvas text-text-primary;
-    font-family: "Source Sans 3", system-ui, sans-serif;
+    font-family: var(--font-body);
   }
 
   h1,
   h2,
   h3 {
-    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-family: var(--font-display);
+  }
+
+  button {
+    cursor: pointer;
   }
 
   a {
-    @apply text-accent-link;
+    text-decoration: none;
   }
 
   a:hover {
-    text-decoration: none !important;
+    text-decoration: underline;
   }
 
+  /* Scrollbar styling */
   ::-webkit-scrollbar {
     width: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: #030303;
+    @apply bg-base-300;
   }
   ::-webkit-scrollbar-thumb {
-    background: #343536;
-    border-radius: 4px;
+    @apply bg-neutral rounded;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #818384;
+    @apply bg-neutral/80;
   }
 
   .scrollbar-hide::-webkit-scrollbar {
@@ -120,7 +116,7 @@
     scrollbar-width: none;
   }
 
-  /* FeedSortBar select focus states - remove white border */
+  /* DaisyUI component overrides */
   .select:focus,
   .select:focus-within {
     outline: none !important;

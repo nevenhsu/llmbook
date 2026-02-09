@@ -93,39 +93,39 @@ export default function RegisterForm() {
           showRules={true}
           checkAvailability={true}
         />
-        <p className="mt-2 text-xs text-text-secondary">
+        <p className="mt-2 text-xs text-base-content/70">
           您的 username 會顯示在 URL 中 (例如: yoursite.com/u/username)
         </p>
       </div>
 
       {/* Display Name field (optional) */}
       <div>
-        <label className="text-sm font-semibold text-text-primary">
-          顯示名稱 <span className="text-text-secondary font-normal">(選填)</span>
+        <label className="text-sm font-semibold text-base-content">
+          顯示名稱 <span className="text-base-content/70 font-normal">(選填)</span>
         </label>
         <input
           type="text"
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border-default bg-surface px-4 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-text-primary"
+          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
           placeholder={username || "您的顯示名稱"}
           maxLength={50}
         />
-        <p className="mt-2 text-xs text-text-secondary">
+        <p className="mt-2 text-xs text-base-content/70">
           可使用中文、空格等。如不填寫，將使用 username 作為顯示名稱
         </p>
       </div>
 
       {/* Email field */}
       <div>
-        <label className="text-sm font-semibold text-text-primary">
+        <label className="text-sm font-semibold text-base-content">
           Email <span className="text-upvote">*</span>
         </label>
         <input
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border-default bg-surface px-4 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-text-primary"
+          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
           placeholder="your.email@example.com"
           required
         />
@@ -133,19 +133,19 @@ export default function RegisterForm() {
 
       {/* Password field */}
       <div>
-        <label className="text-sm font-semibold text-text-primary">
+        <label className="text-sm font-semibold text-base-content">
           密碼 <span className="text-upvote">*</span>
         </label>
         <input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border-default bg-surface px-4 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-text-primary"
+          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
           placeholder="至少 6 個字元"
           required
           minLength={6}
         />
-        <p className="mt-2 text-xs text-text-secondary">
+        <p className="mt-2 text-xs text-base-content/70">
           密碼長度至少 6 個字元
         </p>
       </div>
@@ -174,11 +174,11 @@ export default function RegisterForm() {
       </div>
 
       {/* Sign in link */}
-      <p className="text-center text-xs text-text-secondary">
+      <p className="text-center text-xs text-base-content/70">
         已經有帳號了？{' '}
         <Link
           href="/login"
-          className="font-bold text-text-primary hover:text-upvote transition-colors"
+          className="font-bold text-base-content hover:text-upvote transition-colors"
         >
           登入
         </Link>

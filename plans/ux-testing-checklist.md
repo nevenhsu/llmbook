@@ -251,7 +251,7 @@
 | BUG-008 | 2026-02-08 | 首頁排序 | P3 | Top 時間選擇器無法使用 | 選擇 Top，點擊時間選擇器 | 展開選項並更新列表 | 只能點擊，無選項出現 | 待補 | ✅ 已修復 (2026-02-08) - 重寫 FeedSortBar，改用 DaisyUI select 組件替代 dropdown，解決顯示問題 |
 | BUG-009 | 2026-02-08 | 評論功能 | P0 | Comment 後頁面當機 | 發布評論後 | 正常更新，無錯誤 | DOMPurify sanitize 錯誤 | 待補 | ✅ 已修復 (2026-02-09) - 改用 isomorphic-dompurify |
 | BUG-010 | 2026-02-08 | 個人資料 | P0 | `/profile` runtime error | 訪問 `/profile` | 正常顯示 UI | Event handlers cannot be passed to Client Component props | 待補 | ✅ 已修復 (2026-02-09) - 創建 ProfilePostList 元件 |
-| BUG-011 | 2026-02-08 | 帖子詳情頁 | P3 | 帖子詳情頁缺少作者資訊 | 訪問 `/posts/[id]` | 顯示 avatar、name，可點擊查看 `/u/display_name` | 沒有顯示作者資訊 | 待補 | |
+| BUG-011 | 2026-02-08 | 帖子詳情頁 | P3 | 帖子詳情頁缺少作者資訊 | 訪問 `/posts/[id]` | 顯示 avatar、name，可點擊查看 `/u/username` | 沒有顯示作者資訊 | 待補 | ✅ 已修復 (2026-02-09) - PostMeta 使用 Avatar 元件，顯示 display_name + 頭像，連結到 /u/username；更新所有 API 返回 username 欄位 |
 | BUG-012 | 2026-02-08 | 用戶頁面 | P0 | 沒有作者/Persona 頁面 | 訪問 `/u/any_display_name` | 查看 user/ persona info，layout 類似 `/profile` | 頁面不存在 (404) | 待補 | ✅ 已修復 (2026-02-09) - 創建 /u/[display_name] 頁面，支援 user 和 persona |
 | BUG-013 | 2026-02-08 | 板塊頁面 | P2 | Board 路徑應為 `/r` 開頭 | 訪問 `/boards/concept-art-gallery` | URL 為 `/r/concept-art-gallery` | URL 為 `/boards/concept-art-gallery` | 待補 | ✅ 已修復 (2026-02-08) - 創建 /r/[slug] 路由，更新所有元件連結 (PostMeta, BoardInfoCard, BoardLayout, DrawerSidebar 等)，保留 /boards 做向後相容 |
 | BUG-014 | 2026-02-08 | API 性能 | P2 | /api/posts 載入過慢 | 訪問首頁，觀察載入時間 | API 回應 < 500ms | 載入時間過長 | 待補 | ✅ 已優化 (2026-02-08) - 1) 移除 body 欄位減少 payload 2) 平行查詢 boards/tags 3) 條件查詢 hidden_posts 4) 限制返回 20 條 5) 添加快取 60s 6) 時間篩選減少資料量；✅ 已修復 - Rising 時間範圍從1天改為3天 |

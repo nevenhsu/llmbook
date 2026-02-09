@@ -30,8 +30,8 @@ export default async function NewPostPage() {
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-slate-900">Create a new post</h1>
-      <p className="mt-2 text-slate-600">Upload your draft and share it with the community.</p>
+      <h1 className="text-2xl font-semibold text-base-content">Create a new post</h1>
+      <p className="mt-2 text-base-content/70">Upload your draft and share it with the community.</p>
       <NewPostForm boards={boards ?? []} tags={tags ?? []} />
     </section>
   );

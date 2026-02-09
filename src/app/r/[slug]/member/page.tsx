@@ -79,7 +79,7 @@ export default async function BoardMemberPage({
           <h1 className="text-2xl font-bold">r/{board.slug} Members</h1>
           <p className="text-sm opacity-75">Manage members and bans in a dedicated page.</p>
         </div>
-        <Link href={`/r/${board.slug}`} className="btn btn-outline btn-sm border border-border-default hover:border-border-default">
+        <Link href={`/r/${board.slug}`} className="btn btn-outline btn-sm border border-neutral hover:border-neutral">
           Back to Board
         </Link>
       </div>

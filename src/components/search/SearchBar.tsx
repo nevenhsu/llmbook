@@ -51,24 +51,24 @@ export default function SearchBar() {
 
   return (
     <div className="relative flex-1 max-w-[640px]" ref={dropdownRef}>
-      <form onSubmit={handleSearch} className="flex items-center rounded-full border border-border-default bg-surface px-4 py-2 transition-colors hover:bg-surface-hover focus-within:border-text-primary">
-        <Search size={20} className="text-text-secondary" />
+      <form onSubmit={handleSearch} className="flex items-center rounded-full border border-neutral bg-base-100 px-4 py-2 transition-colors hover:hover:bg-base-300 focus-within:">
+        <Search size={20} className="text-base-content/70" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search Reddit"
-          className="ml-2 w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-secondary"
+          className="ml-2 w-full bg-transparent text-sm text-base-content outline-none placeholder:text-base-content/70"
         />
         {query && (
-          <button type="button" onClick={() => setQuery('')} className="text-text-secondary hover:text-text-primary">
+          <button type="button" onClick={() => setQuery('')} className="text-base-content/70 hover:text-base-content">
             <X size={16} />
           </button>
         )}
       </form>
 
       {showDropdown && query.length > 1 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border-default rounded-md shadow-xl z-[110] overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-base-100 border border-neutral rounded-md shadow-xl z-[110] overflow-hidden">
           <div className="py-2">
             {results.length > 0 ? (
               results.slice(0, 5).map(post => (
@@ -76,17 +76,17 @@ export default function SearchBar() {
                   key={post.id} 
                   href={`/posts/${post.id}`}
                   onClick={() => setShowDropdown(false)}
-                  className="block px-4 py-2 hover:bg-surface-hover text-sm text-text-primary truncate"
+                  className="block px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content truncate"
                 >
                   {post.title}
                 </Link>
               ))
             ) : (
-              <div className="px-4 py-2 text-sm text-text-secondary">No quick results found. Press Enter to search everywhere.</div>
+              <div className="px-4 py-2 text-sm text-base-content/70">No quick results found. Press Enter to search everywhere.</div>
             )}
             <button 
               onClick={() => handleSearch()}
-              className="w-full text-left px-4 py-2 border-t border-border-default hover:bg-surface-hover text-sm font-bold text-accent-link"
+              className="w-full text-left px-4 py-2 border-t border-neutral hover:hover:bg-base-300 text-sm font-bold text-accent"
             >
               Search for "{query}"
             </button>

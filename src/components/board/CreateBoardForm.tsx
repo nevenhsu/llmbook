@@ -93,7 +93,7 @@ export default function CreateBoardForm() {
         </label>
         <input
           type="text"
-          className="input input-bordered w-full bg-surface border-neutral"
+          className="input input-bordered w-full bg-base-100 border-neutral"
           value={name}
           onChange={(e) => handleNameChange(e.target.value)}
           placeholder="gaming"
@@ -102,7 +102,7 @@ export default function CreateBoardForm() {
           required
         />
         <label className="label">
-          <span className="label-text-alt">3-21 characters, alphanumeric and underscores only</span>
+          <span className="label-text-base-content/70">3-21 characters, alphanumeric and underscores only</span>
         </label>
       </div>
 
@@ -115,7 +115,7 @@ export default function CreateBoardForm() {
           <span className="join-item btn btn-sm btn-disabled">r/</span>
           <input
             type="text"
-            className="input input-bordered join-item flex-1 bg-surface border-neutral"
+            className="input input-bordered join-item flex-1 bg-base-100 border-neutral"
             value={slug}
             onChange={(e) => setSlug(e.target.value.toLowerCase())}
             placeholder="gaming"
@@ -124,7 +124,7 @@ export default function CreateBoardForm() {
           />
         </div>
         <label className="label">
-          <span className="label-text-alt">Lowercase, alphanumeric and underscores only</span>
+          <span className="label-text-base-content/70">Lowercase, alphanumeric and underscores only</span>
         </label>
       </div>
 
@@ -134,7 +134,7 @@ export default function CreateBoardForm() {
           <span className="label-text">Description</span>
         </label>
         <textarea
-          className="textarea textarea-bordered w-full bg-surface border-neutral"
+          className="textarea textarea-bordered w-full bg-base-100 border-neutral"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What is this board about?"
@@ -142,7 +142,7 @@ export default function CreateBoardForm() {
           rows={3}
         />
         <label className="label">
-          <span className="label-text-alt">{description.length}/500</span>
+          <span className="label-text-base-content/70">{description.length}/500</span>
         </label>
       </div>
 
@@ -177,7 +177,7 @@ export default function CreateBoardForm() {
         </label>
         <div className="space-y-2">
           {rules.map((rule, index) => (
-            <div key={index} className="collapse collapse-arrow bg-surface border border-neutral">
+            <div key={index} className="collapse collapse-arrow bg-base-100 border border-neutral">
               <input type="checkbox" defaultChecked />
               <div className="collapse-title font-medium flex items-center justify-between">
                 <span>Rule {index + 1}</span>
@@ -185,14 +185,14 @@ export default function CreateBoardForm() {
               <div className="collapse-content space-y-2">
                 <input
                   type="text"
-                  className="input input-bordered input-sm w-full bg-surface border-neutral"
+                  className="input input-bordered input-sm w-full bg-base-100 border-neutral"
                   value={rule.title}
                   onChange={(e) => updateRule(index, 'title', e.target.value)}
                   placeholder="Rule title"
                   maxLength={100}
                 />
                 <textarea
-                  className="textarea textarea-bordered textarea-sm w-full bg-surface border-neutral"
+                  className="textarea textarea-bordered textarea-sm w-full bg-base-100 border-neutral"
                   value={rule.description}
                   onChange={(e) => updateRule(index, 'description', e.target.value)}
                   placeholder="Rule description"
