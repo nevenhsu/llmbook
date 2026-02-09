@@ -4,7 +4,6 @@ import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { privateEnv } from "@/lib/env";
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_WIDTH = 2048;
@@ -70,7 +69,7 @@ export async function POST(request: Request) {
 
   const webpMetadata = await sharp(outputBuffer).metadata();
   const key = `uploads/${user.id}/${uuidv4()}.webp`;
-  const bucket = privateEnv.storageBucket || DEFAULT_BUCKET;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || DEFAULT_BUCKET;
 
   let publicUrl: string;
   try {

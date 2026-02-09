@@ -1,9 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { publicEnv } from "@/lib/env";
 
-const supabaseUrl = publicEnv.supabaseUrl;
-const supabaseKey = publicEnv.supabaseAnonKey;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 type CookieStore = Awaited<ReturnType<typeof cookies>>;
 
