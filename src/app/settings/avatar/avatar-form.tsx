@@ -26,6 +26,7 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('只允許上傳圖片檔案');
+      e.target.value = ''; // Reset input
       return;
     }
 
@@ -33,9 +34,13 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
     const maxBytes = 5 * 1024 * 1024;
     if (file.size > maxBytes) {
       toast.error('檔案大小超過 5 MB 限制');
+      e.target.value = ''; // Reset input
       return;
     }
 
+    // Show local preview immediately
+    const localPreview = URL.createObjectURL(file);
+    setPreview(localPreview);
     setIsUploading(true);
 
     try {
@@ -46,13 +51,22 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
         quality: 85
       });
 
+      // Update with uploaded URL but don't save to profile yet
       setAvatarUrl(result.url);
       setPreview(result.url);
-      toast.success('圖片已上傳');
+      
+      // Cleanup local preview
+      URL.revokeObjectURL(localPreview);
+      
+      toast.success('圖片已準備好，點擊「儲存」套用變更');
     } catch (err: any) {
       toast.error(err.message || '上傳失敗');
+      // Revert to current avatar on error
+      setPreview(currentAvatarUrl);
+      URL.revokeObjectURL(localPreview);
     } finally {
       setIsUploading(false);
+      e.target.value = ''; // Reset input to allow re-selecting same file
     }
   };
 
@@ -97,7 +111,6 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
           fallbackSeed={currentDisplayName} 
           src={preview} 
           size="lg" 
-          className="border-2 border-neutral" 
         />
         <div>
           <p className="text-sm font-semibold text-base-content">當前頭像</p>
@@ -107,57 +120,60 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
 
       {/* Upload Area */}
       <div className="space-y-3">
-        <label className="block">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-            id="avatar-upload"
-            disabled={isUploading}
-          />
-          <div 
-            onClick={() => document.getElementById('avatar-upload')?.click()}
-            className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-neutral rounded-xl cursor-pointer hover:border-upvote hover:bg-base-300 transition-colors"
-          >
-            {isUploading ? (
-              <>
-                <Loader2 size={32} className="animate-spin text-upvote mb-2" />
-                <span className="text-sm text-base-content/70">上傳中...</span>
-              </>
-            ) : (
-              <>
-                <Upload size={32} className="text-base-content/70 mb-2" />
-                <span className="text-sm text-base-content font-semibold">點擊上傳圖片</span>
-                <span className="text-xs text-base-content/70 mt-1">
-                  支援 JPG、PNG、GIF（最大 5 MB）
-                </span>
-              </>
-            )}
-          </div>
-        </label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+          id="avatar-upload"
+          disabled={isUploading}
+        />
+        <div 
+          onClick={() => document.getElementById('avatar-upload')?.click()}
+          className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-neutral rounded-xl cursor-pointer hover:border-upvote hover:bg-base-300 transition-colors"
+        >
+          {isUploading ? (
+            <>
+              <Loader2 size={32} className="animate-spin text-upvote mb-2" />
+              <span className="text-sm text-base-content/70">上傳中...</span>
+            </>
+          ) : (
+            <>
+              <Upload size={32} className="text-base-content/70 mb-2" />
+              <span className="text-sm text-base-content font-semibold">點擊上傳圖片</span>
+              <span className="text-xs text-base-content/70 mt-1">
+                支援 JPG、PNG、GIF（最大 5 MB）
+              </span>
+            </>
+          )}
+        </div>
 
-        {preview && preview !== currentAvatarUrl && (
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-between">
+        {preview && preview !== currentAvatarUrl ? (
           <button
             type="button"
             onClick={handleRemove}
-            className="flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content"
+            className="flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content transition-colors"
           >
             <X size={16} />
             取消選擇
           </button>
+        ) : (
+          <div></div>
         )}
+        
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving || isUploading || !avatarUrl || avatarUrl === currentAvatarUrl}
+          className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSaving ? "儲存中..." : "儲存頭像"}
+        </button>
       </div>
-
-      {/* Save Button */}
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={isSaving || isUploading || !avatarUrl || avatarUrl === currentAvatarUrl}
-        className="inline-flex min-h-10 items-center justify-center rounded-full bg-upvote px-6 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isSaving ? "儲存中..." : "儲存頭像"}
-      </button>
     </div>
   );
 }
