@@ -76,24 +76,24 @@ export default function UsernameInput({
   const showError = formatError || availabilityError;
 
   return (
-    <div className="space-y-2">
+    <div className="form-control">
       {/* Label */}
-      <div className="flex items-center justify-between">
-        <label className="text-sm font-semibold text-base-content">
+      <label className="label w-full">
+        <span className="label-text font-semibold">
           {label}
-          {required && <span className="text-upvote ml-1">*</span>}
-        </label>
+          {required && <span className="text-error ml-1">*</span>}
+        </span>
         {showRules && (
           <button
             type="button"
             onClick={() => setShowRulesList(!showRulesList)}
-            className="flex items-center gap-1 text-xs text-base-content/70 hover:text-base-content"
+            className="label-text-alt text-xs flex items-center gap-1 hover:text-base-content ml-auto"
           >
-            <Info size={14} />
+            <Info size={12} />
             規則
           </button>
         )}
-      </div>
+      </label>
 
       {/* Input with icon */}
       <div className="relative">
@@ -101,12 +101,12 @@ export default function UsernameInput({
           type="text"
           value={value}
           onChange={handleChange}
-          className={`w-full rounded-xl border bg-base-100 px-4 py-2.5 pr-10 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 ${
+          className={`input w-full pr-10 ${
             showError
-              ? 'border-downvote focus:border-downvote'
+              ? 'input-error'
               : showSuccess
-              ? 'border-upvote focus:border-upvote'
-              : 'border-neutral focus:'
+              ? 'input-success'
+              : 'input-bordered'
           }`}
           placeholder={isPersona ? 'ai_example' : 'example.username'}
           spellCheck={false}
@@ -117,27 +117,31 @@ export default function UsernameInput({
 
         {/* Status icon */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {isChecking && <Loader2 size={18} className="animate-spin text-base-content/70" />}
-          {!isChecking && showSuccess && <CheckCircle size={18} className="text-upvote" />}
-          {!isChecking && showError && <XCircle size={18} className="text-downvote" />}
+          {isChecking && <Loader2 size={18} className="animate-spin opacity-70" />}
+          {!isChecking && showSuccess && <CheckCircle size={18} className="text-success" />}
+          {!isChecking && showError && <XCircle size={18} className="text-error" />}
         </div>
       </div>
 
       {/* Error message */}
       {showError && (
-        <p className="text-xs text-downvote">{formatError || availabilityError}</p>
+        <label className="label !whitespace-normal">
+          <span className="label-text-alt text-xs text-error break-words">{formatError || availabilityError}</span>
+        </label>
       )}
 
       {/* Success message */}
       {showSuccess && (
-        <p className="text-xs text-upvote">✓ Username 可以使用</p>
+        <label className="label !whitespace-normal">
+          <span className="label-text-alt text-xs text-success">✓ Username 可以使用</span>
+        </label>
       )}
 
       {/* Rules list (collapsible) */}
       {showRules && showRulesList && (
-        <div className="rounded-lg bg-base-300 p-3 text-xs text-base-content/70 space-y-1">
-          <p className="font-semibold text-base-content mb-2">Username 規則：</p>
-          <ul className="space-y-1 list-disc list-inside">
+        <div className="rounded-lg bg-base-200 p-3 text-sm space-y-1 mt-2">
+          <p className="font-semibold mb-2">Username 規則：</p>
+          <ul className="space-y-1 list-disc list-inside opacity-70">
             {rules.map((rule, index) => (
               <li key={index}>{rule}</li>
             ))}

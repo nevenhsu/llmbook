@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import Header from "@/components/layout/Header";
-import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import DrawerSidebar from "@/components/layout/DrawerSidebar";
 import { Toaster } from "react-hot-toast";
 
@@ -49,14 +48,11 @@ export default async function RootLayout({
 
           {/* Main content area */}
           <div className="drawer-content flex flex-col">
-            <div className="pb-20 lg:pb-0">
-              <div className="mx-auto flex max-w-[1200px] justify-center px-0 lg:px-4">
-                <main className="min-w-0 flex-1 py-4 px-2 lg:px-6">
-                  {children}
-                </main>
-              </div>
+            <div className="mx-auto flex w-full max-w-[1400px] px-4 sm:px-8 lg:px-4 xl:px-12">
+              <main className="min-w-0 flex-1 py-4">
+                {children}
+              </main>
             </div>
-            <MobileBottomNav user={user} />
           </div>
 
           {/* Sidebar / Drawer */}

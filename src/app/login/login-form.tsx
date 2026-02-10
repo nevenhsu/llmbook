@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { XCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginForm() {
@@ -34,83 +35,56 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="space-y-4 px-4 sm:px-0">
-      {/* Social Buttons Stack */}
-      <div className="space-y-3">
-        <button
-          type="button"
-          className="btn btn-outline w-full rounded-full border-neutral bg-base-100 text-base-content hover:bg-base-200"
-        >
-          Continue with Phone Number
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline w-full rounded-full border-neutral bg-base-100 text-base-content hover:bg-base-200"
-        >
-          Continue with Google
-        </button>
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      <div className="form-control">
+        <input
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className="input input-bordered w-full"
+          placeholder="Email or username"
+          required
+        />
       </div>
 
-      {/* OR Divider */}
-      <div className="divider text-xs font-bold text-[#818384] uppercase">OR</div>
+      <div className="form-control">
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="input input-bordered w-full"
+          placeholder="Password"
+          required
+        />
+      </div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="input input-bordered w-full rounded-full bg-base-300 border-neutral focus:border-primary"
-            placeholder="Email or username"
-            required
-          />
+      {error && (
+        <div role="alert" className="alert alert-error">
+          <XCircle className="h-5 w-5 shrink-0" />
+          <span>{error}</span>
         </div>
-        <div>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="input input-bordered w-full rounded-full bg-base-300 border-neutral focus:border-primary"
-            placeholder="Password"
-            required
-          />
-        </div>
+      )}
 
-        {error && (
-          <div className="alert alert-error text-sm py-2">
-            <span>{error}</span>
-          </div>
-        )}
+      <div className="flex justify-end">
+        <Link href="/forgot-password" className="link link-hover text-sm">
+          Forgot password?
+        </Link>
+      </div>
 
-        <div className="py-1">
-          <Link
-            href="/forgot-password"
-            className="link link-accent text-xs font-bold"
-          >
-            Forgot password?
-          </Link>
-        </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="btn btn-primary btn-block"
+      >
+        {loading ? "Logging In..." : "Log In"}
+      </button>
 
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn btn-primary w-full rounded-full"
-          >
-            {loading ? "Logging In..." : "Log In"}
-          </button>
-        </div>
-
-        <p className="text-center text-xs text-[#818384] mt-4">
-          New to Persona Sandbox?{" "}
-          <Link
-            href="/register"
-            className="link link-hover font-bold text-base-content"
-          >
-            Sign Up
-          </Link>
-        </p>
-      </form>
-    </div>
+      <div className="text-center">
+        <span className="text-sm opacity-70">New to Persona Sandbox? </span>
+        <Link href="/register" className="link text-sm font-semibold">
+          Sign Up
+        </Link>
+      </div>
+    </form>
   );
 }

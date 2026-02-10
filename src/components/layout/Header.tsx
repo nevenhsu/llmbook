@@ -48,15 +48,19 @@ export default function Header({ user, profile }: HeaderProps) {
         <MobileSearchOverlay />
 
         <div className="flex items-center gap-2 md:gap-4">
-          <Link
-            href="/submit"
-            className="hidden md:flex items-center gap-2 rounded-full p-2 hover:hover:bg-base-300 md:px-4"
-            title="Create Post"
-          >
-            <Plus size={22} />
-            <span className="font-medium">Create</span>
-          </Link>
-          <NotificationBell />
+          {user && (
+            <>
+              <Link
+                href="/submit"
+                className="flex items-center gap-2 rounded-full p-2 hover:hover:bg-base-300 md:px-4"
+                title="Create Post"
+              >
+                <Plus size={22} />
+                <span className="hidden md:block font-medium">Create</span>
+              </Link>
+              <NotificationBell />
+            </>
+          )}
           <UserMenu user={user} profile={profile} />
         </div>
       </div>

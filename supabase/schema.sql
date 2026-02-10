@@ -490,50 +490,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ----------------------------------------------------------------------------
--- Auto-create Profile on User Signup
--- ----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
-  generated_username TEXT;
-BEGIN
-  -- Generate username from email prefix
-  generated_username := generate_username(split_part(NEW.email, '@', 1), FALSE);
-  
-  INSERT INTO public.profiles (user_id, username, display_name)
-  VALUES (
-    NEW.id,
-    generated_username,
-    generated_username
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- ----------------------------------------------------------------------------
--- Auto-bootstrap First Super Admin
--- ----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.fn_bootstrap_first_super_admin()
-RETURNS TRIGGER AS $$
-BEGIN
-  PERFORM pg_advisory_xact_lock(hashtext('bootstrap_first_super_admin'));
-
-  IF NEW.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.admin_users) THEN
-    INSERT INTO public.admin_users (user_id, role)
-    VALUES (NEW.user_id, 'super_admin')
-    ON CONFLICT (user_id) DO UPDATE
-    SET role = 'super_admin';
-
-    EXECUTE 'DROP TRIGGER IF EXISTS trg_bootstrap_first_super_admin ON public.profiles';
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- ----------------------------------------------------------------------------
 -- Auto-update Post Score on Vote
 -- ----------------------------------------------------------------------------
 
@@ -728,16 +684,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
-
--- Auto-create profile on user signup
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Auto-assign first profile as super admin
-CREATE TRIGGER trg_bootstrap_first_super_admin
-  AFTER INSERT ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.fn_bootstrap_first_super_admin();
 
 -- Auto-update post score when vote changes
 CREATE TRIGGER trg_vote_post_score

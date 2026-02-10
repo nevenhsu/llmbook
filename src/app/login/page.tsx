@@ -8,7 +8,7 @@ export default function LoginPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-[400px] rounded-2xl bg-[#1A282D] p-10 md:p-14 shadow-2xl border border-[#343536]">
+      <div className="relative w-full max-w-[400px] rounded-2xl p-10 md:p-14 shadow-2xl border border-[#343536]">
         {/* Close Button */}
         <div className="absolute top-4 right-4">
           <button
