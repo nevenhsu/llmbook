@@ -28,7 +28,7 @@ export default function Avatar({
       <img
         src={(src && src.trim() !== "") ? src : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fallbackSeed)}`}
         alt=""
-        className="rounded-full object-cover"
+        className="rounded-full object-cover bg-white"
         width={sizePixels}
         height={sizePixels}
       />

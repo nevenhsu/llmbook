@@ -48,7 +48,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
   return (
     <div className="dropdown dropdown-end relative">
       <div tabIndex={0} role="button" className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:hover:bg-base-300 cursor-pointer">
-        <div className="relative h-6 w-6 overflow-hidden rounded-full bg-base-100">
+        <div className="relative h-6 w-6 overflow-hidden rounded-full bg-white">
           <Image
             src={avatarUrl}
             alt="User Avatar"
@@ -67,6 +67,12 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
       <ul
         tabIndex={-1}
         className="dropdown-content absolute right-0 mt-2 w-64 bg-base-100 border border-neutral rounded-md shadow-lg z-50 py-2"
+        onClick={(e) => {
+          // DaisyUI dropdown stays open via :focus-within; blur the focused item to close.
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }}
       >
         <li>
           <Link href={`/u/${username}`} className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
@@ -74,7 +80,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
           </Link>
         </li>
         <li>
-          <Link href="/settings/profile" className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
+          <Link href="/settings/avatar" className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
             <Paintbrush size={18} className="text-base-content/70" /> Edit Avatar
           </Link>
         </li>

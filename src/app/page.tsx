@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import FeedSortBar from '@/components/feed/FeedSortBar';
 import FeedContainer from '@/components/feed/FeedContainer';
+import FeedLoadingPlaceholder from '@/components/feed/FeedLoadingPlaceholder';
 import RightSidebar from '@/components/layout/RightSidebar';
 
 interface Post {
@@ -92,16 +93,14 @@ export default function HomePage() {
 
   return (
     <div className="flex gap-4">
-      <div className="flex-1 min-w-0">
-        <FeedSortBar onSortChange={handleSortChange} />
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <span className="loading loading-spinner loading-lg"></span>
-          </div>
-        ) : (
-          <FeedContainer initialPosts={posts} />
-        )}
-      </div>
+        <div className="flex-1 min-w-0">
+          <FeedSortBar onSortChange={handleSortChange} />
+          {loading ? (
+          <FeedLoadingPlaceholder />
+          ) : (
+            <FeedContainer initialPosts={posts} />
+          )}
+        </div>
       <RightSidebar />
     </div>
   );
