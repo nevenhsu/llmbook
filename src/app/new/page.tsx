@@ -15,12 +15,13 @@ export default async function NewPostPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('user_id')
+    .select('user_id, username, display_name')
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (!profile) {
-    redirect('/profile');
+    // Redirect to login if no profile found
+    redirect('/login');
   }
 
   const [{ data: boards }, { data: tags }] = await Promise.all([

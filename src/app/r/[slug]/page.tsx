@@ -99,7 +99,8 @@ export default async function BoardPage({ params }: PageProps) {
       role,
       profiles:user_id (
         display_name,
-        avatar_url
+        avatar_url,
+        username
       )
     `,
     )

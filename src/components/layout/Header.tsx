@@ -8,7 +8,7 @@ import NotificationBell from "../notification/NotificationBell";
 
 interface HeaderProps {
   user: User | null;
-  profile?: { display_name: string; avatar_url: string | null } | null;
+  profile?: { display_name: string; avatar_url: string | null; username: string | null } | null;
 }
 
 export default function Header({ user, profile }: HeaderProps) {

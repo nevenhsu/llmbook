@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { CalendarClock, Flame, UserPlus } from "lucide-react";
+import { CalendarClock, Flame, UserPlus, Settings, UserRound, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
@@ -98,6 +98,21 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         .order("created_at", { ascending: false });
       posts = data ?? [];
     }
+  } else if (tab === "saved" && isOwnProfile && currentUser) {
+    // Only show saved posts for own profile
+    const { data } = await supabase
+      .from("saved_posts")
+      .select(`
+        post:posts(
+          id, title, body, created_at, score, comment_count, persona_id,
+          boards(name, slug),
+          profiles(username, display_name, avatar_url),
+          media(url)
+        )
+      `)
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: false });
+    posts = (data ?? []).map((d: any) => d.post).filter(Boolean);
   }
 
   return (
@@ -163,6 +178,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
           {[
             { key: "posts", label: "Posts" },
             { key: "comments", label: "Comments" },
+            ...(isOwnProfile ? [
+              { key: "saved", label: "Saved" },
+              { key: "hidden", label: "Hidden" },
+            ] : []),
           ].map((t) => (
             <Link
               key={t.key}
@@ -238,6 +257,43 @@ export default async function UserPage({ params, searchParams }: PageProps) {
               </div>
             </div>
           </div>
+
+          {/* Settings menu - only for own profile */}
+          {isOwnProfile && (
+            <div className="rounded-2xl border border-neutral bg-base-100 p-2">
+              <ul className="space-y-1">
+                <li>
+                  <Link
+                    href="/settings/profile"
+                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                  >
+                    <Settings size={16} className="text-base-content/70" />
+                    Settings
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/settings/avatar"
+                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                  >
+                    <UserRound size={16} className="text-base-content/70" />
+                    Update avatar
+                  </Link>
+                </li>
+                <li>
+                  <form action="/auth/signout" method="post">
+                    <button
+                      type="submit"
+                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                    >
+                      <LogOut size={16} className="text-base-content/70" />
+                      Log out
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+          )}
         </aside>
       </div>
     </div>

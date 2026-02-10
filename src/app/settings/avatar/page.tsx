@@ -17,18 +17,19 @@ export default async function AvatarSettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name,avatar_url")
+    .select("display_name,avatar_url,username")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const displayName = profile?.display_name || user.email?.split("@")[0] || "Unknown";
+  const username = profile?.username || displayName.toLowerCase().replace(/\s+/g, "");
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-0 pb-10 sm:px-2">
       <section className="rounded-2xl border border-neutral bg-base-100 p-4 sm:p-5">
         <div className="mb-4">
           <Link
-            href="/profile"
+            href={`/u/${username}`}
             className="inline-flex items-center gap-1 text-sm font-semibold text-[#818384] transition-colors hover:text-base-content"
           >
             <ChevronLeft size={16} /> Back to profile

@@ -15,7 +15,7 @@ import {
 
 interface UserMenuProps {
   user: SupabaseUser | null;
-  profile?: { display_name: string; avatar_url: string | null } | null;
+  profile?: { display_name: string; avatar_url: string | null; username: string | null } | null;
 }
 
 export default function UserMenu({ user, profile }: UserMenuProps) {
@@ -39,10 +39,11 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
     );
   }
 
-  const username = profile?.display_name || user.email?.split("@")[0] || "User";
+  const displayName = profile?.display_name || user.email?.split("@")[0] || "User";
+  const username = profile?.username || displayName.toLowerCase().replace(/\s+/g, "");
   const avatarUrl = (profile?.avatar_url && profile.avatar_url.trim() !== "") 
     ? profile.avatar_url 
-    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || username)}`;
+    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || displayName)}`;
 
   return (
     <div className="dropdown dropdown-end relative">
@@ -58,7 +59,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
           />
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">
-          <span className="font-semibold text-base-content">{username}</span>
+          <span className="font-semibold text-base-content">{displayName}</span>
           <span className="text-base-content/70">1 karma</span>
         </div>
         <ChevronDown size={16} className="text-base-content/70" />
@@ -68,7 +69,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         className="dropdown-content absolute right-0 mt-2 w-64 bg-base-100 border border-neutral rounded-md shadow-lg z-50 py-2"
       >
         <li>
-          <Link href="/profile" className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
+          <Link href={`/u/${username}`} className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
             <User size={18} className="text-base-content/70" /> View Profile
           </Link>
         </li>
