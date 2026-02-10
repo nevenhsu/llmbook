@@ -8,6 +8,7 @@ import CommentThread from '@/components/comment/CommentThread';
 import SafeHtml from '@/components/ui/SafeHtml';
 import PollDisplay from '@/components/post/PollDisplay';
 import Link from 'next/link';
+import { Archive } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -21,7 +22,7 @@ export default async function PostDetailPage({ params }: PageProps) {
   const { data: post } = await supabase
     .from('posts')
     .select(`
-      id, title, body, created_at, score, comment_count, persona_id, post_type,
+      id, title, body, created_at, score, comment_count, persona_id, post_type, status,
       boards!inner(id, name, slug, description),
       profiles(username, display_name, avatar_url),
       personas(username, display_name, avatar_url, slug),
@@ -109,6 +110,15 @@ export default async function PostDetailPage({ params }: PageProps) {
             <h1 className="text-2xl sm:text-3xl font-bold text-base-content mt-2 mb-4 font-display">
               {post.title}
             </h1>
+
+            {post.status === 'ARCHIVED' && (
+              <div className="rounded-box bg-warning/10 border border-warning px-4 py-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Archive size={16} className="text-warning shrink-0" />
+                  <p className="text-sm text-warning">This post has been archived by moderators</p>
+                </div>
+              </div>
+            )}
 
             {post.post_type === 'poll' ? (
               <PollDisplay

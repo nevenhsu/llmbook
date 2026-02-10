@@ -105,16 +105,46 @@ export async function canManageBoard(
   
   const { data, error } = await supabase
     .from('board_moderators')
-    .select('permissions')
+    .select('role, permissions')
     .eq('board_id', boardId)
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error || !data) return false;
+
+  if (data.role === 'owner') {
+    return true;
+  }
   
   // Check if user has manage_settings permission
   const permissions = data.permissions as { manage_settings?: boolean };
   return permissions.manage_settings === true;
+}
+
+/**
+ * Check if a user can manage board posts (archive/remove)
+ */
+export async function canManageBoardPosts(
+  boardId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = await createServerClient(cookies());
+
+  const { data, error } = await supabase
+    .from('board_moderators')
+    .select('role, permissions')
+    .eq('board_id', boardId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+
+  if (data.role === 'owner') {
+    return true;
+  }
+
+  const permissions = data.permissions as { manage_posts?: boolean };
+  return permissions.manage_posts === true;
 }
 
 /**

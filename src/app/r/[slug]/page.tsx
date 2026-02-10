@@ -8,6 +8,8 @@ import BoardInfoCard from "@/components/board/BoardInfoCard";
 import BoardManageCard from "@/components/board/BoardManageCard";
 import BoardRulesCard from "@/components/board/BoardRulesCard";
 import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
+import UnarchiveButton from "@/components/board/UnarchiveButton";
+import { isAdmin } from "@/lib/admin";
 import { Archive } from "lucide-react";
 
 interface PageProps {
@@ -80,6 +82,7 @@ export default async function BoardPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
 
   let isJoined = false;
+  let userIsAdmin = false;
   if (user) {
     const { data: membership } = await supabase
       .from("board_members")
@@ -88,6 +91,7 @@ export default async function BoardPage({ params }: PageProps) {
       .eq("board_id", board.id)
       .maybeSingle();
     isJoined = !!membership;
+    userIsAdmin = await isAdmin(user.id, supabase);
   }
 
   // Get moderators
@@ -117,11 +121,14 @@ export default async function BoardPage({ params }: PageProps) {
           {/* Archived Banner */}
           {board.is_archived && (
             <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Archive size={18} className="text-warning shrink-0" />
-                <p className="text-sm text-warning">
-                  This community has been archived and is read-only
-                </p>
+              <div className="flex items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Archive size={18} className="text-warning shrink-0" />
+                  <p className="text-sm text-warning">
+                    This community has been archived and is read-only
+                  </p>
+                </div>
+                {userIsAdmin && <UnarchiveButton slug={board.slug} compact />}
               </div>
             </div>
           )}

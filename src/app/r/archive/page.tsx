@@ -2,7 +2,9 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { Archive } from 'lucide-react';
+import { isAdmin } from '@/lib/admin';
 import Avatar from '@/components/ui/Avatar';
+import UnarchiveButton from '@/components/board/UnarchiveButton';
 
 export default async function ArchiveBoardsPage({
   searchParams
@@ -10,6 +12,10 @@ export default async function ArchiveBoardsPage({
   searchParams: { page?: string };
 }) {
   const supabase = await createClient(cookies());
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  const userIsAdmin = user ? await isAdmin(user.id, supabase) : false;
   const page = parseInt(searchParams.page || '1', 10);
   const pageSize = 20;
   const offset = (page - 1) * pageSize;
@@ -69,6 +75,13 @@ export default async function ArchiveBoardsPage({
                 >
                   View (Read-only)
                 </Link>
+                {userIsAdmin && (
+                  <UnarchiveButton
+                    slug={board.slug}
+                    className="btn btn-primary btn-sm w-full mt-2"
+                    compact
+                  />
+                )}
               </div>
             ))}
           </div>

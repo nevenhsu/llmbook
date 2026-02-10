@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { getUserBoardRole } from '@/lib/board-permissions';
+import { isAdmin } from '@/lib/admin';
 import BoardSettingsForm from '@/components/board/BoardSettingsForm';
 
 export default async function BoardSettingsPage({
@@ -31,9 +32,10 @@ export default async function BoardSettingsPage({
     redirect('/');
   }
 
-  // Check if user is a moderator
+  // Check if user is a moderator or site admin
   const role = await getUserBoardRole(board.id, user.id);
-  if (!role) {
+  const userIsAdmin = await isAdmin(user.id, supabase);
+  if (!role && !userIsAdmin) {
     redirect(`/r/${slug}`);
   }
 
@@ -60,7 +62,8 @@ export default async function BoardSettingsPage({
       <BoardSettingsForm
         board={board}
         moderators={moderators || []}
-        userRole={role}
+        userRole={role || 'moderator'}
+        isAdmin={userIsAdmin}
       />
     </div>
   );

@@ -47,12 +47,14 @@ interface BoardSettingsFormProps {
   board: any;
   moderators: Moderator[];
   userRole: 'owner' | 'moderator';
+  isAdmin: boolean;
 }
 
 export default function BoardSettingsForm({
   board,
   moderators,
-  userRole
+  userRole,
+  isAdmin
 }: BoardSettingsFormProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'moderators' | 'danger'>('general');
@@ -417,22 +419,22 @@ export default function BoardSettingsForm({
           Rules
         </button>
         {userRole === 'owner' && (
-          <>
-            <button
-              role="tab"
-              className={`tab whitespace-nowrap ${activeTab === 'moderators' ? 'tab-active' : ''}`}
-              onClick={() => setActiveTab('moderators')}
-            >
-              Moderators
-            </button>
-            <button
-              role="tab"
-              className={`tab whitespace-nowrap ${activeTab === 'danger' ? 'tab-active' : ''}`}
-              onClick={() => setActiveTab('danger')}
-            >
-              Danger Zone
-            </button>
-          </>
+          <button
+            role="tab"
+            className={`tab whitespace-nowrap ${activeTab === 'moderators' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('moderators')}
+          >
+            Moderators
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            role="tab"
+            className={`tab whitespace-nowrap ${activeTab === 'danger' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('danger')}
+          >
+            Danger Zone
+          </button>
         )}
       </div>
 
@@ -669,7 +671,7 @@ export default function BoardSettingsForm({
       )}
 
       {/* Danger Zone Tab */}
-      {activeTab === 'danger' && userRole === 'owner' && (
+      {activeTab === 'danger' && isAdmin && (
         <div className="space-y-4">
           <div className="alert alert-error">
             <span>Archiving is permanent and will make this board read-only.</span>

@@ -1,7 +1,11 @@
 -- ============================================================================
--- Complete Schema for AI Persona Sandbox
--- Generated from migrations 002-010
+-- Complete schema for AI Persona Sandbox
+-- Consolidated from current migrations
 -- ============================================================================
+
+-- Required extensions
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ============================================================================
 -- TABLES
@@ -22,6 +26,14 @@ CREATE TABLE public.profiles (
   created_at timestamptz DEFAULT now()
 );
 
+-- Site admins
+CREATE TABLE public.admin_users (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  role text NOT NULL DEFAULT 'admin',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT admin_users_role_check CHECK (role IN ('admin', 'super_admin'))
+);
+
 -- AI Personas
 CREATE TABLE public.personas (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,6 +46,7 @@ CREATE TABLE public.personas (
   specialties text[] NOT NULL DEFAULT '{}',
   traits jsonb NOT NULL DEFAULT '{}'::jsonb,
   modules jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status text NOT NULL DEFAULT 'active',
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -119,7 +132,7 @@ CREATE TABLE public.votes (
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   persona_id uuid REFERENCES public.personas(id) ON DELETE CASCADE,
   post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
-  comment_id uuid REFERENCES public.comments(id) ON DELETE CASCADE,
+  comment_id uuid,
   value smallint NOT NULL CHECK (value IN (-1, 1)),
   created_at timestamptz DEFAULT now(),
   CONSTRAINT vote_target CHECK (
@@ -228,25 +241,100 @@ CREATE TABLE public.notifications (
 CREATE TABLE public.persona_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  task_type text NOT NULL,
+  task_type text NOT NULL,  -- 'comment' | 'post' | 'reply' | 'vote' | 'image_post' | 'poll_post'
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  status text NOT NULL DEFAULT 'PENDING',
+  
+  -- Status and scheduling
+  status text NOT NULL DEFAULT 'PENDING',  -- PENDING → RUNNING → DONE | FAILED | SKIPPED
   scheduled_at timestamptz NOT NULL DEFAULT now(),
-  executed_at timestamptz,
+  started_at timestamptz,
+  completed_at timestamptz,
+  
+  -- Retry logic
+  retry_count int DEFAULT 0,
+  max_retries int DEFAULT 3,
+  
+  -- Result tracking
+  result_id uuid,        -- ID of created post/comment/vote
+  result_type text,      -- 'post' | 'comment' | 'vote'
   error_message text,
+  
   created_at timestamptz DEFAULT now()
 );
 
--- Persona memory (deduplication / context)
+-- Persona memory (short-term memory / deduplication)
 CREATE TABLE public.persona_memory (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  key text NOT NULL,
-  value text,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  expires_at timestamptz,
+  key text NOT NULL,           -- e.g. 'recent_action_1', 'commented_on_{post_id}'
+  value text,                  -- Natural language summary of interaction
+  context_data jsonb NOT NULL DEFAULT '{}'::jsonb,  -- Extra data (post_id, board_slug, target persona, etc.)
+  expires_at timestamptz,      -- TTL, e.g. 24-48 hours
   created_at timestamptz DEFAULT now(),
   UNIQUE (persona_id, key)
+);
+
+-- Persona Souls (complete soul definition for persona engine)
+CREATE TABLE public.persona_souls (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id uuid NOT NULL UNIQUE REFERENCES public.personas(id) ON DELETE CASCADE,
+  
+  -- Immutable core (admin manual edit only)
+  identity text NOT NULL,
+  voice_style text NOT NULL,
+  knowledge_domains jsonb NOT NULL DEFAULT '[]'::jsonb,
+  personality_axes jsonb NOT NULL DEFAULT '{}'::jsonb,
+  behavioral_rules text NOT NULL DEFAULT '',
+  
+  -- Daily batch update
+  emotional_baseline jsonb NOT NULL DEFAULT '{}'::jsonb,
+  relationships jsonb NOT NULL DEFAULT '{}'::jsonb,
+  
+  -- Posting preferences
+  posting_preferences jsonb NOT NULL DEFAULT '{}'::jsonb,
+  
+  -- Version tracking
+  version int NOT NULL DEFAULT 1,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Persona Long-term Memories (with pgvector)
+-- NOTE: Requires pgvector extension (enabled in migration)
+CREATE TABLE public.persona_long_memories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
+  content text NOT NULL,
+  content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED,
+  embedding vector(1536),
+  importance real NOT NULL DEFAULT 0.5,
+  memory_category text NOT NULL,  -- 'interaction' | 'knowledge' | 'opinion' | 'relationship'
+  related_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
+  related_board_slug text,
+  source_action_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Persona Engine Config (global key-value settings)
+CREATE TABLE public.persona_engine_config (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  encrypted boolean NOT NULL DEFAULT false,
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Persona LLM Usage (cost tracking)
+CREATE TABLE public.persona_llm_usage (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
+  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
+  task_type text NOT NULL,  -- 'comment' | 'post' | 'vote' | 'memory_eval' | 'soul_update'
+  provider text NOT NULL,   -- 'gemini' | 'kimi' | 'deepseek' | 'anthropic' | 'openai'
+  model text NOT NULL,
+  prompt_tokens int NOT NULL DEFAULT 0,
+  completion_tokens int NOT NULL DEFAULT 0,
+  estimated_cost_usd numeric(10, 6) NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now()
 );
 
 -- ----------------------------------------------------------------------------
@@ -282,6 +370,9 @@ CREATE TABLE public.post_rankings (
 
 -- Profiles
 CREATE UNIQUE INDEX profiles_username_unique_idx ON public.profiles (LOWER(username));
+
+-- Admin users
+CREATE INDEX idx_admin_users_role ON public.admin_users(role);
 
 -- Personas
 CREATE UNIQUE INDEX personas_username_unique_idx ON public.personas (LOWER(username));
@@ -319,6 +410,22 @@ CREATE INDEX idx_persona_tasks_persona ON public.persona_tasks(persona_id);
 
 -- Persona memory
 CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
+
+-- Persona souls
+CREATE INDEX idx_persona_souls_persona ON public.persona_souls(persona_id);
+CREATE INDEX idx_persona_souls_domains ON public.persona_souls USING gin (knowledge_domains);
+
+-- Persona long memories
+CREATE INDEX idx_long_mem_persona ON public.persona_long_memories(persona_id);
+CREATE INDEX idx_long_mem_embedding ON public.persona_long_memories
+  USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX idx_long_mem_tsv ON public.persona_long_memories
+  USING gin (content_tsv);
+CREATE INDEX idx_long_mem_category ON public.persona_long_memories(persona_id, memory_category);
+
+-- Persona LLM usage
+CREATE INDEX idx_llm_usage_monthly ON public.persona_llm_usage(created_at);
+CREATE INDEX idx_llm_usage_persona ON public.persona_llm_usage(persona_id, created_at DESC);
 
 -- Post rankings
 CREATE INDEX idx_post_rankings_hot ON public.post_rankings(hot_rank ASC) WHERE hot_rank > 0;
@@ -400,6 +507,28 @@ BEGIN
     generated_username,
     generated_username
   );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
+-- Auto-bootstrap First Super Admin
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.fn_bootstrap_first_super_admin()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtext('bootstrap_first_super_admin'));
+
+  IF NEW.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.admin_users) THEN
+    INSERT INTO public.admin_users (user_id, role)
+    VALUES (NEW.user_id, 'super_admin')
+    ON CONFLICT (user_id) DO UPDATE
+    SET role = 'super_admin';
+
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_bootstrap_first_super_admin ON public.profiles';
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -605,6 +734,11 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- Auto-assign first profile as super admin
+CREATE TRIGGER trg_bootstrap_first_super_admin
+  AFTER INSERT ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.fn_bootstrap_first_super_admin();
+
 -- Auto-update post score when vote changes
 CREATE TRIGGER trg_vote_post_score
   AFTER INSERT OR UPDATE OR DELETE ON public.votes
@@ -700,12 +834,18 @@ CHECK (
   username !~* '\.\.'
 );
 
+-- Votes: add FK after comments exists
+ALTER TABLE public.votes
+ADD CONSTRAINT votes_comment_id_fkey
+FOREIGN KEY (comment_id) REFERENCES public.comments(id) ON DELETE CASCADE;
+
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================================================
 
 -- Enable RLS on all tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.personas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.boards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
@@ -722,6 +862,10 @@ ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
@@ -748,11 +892,80 @@ CREATE POLICY "Users can manage their profile" ON public.profiles
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- ----------------------------------------------------------------------------
+-- Admin Users Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Admins can view admin users" ON public.admin_users
+  FOR SELECT
+  USING (
+    auth.uid() IN (
+      SELECT au.user_id
+      FROM public.admin_users AS au
+    )
+  );
+
+CREATE POLICY "Only super admins can insert admins" ON public.admin_users
+  FOR INSERT
+  WITH CHECK (
+    (
+      NOT EXISTS (SELECT 1 FROM public.admin_users)
+      AND user_id = auth.uid()
+      AND role = 'super_admin'
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.admin_users AS au
+      WHERE au.user_id = auth.uid()
+        AND au.role = 'super_admin'
+    )
+  );
+
+CREATE POLICY "Only super admins can update admins" ON public.admin_users
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.admin_users AS au
+      WHERE au.user_id = auth.uid()
+        AND au.role = 'super_admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.admin_users AS au
+      WHERE au.user_id = auth.uid()
+        AND au.role = 'super_admin'
+    )
+  );
+
+CREATE POLICY "Only super admins can delete admins" ON public.admin_users
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.admin_users AS au
+      WHERE au.user_id = auth.uid()
+        AND au.role = 'super_admin'
+    )
+  );
+
+-- ----------------------------------------------------------------------------
 -- Personas Policies
 -- ----------------------------------------------------------------------------
 
 CREATE POLICY "Personas are viewable by everyone" ON public.personas
   FOR SELECT USING (true);
+
+-- ----------------------------------------------------------------------------
+-- Persona Souls Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Persona souls are viewable by everyone" ON public.persona_souls
+  FOR SELECT USING (true);
+
+-- Note: persona_long_memories, persona_engine_config, persona_llm_usage
+-- have RLS enabled but no public policies (service role only)
 
 -- ----------------------------------------------------------------------------
 -- Boards Policies
@@ -918,6 +1131,9 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 
 COMMENT ON COLUMN profiles.username IS 'Unique username for the user (1-30 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 4-30 chars total)';
+COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
+COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
+COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 
 COMMENT ON TABLE public.post_rankings IS 'Cached post rankings for Hot and Rising sorts. Updated by external script via npm run update-rankings.';
 COMMENT ON COLUMN public.post_rankings.hot_score IS 'Calculated as: (comment_count × 2) + (score × 1) − min(age_days, 30)';
@@ -940,8 +1156,96 @@ ON CONFLICT (slug) DO NOTHING;
 INSERT INTO public.tags (name, slug)
 VALUES
   ('Feedback', 'feedback'),
-  ('Draft', 'draft'),
-  ('Moodboard', 'moodboard'),
-  ('Sci-Fi', 'sci-fi'),
-  ('Fantasy', 'fantasy')
+  ('Draft', 'draft')
 ON CONFLICT (slug) DO NOTHING;
+
+-- Seed persona engine config
+INSERT INTO public.persona_engine_config (key, value, encrypted) VALUES
+  ('llm_comment', 'gemini-2.5-flash', false),
+  ('llm_post', 'gemini-2.5-flash', false),
+  ('llm_long_form', 'gemini-2.5-pro', false),
+  ('llm_vote_decision', 'gemini-2.5-flash', false),
+  ('llm_image_gen', 'gemini-2.0-flash', false),
+  ('llm_memory_eval', 'gemini-2.5-flash', false),
+  ('llm_soul_update', 'gemini-2.5-pro', false),
+  ('fallback_text_short', 'gemini:gemini-2.5-flash,kimi:moonshot-v1-8k,deepseek:deepseek-chat', false),
+  ('fallback_text_long', 'gemini:gemini-2.5-pro,deepseek:deepseek-chat,kimi:moonshot-v1-8k', false),
+  ('fallback_image', 'gemini:gemini-2.0-flash', false),
+  ('fallback_system', 'gemini:gemini-2.5-flash,deepseek:deepseek-chat,kimi:moonshot-v1-8k', false),
+  ('monthly_budget_usd', '10', false)
+ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================================
+-- STORAGE
+-- ============================================================================
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'media',
+  'media',
+  true,
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  public = true,
+  file_size_limit = 10485760,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[];
+
+DROP POLICY IF EXISTS "Public read access" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own images" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can upload persona images" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can update any image" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can delete any image" ON storage.objects;
+
+CREATE POLICY "Public read access"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'media');
+
+CREATE POLICY "Authenticated users can upload"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'media'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+CREATE POLICY "Users can update own images"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'media'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  )
+  WITH CHECK (
+    bucket_id = 'media'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+CREATE POLICY "Users can delete own images"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'media'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+CREATE POLICY "Service role can upload persona images"
+  ON storage.objects FOR INSERT
+  TO service_role
+  WITH CHECK (bucket_id = 'media');
+
+CREATE POLICY "Service role can update any image"
+  ON storage.objects FOR UPDATE
+  TO service_role
+  USING (bucket_id = 'media')
+  WITH CHECK (bucket_id = 'media');
+
+CREATE POLICY "Service role can delete any image"
+  ON storage.objects FOR DELETE
+  TO service_role
+  USING (bucket_id = 'media');

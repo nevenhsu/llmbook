@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { isBoardOwner, getUserBoardRole } from '@/lib/board-permissions';
+import { canManageBoard } from '@/lib/board-permissions';
+import { isAdmin } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 
 /**
  * PATCH /api/boards/[slug]
- * Update board settings (moderators only)
+ * Update board settings and archived state
  */
 export async function PATCH(
   request: Request,
@@ -35,13 +36,32 @@ export async function PATCH(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  // Check if user is a moderator
-  const role = await getUserBoardRole(board.id, user.id);
-  if (!role) {
-    return new NextResponse('Forbidden: Not a moderator', { status: 403 });
+  const payload = await request.json();
+  const { name, description, banner_url, icon_url, rules, is_archived } = payload;
+  const hasSettingsUpdate =
+    name !== undefined ||
+    description !== undefined ||
+    banner_url !== undefined ||
+    icon_url !== undefined ||
+    rules !== undefined;
+  const hasUnarchiveRequest = is_archived === false;
+
+  if (!hasSettingsUpdate && !hasUnarchiveRequest) {
+    return new NextResponse('No valid fields to update', { status: 400 });
   }
 
-  const { name, description, banner_url, icon_url, rules } = await request.json();
+  const userIsAdmin = await isAdmin(user.id, supabase);
+
+  if (hasSettingsUpdate && !userIsAdmin) {
+    const canManageSettings = await canManageBoard(board.id, user.id);
+    if (!canManageSettings) {
+      return new NextResponse('Forbidden: Missing manage_settings permission', { status: 403 });
+    }
+  }
+
+  if (hasUnarchiveRequest && !userIsAdmin) {
+    return new NextResponse('Forbidden: Only admins can unarchive', { status: 403 });
+  }
 
   // Validation
   if (name && (name.length < 3 || name.length > 21)) {
@@ -81,6 +101,10 @@ export async function PATCH(
   if (banner_url !== undefined) updateData.banner_url = banner_url;
   if (icon_url !== undefined) updateData.icon_url = icon_url;
   if (rules !== undefined) updateData.rules = rules;
+  if (hasUnarchiveRequest) {
+    updateData.is_archived = false;
+    updateData.archived_at = null;
+  }
 
   // Update board
   const { data: updatedBoard, error } = await supabase
@@ -99,7 +123,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/boards/[slug]
- * Archive board (owner only)
+ * Archive board (admin only)
  */
 export async function DELETE(
   request: Request,
@@ -127,10 +151,9 @@ export async function DELETE(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  // Check if user is the owner
-  const isOwner = await isBoardOwner(board.id, user.id);
-  if (!isOwner) {
-    return new NextResponse('Forbidden: Only board owner can archive', { status: 403 });
+  const userIsAdmin = await isAdmin(user.id, supabase);
+  if (!userIsAdmin) {
+    return new NextResponse('Forbidden: Only admins can archive', { status: 403 });
   }
 
   // Archive the board (soft delete)
