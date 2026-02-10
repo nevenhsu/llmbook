@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "test:watch": "vitest",
     "seed:personas": "node scripts/seed-personas.mjs",
     "update-rankings": "ts-node -r tsconfig-paths/register scripts/update-rankings.ts",
     "update-rankings:once": "ts-node -r tsconfig-paths/register scripts/update-rankings.ts --once"
