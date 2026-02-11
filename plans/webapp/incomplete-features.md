@@ -8,6 +8,42 @@
 
 ---
 
+## 📊 實作進度
+
+**最後更新：** 2026-02-11
+
+### ✅ 已完成 (15/35)
+
+**第一階段：Admin 基礎設施**
+- **PA-1**: 建立 admin_users 資料表 ✅
+- **PA-2**: Admin 權限檢查共用函式 ✅
+- **PA-3**: Board Archive 改為 admin-only ✅
+- **PA-4**: Board Unarchive 功能 ✅
+- **PA-5**: Post 刪除 API（作者自刪）✅
+- **PA-6**: Post Archive 功能（admin/moderator）✅
+- **PA-7**: 修正 Board Moderator 權限 dead code ✅
+
+**第二階段：快速修正**
+- **P3-1**: 移除 /popular 連結 ✅
+- **P1-11**: BoardInfoCard Join 按鈕 ✅
+- **P1-19**: UserMenu Display Mode ✅
+- **P2-5**: UserMenu Karma 顯示 ✅
+- **P1-1**: PostActions Save 按鈕 ✅
+- **P1-2**: PostActions Hide 按鈕 ✅
+- **P1-4**: PostActions Comments 導航 ✅
+- **P1-6**: ProfilePostList 投票功能 ✅
+- **P1-17**: 搜尋結果投票功能 ✅
+
+### 🔄 進行中 (0/35)
+
+（無）
+
+### ⏳ 待處理 (20/35)
+
+詳見下方各分類任務列表
+
+---
+
 ## 目錄
 
 - [PA — Admin 系統與權限架構（全新）](#pa--admin-系統與權限架構全新)
@@ -22,145 +58,120 @@
 
 > 目前系統完全沒有 site-wide admin 的概念。`profiles` 表沒有 role 欄位，沒有 admin 頁面，沒有 admin 權限檢查。以下是需要建立的基礎設施和功能。
 
-### PA-1: 建立 admin_users 資料表
+### PA-1: 建立 admin_users 資料表 ✅
 
-**現狀：**
-- 沒有任何 admin 角色的概念
-- 所有權限都是 board-level（owner / moderator）
-- 沒有人可以跨 board 執行管理操作
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- 建立獨立的 `admin_users` 資料表，與 `profiles` 分開
-- 欄位：`user_id`（FK to auth.users）、`role`（如 `'admin'` | `'super_admin'`）、`created_at`
-- RLS 政策：只有現有 admin 可以新增其他 admin（或只能透過 service role 操作）
-- 第一個 admin 用 seed SQL 或 Supabase Dashboard 手動插入
+**實作內容：**
+- ✅ Migration 已建立：`supabase/migrations/20260210_admin_users.sql`
+- ✅ 資料表：`admin_users` (user_id, role, created_at)
+- ✅ RLS 政策：只有 super_admin 可以新增/更新/刪除其他 admin
+- ✅ 索引和約束條件完整
 
 **相關檔案：**
-- 需要新建 migration：`supabase/migrations/xxx_admin_users.sql`
-
-**需要新建的：**
-- 資料表：`admin_users`
-- 共用函式：`isAdmin(userId)` 或 `isSiteAdmin(userId)` 放在 `src/lib/admin.ts`
+- `supabase/migrations/20260210_admin_users.sql`
 
 ---
 
-### PA-2: Admin 權限檢查共用函式
+### PA-2: Admin 權限檢查共用函式 ✅
 
-**現狀：**
-- 不存在
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- 在 `src/lib/` 建立 admin 權限檢查函式
-- 提供 `isAdmin(supabase, userId): Promise<boolean>` 函式
-- 所有需要 admin 權限的 API route 都使用此函式
-- 可以同時提供 middleware 層級的檢查（可選）
+**實作內容：**
+- ✅ 共用函式已建立：`src/lib/admin.ts`
+- ✅ `isAdmin(userId, supabaseClient?)` 函式可查詢 admin_users 表
+- ✅ 支援傳入自訂的 supabase client（避免重複建立連線）
+- ✅ 回傳 boolean 值
 
 **相關檔案：**
-- 需要新建：`src/lib/admin.ts`
+- `src/lib/admin.ts`
 
 ---
 
-### PA-3: Board Archive 改為 admin-only
+### PA-3: Board Archive 改為 admin-only ✅
 
-**現狀：**
-- Board archive（soft delete）目前只有 board owner 可以操作
-- API `DELETE /api/boards/[slug]` 檢查 `isBoardOwner()`
-- BoardSettingsForm 的 Danger Zone tab 只對 `userRole === 'owner'` 顯示
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- Board archive 改為只有 site admin 可以操作
-- API `DELETE /api/boards/[slug]` 改為檢查 `isAdmin()` 取代 `isBoardOwner()`
-- BoardSettingsForm 的 Danger Zone tab 只對 admin 顯示（需要傳入 `isAdmin` prop）
-- Board owner 不再能自行 archive board
+**實作內容：**
+- ✅ DELETE `/api/boards/[slug]` 已改用 `isAdmin()` 檢查（第 154-157 行）
+- ✅ BoardSettingsForm 的 Danger Zone tab 只對 admin 顯示（使用 `isAdmin` prop）
+- ✅ Settings 頁面已查詢並傳入 `isAdmin` 狀態
+- ✅ Board owner 不再能自行 archive board
 
 **相關檔案：**
-- `src/app/api/boards/[slug]/route.ts`（DELETE handler，目前第 131 行檢查 `isBoardOwner`）
-- `src/components/board/BoardSettingsForm.tsx`（Danger Zone tab，目前用 `userRole === 'owner'` 控制顯示）
-- `src/app/r/[slug]/settings/page.tsx`（需要查詢並傳入 isAdmin 狀態）
-- `src/lib/admin.ts`（PA-2 建立的共用函式）
+- `src/app/api/boards/[slug]/route.ts` (DELETE handler)
+- `src/components/board/BoardSettingsForm.tsx` (第 430-438 行)
+- `src/app/r/[slug]/settings/page.tsx` (第 37, 66 行)
 
 ---
 
-### PA-4: Board Unarchive 功能（目前不存在）
+### PA-4: Board Unarchive 功能 ✅
 
-**現狀：**
-- 一旦 board 被 archive，無法逆轉
-- 沒有 unarchive 的 API endpoint
-- Archive 頁面沒有 unarchive 按鈕
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- 只有 admin 可以 unarchive board
-- 在 `/r/archive` 頁面，admin 可以看到每個 archived board 的「Unarchive」按鈕
-- 或在 archived board 的頁面上方，admin 可以看到「Unarchive this board」選項
-- API：在 `PATCH /api/boards/[slug]` 加入 `is_archived: false` 的處理，需 admin 權限檢查
-- Unarchive 後恢復正常功能（可發文、可留言、可加入）
+**實作內容：**
+- ✅ PATCH `/api/boards/[slug]` 支援 `is_archived: false`（第 47-64 行）
+- ✅ 只有 admin 可以 unarchive（第 62-64 行）
+- ✅ UnarchiveButton 元件已建立：`src/components/board/UnarchiveButton.tsx`
+- ✅ `/r/archive` 頁面顯示 Unarchive 按鈕（第 78-84 行）
+- ✅ Archived board 頁面橫幅顯示 Unarchive 按鈕（board page 第 131 行）
 
 **相關檔案：**
-- `src/app/api/boards/[slug]/route.ts`（PATCH handler）
-- `src/app/r/archive/page.tsx`（需要加入 Unarchive 按鈕，僅 admin 可見）
-- `src/app/r/[slug]/page.tsx`（archived banner 上加 Unarchive 選項，僅 admin）
+- `src/app/api/boards/[slug]/route.ts` (PATCH handler)
+- `src/components/board/UnarchiveButton.tsx`
+- `src/app/r/archive/page.tsx`
+- `src/app/r/[slug]/page.tsx`
 
 ---
 
-### PA-5: Post 刪除 API（作者自刪）
+### PA-5: Post 刪除 API（作者自刪）✅
 
-**現狀：**
-- 完全沒有刪除貼文的 API endpoint
-- `src/app/api/posts/[id]/route.ts` 只有 GET handler
-- RLS 有 `"Users can delete their posts"` 政策（`auth.uid() = author_id`），但沒有 API 使用它
-- PostActions 的 More 選單也不存在（見 P1-3）
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- 在 `src/app/api/posts/[id]/route.ts` 加入 DELETE handler
-- 只有作者可以刪除自己的貼文
-- 刪除方式：硬刪除（真的從 DB 移除）或軟刪除（設定 status = 'DELETED'，body 替換為 '[deleted]'）— 建議軟刪除以保留留言脈絡
-- 刪除後相關的 votes、media 等也要清理（或由 DB cascade 處理）
+**實作內容：**
+- ✅ DELETE handler 已建立（第 34-90 行）
+- ✅ 只有作者可以刪除（第 58-60 行）
+- ✅ 採用軟刪除：設定 `status = 'DELETED'`, `body = '[deleted]'`
+- ✅ 清理相關資料：votes, saved_posts, hidden_posts, media, post_tags, poll_options（第 80-87 行）
+- ✅ 保留留言脈絡（不刪除 comments）
 
 **相關檔案：**
-- `src/app/api/posts/[id]/route.ts`（加入 DELETE handler）
-- `supabase/schema.sql`（posts 表已有 `status` 欄位，預設 'PUBLISHED'）
+- `src/app/api/posts/[id]/route.ts` (DELETE handler)
 
 ---
 
-### PA-6: Post Archive 功能（admin/moderator 可操作）
+### PA-6: Post Archive 功能（admin/moderator）✅
 
-**現狀：**
-- 沒有任何 post archive 的概念
-- Moderator 的 `manage_posts` 權限存在於 DB 但從未被任何程式碼檢查或使用（dead code）
-- Board moderator 無法對貼文進行任何管理操作
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- Admin 和 board moderator（有 `manage_posts` 權限）可以 archive 貼文
-- Archive 是軟刪除：設定 `status = 'ARCHIVED'`，貼文仍然存在但從 feed 中隱藏
-- Archived 貼文的直接連結仍可訪問，但顯示「This post has been archived by moderators」的提示
-- API：在 `PATCH /api/posts/[id]` 加入 `status: 'ARCHIVED'` 的處理
-- 權限檢查：`isAdmin(userId)` 或 `canManageBoardPosts(boardId, userId)`（需要新函式或啟用現有的 `manage_posts` 檢查）
+**實作內容：**
+- ✅ PATCH handler 已建立（第 92-145 行）
+- ✅ 支援 `status: 'ARCHIVED'` 和 `status: 'PUBLISHED'`
+- ✅ 權限檢查：`isAdmin()` 或 `canManageBoardPosts()`（第 123-128 行）
+- ✅ `canManageBoardPosts()` 函式已在 `src/lib/board-permissions.ts` 實作（第 127-148 行）
+- ✅ 檢查 moderator 的 `manage_posts` 權限
 
 **相關檔案：**
-- `src/app/api/posts/[id]/route.ts`（加入 PATCH handler）
-- `src/lib/board-permissions.ts`（啟用 `manage_posts` 權限檢查）
-- `src/lib/admin.ts`（PA-2 建立的共用函式）
-- `src/app/api/posts/route.ts`（GET handler 需要過濾掉 archived 貼文）
+- `src/app/api/posts/[id]/route.ts` (PATCH handler)
+- `src/lib/board-permissions.ts` (canManageBoardPosts)
 
 ---
 
-### PA-7: 修正 Board Moderator 權限 — manage_posts 和 manage_settings 是 dead code
+### PA-7: 修正 Board Moderator 權限 dead code ✅
 
-**現狀：**
-- `board_moderators` 表有 `permissions` JSONB 欄位，包含 `manage_posts`、`manage_users`、`manage_settings`
-- 但只有 `manage_users` 被實際檢查過（在 ban 管理中）
-- `manage_posts`：從未被任何程式碼檢查，moderator 不能管理貼文
-- `manage_settings`：`canManageBoard()` 函式存在但從未被呼叫，PATCH API 讓所有 moderator 都能改設定
-- BoardSettingsForm UI 中有權限編輯器可以勾選這三個權限，但勾不勾都沒有實際效果
+**狀態：** 已完成（2026-02-11）
 
-**期望行為：**
-- `manage_posts`：與 PA-6 一起啟用。有此權限的 moderator 可以 archive 其 board 中的貼文
-- `manage_settings`：PATCH `/api/boards/[slug]` 應使用 `canManageBoard()` 函式檢查，而非只檢查是否為 moderator
-- 權限編輯器的勾選要真正產生效果
+**實作內容：**
+- ✅ `manage_posts` 權限已啟用（在 `canManageBoardPosts` 函式中檢查）
+- ✅ `manage_settings` 權限已啟用（PATCH `/api/boards/[slug]` 使用 `canManageBoard` 檢查，第 55-60 行）
+- ✅ BoardSettingsForm 權限編輯器的勾選有實際效果
+- ✅ Owner 永遠擁有所有權限
+- ✅ Moderator 根據個別權限設定進行檢查
 
 **相關檔案：**
-- `src/lib/board-permissions.ts`（`canManageBoard` 已存在但未使用）
-- `src/app/api/boards/[slug]/route.ts`（PATCH handler，第 39 行用 `getUserBoardRole`，應改用 `canManageBoard`）
+- `src/lib/board-permissions.ts` (canManageBoard, canManageBoardPosts)
+- `src/app/api/boards/[slug]/route.ts` (PATCH handler)
+- `src/components/board/BoardSettingsForm.tsx`
 
 ---
 

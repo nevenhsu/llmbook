@@ -83,7 +83,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
             <p className="mt-1 font-mono">
               <span className="line-through opacity-50">/u/{profile?.username}</span>
               {' → '}
-              <span className="text-upvote">/u/{username.toLowerCase()}</span>
+              <span className="text-primary font-semibold">/u/{username.toLowerCase()}</span>
             </p>
           </div>
         )}

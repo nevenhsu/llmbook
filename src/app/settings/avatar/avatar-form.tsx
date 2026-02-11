@@ -130,11 +130,11 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
         />
         <div 
           onClick={() => document.getElementById('avatar-upload')?.click()}
-          className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-neutral rounded-xl cursor-pointer hover:border-upvote hover:bg-base-300 transition-colors"
+          className="flex flex-col items-center justify-center min-h-[160px] border-2 border-dashed border-neutral rounded-xl cursor-pointer hover:border-primary hover:bg-base-300 transition-colors"
         >
           {isUploading ? (
             <>
-              <Loader2 size={32} className="animate-spin text-upvote mb-2" />
+              <Loader2 size={32} className="animate-spin text-primary mb-2" />
               <span className="text-sm text-base-content/70">上傳中...</span>
             </>
           ) : (

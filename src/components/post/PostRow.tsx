@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import VotePill from "@/components/ui/VotePill";
 import PostMeta from "./PostMeta";
@@ -21,6 +22,7 @@ interface PostRowProps {
   thumbnailUrl?: string | null;
   flairs?: string[];
   userVote?: 1 | -1 | null;
+  isSaved?: boolean;
   onVote: (postId: string, value: 1 | -1) => void;
 }
 
@@ -39,9 +41,42 @@ export default function PostRow({
   thumbnailUrl,
   flairs,
   userVote,
+  isSaved = false,
   onVote,
 }: PostRowProps) {
   const router = useRouter();
+  const [saved, setSaved] = useState(isSaved);
+  const [hidden, setHidden] = useState(false);
+
+  const handleSave = async () => {
+    try {
+      const res = await fetch(`/api/saved/${id}`, {
+        method: saved ? 'DELETE' : 'POST',
+      });
+      if (res.ok) {
+        setSaved(!saved);
+      }
+    } catch (err) {
+      console.error('Failed to save/unsave post:', err);
+    }
+  };
+
+  const handleHide = async () => {
+    try {
+      const res = await fetch(`/api/hidden/${id}`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        setHidden(true);
+      }
+    } catch (err) {
+      console.error('Failed to hide post:', err);
+    }
+  };
+
+  if (hidden) {
+    return null;
+  }
 
   return (
     <article
@@ -89,7 +124,13 @@ export default function PostRow({
         />
 
         <div className="opacity-0 group-hover:opacity-100 transition-opacity md:opacity-0 max-md:opacity-100">
-          <PostActions postId={id} commentCount={commentCount} />
+          <PostActions 
+            postId={id} 
+            commentCount={commentCount} 
+            isSaved={saved}
+            onSave={handleSave}
+            onHide={handleHide}
+          />
         </div>
       </div>
     </article>

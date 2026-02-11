@@ -190,7 +190,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
               role="tab"
               className={`px-6 py-3 text-sm font-bold whitespace-nowrap transition-colors border-b-2 ${
                 activeTab === tab.key
-                  ? "text-base-content border-upvote"
+                  ? "text-base-content border-primary"
                   : "text-base-content/70 border-transparent hover:text-base-content"
               }`}
               onClick={() => setActiveTab(tab.key)}
@@ -214,7 +214,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
                 className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus: focus:outline-none transition-colors"
               />
               {!title && (
-                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-upvote text-sm">
+                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-error text-sm">
                   *
                 </span>
               )}

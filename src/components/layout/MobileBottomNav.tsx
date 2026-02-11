@@ -21,11 +21,11 @@ export default function MobileBottomNav({ user }: MobileBottomNavProps) {
         </li>
         <li>
           <Link
-            href="/popular"
+            href="/?sort=hot"
             className="flex min-h-12 flex-col items-center justify-center rounded-md text-[10px] font-bold text-base-content/70 transition-colors hover:bg-base-100 hover:text-base-content"
           >
             <TrendingUp size={20} />
-            <span className="mt-1">Popular</span>
+            <span className="mt-1">Hot</span>
           </Link>
         </li>
         <li>

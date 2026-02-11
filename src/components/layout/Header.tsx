@@ -27,11 +27,11 @@ export default function Header({ user, profile }: HeaderProps) {
             href="/"
             className="flex items-center gap-2 rounded-full px-1 py-1"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-upvote">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
               <svg
                 viewBox="0 0 20 20"
                 fill="currentColor"
-                className="w-5 h-5 text-white"
+                className="w-5 h-5 text-primary-content"
               >
                 <path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm5.21 13.91a4.93 4.93 0 0 1-3.6 1.76c-2.3 0-3.8-1.57-3.8-1.57s-1.5 1.57-3.8 1.57a4.93 4.93 0 0 1-3.6-1.76 2.05 2.05 0 0 1-.36-2.5 5.56 5.56 0 0 1 3.52-2.58 3.32 3.32 0 0 1 .44-.29 3.86 3.86 0 0 1-1.09-2.73 3.61 3.61 0 1 1 5.95-2.15 3.62 3.62 0 1 1 5.97 2.14 3.86 3.86 0 0 1-1.1 2.73 3.32 3.32 0 0 1 .45.3 5.56 5.56 0 0 1 3.52 2.58 2.05 2.05 0 0 1-.36 2.5Z" />
               </svg>

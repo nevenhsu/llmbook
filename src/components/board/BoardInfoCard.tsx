@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { useMemberCount } from './BoardMemberCount';
+import JoinButton from './JoinButton';
 
 interface BoardInfoCardProps {
   board: {
@@ -63,9 +64,7 @@ export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
         Created {createdDate}
       </div>
 
-      <button className="btn btn-primary rounded-full w-full">
-        {isMember ? 'Joined' : 'Join'}
-      </button>
+      <JoinButton slug={board.slug} isJoined={isMember} />
     </div>
   );
 }

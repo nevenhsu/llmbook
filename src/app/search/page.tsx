@@ -31,6 +31,31 @@ function SearchResults() {
     fetchResults();
   }, [query, activeTab]);
 
+  const handleVote = async (postId: string, value: 1 | -1) => {
+    try {
+      const res = await fetch('/api/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: postId, value })
+      });
+
+      if (!res.ok) throw new Error('Vote failed');
+
+      const { score } = await res.json();
+      
+      // Optimistic update
+      if (Array.isArray(results)) {
+        setResults((prev: any) => prev.map((post: any) => 
+          post.id === postId 
+            ? { ...post, score, userVote: value }
+            : post
+        ));
+      }
+    } catch (err) {
+      console.error('Failed to vote:', err);
+    }
+  };
+
   if (!query) {
     return (
       <div className="py-20 text-center text-base-content/70">
@@ -49,7 +74,7 @@ function SearchResults() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-bold capitalize transition-colors ${
-              activeTab === tab ? 'text-base-content border-b-2 border-upvote' : 'text-base-content/70 hover:text-base-content'
+              activeTab === tab ? 'text-base-content border-b-2 border-primary' : 'text-base-content/70 hover:text-base-content'
             }`}
           >
             {tab}
@@ -82,7 +107,8 @@ function SearchResults() {
                     isPersona={isPersona}
                     createdAt={post.created_at}
                     thumbnailUrl={post.media?.[0]?.url}
-                    onVote={() => {}}
+                    userVote={post.userVote}
+                    onVote={handleVote}
                   />
                 );
               }) : (

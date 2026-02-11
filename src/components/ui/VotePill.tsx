@@ -35,18 +35,18 @@ export default function VotePill({
       <div className="flex flex-col items-center rounded-lg bg-base-100 py-1">
         <button
           onClick={(e) => { e.stopPropagation(); if (!disabled) onVote(1); }}
-          className={`p-1 rounded-md hover:hover:bg-base-300 ${isUpvoted ? 'text-upvote' : 'text-base-content/70 hover:text-upvote'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+          className={`p-1 rounded-md hover:hover:bg-base-300 ${isUpvoted ? 'text-success' : 'text-base-content/70 hover:text-success'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
           aria-label="Upvote"
           disabled={disabled}
         >
           <ArrowBigUp size={iconSize} fill={isUpvoted ? 'currentColor' : 'none'} />
         </button>
-        <span className={`text-xs font-bold py-0.5 min-w-[2ch] text-center ${isUpvoted ? 'text-upvote' : isDownvoted ? 'text-downvote' : 'text-base-content'}`}>
+        <span className={`text-xs font-bold py-0.5 min-w-[2ch] text-center ${isUpvoted ? 'text-success' : isDownvoted ? 'text-error' : 'text-base-content'}`}>
           {formatScore(score)}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); if (!disabled) onVote(-1); }}
-          className={`p-1 rounded-md hover:hover:bg-base-300 ${isDownvoted ? 'text-downvote' : 'text-base-content/70 hover:text-downvote'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+          className={`p-1 rounded-md hover:hover:bg-base-300 ${isDownvoted ? 'text-error' : 'text-base-content/70 hover:text-error'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
           aria-label="Downvote"
           disabled={disabled}
         >
@@ -60,18 +60,18 @@ export default function VotePill({
     <div className="flex items-center rounded-full bg-base-100">
       <button
         onClick={(e) => { e.stopPropagation(); if (!disabled) onVote(1); }}
-        className={`p-1 rounded-l-full hover:hover:bg-base-300 ${isUpvoted ? 'text-upvote' : 'text-base-content/70 hover:text-upvote'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+        className={`p-1 rounded-l-full hover:hover:bg-base-300 ${isUpvoted ? 'text-success' : 'text-base-content/70 hover:text-success'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         aria-label="Upvote"
         disabled={disabled}
       >
         <ArrowBigUp size={iconSize} fill={isUpvoted ? 'currentColor' : 'none'} />
       </button>
-      <span className={`text-xs font-bold px-0.5 min-w-[2ch] text-center ${isUpvoted ? 'text-upvote' : isDownvoted ? 'text-downvote' : 'text-base-content'}`}>
+      <span className={`text-xs font-bold px-0.5 min-w-[2ch] text-center ${isUpvoted ? 'text-success' : isDownvoted ? 'text-error' : 'text-base-content'}`}>
         {formatScore(score)}
       </span>
       <button
         onClick={(e) => { e.stopPropagation(); if (!disabled) onVote(-1); }}
-        className={`p-1 rounded-r-full hover:hover:bg-base-300 ${isDownvoted ? 'text-downvote' : 'text-base-content/70 hover:text-downvote'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+        className={`p-1 rounded-r-full hover:hover:bg-base-300 ${isDownvoted ? 'text-error' : 'text-base-content/70 hover:text-error'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         aria-label="Downvote"
         disabled={disabled}
       >

@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import Image from "next/image";
-import { useEffect, useState } from "react";
 import { ChevronDown, User, Paintbrush, Moon, Sun, LogOut } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 
 interface UserMenuProps {
   user: SupabaseUser | null;
@@ -14,34 +14,13 @@ interface UserMenuProps {
     display_name: string;
     avatar_url: string | null;
     username: string | null;
+    karma?: number;
   } | null;
 }
 
 export default function UserMenu({ user, profile }: UserMenuProps) {
   const router = useRouter();
-  const [theme, setTheme] = useState<"light" | "black">("light");
-
-  useEffect(() => {
-    // 初始化主題
-    const savedTheme = localStorage.getItem("theme") as
-      | "light"
-      | "black"
-      | null;
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    const initialTheme = savedTheme || (prefersDark ? "black" : "light");
-
-    setTheme(initialTheme);
-    document.documentElement.setAttribute("data-theme", initialTheme);
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "black" : "light";
-    setTheme(newTheme);
-    document.documentElement.setAttribute("data-theme", newTheme);
-    localStorage.setItem("theme", newTheme);
-  };
+  const { theme, toggleTheme } = useTheme();
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -55,18 +34,18 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
       <div className="flex items-center gap-2">
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-full hover:bg-base-300"
+          className="btn btn-ghost btn-circle"
           aria-label="Toggle theme"
         >
-          {theme === "light" ? (
-            <Moon size={20} className="text-base-content/70" />
+          {theme === "black" ? (
+            <Sun size={20} className="text-base-content" />
           ) : (
-            <Sun size={20} className="text-base-content/70" />
+            <Moon size={20} className="text-base-content" />
           )}
         </button>
         <Link
           href="/login"
-          className="bg-upvote text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-opacity-90"
+          className="btn btn-primary btn-sm rounded-full"
         >
           Log In
         </Link>
@@ -104,7 +83,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">
           <span className="font-semibold text-base-content">{displayName}</span>
-          <span className="text-base-content/70">1 karma</span>
+          <span className="text-base-content/70">{profile?.karma || 0} karma</span>
         </div>
         <ChevronDown size={16} className="text-base-content/70" />
       </div>
@@ -140,10 +119,10 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
             onClick={toggleTheme}
             className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left"
           >
-            {theme === "light" ? (
-              <Moon size={18} className="text-base-content/70" />
-            ) : (
+            {theme === "black" ? (
               <Sun size={18} className="text-base-content/70" />
+            ) : (
+              <Moon size={18} className="text-base-content/70" />
             )}
             Display Mode
           </button>

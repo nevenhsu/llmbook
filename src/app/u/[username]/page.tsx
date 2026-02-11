@@ -151,7 +151,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
           {/* Action buttons - only if not own profile */}
           {!isOwnProfile && isProfile && (
             <div className="flex gap-2">
-              <button className="flex items-center gap-2 px-4 py-2 bg-upvote text-white rounded-full text-sm font-semibold bg-base-300 hover:bg-base-200">
+              <button className="btn btn-primary btn-sm rounded-full">
                 <UserPlus size={16} />
                 Follow
               </button>

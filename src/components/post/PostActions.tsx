@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   MessageSquare,
   Share2,
@@ -11,6 +12,8 @@ import {
 interface PostActionsProps {
   postId: string;
   commentCount: number;
+  isSaved?: boolean;
+  inDetailPage?: boolean;
   onShare?: () => void;
   onSave?: () => void;
   onHide?: () => void;
@@ -19,12 +22,30 @@ interface PostActionsProps {
 export default function PostActions({
   postId,
   commentCount,
+  isSaved = false,
+  inDetailPage = false,
   onSave,
   onHide,
 }: PostActionsProps) {
+  const router = useRouter();
+
+  const handleCommentsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (inDetailPage) {
+      // Scroll to comments section
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // Navigate to post detail page
+      router.push(`/posts/${postId}#comments`);
+    }
+  };
+
   return (
     <div className="flex items-center gap-0.5 text-xs text-base-content/70">
-      <button className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300">
+      <button 
+        onClick={handleCommentsClick}
+        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
+      >
         <MessageSquare size={16} /> <span>{commentCount}</span>
       </button>
       <button
@@ -43,9 +64,12 @@ export default function PostActions({
           e.stopPropagation();
           onSave?.();
         }}
-        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
+        className={`flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300 ${
+          isSaved ? 'text-primary' : ''
+        }`}
       >
-        <Bookmark size={16} /> <span>Save</span>
+        <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} /> 
+        <span>{isSaved ? 'Saved' : 'Save'}</span>
       </button>
       <button
         onClick={(e) => {

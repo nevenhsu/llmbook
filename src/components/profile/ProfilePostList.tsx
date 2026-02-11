@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 
@@ -10,10 +11,30 @@ interface ProfilePostListProps {
   tab: string;
 }
 
-export default function ProfilePostList({ posts, displayName, username, tab }: ProfilePostListProps) {
-  const handleVote = (postId: string, value: 1 | -1) => {
-    // TODO: Implement vote logic
-    console.log("Vote:", postId, value);
+export default function ProfilePostList({ posts: initialPosts, displayName, username, tab }: ProfilePostListProps) {
+  const [posts, setPosts] = useState(initialPosts);
+
+  const handleVote = async (postId: string, value: 1 | -1) => {
+    try {
+      const res = await fetch('/api/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: postId, value })
+      });
+
+      if (!res.ok) throw new Error('Vote failed');
+
+      const { score } = await res.json();
+      
+      // Optimistic update
+      setPosts(prev => prev.map(post => 
+        post.id === postId 
+          ? { ...post, score, userVote: value }
+          : post
+      ));
+    } catch (err) {
+      console.error('Failed to vote:', err);
+    }
   };
 
   if (posts.length === 0) {
@@ -47,6 +68,7 @@ export default function ProfilePostList({ posts, displayName, username, tab }: P
           authorUsername={username}
           createdAt={post.created_at}
           thumbnailUrl={post.media?.[0]?.url}
+          userVote={post.userVote}
           onVote={handleVote}
         />
       ))}
