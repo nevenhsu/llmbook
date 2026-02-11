@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
-import { validateUsernameFormat } from '@/lib/username-validation';
+import { validateUsernameFormat, sanitizeUsername } from '@/lib/username-validation';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +14,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate format first
-    const validation = validateUsernameFormat(username, false);
+    // Sanitize and validate format first
+    const cleanUsername = sanitizeUsername(username);
+    const validation = validateUsernameFormat(cleanUsername, false);
     if (!validation.valid) {
       return NextResponse.json(
         { available: false, error: validation.error },
@@ -24,7 +25,6 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient(cookies());
-    const cleanUsername = username.trim().toLowerCase();
 
     // Check in profiles table
     const { data: profileExists } = await supabase

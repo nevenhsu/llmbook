@@ -39,7 +39,7 @@ export default async function RootLayout({
   const boardsList = (boards ?? []) as Array<{ name: string; slug: string }>;
 
   return (
-    <html lang="en">
+    <html lang="en" data-theme="black">
       <body className="min-h-screen bg-base-100 text-base-content">
         <Toaster position="top-center" />
         <Header user={user} profile={profile} />
@@ -49,9 +49,7 @@ export default async function RootLayout({
           {/* Main content area */}
           <div className="drawer-content flex flex-col">
             <div className="mx-auto flex w-full max-w-[1400px] px-4 sm:px-8 lg:px-4 xl:px-12">
-              <main className="min-w-0 flex-1 py-4">
-                {children}
-              </main>
+              <main className="min-w-0 flex-1 py-4">{children}</main>
             </div>
           </div>
 

@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { XCircle } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 export default function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,31 +17,43 @@ export default function LoginForm() {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          identifier,
+          password,
+        }),
+      });
 
-    if (signInError) {
-      setError(signInError.message);
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || '登入失敗');
+        setLoading(false);
+        return;
+      }
+
+      // Redirect to home using window.location to force full reload
+      window.location.href = '/';
+    } catch (err: any) {
+      setError(err.message || '登入時發生錯誤');
       setLoading(false);
-      return;
     }
-
-    router.push("/");
-    router.refresh();
   }
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="form-control">
         <input
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          type="text"
+          value={identifier}
+          onChange={(event) => setIdentifier(event.target.value)}
           className="input input-bordered w-full"
-          placeholder="Email or username"
+          placeholder="Email 或 Username"
           required
         />
       </div>

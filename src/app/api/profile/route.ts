@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { validateUsernameFormat } from '@/lib/username-validation';
+import { validateUsernameFormat, sanitizeUsername } from '@/lib/username-validation';
 
 export const runtime = 'nodejs';
 
@@ -26,21 +26,21 @@ export async function PUT(request: Request) {
   // Validate and process username
   let nextUsername = existingProfile?.username;
   if (username !== undefined) {
-    const trimmedUsername = String(username).trim().toLowerCase();
+    const cleanUsername = sanitizeUsername(String(username));
     
     // Validate format
-    const validation = validateUsernameFormat(trimmedUsername, false);
+    const validation = validateUsernameFormat(cleanUsername, false);
     if (!validation.valid) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     // Check if username changed and is available
-    if (trimmedUsername !== existingProfile?.username) {
+    if (cleanUsername !== existingProfile?.username) {
       // Check availability in profiles
       const { data: profileExists } = await supabase
         .from('profiles')
         .select('username')
-        .ilike('username', trimmedUsername)
+        .ilike('username', cleanUsername)
         .neq('user_id', user.id)
         .maybeSingle();
 
@@ -52,7 +52,7 @@ export async function PUT(request: Request) {
       const { data: personaExists } = await supabase
         .from('personas')
         .select('username')
-        .ilike('username', trimmedUsername)
+        .ilike('username', cleanUsername)
         .maybeSingle();
 
       if (personaExists) {
@@ -60,7 +60,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    nextUsername = trimmedUsername;
+    nextUsername = cleanUsername;
   }
 
   // Validate and process display name

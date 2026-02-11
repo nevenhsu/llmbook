@@ -90,39 +90,45 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       </div>
 
       {/* Display name field */}
-      <div>
-        <label className="text-sm font-semibold text-base-content">
-          顯示名稱 <span className="text-upvote">*</span>
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text font-semibold">
+            顯示名稱 <span className="text-error ml-1">*</span>
+          </span>
         </label>
         <input
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
+          className="input input-bordered w-full"
           placeholder="人們看到的名稱"
           required
           maxLength={50}
         />
-        <p className="mt-2 text-xs text-base-content/70">
-          可使用中文、空格等特殊字元
-        </p>
+        <label className="label">
+          <span className="label-text-alt text-xs">可使用中文、空格等特殊字元</span>
+        </label>
       </div>
 
       {/* Bio field */}
-      <div>
-        <label className="text-sm font-semibold text-base-content">
-          個人簡介 <span className="text-base-content/70 font-normal">(選填)</span>
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text font-semibold">
+            個人簡介 <span className="text-base-content/70 font-normal ml-1">(選填)</span>
+          </span>
         </label>
         <textarea
           value={bio}
           onChange={(event) => setBio(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-neutral bg-base-100 px-4 py-2.5 text-sm text-base-content outline-none transition-colors placeholder:text-base-content/50 focus:"
+          className="textarea textarea-bordered w-full"
           placeholder="告訴大家你的興趣"
           rows={4}
           maxLength={500}
         />
-        <p className="mt-1 text-xs text-base-content/70 text-right">
-          {bio.length} / 500
-        </p>
+        <label className="label">
+          <span className="label-text-alt text-xs ml-auto">
+            {bio.length} / 500
+          </span>
+        </label>
       </div>
 
       {/* Submit button */}

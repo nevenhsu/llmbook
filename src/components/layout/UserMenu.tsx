@@ -5,21 +5,43 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import Image from "next/image";
-import {
-  ChevronDown,
-  User,
-  Paintbrush,
-  Moon,
-  LogOut,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, User, Paintbrush, Moon, Sun, LogOut } from "lucide-react";
 
 interface UserMenuProps {
   user: SupabaseUser | null;
-  profile?: { display_name: string; avatar_url: string | null; username: string | null } | null;
+  profile?: {
+    display_name: string;
+    avatar_url: string | null;
+    username: string | null;
+  } | null;
 }
 
 export default function UserMenu({ user, profile }: UserMenuProps) {
   const router = useRouter();
+  const [theme, setTheme] = useState<"light" | "black">("light");
+
+  useEffect(() => {
+    // 初始化主題
+    const savedTheme = localStorage.getItem("theme") as
+      | "light"
+      | "black"
+      | null;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    const initialTheme = savedTheme || (prefersDark ? "black" : "light");
+
+    setTheme(initialTheme);
+    document.documentElement.setAttribute("data-theme", initialTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "black" : "light";
+    setTheme(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -30,24 +52,44 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
 
   if (!user) {
     return (
-      <Link
-        href="/login"
-        className="bg-upvote text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-opacity-90"
-      >
-        Log In
-      </Link>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full hover:bg-base-300"
+          aria-label="Toggle theme"
+        >
+          {theme === "light" ? (
+            <Moon size={20} className="text-base-content/70" />
+          ) : (
+            <Sun size={20} className="text-base-content/70" />
+          )}
+        </button>
+        <Link
+          href="/login"
+          className="bg-upvote text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-opacity-90"
+        >
+          Log In
+        </Link>
+      </div>
     );
   }
 
-  const displayName = profile?.display_name || user.email?.split("@")[0] || "User";
-  const username = profile?.username || displayName.toLowerCase().replace(/\s+/g, "");
-  const avatarUrl = (profile?.avatar_url && profile.avatar_url.trim() !== "") 
-    ? profile.avatar_url 
-    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || displayName)}`;
+  const displayName =
+    profile?.display_name || user.email?.split("@")[0] || "User";
+  const username =
+    profile?.username || displayName.toLowerCase().replace(/\s+/g, "");
+  const avatarUrl =
+    profile?.avatar_url && profile.avatar_url.trim() !== ""
+      ? profile.avatar_url
+      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || displayName)}`;
 
   return (
     <div className="dropdown dropdown-end relative">
-      <div tabIndex={0} role="button" className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:hover:bg-base-300 cursor-pointer">
+      <div
+        tabIndex={0}
+        role="button"
+        className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:hover:bg-base-300 cursor-pointer"
+      >
         <div className="relative h-6 w-6 overflow-hidden rounded-full bg-white">
           <Image
             src={avatarUrl}
@@ -55,7 +97,9 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
             fill
             className="object-cover"
             sizes="24px"
-            unoptimized={avatarUrl.endsWith('.svg') || avatarUrl.includes('dicebear')}
+            unoptimized={
+              avatarUrl.endsWith(".svg") || avatarUrl.includes("dicebear")
+            }
           />
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">
@@ -75,23 +119,41 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         }}
       >
         <li>
-          <Link href={`/u/${username}`} className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
+          <Link
+            href={`/u/${username}`}
+            className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content"
+          >
             <User size={18} className="text-base-content/70" /> View Profile
           </Link>
         </li>
         <li>
-          <Link href="/settings/avatar" className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content">
-            <Paintbrush size={18} className="text-base-content/70" /> Edit Avatar
+          <Link
+            href="/settings/avatar"
+            className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content"
+          >
+            <Paintbrush size={18} className="text-base-content/70" /> Edit
+            Avatar
           </Link>
         </li>
         <li>
-          <button className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left">
-            <Moon size={18} className="text-base-content/70" /> Display Mode
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left"
+          >
+            {theme === "light" ? (
+              <Moon size={18} className="text-base-content/70" />
+            ) : (
+              <Sun size={18} className="text-base-content/70" />
+            )}
+            Display Mode
           </button>
         </li>
         <div className="border-t border-neutral my-1"></div>
         <li>
-          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left">
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left"
+          >
             <LogOut size={18} className="text-base-content/70" /> Log Out
           </button>
         </li>

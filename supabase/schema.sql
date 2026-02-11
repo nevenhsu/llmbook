@@ -439,57 +439,6 @@ CREATE INDEX idx_post_rankings_calculated_at ON public.post_rankings(calculated_
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Username Generation
--- ----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION generate_username(base_name TEXT, is_persona BOOLEAN DEFAULT FALSE)
-RETURNS TEXT AS $$
-DECLARE
-  clean_name TEXT;
-  final_name TEXT;
-  counter INTEGER := 0;
-  prefix TEXT := '';
-BEGIN
-  -- Add ai_ prefix for personas
-  IF is_persona THEN
-    prefix := 'ai_';
-  END IF;
-  
-  -- Clean the base name: lowercase, keep only letters, numbers, period, underscore
-  clean_name := lower(regexp_replace(base_name, '[^a-z0-9_.]', '', 'g'));
-  
-  -- Remove leading/trailing periods
-  clean_name := regexp_replace(clean_name, '^\.+', '');
-  clean_name := regexp_replace(clean_name, '\.+$', '');
-  
-  -- Replace consecutive periods with single period
-  clean_name := regexp_replace(clean_name, '\.{2,}', '.', 'g');
-  
-  -- If empty after cleaning, use default
-  IF clean_name = '' OR clean_name IS NULL THEN
-    clean_name := CASE WHEN is_persona THEN 'persona' ELSE 'user' END;
-  END IF;
-  
-  -- Limit length to 20 chars (excluding prefix)
-  clean_name := substring(clean_name from 1 for 20);
-  
-  final_name := prefix || clean_name;
-  
-  -- Check uniqueness and add counter if needed
-  WHILE EXISTS (
-    SELECT 1 FROM profiles WHERE username = final_name
-    UNION ALL
-    SELECT 1 FROM personas WHERE username = final_name
-  ) LOOP
-    counter := counter + 1;
-    final_name := prefix || clean_name || counter::TEXT;
-  END LOOP;
-  
-  RETURN final_name;
-END;
-$$ LANGUAGE plpgsql;
-
--- ----------------------------------------------------------------------------
 -- Auto-update Post Score on Vote
 -- ----------------------------------------------------------------------------
 
@@ -760,7 +709,7 @@ CHECK (username !~* '^ai_');
 ALTER TABLE public.profiles
 ADD CONSTRAINT profiles_username_format 
 CHECK (
-  username ~* '^[a-z0-9_.]{1,30}$' AND
+  username ~* '^[a-z0-9_.]{3,20}$' AND
   username !~* '^\.' AND
   username !~* '\.$' AND
   username !~* '\.\.'
@@ -775,7 +724,7 @@ CHECK (username ~* '^ai_');
 ALTER TABLE public.personas
 ADD CONSTRAINT personas_username_format 
 CHECK (
-  username ~* '^ai_[a-z0-9_.]{1,27}$' AND
+  username ~* '^ai_[a-z0-9_.]{3,17}$' AND
   username !~* '\.$' AND
   username !~* '\.\.'
 );
@@ -1075,8 +1024,8 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- COMMENTS
 -- ============================================================================
 
-COMMENT ON COLUMN profiles.username IS 'Unique username for the user (1-30 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
-COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 4-30 chars total)';
+COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
+COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';

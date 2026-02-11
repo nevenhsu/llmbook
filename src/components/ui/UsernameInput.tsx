@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Loader2, Info } from 'lucide-react';
-import { validateUsernameFormat, checkUsernameAvailability, getUsernameRules } from '@/lib/username-validation';
+import { validateUsernameFormat, checkUsernameAvailability, getUsernameRules, sanitizeUsername } from '@/lib/username-validation';
 
 interface UsernameInputProps {
   value: string;
@@ -41,8 +41,8 @@ export default function UsernameInput({
       return;
     }
 
-    // First validate format
-    const validation = validateUsernameFormat(value, isPersona);
+    // Validate original input first (don't sanitize yet)
+    const validation = validateUsernameFormat(value.trim().toLowerCase(), isPersona);
     setFormatError(validation.valid ? null : validation.error || null);
 
     if (!validation.valid) {
@@ -52,10 +52,11 @@ export default function UsernameInput({
       return;
     }
 
-    // Then check availability with debounce
+    // Then check availability with debounce (use sanitized value)
     const timer = setTimeout(async () => {
       setIsChecking(true);
-      const result = await checkUsernameAvailability(value);
+      const cleanValue = sanitizeUsername(value);
+      const result = await checkUsernameAvailability(cleanValue);
       setIsChecking(false);
       setIsAvailable(result.available);
       setAvailabilityError(result.error || null);

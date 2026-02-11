@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { XCircle, CheckCircle } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import UsernameInput from "@/components/ui/UsernameInput";
 
 export default function RegisterForm() {
@@ -33,7 +32,7 @@ export default function RegisterForm() {
         .replace(/^\.+/, '')
         .replace(/\.+$/, '')
         .replace(/\.{2,}/g, '.')
-        .substring(0, 30);
+        .substring(0, 20);
       if (sanitized) {
         setUsername(sanitized);
       }
@@ -60,49 +59,42 @@ export default function RegisterForm() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
-
-      // Sign up user
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+      // Call register API
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          username: username.toLowerCase(),
+        }),
       });
 
-      if (signUpError) {
-        setError(signUpError.message);
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || '註冊失敗');
         setLoading(false);
         return;
       }
 
-      if (!data.user) {
-        setError("註冊失敗");
-        setLoading(false);
+      // Success - user is registered
+      setNotice(data.message || '註冊成功！');
+      
+      // If needs manual login, redirect to login page
+      if (data.needsManualLogin) {
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
         return;
       }
-
-      // Create profile manually (trigger disabled)
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          user_id: data.user.id,
-          username: username.toLowerCase(),
-          display_name: username.toLowerCase(),
-        });
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError);
-        // Continue anyway, user can update later
-      }
-
-      if (!data.session) {
-        setNotice("請檢查您的電子郵件以確認帳號後再登入");
-        setLoading(false);
-        return;
-      }
-
-      // Redirect to home
-      router.push("/");
-      router.refresh();
+      
+      // Auto-login successful, redirect to home
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 500);
     } catch (err: any) {
       setError(err.message || "註冊時發生錯誤");
       setLoading(false);

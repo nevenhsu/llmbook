@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Home, TrendingUp, Archive, PlusSquare } from "lucide-react";
+import { Home, Archive, PlusSquare } from "lucide-react";
 
 type Board = {
   name: string;
@@ -29,13 +29,6 @@ export default function DrawerSidebar({ boards }: { boards: Board[] }) {
         onClick={closeDrawer}
       >
         <Home size={20} /> Home
-      </Link>
-      <Link
-        href="/popular"
-        className="flex items-center gap-3 px-4 py-2 rounded-md hover:bg-base-100 text-sm font-medium text-base-content"
-        onClick={closeDrawer}
-      >
-        <TrendingUp size={20} /> Popular
       </Link>
 
       <div className="text-[10px] font-bold uppercase text-base-content/50 mt-6 mb-1 px-4 tracking-wider">
