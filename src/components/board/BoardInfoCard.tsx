@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
-import { useMemberCount } from './BoardMemberCount';
 import JoinButton from './JoinButton';
 
 interface BoardInfoCardProps {
@@ -20,7 +19,6 @@ interface BoardInfoCardProps {
 }
 
 export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
-  const { memberCount } = useMemberCount();
   const createdDate = new Date(board.created_at).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -49,7 +47,7 @@ export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
           <div className="flex items-center justify-between gap-2">
             <div>
               <div className="stat-title text-xs">Members</div>
-              <div className="stat-value text-lg">{memberCount.toLocaleString()}</div>
+              <div className="stat-value text-lg">{board.member_count.toLocaleString()}</div>
             </div>
             <ChevronRight size={16} className="opacity-70" />
           </div>
