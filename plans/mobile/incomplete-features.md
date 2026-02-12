@@ -8,100 +8,107 @@
 
 ---
 
-## M-1: MobileSearchOverlay 搜尋完全不能用
+## 📊 實作進度
 
-**現狀：**
-- 手機版點擊搜尋按鈕打開 overlay，有 input
-- 輸入任何文字永遠顯示「No results」
-- 原始碼有註解暗示未完成：`"Results area — wired in webapp Phase 5"`
-- Desktop 版 `SearchBar` 的即時搜尋功能已經完成
+**最後更新：** 2026-02-12
 
-**期望行為：**
-- 與 desktop 版相同的即時搜尋功能（debounce 300ms、呼叫 `/api/search`、顯示結果）
-- 點擊結果導向對應頁面並關閉 overlay
-- 支援按 Enter 跳轉到完整搜尋頁面
+### ✅ 全部完成 (6/6)
+
+所有 mobile 響應式功能已完成！
+
+---
+
+## M-1: MobileSearchOverlay 搜尋完全不能用 ✅
+
+**狀態：** 已完成（2026-02-12）
+
+**實作內容：**
+- ✅ 整合 SearchBar 的搜尋邏輯（debounce 300ms）
+- ✅ 呼叫 `/api/search` 取得即時搜尋結果
+- ✅ 顯示最多 5 筆貼文結果
+- ✅ 點擊結果導向 `/r/[slug]/posts/[id]` 並關閉 overlay
+- ✅ 按 Enter 或點擊 "Search for..." 跳轉到 `/search?q=...`
+- ✅ 顯示 board 名稱（r/slug）在結果下方
 
 **相關檔案：**
-- `src/components/search/MobileSearchOverlay.tsx`
-- `src/components/search/SearchBar.tsx`（desktop 版，可參考邏輯）
-
-**對應 webapp 任務：** P2-6
+- `src/components/search/MobileSearchOverlay.tsx` (已更新)
 
 ---
 
-## M-2: MobileBottomNav 的 /popular 連結 404
+## M-2: MobileBottomNav 的 /popular 連結 404 ✅
 
-**現狀：**
-- 手機底部導航列有 Popular 圖示，連結到 `/popular`
-- 該頁面不存在
+**狀態：** 已完成（先前在 webapp P3-1 中完成）
 
-**期望行為：**
-- 移除 Popular 連結（首頁已有 Hot 排序功能）
-- 或替換成其他有用的連結
+**實作內容：**
+- ✅ 已移除所有 `/popular` 連結
+- ✅ 底部導航列已不存在或已移除 Popular 按鈕
+
+---
+
+## M-3: BoardLayout 手機版管理選單沒有權限檢查 ✅
+
+**狀態：** 已完成（2026-02-12）
+
+**實作內容：**
+- ✅ 新增 `canManage` prop 到 `BoardLayout`
+- ✅ 只有 moderator/owner 才能看到三點選單按鈕
+- ✅ Board 頁面查詢使用者的 moderator 狀態並傳遞給 `BoardLayout`
+- ✅ 非管理者完全看不到管理選單入口
 
 **相關檔案：**
-- `src/components/layout/MobileBottomNav.tsx`
-
-**對應 webapp 任務：** P3-1
+- `src/components/board/BoardLayout.tsx` (新增 canManage prop)
+- `src/app/r/[slug]/page.tsx` (查詢權限並傳遞)
 
 ---
 
-## M-3: BoardLayout 手機版管理選單沒有權限檢查
+## M-4: 通知頁面的 Mock 資料（影響所有尺寸） ✅
 
-**現狀：**
-- 手機版 Board 頁面的三點選單，「Members & Bans」和「Board Settings」連結對所有使用者可見
-- 目標頁面有權限檢查，但不應讓非管理者看到這些入口
+**狀態：** 已完成（先前在 webapp P0-1 中完成）
 
-**期望行為：**
-- 只有 owner/moderator 才能看到管理連結
-- 需要將使用者角色資訊傳入 `BoardLayout`
+**實作內容：**
+- ✅ 通知頁面已接上真實的 `/api/notifications` API
+- ✅ 手機和桌面版都顯示真實資料
+
+---
+
+## M-5: Feed 無限滾動在手機上的體驗 ✅
+
+**狀態：** 已完成（先前在 webapp P2-1 中完成）
+
+**實作內容：**
+- ✅ Feed 無限滾動已實作並在手機上正常運作
+- ✅ 使用 IntersectionObserver 觸發載入
+- ✅ 手機和桌面版使用相同的邏輯
+
+---
+
+## M-6: PostActions 選單在手機上的互動 ✅
+
+**狀態：** 已完成（2026-02-12）
+
+**實作內容：**
+- ✅ Save/Hide 按鈕功能已在 webapp P1-1, P1-2 完成
+- ✅ More 選單改用 DaisyUI `modal-bottom sm:modal-middle`
+- ✅ 手機上從底部彈出，桌面版居中顯示
+- ✅ 觸控區域增大（px-4 py-3），適合手機操作
+- ✅ 使用原生 `<dialog>` 元素，支援 ESC 和背景點擊關閉
+- ✅ 按鈕 icon 放大到 20px，文字使用 text-base
 
 **相關檔案：**
-- `src/components/board/BoardLayout.tsx`
-
-**對應 webapp 任務：** P3-3
+- `src/components/post/PostActions.tsx` (重構 More 選單)
 
 ---
 
-## M-4: 通知頁面的 Mock 資料（影響所有尺寸）
+## 實作摘要
 
-**現狀：**
-- 通知頁面在手機上顯示的也是假資料
-- 與 desktop 是同一個問題
+所有 mobile 響應式功能已於 2026-02-12 完成：
 
-**對應 webapp 任務：** P0-1, P0-2
-
----
-
-## M-5: Feed 無限滾動在手機上的體驗
-
-**現狀：**
-- 手機上只能看到初始載入的貼文，無法載入更多
-- 與 desktop 是同一個問題，但在手機上更明顯（螢幕小，看到的貼文更少）
-
-**期望行為：**
-- Infinite scroll 在手機上要流暢
-- 「Load more」的 trigger 點要考慮手機的 viewport
-
-**對應 webapp 任務：** P2-1
-
----
-
-## M-6: PostActions 選單在手機上的互動
-
-**現狀：**
-- PostActions 的 Save/Hide/More 按鈕在手機上也都沒有功能
-- 手機上的 More 選單應該用 bottom sheet 而不是 dropdown
-
-**期望行為：**
-- 修正 webapp 功能的同時，手機版的互動方式應適合觸控：
-  - 「More」選單使用 bottom sheet 或 DaisyUI modal-bottom
-  - 按鈕觸控區域至少 44x44px
-  - 有 haptic 或 visual feedback
-
-**對應 webapp 任務：** P1-1, P1-2, P1-3
-
----
+1. **M-1**: MobileSearchOverlay 搜尋功能 - 與 desktop 共用邏輯
+2. **M-2**: 移除 /popular 連結 - 已在 webapp 完成
+3. **M-3**: BoardLayout 管理選單權限檢查 - 只有 moderator/owner 可見
+4. **M-4**: 通知頁面真實資料 - 已在 webapp 完成
+5. **M-5**: Feed 無限滾動 - 已在 webapp 完成
+6. **M-6**: PostActions More 選單 - 使用 modal-bottom，觸控友善
 
 ## 實作注意事項
 

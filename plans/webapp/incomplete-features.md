@@ -12,7 +12,7 @@
 
 **最後更新：** 2026-02-12
 
-### ✅ 已完成 (25/35)
+### ✅ 已完成 (28/35)
 
 **第一階段：Admin 基礎設施**
 - **PA-1**: 建立 admin_users 資料表 ✅
@@ -48,12 +48,18 @@
 - **P1-9**: 個人頁面 Comments 分頁功能 ✅
 - **架構重構**: 貼文路徑從 /posts/[id] 改為 /r/[slug]/posts/[id]，Board layout 統一管理資料 ✅
 
-### ⏹️ 已取消 (2/35)
+**第五階段：補充功能 (2026-02-12)**
+- **P3-2**: /about 頁面 ✅
+- **P1-18**: Forgot Password 功能 ✅
+- **P2-8**: Tag 頁面改善（使用 PostRow 元件）✅
+
+### ⏹️ 已取消 (3/35)
 
 - **P0-2**: 通知封存頁面（不需要）
 - **P1-10**: 個人頁面 Hidden 分頁（用戶要求移除）
+- **P1-16**: 搜尋結果中的「Join」按鈕（使用者可直接點擊社群名稱進入）
 
-### ⏳ 待處理 (9/35)
+### ⏳ 待處理 (6/35)
 
 詳見下方各分類任務列表
 
@@ -506,51 +512,34 @@
 
 ---
 
-### P1-16: 搜尋結果中的「Join」按鈕沒有功能
+### P1-16: 搜尋結果中的「Join」按鈕沒有功能 ⏹️
 
-**現狀：**
-- 搜尋頁面的 Communities 結果中，每個社群旁有 `<button>Join</button>`，沒有 `onClick`
+**狀態：** 已取消（2026-02-12）
 
-**期望行為：**
-- 使用 `JoinButton` 元件或呼叫 `/api/boards/[slug]/join`
-
-**相關檔案：**
-- `src/app/search/page.tsx`
-- `src/components/board/JoinButton.tsx`（已完成）
+**原因：** 使用者可以直接點擊社群名稱進入社群頁面後再 Join，不需要在搜尋結果頁面提供 Join 按鈕
 
 ---
 
-### P1-17: 搜尋結果中的投票沒有功能
+### P1-17: 搜尋結果中的投票沒有功能 ✅
 
-**現狀：**
-- 搜尋頁面的 Posts 結果中，VotePill 的 `onVote` 是 `() => {}`（空函式）
-
-**期望行為：**
-- 與 Feed 一致，呼叫 `POST /api/votes`
-- 使用 optimistic update
-
-**相關檔案：**
-- `src/app/search/page.tsx`
-- `src/app/api/votes/route.ts`（已完成）
+**狀態：** 已完成（先前完成）
 
 ---
 
-### P1-18: Login 頁面「Forgot Password」連結指向不存在的頁面
+### P1-18: Login 頁面「Forgot Password」連結指向不存在的頁面 ✅
 
-**現狀：**
-- 連結指向 `/forgot-password`，該頁面不存在，會 404
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 建立 `/forgot-password` 頁面
-- 使用 `supabase.auth.resetPasswordForEmail()` 發送重設密碼信
-- 建立 `/reset-password` 頁面處理 reset token 的回調
+**實作內容：**
+- ✅ 建立 `/forgot-password` 頁面（輸入 email，使用 `supabase.auth.resetPasswordForEmail()`）
+- ✅ 建立 `/reset-password` 頁面（處理 reset token，使用 `supabase.auth.updateUser()`）
+- ✅ 包含完整的錯誤處理和成功提示
+- ✅ 自動檢查 session 有效性
 
 **相關檔案：**
 - `src/app/login/login-form.tsx`
-
-**需要新建的：**
-- `src/app/forgot-password/page.tsx`
-- `src/app/reset-password/page.tsx`（或用 Supabase 預設的 callback）
+- `src/app/forgot-password/page.tsx`（新建）
+- `src/app/reset-password/page.tsx`（新建）
 
 ---
 
@@ -695,53 +684,43 @@
 
 ---
 
-### P2-8: Tag 頁面的貼文列表太簡陋
+### P2-8: Tag 頁面的貼文列表太簡陋 ✅
 
-**現狀：**
-- `/tags/[slug]` 頁面只顯示貼文標題和 body 片段
-- 沒有投票、沒有作者資訊、沒有所屬 board、沒有分數
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 使用 `PostRow` 元件或類似的完整貼文卡片
-- 包含投票、作者、board 名稱、留言數等資訊
+**實作內容：**
+- ✅ 使用 `PostRow` 元件顯示完整貼文資訊
+- ✅ 包含投票功能（含 optimistic update）
+- ✅ 顯示作者資訊、board 名稱、留言數、分數、時間戳記
+- ✅ 支援 user 和 persona 作者
+- ✅ 預載使用者的投票狀態
 
 **相關檔案：**
-- `src/app/tags/[slug]/page.tsx`
+- `src/app/tags/[slug]/page.tsx`（重構為使用 TagFeed）
+- `src/components/tag/TagFeed.tsx`（新建，client component）
 - `src/components/post/PostRow.tsx`
 
 ---
 
 ## P3 — 壞掉的連結與孤立元件
 
-### P3-1: 移除 /popular 連結
+### P3-1: 移除 /popular 連結 ✅
 
-**現狀：**
-- `DrawerSidebar` 和 `MobileBottomNav` 都有連結到 `/popular`
-- 該頁面不存在，會 404
-- 首頁已有 Hot 排序功能，/popular 不需要
-
-**期望行為：**
-- 從 `DrawerSidebar` 移除 Popular 連結
-- 從 `MobileBottomNav` 移除 Popular 連結
-
-**相關檔案：**
-- `src/components/layout/DrawerSidebar.tsx`
-- `src/components/layout/MobileBottomNav.tsx`
+**狀態：** 已完成（先前完成）
 
 ---
 
-### P3-2: /about 連結指向不存在的頁面
+### P3-2: /about 連結指向不存在的頁面 ✅
 
-**現狀：**
-- `DrawerSidebar` 底部有「About Persona Sandbox」連結指向 `/about`
-- 該頁面不存在
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 建立簡單的 `/about` 靜態頁面
-- 或暫時移除連結
+**實作內容：**
+- ✅ 建立 `/about` 頁面（佔位符，包含專案簡介、功能列表、技術棧）
+- ✅ DrawerSidebar 的 About 連結現在可正常運作
 
 **相關檔案：**
 - `src/components/layout/DrawerSidebar.tsx`
+- `src/app/about/page.tsx`（新建）
 
 ---
 

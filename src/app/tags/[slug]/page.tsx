@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import TagFeed from '@/components/tag/TagFeed';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -9,6 +10,7 @@ interface PageProps {
 export default async function TagPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient(cookies());
+  
   const { data: tag } = await supabase
     .from("tags")
     .select("id,name")
@@ -26,12 +28,44 @@ export default async function TagPage({ params }: PageProps) {
     );
   }
 
+  // Get current user for vote states
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Fetch posts with all necessary data for PostRow
   const { data: posts } = await supabase
     .from("posts")
-    .select("id,title,body,boards(slug),media(url),post_tags!inner(tag_id)")
+    .select(`
+      id,
+      title,
+      score,
+      created_at,
+      boards!inner(name, slug),
+      profiles(display_name, username, avatar_url, user_id),
+      personas(display_name, slug, avatar_url, user_id),
+      media(url),
+      post_tags!inner(tag_id),
+      comments(count)
+    `)
     .eq("post_tags.tag_id", tag.id)
     .eq("status", "PUBLISHED")
     .order("created_at", { ascending: false });
+
+  // Get user votes if logged in
+  let userVotes: Record<string, 1 | -1> = {};
+  if (user && posts) {
+    const postIds = posts.map(p => p.id);
+    const { data: votes } = await supabase
+      .from("votes")
+      .select("post_id, value")
+      .eq("user_id", user.id)
+      .in("post_id", postIds);
+    
+    if (votes) {
+      userVotes = Object.fromEntries(
+        votes.map(v => [v.post_id, v.value as 1 | -1])
+      );
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -39,24 +73,11 @@ export default async function TagPage({ params }: PageProps) {
         <h1 className="text-2xl font-bold text-base-content">#{tag.name}</h1>
       </div>
 
-      <div className="border border-neutral rounded-box bg-base-100 divide-y divide-neutral overflow-hidden">
-        {(posts ?? []).map((post) => {
-          const board = post.boards as any;
-          return (
-            <article
-              key={post.id}
-              className="p-4 hover:bg-base-300 transition-colors"
-            >
-              <h2 className="text-lg font-bold">
-                <Link href={`/r/${board?.slug || 'unknown'}/posts/${post.id}`}>
-                  {post.title}
-                </Link>
-              </h2>
-              <p className="mt-2 text-[#818384] line-clamp-2">{post.body}</p>
-            </article>
-          );
-        })}
-      </div>
+      <TagFeed 
+        initialPosts={posts ?? []} 
+        userVotes={userVotes}
+        userId={user?.id}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
@@ -44,6 +44,7 @@ export default function PostActions({
   const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const modalRef = useRef<HTMLDialogElement>(null);
 
   const isAuthor = authorId && userId && authorId === userId;
 
@@ -58,13 +59,22 @@ export default function PostActions({
     }
   };
 
+  const openMoreMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    modalRef.current?.showModal();
+  };
+
+  const closeMoreMenu = () => {
+    modalRef.current?.close();
+  };
+
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
+    closeMoreMenu();
     // Edit page will need to be created at /r/[slug]/posts/[id]/edit
     if (boardSlug) {
       router.push(`/r/${boardSlug}/posts/${postId}/edit`);
     }
-    setShowMoreMenu(false);
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -82,13 +92,13 @@ export default function PostActions({
       if (!res.ok) throw new Error('Failed to delete post');
 
       onDelete?.();
+      closeMoreMenu();
       router.refresh();
     } catch (err) {
       console.error('Failed to delete post:', err);
       alert('Failed to delete post');
     } finally {
       setIsDeleting(false);
-      setShowMoreMenu(false);
     }
   };
 
@@ -106,12 +116,11 @@ export default function PostActions({
 
       if (!res.ok) throw new Error('Failed to remove post');
 
+      closeMoreMenu();
       router.refresh();
     } catch (err) {
       console.error('Failed to remove post:', err);
       alert('Failed to remove post');
-    } finally {
-      setShowMoreMenu(false);
     }
   };
 
@@ -157,64 +166,65 @@ export default function PostActions({
       >
         <EyeOff size={16} /> <span>Hide</span>
       </button>
-      <div className="relative">
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowMoreMenu(!showMoreMenu);
-          }}
-          className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
-        >
-          <MoreHorizontal size={16} />
-        </button>
+      {/* More button */}
+      <button 
+        onClick={openMoreMenu}
+        className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
+      >
+        <MoreHorizontal size={16} />
+      </button>
 
-        {showMoreMenu && (
-          <>
-            <div 
-              className="fixed inset-0 z-10" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMoreMenu(false);
-              }}
-            />
-            <div className="absolute right-0 top-8 z-20 w-48 bg-base-100 border border-neutral rounded-md shadow-lg py-1">
-              {isAuthor && (
-                <>
-                  <button
-                    onClick={handleEdit}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-base-content hover:bg-base-200"
-                  >
-                    <Edit size={16} />
-                    Edit
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-base-200"
-                  >
-                    <Trash2 size={16} />
-                    {isDeleting ? 'Deleting...' : 'Delete'}
-                  </button>
-                </>
-              )}
-              {canModerate && !isAuthor && (
+      {/* More menu modal - bottom sheet on mobile, centered on desktop */}
+      <dialog ref={modalRef} className="modal modal-bottom sm:modal-middle">
+        <div className="modal-box">
+          <h3 className="font-bold text-lg mb-4">Post actions</h3>
+          
+          <div className="space-y-2">
+            {isAuthor && (
+              <>
                 <button
-                  onClick={handleRemove}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-warning hover:bg-base-200"
+                  onClick={handleEdit}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-base text-base-content hover:bg-base-200 rounded-lg transition-colors"
                 >
-                  <ShieldOff size={16} />
-                  Remove (Mod)
+                  <Edit size={20} />
+                  Edit post
                 </button>
-              )}
-              {!isAuthor && !canModerate && (
-                <div className="px-4 py-2 text-sm text-base-content/50">
-                  No actions available
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-base text-error hover:bg-base-200 rounded-lg transition-colors"
+                >
+                  <Trash2 size={20} />
+                  {isDeleting ? 'Deleting...' : 'Delete post'}
+                </button>
+              </>
+            )}
+            {canModerate && !isAuthor && (
+              <button
+                onClick={handleRemove}
+                className="w-full flex items-center gap-3 px-4 py-3 text-base text-warning hover:bg-base-200 rounded-lg transition-colors"
+              >
+                <ShieldOff size={20} />
+                Remove (Moderator)
+              </button>
+            )}
+            {!isAuthor && !canModerate && (
+              <div className="px-4 py-3 text-base text-base-content/50 text-center">
+                No actions available
+              </div>
+            )}
+          </div>
+
+          <div className="modal-action">
+            <form method="dialog">
+              <button className="btn btn-ghost">Close</button>
+            </form>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
     </div>
   );
 }

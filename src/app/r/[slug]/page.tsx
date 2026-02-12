@@ -108,15 +108,37 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     };
   });
 
-  // Check if user is admin (for Unarchive button)
+  // Check if user is admin (for Unarchive button) and can manage board
   let userIsAdmin = false;
-  let isJoined = false; // For BoardLayout compatibility
+  let isJoined = false;
+  let canManage = false;
+  
   if (user) {
     userIsAdmin = await isAdmin(user.id, supabase);
+    
+    // Check if user is joined to the board
+    const { data: membership } = await supabase
+      .from('board_members')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .eq('board_id', board.id)
+      .maybeSingle();
+    
+    isJoined = !!membership;
+    
+    // Check if user is moderator/owner
+    const { data: moderator } = await supabase
+      .from('board_moderators')
+      .select('role')
+      .eq('board_id', board.id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    canManage = !!moderator;
   }
 
   return (
-    <BoardLayout board={board} slug={slug} isJoined={isJoined}>
+    <BoardLayout board={board} slug={slug} isJoined={isJoined} canManage={canManage}>
       {/* Archived Banner */}
       {board.is_archived && (
         <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">

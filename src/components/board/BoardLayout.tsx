@@ -20,9 +20,10 @@ interface BoardLayoutProps {
   };
   slug: string;
   isJoined: boolean;
+  canManage?: boolean;
 }
 
-export default function BoardLayout({ children, board, slug, isJoined }: BoardLayoutProps) {
+export default function BoardLayout({ children, board, slug, isJoined, canManage = false }: BoardLayoutProps) {
   return (
     <MemberCountProvider initialCount={board.member_count}>
       <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
@@ -33,25 +34,27 @@ export default function BoardLayout({ children, board, slug, isJoined }: BoardLa
             size="lg"
           />
           <MemberCountDisplay slug={board.slug} />
-          <div className="dropdown dropdown-end">
-            <button tabIndex={0} className="btn btn-ghost btn-sm btn-circle" aria-label="Board menu">
-              <MoreVertical size={16} />
-            </button>
-            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1">
-              <li>
-                <Link href={`/r/${slug}/member`}>
-                  <Users size={14} />
-                  Members & Bans
-                </Link>
-              </li>
-              <li>
-                <Link href={`/r/${slug}/settings`}>
-                  <Settings size={14} />
-                  Board Settings
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {canManage && (
+            <div className="dropdown dropdown-end">
+              <button tabIndex={0} className="btn btn-ghost btn-sm btn-circle" aria-label="Board menu">
+                <MoreVertical size={16} />
+              </button>
+              <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1">
+                <li>
+                  <Link href={`/r/${slug}/member`}>
+                    <Users size={14} />
+                    Members & Bans
+                  </Link>
+                </li>
+                <li>
+                  <Link href={`/r/${slug}/settings`}>
+                    <Settings size={14} />
+                    Board Settings
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          )}
         </div>
         
         {!board.is_archived && (
