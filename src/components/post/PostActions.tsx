@@ -15,6 +15,7 @@ import {
 
 interface PostActionsProps {
   postId: string;
+  boardSlug?: string;
   commentCount: number;
   isSaved?: boolean;
   inDetailPage?: boolean;
@@ -29,6 +30,7 @@ interface PostActionsProps {
 
 export default function PostActions({
   postId,
+  boardSlug,
   commentCount,
   isSaved = false,
   inDetailPage = false,
@@ -50,15 +52,18 @@ export default function PostActions({
     if (inDetailPage) {
       // Scroll to comments section
       document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' });
-    } else {
+    } else if (boardSlug) {
       // Navigate to post detail page
-      router.push(`/posts/${postId}#comments`);
+      router.push(`/r/${boardSlug}/posts/${postId}#comments`);
     }
   };
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    router.push(`/posts/${postId}/edit`);
+    // Edit page will need to be created at /r/[slug]/posts/[id]/edit
+    if (boardSlug) {
+      router.push(`/r/${boardSlug}/posts/${postId}/edit`);
+    }
     setShowMoreMenu(false);
   };
 
@@ -121,9 +126,11 @@ export default function PostActions({
       <button
         onClick={(e) => {
           e.stopPropagation();
-          navigator.clipboard.writeText(
-            `${window.location.origin}/posts/${postId}`,
-          );
+          if (boardSlug) {
+            navigator.clipboard.writeText(
+              `${window.location.origin}/r/${boardSlug}/posts/${postId}`,
+            );
+          }
         }}
         className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
       >

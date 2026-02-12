@@ -7,6 +7,9 @@ import CommentForm from '@/components/comment/CommentForm';
 import CommentThread from '@/components/comment/CommentThread';
 import SafeHtml from '@/components/ui/SafeHtml';
 import PollDisplay from '@/components/post/PollDisplay';
+import BoardInfoCard from '@/components/board/BoardInfoCard';
+import BoardRulesCard from '@/components/board/BoardRulesCard';
+import BoardModeratorsCard from '@/components/board/BoardModeratorsCard';
 import Link from 'next/link';
 import { Archive } from 'lucide-react';
 
@@ -22,8 +25,8 @@ export default async function PostDetailPage({ params }: PageProps) {
   const { data: post } = await supabase
     .from('posts')
     .select(`
-      id, title, body, created_at, score, comment_count, persona_id, post_type, status,
-      boards!inner(id, name, slug, description),
+      id, title, body, created_at, score, comment_count, persona_id, post_type, status, board_id,
+      boards!inner(id, name, slug, description, member_count, post_count, icon_url, created_at, rules),
       profiles(username, display_name, avatar_url),
       personas(username, display_name, avatar_url, slug),
       media(url)
@@ -74,6 +77,7 @@ export default async function PostDetailPage({ params }: PageProps) {
   const authorAvatar = authorData?.avatar_url ?? null;
 
   let userVote: 1 | -1 | null = null;
+  let isJoined = false;
   if (user) {
     const { data: vote } = await supabase
       .from('votes')
@@ -82,6 +86,39 @@ export default async function PostDetailPage({ params }: PageProps) {
       .eq('post_id', id)
       .maybeSingle();
     userVote = vote?.value ?? null;
+
+    // Check if user is a member of the board
+    if (board?.id) {
+      const { data: membership } = await supabase
+        .from('board_members')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .eq('board_id', board.id)
+        .maybeSingle();
+      isJoined = !!membership;
+    }
+  }
+
+  // Get moderators
+  let moderators: any[] = [];
+  if (board?.id) {
+    const { data: modData } = await supabase
+      .from('board_moderators')
+      .select(`
+        user_id,
+        role,
+        profiles:user_id (
+          display_name,
+          avatar_url,
+          username
+        )
+      `)
+      .eq('board_id', board.id)
+      .order('created_at', { ascending: true });
+    moderators = (modData || []).map((mod: any) => ({
+      ...mod,
+      profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles,
+    }));
   }
 
   return (
@@ -163,20 +200,11 @@ export default async function PostDetailPage({ params }: PageProps) {
 
       <aside className="hidden lg:block w-[312px] space-y-4">
         {board && (
-          <div className="bg-base-100 rounded-md border border-neutral p-4">
-            <h3 className="font-bold text-base-content mb-2">About r/{board.name}</h3>
-            <p className="text-sm text-base-content/70 mb-4">{board.description}</p>
-            <div className="flex items-center justify-between text-xs text-base-content border-t border-neutral pt-4">
-              <div className="flex flex-col">
-                <span className="font-bold">1.2k</span>
-                <span className="text-base-content/70">Members</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="font-bold">42</span>
-                <span className="text-base-content/70">Online</span>
-              </div>
-            </div>
-          </div>
+          <>
+            <BoardInfoCard board={board} isMember={isJoined} />
+            <BoardRulesCard rules={board.rules || []} />
+            <BoardModeratorsCard moderators={moderators} />
+          </>
         )}
       </aside>
     </div>

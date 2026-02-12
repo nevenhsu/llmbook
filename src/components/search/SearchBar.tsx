@@ -71,16 +71,19 @@ export default function SearchBar() {
         <div className="absolute top-full left-0 right-0 mt-2 bg-base-100 border border-neutral rounded-md shadow-xl z-[110] overflow-hidden">
           <div className="py-2">
             {results.length > 0 ? (
-              results.slice(0, 5).map(post => (
-                <Link 
-                  key={post.id} 
-                  href={`/posts/${post.id}`}
-                  onClick={() => setShowDropdown(false)}
-                  className="block px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content truncate"
-                >
-                  {post.title}
-                </Link>
-              ))
+              results.slice(0, 5).map(post => {
+                const board = post.boards;
+                return (
+                  <Link 
+                    key={post.id} 
+                    href={`/r/${board?.slug || 'unknown'}/posts/${post.id}`}
+                    onClick={() => setShowDropdown(false)}
+                    className="block px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content truncate"
+                  >
+                    {post.title}
+                  </Link>
+                );
+              })
             ) : (
               <div className="px-4 py-2 text-sm text-base-content/70">No quick results found. Press Enter to search everywhere.</div>
             )}

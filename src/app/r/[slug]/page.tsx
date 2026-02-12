@@ -1,13 +1,8 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import BoardLayout from "@/components/board/BoardLayout";
-import BoardInfoCard from "@/components/board/BoardInfoCard";
-import BoardManageCard from "@/components/board/BoardManageCard";
-import BoardRulesCard from "@/components/board/BoardRulesCard";
-import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
 import UnarchiveButton from "@/components/board/UnarchiveButton";
 import { isAdmin } from "@/lib/admin";
 import { sortPosts, getTimeRangeDate, type SortType } from "@/lib/ranking";
@@ -33,17 +28,9 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     .eq("slug", slug)
     .maybeSingle();
 
+  // Board not found is handled by layout.tsx, which will call notFound()
   if (!board) {
-    return (
-      <div className="bg-base-100 p-6 rounded-md border border-neutral">
-        <h1 className="text-xl font-semibold text-base-content">
-          Board not found
-        </h1>
-        <Link href="/" className="mt-4 inline-block">
-          Back to feed
-        </Link>
-      </div>
-    );
+    return null;
   }
 
   // Build query with time range filter
@@ -121,83 +108,38 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     };
   });
 
-  let isJoined = false;
+  // Check if user is admin (for Unarchive button)
   let userIsAdmin = false;
+  let isJoined = false; // For BoardLayout compatibility
   if (user) {
-    const { data: membership } = await supabase
-      .from("board_members")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .eq("board_id", board.id)
-      .maybeSingle();
-    isJoined = !!membership;
     userIsAdmin = await isAdmin(user.id, supabase);
   }
 
-  // Get moderators
-  const { data: moderators } = await supabase
-    .from("board_moderators")
-    .select(
-      `
-      user_id,
-      role,
-      profiles:user_id (
-        display_name,
-        avatar_url,
-        username
-      )
-    `,
-    )
-    .eq("board_id", board.id)
-    .order("created_at", { ascending: true });
-
-  const canOpenSettings =
-    !!user && (moderators || []).some((mod: any) => mod.user_id === user.id);
-
   return (
     <BoardLayout board={board} slug={slug} isJoined={isJoined}>
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 min-w-0">
-          {/* Archived Banner */}
-          {board.is_archived && (
-            <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
-              <div className="flex items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Archive size={18} className="text-warning shrink-0" />
-                  <p className="text-sm text-warning">
-                    This community has been archived and is read-only
-                  </p>
-                </div>
-                {userIsAdmin && <UnarchiveButton slug={board.slug} compact />}
-              </div>
+      {/* Archived Banner */}
+      {board.is_archived && (
+        <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Archive size={18} className="text-warning shrink-0" />
+              <p className="text-sm text-warning">
+                This community has been archived and is read-only
+              </p>
             </div>
-          )}
-
-          <FeedSortBar basePath={`/r/${slug}`} />
-          <FeedContainer 
-            initialPosts={posts} 
-            userId={user?.id} 
-            boardSlug={slug}
-            sortBy={sortBy}
-            timeRange={timeRange}
-          />
+            {userIsAdmin && <UnarchiveButton slug={board.slug} compact />}
+          </div>
         </div>
+      )}
 
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-[312px]">
-          <BoardInfoCard board={board} isMember={isJoined} />
-          {canOpenSettings && <BoardManageCard slug={board.slug} />}
-          <BoardRulesCard rules={board.rules || []} />
-          <BoardModeratorsCard
-            moderators={(moderators || []).map((mod: any) => ({
-              ...mod,
-              profiles: Array.isArray(mod.profiles)
-                ? mod.profiles[0]
-                : mod.profiles,
-            }))}
-          />
-        </aside>
-      </div>
+      <FeedSortBar basePath={`/r/${slug}`} />
+      <FeedContainer 
+        initialPosts={posts} 
+        userId={user?.id} 
+        boardSlug={slug}
+        sortBy={sortBy}
+        timeRange={timeRange}
+      />
     </BoardLayout>
   );
 }

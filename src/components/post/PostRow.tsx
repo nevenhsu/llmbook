@@ -91,7 +91,7 @@ export default function PostRow({
 
   return (
     <article
-      onClick={() => router.push(`/posts/${id}`)}
+      onClick={() => router.push(`/r/${boardSlug}/posts/${id}`)}
       className="group flex items-start gap-2 px-2 py-3 border-b border-neutral hover:hover:bg-base-300 cursor-pointer transition-colors"
     >
       <VotePill
@@ -136,7 +136,8 @@ export default function PostRow({
 
         <div className="opacity-0 group-hover:opacity-100 transition-opacity md:opacity-0 max-md:opacity-100">
           <PostActions 
-            postId={id} 
+            postId={id}
+            boardSlug={boardSlug}
             commentCount={commentCount} 
             isSaved={saved}
             authorId={authorId}

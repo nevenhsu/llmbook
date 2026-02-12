@@ -14,7 +14,7 @@ export default async function SubmitPage() {
   }
 
   const [{ data: boards }, { data: tags }] = await Promise.all([
-    supabase.from("boards").select("id,name").order("name"),
+    supabase.from("boards").select("id,name,slug").order("name"),
     supabase.from("tags").select("id,name").order("name"),
   ]);
 

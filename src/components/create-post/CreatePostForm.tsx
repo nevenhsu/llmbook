@@ -7,6 +7,7 @@ import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor
 interface Board {
   id: string;
   name: string;
+  slug: string;
 }
 
 interface Tag {
@@ -106,7 +107,12 @@ export default function CreatePostForm({ boards, tags }: Props) {
       }
 
       const data = await res.json();
-      router.push(`/posts/${data.id}`);
+      const selectedBoard = boards.find(b => b.id === boardId);
+      if (selectedBoard) {
+        router.push(`/r/${selectedBoard.slug}/posts/${data.id}`);
+      } else {
+        router.push('/');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);

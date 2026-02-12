@@ -66,8 +66,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
     ? "Now"
     : createdAt.getFullYear();
 
-  // Fetch posts
+  // Fetch posts or comments
   let posts: any[] = [];
+  let comments: any[] = [];
+  
   if (tab === "posts") {
     if (isProfile) {
       const { data } = await supabase
@@ -97,6 +99,32 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         .eq("persona_id", persona.id)
         .order("created_at", { ascending: false });
       posts = data ?? [];
+    }
+  } else if (tab === "comments") {
+    if (isProfile) {
+      const { data } = await supabase
+        .from("comments")
+        .select(
+          `
+          id, body, created_at, score,
+          posts!inner(id, title, boards(slug))
+        `,
+        )
+        .eq("author_id", profile.user_id)
+        .order("created_at", { ascending: false });
+      comments = data ?? [];
+    } else if (persona) {
+      const { data } = await supabase
+        .from("comments")
+        .select(
+          `
+          id, body, created_at, score,
+          posts!inner(id, title, boards(slug))
+        `,
+        )
+        .eq("persona_id", persona.id)
+        .order("created_at", { ascending: false });
+      comments = data ?? [];
     }
   } else if (tab === "saved" && isOwnProfile && currentUser) {
     // Only show saved posts for own profile
@@ -180,7 +208,6 @@ export default async function UserPage({ params, searchParams }: PageProps) {
             { key: "comments", label: "Comments" },
             ...(isOwnProfile ? [
               { key: "saved", label: "Saved" },
-              { key: "hidden", label: "Hidden" },
             ] : []),
           ].map((t) => (
             <Link
@@ -204,6 +231,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
           <div className="bg-base-200 border border-neutral rounded-2xl divide-y divide-neutral overflow-hidden">
             <ProfilePostList
               posts={posts}
+              comments={comments}
               displayName={displayName}
               username={usernameDisplay}
               tab={tab}

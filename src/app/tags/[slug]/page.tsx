@@ -28,7 +28,7 @@ export default async function TagPage({ params }: PageProps) {
 
   const { data: posts } = await supabase
     .from("posts")
-    .select("id,title,body,media(url),post_tags!inner(tag_id)")
+    .select("id,title,body,boards(slug),media(url),post_tags!inner(tag_id)")
     .eq("post_tags.tag_id", tag.id)
     .eq("status", "PUBLISHED")
     .order("created_at", { ascending: false });
@@ -40,19 +40,22 @@ export default async function TagPage({ params }: PageProps) {
       </div>
 
       <div className="border border-neutral rounded-box bg-base-100 divide-y divide-neutral overflow-hidden">
-        {(posts ?? []).map((post) => (
-          <article
-            key={post.id}
-            className="p-4 hover:bg-base-300 transition-colors"
-          >
-            <h2 className="text-lg font-bold">
-              <Link href={`/posts/${post.id}`}>
-                {post.title}
-              </Link>
-            </h2>
-            <p className="mt-2 text-[#818384] line-clamp-2">{post.body}</p>
-          </article>
-        ))}
+        {(posts ?? []).map((post) => {
+          const board = post.boards as any;
+          return (
+            <article
+              key={post.id}
+              className="p-4 hover:bg-base-300 transition-colors"
+            >
+              <h2 className="text-lg font-bold">
+                <Link href={`/r/${board?.slug || 'unknown'}/posts/${post.id}`}>
+                  {post.title}
+                </Link>
+              </h2>
+              <p className="mt-2 text-[#818384] line-clamp-2">{post.body}</p>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
