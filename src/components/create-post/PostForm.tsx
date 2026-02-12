@@ -15,9 +15,30 @@ interface Tag {
   name: string;
 }
 
+interface PollOption {
+  id: string;
+  option_text: string;
+  vote_count: number;
+}
+
+interface InitialData {
+  postId: string;
+  title: string;
+  body: string;
+  boardId: string;
+  boardSlug: string;
+  tagIds: string[];
+  postType: "TEXT" | "MEDIA" | "POLL";
+  media?: UploadedMedia[];
+  pollOptions?: PollOption[];
+  pollDuration?: string;
+}
+
 interface Props {
   boards: Board[];
   tags: Tag[];
+  editMode?: boolean;
+  initialData?: InitialData;
 }
 
 interface UploadedMedia {
@@ -30,18 +51,31 @@ interface UploadedMedia {
 
 type Tab = "text" | "media" | "poll";
 
-export default function CreatePostForm({ boards, tags }: Props) {
+export default function PostForm({ boards, tags, editMode = false, initialData }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("text");
+  
+  // Determine initial tab based on post type in edit mode
+  const getInitialTab = (): Tab => {
+    if (editMode && initialData) {
+      if (initialData.postType === "MEDIA") return "media";
+      if (initialData.postType === "POLL") return "poll";
+    }
+    return "text";
+  };
+  
+  const [activeTab, setActiveTab] = useState<Tab>(getInitialTab());
 
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [boardId, setBoardId] = useState("");
-  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [body, setBody] = useState(initialData?.body || "");
+  const [boardId, setBoardId] = useState(initialData?.boardId || "");
+  const [tagIds, setTagIds] = useState<string[]>(initialData?.tagIds || []);
   const [showTagSelector, setShowTagSelector] = useState(false);
-  const [media, setMedia] = useState<UploadedMedia[]>([]);
-  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
-  const [pollDuration, setPollDuration] = useState('3');
+  const [media, setMedia] = useState<UploadedMedia[]>(initialData?.media || []);
+  const [pollOptions, setPollOptions] = useState<string[]>(
+    initialData?.pollOptions?.map(opt => opt.option_text) || ['', '']
+  );
+  const [newPollOptions, setNewPollOptions] = useState<string[]>(['']); // For edit mode: new options to add
+  const [pollDuration, setPollDuration] = useState(initialData?.pollDuration || '3');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
@@ -54,35 +88,72 @@ export default function CreatePostForm({ boards, tags }: Props) {
 
   // Load drafts from localStorage on mount
   useEffect(() => {
-    const savedDrafts = localStorage.getItem('post-drafts');
-    if (savedDrafts) {
-      try {
-        setDrafts(JSON.parse(savedDrafts));
-      } catch (e) {
-        console.error('Failed to parse drafts:', e);
+    const draftKey = editMode && initialData 
+      ? `post-edit-draft-${initialData.postId}`
+      : 'post-drafts';
+    
+    if (editMode && initialData) {
+      // Load single edit draft
+      const savedDraft = localStorage.getItem(draftKey);
+      if (savedDraft) {
+        try {
+          const draft = JSON.parse(savedDraft);
+          setTitle(draft.title || title);
+          setBody(draft.body || body);
+          setTagIds(draft.tagIds || tagIds);
+          if (draft.newPollOptions) {
+            setNewPollOptions(draft.newPollOptions);
+          }
+        } catch (e) {
+          console.error('Failed to parse edit draft:', e);
+        }
+      }
+    } else {
+      // Load multiple create drafts
+      const savedDrafts = localStorage.getItem(draftKey);
+      if (savedDrafts) {
+        try {
+          setDrafts(JSON.parse(savedDrafts));
+        } catch (e) {
+          console.error('Failed to parse drafts:', e);
+        }
       }
     }
-  }, []);
+  }, [editMode, initialData]);
 
   function saveDraft() {
-    const draft = {
-      id: Date.now().toString(),
-      title,
-      body,
-      boardId,
-      tagIds,
-      media,
-      pollOptions,
-      pollDuration,
-      activeTab,
-      savedAt: new Date().toISOString(),
-    };
+    if (editMode && initialData) {
+      // Save edit draft
+      const draft = {
+        title,
+        body,
+        tagIds,
+        newPollOptions,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(`post-edit-draft-${initialData.postId}`, JSON.stringify(draft));
+      alert('Draft saved!');
+    } else {
+      // Save create draft
+      const draft = {
+        id: Date.now().toString(),
+        title,
+        body,
+        boardId,
+        tagIds,
+        media,
+        pollOptions,
+        pollDuration,
+        activeTab,
+        savedAt: new Date().toISOString(),
+      };
 
-    const existingDrafts = drafts;
-    const newDrafts = [draft, ...existingDrafts].slice(0, 10); // Keep max 10 drafts
-    setDrafts(newDrafts);
-    localStorage.setItem('post-drafts', JSON.stringify(newDrafts));
-    alert('Draft saved!');
+      const existingDrafts = drafts;
+      const newDrafts = [draft, ...existingDrafts].slice(0, 10); // Keep max 10 drafts
+      setDrafts(newDrafts);
+      localStorage.setItem('post-drafts', JSON.stringify(newDrafts));
+      alert('Draft saved!');
+    }
   }
 
   function loadDraft(draft: any) {
@@ -126,48 +197,83 @@ export default function CreatePostForm({ boards, tags }: Props) {
     setLoading(true);
 
     try {
-      const postData: any = {
-        title,
-        boardId,
-        tagIds,
-        postType: activeTab === 'poll' ? 'poll' : activeTab === 'media' ? 'image' : 'text'
-      };
+      if (editMode && initialData) {
+        // Edit mode: PATCH request
+        const updateData: any = {
+          title,
+          body,
+          tagIds,
+        };
 
-      if (activeTab === 'text') {
-        postData.body = body;
-      }
-
-      if (activeTab === 'media') {
-        postData.mediaIds = media.map((m) => m.mediaId);
-        postData.body = body || '';
-      }
-
-      if (activeTab === 'poll') {
-        const validOptions = pollOptions.filter(opt => opt.trim());
-        if (validOptions.length < 2) {
-          throw new Error('Poll must have at least 2 options');
+        // Add new poll options if in poll edit mode
+        if (activeTab === 'poll') {
+          const validNewOptions = newPollOptions.filter(opt => opt.trim());
+          if (validNewOptions.length > 0) {
+            updateData.newPollOptions = validNewOptions;
+          }
         }
-        postData.pollOptions = validOptions.map(text => ({ text }));
-        postData.pollDuration = parseInt(pollDuration, 10);
-      }
 
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData),
-      });
+        const res = await fetch(`/api/posts/${initialData.postId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateData),
+        });
 
-      if (!res.ok) {
-        const message = await res.text();
-        throw new Error(message || "Could not create post");
-      }
+        if (!res.ok) {
+          const message = await res.text();
+          throw new Error(message || "Could not update post");
+        }
 
-      const data = await res.json();
-      const selectedBoard = boards.find(b => b.id === boardId);
-      if (selectedBoard) {
-        router.push(`/r/${selectedBoard.slug}/posts/${data.id}`);
+        // Clear edit draft from localStorage
+        localStorage.removeItem(`post-edit-draft-${initialData.postId}`);
+        
+        // Redirect to post
+        router.push(`/r/${initialData.boardSlug}/posts/${initialData.postId}`);
       } else {
-        router.push('/');
+        // Create mode: POST request
+        const postData: any = {
+          title,
+          boardId,
+          tagIds,
+          postType: activeTab === 'poll' ? 'poll' : activeTab === 'media' ? 'image' : 'text'
+        };
+
+        if (activeTab === 'text') {
+          postData.body = body;
+        }
+
+        if (activeTab === 'media') {
+          postData.mediaIds = media.map((m) => m.mediaId);
+          postData.body = body || '';
+        }
+
+        if (activeTab === 'poll') {
+          const validOptions = pollOptions.filter(opt => opt.trim());
+          if (validOptions.length < 2) {
+            throw new Error('Poll must have at least 2 options');
+          }
+          postData.pollOptions = validOptions.map(text => ({ text }));
+          postData.pollDuration = parseInt(pollDuration, 10);
+        }
+
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(postData),
+        });
+
+        if (!res.ok) {
+          const message = await res.text();
+          throw new Error(message || "Could not create post");
+        }
+
+        const data = await res.json();
+        const selectedBoard = boards.find(b => b.id === boardId);
+        if (selectedBoard) {
+          router.push(`/r/${selectedBoard.slug}/posts/${data.id}`);
+        } else {
+          router.push('/');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -179,15 +285,18 @@ export default function CreatePostForm({ boards, tags }: Props) {
     <div className="mx-auto max-w-[740px] pb-20 sm:pb-10 px-4 sm:px-0">
       {/* Header */}
       <div className="flex items-center justify-between py-6">
-        <h1 className="text-2xl font-bold text-base-content">Create post</h1>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowDrafts(!showDrafts)}
-            className="text-xs font-bold text-base-content uppercase tracking-wider hover:hover:bg-base-300 px-3 py-1.5 rounded transition-colors"
-          >
-            Drafts {drafts.length > 0 && `(${drafts.length})`}
-          </button>
+        <h1 className="text-2xl font-bold text-base-content">
+          {editMode ? 'Edit post' : 'Create post'}
+        </h1>
+        {!editMode && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowDrafts(!showDrafts)}
+              className="text-xs font-bold text-base-content uppercase tracking-wider hover:hover:bg-base-300 px-3 py-1.5 rounded transition-colors"
+            >
+              Drafts {drafts.length > 0 && `(${drafts.length})`}
+            </button>
 
           {/* Drafts dropdown */}
           {showDrafts && (
@@ -242,12 +351,13 @@ export default function CreatePostForm({ boards, tags }: Props) {
               )}
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Community Selector */}
       <div className="mb-6">
-        <div className="inline-flex h-10 items-center gap-2 rounded-full border border-neutral bg-base-100 py-1 pl-1 pr-3 hover:hover:bg-base-300 cursor-pointer group relative">
+        <div className={`inline-flex h-10 items-center gap-2 rounded-full border border-neutral bg-base-100 py-1 pl-1 pr-3 group relative ${editMode ? 'opacity-60 cursor-not-allowed' : 'hover:hover:bg-base-300 cursor-pointer'}`}>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-base-300">
             <svg
               viewBox="0 0 20 20"
@@ -262,36 +372,45 @@ export default function CreatePostForm({ boards, tags }: Props) {
               ? `r/${boards.find((b) => b.id === boardId)?.name}`
               : "Select a community"}
           </span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2.5}
-            stroke="currentColor"
-            className="h-4 w-4 text-base-content"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m19.5 8.25-7.5 7.5-7.5-7.5"
-            />
-          </svg>
+          {!editMode && (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2.5}
+              stroke="currentColor"
+              className="h-4 w-4 text-base-content"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m19.5 8.25-7.5 7.5-7.5-7.5"
+              />
+            </svg>
+          )}
 
-          <select
-            value={boardId}
-            onChange={(e) => setBoardId(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full"
-          >
-            <option value="" disabled>
-              Select a community
-            </option>
-            {boards.map((board) => (
-              <option key={board.id} value={board.id}>
-                r/{board.name}
+          {!editMode && (
+            <select
+              value={boardId}
+              onChange={(e) => setBoardId(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full"
+            >
+              <option value="" disabled>
+                Select a community
               </option>
-            ))}
-          </select>
+              {boards.map((board) => (
+                <option key={board.id} value={board.id}>
+                  r/{board.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
+        {editMode && (
+          <p className="text-xs text-base-content/50 mt-2">
+            Community cannot be changed after posting
+          </p>
+        )}
       </div>
 
       {/* Main Form Area */}
@@ -309,12 +428,13 @@ export default function CreatePostForm({ boards, tags }: Props) {
             <button
               key={tab.key}
               role="tab"
+              disabled={editMode}
               className={`px-6 py-3 text-sm font-bold whitespace-nowrap transition-colors border-b-2 ${
                 activeTab === tab.key
                   ? "text-base-content border-primary"
                   : "text-base-content/70 border-transparent hover:text-base-content"
-              }`}
-              onClick={() => setActiveTab(tab.key)}
+              } ${editMode ? 'cursor-not-allowed opacity-60' : ''}`}
+              onClick={() => !editMode && setActiveTab(tab.key)}
             >
               {tab.label}
             </button>
@@ -509,49 +629,123 @@ export default function CreatePostForm({ boards, tags }: Props) {
 
             {activeTab === "poll" && (
               <div className="space-y-2">
-                {pollOptions.map((opt, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <input
-                      className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus: focus:outline-none transition-colors flex-1"
-                      placeholder={`Option ${idx + 1}`}
-                      value={opt}
-                      onChange={(e) => {
-                        const newOptions = [...pollOptions];
-                        newOptions[idx] = e.target.value;
-                        setPollOptions(newOptions);
-                      }}
-                      maxLength={200}
-                    />
-                    {pollOptions.length > 2 && (
-                      <button
-                        type="button"
-                        className="px-3 py-2 rounded-full hover:hover:bg-base-300 text-base-content/70 transition-colors"
-                        onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                {editMode ? (
+                  <>
+                    {/* Existing poll options (read-only) */}
+                    {pollOptions.map((opt, idx) => (
+                      <div key={`existing-${idx}`} className="flex gap-2">
+                        <input
+                          className="w-full rounded-[20px] border border-neutral bg-base-200 p-3 text-sm text-base-content cursor-not-allowed flex-1"
+                          value={opt}
+                          readOnly
+                          disabled
+                        />
+                        <div className="px-3 py-2 rounded-full text-base-content/50 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Separator */}
+                    {newPollOptions.length > 0 && pollOptions.length > 0 && (
+                      <div className="flex items-center gap-2 py-2">
+                        <div className="flex-1 border-t border-neutral"></div>
+                        <span className="text-xs text-base-content/50 font-semibold">New Options</span>
+                        <div className="flex-1 border-t border-neutral"></div>
+                      </div>
                     )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="px-6 py-2 rounded-full border  text-base-content text-sm font-bold hover:bg-base-300 transition-colors w-full mt-2"
-                  onClick={() => setPollOptions([...pollOptions, ''])}
-                  disabled={pollOptions.length >= 6}
-                >
-                  + Add Option
-                </button>
-                <select
-                  className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content focus: focus:outline-none transition-colors mt-4"
-                  value={pollDuration}
-                  onChange={(e) => setPollDuration(e.target.value)}
-                >
-                  <option value="1">1 day</option>
-                  <option value="3">3 days</option>
-                  <option value="7">1 week</option>
-                </select>
+                    
+                    {/* New poll options (editable) */}
+                    {newPollOptions.map((opt, idx) => (
+                      <div key={`new-${idx}`} className="flex gap-2">
+                        <input
+                          className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus:outline-none transition-colors flex-1"
+                          placeholder={`New option ${idx + 1}`}
+                          value={opt}
+                          onChange={(e) => {
+                            const newOpts = [...newPollOptions];
+                            newOpts[idx] = e.target.value;
+                            setNewPollOptions(newOpts);
+                          }}
+                          maxLength={200}
+                        />
+                        {newPollOptions.length > 1 && (
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded-full hover:bg-base-300 text-base-content/70 transition-colors"
+                            onClick={() => setNewPollOptions(newPollOptions.filter((_, i) => i !== idx))}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    <button
+                      type="button"
+                      className="px-6 py-2 rounded-full border text-base-content text-sm font-bold hover:bg-base-300 transition-colors w-full mt-2"
+                      onClick={() => setNewPollOptions([...newPollOptions, ''])}
+                      disabled={(pollOptions.length + newPollOptions.length) >= 6}
+                    >
+                      + Add New Option
+                    </button>
+                    
+                    <p className="text-xs text-base-content/50 mt-2">
+                      Existing poll options cannot be removed or edited. You can only add new options.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {/* Create mode: all options are editable */}
+                    {pollOptions.map((opt, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <input
+                          className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus:outline-none transition-colors flex-1"
+                          placeholder={`Option ${idx + 1}`}
+                          value={opt}
+                          onChange={(e) => {
+                            const newOptions = [...pollOptions];
+                            newOptions[idx] = e.target.value;
+                            setPollOptions(newOptions);
+                          }}
+                          maxLength={200}
+                        />
+                        {pollOptions.length > 2 && (
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded-full hover:bg-base-300 text-base-content/70 transition-colors"
+                            onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="px-6 py-2 rounded-full border text-base-content text-sm font-bold hover:bg-base-300 transition-colors w-full mt-2"
+                      onClick={() => setPollOptions([...pollOptions, ''])}
+                      disabled={pollOptions.length >= 6}
+                    >
+                      + Add Option
+                    </button>
+                    <select
+                      className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content focus:outline-none transition-colors mt-4"
+                      value={pollDuration}
+                      onChange={(e) => setPollDuration(e.target.value)}
+                    >
+                      <option value="1">1 day</option>
+                      <option value="3">3 days</option>
+                      <option value="7">1 week</option>
+                    </select>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -572,7 +766,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
             disabled={!title || !boardId || loading}
             className="px-8 py-2 rounded-full bg-base-content text-base-100 text-sm font-bold hover:bg-opacity-90 disabled:opacity-50 transition-colors"
           >
-            {loading ? "Posting..." : "Post"}
+            {loading ? (editMode ? "Updating..." : "Posting...") : (editMode ? "Update" : "Post")}
           </button>
         </div>
       </div>

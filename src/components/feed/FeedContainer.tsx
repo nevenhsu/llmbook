@@ -10,6 +10,7 @@ interface FeedContainerProps {
   boardSlug?: string;
   sortBy?: string;
   timeRange?: string;
+  canViewArchived?: boolean;
 }
 
 export default function FeedContainer({ 
@@ -17,7 +18,8 @@ export default function FeedContainer({
   userId, 
   boardSlug, 
   sortBy = 'hot',
-  timeRange = 'all' 
+  timeRange = 'all',
+  canViewArchived = false
 }: FeedContainerProps) {
   const [posts, setPosts] = useState(initialPosts);
   const [page, setPage] = useState(1);
@@ -55,6 +57,10 @@ export default function FeedContainer({
 
       if (boardSlug) {
         params.append('board', boardSlug);
+      }
+
+      if (canViewArchived) {
+        params.append('includeArchived', 'true');
       }
 
       const res = await fetch(`/api/posts?${params}`);

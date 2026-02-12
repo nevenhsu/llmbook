@@ -10,9 +10,9 @@
 
 ## 📊 實作進度
 
-**最後更新：** 2026-02-12
+**最後更新：** 2026-02-12 (Evening Session - Complete!)
 
-### ✅ 已完成 (32/35)
+### ✅ 已完成 (35/35 實際任務)
 
 **第一階段：Admin 基礎設施**
 - **PA-1**: 建立 admin_users 資料表 ✅
@@ -59,19 +59,42 @@
 - **P1-12**: Add tags 按鈕功能 ✅
 - **P1-13**: 草稿功能 (localStorage) ✅
 
-### ⏹️ 已取消 (4/36)
+**第七階段：User Follow 與 Post Edit (2026-02-12 Evening)**
+- **P1-7**: Follow 按鈕功能 ✅
+- **P1-8**: Followers 數量顯示真實資料 ✅
+- **P1-20**: Post Edit 頁面（含 Poll 編輯）✅
+- **P3-3**: BoardLayout 管理連結權限檢查（手機版）✅
+- **P3-4**: 搜尋頁面 People 結果加上連結 ✅
+
+**第八階段：全域 UserContext 架構優化 (2026-02-12 Evening)**
+- **架構優化**: 建立全域 UserContext ✅
+  - 建立 `src/contexts/UserContext.tsx`（提供 user, profile, isAdmin）
+  - Root layout 統一查詢 isAdmin 並提供給全站
+  - 更新 BoardContext 整合 UserContext（useBoardContext 現在自動包含 userId 和 isAdmin）
+  - 所有 client component 都可使用 `useUserContext()` 或 `useOptionalUserContext()`
+  - Server component 繼續使用 `isAdmin()` 直接查詢
+  - 建立使用指南：`docs/contexts/USER_CONTEXT.md`
+- **P3-5**: NotificationBell 即時更新 ✅
+  - 實作 polling 機制（每 30 秒自動更新）
+  - 加入 Page Visibility API（切回頁面時立即更新）
+  - 只對已登入使用者顯示和更新
+
+### ⏹️ 已取消 (5 任務)
 
 - **P0-2**: 通知封存頁面（不需要）
 - **P1-10**: 個人頁面 Hidden 分頁（用戶要求移除）
 - **P1-14**: Link 分頁（改用 TipTap 編輯器的連結功能）✅
 - **P1-16**: 搜尋結果中的「Join」按鈕（使用者可直接點擊社群名稱進入）
+- **P2-6**: MobileSearchOverlay 搜尋（已在 M-1 完成）
 
-### ⏳ 待處理 (7/36)
+### ⏳ 待處理 (0 任務)
 
-詳見下方各分類任務列表
+🎉 **所有實際需要的功能都已完成！**
 
-**新增任務：**
-- **P1-20**: Post Edit 頁面（需建立）
+- 總任務數：40
+- 已完成：35
+- 已取消（不需要）：5
+- 完成率：100% (35/35 實際任務)
 
 ---
 
@@ -366,39 +389,40 @@
 
 ---
 
-### P1-7: 使用者個人頁面「Follow」按鈕沒有功能
+### P1-7: 使用者個人頁面「Follow」按鈕沒有功能 ✅
 
-**現狀：**
-- `/u/[username]` 頁面有一個 `<button>Follow</button>`，沒有 `onClick`
-- 沒有 Follow 相關的 API route
-- 沒有 followers 資料表
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 點擊 Follow 呼叫 API 追蹤該用戶
-- 再次點擊 Unfollow
-- 追蹤者數量即時更新
-- 需要建立 `user_follows` 資料表和對應的 API route
+**實作內容：**
+- ✅ Migration 已建立：`supabase/migrations/20260212_user_follows.sql`
+- ✅ 資料表：`user_follows` (follower_id, following_id, created_at)
+- ✅ 約束：no_self_follow CHECK (follower_id != following_id)
+- ✅ RLS 政策：任何人可查看，只有 follower 可新增/刪除
+- ✅ API 已建立：`/api/users/[userId]/follow` (POST/DELETE)
+- ✅ FollowButton 元件：支援 optimistic update
+- ✅ 個人頁面整合：顯示 Follow/Following 按鈕
+- ✅ 權限檢查：不可 follow 自己、只能 follow 一般使用者（不含 personas）
 
 **相關檔案：**
-- `src/app/u/[username]/page.tsx`
-
-**需要新建的：**
-- 資料表：`user_follows`（follower_id, following_id, created_at）
-- API：`/api/users/[userId]/follow`（POST 追蹤、DELETE 取消追蹤）
+- `supabase/migrations/20260212_user_follows.sql`
+- `src/app/api/users/[userId]/follow/route.ts`
+- `src/components/profile/FollowButton.tsx`
+- `src/app/u/[username]/page.tsx` (第 60-93 行)
 
 ---
 
-### P1-8: 使用者個人頁面「Followers」數量 hardcoded 為 0
+### P1-8: 使用者個人頁面「Followers」數量 hardcoded 為 0 ✅
 
-**現狀：**
-- 側邊欄顯示「0 Followers」，這個數字是寫死的，不從資料庫取得
+**狀態：** 已完成（2026-02-12，與 P1-7 一起完成）
 
-**期望行為：**
-- 從資料庫查詢實際的追蹤者數量
-- 與 P1-7 Follow 功能一起實作
+**實作內容：**
+- ✅ 查詢 followers 數量（COUNT user_follows WHERE following_id = userId）
+- ✅ 查詢 following 數量（COUNT user_follows WHERE follower_id = userId）
+- ✅ 檢查當前使用者是否已 follow 該 profile
+- ✅ 側邊欄顯示真實的 Followers 數量
 
 **相關檔案：**
-- `src/app/u/[username]/page.tsx`
+- `src/app/u/[username]/page.tsx` (第 66-93, 296 行)
 
 ---
 
@@ -554,40 +578,36 @@
 
 ---
 
-### P1-20: Post Edit 頁面（需建立）
+### P1-20: Post Edit 頁面（需建立）✅
 
-**現狀：**
-- Post edit 功能完全不存在
-- PostActions 的 "Edit" 選項會導向 `/r/[slug]/posts/[id]/edit`，但該路由不存在
-- 沒有編輯貼文的 UI 和 API 整合
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 建立 `/app/r/[slug]/posts/[id]/edit/page.tsx` 頁面
-- 只有作者可以編輯（需權限檢查）
-- 共用 `CreatePostForm` 元件（或建立類似的 `EditPostForm`）
-- 共用 TipTap 編輯器（`SimpleEditor`）
-- 支援草稿功能（localStorage，與 CreatePost 分開儲存）
-- 預載現有貼文內容（title, body, tags, media, poll options）
-- 更新時呼叫 `PATCH /api/posts/[id]`
-
-**實作要點：**
-1. **權限檢查**：只有貼文作者可以編輯
-2. **草稿儲存**：使用 localStorage，key 為 `post-edit-draft-{postId}`
-3. **共用元件**：盡量重用 `CreatePostForm` 的邏輯和 UI
-4. **資料預載**：
-   - 從 API 取得現有貼文資料
-   - 填入表單欄位（title, body, boardId, tagIds, media, pollOptions）
-   - 不可更改 board（已發布的貼文不能換社群）
-5. **Poll 限制**：已發布的 poll 不可編輯選項（只能編輯 title/body）
+**實作內容：**
+- ✅ **API 擴展**：PATCH `/api/posts/[id]` 支援內容編輯
+  - 支援編輯：title, body, tagIds
+  - 支援新增 poll options（newPollOptions）
+  - 權限檢查：只有作者可以編輯內容
+  - 不允許更改：board_id, post_type
+- ✅ **PostForm 元件重構**：
+  - 重命名：`CreatePostForm` → `PostForm`
+  - 新增 `editMode` prop 和 `initialData` prop
+  - 編輯模式功能：
+    - Board selector 顯示為 disabled（不可更改社群）
+    - Tabs 禁用（不可更改貼文類型）
+    - Poll 編輯：顯示現有選項（不可編輯/刪除）+ 新增選項輸入框
+    - 草稿功能：localStorage key 為 `post-edit-draft-{postId}`
+    - 按鈕文字：Update / Updating...
+- ✅ **編輯頁面**：`/app/r/[slug]/posts/[id]/edit/page.tsx`
+  - 權限檢查：只有作者可編輯（persona 貼文由其他 app 處理）
+  - DELETED 狀態處理：顯示標題 + 「已刪除」提示
+  - 預載資料：title, body, tags, media, poll options
+  - 查詢所有 boards 和 tags 供表單使用
 
 **相關檔案：**
-- `src/app/r/[slug]/posts/[id]/edit/page.tsx`（需建立）
-- `src/components/create-post/CreatePostForm.tsx`（可重用邏輯）
-- `src/app/api/posts/[id]/route.ts`（PATCH handler 已存在）
-- `src/components/post/PostActions.tsx`（Edit 按鈕已有導向邏輯）
-
-**API 需求：**
-- `PATCH /api/posts/[id]` - 已存在，但需確認支援所有欄位更新
+- `src/app/api/posts/[id]/route.ts` (PATCH handler 擴展)
+- `src/components/create-post/PostForm.tsx` (重命名並擴展)
+- `src/app/r/[slug]/posts/[id]/edit/page.tsx` (新建)
+- `src/app/submit/page.tsx` (import 更新)
 
 ---
 
@@ -679,21 +699,18 @@
 
 ---
 
-### P2-6: MobileSearchOverlay 搜尋不會呼叫 API
+### P2-6: MobileSearchOverlay 搜尋不會呼叫 API ⏹️
 
-**現狀：**
-- 手機版搜尋 overlay 只有 input UI
-- 輸入任何內容永遠顯示「No results」
-- 原始碼有註解：`"Results area — wired in webapp Phase 5"`
+**狀態：** 已取消（已在 Mobile M-1 任務中完成，2026-02-12）
 
-**期望行為：**
-- 使用與 `SearchBar` 相同的邏輯，呼叫 `/api/search` 並顯示結果
-- 或者直接 reuse `SearchBar` 的搜尋邏輯
+**實作內容：**
+- ✅ 已在 mobile/incomplete-features.md 的 M-1 任務中完成
+- ✅ 整合 SearchBar 的搜尋邏輯（debounce 300ms）
+- ✅ 呼叫 `/api/search` 取得即時搜尋結果
+- ✅ 顯示最多 5 筆貼文結果
 
 **相關檔案：**
 - `src/components/search/MobileSearchOverlay.tsx`
-- `src/components/search/SearchBar.tsx`（desktop 版已完成，可參考）
-- `src/app/api/search/route.ts`（已完成）
 
 ---
 
@@ -755,47 +772,49 @@
 
 ---
 
-### P3-3: BoardLayout 管理連結沒有權限檢查（手機版）
+### P3-3: BoardLayout 管理連結沒有權限檢查（手機版）✅
 
-**現狀：**
-- 手機版的三點選單顯示「Members & Bans」和「Board Settings」連結給所有使用者
-- 雖然目標頁面有權限檢查，但不應該讓非管理者看到這些連結
+**狀態：** 已完成（先前在 M-3 中完成，2026-02-12 確認）
 
-**期望行為：**
-- 根據使用者角色（owner/moderator）決定是否顯示管理連結
-- 非管理者不應看到這些選項
+**實作內容：**
+- ✅ BoardLayout 新增 `canManage` prop
+- ✅ 只有 moderator/owner 才能看到三點選單按鈕
+- ✅ Board 頁面查詢使用者的 moderator 狀態並傳遞
+- ✅ 非管理者完全看不到管理選單入口
 
 **相關檔案：**
-- `src/components/board/BoardLayout.tsx`
+- `src/components/board/BoardLayout.tsx` (第 23, 37-57 行)
+- `src/app/r/[slug]/page.tsx` (第 129-141 行)
 
 ---
 
-### P3-4: 搜尋頁面 People 結果沒有連結到個人頁面
+### P3-4: 搜尋頁面 People 結果沒有連結到個人頁面 ✅
 
-**現狀：**
-- 搜尋 People 的結果只顯示文字（名稱），沒有 `<Link>` 到 `/u/[username]`
-- Persona 結果有連結到 `/p/[slug]`，但一般使用者沒有
+**狀態：** 已完成（先前已完成，2026-02-12 確認）
 
-**期望行為：**
-- 每個人物結果都應該是可點擊的連結到 `/u/[username]`
+**實作內容：**
+- ✅ Users 結果已用 `<Link>` 包裹，連結到 `/u/${user.username}`
+- ✅ Personas 結果也有連結到 `/p/${persona.slug}`
+- ✅ 所有 People 搜尋結果都可點擊
 
 **相關檔案：**
-- `src/app/search/page.tsx`
+- `src/app/search/page.tsx` (第 112-119, 126-133 行)
 
 ---
 
-### P3-5: NotificationBell 沒有即時更新
+### P3-5: NotificationBell 沒有即時更新 ✅
 
-**現狀：**
-- `NotificationBell` 只在元件 mount 時 fetch 一次
-- 之後不會自動更新，使用者需要重新整理頁面才能看到新通知
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 定期 polling（例如每 30 秒）檢查新通知
-- 或使用 Supabase Realtime 訂閱
+**實作內容：**
+- ✅ 實作 polling 機制（每 30 秒自動檢查新通知）
+- ✅ 加入 Page Visibility API（當使用者切回頁面時立即更新）
+- ✅ 使用 `useOptionalUserContext()` 檢查登入狀態
+- ✅ 只對已登入使用者顯示和更新通知
+- ✅ 自動清理 interval 和 event listener（避免記憶體洩漏）
 
 **相關檔案：**
-- `src/components/notification/NotificationBell.tsx`
+- `src/components/notification/NotificationBell.tsx` (已更新)
 
 ---
 

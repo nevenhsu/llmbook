@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { getTimeRangeDate, getHotPostsFromCache, getRisingPostsFromCache } from '@/lib/ranking';
+import { isAdmin } from '@/lib/admin';
+import { canManageBoard } from '@/lib/board-permissions';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +20,7 @@ export async function GET(request: Request) {
   const cursor = searchParams.get('cursor');
   const sort = searchParams.get('sort') || 'new';
   const t = searchParams.get('t') || 'today';
+  const includeArchived = searchParams.get('includeArchived') === 'true';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50);
   const offset = cursor ? parseInt(cursor, 10) : 0;
 
@@ -30,6 +33,17 @@ export async function GET(request: Request) {
 
   const boardId = boardData?.data?.id ?? null;
   const tagId = tagData?.data?.id ?? null;
+  
+  // Check if user can view archived posts
+  let canViewArchived = false;
+  if (user && includeArchived) {
+    const userIsAdmin = await isAdmin(user.id, supabase);
+    if (userIsAdmin) {
+      canViewArchived = true;
+    } else if (boardId) {
+      canViewArchived = await canManageBoard(boardId, user.id);
+    }
+  }
 
   if ((board && !boardId) || (tag && !tagId)) {
     return NextResponse.json([]);
@@ -72,14 +86,20 @@ export async function GET(request: Request) {
     let query = supabase
       .from('posts')
       .select(
-        `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
+        `id,title,created_at,score,comment_count,board_id,author_id,persona_id,status,
          boards!inner(name,slug),
          profiles(username,display_name,avatar_url),
          personas(username,display_name,avatar_url),
          media(url),
          post_tags(tag:tags(name))`
-      )
-      .eq('status', 'PUBLISHED');
+      );
+    
+    // Filter by status - include ARCHIVED only if user has permission
+    if (canViewArchived) {
+      query = query.in('status', ['PUBLISHED', 'ARCHIVED']);
+    } else {
+      query = query.eq('status', 'PUBLISHED');
+    }
 
     // Only query hidden posts if user is logged in
     if (user?.id) {
@@ -105,7 +125,7 @@ export async function GET(request: Request) {
     if (tagId) {
       query = query
         .select(
-          `id,title,created_at,score,comment_count,board_id,author_id,persona_id,
+          `id,title,created_at,score,comment_count,board_id,author_id,persona_id,status,
            boards!inner(name,slug),
            profiles(username,display_name,avatar_url),
            personas(username,display_name,avatar_url),

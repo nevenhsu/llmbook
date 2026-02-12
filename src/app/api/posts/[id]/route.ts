@@ -104,15 +104,12 @@ export async function PATCH(
   }
 
   const payload = await request.json();
-  const nextStatus = payload?.status;
+  const { status: nextStatus, title, body, tagIds, newPollOptions } = payload;
 
-  if (nextStatus !== 'ARCHIVED' && nextStatus !== 'PUBLISHED') {
-    return new NextResponse('Only ARCHIVED and PUBLISHED status updates are supported', { status: 400 });
-  }
-
+  // Fetch post with author info
   const { data: post, error: postError } = await supabase
     .from('posts')
-    .select('id, board_id')
+    .select('id, author_id, board_id, post_type')
     .eq('id', id)
     .maybeSingle();
 
@@ -120,26 +117,92 @@ export async function PATCH(
     return new NextResponse('Not found', { status: 404 });
   }
 
-  const userIsAdmin = await isAdmin(user.id, supabase);
-  const canManagePosts = userIsAdmin || await canManageBoardPosts(post.board_id, user.id);
+  // Handle status update (Archive/Unarchive - admin/moderator only)
+  if (nextStatus && (nextStatus === 'ARCHIVED' || nextStatus === 'PUBLISHED')) {
+    const userIsAdmin = await isAdmin(user.id, supabase);
+    const canManagePosts = userIsAdmin || await canManageBoardPosts(post.board_id, user.id);
 
-  if (!canManagePosts) {
-    return new NextResponse('Forbidden: Missing manage_posts permission', { status: 403 });
+    if (!canManagePosts) {
+      return new NextResponse('Forbidden: Missing manage_posts permission', { status: 403 });
+    }
+
+    const { data: updatedPost, error: updateError } = await supabase
+      .from('posts')
+      .update({
+        status: nextStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, status')
+      .single();
+
+    if (updateError) {
+      return new NextResponse(updateError.message, { status: 400 });
+    }
+
+    return NextResponse.json({ post: updatedPost });
   }
 
-  const { data: updatedPost, error: updateError } = await supabase
+  // Handle content update (author only)
+  if (post.author_id !== user.id) {
+    return new NextResponse('Forbidden: Only author can edit content', { status: 403 });
+  }
+
+  // Build update object
+  const updates: any = {
+    updated_at: new Date().toISOString()
+  };
+
+  if (title !== undefined) {
+    if (!title.trim()) {
+      return new NextResponse('Title is required', { status: 400 });
+    }
+    updates.title = title.trim();
+  }
+
+  if (body !== undefined) {
+    updates.body = body;
+  }
+
+  // Update post
+  const { error: updateError } = await supabase
     .from('posts')
-    .update({
-      status: nextStatus,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', id)
-    .select('id, status')
-    .single();
+    .update(updates)
+    .eq('id', id);
 
   if (updateError) {
     return new NextResponse(updateError.message, { status: 400 });
   }
 
-  return NextResponse.json({ post: updatedPost });
+  // Update tags if provided
+  if (tagIds !== undefined && Array.isArray(tagIds)) {
+    // Delete existing tags
+    await supabase.from('post_tags').delete().eq('post_id', id);
+
+    // Insert new tags
+    if (tagIds.length > 0) {
+      const tagInserts = tagIds.map(tagId => ({
+        post_id: id,
+        tag_id: tagId
+      }));
+      await supabase.from('post_tags').insert(tagInserts);
+    }
+  }
+
+  // Add new poll options if provided (for poll posts only)
+  if (newPollOptions && Array.isArray(newPollOptions) && newPollOptions.length > 0 && post.post_type === 'POLL') {
+    const optionInserts = newPollOptions
+      .filter((opt: string) => opt.trim())
+      .map((opt: string) => ({
+        post_id: id,
+        option_text: opt.trim(),
+        vote_count: 0
+      }));
+    
+    if (optionInserts.length > 0) {
+      await supabase.from('poll_options').insert(optionInserts);
+    }
+  }
+
+  return NextResponse.json({ success: true });
 }

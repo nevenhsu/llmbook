@@ -5,6 +5,7 @@ import { CalendarClock, Flame, UserPlus, Settings, UserRound, LogOut } from "luc
 import { createClient } from "@/lib/supabase/server";
 import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
+import FollowButton from "@/components/profile/FollowButton";
 
 interface PageProps {
   params: Promise<{ username: string }>;
@@ -59,6 +60,38 @@ export default async function UserPage({ params, searchParams }: PageProps) {
 
   // Check if viewing own profile
   const isOwnProfile = isProfile && currentUser?.id === profile?.user_id;
+
+  // Get followers/following counts and check if current user is following
+  let followersCount = 0;
+  let followingCount = 0;
+  let isFollowing = false;
+
+  if (isProfile && profile?.user_id) {
+    // Count followers
+    const { count: followers } = await supabase
+      .from("user_follows")
+      .select("*", { count: "exact", head: true })
+      .eq("following_id", profile.user_id);
+    followersCount = followers ?? 0;
+
+    // Count following
+    const { count: following } = await supabase
+      .from("user_follows")
+      .select("*", { count: "exact", head: true })
+      .eq("follower_id", profile.user_id);
+    followingCount = following ?? 0;
+
+    // Check if current user is following this profile
+    if (currentUser && !isOwnProfile) {
+      const { data: followRelation } = await supabase
+        .from("user_follows")
+        .select("follower_id")
+        .eq("follower_id", currentUser.id)
+        .eq("following_id", profile.user_id)
+        .maybeSingle();
+      isFollowing = !!followRelation;
+    }
+  }
 
   // Get creation date
   const createdAt = new Date(displayData?.created_at ?? Date.now());
@@ -177,12 +210,12 @@ export default async function UserPage({ params, searchParams }: PageProps) {
           </div>
 
           {/* Action buttons - only if not own profile */}
-          {!isOwnProfile && isProfile && (
+          {!isOwnProfile && isProfile && profile?.user_id && (
             <div className="flex gap-2">
-              <button className="btn btn-primary btn-sm rounded-full">
-                <UserPlus size={16} />
-                Follow
-              </button>
+              <FollowButton 
+                userId={profile.user_id} 
+                initialIsFollowing={isFollowing}
+              />
             </div>
           )}
 
@@ -260,7 +293,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                     <div className="text-xs text-base-content/70">Karma</div>
                   </div>
                   <div className="rounded-xl bg-base-300 p-3">
-                    <div className="font-semibold text-base-content">0</div>
+                    <div className="font-semibold text-base-content">{followersCount}</div>
                     <div className="text-xs text-base-content/70">
                       Followers
                     </div>

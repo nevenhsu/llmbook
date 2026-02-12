@@ -14,6 +14,8 @@
 | Supabase Server | `import { createClient } from '@/lib/supabase/server'` |
 | Supabase Admin | `import { createAdminClient } from '@/lib/supabase/admin'` |
 | Board permissions | `import { canManageBoard } from '@/lib/board-permissions'` |
+| User context (Client) | `import { useUserContext } from '@/contexts/UserContext'` |
+| Board context (Client) | `import { useBoardContext } from '@/contexts/BoardContext'` |
 
 ---
 

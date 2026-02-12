@@ -22,6 +22,7 @@ interface PostActionsProps {
   authorId?: string;
   userId?: string;
   canModerate?: boolean;
+  status?: string;
   onShare?: () => void;
   onSave?: () => void;
   onHide?: () => void;
@@ -37,6 +38,7 @@ export default function PostActions({
   authorId,
   userId,
   canModerate = false,
+  status,
   onSave,
   onHide,
   onDelete,
@@ -47,6 +49,9 @@ export default function PostActions({
   const modalRef = useRef<HTMLDialogElement>(null);
 
   const isAuthor = authorId && userId && authorId === userId;
+  const canEdit = isAuthor && status !== 'ARCHIVED' && status !== 'DELETED';
+  const canDelete = isAuthor || canModerate;
+  const canArchive = canModerate;
 
   const handleCommentsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -102,25 +107,25 @@ export default function PostActions({
     }
   };
 
-  const handleRemove = async (e: React.MouseEvent) => {
+  const handleArchive = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const reason = prompt('Reason for removal (optional):');
+    const reason = prompt('Reason for archiving (optional):');
     if (reason === null) return; // User cancelled
 
     try {
       const res = await fetch(`/api/posts/${postId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ARCHIVED', removal_reason: reason }),
+        body: JSON.stringify({ status: 'ARCHIVED' }),
       });
 
-      if (!res.ok) throw new Error('Failed to remove post');
+      if (!res.ok) throw new Error('Failed to archive post');
 
       closeMoreMenu();
       router.refresh();
     } catch (err) {
-      console.error('Failed to remove post:', err);
-      alert('Failed to remove post');
+      console.error('Failed to archive post:', err);
+      alert('Failed to archive post');
     }
   };
 
@@ -180,35 +185,41 @@ export default function PostActions({
           <h3 className="font-bold text-lg mb-4">Post actions</h3>
           
           <div className="space-y-2">
-            {isAuthor && (
-              <>
-                <button
-                  onClick={handleEdit}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-base text-base-content hover:bg-base-200 rounded-lg transition-colors"
-                >
-                  <Edit size={20} />
-                  Edit post
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-base text-error hover:bg-base-200 rounded-lg transition-colors"
-                >
-                  <Trash2 size={20} />
-                  {isDeleting ? 'Deleting...' : 'Delete post'}
-                </button>
-              </>
-            )}
-            {canModerate && !isAuthor && (
+            {/* Edit - only owner and not archived/deleted */}
+            {canEdit && (
               <button
-                onClick={handleRemove}
+                onClick={handleEdit}
+                className="w-full flex items-center gap-3 px-4 py-3 text-base text-base-content hover:bg-base-200 rounded-lg transition-colors"
+              >
+                <Edit size={20} />
+                Edit post
+              </button>
+            )}
+            
+            {/* Delete - owner or moderator */}
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="w-full flex items-center gap-3 px-4 py-3 text-base text-error hover:bg-base-200 rounded-lg transition-colors"
+              >
+                <Trash2 size={20} />
+                {isDeleting ? 'Deleting...' : 'Delete post'}
+              </button>
+            )}
+            
+            {/* Archive - moderator only, not already archived/deleted */}
+            {canArchive && status === 'PUBLISHED' && (
+              <button
+                onClick={handleArchive}
                 className="w-full flex items-center gap-3 px-4 py-3 text-base text-warning hover:bg-base-200 rounded-lg transition-colors"
               >
                 <ShieldOff size={20} />
-                Remove (Moderator)
+                Archive post
               </button>
             )}
-            {!isAuthor && !canModerate && (
+            
+            {!canEdit && !canDelete && !canArchive && (
               <div className="px-4 py-3 text-base text-base-content/50 text-center">
                 No actions available
               </div>

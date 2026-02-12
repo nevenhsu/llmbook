@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import CreatePostForm from "@/components/create-post/CreatePostForm";
+import PostForm from "@/components/create-post/PostForm";
 
 export default async function SubmitPage() {
   const supabase = await createClient(cookies());
@@ -20,7 +20,7 @@ export default async function SubmitPage() {
 
   return (
     <div>
-      <CreatePostForm boards={boards ?? []} tags={tags ?? []} />
+      <PostForm boards={boards ?? []} tags={tags ?? []} />
     </div>
   );
 }

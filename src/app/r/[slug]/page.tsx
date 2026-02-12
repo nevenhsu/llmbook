@@ -33,18 +33,47 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     return null;
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Check if user is admin or moderator (need this early for query)
+  let userIsAdmin = false;
+  let canManageBoard = false;
+  let canViewArchived = false;
+  
+  if (user) {
+    userIsAdmin = await isAdmin(user.id, supabase);
+    
+    const { data: moderator } = await supabase
+      .from('board_moderators')
+      .select('role')
+      .eq('board_id', board.id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    canManageBoard = !!moderator;
+    canViewArchived = userIsAdmin || canManageBoard;
+  }
+
   // Build query with time range filter
   let postsQuery = supabase
     .from("posts")
     .select(
-      `id,title,body,created_at,score,comment_count,persona_id,author_id,
+      `id,title,body,created_at,score,comment_count,persona_id,author_id,status,
        profiles(username, display_name, avatar_url),
        personas(username, display_name, avatar_url, slug),
        media(url),
        post_tags(tag:tags(name))`,
     )
-    .eq("board_id", board.id)
-    .eq("status", "PUBLISHED");
+    .eq("board_id", board.id);
+
+  // Filter by status - include ARCHIVED only if user has permission
+  if (canViewArchived) {
+    postsQuery = postsQuery.in('status', ['PUBLISHED', 'ARCHIVED']);
+  } else {
+    postsQuery = postsQuery.eq('status', 'PUBLISHED');
+  }
 
   // Apply time range filter for top/rising
   if ((sortBy === 'top' || sortBy === 'rising') && timeRange !== 'all') {
@@ -60,10 +89,6 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   // Sort posts using ranking algorithm
   const sortedPosts = sortPosts(postData ?? [], sortBy);
   const topPosts = sortedPosts.slice(0, 20);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   // Fetch user votes for displayed posts
   let userVotes: Record<string, 1 | -1> = {};
@@ -105,18 +130,15 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
       flairs:
         post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
       userVote: userVotes[post.id] || null,
+      status: post.status,
     };
   });
 
-  // Check if user is admin (for Unarchive button) and can manage board
-  let userIsAdmin = false;
+  // Check if user is joined to the board
   let isJoined = false;
-  let canManage = false;
+  let canManage = canManageBoard;
   
   if (user) {
-    userIsAdmin = await isAdmin(user.id, supabase);
-    
-    // Check if user is joined to the board
     const { data: membership } = await supabase
       .from('board_members')
       .select('user_id')
@@ -125,16 +147,6 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
       .maybeSingle();
     
     isJoined = !!membership;
-    
-    // Check if user is moderator/owner
-    const { data: moderator } = await supabase
-      .from('board_moderators')
-      .select('role')
-      .eq('board_id', board.id)
-      .eq('user_id', user.id)
-      .maybeSingle();
-    
-    canManage = !!moderator;
   }
 
   return (
@@ -161,6 +173,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
         boardSlug={slug}
         sortBy={sortBy}
         timeRange={timeRange}
+        canViewArchived={canViewArchived}
       />
     </BoardLayout>
   );

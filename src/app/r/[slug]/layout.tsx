@@ -5,6 +5,8 @@ import BoardInfoCard from '@/components/board/BoardInfoCard';
 import BoardManageCard from '@/components/board/BoardManageCard';
 import BoardRulesCard from '@/components/board/BoardRulesCard';
 import BoardModeratorsCard from '@/components/board/BoardModeratorsCard';
+import { BoardProvider } from '@/contexts/BoardContext';
+import { isAdmin } from '@/lib/admin';
 
 interface BoardLayoutProps {
   children: React.ReactNode;
@@ -25,6 +27,15 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
 
   if (!board) {
     notFound();
+  }
+
+  // Check permissions
+  let userIsAdmin = false;
+  let isModerator = false;
+  let canModerate = false;
+
+  if (user) {
+    userIsAdmin = await isAdmin(user.id, supabase);
   }
 
   // Get membership status and moderators in parallel
@@ -61,7 +72,9 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
       profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles,
     }));
 
-    canOpenSettings = moderators.some((mod: any) => mod.user_id === user.id);
+    isModerator = moderators.some((mod: any) => mod.user_id === user.id);
+    canOpenSettings = isModerator;
+    canModerate = userIsAdmin || isModerator;
   } else {
     // If no user, still fetch moderators
     const { data: moderatorsResult } = await supabase
@@ -85,19 +98,28 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      {/* Main content area */}
-      <div className="flex-1 min-w-0">
-        {children}
-      </div>
+    <BoardProvider
+      value={{
+        boardId: board.id,
+        boardSlug: board.slug,
+        isModerator,
+        canModerate,
+      }}
+    >
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* Main content area */}
+        <div className="flex-1 min-w-0">
+          {children}
+        </div>
 
-      {/* Desktop Sidebar - shared across all board pages */}
-      <aside className="hidden lg:block w-[312px] space-y-4">
-        <BoardInfoCard board={board} isMember={isJoined} />
-        {canOpenSettings && <BoardManageCard slug={board.slug} />}
-        <BoardRulesCard rules={board.rules || []} />
-        <BoardModeratorsCard moderators={moderators} />
-      </aside>
-    </div>
+        {/* Desktop Sidebar - shared across all board pages */}
+        <aside className="hidden lg:block w-[312px] space-y-4">
+          <BoardInfoCard board={board} isMember={isJoined} />
+          {canOpenSettings && <BoardManageCard slug={board.slug} />}
+          <BoardRulesCard rules={board.rules || []} />
+          <BoardModeratorsCard moderators={moderators} />
+        </aside>
+      </div>
+    </BoardProvider>
   );
 }

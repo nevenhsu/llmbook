@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import Header from "@/components/layout/Header";
 import DrawerSidebar from "@/components/layout/DrawerSidebar";
 import { Toaster } from "react-hot-toast";
+import { UserProvider } from "@/contexts/UserContext";
+import { isAdmin } from "@/lib/admin";
 
 export const metadata = {
   title: "AI Persona Sandbox",
@@ -22,13 +24,19 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   let profile = null;
+  let userIsAdmin = false;
+
   if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("display_name, avatar_url, username, karma")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    profile = data;
+    const [profileResult, adminCheck] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name, avatar_url, username, karma")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      isAdmin(user.id, supabase),
+    ]);
+    profile = profileResult.data;
+    userIsAdmin = adminCheck;
   }
 
   const { data: boards } = await supabase
@@ -41,30 +49,38 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme="black">
       <body className="min-h-screen bg-base-100 text-base-content">
-        <Toaster position="top-center" />
-        <Header user={user} profile={profile} />
-        <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">
-          <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />
+        <UserProvider
+          value={{
+            user,
+            profile,
+            isAdmin: userIsAdmin,
+          }}
+        >
+          <Toaster position="top-center" />
+          <Header user={user} profile={profile} />
+          <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">
+            <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />
 
-          {/* Main content area */}
-          <div className="drawer-content flex flex-col">
-            <div className="mx-auto flex w-full max-w-[1400px] px-4 sm:px-8 lg:px-4 xl:px-12">
-              <main className="min-w-0 flex-1 py-4">{children}</main>
+            {/* Main content area */}
+            <div className="drawer-content flex flex-col">
+              <div className="mx-auto flex w-full max-w-[1400px] px-4 sm:px-8 lg:px-4 xl:px-12">
+                <main className="min-w-0 flex-1 py-4">{children}</main>
+              </div>
+            </div>
+
+            {/* Sidebar / Drawer */}
+            <div className="drawer-side z-[90] top-16 h-[calc(100vh-4rem)]">
+              <label
+                htmlFor="mobile-drawer"
+                aria-label="close sidebar"
+                className="drawer-overlay"
+              ></label>
+              <aside className="bg-base-200 h-full w-[270px] overflow-y-auto border-r border-neutral py-4">
+                <DrawerSidebar boards={boardsList} />
+              </aside>
             </div>
           </div>
-
-          {/* Sidebar / Drawer */}
-          <div className="drawer-side z-[90] top-16 h-[calc(100vh-4rem)]">
-            <label
-              htmlFor="mobile-drawer"
-              aria-label="close sidebar"
-              className="drawer-overlay"
-            ></label>
-            <aside className="bg-base-200 h-full w-[270px] overflow-y-auto border-r border-neutral py-4">
-              <DrawerSidebar boards={boardsList} />
-            </aside>
-          </div>
-        </div>
+        </UserProvider>
       </body>
     </html>
   );

@@ -26,6 +26,7 @@ interface PostRowProps {
   authorId?: string;
   userId?: string;
   canModerate?: boolean;
+  status?: string;
   onVote: (postId: string, value: 1 | -1) => void;
 }
 
@@ -48,6 +49,7 @@ export default function PostRow({
   authorId,
   userId,
   canModerate = false,
+  status,
   onVote,
 }: PostRowProps) {
   const router = useRouter();
@@ -117,6 +119,11 @@ export default function PostRow({
           <span className="text-md font-medium text-base-content line-clamp-1">
             {title}
           </span>
+          {status === 'ARCHIVED' && (
+            <span className="inline-flex items-center rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-warning border border-warning/30">
+              ARCHIVED
+            </span>
+          )}
           {flairs?.map((f) => (
             <Badge key={f} variant="flair">
               {f}
