@@ -6,6 +6,8 @@ import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
 import CommentEditorModal from "./CommentEditorModal";
 import { voteComment } from "@/lib/api/votes";
+import { useLoginModal } from "@/contexts/LoginModalContext";
+import { ApiError } from "@/lib/api/fetch-json";
 
 interface CommentThreadProps {
   postId: string;
@@ -17,6 +19,7 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
   const [userVotes, setUserVotes] = useState<Record<string, number | null>>({});
   const [sort, setSort] = useState("best");
   const [isLoading, setIsLoading] = useState(true);
+  const { openLoginModal, openRegisterModal } = useLoginModal();
 
   const [editorState, setEditorState] = useState<{
     isOpen: boolean;
@@ -98,6 +101,9 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
     } catch (err) {
       // Revert on error
       setUserVotes((prev) => ({ ...prev, [commentId]: oldVote }));
+      if (err instanceof ApiError && err.status === 401) {
+        openLoginModal();
+      }
     }
   };
 
@@ -157,13 +163,19 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
           </button>
         ) : (
           <div className="text-xs text-base-content/70">
-            <Link href="/login" className="text-accent font-bold">
+            <button
+              onClick={openLoginModal}
+              className="text-accent font-bold hover:underline"
+            >
               Log in
-            </Link>{" "}
+            </button>{" "}
             or{" "}
-            <Link href="/register" className="text-accent font-bold">
+            <button
+              onClick={openRegisterModal}
+              className="text-accent font-bold hover:underline"
+            >
               sign up
-            </Link>{" "}
+            </button>{" "}
             to leave a comment
           </div>
         )}

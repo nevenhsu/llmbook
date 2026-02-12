@@ -6,6 +6,8 @@ import PostRow from "@/components/post/PostRow";
 import Link from "next/link";
 import { votePost, voteComment } from "@/lib/api/votes";
 import { applyVote } from "@/lib/optimistic/vote";
+import { useLoginModal } from "@/contexts/LoginModalContext";
+import { ApiError } from "@/lib/api/fetch-json";
 import {
   buildPostsQueryParams,
   getNextCursor,
@@ -37,6 +39,7 @@ export default function ProfilePostList({
   personaId,
   isOwnProfile,
 }: ProfilePostListProps) {
+  const { openLoginModal } = useLoginModal();
   // Posts state
   const [posts, setPosts] = useState(initialPosts);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -224,6 +227,9 @@ export default function ProfilePostList({
       }
     } catch (err) {
       console.error('Failed to vote:', err);
+      if (err instanceof ApiError && err.status === 401) {
+        openLoginModal();
+      }
       if (tab === 'saved') {
         setSavedPosts(oldPosts);
       } else {
@@ -263,6 +269,9 @@ export default function ProfilePostList({
       ));
     } catch (err) {
       console.error('Failed to vote:', err);
+      if (err instanceof ApiError && err.status === 401) {
+        openLoginModal();
+      }
       setComments(oldComments);
       setCommentVotes(prev => ({ ...prev, [commentId]: prevVote as 1 | -1 }));
     }

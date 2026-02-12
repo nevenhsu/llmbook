@@ -6,7 +6,13 @@ import Link from "next/link";
 import { XCircle, CheckCircle } from "lucide-react";
 import UsernameInput from "@/components/ui/UsernameInput";
 
-export default function RegisterForm() {
+interface RegisterFormProps {
+  onSuccess?: () => void;
+  onClose?: () => void;
+  onSwitchToLogin?: () => void;
+}
+
+export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: RegisterFormProps) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -83,18 +89,27 @@ export default function RegisterForm() {
       // Success - user is registered
       setNotice(data.message || '註冊成功！');
       
-      // If needs manual login, redirect to login page
+      // If needs manual login, redirect to login page or switch to login modal
       if (data.needsManualLogin) {
         setTimeout(() => {
-          window.location.href = '/login';
+          if (onSuccess) {
+            onSuccess();
+            onSwitchToLogin?.();
+          } else {
+            window.location.href = '/login';
+          }
         }, 1500);
         return;
       }
       
-      // Auto-login successful, redirect to home
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
+      // Auto-login successful
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 500);
+      }
     } catch (err: any) {
       setError(err.message || "註冊時發生錯誤");
       setLoading(false);
@@ -187,9 +202,22 @@ export default function RegisterForm() {
       {/* Sign in link */}
       <div className="text-center">
         <span className="text-sm opacity-70">已經有帳號了？ </span>
-        <Link href="/login" className="link link-hover text-sm font-semibold">
-          登入
-        </Link>
+        {onSwitchToLogin ? (
+          <button 
+            onClick={onSwitchToLogin}
+            className="link link-hover text-sm font-semibold"
+          >
+            登入
+          </button>
+        ) : (
+          <Link 
+            href="/login" 
+            className="link link-hover text-sm font-semibold"
+            onClick={onClose}
+          >
+            登入
+          </Link>
+        )}
       </div>
     </form>
   );

@@ -2,22 +2,33 @@
 
 import { useState } from "react";
 import { UserPlus, UserMinus } from "lucide-react";
+import { useLoginModal } from "@/contexts/LoginModalContext";
+import { ApiError } from "@/lib/api/fetch-json";
 
 interface FollowButtonProps {
   userId: string;
   initialIsFollowing: boolean;
   onFollowChange?: (isFollowing: boolean) => void;
+  currentUserId?: string | null;
 }
 
 export default function FollowButton({
   userId,
   initialIsFollowing,
   onFollowChange,
+  currentUserId,
 }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [isLoading, setIsLoading] = useState(false);
+  const { openLoginModal } = useLoginModal();
 
   const handleToggleFollow = async () => {
+    // Check if user is logged in
+    if (!currentUserId) {
+      openLoginModal();
+      return;
+    }
+
     setIsLoading(true);
 
     // Optimistic update
@@ -35,7 +46,13 @@ export default function FollowButton({
         setIsFollowing(previousState);
         onFollowChange?.(previousState);
         const data = await response.json();
-        alert(data.error || "Failed to update follow status");
+        
+        // Show login modal on 401, otherwise show error
+        if (response.status === 401) {
+          openLoginModal();
+        } else {
+          alert(data.error || "Failed to update follow status");
+        }
       }
     } catch (error) {
       // Revert on error

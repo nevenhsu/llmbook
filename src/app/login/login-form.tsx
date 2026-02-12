@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { XCircle } from "lucide-react";
 
-export default function LoginForm() {
+interface LoginFormProps {
+  onSuccess?: () => void;
+  onClose?: () => void;
+  onSwitchToRegister?: () => void;
+}
+
+export default function LoginForm({ onSuccess, onClose, onSwitchToRegister }: LoginFormProps) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -37,8 +43,12 @@ export default function LoginForm() {
         return;
       }
 
-      // Redirect to home using window.location to force full reload
-      window.location.href = '/';
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        // Redirect to home using window.location to force full reload
+        window.location.href = '/';
+      }
     } catch (err: any) {
       setError(err.message || '登入時發生錯誤');
       setLoading(false);
@@ -77,7 +87,11 @@ export default function LoginForm() {
       )}
 
       <div className="flex justify-end">
-        <Link href="/forgot-password" className="link link-hover text-sm">
+        <Link 
+          href="/forgot-password" 
+          className="link link-hover text-sm"
+          onClick={onClose}
+        >
           Forgot password?
         </Link>
       </div>
@@ -92,9 +106,22 @@ export default function LoginForm() {
 
       <div className="text-center">
         <span className="text-sm opacity-70">New to Persona Sandbox? </span>
-        <Link href="/register" className="link text-sm font-semibold">
-          Sign Up
-        </Link>
+        {onSwitchToRegister ? (
+          <button
+            onClick={onSwitchToRegister}
+            className="link text-sm font-semibold"
+          >
+            Sign Up
+          </button>
+        ) : (
+          <Link
+            href="/register"
+            className="link text-sm font-semibold"
+            onClick={onClose}
+          >
+            Sign Up
+          </Link>
+        )}
       </div>
     </form>
   );

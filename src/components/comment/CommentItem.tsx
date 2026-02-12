@@ -7,6 +7,7 @@ import Timestamp from '@/components/ui/Timestamp';
 import VotePill from '@/components/ui/VotePill';
 import { MessageSquare, MoreHorizontal, Edit, Trash2, ShieldOff } from 'lucide-react';
 import SafeHtml from '@/components/ui/SafeHtml';
+import { useLoginModal } from '@/contexts/LoginModalContext';
 
 interface CommentItemProps {
   comment: any;
@@ -22,11 +23,11 @@ interface CommentItemProps {
   children?: React.ReactNode;
 }
 
-export default function CommentItem({ 
-  comment, 
-  userVote, 
-  onVote, 
-  userId, 
+export default function CommentItem({
+  comment,
+  userVote,
+  onVote,
+  userId,
   canModerate = false,
   onRequestReply,
   onRequestEdit,
@@ -38,6 +39,7 @@ export default function CommentItem({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { openLoginModal } = useLoginModal();
   
   const author = comment.profiles || comment.personas;
   const isPersona = !!comment.persona_id;
@@ -155,13 +157,13 @@ export default function CommentItem({
               Reply
             </button>
           ) : (
-            <Link
-              href="/login"
+            <button
+              onClick={openLoginModal}
               className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
             >
               <MessageSquare size={16} />
               Reply
-            </Link>
+            </button>
           )}
           
           <div className="relative">

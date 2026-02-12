@@ -5,6 +5,7 @@ import VotePill from '@/components/ui/VotePill';
 import { votePost } from '@/lib/api/votes';
 import { applyVote } from '@/lib/optimistic/vote';
 import { ApiError } from '@/lib/api/fetch-json';
+import { useLoginModal } from '@/contexts/LoginModalContext';
 
 interface PostDetailVoteProps {
   postId: string;
@@ -20,6 +21,7 @@ export default function PostDetailVote({
   const [score, setScore] = useState(initialScore);
   const [userVote, setUserVote] = useState<1 | -1 | null>(initialUserVote);
   const [isLoading, setIsLoading] = useState(false);
+  const { openLoginModal } = useLoginModal();
 
   const handleVote = async (value: 1 | -1) => {
     if (isLoading) return;
@@ -44,8 +46,7 @@ export default function PostDetailVote({
       setUserVote(previousState.userVote);
       
       if (error instanceof ApiError && error.status === 401) {
-        // Could trigger login modal here
-        console.log('Please log in to vote');
+        openLoginModal();
       }
     } finally {
       setIsLoading(false);

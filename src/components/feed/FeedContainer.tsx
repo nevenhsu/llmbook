@@ -5,6 +5,8 @@ import { Loader2 } from 'lucide-react';
 import PostRow from '@/components/post/PostRow';
 import { votePost } from '@/lib/api/votes';
 import { applyVote } from '@/lib/optimistic/vote';
+import { useLoginModal } from '@/contexts/LoginModalContext';
+import { ApiError } from '@/lib/api/fetch-json';
 import {
   buildPostsQueryParams,
   getNextCursor,
@@ -43,6 +45,7 @@ export default function FeedContainer({
   const [page, setPage] = useState(1);
   const [cursor, setCursor] = useState<string | undefined>(getNextCursor(initialPosts));
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const { openLoginModal } = useLoginModal();
 
   // Determine pagination mode
   const paginationMode = useMemo(
@@ -138,6 +141,9 @@ export default function FeedContainer({
       ));
     } catch (err) {
       console.error('Failed to vote:', err);
+      if (err instanceof ApiError && err.status === 401) {
+        openLoginModal();
+      }
       setPosts(oldPosts);
     }
   };

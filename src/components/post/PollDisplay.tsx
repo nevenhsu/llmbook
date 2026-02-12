@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useLoginModal } from '@/contexts/LoginModalContext';
 
 interface PollOption {
   id: string;
@@ -26,6 +27,7 @@ export default function PollDisplay({
   const [userVote, setUserVote] = useState<string | null>(initialUserVote);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { openLoginModal } = useLoginModal();
 
   useEffect(() => {
     // Fetch poll data if not provided
@@ -64,6 +66,10 @@ export default function PollDisplay({
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          openLoginModal();
+          return;
+        }
         const text = await res.text();
         throw new Error(text || 'Failed to vote');
       }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { XCircle, CheckCircle } from "lucide-react";
+import { X, XCircle, CheckCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
@@ -71,25 +71,30 @@ export default function ResetPasswordPage() {
 
   if (!validSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-100 px-4">
-        <div className="card w-full max-w-md bg-base-200 shadow-xl">
-          <div className="card-body">
-            <div role="alert" className="alert alert-warning">
-              <XCircle className="h-5 w-5 shrink-0" />
-              <div>
-                <h3 className="font-bold">無效的重設密碼連結</h3>
-                <div className="text-sm">請重新申請重設密碼，或檢查您的郵件連結是否已過期。</div>
-              </div>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="relative w-full max-w-[400px] rounded-2xl bg-base-100 p-10 md:p-14 shadow-2xl border border-neutral">
+          <button
+            onClick={() => router.push("/login")}
+            className="absolute top-4 right-4 text-base-content/60 hover:bg-base-300 rounded-full p-2 transition-colors"
+          >
+            <X size={24} />
+          </button>
+
+          <div role="alert" className="alert alert-warning">
+            <XCircle className="h-5 w-5 shrink-0" />
+            <div>
+              <h3 className="font-bold">無效的重設密碼連結</h3>
+              <div className="text-sm">請重新申請重設密碼，或檢查您的郵件連結是否已過期。</div>
             </div>
-            
-            <div className="mt-4 space-y-2">
-              <Link href="/forgot-password" className="btn btn-primary btn-block">
-                重新申請重設密碼
-              </Link>
-              <Link href="/login" className="btn btn-outline btn-block">
-                返回登入頁面
-              </Link>
-            </div>
+          </div>
+          
+          <div className="mt-6 space-y-2">
+            <Link href="/forgot-password" className="btn btn-primary btn-block">
+              重新申請重設密碼
+            </Link>
+            <Link href="/login" className="btn btn-outline btn-block">
+              返回登入頁面
+            </Link>
           </div>
         </div>
       </div>
@@ -98,15 +103,13 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-100 px-4">
-        <div className="card w-full max-w-md bg-base-200 shadow-xl">
-          <div className="card-body">
-            <div role="alert" className="alert alert-success">
-              <CheckCircle className="h-5 w-5 shrink-0" />
-              <div>
-                <h3 className="font-bold">密碼已成功更新</h3>
-                <div className="text-sm">正在跳轉到首頁...</div>
-              </div>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="relative w-full max-w-[400px] rounded-2xl bg-base-100 p-10 md:p-14 shadow-2xl border border-neutral">
+          <div role="alert" className="alert alert-success">
+            <CheckCircle className="h-5 w-5 shrink-0" />
+            <div>
+              <h3 className="font-bold">密碼已成功更新</h3>
+              <div className="text-sm">正在跳轉到首頁...</div>
             </div>
           </div>
         </div>
@@ -115,61 +118,62 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-base-100 px-4">
-      <div className="card w-full max-w-md bg-base-200 shadow-xl">
-        <div className="card-body">
-          <h2 className="card-title text-2xl font-bold mb-2">設定新密碼</h2>
-          <p className="text-sm text-base-content/70 mb-6">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-[400px] rounded-2xl bg-base-100 p-10 md:p-14 shadow-2xl border border-neutral">
+        <button
+          onClick={() => router.push("/login")}
+          className="absolute top-4 right-4 text-base-content/60 hover:bg-base-300 rounded-full p-2 transition-colors"
+        >
+          <X size={24} />
+        </button>
+
+        <div className="mb-6">
+          <h1 className="mb-2 text-2xl font-bold text-base-content">設定新密碼</h1>
+          <p className="text-xs text-base-content/80 leading-relaxed">
             請輸入您的新密碼。
           </p>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">新密碼</span>
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input input-bordered w-full"
-                placeholder="至少 6 個字元"
-                required
-                minLength={6}
-              />
-            </div>
-
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">確認新密碼</span>
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="input input-bordered w-full"
-                placeholder="再次輸入新密碼"
-                required
-                minLength={6}
-              />
-            </div>
-
-            {error && (
-              <div role="alert" className="alert alert-error">
-                <XCircle className="h-5 w-5 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary btn-block"
-            >
-              {loading ? "更新中..." : "更新密碼"}
-            </button>
-          </form>
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="form-control">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input input-bordered w-full"
+              placeholder="至少 6 個字元"
+              required
+              minLength={6}
+            />
+          </div>
+
+          <div className="form-control">
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="input input-bordered w-full"
+              placeholder="再次輸入新密碼"
+              required
+              minLength={6}
+            />
+          </div>
+
+          {error && (
+            <div role="alert" className="alert alert-error">
+              <XCircle className="h-5 w-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary btn-block"
+          >
+            {loading ? "更新中..." : "更新密碼"}
+          </button>
+        </form>
       </div>
     </div>
   );

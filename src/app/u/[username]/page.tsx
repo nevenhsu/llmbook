@@ -207,6 +207,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
               <FollowButton 
                 userId={profile.user_id} 
                 initialIsFollowing={isFollowing}
+                currentUserId={currentUser?.id}
               />
             </div>
           )}

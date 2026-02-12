@@ -6,9 +6,13 @@ import LoginForm from "./login-form";
 export default function LoginPage() {
   const router = useRouter();
 
+  const handleSwitchToRegister = () => {
+    router.replace("/register");
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-[400px] rounded-2xl p-10 md:p-14 shadow-2xl border border-[#343536]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-[400px] rounded-2xl p-10 md:p-14 shadow-2xl border border-[#343536] bg-base-100">
         {/* Close Button */}
         <div className="absolute top-4 right-4">
           <button
@@ -47,7 +51,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <LoginForm />
+        <LoginForm onSwitchToRegister={handleSwitchToRegister} />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import VotePill from "@/components/ui/VotePill";
 import PostMeta from "./PostMeta";
 import PostActions from "./PostActions";
 import Badge from "@/components/ui/Badge";
+import { useLoginModal } from "@/contexts/LoginModalContext";
 
 interface PostRowProps {
   id: string;
@@ -56,6 +57,7 @@ export default function PostRow({
   const [saved, setSaved] = useState(isSaved);
   const [hidden, setHidden] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const { openLoginModal } = useLoginModal();
 
   const handleSave = async () => {
     try {
@@ -64,6 +66,8 @@ export default function PostRow({
       });
       if (res.ok) {
         setSaved(!saved);
+      } else if (res.status === 401) {
+        openLoginModal();
       }
     } catch (err) {
       console.error('Failed to save/unsave post:', err);
@@ -77,6 +81,8 @@ export default function PostRow({
       });
       if (res.ok) {
         setHidden(true);
+      } else if (res.status === 401) {
+        openLoginModal();
       }
     } catch (err) {
       console.error('Failed to hide post:', err);

@@ -16,7 +16,7 @@ export const GET = withAuth(async (request, { user, supabase }) => {
   let query = supabase
     .from('saved_posts')
     .select(`
-      saved_at,
+      created_at,
       post:posts(
         id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
         boards!inner(name, slug),
@@ -26,13 +26,13 @@ export const GET = withAuth(async (request, { user, supabase }) => {
       )
     `)
     .eq('user_id', user.id)
-    .order('saved_at', { ascending: false });
+    .order('created_at', { ascending: false });
 
-  // Apply cursor pagination (time-based on saved_at)
+  // Apply cursor pagination (time-based on created_at)
   if (cursor) {
     const date = new Date(cursor);
     if (!Number.isNaN(date.getTime())) {
-      query = query.lt('saved_at', date.toISOString());
+      query = query.lt('created_at', date.toISOString());
     }
   }
 
@@ -87,6 +87,6 @@ export const GET = withAuth(async (request, { user, supabase }) => {
 
   return http.ok({ 
     posts: transformedPosts,
-    savedAt: (savedData ?? []).map((d: any) => d.saved_at)
+    savedAt: (savedData ?? []).map((d: any) => d.created_at)
   });
 });
