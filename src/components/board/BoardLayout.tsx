@@ -2,9 +2,8 @@
 
 import { ReactNode } from 'react';
 import Link from 'next/link';
-import { MoreVertical, Users, Settings } from 'lucide-react';
+import { MoreVertical, Users, Settings, Hash } from 'lucide-react';
 import { MemberCountProvider, useMemberCount } from './BoardMemberCount';
-import Avatar from '@/components/ui/Avatar';
 import MobileJoinButton from './MobileJoinButton';
 
 interface BoardLayoutProps {
@@ -13,7 +12,6 @@ interface BoardLayoutProps {
     slug: string;
     name: string;
     description?: string | null;
-    icon_url?: string | null;
     member_count: number;
     is_archived: boolean;
     rules?: any[];
@@ -28,11 +26,9 @@ export default function BoardLayout({ children, board, slug, isJoined, canManage
     <MemberCountProvider initialCount={board.member_count}>
       <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
         <div className="flex items-start gap-3 mb-3">
-          <Avatar
-            src={board.icon_url}
-            fallbackSeed={board.name}
-            size="lg"
-          />
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Hash size={24} className="text-primary" />
+          </div>
           <MemberCountDisplay slug={board.slug} />
           {canManage && (
             <div className="dropdown dropdown-end">

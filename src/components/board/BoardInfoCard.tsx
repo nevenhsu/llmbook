@@ -1,8 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
-import Avatar from '@/components/ui/Avatar';
+import { ChevronRight, Hash } from 'lucide-react';
 import JoinButton from './JoinButton';
 
 interface BoardInfoCardProps {
@@ -10,7 +9,6 @@ interface BoardInfoCardProps {
     slug: string;
     name: string;
     description?: string | null;
-    icon_url?: string | null;
     member_count: number;
     post_count: number;
     created_at: string;
@@ -28,11 +26,9 @@ export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
   return (
     <div className="card bg-base-100 rounded-box p-4 space-y-4">
       <div className="flex items-center gap-3">
-        <Avatar
-          src={board.icon_url}
-          fallbackSeed={board.name}
-          size="lg"
-        />
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <Hash size={24} className="text-primary" />
+        </div>
         <div className="flex-1 min-w-0">
           <h2 className="font-bold text-lg truncate">r/{board.slug}</h2>
         </div>

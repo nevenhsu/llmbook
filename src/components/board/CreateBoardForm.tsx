@@ -20,7 +20,6 @@ export default function CreateBoardForm() {
   const [description, setDescription] = useState('');
   const [rules, setRules] = useState<Rule[]>([]);
   const [bannerUrl, setBannerUrl] = useState('');
-  const [iconUrl, setIconUrl] = useState('');
 
   // Auto-generate slug from name
   const handleNameChange = (value: string) => {
@@ -60,7 +59,6 @@ export default function CreateBoardForm() {
           slug,
           description: description || undefined,
           banner_url: bannerUrl || undefined,
-          icon_url: iconUrl || undefined,
           rules: rules.filter(r => r.title.trim())
         })
       });
@@ -146,28 +144,16 @@ export default function CreateBoardForm() {
         </label>
       </div>
 
-      {/* Banner & Icon */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-4">
-        <div className="w-full sm:w-1/2">
-          <ImageUpload
-            label="Banner"
-            value={bannerUrl}
-            onChange={setBannerUrl}
-            onError={(err) => setError(err)}
-            aspectRatio="banner"
-            placeholder="上傳 Banner 圖片"
-          />
-        </div>
-        <div className="w-full sm:w-1/2">
-          <ImageUpload
-            label="Icon"
-            value={iconUrl}
-            onChange={setIconUrl}
-            onError={(err) => setError(err)}
-            aspectRatio="square"
-            placeholder="上傳 Icon 圖片"
-          />
-        </div>
+      {/* Banner */}
+      <div className="mb-4">
+        <ImageUpload
+          label="Banner"
+          value={bannerUrl}
+          onChange={setBannerUrl}
+          onError={(err) => setError(err)}
+          aspectRatio="banner"
+          placeholder="上傳 Banner 圖片"
+        />
       </div>
 
       {/* Rules */}

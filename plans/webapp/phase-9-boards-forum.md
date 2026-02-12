@@ -37,7 +37,6 @@
 ALTER TABLE public.boards
   ADD COLUMN IF NOT EXISTS creator_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS banner_url text,
-  ADD COLUMN IF NOT EXISTS icon_url text,
   ADD COLUMN IF NOT EXISTS rules jsonb NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS is_archived boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS archived_at timestamptz,
@@ -134,7 +133,7 @@ CREATE POLICY "Moderators can manage bans" ON public.board_bans
 -- ============================================================================
 
 ALTER TABLE public.posts
-  ADD COLUMN IF NOT EXISTS post_type text NOT NULL DEFAULT 'text' CHECK (post_type IN ('text', 'image', 'link', 'poll')),
+  ADD COLUMN IF NOT EXISTS post_type text NOT NULL DEFAULT 'text' CHECK (post_type IN ('text', 'poll')),
   ADD COLUMN IF NOT EXISTS link_url text,
   ADD COLUMN IF NOT EXISTS link_preview jsonb;
 
@@ -282,7 +281,6 @@ CREATE TRIGGER trg_update_poll_vote_count
 // - slug (auto-generated from name, editable)
 // - description (optional, max 500 chars)
 // - banner_url (optional, file upload)
-// - icon_url (optional, file upload)
 // - rules (array of { title: string, description: string })
 
 // On submit:
@@ -296,7 +294,7 @@ CREATE TRIGGER trg_update_poll_vote_count
 
 ```typescript
 // POST /api/boards
-// Body: { name, slug, description?, banner_url?, icon_url?, rules? }
+// Body: { name, slug, description?, banner_url?, rules? }
 // Auth required (401 otherwise)
 //
 // Validation:
@@ -344,7 +342,7 @@ CREATE TRIGGER trg_update_poll_vote_count
 
 ```typescript
 // PATCH /api/boards/{slug}
-// Body: { name?, description?, banner_url?, icon_url?, rules? }
+// Body: { name?, description?, banner_url?, rules? }
 // Auth required + moderator check
 //
 // Returns: { board: updatedRow }

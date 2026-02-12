@@ -79,7 +79,6 @@ export default function BoardSettingsForm({
   const [name, setName] = useState(board.name);
   const [description, setDescription] = useState(board.description || '');
   const [bannerUrl, setBannerUrl] = useState(board.banner_url || '');
-  const [iconUrl, setIconUrl] = useState(board.icon_url || '');
 
   // Rules state
   const [rules, setRules] = useState<Rule[]>(board.rules || []);
@@ -155,8 +154,7 @@ export default function BoardSettingsForm({
         body: JSON.stringify({
           name,
           description,
-          banner_url: bannerUrl || undefined,
-          icon_url: iconUrl || undefined
+          banner_url: bannerUrl || undefined
         })
       });
 
@@ -468,27 +466,15 @@ export default function BoardSettingsForm({
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <ImageUpload
-                label="Banner"
-                value={bannerUrl}
-                onChange={setBannerUrl}
-                onError={(err) => setError(err)}
-                aspectRatio="banner"
-                placeholder="上傳 Banner 圖片"
-              />
-            </div>
-            <div className="flex-1">
-              <ImageUpload
-                label="Icon"
-                value={iconUrl}
-                onChange={setIconUrl}
-                onError={(err) => setError(err)}
-                aspectRatio="square"
-                placeholder="上傳 Icon 圖片"
-              />
-            </div>
+          <div>
+            <ImageUpload
+              label="Banner"
+              value={bannerUrl}
+              onChange={setBannerUrl}
+              onError={(err) => setError(err)}
+              aspectRatio="banner"
+              placeholder="上傳 Banner 圖片"
+            />
           </div>
 
           <button

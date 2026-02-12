@@ -1,0 +1,189 @@
+"use client";
+
+import { useState, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
+import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
+
+interface CommentEditorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  postId: string;
+  parentId?: string;
+  initialContent?: string;
+  commentId?: string; // For edit mode
+  mode: 'create' | 'edit' | 'reply';
+  onSuccess?: (comment: any) => void;
+}
+
+export default function CommentEditorModal({
+  isOpen,
+  onClose,
+  postId,
+  parentId,
+  initialContent = '',
+  commentId,
+  mode,
+  onSuccess
+}: CommentEditorModalProps) {
+  const [content, setContent] = useState(initialContent);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    if (isOpen && dialogRef.current) {
+      dialogRef.current.showModal();
+      document.body.style.overflow = 'hidden';
+    } else if (dialogRef.current) {
+      dialogRef.current.close();
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setContent(initialContent);
+    setError('');
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    const trimmedContent = content.trim();
+    if (!trimmedContent) {
+      setError('Comment cannot be empty');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      if (mode === 'edit' && commentId) {
+        // Edit existing comment
+        const res = await fetch(`/api/comments/${commentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: content })
+        });
+
+        if (!res.ok) throw new Error('Failed to update comment');
+        const data = await res.json();
+        onSuccess?.(data.comment);
+      } else {
+        // Create new comment or reply
+        const res = await fetch(`/api/posts/${postId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: content,
+            parentId: parentId || undefined
+          })
+        });
+
+        if (!res.ok) throw new Error('Failed to post comment');
+        const data = await res.json();
+        onSuccess?.(data.comment);
+      }
+
+      // Reset and close
+      setContent('');
+      handleClose();
+
+      // Reload page if no success handler
+      if (!onSuccess) {
+        window.location.reload();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to save comment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getTitle = () => {
+    switch (mode) {
+      case 'edit':
+        return 'Edit Comment';
+      case 'reply':
+        return 'Reply to Comment';
+      default:
+        return 'Add a Comment';
+    }
+  };
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="modal"
+      onClose={handleClose}
+      onClick={(e) => {
+        // Close on backdrop click
+        if (e.target === dialogRef.current) {
+          handleClose();
+        }
+      }}
+    >
+      <div className="modal-box w-11/12 max-w-3xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-neutral sticky top-0 bg-base-100 z-10">
+          <h3 className="font-bold text-lg">{getTitle()}</h3>
+          <button
+            onClick={handleClose}
+            className="btn btn-sm btn-circle btn-ghost"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {error && (
+            <div className="alert alert-error mb-4">
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="min-h-[200px]">
+            <SimpleEditor
+              content={content}
+              onChange={setContent}
+              placeholder="What are your thoughts?"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 p-4 border-t border-neutral sticky bottom-0 bg-base-100">
+          <button
+            onClick={handleClose}
+            className="btn btn-ghost"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!content.trim() || isSubmitting}
+            className="btn btn-primary"
+          >
+            {isSubmitting ? (
+              <>
+                <span className="loading loading-spinner loading-sm"></span>
+                {mode === 'edit' ? 'Updating...' : 'Posting...'}
+              </>
+            ) : mode === 'edit' ? (
+              'Update'
+            ) : (
+              'Comment'
+            )}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}

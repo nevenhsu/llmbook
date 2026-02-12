@@ -28,8 +28,7 @@ interface InitialData {
   boardId: string;
   boardSlug: string;
   tagIds: string[];
-  postType: "TEXT" | "MEDIA" | "POLL";
-  media?: UploadedMedia[];
+  postType: "TEXT" | "POLL";
   pollOptions?: PollOption[];
   pollDuration?: string;
 }
@@ -49,7 +48,7 @@ interface UploadedMedia {
   sizeBytes: number;
 }
 
-type Tab = "text" | "media" | "poll";
+type Tab = "text" | "poll";
 
 export default function PostForm({ boards, tags, editMode = false, initialData }: Props) {
   const router = useRouter();
@@ -57,7 +56,6 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
   // Determine initial tab based on post type in edit mode
   const getInitialTab = (): Tab => {
     if (editMode && initialData) {
-      if (initialData.postType === "MEDIA") return "media";
       if (initialData.postType === "POLL") return "poll";
     }
     return "text";
@@ -70,7 +68,7 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
   const [boardId, setBoardId] = useState(initialData?.boardId || "");
   const [tagIds, setTagIds] = useState<string[]>(initialData?.tagIds || []);
   const [showTagSelector, setShowTagSelector] = useState(false);
-  const [media, setMedia] = useState<UploadedMedia[]>(initialData?.media || []);
+  // Media handling removed - use TipTap editor for images
   const [pollOptions, setPollOptions] = useState<string[]>(
     initialData?.pollOptions?.map(opt => opt.option_text) || ['', '']
   );
@@ -141,7 +139,6 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
         body,
         boardId,
         tagIds,
-        media,
         pollOptions,
         pollDuration,
         activeTab,
@@ -161,7 +158,6 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
     setBody(draft.body || '');
     setBoardId(draft.boardId || (boards.length > 0 ? boards[0].id : ''));
     setTagIds(draft.tagIds || []);
-    setMedia(draft.media || []);
     setPollOptions(draft.pollOptions || ['', '']);
     setPollDuration(draft.pollDuration || '3');
     setActiveTab(draft.activeTab || 'text');
@@ -235,16 +231,11 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
           title,
           boardId,
           tagIds,
-          postType: activeTab === 'poll' ? 'poll' : activeTab === 'media' ? 'image' : 'text'
+          postType: activeTab === 'poll' ? 'poll' : 'text'
         };
 
         if (activeTab === 'text') {
           postData.body = body;
-        }
-
-        if (activeTab === 'media') {
-          postData.mediaIds = media.map((m) => m.mediaId);
-          postData.body = body || '';
         }
 
         if (activeTab === 'poll') {
@@ -422,7 +413,6 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
         >
           {([
             { key: "text", label: "Text" },
-            { key: "media", label: "Images & Video" },
             { key: "poll", label: "Poll" },
           ] as const).map((tab) => (
             <button
@@ -579,52 +569,6 @@ export default function PostForm({ boards, tags, editMode = false, initialData }
                 onChange={setBody}
                 placeholder="Body text (optional)"
               />
-            )}
-
-            {activeTab === "media" && (
-              <div className="flex h-40 sm:h-64 w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-neutral bg-base-100 p-4 text-center">
-                <p className="mb-2 text-base-content">
-                  Drag and drop images or
-                </p>
-                <label className="cursor-pointer px-6 py-2 rounded-full border  text-base-content text-sm font-bold hover:bg-base-300 transition-colors">
-                  Upload
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    multiple
-                    onChange={async (e) => {
-                      if (e.target.files) {
-                        const files = Array.from(e.target.files);
-                        for (const file of files) {
-                          try {
-                            const uploaded = await uploadFile(file);
-                            setMedia((prev) => [...prev, uploaded]);
-                          } catch (err) {
-                            console.error(err);
-                            setError("Failed to upload image");
-                          }
-                        }
-                      }
-                    }}
-                  />
-                </label>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {media.map((m) => (
-                    <div
-                      key={m.mediaId}
-                      className="relative h-16 w-16 overflow-hidden rounded bg-base-300"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={m.url}
-                        alt="Uploaded"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
 
             {activeTab === "poll" && (

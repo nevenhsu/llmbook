@@ -874,3 +874,146 @@
 | 33 | P3-3 | 權限檢查修正 |
 | 34 | P3-4 | 搜尋 People 連結 |
 | 35 | P3-5 | 通知即時更新 |
+
+---
+
+## P4 — 架構改善（TipTap 整合）
+
+> 基於使用者要求，整合 TipTap 編輯器到貼文和留言系統，移除獨立的 Media post type
+
+### P4-1: 移除 Media Post Type，整合到 TipTap ✅
+
+**狀態：** 已完成（2026-02-12）
+
+**目標：**
+- 移除 `post_type = 'image'`，只保留 `'text'` 和 `'poll'`
+- 所有圖片和連結透過 TipTap 編輯器處理
+- CreatePostForm 移除 Media 分頁
+
+**實作內容：**
+1. ✅ Migration: 更新 `posts.post_type` CHECK constraint（移除 'image', 'link'）
+2. ✅ 更新 PostForm: 移除 Media tab
+3. ✅ 更新 schema.sql: 更新 post_type constraint
+4. ✅ Migration 會自動清理現有資料: 將 post_type = 'image'/'link' 改為 'text'
+
+**相關檔案：**
+- `supabase/migrations/20260212_remove_media_post_type.sql`（新建）
+- `src/components/create-post/PostForm.tsx`
+- `src/app/api/posts/route.ts`
+
+---
+
+### P4-2: Comment 編輯器改用 TipTap（Modal 模式）🔄
+
+**狀態：** 進行中（2026-02-12）
+
+**目標：**
+- 留言輸入使用 TipTap 編輯器（支援 link & media）
+- 桌面版和手機版都使用 Modal 顯示編輯器
+- 留言渲染支援 TipTap HTML 格式（圖片、連結、格式化）
+
+**實作內容：**
+1. ✅ 建立 `CommentEditorModal.tsx`
+   - 使用 TipTap Simple Editor（與 PostForm 一致）
+   - 支援連結插入（Link extension）
+   - 支援圖片上傳（Image extension + upload handler）
+   - Modal 模式（DaisyUI dialog）
+   - 取消/送出按鈕
+   - 支援三種模式：create / edit / reply
+2. ⏳ 更新 `CommentItem.tsx`
+   - 「Reply」按鈕打開 Modal
+   - 「Edit」按鈕打開 Modal（預填原內容）
+3. ⏳ 更新 `CommentThread.tsx`
+   - 頂層「Add a comment」打開 Modal
+4. ⏳ 更新 `CommentItem.tsx` 渲染邏輯
+   - 支援渲染 TipTap HTML 格式
+   - 使用 SafeHtml（DOMPurify）
+   - 支援圖片顯示
+   - 支援連結點擊
+5. ⏳ 更新 API
+   - `POST /api/posts/[id]/comments` 接收 HTML body
+   - `PATCH /api/comments/[id]` 接收 HTML body
+
+**UX Flow:**
+```
+使用者點擊「Reply」或「Add a comment」
+  ↓
+打開全螢幕 Modal（手機）或居中 Modal（桌面）
+  ↓
+TipTap 編輯器（支援文字、連結、圖片）
+  ↓
+點擊「Cancel」關閉 Modal
+  ↓
+點擊「Comment」送出
+  ↓
+POST /api/posts/[id]/comments { body: "<p>...</p>" }
+  ↓
+關閉 Modal，重新載入留言區
+```
+
+**相關檔案：**
+- `src/components/comment/CommentEditorModal.tsx`（新建）
+- `src/components/comment/CommentItem.tsx`
+- `src/components/comment/CommentThread.tsx`
+- `src/app/api/posts/[id]/comments/route.ts`
+- `src/app/api/comments/[id]/route.ts`
+
+**設計考量：**
+- TipTap 設定與 PostForm 一致（相同 extensions）
+- 圖片上傳限制：5MB，自動壓縮為 WebP
+- Modal 設計：手機全螢幕，桌面 max-w-2xl
+- 留言排序功能保留（Best / Top / New / Old）
+
+---
+
+### P4-3: 移除 Board Icon ✅
+
+**狀態：** 已完成（2026-02-12）
+
+**目標：**
+- Board 只保留 banner，移除 icon
+- Board avatar 改用簡單的 icon（Avatar fallback）
+
+**實作內容：**
+1. ✅ Migration: 移除 `boards.icon_url` 欄位
+2. ✅ 更新 BoardSettingsForm: 移除 icon 上傳欄位
+3. ✅ 更新 BoardInfoCard: 移除 icon 顯示，使用 Avatar fallbackSeed
+4. ✅ 更新 BoardLayout: 移除 icon_url
+5. ✅ 更新 CreateBoardForm: 移除 icon 上傳欄位
+6. ✅ 更新 schema.sql: 移除 icon_url 欄位
+
+**相關檔案：**
+- `supabase/migrations/20260212_remove_board_icon.sql`（新建）
+- `src/components/board/BoardSettingsForm.tsx`
+- `src/components/board/BoardInfoCard.tsx`
+- `src/app/api/boards/route.ts`
+- `src/app/api/boards/[slug]/route.ts`
+
+---
+
+### P4-4: 移除 Upvote/Downvote 自訂色彩 ✅
+
+**狀態：** 已完成（2026-02-12）
+
+**目標：**
+- 移除 `upvote` (#FF4500) 和 `downvote` (#7193FF) 色彩定義
+- 改用 DaisyUI 標準色彩系統
+
+**實作內容：**
+1. ✅ 確認投票元件已使用 DaisyUI 標準色彩
+   - VotePill: 使用 `text-success` / `text-error`
+   - PostDetailVote: 使用 DaisyUI 色彩
+   - CommentItem: 使用 DaisyUI 色彩
+2. ✅ 無需修改 tailwind.config.ts（globals.css 的 primary 色彩用於其他用途）
+
+**色彩對應：**
+- Upvote: `text-success`
+- Downvote: `text-error`
+
+**相關檔案：**
+- `tailwind.config.ts`
+- `src/components/ui/VotePill.tsx`
+- `src/components/post/PostDetailVote.tsx`
+- `src/components/comment/CommentItem.tsx`
+
+---

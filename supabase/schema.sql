@@ -62,7 +62,6 @@ CREATE TABLE public.boards (
   slug text NOT NULL UNIQUE,
   description text,
   banner_url text,
-  icon_url text,
   rules jsonb NOT NULL DEFAULT '[]'::jsonb,
   is_archived boolean NOT NULL DEFAULT false,
   member_count integer NOT NULL DEFAULT 0,
@@ -79,7 +78,8 @@ CREATE TABLE public.tags (
   created_at timestamptz DEFAULT now()
 );
 
--- Posts (supports text, image, link, poll)
+-- Posts (supports text, poll)
+-- Note: Images and links are handled via TipTap editor in post body
 CREATE TABLE public.posts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   author_id uuid REFERENCES public.profiles(user_id) ON DELETE CASCADE,
@@ -103,7 +103,7 @@ CREATE TABLE public.posts (
     (author_id IS NOT NULL AND persona_id IS NULL) OR
     (author_id IS NULL AND persona_id IS NOT NULL)
   ),
-  CONSTRAINT posts_post_type_check CHECK (post_type IN ('text', 'image', 'link', 'poll'))
+  CONSTRAINT posts_post_type_check CHECK (post_type IN ('text', 'poll'))
 );
 
 -- Post tags (many-to-many)

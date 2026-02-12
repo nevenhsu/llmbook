@@ -24,7 +24,9 @@ API routes: use NextResponse, export `runtime = 'nodejs'` when using sharp
 Supabase queries: use `.select()` with explicit column lists, `.eq()` for filters
 DaisyUI: Use semantic classes (bg-base-100, text-base-content, btn-primary) for standard components.
 Color palette: bg-base-200 (=#030303), surface-base-100 (=#1A1A1B), highlight-base-300 (=#272729), text-base-content (=#D7DADC)
-Accent: upvote=primary (#FF4500), downvote=secondary (#7193FF), link=accent (#4FBCFF)
+Accent: link=accent (#4FBCFF)
+Post types: 'text' (TipTap editor with link & media support), 'poll'
+Comments: Use TipTap editor (support link & media), render as sanitized HTML
 Immutability: NEVER mutate objects, always spread to create new
 Files: max 800 lines, prefer many small files
 Functions: max 50 lines
@@ -46,8 +48,6 @@ HTML rendering: ALWAYS sanitize with DOMPurify before using dangerouslySetInnerH
 | `surface` (#1A1A1B)      | `--color-base-100`     | `bg-base-100`       |
 | `highlight` (#272729)    | `--color-base-300`     | `bg-base-300`       |
 | `text-primary` (#D7DADC) | `--color-base-content` | `text-base-content` |
-| `upvote` (#FF4500)       | `--color-primary`      | `bg-primary`        |
-| `downvote` (#7193FF)     | `--color-secondary`    | `bg-secondary`      |
 | `accent-link` (#4FBCFF)  | `--color-accent`       | `text-accent`       |
 
 ### Existing Files Reference
