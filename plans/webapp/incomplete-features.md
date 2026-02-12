@@ -12,7 +12,7 @@
 
 **最後更新：** 2026-02-12
 
-### ✅ 已完成 (28/35)
+### ✅ 已完成 (32/35)
 
 **第一階段：Admin 基礎設施**
 - **PA-1**: 建立 admin_users 資料表 ✅
@@ -53,15 +53,25 @@
 - **P1-18**: Forgot Password 功能 ✅
 - **P2-8**: Tag 頁面改善（使用 PostRow 元件）✅
 
-### ⏹️ 已取消 (3/35)
+**第六階段：CreatePostForm 功能補完 (2026-02-12)**
+- **P1-14**: Link 分頁移除（改用 TipTap 連結功能）✅
+- **P1-15**: Poll duration 選擇器送出 ✅
+- **P1-12**: Add tags 按鈕功能 ✅
+- **P1-13**: 草稿功能 (localStorage) ✅
+
+### ⏹️ 已取消 (4/36)
 
 - **P0-2**: 通知封存頁面（不需要）
 - **P1-10**: 個人頁面 Hidden 分頁（用戶要求移除）
+- **P1-14**: Link 分頁（改用 TipTap 編輯器的連結功能）✅
 - **P1-16**: 搜尋結果中的「Join」按鈕（使用者可直接點擊社群名稱進入）
 
-### ⏳ 待處理 (6/35)
+### ⏳ 待處理 (7/36)
 
 詳見下方各分類任務列表
+
+**新增任務：**
+- **P1-20**: Post Edit 頁面（需建立）
 
 ---
 
@@ -435,74 +445,69 @@
 
 ---
 
-### P1-12: CreatePostForm「Add tags」按鈕沒有功能
+### P1-12: CreatePostForm「Add tags」按鈕沒有功能 ✅
 
-**現狀：**
-- 發文表單有一個「Add tags」按鈕，沒有 `onClick`
-- State 中有 `tagIds` 陣列，但沒有任何 UI 可以填入值
-- 標籤選擇功能完全不存在
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 點擊「Add tags」打開標籤選擇器（下拉或 modal）
-- 從 `/api/tags` 取得可用標籤列表
-- 已選標籤顯示為 badge，可移除
-- 送出貼文時將 `tagIds` 一起送出
+**實作內容：**
+- ✅ 點擊「Add tags」打開下拉選擇器
+- ✅ 顯示所有可用標籤，支援多選
+- ✅ 已選標籤顯示為 badge，可點擊 X 移除
+- ✅ 標籤資料從 props 傳入（CreatePost 頁面已查詢）
+- ✅ 送出貼文時包含 `tagIds` 陣列
 
 **相關檔案：**
-- `src/components/create-post/CreatePostForm.tsx`
-- `src/app/api/tags/route.ts`（已完成）
+- `src/components/create-post/CreatePostForm.tsx` (新增標籤選擇器 UI)
 
 ---
 
-### P1-13: CreatePostForm「Save Draft」與「Drafts」按鈕沒有功能
+### P1-13: CreatePostForm「Save Draft」與「Drafts」按鈕沒有功能 ✅
 
-**現狀：**
-- 「Save Draft」按鈕沒有 `onClick`
-- Header 區域有一個「Drafts」按鈕也沒有 `onClick`
-- 沒有草稿相關的 API 或資料表
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 「Save Draft」將目前表單內容儲存到後端或 localStorage
-- 「Drafts」打開草稿列表，可以載入之前的草稿
-- 需要決定儲存方式：localStorage（簡單）或後端資料表（完整）
+**實作內容：**
+- ✅ 使用 localStorage 儲存草稿（key: `post-drafts`）
+- ✅ 「Save Draft」按鈕儲存當前表單狀態
+- ✅ 「Drafts」按鈕打開下拉列表，顯示所有草稿（最多 10 個）
+- ✅ 點擊草稿可載入內容
+- ✅ 草稿可刪除
+- ✅ 草稿包含：title, body, boardId, tagIds, media, pollOptions, pollDuration, activeTab
 
 **相關檔案：**
-- `src/components/create-post/CreatePostForm.tsx`
-
-**需要新建的（如果用後端方案）：**
-- 資料表：`post_drafts`
-- API：`/api/drafts`
+- `src/components/create-post/CreatePostForm.tsx` (新增草稿功能)
 
 ---
 
-### P1-14: CreatePostForm「Link」分頁的 URL 輸入未綁定 state
+### P1-14: CreatePostForm「Link」分頁的 URL 輸入未綁定 state ⏹️
 
-**現狀：**
-- Link 分頁有一個 URL input，但沒有 `value` 和 `onChange`
-- `handleSubmit` 會送出 `postType: 'link'` 但不會帶上 `linkUrl`
-- 後端 API 驗證 link post 需要 `linkUrl`，所以 Link 類型的貼文必定失敗
+**狀態：** 已取消（2026-02-12）
 
-**期望行為：**
-- URL input 綁定到 state
-- 送出時包含 `linkUrl` 欄位
-- 可以考慮加入 URL 預覽（Open Graph preview）
+**原因：** 
+- TipTap 編輯器已內建連結功能（使用 `@tiptap/extension-link`）
+- Link 分頁已從 CreatePostForm 移除
+- 使用者可在 Text 和 Media 貼文的 body 中插入連結
 
 **相關檔案：**
-- `src/components/create-post/CreatePostForm.tsx`
-- `src/app/api/posts/route.ts`
+- `src/components/tiptap-templates/simple/simple-editor.tsx` (已有連結功能)
 
 ---
 
-### P1-15: CreatePostForm Poll 的 duration 選擇器沒有送出
+### P1-15: CreatePostForm Poll 的 duration 選擇器沒有送出 ✅
 
-**現狀：**
-- Poll 分頁有 duration selector，`pollDuration` state 存在
-- 但 `handleSubmit` 沒有將 duration 送到 API
-- 後端也沒有處理 poll duration 的邏輯
+**狀態：** 已完成（2026-02-12）
 
-**期望行為：**
-- 送出 poll 時包含 duration
-- 後端根據 duration 計算 `expires_at` 並存入 `poll_options` 或 `posts` 表
+**實作內容：**
+- ✅ 前端送出 `pollDuration` 參數（1/3/7 天）
+- ✅ 後端計算 `expires_at` 時間戳記（當前時間 + duration 天數）
+- ✅ 儲存到 `posts.expires_at` 欄位
+- ✅ 建立 migration 新增 `expires_at` 欄位
+- ✅ 更新 `schema.sql`
+
+**相關檔案：**
+- `src/components/create-post/CreatePostForm.tsx` (送出 pollDuration)
+- `src/app/api/posts/route.ts` (計算並儲存 expires_at)
+- `supabase/migrations/20260212_add_link_text_and_poll_expires.sql` (新建)
+- `supabase/schema.sql` (更新)
 - 前端 `PollDisplay` 根據 `expires_at` 判斷是否已過期
 
 **相關檔案：**
@@ -543,20 +548,46 @@
 
 ---
 
-### P1-19: UserMenu「Display Mode」按鈕沒有功能
+### P1-19: UserMenu「Display Mode」按鈕沒有功能 ✅
+
+**狀態：** 已完成（先前完成）
+
+---
+
+### P1-20: Post Edit 頁面（需建立）
 
 **現狀：**
-- UserMenu 下拉選單有「Display Mode」按鈕，沒有 `onClick`
-- `ThemeToggle` 元件已經存在且功能完整（讀寫 localStorage、切換 `data-theme`）
-- 但 `ThemeToggle` 沒有被整合到任何地方
+- Post edit 功能完全不存在
+- PostActions 的 "Edit" 選項會導向 `/r/[slug]/posts/[id]/edit`，但該路由不存在
+- 沒有編輯貼文的 UI 和 API 整合
 
 **期望行為：**
-- 將「Display Mode」按鈕替換為 `ThemeToggle` 元件
-- 或讓按鈕呼叫相同的主題切換邏輯
+- 建立 `/app/r/[slug]/posts/[id]/edit/page.tsx` 頁面
+- 只有作者可以編輯（需權限檢查）
+- 共用 `CreatePostForm` 元件（或建立類似的 `EditPostForm`）
+- 共用 TipTap 編輯器（`SimpleEditor`）
+- 支援草稿功能（localStorage，與 CreatePost 分開儲存）
+- 預載現有貼文內容（title, body, tags, media, poll options）
+- 更新時呼叫 `PATCH /api/posts/[id]`
+
+**實作要點：**
+1. **權限檢查**：只有貼文作者可以編輯
+2. **草稿儲存**：使用 localStorage，key 為 `post-edit-draft-{postId}`
+3. **共用元件**：盡量重用 `CreatePostForm` 的邏輯和 UI
+4. **資料預載**：
+   - 從 API 取得現有貼文資料
+   - 填入表單欄位（title, body, boardId, tagIds, media, pollOptions）
+   - 不可更改 board（已發布的貼文不能換社群）
+5. **Poll 限制**：已發布的 poll 不可編輯選項（只能編輯 title/body）
 
 **相關檔案：**
-- `src/components/layout/UserMenu.tsx`
-- `src/components/ui/ThemeToggle.tsx`（已完成，直接使用）
+- `src/app/r/[slug]/posts/[id]/edit/page.tsx`（需建立）
+- `src/components/create-post/CreatePostForm.tsx`（可重用邏輯）
+- `src/app/api/posts/[id]/route.ts`（PATCH handler 已存在）
+- `src/components/post/PostActions.tsx`（Edit 按鈕已有導向邏輯）
+
+**API 需求：**
+- `PATCH /api/posts/[id]` - 已存在，但需確認支援所有欄位更新
 
 ---
 

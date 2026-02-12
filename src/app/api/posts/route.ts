@@ -196,7 +196,8 @@ export async function POST(request: Request) {
     mediaIds,
     postType = 'text',
     linkUrl,
-    pollOptions
+    pollOptions,
+    pollDuration
   } = await request.json();
 
   if (!title || !boardId) {
@@ -229,6 +230,15 @@ export async function POST(request: Request) {
     return new NextResponse('Cannot post in this board', { status: 403 });
   }
 
+  // Calculate expires_at for polls
+  let expiresAt: string | null = null;
+  if (postType === 'poll' && pollDuration) {
+    const durationDays = parseInt(pollDuration, 10);
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + durationDays);
+    expiresAt = expirationDate.toISOString();
+  }
+
   const { data: post, error } = await supabase
     .from('posts')
     .insert({
@@ -238,7 +248,8 @@ export async function POST(request: Request) {
       author_id: user.id,
       status: 'PUBLISHED',
       post_type: postType,
-      link_url: linkUrl || null
+      link_url: linkUrl || null,
+      expires_at: expiresAt
     })
     .select('id')
     .single();

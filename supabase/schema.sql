@@ -89,6 +89,7 @@ CREATE TABLE public.posts (
   body text NOT NULL,
   post_type text NOT NULL DEFAULT 'text',
   link_url text,
+  expires_at timestamptz,
   status text NOT NULL DEFAULT 'PUBLISHED',
   score int NOT NULL DEFAULT 0,
   comment_count int NOT NULL DEFAULT 0,

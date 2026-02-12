@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 
@@ -28,7 +28,7 @@ interface UploadedMedia {
   sizeBytes: number;
 }
 
-type Tab = "text" | "media" | "link" | "poll";
+type Tab = "text" | "media" | "poll";
 
 export default function CreatePostForm({ boards, tags }: Props) {
   const router = useRouter();
@@ -38,15 +38,70 @@ export default function CreatePostForm({ boards, tags }: Props) {
   const [body, setBody] = useState("");
   const [boardId, setBoardId] = useState("");
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [showTagSelector, setShowTagSelector] = useState(false);
   const [media, setMedia] = useState<UploadedMedia[]>([]);
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [pollDuration, setPollDuration] = useState('3');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [drafts, setDrafts] = useState<any[]>([]);
 
   // Initialize boardId when boards are available
   if (!boardId && boards.length > 0) {
     setBoardId(boards[0].id);
+  }
+
+  // Load drafts from localStorage on mount
+  useEffect(() => {
+    const savedDrafts = localStorage.getItem('post-drafts');
+    if (savedDrafts) {
+      try {
+        setDrafts(JSON.parse(savedDrafts));
+      } catch (e) {
+        console.error('Failed to parse drafts:', e);
+      }
+    }
+  }, []);
+
+  function saveDraft() {
+    const draft = {
+      id: Date.now().toString(),
+      title,
+      body,
+      boardId,
+      tagIds,
+      media,
+      pollOptions,
+      pollDuration,
+      activeTab,
+      savedAt: new Date().toISOString(),
+    };
+
+    const existingDrafts = drafts;
+    const newDrafts = [draft, ...existingDrafts].slice(0, 10); // Keep max 10 drafts
+    setDrafts(newDrafts);
+    localStorage.setItem('post-drafts', JSON.stringify(newDrafts));
+    alert('Draft saved!');
+  }
+
+  function loadDraft(draft: any) {
+    setTitle(draft.title || '');
+    setBody(draft.body || '');
+    setBoardId(draft.boardId || (boards.length > 0 ? boards[0].id : ''));
+    setTagIds(draft.tagIds || []);
+    setMedia(draft.media || []);
+    setPollOptions(draft.pollOptions || ['', '']);
+    setPollDuration(draft.pollDuration || '3');
+    setActiveTab(draft.activeTab || 'text');
+    setShowDrafts(false);
+    alert('Draft loaded!');
+  }
+
+  function deleteDraft(draftId: string) {
+    const newDrafts = drafts.filter((d) => d.id !== draftId);
+    setDrafts(newDrafts);
+    localStorage.setItem('post-drafts', JSON.stringify(newDrafts));
   }
 
   async function uploadFile(file: File) {
@@ -75,7 +130,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
         title,
         boardId,
         tagIds,
-        postType: activeTab === 'poll' ? 'poll' : activeTab === 'link' ? 'link' : activeTab === 'media' ? 'image' : 'text'
+        postType: activeTab === 'poll' ? 'poll' : activeTab === 'media' ? 'image' : 'text'
       };
 
       if (activeTab === 'text') {
@@ -93,6 +148,7 @@ export default function CreatePostForm({ boards, tags }: Props) {
           throw new Error('Poll must have at least 2 options');
         }
         postData.pollOptions = validOptions.map(text => ({ text }));
+        postData.pollDuration = parseInt(pollDuration, 10);
       }
 
       const res = await fetch("/api/posts", {
@@ -124,9 +180,69 @@ export default function CreatePostForm({ boards, tags }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold text-base-content">Create post</h1>
-        <button className="text-xs font-bold text-base-content uppercase tracking-wider">
-          Drafts
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowDrafts(!showDrafts)}
+            className="text-xs font-bold text-base-content uppercase tracking-wider hover:hover:bg-base-300 px-3 py-1.5 rounded transition-colors"
+          >
+            Drafts {drafts.length > 0 && `(${drafts.length})`}
+          </button>
+
+          {/* Drafts dropdown */}
+          {showDrafts && (
+            <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto rounded-md border border-neutral bg-base-100 shadow-xl z-50">
+              {drafts.length === 0 ? (
+                <p className="text-sm text-base-content/50 p-4">No drafts saved</p>
+              ) : (
+                <div className="p-2">
+                  {drafts.map((draft) => (
+                    <div
+                      key={draft.id}
+                      className="p-3 rounded hover:hover:bg-base-300 border-b border-neutral last:border-0 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => loadDraft(draft)}
+                          className="flex-1 text-left"
+                        >
+                          <p className="font-bold text-sm text-base-content line-clamp-1">
+                            {draft.title || 'Untitled draft'}
+                          </p>
+                          <p className="text-xs text-base-content/50 mt-1">
+                            {new Date(draft.savedAt).toLocaleString()}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteDraft(draft.id)}
+                          className="p-1 hover:hover:bg-error/20 rounded text-error transition-colors"
+                          title="Delete draft"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Community Selector */}
@@ -188,7 +304,6 @@ export default function CreatePostForm({ boards, tags }: Props) {
           {([
             { key: "text", label: "Text" },
             { key: "media", label: "Images & Video" },
-            { key: "link", label: "Link" },
             { key: "poll", label: "Poll" },
           ] as const).map((tab) => (
             <button
@@ -230,11 +345,110 @@ export default function CreatePostForm({ boards, tags }: Props) {
             </div>
           </div>
 
-          {/* Tags Placeholder */}
-          <div>
-            <button className="px-4 py-1 text-xs font-bold rounded-full bg-base-300 text-base-content/70 hover:text-base-content transition-colors">
-              Add tags
-            </button>
+          {/* Tags */}
+          <div className="space-y-2">
+            {/* Selected tags */}
+            {tagIds.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {tagIds.map((tagId) => {
+                  const tag = tags.find((t) => t.id === tagId);
+                  return tag ? (
+                    <div
+                      key={tagId}
+                      className="flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary"
+                    >
+                      {tag.name}
+                      <button
+                        type="button"
+                        onClick={() => setTagIds(tagIds.filter((id) => id !== tagId))}
+                        className="hover:hover:bg-primary/30 rounded-full p-0.5 transition-colors"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-3 w-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            )}
+            
+            {/* Add tags button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTagSelector(!showTagSelector)}
+                className="px-4 py-1 text-xs font-bold rounded-full bg-base-300 text-base-content/70 hover:text-base-content transition-colors"
+              >
+                {tagIds.length > 0 ? 'Edit tags' : 'Add tags'}
+              </button>
+              
+              {/* Tag selector dropdown */}
+              {showTagSelector && (
+                <div className="absolute left-0 top-full mt-2 w-64 max-h-64 overflow-y-auto rounded-md border border-neutral bg-base-100 shadow-xl z-50">
+                  <div className="p-2">
+                    {tags.length === 0 ? (
+                      <p className="text-sm text-base-content/50 p-2">No tags available</p>
+                    ) : (
+                      tags.map((tag) => {
+                        const isSelected = tagIds.includes(tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setTagIds(tagIds.filter((id) => id !== tag.id));
+                              } else {
+                                setTagIds([...tagIds, tag.id]);
+                              }
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded hover:hover:bg-base-300 transition-colors ${
+                              isSelected ? 'bg-primary/20 text-primary font-bold' : 'text-base-content'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                isSelected ? 'bg-primary border-primary' : 'border-neutral'
+                              }`}>
+                                {isSelected && (
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-3 w-3 text-base-100"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={3}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                )}
+                              </div>
+                              {tag.name}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Body / Editor */}
@@ -293,14 +507,6 @@ export default function CreatePostForm({ boards, tags }: Props) {
               </div>
             )}
 
-            {activeTab === "link" && (
-              <input
-                type="text"
-                placeholder="Url"
-                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-text-base-content/50 focus: focus:outline-none"
-              />
-            )}
-
             {activeTab === "poll" && (
               <div className="space-y-2">
                 {pollOptions.map((opt, idx) => (
@@ -353,7 +559,11 @@ export default function CreatePostForm({ boards, tags }: Props) {
 
         {/* Footer Actions - Fixed on mobile, relative on desktop */}
         <div className="fixed bottom-[64px] left-0 right-0 z-[101] flex justify-end gap-2 border-t border-neutral bg-base-200/95 p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:border-0 sm:p-0 sm:bg-transparent sm:mt-8 sm:backdrop-blur-none">
-          <button type="button" className="px-6 py-2 rounded-full text-base-content/70 font-bold text-sm hover:bg-base-100 transition-colors">
+          <button
+            type="button"
+            onClick={saveDraft}
+            className="px-6 py-2 rounded-full text-base-content/70 font-bold text-sm hover:bg-base-100 transition-colors"
+          >
             Save Draft
           </button>
           <button
