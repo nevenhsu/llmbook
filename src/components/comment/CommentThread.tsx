@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
+import CommentEditorModal from "./CommentEditorModal";
 
 interface CommentThreadProps {
   postId: string;
@@ -14,6 +16,20 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
   const [userVotes, setUserVotes] = useState<Record<string, number | null>>({});
   const [sort, setSort] = useState("best");
   const [isLoading, setIsLoading] = useState(true);
+
+  const [editorState, setEditorState] = useState<{
+    isOpen: boolean;
+    mode: "create" | "edit" | "reply";
+    parentId?: string;
+    commentId?: string;
+    initialContent?: string;
+  }>({
+    isOpen: false,
+    mode: "create",
+    parentId: undefined,
+    commentId: undefined,
+    initialContent: "",
+  });
 
   const fetchComments = async () => {
     setIsLoading(true);
@@ -32,6 +48,36 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
   useEffect(() => {
     fetchComments();
   }, [postId, sort]);
+
+  const openCreate = () => {
+    setEditorState({
+      isOpen: true,
+      mode: "create",
+      parentId: undefined,
+      commentId: undefined,
+      initialContent: "",
+    });
+  };
+
+  const openReply = (comment: any) => {
+    setEditorState({
+      isOpen: true,
+      mode: "reply",
+      parentId: comment.id,
+      commentId: undefined,
+      initialContent: "",
+    });
+  };
+
+  const openEdit = (comment: any) => {
+    setEditorState({
+      isOpen: true,
+      mode: "edit",
+      parentId: undefined,
+      commentId: comment.id,
+      initialContent: comment.body ?? "",
+    });
+  };
 
   const handleVote = async (commentId: string, value: 1 | -1) => {
     const oldVote = userVotes[commentId] ?? null;
@@ -55,10 +101,6 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
     } catch (err) {
       setUserVotes((prev) => ({ ...prev, [commentId]: oldVote }));
     }
-  };
-
-  const handleNewComment = (newComment: any) => {
-    setComments((prev) => [newComment, ...prev]);
   };
 
   const tree = useMemo(() => {
@@ -86,9 +128,10 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
         comment={node}
         userVote={userVotes[node.id] as 1 | -1 | null}
         onVote={handleVote}
-        postId={postId}
         userId={userId}
-        onReply={handleNewComment}
+        onRequestReply={openReply}
+        onRequestEdit={openEdit}
+        onChanged={fetchComments}
       >
         {node.children.length > 0 && (
           <div className="ml-2 border-l border-neutral pl-4">
@@ -108,7 +151,25 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
 
   return (
     <div className="mt-4">
-      <CommentSort currentSort={sort} onChange={setSort} />
+      <div className="flex items-start justify-between gap-3">
+        <CommentSort currentSort={sort} onChange={setSort} />
+        {userId ? (
+          <button onClick={openCreate} className="btn btn-sm btn-primary">
+            Add a comment
+          </button>
+        ) : (
+          <div className="text-xs text-base-content/70">
+            <Link href="/login" className="text-accent font-bold">
+              Log in
+            </Link>{" "}
+            or{" "}
+            <Link href="/register" className="text-accent font-bold">
+              sign up
+            </Link>{" "}
+            to leave a comment
+          </div>
+        )}
+      </div>
       <div className="space-y-4">
         {renderComments(tree)}
         {comments.length === 0 && (
@@ -117,6 +178,21 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
           </div>
         )}
       </div>
+
+      {userId && (
+        <CommentEditorModal
+          isOpen={editorState.isOpen}
+          onClose={() => setEditorState((prev) => ({ ...prev, isOpen: false }))}
+          postId={postId}
+          parentId={editorState.parentId}
+          initialContent={editorState.initialContent}
+          commentId={editorState.commentId}
+          mode={editorState.mode}
+          onSuccess={() => {
+            fetchComments();
+          }}
+        />
+      )}
     </div>
   );
 }

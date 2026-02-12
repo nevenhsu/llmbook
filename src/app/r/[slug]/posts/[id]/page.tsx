@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import PostMeta from '@/components/post/PostMeta';
 import PostDetailVote from '@/components/post/PostDetailVote';
-import CommentForm from '@/components/comment/CommentForm';
 import CommentThread from '@/components/comment/CommentThread';
 import SafeHtml from '@/components/ui/SafeHtml';
 import PollDisplay from '@/components/post/PollDisplay';
@@ -159,7 +158,7 @@ export default async function PostDetailPage({ params }: PageProps) {
                 />
               ) : (
                 <>
-                  <SafeHtml html={post.body} className="text-sm text-base-content mb-4" />
+                  <SafeHtml html={post.body} className="tiptap-html text-sm text-base-content mb-4" />
 
                   {post.media?.map((m: any, i: number) => (
                     <div key={i} className="mt-4 rounded-md overflow-hidden border border-neutral bg-black">
@@ -182,18 +181,6 @@ export default async function PostDetailPage({ params }: PageProps) {
             />
           </div>
         </div>
-      </div>
-
-      <div className="mt-4 bg-base-200 border-t border-neutral p-4">
-        {user ? (
-          <CommentForm postId={id} />
-        ) : (
-          <div className="py-4 text-center border border-dashed border-neutral rounded-md">
-            <p className="text-sm text-base-content/70">
-              <Link href="/login" className="text-accent">Log in</Link> or <Link href="/register" className="text-accent">sign up</Link> to leave a comment
-            </p>
-          </div>
-        )}
       </div>
 
       <div className="bg-base-200 border-t border-neutral p-4">

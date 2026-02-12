@@ -1,21 +1,22 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import Avatar from '@/components/ui/Avatar';
 import Timestamp from '@/components/ui/Timestamp';
 import VotePill from '@/components/ui/VotePill';
 import { MessageSquare, MoreHorizontal, Edit, Trash2, ShieldOff } from 'lucide-react';
-import CommentForm from './CommentForm';
-import DOMPurify from 'isomorphic-dompurify';
+import SafeHtml from '@/components/ui/SafeHtml';
 
 interface CommentItemProps {
   comment: any;
   userVote?: 1 | -1 | null;
   onVote: (commentId: string, value: 1 | -1) => void;
-  postId: string;
   userId?: string;
   canModerate?: boolean;
-  onReply: (newComment: any) => void;
+  onRequestReply?: (comment: any) => void;
+  onRequestEdit?: (comment: any) => void;
+  onChanged?: () => void;
   onUpdate?: (commentId: string, newBody: string) => void;
   onDelete?: (commentId: string) => void;
   children?: React.ReactNode;
@@ -25,45 +26,22 @@ export default function CommentItem({
   comment, 
   userVote, 
   onVote, 
-  postId, 
   userId, 
   canModerate = false,
-  onReply,
+  onRequestReply,
+  onRequestEdit,
+  onChanged,
   onUpdate,
   onDelete,
   children
 }: CommentItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isReplying, setIsReplying] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [editBody, setEditBody] = useState(comment.body);
   const [isDeleting, setIsDeleting] = useState(false);
   
   const author = comment.profiles || comment.personas;
   const isPersona = !!comment.persona_id;
   const isAuthor = userId && comment.author_id === userId;
-
-  const handleEdit = async () => {
-    if (!editBody.trim()) return;
-
-    try {
-      const res = await fetch(`/api/comments/${comment.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: editBody })
-      });
-
-      if (!res.ok) throw new Error('Failed to update comment');
-
-      const { comment: updatedComment } = await res.json();
-      onUpdate?.(comment.id, updatedComment.body);
-      setIsEditing(false);
-    } catch (err) {
-      console.error('Failed to update comment:', err);
-      alert('Failed to update comment');
-    }
-  };
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this comment?')) return;
@@ -74,14 +52,15 @@ export default function CommentItem({
         method: 'DELETE'
       });
 
-      if (!res.ok) throw new Error('Failed to delete comment');
+       if (!res.ok) throw new Error('Failed to delete comment');
 
-      onDelete?.(comment.id);
-    } catch (err) {
-      console.error('Failed to delete comment:', err);
-      alert('Failed to delete comment');
-    } finally {
-      setIsDeleting(false);
+       onDelete?.(comment.id);
+       onChanged?.();
+     } catch (err) {
+       console.error('Failed to delete comment:', err);
+       alert('Failed to delete comment');
+     } finally {
+       setIsDeleting(false);
       setShowMoreMenu(false);
     }
   };
@@ -101,6 +80,7 @@ export default function CommentItem({
 
       const { comment: updatedComment } = await res.json();
       onUpdate?.(comment.id, updatedComment.body);
+      onChanged?.();
     } catch (err) {
       console.error('Failed to remove comment:', err);
       alert('Failed to remove comment');
@@ -150,36 +130,12 @@ export default function CommentItem({
           <Timestamp date={comment.created_at} />
         </div>
 
-        {isEditing ? (
-          <div className="mb-2">
-            <textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              className="w-full p-2 border border-neutral rounded-md bg-base-100 text-sm"
-              rows={3}
-            />
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={handleEdit}
-                className="btn btn-sm btn-primary"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setEditBody(comment.body);
-                }}
-                className="btn btn-sm btn-ghost"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+        {comment.is_deleted ? (
+          <div className="text-sm text-base-content/60 mb-2">[deleted]</div>
         ) : (
-          <div 
-            className="text-sm text-base-content mb-2 break-words"
-            dangerouslySetInnerHTML={{ __html: comment.is_deleted ? '[deleted]' : DOMPurify.sanitize(comment.body) }}
+          <SafeHtml
+            html={comment.body ?? ""}
+            className="tiptap-html text-sm text-base-content mb-2 break-words"
           />
         )}
 
@@ -190,13 +146,23 @@ export default function CommentItem({
             onVote={(v) => onVote(comment.id, v)} 
             size="sm" 
           />
-          <button 
-            onClick={() => setIsReplying(!isReplying)}
-            className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
-          >
-            <MessageSquare size={16} />
-            Reply
-          </button>
+          {userId ? (
+            <button
+              onClick={() => onRequestReply?.(comment)}
+              className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
+            >
+              <MessageSquare size={16} />
+              Reply
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
+            >
+              <MessageSquare size={16} />
+              Reply
+            </Link>
+          )}
           
           <div className="relative">
             <button 
@@ -217,7 +183,7 @@ export default function CommentItem({
                     <>
                       <button
                         onClick={() => {
-                          setIsEditing(true);
+                          onRequestEdit?.(comment);
                           setShowMoreMenu(false);
                         }}
                         className="w-full flex items-center gap-2 px-4 py-2 text-sm text-base-content hover:bg-base-200"
@@ -244,7 +210,7 @@ export default function CommentItem({
                       Remove (Mod)
                     </button>
                   )}
-                  {(!isAuthor && !canModerate) || comment.is_deleted && (
+                  {((!isAuthor && !canModerate) || comment.is_deleted) && (
                     <div className="px-4 py-2 text-sm text-base-content/50">
                       No actions available
                     </div>
@@ -254,18 +220,6 @@ export default function CommentItem({
             )}
           </div>
         </div>
-
-        {isReplying && (
-          <CommentForm 
-            postId={postId} 
-            parentId={comment.id} 
-            onCancel={() => setIsReplying(false)} 
-            onSubmit={(newComment) => {
-              setIsReplying(false);
-              onReply(newComment);
-            }} 
-          />
-        )}
 
         {children && (
           <div className="mt-2">

@@ -105,3 +105,42 @@
     }
   }
 }
+
+@layer components {
+  /* Basic TipTap HTML rendering styles (posts + comments) */
+  .tiptap-html p {
+    @apply my-1;
+  }
+
+  .tiptap-html a {
+    @apply text-accent underline underline-offset-2;
+  }
+
+  .tiptap-html ul {
+    @apply list-disc pl-5 my-2;
+  }
+
+  .tiptap-html ol {
+    @apply list-decimal pl-5 my-2;
+  }
+
+  .tiptap-html li {
+    @apply my-0.5;
+  }
+
+  .tiptap-html blockquote {
+    @apply border-l-4 border-neutral pl-3 my-2 text-base-content/80;
+  }
+
+  .tiptap-html pre {
+    @apply bg-base-200 border border-neutral rounded-md p-3 my-2 overflow-x-auto text-xs;
+  }
+
+  .tiptap-html code {
+    @apply bg-base-200 px-1 py-0.5 rounded;
+  }
+
+  .tiptap-html img {
+    @apply max-w-full h-auto rounded-md border border-neutral my-2;
+  }
+}

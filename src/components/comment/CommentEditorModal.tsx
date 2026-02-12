@@ -30,6 +30,15 @@ export default function CommentEditorModal({
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLDialogElement>(null);
 
+  const isEmptyTiptapHtml = (html: string) => {
+    const normalized = html
+      .replace(/<br\s*\/?\s*>/gi, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+    return normalized.length === 0;
+  };
+
   useEffect(() => {
     if (isOpen && dialogRef.current) {
       dialogRef.current.showModal();
@@ -44,6 +53,12 @@ export default function CommentEditorModal({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setContent(initialContent);
+    setError('');
+  }, [isOpen, initialContent]);
+
   const handleClose = () => {
     setContent(initialContent);
     setError('');
@@ -51,8 +66,7 @@ export default function CommentEditorModal({
   };
 
   const handleSubmit = async () => {
-    const trimmedContent = content.trim();
-    if (!trimmedContent) {
+    if (isEmptyTiptapHtml(content)) {
       setError('Comment cannot be empty');
       return;
     }

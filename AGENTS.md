@@ -6,16 +6,16 @@
 
 ## Quick Reference
 
-| Need | Import |
-|------|--------|
-| Environment variables | `import { publicEnv, privateEnv } from '@/lib/env'` |
-| Image upload | `import { uploadImage, validateImageFile } from '@/lib/image-upload'` |
-| Supabase Client (browser) | `import { createClient } from '@/lib/supabase/client'` |
-| Supabase Server | `import { createClient } from '@/lib/supabase/server'` |
-| Supabase Admin | `import { createAdminClient } from '@/lib/supabase/admin'` |
-| Board permissions | `import { canManageBoard } from '@/lib/board-permissions'` |
-| User context (Client) | `import { useUserContext } from '@/contexts/UserContext'` |
-| Board context (Client) | `import { useBoardContext } from '@/contexts/BoardContext'` |
+| Need                      | Import                                                                |
+| ------------------------- | --------------------------------------------------------------------- |
+| Environment variables     | `import { publicEnv, privateEnv } from '@/lib/env'`                   |
+| Image upload              | `import { uploadImage, validateImageFile } from '@/lib/image-upload'` |
+| Supabase Client (browser) | `import { createClient } from '@/lib/supabase/client'`                |
+| Supabase Server           | `import { createClient } from '@/lib/supabase/server'`                |
+| Supabase Admin            | `import { createAdminClient } from '@/lib/supabase/admin'`            |
+| Board permissions         | `import { canManageBoard } from '@/lib/board-permissions'`            |
+| User context (Client)     | `import { useUserContext } from '@/contexts/UserContext'`             |
+| Board context (Client)    | `import { useBoardContext } from '@/contexts/BoardContext'`           |
 
 ---
 
@@ -26,13 +26,13 @@
 **Purpose:** Unified environment variable management to avoid duplicate dotenv configuration
 
 **Important Rules:**
+
 - **NEVER** repeat `import dotenv from 'dotenv'; dotenv.config()` in every file
-- **NEVER** use `process.env.Xxx` directly
-- **ALWAYS** use `publicEnv` or `privateEnv` from this library
 
 **Example:**
+
 ```typescript
-import { publicEnv, privateEnv, isIntegrationTest } from '@/lib/env';
+import { publicEnv, privateEnv, isIntegrationTest } from "@/lib/env";
 
 // Public env (browser-safe)
 const supabaseUrl = publicEnv.supabaseUrl;
@@ -43,12 +43,13 @@ const serviceRoleKey = privateEnv.supabaseServiceRoleKey;
 const bucket = privateEnv.storageBucket;
 
 // Validate environment variables (for tests)
-import { validateTestEnv } from '@/lib/env';
+import { validateTestEnv } from "@/lib/env";
 beforeAll(() => validateTestEnv());
 ```
 
 **Public vs Private:**
-- `publicEnv`: Variables starting with NEXT_PUBLIC_*, safe for browser use
+
+- `publicEnv`: Variables starting with NEXT*PUBLIC*\*, safe for browser use
 - `privateEnv`: All other variables, server-side only
 
 ---
@@ -58,19 +59,25 @@ beforeAll(() => validateTestEnv());
 **Purpose:** Shared logic for image upload, compression, and validation
 
 **When to use:**
+
 - Uploading images to Supabase Storage
 - Validating image files (size, type)
 - Generating image previews
 
 **Example:**
+
 ```typescript
-import { uploadImage, validateImageFile, formatBytes } from '@/lib/image-upload';
+import {
+  uploadImage,
+  validateImageFile,
+  formatBytes,
+} from "@/lib/image-upload";
 
 // Upload image
 const result = await uploadImage(file, {
   maxWidth: 2048,
   maxBytes: 5 * 1024 * 1024,
-  quality: 82
+  quality: 82,
 });
 // result: { url, width, height, sizeBytes }
 
@@ -90,21 +97,24 @@ if (error) {
 **Purpose:** Unified Supabase client configuration
 
 #### Browser Client (`src/lib/supabase/client.ts`)
+
 ```typescript
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from "@/lib/supabase/client";
 // For React components (client-side)
 ```
 
 #### Server Client (`src/lib/supabase/server.ts`)
+
 ```typescript
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from "@/lib/supabase/server";
 // For API routes, Server Components
 const supabase = await createClient(cookies());
 ```
 
 #### Admin Client (`src/lib/supabase/admin.ts`)
+
 ```typescript
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient } from "@/lib/supabase/admin";
 // For operations requiring service role key
 // ⚠️ Server-side only, NEVER expose to browser
 const admin = createAdminClient();
@@ -117,12 +127,14 @@ const admin = createAdminClient();
 **Purpose:** Board permission checking logic
 
 **When to use:**
+
 - Check if user can manage a board
 - Check moderator permissions
 
 **Example:**
+
 ```typescript
-import { canManageBoard, canModerateBoard } from '@/lib/board-permissions';
+import { canManageBoard, canModerateBoard } from "@/lib/board-permissions";
 
 const canManage = await canManageBoard(supabase, boardId, userId);
 const canModerate = await canModerateBoard(supabase, boardId, userId);
@@ -166,32 +178,35 @@ src/lib/
 **Important:** When using QMD search, always specify `collection: "llmbook"`
 
 **Examples:**
+
 ```typescript
 // Keyword search (BM25)
 await qmd_search({
   query: "board permissions",
-  collection: "llmbook"
+  collection: "llmbook",
 });
 
 // Semantic search (vector similarity)
 await qmd_vsearch({
   query: "how to check user permissions",
-  collection: "llmbook"
+  collection: "llmbook",
 });
 
 // Hybrid search (most accurate)
 await qmd_query({
   query: "upload image to supabase",
-  collection: "llmbook"
+  collection: "llmbook",
 });
 ```
 
 **Collection Info:**
+
 - Collection name: `llmbook`
 - Path: `/Users/neven/Documents/projects/llmbook`
 - Documents: 33 files
 
 **When to use:**
+
 - Search technical documents (plans/, docs/, README.md)
 - Query project conventions and standards
 - Find code examples

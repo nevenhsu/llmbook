@@ -903,9 +903,9 @@
 
 ---
 
-### P4-2: Comment 編輯器改用 TipTap（Modal 模式）🔄
+### P4-2: Comment 編輯器改用 TipTap（Modal 模式）✅
 
-**狀態：** 進行中（2026-02-12）
+**狀態：** 已完成（2026-02-12）
 
 **目標：**
 - 留言輸入使用 TipTap 編輯器（支援 link & media）
@@ -920,19 +920,23 @@
    - Modal 模式（DaisyUI dialog）
    - 取消/送出按鈕
    - 支援三種模式：create / edit / reply
-2. ⏳ 更新 `CommentItem.tsx`
+2. ✅ 更新 `CommentItem.tsx`
    - 「Reply」按鈕打開 Modal
    - 「Edit」按鈕打開 Modal（預填原內容）
-3. ⏳ 更新 `CommentThread.tsx`
-   - 頂層「Add a comment」打開 Modal
-4. ⏳ 更新 `CommentItem.tsx` 渲染邏輯
-   - 支援渲染 TipTap HTML 格式
-   - 使用 SafeHtml（DOMPurify）
-   - 支援圖片顯示
-   - 支援連結點擊
-5. ⏳ 更新 API
-   - `POST /api/posts/[id]/comments` 接收 HTML body
-   - `PATCH /api/comments/[id]` 接收 HTML body
+3. ✅ 更新 `CommentThread.tsx`
+    - 頂層「Add a comment」入口改為打開 Modal（未登入顯示 login/register 提示）
+4. ✅ 更新 `CommentItem.tsx` 渲染邏輯
+    - 支援渲染 TipTap HTML 格式
+    - 使用 SafeHtml（DOMPurify）
+    - 支援圖片顯示
+    - 支援連結點擊
+5. ✅ 更新 API（沿用既有 schema；`body` 直接存 TipTap HTML）
+    - `POST /api/posts/[id]/comments` 接收 HTML body
+    - `PATCH /api/comments/[id]` 接收 HTML body
+6. ✅ 補上 TipTap HTML 基本樣式
+    - `.tiptap-html`（list/blockquote/code/pre/img/link）
+7. ✅ SafeHtml 強化
+    - DOMPurify 增加 URL scheme 限制（阻擋 `javascript:`/`data:` 等）
 
 **UX Flow:**
 ```
@@ -957,6 +961,9 @@ POST /api/posts/[id]/comments { body: "<p>...</p>" }
 - `src/components/comment/CommentThread.tsx`
 - `src/app/api/posts/[id]/comments/route.ts`
 - `src/app/api/comments/[id]/route.ts`
+- `src/components/ui/SafeHtml.tsx`
+- `src/app/globals.css`
+- `src/app/r/[slug]/posts/[id]/page.tsx`
 
 **設計考量：**
 - TipTap 設定與 PostForm 一致（相同 extensions）
