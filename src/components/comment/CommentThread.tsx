@@ -12,9 +12,10 @@ import { ApiError } from "@/lib/api/fetch-json";
 interface CommentThreadProps {
   postId: string;
   userId?: string;
+  isArchived?: boolean;
 }
 
-export default function CommentThread({ postId, userId }: CommentThreadProps) {
+export default function CommentThread({ postId, userId, isArchived = false }: CommentThreadProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [userVotes, setUserVotes] = useState<Record<string, number | null>>({});
   const [sort, setSort] = useState("best");
@@ -133,9 +134,10 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
         userVote={userVotes[node.id] as 1 | -1 | null}
         onVote={handleVote}
         userId={userId}
-        onRequestReply={openReply}
-        onRequestEdit={openEdit}
+        onRequestReply={!isArchived ? openReply : undefined}
+        onRequestEdit={!isArchived ? openEdit : undefined}
         onChanged={fetchComments}
+        isArchived={isArchived}
       >
         {node.children.length > 0 && (
           <div className="ml-2 border-l border-neutral pl-4">
@@ -157,11 +159,11 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
     <div className="mt-4">
       <div className="flex items-start justify-between gap-3">
         <CommentSort currentSort={sort} onChange={setSort} />
-        {userId ? (
+        {userId && !isArchived ? (
           <button onClick={openCreate} className="btn btn-sm btn-primary">
             Add a comment
           </button>
-        ) : (
+        ) : !userId ? (
           <div className="text-xs text-base-content/70">
             <button
               onClick={openLoginModal}
@@ -178,7 +180,7 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
             </button>{" "}
             to leave a comment
           </div>
-        )}
+        ) : null}
       </div>
       <div className="space-y-4">
         {renderComments(tree)}

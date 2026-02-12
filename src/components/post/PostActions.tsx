@@ -12,6 +12,7 @@ import {
   Trash2,
   ShieldOff,
 } from "lucide-react";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 interface PostActionsProps {
   postId: string;
@@ -23,9 +24,12 @@ interface PostActionsProps {
   userId?: string;
   canModerate?: boolean;
   status?: string;
+  isHidden?: boolean;
   onShare?: () => void;
   onSave?: () => void;
   onHide?: () => void;
+  onUnhide?: () => void;
+  onToggleExpand?: () => void;
   onDelete?: () => void;
 }
 
@@ -39,18 +43,26 @@ export default function PostActions({
   userId,
   canModerate = false,
   status,
+  isHidden = false,
   onSave,
   onHide,
+  onUnhide,
+  onToggleExpand,
   onDelete,
 }: PostActionsProps) {
   const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isUndeleting, setIsUndeleting] = useState(false);
   const modalRef = useRef<HTMLDialogElement>(null);
 
   const isAuthor = authorId && userId && authorId === userId;
-  const canEdit = isAuthor && status !== 'ARCHIVED' && status !== 'DELETED';
+  const isArchived = status === 'ARCHIVED';
+  const canEdit = (isAuthor || canModerate) && !isArchived && status !== 'DELETED';
   const canDelete = isAuthor || canModerate;
+  const canUndelete = canModerate;
+  const canUnarchive = canModerate;
   const canArchive = canModerate;
 
   const handleCommentsClick = (e: React.MouseEvent) => {
@@ -82,12 +94,7 @@ export default function PostActions({
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
-      return;
-    }
-
+  const handleDelete = async () => {
     setIsDeleting(true);
     try {
       const res = await fetch(`/api/posts/${postId}`, {
@@ -104,6 +111,46 @@ export default function PostActions({
       alert('Failed to delete post');
     } finally {
       setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleUndelete = async () => {
+    setIsUndeleting(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'PUBLISHED' }),
+      });
+
+      if (!res.ok) throw new Error('Failed to undelete post');
+
+      closeMoreMenu();
+      router.refresh();
+    } catch (err) {
+      console.error('Failed to undelete post:', err);
+      alert('Failed to undelete post');
+    } finally {
+      setIsUndeleting(false);
+    }
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'PUBLISHED' }),
+      });
+
+      if (!res.ok) throw new Error('Failed to unarchive post');
+
+      closeMoreMenu();
+      router.refresh();
+    } catch (err) {
+      console.error('Failed to unarchive post:', err);
+      alert('Failed to unarchive post');
     }
   };
 
@@ -137,40 +184,61 @@ export default function PostActions({
       >
         <MessageSquare size={16} /> <span>{commentCount}</span>
       </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          if (boardSlug) {
-            navigator.clipboard.writeText(
-              `${window.location.origin}/r/${boardSlug}/posts/${postId}`,
-            );
-          }
-        }}
-        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
-      >
-        <Share2 size={16} /> <span>Share</span>
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onSave?.();
-        }}
-        className={`flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300 ${
-          isSaved ? 'text-primary' : ''
-        }`}
-      >
-        <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} /> 
-        <span>{isSaved ? 'Saved' : 'Save'}</span>
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onHide?.();
-        }}
-        className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
-      >
-        <EyeOff size={16} /> <span>Hide</span>
-      </button>
+      {!isArchived && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (boardSlug) {
+              navigator.clipboard.writeText(
+                `${window.location.origin}/r/${boardSlug}/posts/${postId}`,
+              );
+            }
+          }}
+          className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
+        >
+          <Share2 size={16} /> <span>Share</span>
+        </button>
+      )}
+      {!isArchived && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onSave?.();
+          }}
+          className={`flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300 ${
+            isSaved ? 'text-primary' : ''
+          }`}
+        >
+          <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} /> 
+          <span>{isSaved ? 'Saved' : 'Save'}</span>
+        </button>
+      )}
+      {!isArchived && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isHidden && onToggleExpand) {
+              onToggleExpand();
+            } else {
+              onHide?.();
+            }
+          }}
+          className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
+        >
+          <EyeOff size={16} /> <span>{isHidden ? 'Show' : 'Hide'}</span>
+        </button>
+      )}
+      {isHidden && !isArchived && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnhide?.();
+          }}
+          className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300 text-error"
+        >
+          Unhide
+        </button>
+      )}
       {/* More button */}
       <button 
         onClick={openMoreMenu}
@@ -185,7 +253,7 @@ export default function PostActions({
           <h3 className="font-bold text-lg mb-4">Post actions</h3>
           
           <div className="space-y-2">
-            {/* Edit - only owner and not archived/deleted */}
+            {/* Edit - author or moderator, not archived/deleted */}
             {canEdit && (
               <button
                 onClick={handleEdit}
@@ -195,11 +263,14 @@ export default function PostActions({
                 Edit post
               </button>
             )}
-            
-            {/* Delete - owner or moderator */}
+
+            {/* Delete - author or moderator */}
             {canDelete && (
               <button
-                onClick={handleDelete}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(true);
+                }}
                 disabled={isDeleting}
                 className="w-full flex items-center gap-3 px-4 py-3 text-base text-error hover:bg-base-200 rounded-lg transition-colors"
               >
@@ -207,7 +278,22 @@ export default function PostActions({
                 {isDeleting ? 'Deleting...' : 'Delete post'}
               </button>
             )}
-            
+
+            {/* Undelete - moderator only */}
+            {canUndelete && status === 'DELETED' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUndelete();
+                }}
+                disabled={isUndeleting}
+                className="w-full flex items-center gap-3 px-4 py-3 text-base text-success hover:bg-base-200 rounded-lg transition-colors"
+              >
+                <ShieldOff size={20} />
+                {isUndeleting ? 'Restoring...' : 'Restore post'}
+              </button>
+            )}
+
             {/* Archive - moderator only, not already archived/deleted */}
             {canArchive && status === 'PUBLISHED' && (
               <button
@@ -218,8 +304,22 @@ export default function PostActions({
                 Archive post
               </button>
             )}
-            
-            {!canEdit && !canDelete && !canArchive && (
+
+            {/* Unarchive - moderator only */}
+            {canUnarchive && status === 'ARCHIVED' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUnarchive();
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-base text-success hover:bg-base-200 rounded-lg transition-colors"
+              >
+                <ShieldOff size={20} />
+                Unarchive post
+              </button>
+            )}
+
+            {!canEdit && !canDelete && !canUndelete && !canArchive && (
               <div className="px-4 py-3 text-base text-base-content/50 text-center">
                 No actions available
               </div>
@@ -236,6 +336,16 @@ export default function PostActions({
           <button>close</button>
         </form>
       </dialog>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete Post?"
+        message="Are you sure you want to delete this post?"
+        confirmText="Delete Post"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

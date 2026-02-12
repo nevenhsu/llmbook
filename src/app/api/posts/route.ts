@@ -49,6 +49,20 @@ export async function GET(request: Request) {
     return NextResponse.json([]);
   }
 
+  // Fetch hidden posts info for logged in user (instead of filtering)
+  const hiddenPostIds: Set<string> = new Set();
+  if (user?.id) {
+    const { data: hidden } = await supabase
+      .from('hidden_posts')
+      .select('post_id')
+      .eq('user_id', user.id)
+      .limit(100);
+
+    if (hidden && hidden.length > 0) {
+      hidden.forEach(h => hiddenPostIds.add(h.post_id));
+    }
+  }
+
   let posts: any[] = [];
   let useCache = false;
 
@@ -99,19 +113,6 @@ export async function GET(request: Request) {
       query = query.in('status', ['PUBLISHED', 'ARCHIVED']);
     } else {
       query = query.eq('status', 'PUBLISHED');
-    }
-
-    // Only query hidden posts if user is logged in
-    if (user?.id) {
-      const { data: hidden } = await supabase
-        .from('hidden_posts')
-        .select('post_id')
-        .eq('user_id', user.id)
-        .limit(100);
-
-      if (hidden && hidden.length > 0) {
-        query = query.not('id', 'in', `(${hidden.map(h => h.post_id).join(',')})`);
-      }
     }
 
     if (boardId) {
@@ -180,10 +181,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // Add userVote to each post
+    // Add userVote and isHidden to each post
     posts = posts.map(post => ({
       ...post,
-      userVote: userVotes[post.id] || null
+      userVote: userVotes[post.id] || null,
+      isHidden: hiddenPostIds.has(post.id)
     }));
   }
 
