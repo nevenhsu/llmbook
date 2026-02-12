@@ -1,336 +1,202 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MessageSquare,
-  MoreHorizontal,
   Settings,
   ArrowUp,
   User,
-  EyeOff,
   CheckCircle2,
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import Timestamp from "@/components/ui/Timestamp";
 
-interface NotificationItem {
-  id: number;
-  type: "reply" | "upvote" | "mention";
-  user: string;
-  community: string;
+interface Notification {
+  id: string;
+  user_id: string;
+  type: string;
   content: string;
-  time: string;
-  isUnread: boolean;
-  avatar: string;
+  related_id: string | null;
+  related_type: string | null;
+  created_at: string;
+  read_at: string | null;
 }
 
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 1,
-    type: "reply",
-    user: "tech_enthusiast",
-    community: "r/technology",
-    content:
- "replied to your comment: 'I think the new AI models are going to change everything...'",
-    time: "2h",
-    isUnread: true,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=tech",
-  },
-  {
-    id: 2,
-    type: "upvote",
-    user: "design_pro",
-    community: "r/design",
-    content: "upvoted your post: 'Check out this new UI kit I made!'",
-    time: "5h",
-    isUnread: true,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=design",
-  },
-  {
-    id: 3,
-    type: "mention",
-    user: "moderator_bot",
-    community: "r/announcements",
-    content: "mentioned you in a comment in 'Welcome to the new community!'",
-    time: "1d",
-    isUnread: false,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=bot",
-  },
-  {
-    id: 4,
-    type: "reply",
-    user: "coffee_lover",
-    community: "r/coffee",
-    content:
- "replied to your comment: 'The V60 is definitely better for light roasts.'",
-    time: "2d",
-    isUnread: false,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=coffee",
-  },
-];
-
-const MAX_NOTIFICATIONS = 8;
-
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(
-    INITIAL_NOTIFICATIONS,
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMarkingRead, setIsMarkingRead] = useState(false);
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, isUnread: false })));
-  };
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
-  const markAsRead = (id: number) => {
-    setNotifications(
-      notifications.map((n) => (n.id === id ? { ...n, isUnread: false } : n)),
-    );
-  };
-
-  const hideNotification = (id: number) => {
-    setNotifications(notifications.filter((n) => n.id !== id));
-  };
-
-  const loadMore = async () => {
+  const fetchNotifications = async () => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    const moreNotifications: NotificationItem[] = [
-      {
-        id: Date.now(),
-        type: "reply",
-        user: "new_user_" + Math.floor(Math.random() * 100),
-        community: "r/nextjs",
-        content: "replied to your comment: 'This is looking great!'",
-        time: "just now",
-        isUnread: true,
-        avatar: `https://api.dicebear.com/9.x/avataaars/svg?seed=${Date.now()}`,
-      }
-    ];
-
-    setNotifications((prev) => {
-      const next = [...prev, ...moreNotifications];
-      if (next.length >= MAX_NOTIFICATIONS) {
-        setHasMore(false);
-      }
-      return next;
-    });
-    
-    setIsLoading(false);
+    try {
+      const res = await fetch('/api/notifications');
+      if (!res.ok) throw new Error('Failed to fetch notifications');
+      const data = await res.json();
+      setNotifications(data);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const markAllAsRead = async () => {
+    const unreadIds = notifications
+      .filter(n => !n.read_at)
+      .map(n => n.id);
+    
+    if (unreadIds.length === 0) return;
+
+    setIsMarkingRead(true);
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: unreadIds })
+      });
+
+      if (!res.ok) throw new Error('Failed to mark as read');
+
+      setNotifications(notifications.map(n => ({ ...n, read_at: new Date().toISOString() })));
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
+    } finally {
+      setIsMarkingRead(false);
+    }
+  };
+
+  const markAsRead = async (id: string) => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] })
+      });
+
+      if (!res.ok) throw new Error('Failed to mark as read');
+
+      setNotifications(
+        notifications.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
+      );
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
+    }
+  };
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'comment_reply':
+        return <MessageSquare size={20} className="text-blue-500" />;
+      case 'post_upvote':
+      case 'comment_upvote':
+        return <ArrowUp size={20} className="text-upvote" />;
+      case 'mention':
+        return <User size={20} className="text-purple-500" />;
+      default:
+        return <MessageSquare size={20} className="text-base-content/70" />;
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.read_at).length;
 
   return (
-    <div className="mx-auto max-w-[800px]">
-      <div className="flex items-center justify-between mb-4 px-2">
-        <h1 className="text-2xl font-bold text-base-content">Notifications</h1>
-        <div className="flex items-center gap-2">
-          {/* Top-right Settings Dropdown */}
-          <div className="dropdown dropdown-end">
-            <button
-              tabIndex={0}
-              className="btn btn-ghost btn-circle btn-sm"
-              aria-label="Notification Settings"
-            >
-              <Settings size={20} className="text-[#818384]" />
-            </button>
-            <ul
-              tabIndex={0}
-              className="dropdown-content menu p-2 shadow-lg bg-base-100 border border-neutral rounded-box w-56 z-[10]"
-            >
-              <li>
-                <button
-                  onClick={() => {
-                    markAllAsRead();
-                    if (document.activeElement instanceof HTMLElement) {
-                      document.activeElement.blur();
-                    }
-                  }}
-                  className="flex items-center gap-2 py-2"
-                >
-                  <CheckCircle2 size={16} /> Mark all as read
-                </button>
-              </li>
-              <li>
-                <Link
-                  href="/settings/notifications"
-                  className="flex items-center gap-2 py-2"
-                >
-                  <Settings size={16} /> Notification settings
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
+    <div className="max-w-3xl mx-auto px-4 py-6 pb-24 sm:pb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Notifications</h1>
+        <Link
+          href="/settings/notifications"
+          className="flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content"
+        >
+          <Settings size={18} />
+          Settings
+        </Link>
       </div>
 
-      <div className="bg-base-100 rounded-lg overflow-hidden border border-neutral">
-        {notifications.length === 0 ? (
-          <div className="p-12 text-center text-[#818384]">
-            <p>No notifications yet.</p>
-          </div>
-        ) : (
-          <>
-            {notifications.map((notif) => (
-              <div
-                key={notif.id}
-                className={`relative border-b border-neutral last:border-0 hover:bg-base-300 transition-colors ${
-                  notif.isUnread ? "bg-primary/5" : ""
-                }`}
-              >
-                <Link
-                  href={`/notifications/${notif.id}`}
-                  className="flex items-start gap-3 p-4 pr-12"
-                  aria-label={`Notification from ${notif.user} in ${notif.community}: ${notif.content}`}
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="h-10 w-10 rounded-full overflow-hidden bg-base-200 relative">
-                      <Image
-                        src={notif.avatar}
-                        alt={`${notif.user}'s avatar`}
-                        fill
-                        className="object-cover"
-                        sizes="40px"
-                        unoptimized
-                      />
-                    </div>
-                    <div className="absolute -bottom-1 -right-1 bg-base-100 rounded-full p-0.5">
-                      {notif.type === "upvote" ? (
-                        <div className="bg-[#FF4500] text-white rounded-full p-0.5">
-                          <ArrowUp size={10} strokeWidth={4} />
-                        </div>
-                      ) : notif.type === "reply" ? (
-                        <div className="bg-info text-white rounded-full p-0.5">
-                          <MessageSquare size={10} fill="currentColor" />
-                        </div>
-                      ) : (
-                        <div className="bg-neutral text-white rounded-full p-0.5">
-                          <User size={10} fill="currentColor" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className="font-bold text-sm text-base-content">
-                        u/{notif.user}
-                      </span>
-                      <span className="text-[#818384] text-sm">
-                        {notif.content}
-                      </span>
-                      <span className="text-[#818384] text-sm">
-                        • {notif.time}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {notif.isUnread && (
-                      <div
-                        className="h-2 w-2 rounded-full bg-primary"
-                        aria-label="Unread notification"
-                      ></div>
-                    )}
-                  </div>
-                </Link>
-
-                {/* Dropdown Menu - Moved outside Link to fix event propagation */}
-                <div className="absolute right-3 top-4">
-                  <div className="dropdown dropdown-end">
-                    <button
-                      tabIndex={0}
-                      className="btn btn-ghost btn-circle btn-xs"
-                      onClick={(e) => {
-                        // These help open the dropdown without triggering the Link
-                        e.stopPropagation();
-                      }}
-                      aria-label="More options"
-                    >
-                      <MoreHorizontal size={16} className="text-[#818384]" />
-                    </button>
-                    <ul
-                      tabIndex={0}
-                      className="dropdown-content menu p-2 shadow-lg bg-base-100 border border-neutral rounded-box w-52 z-[11]"
-                    >
-                      {notif.isUnread && (
-                        <li>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              markAsRead(notif.id);
-                              // Close dropdown by blurring active element
-                              if (document.activeElement instanceof HTMLElement) {
-                                document.activeElement.blur();
-                              }
-                            }}
-                            className="flex items-center gap-2 py-2"
-                          >
-                            <CheckCircle2 size={16} /> Mark as read
-                          </button>
-                        </li>
-                      )}
-                      <li>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            hideNotification(notif.id);
-                            if (document.activeElement instanceof HTMLElement) {
-                              document.activeElement.blur();
-                            }
-                          }}
-                          className="flex items-center gap-2 py-2"
-                        >
-                          <EyeOff size={16} /> Hide notification
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            {hasMore ? (
-              <div className="p-4 flex justify-center">
-                <button
-                  onClick={loadMore}
-                  disabled={isLoading}
-                  className="btn btn-primary btn-sm rounded-full px-6"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
- "Load more"
-                  )}
-                </button>
-              </div>
+      <div className="flex items-center justify-between mb-4 pb-2 border-b border-neutral">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/notifications"
+            className="text-sm font-bold text-base-content border-b-2 border-upvote pb-2"
+          >
+            All ({notifications.length})
+          </Link>
+          {unreadCount > 0 && (
+            <Link
+              href="/notifications"
+              className="text-sm text-base-content/70 hover:text-base-content pb-2"
+            >
+              Unread ({unreadCount})
+            </Link>
+          )}
+          <Link
+            href="/notifications/archive"
+            className="text-sm text-base-content/70 hover:text-base-content pb-2"
+          >
+            Archive
+          </Link>
+        </div>
+        {unreadCount > 0 && (
+          <button
+            onClick={markAllAsRead}
+            disabled={isMarkingRead}
+            className="flex items-center gap-2 text-sm text-upvote hover:underline"
+          >
+            {isMarkingRead ? (
+              <Loader2 size={16} className="animate-spin" />
             ) : (
-              <div className="p-4 text-center text-[#818384] text-sm border-t border-neutral/50">
-                No more notifications to load
-              </div>
+              <CheckCircle2 size={16} />
             )}
-          </>
+            Mark all as read
+          </button>
         )}
       </div>
 
-      <div className="mt-8 text-center text-[#818384] text-sm">
-        <p>
-          Looking for older notifications? Check out your{" "}
-          <Link
-            href="/notifications/archive"
-            className="text-primary"
-          >
-            archive
-          </Link>
-          .
-        </p>
-      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 size={32} className="animate-spin text-base-content/50" />
+        </div>
+      ) : notifications.length === 0 ? (
+        <div className="text-center py-20 text-base-content/50">
+          <p>No notifications yet</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-neutral">
+          {notifications.map((notification) => (
+            <div
+              key={notification.id}
+              className={`flex items-start gap-3 p-4 hover:bg-base-200 transition-colors ${
+                !notification.read_at ? 'bg-base-200/50' : ''
+              }`}
+            >
+              <div className="flex-shrink-0 mt-1">{getIcon(notification.type)}</div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-base-content break-words">
+                  {notification.content}
+                </p>
+                <div className="flex items-center gap-2 mt-1 text-xs text-base-content/50">
+                  <Timestamp date={notification.created_at} />
+                </div>
+              </div>
+
+              {!notification.read_at && (
+                <button
+                  onClick={() => markAsRead(notification.id)}
+                  className="flex-shrink-0 text-xs text-upvote hover:underline"
+                >
+                  Mark read
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

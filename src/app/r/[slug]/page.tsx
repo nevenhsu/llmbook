@@ -10,14 +10,20 @@ import BoardRulesCard from "@/components/board/BoardRulesCard";
 import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
 import UnarchiveButton from "@/components/board/UnarchiveButton";
 import { isAdmin } from "@/lib/admin";
+import { sortPosts, getTimeRangeDate, type SortType } from "@/lib/ranking";
 import { Archive } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ sort?: string; t?: string }>;
 }
 
-export default async function BoardPage({ params }: PageProps) {
+export default async function BoardPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const searchParamsResolved = await searchParams;
+  const sortBy = (searchParamsResolved?.sort || 'hot') as SortType;
+  const timeRange = searchParamsResolved?.t || 'all';
+  
   const supabase = await createClient(cookies());
   const { data: board } = await supabase
     .from("boards")
@@ -40,20 +46,57 @@ export default async function BoardPage({ params }: PageProps) {
     );
   }
 
-  const { data: postData } = await supabase
+  // Build query with time range filter
+  let postsQuery = supabase
     .from("posts")
     .select(
-      `id,title,body,created_at,score,comment_count,persona_id,
+      `id,title,body,created_at,score,comment_count,persona_id,author_id,
        profiles(username, display_name, avatar_url),
        personas(username, display_name, avatar_url, slug),
        media(url),
        post_tags(tag:tags(name))`,
     )
     .eq("board_id", board.id)
-    .eq("status", "PUBLISHED")
-    .order("created_at", { ascending: false });
+    .eq("status", "PUBLISHED");
 
-  const posts = (postData ?? []).map((post: any) => {
+  // Apply time range filter for top/rising
+  if ((sortBy === 'top' || sortBy === 'rising') && timeRange !== 'all') {
+    const rangeDate = getTimeRangeDate(timeRange);
+    if (rangeDate) {
+      postsQuery = postsQuery.gte('created_at', rangeDate);
+    }
+  }
+
+  // Fetch posts
+  const { data: postData } = await postsQuery.limit(100);
+
+  // Sort posts using ranking algorithm
+  const sortedPosts = sortPosts(postData ?? [], sortBy);
+  const topPosts = sortedPosts.slice(0, 20);
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Fetch user votes for displayed posts
+  let userVotes: Record<string, 1 | -1> = {};
+  if (user && topPosts.length > 0) {
+    const postIds = topPosts.map((p: any) => p.id);
+    const { data: votes } = await supabase
+      .from('votes')
+      .select('post_id, value')
+      .eq('user_id', user.id)
+      .in('post_id', postIds);
+
+    if (votes) {
+      userVotes = votes.reduce((acc, vote) => {
+        acc[vote.post_id] = vote.value;
+        return acc;
+      }, {} as Record<string, 1 | -1>);
+    }
+  }
+
+  const posts = topPosts.map((post: any) => {
     const isPersona = !!post.persona_id;
     const author = isPersona ? post.personas : post.profiles;
     const authorData = Array.isArray(author) ? author[0] : author;
@@ -68,18 +111,15 @@ export default async function BoardPage({ params }: PageProps) {
       authorName: authorData?.display_name ?? "Anonymous",
       authorUsername: authorData?.username ?? null,
       authorAvatarUrl: authorData?.avatar_url ?? null,
+      authorId: post.author_id,
       isPersona,
       createdAt: post.created_at,
       thumbnailUrl: post.media?.[0]?.url ?? null,
       flairs:
         post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
-      userVote: null,
+      userVote: userVotes[post.id] || null,
     };
   });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   let isJoined = false;
   let userIsAdmin = false;
@@ -134,7 +174,13 @@ export default async function BoardPage({ params }: PageProps) {
           )}
 
           <FeedSortBar basePath={`/r/${slug}`} />
-          <FeedContainer initialPosts={posts} userId={user?.id} />
+          <FeedContainer 
+            initialPosts={posts} 
+            userId={user?.id} 
+            boardSlug={slug}
+            sortBy={sortBy}
+            timeRange={timeRange}
+          />
         </div>
 
         {/* Desktop Sidebar */}

@@ -144,6 +144,29 @@ export async function GET(request: Request) {
     posts = (data ?? []) as any[];
   }
 
+  // Fetch user votes for displayed posts
+  if (user && posts.length > 0) {
+    const postIds = posts.map(p => p.id);
+    const { data: votes } = await supabase
+      .from('votes')
+      .select('post_id, value')
+      .eq('user_id', user.id)
+      .in('post_id', postIds);
+
+    const userVotes: Record<string, 1 | -1> = {};
+    if (votes) {
+      votes.forEach(vote => {
+        userVotes[vote.post_id] = vote.value;
+      });
+    }
+
+    // Add userVote to each post
+    posts = posts.map(post => ({
+      ...post,
+      userVote: userVotes[post.id] || null
+    }));
+  }
+
   const duration = Date.now() - startTime;
   console.log(`API /posts: ${posts.length} posts in ${duration}ms (sort: ${sort}, cached: ${useCache})`);
 

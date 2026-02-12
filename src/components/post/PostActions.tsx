@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
@@ -7,6 +8,9 @@ import {
   Bookmark,
   EyeOff,
   MoreHorizontal,
+  Edit,
+  Trash2,
+  ShieldOff,
 } from "lucide-react";
 
 interface PostActionsProps {
@@ -14,9 +18,13 @@ interface PostActionsProps {
   commentCount: number;
   isSaved?: boolean;
   inDetailPage?: boolean;
+  authorId?: string;
+  userId?: string;
+  canModerate?: boolean;
   onShare?: () => void;
   onSave?: () => void;
   onHide?: () => void;
+  onDelete?: () => void;
 }
 
 export default function PostActions({
@@ -24,10 +32,18 @@ export default function PostActions({
   commentCount,
   isSaved = false,
   inDetailPage = false,
+  authorId,
+  userId,
+  canModerate = false,
   onSave,
   onHide,
+  onDelete,
 }: PostActionsProps) {
   const router = useRouter();
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isAuthor = authorId && userId && authorId === userId;
 
   const handleCommentsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -37,6 +53,60 @@ export default function PostActions({
     } else {
       // Navigate to post detail page
       router.push(`/posts/${postId}#comments`);
+    }
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/posts/${postId}/edit`);
+    setShowMoreMenu(false);
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error('Failed to delete post');
+
+      onDelete?.();
+      router.refresh();
+    } catch (err) {
+      console.error('Failed to delete post:', err);
+      alert('Failed to delete post');
+    } finally {
+      setIsDeleting(false);
+      setShowMoreMenu(false);
+    }
+  };
+
+  const handleRemove = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const reason = prompt('Reason for removal (optional):');
+    if (reason === null) return; // User cancelled
+
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ARCHIVED', removal_reason: reason }),
+      });
+
+      if (!res.ok) throw new Error('Failed to remove post');
+
+      router.refresh();
+    } catch (err) {
+      console.error('Failed to remove post:', err);
+      alert('Failed to remove post');
+    } finally {
+      setShowMoreMenu(false);
     }
   };
 
@@ -80,9 +150,64 @@ export default function PostActions({
       >
         <EyeOff size={16} /> <span>Hide</span>
       </button>
-      <button className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300">
-        <MoreHorizontal size={16} />
-      </button>
+      <div className="relative">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowMoreMenu(!showMoreMenu);
+          }}
+          className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+
+        {showMoreMenu && (
+          <>
+            <div 
+              className="fixed inset-0 z-10" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMoreMenu(false);
+              }}
+            />
+            <div className="absolute right-0 top-8 z-20 w-48 bg-base-100 border border-neutral rounded-md shadow-lg py-1">
+              {isAuthor && (
+                <>
+                  <button
+                    onClick={handleEdit}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-base-content hover:bg-base-200"
+                  >
+                    <Edit size={16} />
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-base-200"
+                  >
+                    <Trash2 size={16} />
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </>
+              )}
+              {canModerate && !isAuthor && (
+                <button
+                  onClick={handleRemove}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-warning hover:bg-base-200"
+                >
+                  <ShieldOff size={16} />
+                  Remove (Mod)
+                </button>
+              )}
+              {!isAuthor && !canModerate && (
+                <div className="px-4 py-2 text-sm text-base-content/50">
+                  No actions available
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

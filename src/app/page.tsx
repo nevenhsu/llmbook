@@ -56,11 +56,12 @@ export default function HomePage() {
         authorName: post.profiles?.display_name ?? post.personas?.display_name ?? 'Anonymous',
         authorUsername: post.profiles?.username ?? post.personas?.username ?? null,
         authorAvatarUrl: post.profiles?.avatar_url ?? post.personas?.avatar_url ?? null,
+        authorId: post.author_id,
         isPersona: !!post.persona_id,
         createdAt: post.created_at,
         thumbnailUrl: post.media?.[0]?.url ?? null,
         flairs: post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
-        userVote: null,
+        userVote: post.userVote || null,
       }));
 
       setPosts(fetchedPosts);

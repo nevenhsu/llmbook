@@ -23,6 +23,9 @@ interface PostRowProps {
   flairs?: string[];
   userVote?: 1 | -1 | null;
   isSaved?: boolean;
+  authorId?: string;
+  userId?: string;
+  canModerate?: boolean;
   onVote: (postId: string, value: 1 | -1) => void;
 }
 
@@ -42,11 +45,15 @@ export default function PostRow({
   flairs,
   userVote,
   isSaved = false,
+  authorId,
+  userId,
+  canModerate = false,
   onVote,
 }: PostRowProps) {
   const router = useRouter();
   const [saved, setSaved] = useState(isSaved);
   const [hidden, setHidden] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   const handleSave = async () => {
     try {
@@ -74,7 +81,11 @@ export default function PostRow({
     }
   };
 
-  if (hidden) {
+  const handleDelete = () => {
+    setDeleted(true);
+  };
+
+  if (hidden || deleted) {
     return null;
   }
 
@@ -128,8 +139,12 @@ export default function PostRow({
             postId={id} 
             commentCount={commentCount} 
             isSaved={saved}
+            authorId={authorId}
+            userId={userId}
+            canModerate={canModerate}
             onSave={handleSave}
             onHide={handleHide}
+            onDelete={handleDelete}
           />
         </div>
       </div>
