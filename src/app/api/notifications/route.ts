@@ -1,14 +1,13 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import {
+  withAuth,
+  http,
+  parseJsonBody,
+} from '@/lib/server/route-helpers';
 
 export const runtime = 'nodejs';
 
-export async function GET(req: Request) {
-  const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+// GET /api/notifications - Get user's notifications
+export const GET = withAuth(async (req, { user, supabase }) => {
   const { data, error } = await supabase
     .from('notifications')
     .select('*')
@@ -16,22 +15,35 @@ export async function GET(req: Request) {
     .order('created_at', { ascending: false })
     .limit(50);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
-}
+  if (error) {
+    console.error('Error fetching notifications:', error);
+    return http.internalError();
+  }
 
-export async function PATCH(req: Request) {
-  const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return http.ok(data ?? []);
+});
 
-  const { ids } = await req.json();
+// PATCH /api/notifications - Mark notifications as read
+export const PATCH = withAuth(async (req, { user, supabase }) => {
+  const bodyResult = await parseJsonBody<{ ids: string[] }>(req);
+  if (bodyResult instanceof Response) return bodyResult;
+  
+  const { ids } = bodyResult;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return http.badRequest('ids array is required');
+  }
+
   const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
     .in('id', ids)
     .eq('user_id', user.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
-}
+  if (error) {
+    console.error('Error updating notifications:', error);
+    return http.internalError();
+  }
+
+  return http.ok({ success: true });
+});

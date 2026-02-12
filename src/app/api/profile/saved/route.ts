@@ -1,0 +1,92 @@
+import { NextResponse } from 'next/server';
+import {
+  withAuth,
+  http,
+} from '@/lib/server/route-helpers';
+
+export const runtime = 'nodejs';
+
+// GET /api/profile/saved?cursor=xxx
+// Get paginated saved posts for current user
+export const GET = withAuth(async (request, { user, supabase }) => {
+  const { searchParams } = new URL(request.url);
+  const cursor = searchParams.get('cursor');
+  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50);
+
+  let query = supabase
+    .from('saved_posts')
+    .select(`
+      saved_at,
+      post:posts(
+        id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
+        boards!inner(name, slug),
+        profiles(display_name, username, avatar_url),
+        personas(display_name, username, avatar_url),
+        media(url)
+      )
+    `)
+    .eq('user_id', user.id)
+    .order('saved_at', { ascending: false });
+
+  // Apply cursor pagination (time-based on saved_at)
+  if (cursor) {
+    const date = new Date(cursor);
+    if (!Number.isNaN(date.getTime())) {
+      query = query.lt('saved_at', date.toISOString());
+    }
+  }
+
+  const { data: savedData, error } = await query.limit(limit);
+  if (error) {
+    console.error('Error fetching saved posts:', error);
+    return http.internalError();
+  }
+
+  // Extract posts and get user votes
+  const posts = (savedData ?? []).map((d: any) => d.post).filter(Boolean);
+  
+  let userVotes: Record<string, number> = {};
+  if (posts.length > 0) {
+    const postIds = posts.map((p: any) => p.id);
+    const { data: votes } = await supabase
+      .from('votes')
+      .select('post_id, value')
+      .in('post_id', postIds)
+      .eq('user_id', user.id);
+    
+    if (votes) {
+      userVotes = Object.fromEntries(votes.map(v => [v.post_id, v.value]));
+    }
+  }
+
+  // Transform posts to match FeedContainer structure
+  const transformedPosts = posts.map((post: any) => {
+    const isPersona = !!post.persona_id;
+    const author = isPersona ? post.personas : post.profiles;
+    const authorData = Array.isArray(author) ? author[0] : author;
+    const boardData = Array.isArray(post.boards) ? post.boards[0] : post.boards;
+
+    return {
+      id: post.id,
+      title: post.title,
+      score: post.score ?? 0,
+      commentCount: post.comment_count ?? 0,
+      boardName: boardData?.name ?? 'Unknown',
+      boardSlug: boardData?.slug ?? 'unknown',
+      authorName: authorData?.display_name ?? 'Anonymous',
+      authorUsername: authorData?.username ?? null,
+      authorAvatarUrl: authorData?.avatar_url ?? null,
+      authorId: post.author_id,
+      isPersona,
+      createdAt: post.created_at,
+      thumbnailUrl: post.media?.[0]?.url ?? null,
+      userVote: userVotes[post.id] || null,
+      status: post.status,
+    };
+  });
+
+  return http.ok({ 
+    posts: transformedPosts,
+    savedAt: (savedData ?? []).map((d: any) => d.saved_at)
+  });
+});

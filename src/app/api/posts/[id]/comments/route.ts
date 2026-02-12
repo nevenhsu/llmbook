@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
 import { createNotification } from '@/lib/notifications';
+import {
+  getSupabaseServerClient,
+  withAuth,
+  http,
+  parseJsonBody,
+  validateBody,
+} from '@/lib/server/route-helpers';
 
 export const runtime = 'nodejs';
 
+// GET /api/posts/[id]/comments - Get comments for a post
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: postId } = await params;
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get('sort') || 'best';
   
-  const supabase = await createClient(cookies());
+  const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   let query = supabase
@@ -22,20 +28,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     `)
     .eq('post_id', postId);
 
-  if (sort === 'new') {
-    query = query.order('created_at', { ascending: false });
-  } else if (sort === 'old') {
-    query = query.order('created_at', { ascending: true });
-  } else if (sort === 'top') {
-    query = query.order('score', { ascending: false });
-  } else {
-    // best
-    query = query.order('score', { ascending: false }).order('created_at', { ascending: true });
+  // Apply sorting
+  switch (sort) {
+    case 'new':
+      query = query.order('created_at', { ascending: false });
+      break;
+    case 'old':
+      query = query.order('created_at', { ascending: true });
+      break;
+    case 'top':
+      query = query.order('score', { ascending: false });
+      break;
+    default: // 'best'
+      query = query.order('score', { ascending: false }).order('created_at', { ascending: true });
   }
 
   const { data: comments, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Error fetching comments:', error);
+    return http.internalError();
+  }
 
+  // Get user votes if logged in
   let userVotes: Record<string, number> = {};
   if (user && comments && comments.length > 0) {
     const commentIds = comments.map(c => c.id);
@@ -50,18 +64,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  return NextResponse.json({ comments, userVotes });
+  return http.ok({ comments, userVotes });
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+// POST /api/posts/[id]/comments - Create a comment
+export const POST = withAuth(async (req, { user, supabase }, { params }: { params: Promise<{ id: string }> }) => {
   const { id: postId } = await params;
-  const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { body, parentId } = await req.json();
-  if (!body) return NextResponse.json({ error: 'Body is required' }, { status: 400 });
+  
+  // Parse and validate body
+  const bodyResult = await parseJsonBody<{ body: string; parentId?: string }>(req);
+  if (bodyResult instanceof NextResponse) return bodyResult;
+  
+  const validation = validateBody(bodyResult, ['body']);
+  if (!validation.valid) return validation.response;
+  
+  const { body, parentId } = validation.data;
 
   // Get the post's board_id to check ban status
   const { data: post } = await supabase
@@ -71,7 +88,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .single();
 
   if (!post) {
-    return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    return http.notFound('Post not found');
   }
 
   // Check if user is banned from the board
@@ -79,9 +96,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const banned = await isUserBanned(post.board_id, user.id);
   
   if (banned) {
-    return NextResponse.json({ error: 'You are banned from this board' }, { status: 403 });
+    return http.forbidden('You are banned from this board');
   }
 
+  // Insert comment
   const { data: comment, error } = await supabase
     .from('comments')
     .insert({
@@ -96,18 +114,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     `)
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // Trigger notification
-  if (comment) {
-    if (post.author_id && post.author_id !== user.id) {
-      await createNotification(post.author_id, 'REPLY', {
-        postId,
-        commentId: comment.id,
-        authorName: (comment.profiles as any)?.display_name || 'Someone',
-      });
-    }
+  if (error) {
+    console.error('Error creating comment:', error);
+    return http.internalError();
   }
 
-  return NextResponse.json({ comment });
-}
+  // Trigger notification
+  if (comment && post.author_id && post.author_id !== user.id) {
+    await createNotification(post.author_id, 'REPLY', {
+      postId,
+      commentId: comment.id,
+      authorName: (comment.profiles as any)?.display_name || 'Someone',
+    });
+  }
+
+  return http.created({ comment });
+});

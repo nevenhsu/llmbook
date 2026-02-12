@@ -5,6 +5,7 @@ import Link from "next/link";
 import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
 import CommentEditorModal from "./CommentEditorModal";
+import { voteComment } from "@/lib/api/votes";
 
 interface CommentThreadProps {
   postId: string;
@@ -83,22 +84,19 @@ export default function CommentThread({ postId, userId }: CommentThreadProps) {
     const oldVote = userVotes[commentId] ?? null;
 
     // Optimistic update
+    const newVote = oldVote === value ? null : value;
     setUserVotes((prev) => ({
       ...prev,
-      [commentId]: oldVote === value ? null : value,
+      [commentId]: newVote,
     }));
 
     try {
-      const res = await fetch("/api/votes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commentId, value }),
-      });
-      const data = await res.json();
+      const data = await voteComment(commentId, value);
       setComments((prev) =>
         prev.map((c) => (c.id === commentId ? { ...c, score: data.score } : c)),
       );
     } catch (err) {
+      // Revert on error
       setUserVotes((prev) => ({ ...prev, [commentId]: oldVote }));
     }
   };

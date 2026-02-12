@@ -1,31 +1,58 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import PostRow from '@/components/post/PostRow';
+import { votePost } from '@/lib/api/votes';
+import { applyVote } from '@/lib/optimistic/vote';
+import {
+  buildPostsQueryParams,
+  getNextCursor,
+  calculateHasMore,
+  getPaginationMode,
+  createInitialPaginationState,
+  updatePaginationState,
+} from '@/lib/pagination';
 
 interface FeedContainerProps {
   initialPosts: any[];
   userId?: string;
   boardSlug?: string;
+  tagSlug?: string;
   sortBy?: string;
   timeRange?: string;
   canViewArchived?: boolean;
+  enableSort?: boolean;
 }
+
+const DEFAULT_LIMIT = 20;
 
 export default function FeedContainer({ 
   initialPosts, 
   userId, 
-  boardSlug, 
+  boardSlug,
+  tagSlug,
   sortBy = 'hot',
   timeRange = 'all',
-  canViewArchived = false
+  canViewArchived = false,
+  enableSort = true,
 }: FeedContainerProps) {
   const [posts, setPosts] = useState(initialPosts);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(initialPosts.length >= 20);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(calculateHasMore(initialPosts, DEFAULT_LIMIT));
+  const [page, setPage] = useState(1);
+  const [cursor, setCursor] = useState<string | undefined>(getNextCursor(initialPosts));
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Determine pagination mode
+  const paginationMode = useMemo(
+    () => getPaginationMode(sortBy, !!tagSlug),
+    [sortBy, tagSlug]
+  );
+
+  // Tag feeds always use 'new' sort and no time range
+  const effectiveSortBy = tagSlug ? 'new' : sortBy;
+  const effectiveTimeRange = tagSlug ? 'all' : timeRange;
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -42,38 +69,44 @@ export default function FeedContainer({
     }
 
     return () => observer.disconnect();
-  }, [hasMore, isLoading, page]);
+  }, [hasMore, isLoading, page, cursor]);
 
   const loadMore = async () => {
     if (isLoading || !hasMore) return;
 
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: (page + 1).toString(),
-        sort: sortBy,
-        t: timeRange
+      // Build query params based on pagination mode
+      const params = buildPostsQueryParams({
+        board: boardSlug,
+        tag: tagSlug,
+        sort: effectiveSortBy,
+        timeRange: effectiveTimeRange,
+        includeArchived: canViewArchived,
+        limit: DEFAULT_LIMIT,
+        // Use appropriate pagination parameter based on mode
+        ...(paginationMode === 'cursor' && cursor
+          ? { cursor }
+          : { offset: page * DEFAULT_LIMIT }
+        ),
       });
-
-      if (boardSlug) {
-        params.append('board', boardSlug);
-      }
-
-      if (canViewArchived) {
-        params.append('includeArchived', 'true');
-      }
 
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error('Failed to load posts');
 
       const newPosts = await res.json();
       
-      if (newPosts.length < 20) {
-        setHasMore(false);
+      // Update pagination state
+      const newHasMore = calculateHasMore(newPosts, DEFAULT_LIMIT);
+      setHasMore(newHasMore);
+      
+      if (paginationMode === 'cursor') {
+        setCursor(getNextCursor(newPosts));
+      } else {
+        setPage(prev => prev + 1);
       }
 
       setPosts(prev => [...prev, ...newPosts]);
-      setPage(prev => prev + 1);
     } catch (err) {
       console.error('Failed to load more posts:', err);
     } finally {
@@ -82,54 +115,47 @@ export default function FeedContainer({
   };
 
   const handleVote = async (postId: string, value: 1 | -1) => {
-    // Optimistic update
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
     const oldPosts = [...posts];
-    setPosts(posts.map(post => {
-      if (post.id !== postId) return post;
-      
-      let newScore = post.score;
-      let newVote: 1 | -1 | null = value;
-      
-      if (post.userVote === value) {
-        newScore -= value;
-        newVote = null;
-      } else if (post.userVote === -value) {
-        newScore += 2 * value;
-        newVote = value;
-      } else {
-        newScore += value;
-        newVote = value;
-      }
-      
-      return { ...post, score: newScore, userVote: newVote };
-    }));
+    
+    const optimisticResult = applyVote(
+      { score: post.score, userVote: post.userVote },
+      value
+    );
+    
+    setPosts(posts.map(p => 
+      p.id === postId 
+        ? { ...p, score: optimisticResult.score, userVote: optimisticResult.userVote }
+        : p
+    ));
 
     try {
-      const res = await fetch('/api/votes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, value }),
-      });
-      if (!res.ok) throw new Error('Failed to vote');
-      
-      const data = await res.json();
-      // Correct any drift with the actual score from server
-      setPosts(currentPosts => currentPosts.map(post => 
-        post.id === postId ? { ...post, score: data.score } : post
+      const data = await votePost(postId, value);
+      setPosts(currentPosts => currentPosts.map(p => 
+        p.id === postId ? { ...p, score: data.score } : p
       ));
     } catch (err) {
+      console.error('Failed to vote:', err);
       setPosts(oldPosts);
     }
   };
 
+  const emptyMessage = tagSlug 
+    ? { title: 'No posts with this tag yet', subtitle: 'Be the first to use this tag!' }
+    : { title: 'No posts yet', subtitle: 'Be the first to post something!' };
+
   return (
     <>
       <div className="border border-neutral rounded-md bg-base-200 divide-y divide-neutral">
-        {posts.map(post => <PostRow key={post.id} {...post} onVote={handleVote} userId={userId} />)}
+        {posts.map(post => (
+          <PostRow key={post.id} {...post} onVote={handleVote} userId={userId} />
+        ))}
         {posts.length === 0 && !isLoading && (
           <div className="py-20 text-center text-base-content/70">
-            <p className="text-lg">No posts yet</p>
-            <p className="text-sm mt-1">Be the first to post something!</p>
+            <p className="text-lg">{emptyMessage.title}</p>
+            <p className="text-sm mt-1">{emptyMessage.subtitle}</p>
           </div>
         )}
       </div>

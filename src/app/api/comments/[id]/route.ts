@@ -1,18 +1,28 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import {
+  withAuth,
+  http,
+  parseJsonBody,
+  validateBody,
+} from '@/lib/server/route-helpers';
 
 export const runtime = 'nodejs';
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+interface CommentParams {
+  id: string;
+}
+
+// PATCH /api/comments/[id] - Update a comment
+export const PATCH = withAuth<CommentParams>(async (req, { user, supabase }, { params }) => {
   const { id } = await params;
-  const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { body } = await req.json();
-  if (!body) return NextResponse.json({ error: 'Body is required' }, { status: 400 });
+  
+  // Parse and validate body
+  const bodyResult = await parseJsonBody<{ body: string }>(req);
+  if (bodyResult instanceof Response) return bodyResult;
+  
+  const validation = validateBody(bodyResult, ['body']);
+  if (!validation.valid) return validation.response;
+  
+  const { body } = validation.data;
 
   const { data: comment, error } = await supabase
     .from('comments')
@@ -22,18 +32,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!comment) return NextResponse.json({ error: 'Comment not found or not author' }, { status: 403 });
+  if (error) {
+    console.error('Error updating comment:', error);
+    return http.internalError();
+  }
+  
+  if (!comment) {
+    return http.forbidden('Comment not found or not author');
+  }
 
-  return NextResponse.json({ comment });
-}
+  return http.ok({ comment });
+});
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+// DELETE /api/comments/[id] - Soft delete a comment
+export const DELETE = withAuth<CommentParams>(async (req, { user, supabase }, { params }) => {
   const { id } = await params;
-  const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data: comment, error } = await supabase
     .from('comments')
@@ -43,8 +56,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!comment) return NextResponse.json({ error: 'Comment not found or not author' }, { status: 403 });
+  if (error) {
+    console.error('Error deleting comment:', error);
+    return http.internalError();
+  }
+  
+  if (!comment) {
+    return http.forbidden('Comment not found or not author');
+  }
 
-  return NextResponse.json({ success: true });
-}
+  return http.ok({ success: true });
+});

@@ -99,7 +99,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
     ? "Now"
     : createdAt.getFullYear();
 
-  // Fetch posts or comments
+  // Fetch initial data (first page) - sorted by created_at desc (newest first)
   let posts: any[] = [];
   let comments: any[] = [];
   
@@ -116,7 +116,9 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         `,
         )
         .eq("author_id", profile.user_id)
-        .order("created_at", { ascending: false });
+        .eq("status", "PUBLISHED")
+        .order("created_at", { ascending: false })
+        .limit(20);
       posts = data ?? [];
     } else if (persona) {
       const { data } = await supabase
@@ -130,7 +132,9 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         `,
         )
         .eq("persona_id", persona.id)
-        .order("created_at", { ascending: false });
+        .eq("status", "PUBLISHED")
+        .order("created_at", { ascending: false })
+        .limit(20);
       posts = data ?? [];
     }
   } else if (tab === "comments") {
@@ -144,7 +148,8 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         `,
         )
         .eq("author_id", profile.user_id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(20);
       comments = data ?? [];
     } else if (persona) {
       const { data } = await supabase
@@ -156,25 +161,12 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         `,
         )
         .eq("persona_id", persona.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(20);
       comments = data ?? [];
     }
-  } else if (tab === "saved" && isOwnProfile && currentUser) {
-    // Only show saved posts for own profile
-    const { data } = await supabase
-      .from("saved_posts")
-      .select(`
-        post:posts(
-          id, title, body, created_at, score, comment_count, persona_id,
-          boards(name, slug),
-          profiles(username, display_name, avatar_url),
-          media(url)
-        )
-      `)
-      .eq("user_id", currentUser.id)
-      .order("created_at", { ascending: false });
-    posts = (data ?? []).map((d: any) => d.post).filter(Boolean);
   }
+  // Note: saved posts are loaded client-side via API, no need to fetch here
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-4 px-0 pb-8 sm:px-2">
@@ -268,6 +260,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
               displayName={displayName}
               username={usernameDisplay}
               tab={tab}
+              userId={currentUser?.id}
+              authorId={profile?.user_id}
+              personaId={persona?.id}
+              isOwnProfile={isOwnProfile}
             />
           </div>
         </section>

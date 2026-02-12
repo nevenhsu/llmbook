@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import VotePill from '@/components/ui/VotePill';
+import { votePost } from '@/lib/api/votes';
+import { applyVote } from '@/lib/optimistic/vote';
+import { ApiError } from '@/lib/api/fetch-json';
 
 interface PostDetailVoteProps {
   postId: string;
@@ -21,44 +24,29 @@ export default function PostDetailVote({
   const handleVote = async (value: 1 | -1) => {
     if (isLoading) return;
 
+    // Save previous state for rollback
+    const previousState = { score, userVote };
+    
+    // Optimistic update using shared logic
+    const optimisticResult = applyVote({ score, userVote }, value);
+    setScore(optimisticResult.score);
+    setUserVote(optimisticResult.userVote);
     setIsLoading(true);
-    
-    // Optimistic update
-    const previousVote = userVote;
-    const previousScore = score;
-    
-    if (userVote === value) {
-      // Toggle off
-      setUserVote(null);
-      setScore(score - value);
-    } else if (userVote) {
-      // Change vote
-      setUserVote(value);
-      setScore(score - userVote + value);
-    } else {
-      // New vote
-      setUserVote(value);
-      setScore(score + value);
-    }
 
     try {
-      const res = await fetch('/api/votes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, value }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Vote failed');
-      }
-
-      const data = await res.json();
+      const data = await votePost(postId, value);
+      // Reconcile with server response
       setScore(data.score);
     } catch (error) {
       // Revert on error
       console.error('Vote error:', error);
-      setUserVote(previousVote);
-      setScore(previousScore);
+      setScore(previousState.score);
+      setUserVote(previousState.userVote);
+      
+      if (error instanceof ApiError && error.status === 401) {
+        // Could trigger login modal here
+        console.log('Please log in to vote');
+      }
     } finally {
       setIsLoading(false);
     }

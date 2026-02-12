@@ -1,11 +1,15 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import {
+  getSupabaseServerClient,
+  withAuth,
+  http,
+  parseJsonBody,
+} from '@/lib/server/route-helpers';
 
 export const runtime = 'nodejs';
 
+// GET /api/boards - List all boards
 export async function GET(request: Request) {
-  const supabase = await createClient(cookies());
+  const supabase = await getSupabaseServerClient();
   const { searchParams } = new URL(request.url);
   const includeArchived = searchParams.get('archived') === 'true';
   
@@ -21,56 +25,60 @@ export async function GET(request: Request) {
   const { data, error } = await query;
 
   if (error) {
-    return new NextResponse(error.message, { status: 500 });
+    console.error('Error fetching boards:', error);
+    return http.internalError();
   }
 
-  return NextResponse.json(data);
+  return http.ok(data);
 }
 
-export async function POST(request: Request) {
-  const supabase = await createClient(cookies());
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
-  const { name, slug, description, banner_url, icon_url, rules } = await request.json();
+// POST /api/boards - Create a new board
+export const POST = withAuth(async (request, { user, supabase }) => {
+  const bodyResult = await parseJsonBody<{
+    name: string;
+    slug: string;
+    description?: string;
+    banner_url?: string;
+    icon_url?: string;
+    rules?: Array<{ title: string; description?: string }>;
+  }>(request);
+  
+  if (bodyResult instanceof Response) return bodyResult;
+  
+  const { name, slug, description, banner_url, icon_url, rules } = bodyResult;
 
   // Validation
   if (!name || !slug) {
-    return new NextResponse('Missing required fields: name, slug', { status: 400 });
+    return http.badRequest('Missing required fields: name, slug');
   }
 
   if (name.length < 3 || name.length > 21) {
-    return new NextResponse('Board name must be 3-21 characters', { status: 400 });
+    return http.badRequest('Board name must be 3-21 characters');
   }
 
   if (!/^[a-zA-Z0-9_]+$/.test(name)) {
-    return new NextResponse('Board name can only contain alphanumeric characters and underscores', { status: 400 });
+    return http.badRequest('Board name can only contain alphanumeric characters and underscores');
   }
 
   if (!/^[a-z0-9_]+$/.test(slug)) {
-    return new NextResponse('Slug must be lowercase alphanumeric with underscores only', { status: 400 });
+    return http.badRequest('Slug must be lowercase alphanumeric with underscores only');
   }
 
   if (description && description.length > 500) {
-    return new NextResponse('Description must be max 500 characters', { status: 400 });
+    return http.badRequest('Description must be max 500 characters');
   }
 
   if (rules && Array.isArray(rules)) {
     if (rules.length > 15) {
-      return new NextResponse('Maximum 15 rules allowed', { status: 400 });
+      return http.badRequest('Maximum 15 rules allowed');
     }
     
     for (const rule of rules) {
       if (!rule.title || rule.title.length > 100) {
-        return new NextResponse('Rule title required and must be max 100 characters', { status: 400 });
+        return http.badRequest('Rule title required and must be max 100 characters');
       }
       if (rule.description && rule.description.length > 500) {
-        return new NextResponse('Rule description must be max 500 characters', { status: 400 });
+        return http.badRequest('Rule description must be max 500 characters');
       }
     }
   }
@@ -92,13 +100,14 @@ export async function POST(request: Request) {
 
   if (boardError) {
     if (boardError.code === '23505') { // Unique violation
-      return new NextResponse('Board slug already exists', { status: 409 });
+      return http.conflict('Board slug already exists');
     }
-    return new NextResponse(boardError.message, { status: 400 });
+    console.error('Error creating board:', boardError);
+    return http.badRequest(boardError.message);
   }
 
   if (!board) {
-    return new NextResponse('Failed to create board', { status: 500 });
+    return http.internalError('Failed to create board');
   }
 
   // Add creator as owner in board_moderators
@@ -118,7 +127,8 @@ export async function POST(request: Request) {
   if (modError) {
     // Rollback: delete the board
     await supabase.from('boards').delete().eq('id', board.id);
-    return new NextResponse('Failed to assign board owner', { status: 500 });
+    console.error('Error assigning board owner:', modError);
+    return http.internalError('Failed to assign board owner');
   }
 
   // Auto-join creator as member
@@ -134,5 +144,5 @@ export async function POST(request: Request) {
     console.error('Failed to auto-join creator:', memberError);
   }
 
-  return NextResponse.json({ board });
-}
+  return http.created({ board });
+});
