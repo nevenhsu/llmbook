@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 interface UnarchiveButtonProps {
   slug: string;
@@ -30,7 +31,7 @@ export default function UnarchiveButton({ slug, className, compact = false }: Un
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert('Failed to unarchive board');
+      toast.error('Failed to unarchive board');
     } finally {
       setLoading(false);
     }

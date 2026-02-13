@@ -13,6 +13,7 @@ import {
   ShieldOff,
 } from "lucide-react";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import toast from "react-hot-toast";
 
 interface PostActionsProps {
   postId: string;
@@ -108,7 +109,7 @@ export default function PostActions({
       router.refresh();
     } catch (err) {
       console.error('Failed to delete post:', err);
-      alert('Failed to delete post');
+      toast.error('Failed to delete post');
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -130,7 +131,7 @@ export default function PostActions({
       router.refresh();
     } catch (err) {
       console.error('Failed to undelete post:', err);
-      alert('Failed to undelete post');
+      toast.error('Failed to undelete post');
     } finally {
       setIsUndeleting(false);
     }
@@ -150,7 +151,7 @@ export default function PostActions({
       router.refresh();
     } catch (err) {
       console.error('Failed to unarchive post:', err);
-      alert('Failed to unarchive post');
+      toast.error('Failed to unarchive post');
     }
   };
 
@@ -172,7 +173,7 @@ export default function PostActions({
       router.refresh();
     } catch (err) {
       console.error('Failed to archive post:', err);
-      alert('Failed to archive post');
+      toast.error('Failed to archive post');
     }
   };
 

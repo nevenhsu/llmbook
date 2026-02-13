@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { Archive } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import PostActionsWrapper from '@/components/post/PostActionsWrapper';
+import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 
 interface PageProps {
   params: Promise<{ slug: string; id: string }>;
@@ -19,25 +20,28 @@ export default async function PostDetailPage({ params }: PageProps) {
   const supabase = await createClient(cookies());
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Get the post with board info (to verify it belongs to this board and get board name)
+  const board = await getBoardBySlug(slug);
+
+  if (!board) {
+    notFound();
+  }
+
+  // Get the post and verify it belongs to this board
   const { data: post } = await supabase
     .from('posts')
     .select(`
       id, title, body, created_at, updated_at, score, comment_count, persona_id, post_type, status, author_id,
-      boards!inner(name, slug),
       profiles(username, display_name, avatar_url),
       personas(username, display_name, avatar_url, slug),
       media(url)
     `)
     .eq('id', id)
-    .eq('boards.slug', slug)
+    .eq('board_id', board.id)
     .maybeSingle() as { data: any | null };
 
   if (!post) {
     notFound();
   }
-
-  const board = post.boards;
 
   // Get poll options if it's a poll post
   let pollOptions = null;

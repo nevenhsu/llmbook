@@ -5,6 +5,7 @@ import FeedContainer from "@/components/feed/FeedContainer";
 import BoardLayout from "@/components/board/BoardLayout";
 import UnarchiveButton from "@/components/board/UnarchiveButton";
 import { isAdmin } from "@/lib/admin";
+import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { sortPosts, getTimeRangeDate, type SortType } from "@/lib/ranking";
 import { Archive } from "lucide-react";
 
@@ -20,13 +21,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   const timeRange = searchParamsResolved?.t || 'all';
   
   const supabase = await createClient(cookies());
-  const { data: board } = await supabase
-    .from("boards")
-    .select(
-      "id,name,slug,description,icon_url,banner_url,member_count,post_count,created_at,is_archived,rules",
-    )
-    .eq("slug", slug)
-    .maybeSingle();
+  const board = await getBoardBySlug(slug);
 
   // Board not found is handled by layout.tsx, which will call notFound()
   if (!board) {
@@ -150,7 +145,12 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   }
 
   return (
-    <BoardLayout board={board} slug={slug} isJoined={isJoined} canManage={canManage}>
+    <BoardLayout
+      board={{ ...board, rules: board.rules ?? undefined }}
+      slug={slug}
+      isJoined={isJoined}
+      canManage={canManage}
+    >
       {/* Archived Banner */}
       {board.is_archived && (
         <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">

@@ -226,9 +226,8 @@ export async function POST(request: Request) {
     return new NextResponse('Missing fields', { status: 400 });
   }
 
-  if (postType === 'text' && !body) {
-    return new NextResponse('Body required for text posts', { status: 400 });
-  }
+  // Allow text posts with just images (body can be empty or contain only HTML tags)
+  // Removed body requirement for text posts since images are allowed
 
   if (postType === 'link' && !linkUrl) {
     return new NextResponse('Link URL required for link posts', { status: 400 });
@@ -319,5 +318,17 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ id: post.id });
+  // Fetch board slug for redirect
+  const { data: boardData } = await supabase
+    .from('boards')
+    .select('slug')
+    .eq('id', boardId)
+    .single();
+
+  console.log('Created post:', post.id, 'in board:', boardId, 'slug:', boardData?.slug);
+
+  return NextResponse.json({ 
+    id: post.id,
+    boardSlug: boardData?.slug || null
+  });
 }

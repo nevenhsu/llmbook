@@ -15,6 +15,7 @@ import {
 import SafeHtml from "@/components/ui/SafeHtml";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import toast from "react-hot-toast";
 
 interface CommentItemProps {
   comment: any;
@@ -69,7 +70,7 @@ export default function CommentItem({
       onChanged?.();
     } catch (err) {
       console.error("Failed to delete comment:", err);
-      alert("Failed to delete comment");
+      toast.error("Failed to delete comment");
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -91,7 +92,7 @@ export default function CommentItem({
       onChanged?.();
     } catch (err) {
       console.error("Failed to undelete comment:", err);
-      alert("Failed to undelete comment");
+      toast.error("Failed to undelete comment");
     } finally {
       setIsUndeleting(false);
       setShowMoreMenu(false);
@@ -116,7 +117,7 @@ export default function CommentItem({
       onChanged?.();
     } catch (err) {
       console.error("Failed to remove comment:", err);
-      alert("Failed to remove comment");
+      toast.error("Failed to remove comment");
     } finally {
       setShowMoreMenu(false);
     }

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { canManageBoardUsers } from '@/lib/board-permissions';
+import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import BoardMemberManagement from '@/components/board/BoardMemberManagement';
 
 export default async function BoardMemberPage({
@@ -18,18 +19,17 @@ export default async function BoardMemberPage({
   } = await supabase.auth.getUser();
 
   const { slug } = await params;
-
-  const { data: board } = await adminClient
-    .from('boards')
-    .select('id, name, slug')
-    .eq('slug', slug)
-    .single();
+  const board = await getBoardBySlug(slug);
 
   if (!board) {
     redirect('/');
   }
 
   const canEditBans = user ? await canManageBoardUsers(board.id, user.id) : false;
+
+  if (!canEditBans) {
+    redirect(`/r/${board.slug}`);
+  }
 
   const { data: members } = await adminClient
     .from('board_members')

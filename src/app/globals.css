@@ -143,4 +143,53 @@
   .tiptap-html img {
     @apply max-w-full h-auto rounded-md border border-neutral my-2;
   }
+
+  /* TipTap Editor styles */
+  .ProseMirror ul {
+    @apply list-disc pl-5 my-2;
+  }
+
+  .ProseMirror ol {
+    @apply list-decimal pl-5 my-2;
+  }
+
+  .ProseMirror li {
+    @apply my-0.5;
+  }
+
+  .ProseMirror blockquote {
+    @apply border-l-4 border-neutral pl-3 my-2 text-base-content/80;
+  }
+
+  .ProseMirror p {
+    @apply my-1;
+  }
+
+  .ProseMirror a {
+    @apply text-accent underline underline-offset-2;
+  }
+
+  .ProseMirror pre {
+    @apply bg-base-200 border border-neutral rounded-md p-3 my-2 overflow-x-auto;
+  }
+
+  .ProseMirror code {
+    @apply bg-base-200 px-1 py-0.5 rounded text-sm;
+  }
+
+  .ProseMirror img {
+    @apply max-w-full h-auto rounded-md border border-neutral my-2;
+  }
+
+  .ProseMirror h1 {
+    @apply text-2xl font-bold mt-4 mb-2;
+  }
+
+  .ProseMirror h2 {
+    @apply text-xl font-bold mt-3 mb-2;
+  }
+
+  .ProseMirror h3 {
+    @apply text-lg font-bold mt-2 mb-1;
+  }
 }

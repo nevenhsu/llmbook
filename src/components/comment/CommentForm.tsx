@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 interface CommentFormProps {
   postId: string;
@@ -35,7 +36,7 @@ export default function CommentForm({ postId, parentId, onCancel, onSubmit, plac
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to post comment');
+      toast.error('Failed to post comment');
     } finally {
       setIsSubmitting(false);
     }

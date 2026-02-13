@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { getUserBoardRole } from '@/lib/board-permissions';
 import { isAdmin } from '@/lib/admin';
+import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import BoardSettingsForm from '@/components/board/BoardSettingsForm';
 
 export default async function BoardSettingsPage({
@@ -21,12 +22,7 @@ export default async function BoardSettingsPage({
 
   const { slug } = await params;
 
-  // Get board
-  const { data: board } = await supabase
-    .from('boards')
-    .select('*')
-    .eq('slug', slug)
-    .single();
+  const board = await getBoardBySlug(slug);
 
   if (!board) {
     redirect('/');

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { UserPlus, UserMinus } from "lucide-react";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 import { ApiError } from "@/lib/api/fetch-json";
+import toast from "react-hot-toast";
 
 interface FollowButtonProps {
   userId: string;
@@ -51,7 +52,7 @@ export default function FollowButton({
         if (response.status === 401) {
           openLoginModal();
         } else {
-          alert(data.error || "Failed to update follow status");
+          toast.error(data.error || "Failed to update follow status");
         }
       }
     } catch (error) {
@@ -59,7 +60,7 @@ export default function FollowButton({
       setIsFollowing(previousState);
       onFollowChange?.(previousState);
       console.error("Follow error:", error);
-      alert("Failed to update follow status");
+      toast.error("Failed to update follow status");
     } finally {
       setIsLoading(false);
     }

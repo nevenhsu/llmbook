@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Avatar from '@/components/ui/Avatar';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface BoardMember {
   user_id: string;
@@ -62,6 +63,8 @@ export default function BoardMemberManagement({
   const [banLoading, setBanLoading] = useState(false);
   const [unbanLoadingUserId, setUnbanLoadingUserId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [showKickModal, setShowKickModal] = useState(false);
+  const [memberToKick, setMemberToKick] = useState<string | null>(null);
 
   const bannedUserIds = useMemo(() => new Set(bansList.map((ban) => ban.user_id)), [bansList]);
   const bannableMembers = useMemo(
@@ -70,14 +73,18 @@ export default function BoardMemberManagement({
   );
 
   const kickMember = async (userId: string) => {
-    const confirmed = window.confirm('Kick this member from the board?');
-    if (!confirmed) return;
+    setMemberToKick(userId);
+    setShowKickModal(true);
+  };
 
-    setKickLoadingUserId(userId);
+  const confirmKickMember = async () => {
+    if (!memberToKick) return;
+
+    setKickLoadingUserId(memberToKick);
     setError('');
 
     try {
-      const res = await fetch(`/api/boards/${boardSlug}/members/${userId}`, {
+      const res = await fetch(`/api/boards/${boardSlug}/members/${memberToKick}`, {
         method: 'DELETE'
       });
 
@@ -85,7 +92,9 @@ export default function BoardMemberManagement({
         throw new Error('Failed to kick member.');
       }
 
-      setMembersList((prev) => prev.filter((member) => member.user_id !== userId));
+      setMembersList((prev) => prev.filter((member) => member.user_id !== memberToKick));
+      setShowKickModal(false);
+      setMemberToKick(null);
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -337,6 +346,20 @@ export default function BoardMemberManagement({
           )}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={showKickModal}
+        onClose={() => {
+          setShowKickModal(false);
+          setMemberToKick(null);
+        }}
+        onConfirm={confirmKickMember}
+        title="Kick Member"
+        message="Are you sure you want to kick this member from the board?"
+        confirmText="Kick"
+        isLoading={kickLoadingUserId !== null}
+        variant="warning"
+      />
     </div>
   );
 }

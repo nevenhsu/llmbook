@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { X, UserPlus, Archive } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import ImageUpload from '@/components/ui/ImageUpload';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import toast from 'react-hot-toast';
 
 interface Rule {
   title: string;
@@ -74,6 +76,8 @@ export default function BoardSettingsForm({
   const [expandedPermissionUserId, setExpandedPermissionUserId] = useState<string | null>(null);
   const [editingPermissions, setEditingPermissions] = useState<Record<string, ModeratorPermissions>>({});
   const [savePermissionsUserId, setSavePermissionsUserId] = useState<string | null>(null);
+  const [showRemoveModeratorModal, setShowRemoveModeratorModal] = useState(false);
+  const [moderatorToRemove, setModeratorToRemove] = useState<string | null>(null);
 
   // General settings state
   const [name, setName] = useState(board.name);
@@ -163,7 +167,7 @@ export default function BoardSettingsForm({
       }
 
       router.refresh();
-      alert('Settings updated successfully');
+      toast.success('Settings updated successfully');
     } catch (err: any) {
       console.error(err);
       setError('Failed to update board general settings.');
@@ -190,7 +194,7 @@ export default function BoardSettingsForm({
       }
 
       router.refresh();
-      alert('Rules updated successfully');
+      toast.success('Rules updated successfully');
     } catch (err: any) {
       console.error(err);
       setError('Failed to update rules.');
@@ -349,16 +353,18 @@ export default function BoardSettingsForm({
   };
 
   const handleRemoveModerator = async (userId: string) => {
-    const confirmed = window.confirm('Remove this moderator?');
-    if (!confirmed) {
-      return;
-    }
+    setModeratorToRemove(userId);
+    setShowRemoveModeratorModal(true);
+  };
 
-    setRemoveLoadingUserId(userId);
+  const confirmRemoveModerator = async () => {
+    if (!moderatorToRemove) return;
+
+    setRemoveLoadingUserId(moderatorToRemove);
     setError('');
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}/moderators/${userId}`, {
+      const res = await fetch(`/api/boards/${board.slug}/moderators/${moderatorToRemove}`, {
         method: 'DELETE'
       });
 
@@ -366,7 +372,9 @@ export default function BoardSettingsForm({
         throw new Error(await res.text());
       }
 
-      setModeratorsList((prev) => prev.filter((mod) => mod.user_id !== userId));
+      setModeratorsList((prev) => prev.filter((mod) => mod.user_id !== moderatorToRemove));
+      setShowRemoveModeratorModal(false);
+      setModeratorToRemove(null);
       router.refresh();
     } catch (err: any) {
       console.error(err);
@@ -780,6 +788,20 @@ export default function BoardSettingsForm({
           </form>
         </dialog>
       )}
+
+      <ConfirmModal
+        isOpen={showRemoveModeratorModal}
+        onClose={() => {
+          setShowRemoveModeratorModal(false);
+          setModeratorToRemove(null);
+        }}
+        onConfirm={confirmRemoveModerator}
+        title="Remove Moderator"
+        message="Are you sure you want to remove this moderator?"
+        confirmText="Remove"
+        isLoading={removeLoadingUserId !== null}
+        variant="danger"
+      />
     </div>
   );
 }

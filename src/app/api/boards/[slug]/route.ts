@@ -37,12 +37,11 @@ export async function PATCH(
   }
 
   const payload = await request.json();
-  const { name, description, banner_url, icon_url, rules, is_archived } = payload;
+  const { name, description, banner_url, rules, is_archived } = payload;
   const hasSettingsUpdate =
     name !== undefined ||
     description !== undefined ||
     banner_url !== undefined ||
-    icon_url !== undefined ||
     rules !== undefined;
   const hasUnarchiveRequest = is_archived === false;
 
@@ -99,7 +98,6 @@ export async function PATCH(
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
   if (banner_url !== undefined) updateData.banner_url = banner_url;
-  if (icon_url !== undefined) updateData.icon_url = icon_url;
   if (rules !== undefined) updateData.rules = rules;
   if (hasUnarchiveRequest) {
     updateData.is_archived = false;
@@ -111,7 +109,7 @@ export async function PATCH(
     .from('boards')
     .update(updateData)
     .eq('id', board.id)
-    .select('id, slug, name, description, banner_url, icon_url, rules, updated_at')
+    .select('id, slug, name, description, banner_url, rules, updated_at')
     .single();
 
   if (error) {

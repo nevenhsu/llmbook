@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import PostForm from "@/components/create-post/PostForm";
+import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 
 interface PageProps {
   params: Promise<{ slug: string; id: string }>;
@@ -10,6 +11,11 @@ interface PageProps {
 export default async function EditPostPage({ params }: PageProps) {
   const { slug, id } = await params;
   const supabase = await createClient(cookies());
+  const board = await getBoardBySlug(slug);
+
+  if (!board) {
+    notFound();
+  }
 
   // Check authentication
   const {
@@ -33,7 +39,6 @@ export default async function EditPostPage({ params }: PageProps) {
       persona_id,
       post_type,
       status,
-      boards(id, slug),
       personas(id, username),
       post_tags(tag_id),
       media(id, url, width, height, file_size),
@@ -41,6 +46,7 @@ export default async function EditPostPage({ params }: PageProps) {
     `
     )
     .eq("id", id)
+    .eq("board_id", board.id)
     .maybeSingle();
 
   if (postError || !post) {
@@ -73,7 +79,6 @@ export default async function EditPostPage({ params }: PageProps) {
   ]);
 
   // Prepare initial data for the form
-  const board = Array.isArray(post.boards) ? post.boards[0] : post.boards;
   const tagIds = post.post_tags?.map((pt: any) => pt.tag_id) || [];
   
   // Format media
@@ -117,8 +122,8 @@ export default async function EditPostPage({ params }: PageProps) {
     postId: post.id,
     title: post.title,
     body: post.body || "",
-    boardId: post.board_id,
-    boardSlug: board?.slug || slug,
+    boardId: board.id,
+    boardSlug: board.slug,
     tagIds,
     postType: post.post_type,
     media: mediaFormatted,

@@ -20,12 +20,15 @@ import {
   Redo2,
   Strikethrough,
   Undo2,
+  X,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export interface SimpleEditorProps {
   content?: string;
   onChange?: (content: string) => void;
   placeholder?: string;
+  onImageUpload?: (file: File) => Promise<{ url: string }>;
 }
 
 function isProbablySafeHttpUrl(raw: string) {
@@ -68,45 +71,16 @@ function ToolbarButton({
   );
 }
 
-function MenuBar({ editor }: { editor: Editor }) {
+function MenuBar({ 
+  editor, 
+  onOpenLinkModal, 
+  onOpenImageModal 
+}: { 
+  editor: Editor;
+  onOpenLinkModal: () => void;
+  onOpenImageModal: () => void;
+}) {
   const headingLevels = [1, 2, 3] as const;
-
-  function setLink() {
-    const previousUrl = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("URL", previousUrl ?? "");
-    if (url === null) return;
-
-    const trimmed = url.trim();
-    if (!trimmed) {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-
-    if (!isProbablySafeHttpUrl(trimmed)) {
-      window.alert("Please enter a valid http(s) URL.");
-      return;
-    }
-
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange("link")
-      .setLink({ href: trimmed })
-      .run();
-  }
-
-  function insertImage() {
-    const url = window.prompt("Image URL");
-    if (!url) return;
-
-    const trimmed = url.trim();
-    if (!isProbablySafeHttpUrl(trimmed)) {
-      window.alert("Please enter a valid http(s) image URL.");
-      return;
-    }
-
-    editor.chain().focus().setImage({ src: trimmed }).run();
-  }
 
   return (
     <div className="relative z-50 flex flex-wrap items-center gap-0.5 overflow-visible border-b border-neutral bg-base-100/60 px-2 py-1 backdrop-blur-sm">
@@ -226,7 +200,7 @@ function MenuBar({ editor }: { editor: Editor }) {
 
       <ToolbarButton
         label="Add or edit link"
-        onClick={setLink}
+        onClick={onOpenLinkModal}
         active={editor.isActive("link")}
       >
         <Link2 size={16} />
@@ -238,7 +212,7 @@ function MenuBar({ editor }: { editor: Editor }) {
       >
         <Link2Off size={16} />
       </ToolbarButton>
-      <ToolbarButton label="Insert image" onClick={insertImage}>
+      <ToolbarButton label="Insert image" onClick={onOpenImageModal}>
         <ImagePlus size={16} />
       </ToolbarButton>
     </div>
@@ -249,8 +223,15 @@ export function SimpleEditor({
   content,
   onChange,
   placeholder,
+  onImageUpload,
 }: SimpleEditorProps) {
   const [internalContent, setInternalContent] = useState<string>(content ?? "");
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const effectiveContent = content ?? internalContent;
   const emitChange = useMemo(() => {
@@ -274,7 +255,7 @@ export function SimpleEditor({
         linkOnPaste: true,
       }),
       Image.configure({
-        allowBase64: false,
+        allowBase64: true,
       }),
     ],
     content: effectiveContent,
@@ -296,14 +277,210 @@ export function SimpleEditor({
     editor.commands.setContent(effectiveContent, { emitUpdate: false });
   }, [effectiveContent, editor]);
 
+  function handleOpenLinkModal() {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href as string | undefined;
+    setLinkUrl(previousUrl ?? "");
+    setShowLinkModal(true);
+  }
+
+  function handleSetLink() {
+    if (!editor) return;
+    const trimmed = linkUrl.trim();
+    
+    if (!trimmed) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      setShowLinkModal(false);
+      setLinkUrl("");
+      return;
+    }
+
+    if (!isProbablySafeHttpUrl(trimmed)) {
+      toast.error("Please enter a valid http(s) URL.");
+      return;
+    }
+
+    editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+    setShowLinkModal(false);
+    setLinkUrl("");
+  }
+
+  function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleInsertImage() {
+    if (!editor || !imageFile) return;
+
+    if (!onImageUpload) {
+      toast.error("Image upload not configured");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      // Get placeholder URL from parent component
+      const result = await onImageUpload(imageFile);
+      
+      // Insert image with placeholder URL
+      // The parent component will replace this with the real URL when post is submitted
+      editor.chain().focus().setImage({ src: result.url }).run();
+      
+      setShowImageModal(false);
+      setImageFile(null);
+      setImagePreview("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to prepare image");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   return (
-    <div className="relative isolate overflow-x-auto rounded-md border border-neutral bg-base-100 transition-colors focus-within:border-neutral">
-      <div className="relative z-20">
-        {editor ? <MenuBar editor={editor} /> : null}
+    <>
+      <div className="relative isolate overflow-x-auto rounded-md border border-neutral bg-base-100 transition-colors focus-within:border-neutral">
+        <div className="relative z-20">
+          {editor ? (
+            <MenuBar 
+              editor={editor} 
+              onOpenLinkModal={handleOpenLinkModal}
+              onOpenImageModal={() => setShowImageModal(true)}
+            />
+          ) : null}
+        </div>
+        <div className="relative z-0 overflow-hidden">
+          <EditorContent editor={editor} />
+        </div>
       </div>
-      <div className="relative z-0 overflow-hidden">
-        <EditorContent editor={editor} />
-      </div>
-    </div>
+
+      {/* Link Modal */}
+      {showLinkModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg border border-neutral bg-base-100 p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-base-content">Add Link</h3>
+              <button
+                onClick={() => {
+                  setShowLinkModal(false);
+                  setLinkUrl("");
+                }}
+                className="rounded-full p-1 hover:bg-base-300 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <input
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://example.com"
+              className="w-full rounded-lg border border-neutral bg-base-100 px-4 py-2 text-sm text-base-content focus:outline-none focus:border-primary mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSetLink();
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowLinkModal(false);
+                  setLinkUrl("");
+                }}
+                className="px-4 py-2 rounded-full text-sm font-bold text-base-content/70 hover:bg-base-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetLink}
+                className="px-4 py-2 rounded-full bg-primary text-primary-content text-sm font-bold hover:bg-primary/90 transition-colors"
+              >
+                {linkUrl ? "Set Link" : "Remove Link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Upload Modal */}
+      {showImageModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg border border-neutral bg-base-100 p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-base-content">Upload Image</h3>
+              <button
+                onClick={() => {
+                  setShowImageModal(false);
+                  setImageFile(null);
+                  setImagePreview("");
+                }}
+                className="rounded-full p-1 hover:bg-base-300 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block w-full cursor-pointer">
+                <div className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-neutral bg-base-200 p-8 hover:bg-base-300 transition-colors">
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Preview" className="max-h-48 rounded" />
+                  ) : (
+                    <>
+                      <ImagePlus size={32} className="text-base-content/50" />
+                      <span className="text-sm text-base-content/70">Click to select image</span>
+                    </>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+              </label>
+              {imageFile && (
+                <p className="mt-2 text-xs text-base-content/70">{imageFile.name}</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowImageModal(false);
+                  setImageFile(null);
+                  setImagePreview("");
+                }}
+                className="px-4 py-2 rounded-full text-sm font-bold text-base-content/70 hover:bg-base-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInsertImage}
+                disabled={!imageFile || uploadingImage}
+                className="px-4 py-2 rounded-full bg-primary text-primary-content text-sm font-bold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {uploadingImage ? "Uploading..." : "Insert Image"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

@@ -22,7 +22,7 @@ export default async function ArchiveBoardsPage({
 
   const { data: boards, count } = await supabase
     .from('boards')
-    .select('id, slug, name, description, icon_url, member_count, post_count, archived_at', { count: 'exact' })
+    .select('id, slug, name, description, member_count, post_count, archived_at', { count: 'exact' })
     .eq('is_archived', true)
     .order('archived_at', { ascending: false })
     .range(offset, offset + pageSize - 1);
@@ -53,7 +53,6 @@ export default async function ArchiveBoardsPage({
               <div key={board.id} className="py-4 px-4 sm:px-0">
                 <div className="flex items-center gap-3">
                   <Avatar
-                    src={board.icon_url || undefined}
                     fallbackSeed={board.name}
                     size="md"
                   />

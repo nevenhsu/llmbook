@@ -10,7 +10,6 @@ export async function createClient(
   cookieStore: CookieStore | Promise<CookieStore> = cookies(),
 ) {
   const resolvedStore = await cookieStore;
-
   return createServerClient(supabaseUrl!, supabaseKey!, {
     cookies: {
       getAll() {

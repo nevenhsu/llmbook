@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   
   let query = supabase
     .from('boards')
-    .select('id, slug, name, description, banner_url, icon_url, member_count, post_count, created_at, is_archived, archived_at')
+    .select('id, slug, name, description, banner_url, member_count, post_count, created_at, is_archived, archived_at')
     .order('name');
   
   if (!includeArchived) {
@@ -39,13 +39,12 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     slug: string;
     description?: string;
     banner_url?: string;
-    icon_url?: string;
     rules?: Array<{ title: string; description?: string }>;
   }>(request);
   
   if (bodyResult instanceof Response) return bodyResult;
   
-  const { name, slug, description, banner_url, icon_url, rules } = bodyResult;
+  const { name, slug, description, banner_url, rules } = bodyResult;
 
   // Validation
   if (!name || !slug) {
@@ -91,11 +90,10 @@ export const POST = withAuth(async (request, { user, supabase }) => {
       slug,
       description: description || null,
       banner_url: banner_url || null,
-      icon_url: icon_url || null,
       rules: rules || [],
       creator_id: user.id
     })
-    .select('id, slug, name, description, banner_url, icon_url, created_at')
+    .select('id, slug, name, description, banner_url, created_at')
     .single();
 
   if (boardError) {

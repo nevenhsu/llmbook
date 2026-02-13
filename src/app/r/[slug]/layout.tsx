@@ -1,29 +1,30 @@
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
-import BoardInfoCard from '@/components/board/BoardInfoCard';
-import BoardManageCard from '@/components/board/BoardManageCard';
-import BoardRulesCard from '@/components/board/BoardRulesCard';
-import BoardModeratorsCard from '@/components/board/BoardModeratorsCard';
-import { BoardProvider } from '@/contexts/BoardContext';
-import { isAdmin } from '@/lib/admin';
+import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
+import BoardInfoCard from "@/components/board/BoardInfoCard";
+import BoardManageCard from "@/components/board/BoardManageCard";
+import BoardRulesCard from "@/components/board/BoardRulesCard";
+import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
+import { BoardProvider } from "@/contexts/BoardContext";
+import { isAdmin } from "@/lib/admin";
+import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 
 interface BoardLayoutProps {
   children: React.ReactNode;
   params: Promise<{ slug: string }>;
 }
 
-export default async function BoardLayout({ children, params }: BoardLayoutProps) {
+export default async function BoardLayout({
+  children,
+  params,
+}: BoardLayoutProps) {
   const { slug } = await params;
   const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Get board data
-  const { data: board } = await supabase
-    .from('boards')
-    .select('id, name, slug, description, member_count, post_count, icon_url, created_at, rules, is_archived')
-    .eq('slug', slug)
-    .maybeSingle();
+  const board = await getBoardBySlug(slug);
 
   if (!board) {
     notFound();
@@ -46,14 +47,15 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
   if (user) {
     const [membershipResult, moderatorsResult] = await Promise.all([
       supabase
-        .from('board_members')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .eq('board_id', board.id)
+        .from("board_members")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .eq("board_id", board.id)
         .maybeSingle(),
       supabase
-        .from('board_moderators')
-        .select(`
+        .from("board_moderators")
+        .select(
+          `
           user_id,
           role,
           profiles:user_id (
@@ -61,9 +63,10 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
             avatar_url,
             username
           )
-        `)
-        .eq('board_id', board.id)
-        .order('created_at', { ascending: true })
+        `,
+        )
+        .eq("board_id", board.id)
+        .order("created_at", { ascending: true }),
     ]);
 
     isJoined = !!membershipResult.data;
@@ -78,8 +81,9 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
   } else {
     // If no user, still fetch moderators
     const { data: moderatorsResult } = await supabase
-      .from('board_moderators')
-      .select(`
+      .from("board_moderators")
+      .select(
+        `
         user_id,
         role,
         profiles:user_id (
@@ -87,9 +91,10 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
           avatar_url,
           username
         )
-      `)
-      .eq('board_id', board.id)
-      .order('created_at', { ascending: true });
+      `,
+      )
+      .eq("board_id", board.id)
+      .order("created_at", { ascending: true });
 
     moderators = (moderatorsResult || []).map((mod: any) => ({
       ...mod,
@@ -108,9 +113,7 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
     >
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Main content area */}
-        <div className="flex-1 min-w-0">
-          {children}
-        </div>
+        <div className="flex-1 min-w-0">{children}</div>
 
         {/* Desktop Sidebar - shared across all board pages */}
         <aside className="hidden lg:block w-[312px] space-y-4">
