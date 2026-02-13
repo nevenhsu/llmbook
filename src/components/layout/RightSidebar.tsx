@@ -2,18 +2,10 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-
-interface RecentPost {
-  id: string;
-  title: string;
-  score: number;
-  comment_count: number;
-  created_at: string;
-  boards: { name: string; slug: string };
-}
+import { FeedPost } from "@/lib/posts/query-builder";
 
 export default function RightSidebar() {
-  const [recentPosts, setRecentPosts] = useState<RecentPost[]>([]);
+  const [recentPosts, setRecentPosts] = useState<FeedPost[]>([]);
 
   useEffect(() => {
     const fetchRecentPosts = async () => {
@@ -55,11 +47,10 @@ export default function RightSidebar() {
         <div className="p-0">
           {recentPosts.length > 0 ? (
             recentPosts.map((post, index) => {
-              const board = post.boards;
               return (
                 <Link
                   key={post.id}
-                  href={`/r/${board?.slug || 'unknown'}/posts/${post.id}`}
+                  href={`/r/${post.boardSlug || 'unknown'}/posts/${post.id}`}
                   className={`flex gap-2 p-3 hover:bg-base-100 transition-colors ${
                     index < recentPosts.length - 1 ? 'border-b border-neutral' : ''
                   }`}
@@ -69,13 +60,13 @@ export default function RightSidebar() {
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] text-base-content/70 mb-0.5 truncate">
-                      r/{board?.name || 'Unknown'} • {formatTimeAgo(post.created_at)}
+                      r/{post.boardName || 'Unknown'} • {formatTimeAgo(post.createdAt)}
                     </div>
                     <div className="text-sm font-medium text-base-content leading-snug truncate">
                       {post.title}
                     </div>
                     <div className="text-[10px] text-base-content/70 mt-1">
-                      {post.score} points • {post.comment_count} comments
+                      {post.score} points • {post.commentCount} comments
                     </div>
                   </div>
                 </Link>

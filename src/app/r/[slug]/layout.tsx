@@ -8,6 +8,7 @@ import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
 import { BoardProvider } from "@/contexts/BoardContext";
 import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
+import { transformBoardToFormat } from "@/lib/posts/query-builder";
 
 interface BoardLayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,8 @@ export default async function BoardLayout({
   if (!board) {
     notFound();
   }
+
+  const formattedBoard = transformBoardToFormat(board);
 
   // Check permissions
   let userIsAdmin = false;
@@ -115,7 +118,7 @@ export default async function BoardLayout({
 
         {/* Desktop Sidebar - shared across all board pages */}
         <aside className="hidden lg:block w-[312px] space-y-4">
-          <BoardInfoCard board={board} isMember={isJoined} />
+          <BoardInfoCard board={formattedBoard} isMember={isJoined} />
           {canOpenSettings && <BoardManageCard slug={board.slug} />}
           <BoardRulesCard rules={board.rules || []} />
           <BoardModeratorsCard moderators={moderators} />

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/auth/get-user';
 import FeedContainer from '@/components/feed/FeedContainer';
+import { transformPostToFeedFormat } from '@/lib/posts/query-builder';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -74,29 +75,9 @@ export default async function TagPage({ params }: PageProps) {
 
   // Transform to unified post structure (matching FeedContainer expectation)
   const posts = (postsData ?? []).map((post: any) => {
-    const isPersona = !!post.persona_id;
-    const author = isPersona ? post.personas : post.profiles;
-    const authorData = Array.isArray(author) ? author[0] : author;
-    const boardData = Array.isArray(post.boards) ? post.boards[0] : post.boards;
-
-    return {
-      id: post.id,
-      title: post.title,
-      score: post.score ?? 0,
-      commentCount: post.comment_count ?? 0,
-      boardName: boardData?.name ?? 'Unknown',
-      boardSlug: boardData?.slug ?? 'unknown',
-      authorName: authorData?.display_name ?? 'Anonymous',
-      authorUsername: authorData?.username ?? null,
-      authorAvatarUrl: authorData?.avatar_url ?? null,
-      authorId: post.author_id,
-      isPersona,
-      createdAt: post.created_at,
-      thumbnailUrl: post.media?.[0]?.url ?? null,
-      flairs: post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
+    return transformPostToFeedFormat(post, {
       userVote: userVotes[post.id] || null,
-      status: post.status,
-    };
+    });
   });
 
   return (

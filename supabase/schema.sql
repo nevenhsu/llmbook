@@ -817,16 +817,29 @@ CREATE POLICY "Users can manage their profile" ON public.profiles
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- ----------------------------------------------------------------------------
+-- Admin Helper Functions
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.is_admin(u_id uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.admin_users WHERE user_id = u_id
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
 -- Admin Users Policies
 -- ----------------------------------------------------------------------------
 
-CREATE POLICY "Admins can view admin users" ON public.admin_users
+CREATE POLICY "Admin users can view themselves" ON public.admin_users
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view other admin users" ON public.admin_users
   FOR SELECT
   USING (
-    auth.uid() IN (
-      SELECT au.user_id
-      FROM public.admin_users AS au
-    )
+    public.is_admin(auth.uid())
   );
 
 CREATE POLICY "Only super admins can insert admins" ON public.admin_users
@@ -876,6 +889,157 @@ CREATE POLICY "Only super admins can delete admins" ON public.admin_users
   );
 
 -- ----------------------------------------------------------------------------
+-- Posts Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Posts are viewable by everyone if published" ON public.posts
+  FOR SELECT USING (
+    status = 'PUBLISHED'
+    OR auth.uid() = author_id
+    OR public.is_admin(auth.uid())
+  );
+
+CREATE POLICY "Users can create posts" ON public.posts
+  FOR INSERT WITH CHECK (auth.uid() = author_id);
+
+CREATE POLICY "Users can update their posts" ON public.posts
+  FOR UPDATE USING (
+    auth.uid() = author_id
+    OR public.is_admin(auth.uid())
+  ) WITH CHECK (
+    auth.uid() = author_id
+    OR public.is_admin(auth.uid())
+  );
+
+CREATE POLICY "Users can delete their posts" ON public.posts
+  FOR DELETE USING (
+    auth.uid() = author_id
+    OR public.is_admin(auth.uid())
+  );
+
+-- ----------------------------------------------------------------------------
+-- Post Tags Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Post tags are viewable by everyone" ON public.post_tags
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can manage post tags" ON public.post_tags
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.posts
+      WHERE public.posts.id = post_tags.post_id
+        AND (
+          public.posts.author_id = auth.uid()
+          OR public.is_admin(auth.uid())
+        )
+    )
+  );
+
+-- ----------------------------------------------------------------------------
+-- Poll Options Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Poll options are viewable by everyone" ON public.poll_options
+  FOR SELECT USING (true);
+
+CREATE POLICY "Post authors can manage poll options" ON public.poll_options
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.posts
+      WHERE posts.id = poll_options.post_id
+        AND (
+          posts.author_id = auth.uid()
+          OR public.is_admin(auth.uid())
+        )
+    )
+  );
+
+-- ----------------------------------------------------------------------------
+-- Media Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Media is viewable by everyone" ON public.media
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can manage their media" ON public.media
+  FOR ALL USING (
+    auth.uid() = user_id
+    OR public.is_admin(auth.uid())
+  );
+
+-- ----------------------------------------------------------------------------
+-- Engagement Cleanup Policies (Votes, Saved, Hidden)
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Votes are viewable by everyone" ON public.votes
+  FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can vote" ON public.votes
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their votes" ON public.votes
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete votes" ON public.votes
+  FOR DELETE USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.posts
+      WHERE public.posts.id = votes.post_id
+        AND (
+          public.posts.author_id = auth.uid()
+          OR public.is_admin(auth.uid())
+        )
+    )
+    OR public.is_admin(auth.uid())
+  );
+
+CREATE POLICY "Users can manage their saved posts" ON public.saved_posts
+  FOR ALL USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.posts
+      WHERE public.posts.id = saved_posts.post_id
+        AND (
+          public.posts.author_id = auth.uid()
+          OR public.is_admin(auth.uid())
+        )
+    )
+    OR public.is_admin(auth.uid())
+  );
+
+CREATE POLICY "Users can manage their hidden posts" ON public.hidden_posts
+  FOR ALL USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.posts
+      WHERE public.posts.id = hidden_posts.post_id
+        AND (
+          public.posts.author_id = auth.uid()
+          OR public.is_admin(auth.uid())
+        )
+    )
+    OR public.is_admin(auth.uid())
+  );
+
+-- ----------------------------------------------------------------------------
+-- Comments Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Comments are viewable by everyone" ON public.comments 
+  FOR SELECT USING (true);
+
+CREATE POLICY "Auth users can create comments" ON public.comments 
+  FOR INSERT WITH CHECK (auth.uid() = author_id);
+
+CREATE POLICY "Users can update own comments" ON public.comments 
+  FOR UPDATE USING (auth.uid() = author_id);
+
+CREATE POLICY "Users can delete own comments" ON public.comments 
+  FOR DELETE USING (auth.uid() = author_id);
+
+-- ----------------------------------------------------------------------------
 -- Personas Policies
 -- ----------------------------------------------------------------------------
 
@@ -905,100 +1069,6 @@ CREATE POLICY "Boards are viewable by everyone" ON public.boards
 
 CREATE POLICY "Tags are viewable by everyone" ON public.tags
   FOR SELECT USING (true);
-
--- ----------------------------------------------------------------------------
--- Posts Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Posts are viewable when published" ON public.posts
-  FOR SELECT USING (status = 'PUBLISHED');
-
-CREATE POLICY "Users can create posts" ON public.posts
-  FOR INSERT WITH CHECK (auth.uid() = author_id);
-
-CREATE POLICY "Users can update their posts" ON public.posts
-  FOR UPDATE USING (auth.uid() = author_id);
-
-CREATE POLICY "Users can delete their posts" ON public.posts
-  FOR DELETE USING (auth.uid() = author_id);
-
--- ----------------------------------------------------------------------------
--- Post Tags Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Post tags are viewable by everyone" ON public.post_tags
-  FOR SELECT USING (true);
-
-CREATE POLICY "Users can manage post tags" ON public.post_tags
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.posts
-      WHERE public.posts.id = post_tags.post_id
-        AND public.posts.author_id = auth.uid()
-    )
-  );
-
--- ----------------------------------------------------------------------------
--- Poll Options Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Poll options are viewable by everyone" ON public.poll_options
-  FOR SELECT USING (true);
-
-CREATE POLICY "Post authors can manage poll options" ON public.poll_options
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.posts
-      WHERE posts.id = poll_options.post_id
-        AND posts.author_id = auth.uid()
-    )
-  );
-
--- ----------------------------------------------------------------------------
--- Votes Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Votes are viewable by everyone" ON public.votes
-  FOR SELECT USING (true);
-
-CREATE POLICY "Authenticated users can vote" ON public.votes
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their votes" ON public.votes
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their votes" ON public.votes
-  FOR DELETE USING (auth.uid() = user_id);
-
--- ----------------------------------------------------------------------------
--- Comments Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Comments are viewable by everyone" ON public.comments 
-  FOR SELECT USING (true);
-
-CREATE POLICY "Auth users can create comments" ON public.comments 
-  FOR INSERT WITH CHECK (auth.uid() = author_id);
-
-CREATE POLICY "Users can update own comments" ON public.comments 
-  FOR UPDATE USING (auth.uid() = author_id);
-
-CREATE POLICY "Users can delete own comments" ON public.comments 
-  FOR DELETE USING (auth.uid() = author_id);
-
--- ----------------------------------------------------------------------------
--- Saved Posts Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Users can manage their saved posts" ON public.saved_posts
-  FOR ALL USING (auth.uid() = user_id);
-
--- ----------------------------------------------------------------------------
--- Hidden Posts Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Users can manage their hidden posts" ON public.hidden_posts
-  FOR ALL USING (auth.uid() = user_id);
 
 -- ----------------------------------------------------------------------------
 -- Board Members Policies
@@ -1038,19 +1108,6 @@ CREATE POLICY "Board moderators are viewable by everyone" ON public.board_modera
   FOR SELECT USING (true);
 
 -- ----------------------------------------------------------------------------
--- Media Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Media is viewable by everyone" ON public.media
-  FOR SELECT USING (true);
-
-CREATE POLICY "Users can upload media" ON public.media
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their media" ON public.media
-  FOR UPDATE USING (auth.uid() = user_id);
-
--- ----------------------------------------------------------------------------
 -- Notifications Policies
 -- ----------------------------------------------------------------------------
 
@@ -1059,6 +1116,7 @@ CREATE POLICY "Notifications are private" ON public.notifications
 
 CREATE POLICY "Users can manage notifications" ON public.notifications
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 
 -- ----------------------------------------------------------------------------
 -- Persona Tables (No public policies - service role only)

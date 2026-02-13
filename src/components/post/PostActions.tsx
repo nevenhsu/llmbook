@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Share2,
   Bookmark,
+  Eye,
   EyeOff,
   MoreHorizontal,
   Edit,
@@ -26,6 +27,7 @@ interface PostActionsProps {
   canModerate?: boolean;
   status?: string;
   isHidden?: boolean;
+  isExpanded?: boolean;
   onShare?: () => void;
   onSave?: () => void;
   onHide?: () => void;
@@ -45,6 +47,7 @@ export default function PostActions({
   canModerate = false,
   status,
   isHidden = false,
+  isExpanded = false,
   onSave,
   onHide,
   onUnhide,
@@ -58,13 +61,23 @@ export default function PostActions({
   const [isUndeleting, setIsUndeleting] = useState(false);
   const modalRef = useRef<HTMLDialogElement>(null);
 
-  const isAuthor = authorId && userId && authorId === userId;
+  const isAuthor = !!(authorId && userId && authorId === userId);
+  const isModerator = !!canModerate;
+  const isLoggedIn = !!userId;
   const isArchived = status === 'ARCHIVED';
-  const canEdit = (isAuthor || canModerate) && !isArchived && status !== 'DELETED';
-  const canDelete = isAuthor || canModerate;
-  const canUndelete = canModerate;
-  const canUnarchive = canModerate;
-  const canArchive = canModerate;
+  const isDeleted = status === 'DELETED';
+
+  // Action permissions based on requirements
+  const canHide = isLoggedIn && !isArchived && !isAuthor;
+  const canEdit = isAuthor && !isArchived && !isDeleted;
+  const canDelete = isAuthor || isModerator;
+  
+  // Additional moderator-only actions
+  const canUndelete = isModerator && isDeleted;
+  const canUnarchive = isModerator && isArchived;
+  const canArchive = isModerator && !isArchived && !isDeleted;
+
+  const hasAnyAction = canHide || canEdit || canDelete || canUndelete || canUnarchive || canArchive;
 
   const handleCommentsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -177,8 +190,117 @@ export default function PostActions({
     }
   };
 
+  const menuItems = (
+    <div className="space-y-1">
+      {/* Hide/Unhide - logged in only */}
+      {canHide && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isHidden) {
+              onUnhide?.();
+            } else {
+              onHide?.();
+            }
+            closeMoreMenu();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-base-content hover:bg-base-200 rounded-lg transition-colors"
+        >
+          {isHidden ? (
+            <>
+              <Eye size={20} className="md:w-4 md:h-4" />
+              Unhide post
+            </>
+          ) : (
+            <>
+              <EyeOff size={20} className="md:w-4 md:h-4" />
+              Hide post
+            </>
+          )}
+        </button>
+      )}
+
+      {/* Edit - author only, not archived/deleted */}
+      {canEdit && (
+        <button
+          onClick={handleEdit}
+          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-base-content hover:bg-base-200 rounded-lg transition-colors"
+        >
+          <Edit size={20} className="md:w-4 md:h-4" />
+          Edit post
+        </button>
+      )}
+
+      {/* Delete - author or moderator */}
+      {canDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDeleteConfirm(true);
+            closeMoreMenu();
+          }}
+          disabled={isDeleting}
+          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-error hover:bg-base-200 rounded-lg transition-colors"
+        >
+          <Trash2 size={20} className="md:w-4 md:h-4" />
+          {isDeleting ? 'Deleting...' : 'Delete post'}
+        </button>
+      )}
+
+      {/* Moderator Actions */}
+      {canUndelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleUndelete();
+          }}
+          disabled={isUndeleting}
+          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-success hover:bg-base-200 rounded-lg transition-colors"
+        >
+          <ShieldOff size={20} className="md:w-4 md:h-4" />
+          {isUndeleting ? 'Restoring...' : 'Restore post'}
+        </button>
+      )}
+
+      {canArchive && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleArchive(e);
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-warning hover:bg-base-200 rounded-lg transition-colors"
+        >
+          <ShieldOff size={20} className="md:w-4 md:h-4" />
+          Archive post
+        </button>
+      )}
+
+      {canUnarchive && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleUnarchive();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-success hover:bg-base-200 rounded-lg transition-colors"
+        >
+          <ShieldOff size={20} className="md:w-4 md:h-4" />
+          Unarchive post
+        </button>
+      )}
+
+      {!hasAnyAction && (
+        <div className="px-4 py-3 text-base md:text-sm text-base-content/50 text-center">
+          No actions available
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="flex items-center gap-0.5 text-xs text-base-content/70">
+    <div 
+      className="flex items-center gap-0.5 text-xs text-base-content/70"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button 
         onClick={handleCommentsClick}
         className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
@@ -200,7 +322,7 @@ export default function PostActions({
           <Share2 size={16} /> <span>Share</span>
         </button>
       )}
-      {!isArchived && (
+      {!isArchived && isLoggedIn && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -214,119 +336,37 @@ export default function PostActions({
           <span>{isSaved ? 'Saved' : 'Save'}</span>
         </button>
       )}
-      {!isArchived && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isHidden && onToggleExpand) {
-              onToggleExpand();
-            } else {
-              onHide?.();
-            }
-          }}
-          className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300"
-        >
-          <EyeOff size={16} /> <span>{isHidden ? 'Show' : 'Hide'}</span>
-        </button>
-      )}
-      {isHidden && !isArchived && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onUnhide?.();
-          }}
-          className="flex items-center gap-1 rounded-sm px-2 py-1 hover:hover:bg-base-300 text-error"
-        >
-          Unhide
-        </button>
-      )}
-      {/* More button */}
-      <button 
-        onClick={openMoreMenu}
-        className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
-      >
-        <MoreHorizontal size={16} />
-      </button>
-
-      {/* More menu modal - bottom sheet on mobile, centered on desktop */}
-      <dialog ref={modalRef} className="modal modal-bottom sm:modal-middle">
-        <div className="modal-box">
-          <h3 className="font-bold text-lg mb-4">Post actions</h3>
-          
-          <div className="space-y-2">
-            {/* Edit - author or moderator, not archived/deleted */}
-            {canEdit && (
-              <button
-                onClick={handleEdit}
-                className="w-full flex items-center gap-3 px-4 py-3 text-base text-base-content hover:bg-base-200 rounded-lg transition-colors"
-              >
-                <Edit size={20} />
-                Edit post
-              </button>
-            )}
-
-            {/* Delete - author or moderator */}
-            {canDelete && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowDeleteConfirm(true);
-                }}
-                disabled={isDeleting}
-                className="w-full flex items-center gap-3 px-4 py-3 text-base text-error hover:bg-base-200 rounded-lg transition-colors"
-              >
-                <Trash2 size={20} />
-                {isDeleting ? 'Deleting...' : 'Delete post'}
-              </button>
-            )}
-
-            {/* Undelete - moderator only */}
-            {canUndelete && status === 'DELETED' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleUndelete();
-                }}
-                disabled={isUndeleting}
-                className="w-full flex items-center gap-3 px-4 py-3 text-base text-success hover:bg-base-200 rounded-lg transition-colors"
-              >
-                <ShieldOff size={20} />
-                {isUndeleting ? 'Restoring...' : 'Restore post'}
-              </button>
-            )}
-
-            {/* Archive - moderator only, not already archived/deleted */}
-            {canArchive && status === 'PUBLISHED' && (
-              <button
-                onClick={handleArchive}
-                className="w-full flex items-center gap-3 px-4 py-3 text-base text-warning hover:bg-base-200 rounded-lg transition-colors"
-              >
-                <ShieldOff size={20} />
-                Archive post
-              </button>
-            )}
-
-            {/* Unarchive - moderator only */}
-            {canUnarchive && status === 'ARCHIVED' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleUnarchive();
-                }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-base text-success hover:bg-base-200 rounded-lg transition-colors"
-              >
-                <ShieldOff size={20} />
-                Unarchive post
-              </button>
-            )}
-
-            {!canEdit && !canDelete && !canUndelete && !canArchive && (
-              <div className="px-4 py-3 text-base text-base-content/50 text-center">
-                No actions available
-              </div>
-            )}
+      {/* More button - logged in only and if there are actions */}
+      {isLoggedIn && hasAnyAction && (
+        <>
+          {/* Desktop Dropdown */}
+          <div className="hidden md:block dropdown dropdown-end">
+            <button 
+              tabIndex={0}
+              className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            <div tabIndex={0} className="dropdown-content z-[20] menu p-1 shadow-lg bg-base-100 rounded-lg w-48 border border-neutral mt-1">
+              {menuItems}
+            </div>
           </div>
 
+          {/* Mobile Button (opens modal) */}
+          <button 
+            onClick={openMoreMenu}
+            className="md:hidden flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        </>
+      )}
+
+      {/* More menu modal - bottom sheet on mobile, centered on desktop */}
+      <dialog ref={modalRef} className="modal modal-bottom md:hidden">
+        <div className="modal-box">
+          <h3 className="font-bold text-lg mb-4">Post actions</h3>
+          {menuItems}
           <div className="modal-action">
             <form method="dialog">
               <button className="btn btn-ghost">Close</button>

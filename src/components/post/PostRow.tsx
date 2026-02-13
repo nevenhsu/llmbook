@@ -67,11 +67,12 @@ export default function PostRow({
 }: PostRowProps) {
   const router = useRouter();
   const [saved, setSaved] = useState(isSaved);
+  const [localHidden, setLocalHidden] = useState(isHidden);
   const [localExpanded, setLocalExpanded] = useState(false);
-  const [deleted, setDeleted] = useState(false);
+  const [deleted, setDeleted] = useState(status === "DELETED");
   const { openLoginModal } = useLoginModal();
 
-  const isHiddenAndCollapsed = isHidden && !localExpanded;
+  const isHiddenAndCollapsed = localHidden && !localExpanded;
 
   const handleSave = async () => {
     try {
@@ -94,7 +95,7 @@ export default function PostRow({
         method: 'POST',
       });
       if (res.ok) {
-        router.refresh();
+        setLocalHidden(true);
       } else if (res.status === 401) {
         openLoginModal();
       }
@@ -109,7 +110,7 @@ export default function PostRow({
         method: 'DELETE',
       });
       if (res.ok) {
-        router.refresh();
+        setLocalHidden(false);
       } else if (res.status === 401) {
         openLoginModal();
       }
@@ -126,23 +127,19 @@ export default function PostRow({
     setDeleted(true);
   };
 
-  if (deleted) {
+  if (deleted || status === "DELETED") {
     return (
-      <article className="flex items-start gap-2 px-2 py-3 border-b border-neutral bg-base-200/50 cursor-default">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-error/20 flex items-center justify-center">
-          <Trash2 size={16} className="text-error" />
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-medium text-base-content/50 line-clamp-1">
-              {title}
-            </span>
-          </div>
-          <div className="text-xs text-base-content/50">
-            <span className="font-medium">deleted</span>
-            <span className="mx-1">•</span>
-            <span>{authorName}</span>
-          </div>
+      <article className="flex items-center gap-2 px-3 py-2 border-b border-neutral bg-base-200/30 cursor-default">
+        <Trash2 size={14} className="text-base-content/40 flex-shrink-0" />
+        <div className="flex items-center gap-2 min-w-0 text-xs text-base-content/50">
+          <span className="font-bold text-[10px] uppercase tracking-tight bg-base-300 px-1 rounded flex-shrink-0">
+            deleted
+          </span>
+          <span className="font-medium truncate max-w-[200px] sm:max-w-[400px]">
+            {title}
+          </span>
+          <span className="flex-shrink-0">•</span>
+          <span className="truncate flex-shrink-0">{authorName}</span>
         </div>
       </article>
     );
@@ -164,10 +161,19 @@ export default function PostRow({
             <EyeOff size={16} className="text-base-content/60" />
           </div>
           <div className="flex-1 min-w-0 flex flex-col">
-            <span className="text-sm text-base-content/50">Post hidden</span>
-            <span className="text-xs text-base-content/40">{authorName}</span>
+            <span className="text-sm font-medium text-base-content/60">Hidden by you</span>
+            <span className="text-xs text-base-content/40">author: {authorName}</span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUnhide();
+              }}
+              className="btn btn-xs btn-ghost"
+            >
+              Unhide
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -176,15 +182,6 @@ export default function PostRow({
               className="btn btn-xs btn-ghost"
             >
               {localExpanded ? 'Hide' : 'Show'}
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleUnhide();
-              }}
-              className="btn btn-xs btn-ghost text-error"
-            >
-              Unhide
             </button>
           </div>
         </div>
@@ -211,7 +208,7 @@ export default function PostRow({
 
           <div className="flex-1 min-w-0 flex flex-col gap-1.5">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-md font-medium text-base-content line-clamp-1">
+              <span className="text-lg font-bold text-base-content line-clamp-2">
                 {title}
               </span>
               {status === 'ARCHIVED' && (
@@ -219,11 +216,18 @@ export default function PostRow({
                   ARCHIVED
                 </span>
               )}
-              {isHidden && (
-                <span className="inline-flex items-center rounded-full bg-base-300 px-2 py-0.5 text-xs font-medium text-base-content/70">
+              {localHidden && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpanded();
+                  }}
+                  className="inline-flex items-center rounded-full bg-base-300 px-2 py-0.5 text-xs font-medium text-base-content/70 hover:bg-base-content/10 transition-colors ml-auto"
+                  title="Click to collapse"
+                >
                   <EyeOff size={12} className="mr-1" />
                   Hidden
-                </span>
+                </button>
               )}
               {flairs?.map((f) => (
                 <Badge key={f} variant="flair">
@@ -254,7 +258,8 @@ export default function PostRow({
                 onSave={handleSave}
                 onHide={handleHide}
                 onDelete={handleDelete}
-                isHidden={isHidden}
+                isHidden={localHidden}
+                isExpanded={localExpanded}
                 onUnhide={handleUnhide}
                 onToggleExpand={toggleExpanded}
               />

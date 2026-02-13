@@ -58,11 +58,11 @@ export function buildPostsQueryParams(options: {
 /**
  * Get cursor for next page from last item
  */
-export function getNextCursor<T extends { created_at?: string }>(
+export function getNextCursor<T extends { created_at?: string; createdAt?: string }>(
   items: T[]
 ): string | undefined {
   const lastItem = items[items.length - 1];
-  return lastItem?.created_at;
+  return lastItem?.created_at || lastItem?.createdAt;
 }
 
 /**

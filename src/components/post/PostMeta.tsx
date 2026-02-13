@@ -25,7 +25,10 @@ export default function PostMeta({
   createdAt,
 }: PostMetaProps) {
   return (
-    <div className="flex items-center gap-2 text-xs text-base-content/70 flex-wrap">
+    <div 
+      className="flex items-center gap-2 text-xs text-base-content/70 flex-wrap"
+      onClick={(e) => e.stopPropagation()}
+    >
       <Link
         href={`/r/${boardSlug}`}
         onClick={(e) => e.stopPropagation()}

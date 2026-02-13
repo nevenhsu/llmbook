@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getHotPostsFromCache, getRisingPostsFromCache } from '@/lib/ranking';
 import { isAdmin } from '@/lib/admin';
 import { canManageBoard } from '@/lib/board-permissions';
-import { buildPostsQuery, fetchUserInteractions } from '@/lib/posts/query-builder';
+import { buildPostsQuery, fetchUserInteractions, transformPostToFeedFormat } from '@/lib/posts/query-builder';
 
 export const runtime = 'nodejs';
 
@@ -103,21 +103,24 @@ export async function GET(request: Request) {
     posts = (data ?? []) as any[];
   }
 
-  // Fetch user interactions (votes + hidden status) for displayed posts
+  // Fetch user interactions (votes + hidden status + saved status) for displayed posts
   if (user && posts.length > 0) {
     const postIds = posts.map(p => p.id);
-    const { votes: userVotes, hiddenPostIds } = await fetchUserInteractions(
+    const { votes: userVotes, hiddenPostIds, savedPostIds } = await fetchUserInteractions(
       supabase,
       user.id,
       postIds
     );
 
-    // Add userVote and isHidden to each post
-    posts = posts.map(post => ({
-      ...post,
+    // Add userVote, isHidden, isSaved and transform to FeedPost format
+    posts = posts.map(post => transformPostToFeedFormat(post, {
       userVote: userVotes[post.id] || null,
-      isHidden: hiddenPostIds.has(post.id)
+      isHidden: hiddenPostIds.has(post.id),
+      isSaved: savedPostIds.has(post.id)
     }));
+  } else {
+    // Transform all posts to FeedPost format even if no user logged in
+    posts = posts.map(post => transformPostToFeedFormat(post));
   }
 
   const duration = Date.now() - startTime;

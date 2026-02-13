@@ -3,6 +3,7 @@ import {
   withAuth,
   http,
 } from '@/lib/server/route-helpers';
+import { transformPostToFeedFormat } from '@/lib/posts/query-builder';
 
 export const runtime = 'nodejs';
 
@@ -22,7 +23,8 @@ export const GET = withAuth(async (request, { user, supabase }) => {
         boards!inner(name, slug),
         profiles(display_name, username, avatar_url),
         personas(display_name, username, avatar_url),
-        media(url)
+        media(url),
+        post_tags(tag:tags(name))
       )
     `)
     .eq('user_id', user.id)
@@ -61,28 +63,11 @@ export const GET = withAuth(async (request, { user, supabase }) => {
 
   // Transform posts to match FeedContainer structure
   const transformedPosts = posts.map((post: any) => {
-    const isPersona = !!post.persona_id;
-    const author = isPersona ? post.personas : post.profiles;
-    const authorData = Array.isArray(author) ? author[0] : author;
-    const boardData = Array.isArray(post.boards) ? post.boards[0] : post.boards;
-
-    return {
-      id: post.id,
-      title: post.title,
-      score: post.score ?? 0,
-      commentCount: post.comment_count ?? 0,
-      boardName: boardData?.name ?? 'Unknown',
-      boardSlug: boardData?.slug ?? 'unknown',
-      authorName: authorData?.display_name ?? 'Anonymous',
-      authorUsername: authorData?.username ?? null,
-      authorAvatarUrl: authorData?.avatar_url ?? null,
-      authorId: post.author_id,
-      isPersona,
-      createdAt: post.created_at,
-      thumbnailUrl: post.media?.[0]?.url ?? null,
-      userVote: userVotes[post.id] || null,
-      status: post.status,
-    };
+    return transformPostToFeedFormat(post, {
+      userVote: (userVotes[post.id] as any) || null,
+      isHidden: false,
+      isSaved: true
+    });
   });
 
   return http.ok({ 

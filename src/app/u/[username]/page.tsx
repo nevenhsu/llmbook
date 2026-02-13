@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CalendarClock, Flame, UserPlus, Settings, UserRound, LogOut } from "lucide-react";
+import { CalendarClock, Flame, Settings, UserRound, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
 import FollowButton from "@/components/profile/FollowButton";
+import { transformPostToFeedFormat, transformProfileToFormat, fetchUserInteractions } from "@/lib/posts/query-builder";
 
 interface PageProps {
   params: Promise<{ username: string }>;
@@ -49,12 +50,8 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   }
 
   const isProfile = !!profile;
-  const displayData = isProfile ? profile : persona;
-  const displayName = displayData?.display_name || "Unknown";
-  const usernameDisplay = displayData?.username || "unknown";
-  const karma = isProfile ? (profile?.karma ?? 0) : 0;
-  const avatarUrl = displayData?.avatar_url;
-  const bio = displayData?.bio;
+  const formattedProfile = transformProfileToFormat(isProfile ? profile : persona, !isProfile);
+  const { displayName, username: usernameDisplay, karma, avatarUrl, bio, createdAt: profileCreatedAt, id: profileOrPersonaId } = formattedProfile;
 
   // Check if viewing own profile
   const isOwnProfile = isProfile && currentUser?.id === profile?.user_id;
@@ -65,21 +62,18 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   let isFollowing = false;
 
   if (isProfile && profile?.user_id) {
-    // Count followers
     const { count: followers } = await supabase
       .from("user_follows")
       .select("*", { count: "exact", head: true })
       .eq("following_id", profile.user_id);
     followersCount = followers ?? 0;
 
-    // Count following
     const { count: following } = await supabase
       .from("user_follows")
       .select("*", { count: "exact", head: true })
       .eq("follower_id", profile.user_id);
     followingCount = following ?? 0;
 
-    // Check if current user is following this profile
     if (currentUser && !isOwnProfile) {
       const { data: followRelation } = await supabase
         .from("user_follows")
@@ -91,84 +85,90 @@ export default async function UserPage({ params, searchParams }: PageProps) {
     }
   }
 
-  // Get creation date
-  const createdAt = new Date(displayData?.created_at ?? Date.now());
-  const joinYear = Number.isNaN(createdAt.getTime())
+  const createdAtDate = new Date(profileCreatedAt ?? Date.now());
+  const joinYear = Number.isNaN(createdAtDate.getTime())
     ? "Now"
-    : createdAt.getFullYear();
+    : createdAtDate.getFullYear();
 
-  // Fetch initial data (first page) - sorted by created_at desc (newest first)
+  // Fetch initial data and total counts
   let posts: any[] = [];
   let comments: any[] = [];
+  let postsCount = 0;
+  let commentsCount = 0;
+  let savedCount = 0;
   
+  const LIMIT = 10;
+
   if (tab === "posts") {
-    if (isProfile) {
-      const { data } = await supabase
-        .from("posts")
-        .select(
-          `
-          id, title, body, created_at, score, comment_count, persona_id,
+    const query = supabase
+      .from("posts")
+      .select(
+        `
+        id, title, body, created_at, score, comment_count, author_id, persona_id, status,
+        boards(name, slug),
+        profiles(display_name, avatar_url, username),
+        personas(display_name, avatar_url, username),
+        media(url),
+        post_tags(tag:tags(name))
+      `,
+        { count: "exact" }
+      )
+      .eq(isProfile ? "author_id" : "persona_id", profileOrPersonaId)
+      .in("status", ["PUBLISHED", "DELETED"])
+      .order("created_at", { ascending: false })
+      .limit(LIMIT);
+    
+    const { data: postData, count } = await query;
+    postsCount = count ?? 0;
+    
+    const postIds = (postData ?? []).map(p => p.id);
+    const { votes: userVotes, hiddenPostIds, savedPostIds } = currentUser
+      ? await fetchUserInteractions(supabase, currentUser.id, postIds)
+      : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
+
+    posts = (postData ?? []).map(p => transformPostToFeedFormat(p as any, {
+      userVote: userVotes[p.id] || null,
+      isHidden: hiddenPostIds.has(p.id),
+      isSaved: savedPostIds.has(p.id),
+    }));
+  } else if (tab === "comments") {
+    const { count } = await supabase
+      .from("comments")
+      .select("*", { count: "exact", head: true })
+      .eq(isProfile ? "author_id" : "persona_id", profileOrPersonaId);
+    commentsCount = count ?? 0;
+  } else if (tab === "saved" && isOwnProfile && currentUser) {
+    const { data: savedData, count } = await supabase
+      .from("saved_posts")
+      .select(`
+        post_id,
+        posts (
+          id, title, body, created_at, score, comment_count, author_id, persona_id, status,
           boards(name, slug),
           profiles(display_name, avatar_url, username),
-          media(url)
-        `,
-        )
-        .eq("author_id", profile.user_id)
-        .eq("status", "PUBLISHED")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      posts = data ?? [];
-    } else if (persona) {
-      const { data } = await supabase
-        .from("posts")
-        .select(
-          `
-          id, title, body, created_at, score, comment_count, persona_id,
-          boards(name, slug),
           personas(display_name, avatar_url, username),
-          media(url)
-        `,
+          media(url),
+          post_tags(tag:tags(name))
         )
-        .eq("persona_id", persona.id)
-        .eq("status", "PUBLISHED")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      posts = data ?? [];
-    }
-  } else if (tab === "comments") {
-    if (isProfile) {
-      const { data } = await supabase
-        .from("comments")
-        .select(
-          `
-          id, body, created_at, score,
-          posts!inner(id, title, boards(slug))
-        `,
-        )
-        .eq("author_id", profile.user_id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      comments = data ?? [];
-    } else if (persona) {
-      const { data } = await supabase
-        .from("comments")
-        .select(
-          `
-          id, body, created_at, score,
-          posts!inner(id, title, boards(slug))
-        `,
-        )
-        .eq("persona_id", persona.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      comments = data ?? [];
-    }
+      `, { count: "exact" })
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: false })
+      .limit(LIMIT);
+    
+    savedCount = count ?? 0;
+    const savedPostsData = (savedData ?? []).map(s => s.posts).filter(Boolean) as any[];
+    const postIds = savedPostsData.map(p => p.id);
+    const { votes: userVotes, hiddenPostIds, savedPostIds } = await fetchUserInteractions(supabase, currentUser.id, postIds);
+
+    posts = savedPostsData.map(p => transformPostToFeedFormat(p, {
+      userVote: userVotes[p.id] || null,
+      isHidden: hiddenPostIds.has(p.id),
+      isSaved: savedPostIds.has(p.id),
+    }));
   }
-  // Note: saved posts are loaded client-side via API, no need to fetch here
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-4 px-0 pb-8 sm:px-2">
-      {/* Banner Section */}
       <section className="overflow-hidden rounded-2xl border border-neutral bg-base-100">
         <div className="h-20 bg-gradient-to-br from-neutral/30 to-neutral/10" />
         <div className="-mt-8 flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
@@ -176,7 +176,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
             <div className="-mt-8">
               <Avatar
                 fallbackSeed={displayName}
-                src={avatarUrl}
+                src={avatarUrl ?? undefined}
                 size="lg"
                 className="bg-white rounded-full"
                 isPersona={!isProfile}
@@ -199,18 +199,16 @@ export default async function UserPage({ params, searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* Action buttons - only if not own profile */}
-          {!isOwnProfile && isProfile && profile?.user_id && (
+          {!isOwnProfile && isProfile && profileOrPersonaId && (
             <div className="flex gap-2">
               <FollowButton 
-                userId={profile.user_id} 
+                userId={profileOrPersonaId} 
                 initialIsFollowing={isFollowing}
                 currentUserId={currentUser?.id}
               />
             </div>
           )}
 
-          {/* Link to settings if own profile */}
           {isOwnProfile && (
             <div>
               <Link
@@ -224,7 +222,6 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         </div>
       </section>
 
-      {/* Tabs Section */}
       <section className="overflow-x-auto rounded-full border border-neutral bg-base-100 p-1 scrollbar-hide">
         <div className="flex min-w-max items-center gap-1">
           {[
@@ -250,24 +247,23 @@ export default async function UserPage({ params, searchParams }: PageProps) {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {/* Content Area */}
         <section className="space-y-4">
-          <div className="bg-base-200 border border-neutral rounded-2xl divide-y divide-neutral overflow-hidden">
-            <ProfilePostList
-              posts={posts}
-              comments={comments}
-              displayName={displayName}
-              username={usernameDisplay}
-              tab={tab}
-              userId={currentUser?.id}
-              authorId={profile?.user_id}
-              personaId={persona?.id}
-              isOwnProfile={isOwnProfile}
-            />
-          </div>
+          <ProfilePostList
+            posts={posts}
+            comments={comments}
+            displayName={displayName}
+            username={usernameDisplay}
+            tab={tab}
+            userId={currentUser?.id}
+            authorId={isProfile ? profileOrPersonaId : undefined}
+            personaId={!isProfile ? profileOrPersonaId : undefined}
+            isOwnProfile={isOwnProfile}
+            postsCount={postsCount}
+            commentsCount={commentsCount}
+            savedCount={savedCount}
+          />
         </section>
 
-        {/* Sidebar */}
         <aside className="space-y-4">
           <div className="rounded-2xl border border-neutral bg-base-100 p-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-base-content/70">
@@ -295,9 +291,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                   </div>
                 </>
               )}
-              <div
-                className={`${isProfile ? "col-span-2" : "col-span-2"} rounded-xl bg-base-300 p-3`}
-              >
+              <div className="col-span-2 rounded-xl bg-base-300 p-3">
                 <div className="flex items-center gap-2 text-base-content">
                   <CalendarClock size={16} />
                   <span className="font-semibold">
@@ -314,7 +308,6 @@ export default async function UserPage({ params, searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* Settings menu - only for own profile */}
           {isOwnProfile && (
             <div className="rounded-2xl border border-neutral bg-base-100 p-2">
               <ul className="space-y-1">

@@ -7,6 +7,7 @@ import {
   parseJsonBody,
   validateBody,
 } from '@/lib/server/route-helpers';
+import { transformCommentToFormat } from '@/lib/posts/query-builder';
 
 export const runtime = 'nodejs';
 
@@ -64,7 +65,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  return http.ok({ comments, userVotes });
+  // Transform comments to consistent format
+  const transformedComments = (comments ?? []).map((comment: any) => 
+    transformCommentToFormat(comment, userVotes[comment.id] || null)
+  );
+
+  return http.ok({ comments: transformedComments, userVotes });
 }
 
 // POST /api/posts/[id]/comments - Create a comment
@@ -128,5 +134,8 @@ export const POST = withAuth(async (req, { user, supabase }, { params }: { param
     });
   }
 
-  return http.created({ comment });
+  // Transform the new comment
+  const transformedComment = transformCommentToFormat(comment as any);
+
+  return http.created({ comment: transformedComment });
 });

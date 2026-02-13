@@ -3,6 +3,7 @@ import {
   getSupabaseServerClient,
   http,
 } from '@/lib/server/route-helpers';
+import { transformCommentToFormat } from '@/lib/posts/query-builder';
 
 export const runtime = 'nodejs';
 
@@ -80,8 +81,13 @@ export async function GET(request: Request) {
     }
   }
 
+  // Transform comments to consistent format
+  const transformedComments = (comments ?? []).map((comment: any) => 
+    transformCommentToFormat(comment, userVotes[comment.id] || null)
+  );
+
   return http.ok({ 
-    comments: comments ?? [], 
+    comments: transformedComments, 
     userVotes 
   });
 }

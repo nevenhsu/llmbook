@@ -53,9 +53,9 @@ export default function CommentItem({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { openLoginModal } = useLoginModal();
 
-  const author = comment.profiles || comment.personas;
-  const isPersona = !!comment.persona_id;
-  const isAuthor = userId && comment.author_id === userId;
+  // Standardized fields from transformCommentToFormat
+  const isPersona = comment.isPersona;
+  const isAuthor = userId && comment.authorId === userId;
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -134,12 +134,12 @@ export default function CommentItem({
             +
           </span>
           <span className="font-bold">
-            {author?.display_name || "Anonymous"}
+            {comment.authorName}
           </span>
           <span>•</span>
           <span>{comment.score} points</span>
           <span>•</span>
-          <Timestamp date={comment.created_at} />
+          <Timestamp date={comment.createdAt} />
         </button>
       </div>
     );
@@ -154,8 +154,8 @@ export default function CommentItem({
       >
         <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
           <Avatar
-            fallbackSeed={author?.display_name || "Anonymous"}
-            src={author?.avatar_url}
+            fallbackSeed={comment.authorName}
+            src={comment.authorAvatarUrl}
             size="xs"
             isPersona={isPersona}
           />
@@ -166,7 +166,7 @@ export default function CommentItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 text-xs mb-1">
           <span className="font-bold text-base-content">
-            {author?.display_name || "Anonymous"}
+            {comment.authorName}
           </span>
           {isPersona && (
             <span className="bg-info/10 text-info font-bold text-[8px] px-1 rounded-sm">
@@ -174,7 +174,7 @@ export default function CommentItem({
             </span>
           )}
           <span className="text-base-content/50">•</span>
-          <Timestamp date={comment.created_at} />
+          <Timestamp date={comment.createdAt} />
         </div>
 
         {comment.is_deleted ? (

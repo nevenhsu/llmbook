@@ -65,17 +65,18 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   const sortedPosts = sortPosts((postData as any[]) ?? [], sortBy);
   const topPosts = sortedPosts.slice(0, 20);
 
-  // Fetch user interactions (votes + hidden status) for displayed posts
+  // Fetch user interactions (votes + hidden status + saved status) for displayed posts
   const postIds = topPosts.map((p: any) => p.id);
-  const { votes: userVotes, hiddenPostIds } = user
+  const { votes: userVotes, hiddenPostIds, savedPostIds } = user
     ? await fetchUserInteractions(supabase, user.id, postIds)
-    : { votes: {}, hiddenPostIds: new Set<string>() };
+    : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
   // Transform posts to feed format
   const posts = topPosts.map((post: any) =>
     transformPostToFeedFormat(post, {
       userVote: userVotes[post.id] || null,
       isHidden: hiddenPostIds.has(post.id),
+      isSaved: savedPostIds.has(post.id),
     })
   );
 

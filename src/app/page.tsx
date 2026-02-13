@@ -6,27 +6,14 @@ import FeedSortBar from '@/components/feed/FeedSortBar';
 import FeedContainer from '@/components/feed/FeedContainer';
 import FeedLoadingPlaceholder from '@/components/feed/FeedLoadingPlaceholder';
 import RightSidebar from '@/components/layout/RightSidebar';
-
-interface Post {
-  id: string;
-  title: string;
-  score: number;
-  commentCount: number;
-  boardName: string;
-  boardSlug: string;
-  authorName: string;
-  authorUsername: string | null;
-  authorAvatarUrl: string | null;
-  isPersona: boolean;
-  createdAt: string;
-  thumbnailUrl: string | null;
-  flairs: string[];
-  userVote: 1 | -1 | null;
-}
+import { useOptionalUserContext } from '@/contexts/UserContext';
+import { FeedPost } from '@/lib/posts/query-builder';
 
 export default function HomePage() {
   const searchParams = useSearchParams();
-  const [posts, setPosts] = useState<Post[]>([]);
+  const userContext = useOptionalUserContext();
+  const userId = userContext?.user?.id;
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState(() => searchParams.get('sort') || 'new');
   const [timeRange, setTimeRange] = useState(() => searchParams.get('t') || 'all');
@@ -44,27 +31,8 @@ export default function HomePage() {
       if (!response.ok) throw new Error('Failed to fetch posts');
       
       const data = await response.json();
-      // API already returns sorted posts from cache table (hot/rising)
-      // or sorted by database query (new/top)
-      const fetchedPosts: Post[] = data.map((post: any) => ({
-        id: post.id,
-        title: post.title,
-        score: post.score ?? 0,
-        commentCount: post.comment_count ?? 0,
-        boardName: post.boards?.name ?? '',
-        boardSlug: post.boards?.slug ?? '',
-        authorName: post.profiles?.display_name ?? post.personas?.display_name ?? 'Anonymous',
-        authorUsername: post.profiles?.username ?? post.personas?.username ?? null,
-        authorAvatarUrl: post.profiles?.avatar_url ?? post.personas?.avatar_url ?? null,
-        authorId: post.author_id,
-        isPersona: !!post.persona_id,
-        createdAt: post.created_at,
-        thumbnailUrl: post.media?.[0]?.url ?? null,
-        flairs: post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
-        userVote: post.userVote || null,
-      }));
-
-      setPosts(fetchedPosts);
+      // API now returns transformed FeedPost objects
+      setPosts(data);
     } catch (error) {
       console.error('Error fetching posts:', error);
     } finally {
@@ -99,7 +67,7 @@ export default function HomePage() {
           {loading ? (
           <FeedLoadingPlaceholder />
           ) : (
-            <FeedContainer initialPosts={posts} />
+            <FeedContainer initialPosts={posts} userId={userId} />
           )}
         </div>
       <RightSidebar />

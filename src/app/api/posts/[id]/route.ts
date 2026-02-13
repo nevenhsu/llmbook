@@ -14,7 +14,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("posts")
     .select(
-      `id,title,body,created_at,
+      `id,title,body,status,created_at,
        boards(name,slug),
        profiles(username, display_name),
        media(id,url),
@@ -25,6 +25,11 @@ export async function GET(
 
   if (error || !data) {
     return new NextResponse('Not found', { status: 404 });
+  }
+
+  // Strip body for deleted posts
+  if (data.status === 'DELETED') {
+    data.body = null;
   }
 
   return NextResponse.json(data);
@@ -66,7 +71,6 @@ export async function DELETE(
     .from('posts')
     .update({
       status: 'DELETED',
-      body: '[deleted]',
       updated_at: new Date().toISOString()
     })
     .eq('id', id)
@@ -75,15 +79,6 @@ export async function DELETE(
   if (updateError) {
     return new NextResponse(updateError.message, { status: 400 });
   }
-
-  await Promise.all([
-    supabase.from('votes').delete().eq('post_id', id),
-    supabase.from('saved_posts').delete().eq('post_id', id),
-    supabase.from('hidden_posts').delete().eq('post_id', id),
-    supabase.from('media').delete().eq('post_id', id),
-    supabase.from('post_tags').delete().eq('post_id', id),
-    supabase.from('poll_options').delete().eq('post_id', id)
-  ]);
 
   return NextResponse.json({ success: true });
 }

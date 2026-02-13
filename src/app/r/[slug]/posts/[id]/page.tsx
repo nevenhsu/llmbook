@@ -5,11 +5,11 @@ import PostDetailVote from '@/components/post/PostDetailVote';
 import CommentThread from '@/components/comment/CommentThread';
 import SafeHtml from '@/components/ui/SafeHtml';
 import PollDisplay from '@/components/post/PollDisplay';
-import Link from 'next/link';
-import { Archive } from 'lucide-react';
+import { Archive, Trash2 } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import PostActionsWrapper from '@/components/post/PostActionsWrapper';
 import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
+import { transformPostToFeedFormat } from '@/lib/posts/query-builder';
 
 interface PageProps {
   params: Promise<{ slug: string; id: string }>;
@@ -27,26 +27,28 @@ export default async function PostDetailPage({ params }: PageProps) {
   }
 
   // Get the post and verify it belongs to this board
-  const { data: post } = await supabase
+  const { data: postData } = await supabase
     .from('posts')
     .select(`
       id, title, body, created_at, updated_at, score, comment_count, persona_id, post_type, status, author_id,
+      boards(name, slug),
       profiles(username, display_name, avatar_url),
       personas(username, display_name, avatar_url),
-      media(url)
+      media(url),
+      post_tags(tag:tags(name))
     `)
     .eq('id', id)
     .eq('board_id', board.id)
     .maybeSingle() as { data: any | null };
 
-  if (!post) {
+  if (!postData) {
     notFound();
   }
 
   // Get poll options if it's a poll post
   let pollOptions = null;
   let userPollVote = null;
-  if (post.post_type === 'poll') {
+  if (postData.post_type === 'poll') {
     const { data: options } = await supabase
       .from('poll_options')
       .select('id, text, vote_count, position')
@@ -66,25 +68,40 @@ export default async function PostDetailPage({ params }: PageProps) {
     }
   }
 
-  const isPersona = !!post.persona_id;
-  const author = isPersona ? post.personas : post.profiles;
-  const authorData = Array.isArray(author) ? author[0] : author;
-  const authorName = authorData?.display_name ?? 'Anonymous';
-  const authorUsername = authorData?.username ?? null;
-  const authorAvatar = authorData?.avatar_url ?? null;
-
-  // Get user vote
+  // Get user interactions
   let userVote: 1 | -1 | null = null;
-  
+  let isHidden = false;
+  let isSaved = false;
+
   if (user) {
-    const { data: vote } = await supabase
-      .from('votes')
-      .select('value')
-      .eq('user_id', user.id)
-      .eq('post_id', id)
-      .maybeSingle();
-    userVote = vote?.value ?? null;
+    const [voteRes, hiddenRes, savedRes] = await Promise.all([
+      supabase
+        .from('votes')
+        .select('value')
+        .eq('user_id', user.id)
+        .eq('post_id', id)
+        .maybeSingle(),
+      supabase
+        .from('hidden_posts')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .eq('post_id', id)
+        .maybeSingle(),
+      supabase
+        .from('saved_posts')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .eq('post_id', id)
+        .maybeSingle(),
+    ]);
+
+    userVote = (voteRes.data?.value as 1 | -1) ?? null;
+    isHidden = !!hiddenRes.data;
+    isSaved = !!savedRes.data;
   }
+
+  // Transform post to standard format
+  const post = transformPostToFeedFormat(postData, { userVote, isHidden, isSaved });
 
   return (
     <article className="bg-base-200 border border-neutral rounded-md overflow-hidden flex flex-col">
@@ -99,13 +116,13 @@ export default async function PostDetailPage({ params }: PageProps) {
 
         <div className="flex-1 p-4">
           <PostMeta 
-            boardName={board?.name ?? ''} 
-            boardSlug={board?.slug ?? ''} 
-            authorName={authorName}
-            authorUsername={authorUsername}
-            authorAvatarUrl={authorAvatar}
-            isPersona={isPersona}
-            createdAt={post.created_at} 
+            boardName={post.boardName} 
+            boardSlug={post.boardSlug} 
+            authorName={post.authorName}
+            authorUsername={post.authorUsername}
+            authorAvatarUrl={post.authorAvatarUrl}
+            isPersona={post.isPersona}
+            createdAt={post.createdAt} 
           />
           
           <h1 className="text-2xl sm:text-3xl font-bold text-base-content mt-2 mb-2 font-display">
@@ -113,13 +130,13 @@ export default async function PostDetailPage({ params }: PageProps) {
           </h1>
 
           {/* Show "Edited" badge if post was updated */}
-          {post.updated_at && new Date(post.updated_at).getTime() > new Date(post.created_at).getTime() + 60000 && (
+          {post.updatedAt && new Date(post.updatedAt).getTime() > new Date(post.createdAt).getTime() + 60000 && (
             <p className="text-xs text-base-content/50 mb-4">
               <span className="inline-flex items-center gap-1">
                 <span className="font-semibold">Edited</span>
                 <span>·</span>
-                <time dateTime={post.updated_at}>
-                  {new Date(post.updated_at).toLocaleString('en-US', {
+                <time dateTime={post.updatedAt}>
+                  {new Date(post.updatedAt).toLocaleString('en-US', {
                     month: 'short',
                     day: 'numeric',
                     year: 'numeric',
@@ -141,20 +158,21 @@ export default async function PostDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* DELETED state - show message instead of content */}
-          {post.status === 'DELETED' ? (
+          {/* DELETED banner */}
+          {post.status === 'DELETED' && (
             <div className="rounded-box bg-error/10 border border-error px-6 py-8 text-center mb-4">
-              <p className="text-lg font-semibold text-error mb-2">
-                This post has been deleted
-              </p>
-              <p className="text-sm text-base-content/70">
-                The content is no longer available.
-              </p>
+              <div className="flex flex-col items-center gap-2">
+                <Trash2 size={24} className="text-error mb-2" />
+                <p className="text-lg font-bold text-error">This post has been deleted</p>
+                <p className="text-sm text-base-content/60">The content is no longer public but the record is kept for historical purposes.</p>
+              </div>
             </div>
-          ) : (
-            /* Show content for PUBLISHED and ARCHIVED posts */
+          )}
+
+          {/* Show content ONLY for non-DELETED posts */}
+          {post.status !== 'DELETED' && (
             <>
-              {post.post_type === 'poll' ? (
+              {postData.post_type === 'poll' ? (
                 <PollDisplay
                   postId={id}
                   initialOptions={pollOptions || []}
@@ -162,9 +180,9 @@ export default async function PostDetailPage({ params }: PageProps) {
                 />
               ) : (
                 <>
-                  <SafeHtml html={post.body} className="tiptap-html text-sm text-base-content mb-4" />
+                  <SafeHtml html={postData.body} className="tiptap-html text-sm text-base-content mb-4" />
 
-                  {post.media?.map((m: any, i: number) => (
+                  {postData.media?.map((m: any, i: number) => (
                     <div key={i} className="mt-4 rounded-md overflow-hidden border border-neutral bg-black">
                       <img src={m.url} alt="" className="max-w-full h-auto mx-auto" />
                     </div>
@@ -174,14 +192,17 @@ export default async function PostDetailPage({ params }: PageProps) {
             </>
           )}
 
+
           <div className="mt-4 pt-2 border-t border-neutral">
             <PostActionsWrapper
               postId={id} 
               boardSlug={slug} 
-              commentCount={post.comment_count ?? 0}
-              authorId={post.author_id}
+              commentCount={post.commentCount}
+              authorId={post.authorId}
               status={post.status}
               inDetailPage={true}
+              isHidden={isHidden}
+              isSaved={isSaved}
             />
           </div>
         </div>

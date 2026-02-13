@@ -32,7 +32,10 @@ export default function VotePill({
 
   if (orientation === 'vertical') {
     return (
-      <div className="flex flex-col items-center rounded-lg bg-base-100 py-1">
+      <div 
+        className="flex flex-col items-center rounded-lg bg-base-100 py-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={(e) => { e.stopPropagation(); if (!disabled) onVote(1); }}
           className={`p-1 rounded-md hover:hover:bg-base-300 ${isUpvoted ? 'text-success' : 'text-base-content/70 hover:text-success'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
@@ -57,7 +60,10 @@ export default function VotePill({
   }
 
   return (
-    <div className="flex items-center rounded-full bg-base-100">
+    <div 
+      className="flex items-center rounded-full bg-base-100"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         onClick={(e) => { e.stopPropagation(); if (!disabled) onVote(1); }}
         className={`p-1 rounded-l-full hover:hover:bg-base-300 ${isUpvoted ? 'text-success' : 'text-base-content/70 hover:text-success'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}

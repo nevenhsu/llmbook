@@ -116,8 +116,8 @@ export default function CommentThread({ postId, userId, isArchived = false }: Co
 
     const roots: any[] = [];
     comments.forEach((c) => {
-      if (c.parent_id && map[c.parent_id]) {
-        map[c.parent_id].children.push(map[c.id]);
+      if (c.parentId && map[c.parentId]) {
+        map[c.parentId].children.push(map[c.id]);
       } else {
         roots.push(map[c.id]);
       }

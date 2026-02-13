@@ -3,21 +3,15 @@
 import Link from 'next/link';
 import { ChevronRight, Hash } from 'lucide-react';
 import JoinButton from './JoinButton';
+import { FormattedBoard } from '@/lib/posts/query-builder';
 
 interface BoardInfoCardProps {
-  board: {
-    slug: string;
-    name: string;
-    description?: string | null;
-    member_count: number;
-    post_count: number;
-    created_at: string;
-  };
+  board: FormattedBoard;
   isMember: boolean;
 }
 
 export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
-  const createdDate = new Date(board.created_at).toLocaleDateString('en-US', {
+  const createdDate = new Date(board.createdAt).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric'
@@ -43,14 +37,14 @@ export default function BoardInfoCard({ board, isMember }: BoardInfoCardProps) {
           <div className="flex items-center justify-between gap-2">
             <div>
               <div className="stat-title text-xs">Members</div>
-              <div className="stat-value text-lg">{board.member_count.toLocaleString()}</div>
+              <div className="stat-value text-lg">{board.memberCount.toLocaleString()}</div>
             </div>
             <ChevronRight size={16} className="opacity-70" />
           </div>
         </Link>
         <div className="stat py-2 px-3">
           <div className="stat-title text-xs">Posts</div>
-          <div className="stat-value text-lg">{board.post_count.toLocaleString()}</div>
+          <div className="stat-value text-lg">{board.postCount.toLocaleString()}</div>
         </div>
       </div>
 
