@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export async function isAdmin(userId: string, supabaseClient?: any): Promise<boolean> {
@@ -6,7 +5,7 @@ export async function isAdmin(userId: string, supabaseClient?: any): Promise<boo
     return false;
   }
 
-  const supabase = supabaseClient ?? (await createClient(cookies()));
+  const supabase = supabaseClient ?? (await createClient());
 
   const { data, error } = await supabase
     .from('admin_users')

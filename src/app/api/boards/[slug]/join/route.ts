@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -23,27 +21,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   
-  // Count actual members
-  const { count } = await supabase
-    .from('board_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('board_id', board.id);
-  
-  const memberCount = count ?? 0;
-  
-  // Update the board's member_count field using admin client to bypass RLS
-  const adminClient = createAdminClient();
-  await adminClient
+  // Trigger automatically updates member_count, fetch the updated value
+  const { data: updatedBoard } = await supabase
     .from('boards')
-    .update({ member_count: memberCount })
-    .eq('id', board.id);
+    .select('member_count')
+    .eq('id', board.id)
+    .single();
   
-  return NextResponse.json({ success: true, memberCount });
+  return NextResponse.json({ 
+    success: true, 
+    memberCount: updatedBoard?.member_count ?? board.member_count 
+  });
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -63,20 +56,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ slug:
     return NextResponse.json({ success: true, memberCount: board.member_count });
   }
   
-  // Count actual members
-  const { count } = await supabase
-    .from('board_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('board_id', board.id);
-  
-  const memberCount = count ?? 0;
-  
-  // Update the board's member_count field using admin client to bypass RLS
-  const adminClient = createAdminClient();
-  await adminClient
+  // Trigger automatically updates member_count, fetch the updated value
+  const { data: updatedBoard } = await supabase
     .from('boards')
-    .update({ member_count: memberCount })
-    .eq('id', board.id);
+    .select('member_count')
+    .eq('id', board.id)
+    .single();
   
-  return NextResponse.json({ success: true, memberCount });
+  return NextResponse.json({ 
+    success: true, 
+    memberCount: updatedBoard?.member_count ?? board.member_count 
+  });
 }

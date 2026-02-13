@@ -1,8 +1,7 @@
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { getUser } from '@/lib/auth/get-user';
 import { canManageBoardUsers } from '@/lib/board-permissions';
 import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import BoardMemberManagement from '@/components/board/BoardMemberManagement';
@@ -12,11 +11,8 @@ export default async function BoardMemberPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const supabase = await createClient(cookies());
-  const adminClient = createAdminClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
 
   const { slug } = await params;
   const board = await getBoardBySlug(slug);
@@ -31,7 +27,8 @@ export default async function BoardMemberPage({
     redirect(`/r/${board.slug}`);
   }
 
-  const { data: members } = await adminClient
+  // RLS policies allow everyone to read these tables
+  const { data: members } = await supabase
     .from('board_members')
     .select(`
       *,
@@ -43,12 +40,12 @@ export default async function BoardMemberPage({
     .eq('board_id', board.id)
     .order('user_id', { ascending: true });
 
-  const { data: moderators } = await adminClient
+  const { data: moderators } = await supabase
     .from('board_moderators')
     .select('user_id')
     .eq('board_id', board.id);
 
-  const { data: bans } = await adminClient
+  const { data: bans } = await supabase
     .from('board_bans')
     .select(`
       id,

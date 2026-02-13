@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -12,7 +11,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ postId: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -122,7 +121,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ postId: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();

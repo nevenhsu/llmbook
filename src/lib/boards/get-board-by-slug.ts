@@ -1,5 +1,4 @@
 import { cache } from "react";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export type BoardBySlug = {
@@ -16,7 +15,7 @@ export type BoardBySlug = {
 };
 
 export const getBoardBySlug = cache(async (slug: string): Promise<BoardBySlug | null> => {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { data: board } = await supabase
     .from("boards")
     .select(

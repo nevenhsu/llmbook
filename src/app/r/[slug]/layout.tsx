@@ -1,5 +1,5 @@
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import { notFound } from "next/navigation";
 import BoardInfoCard from "@/components/board/BoardInfoCard";
 import BoardManageCard from "@/components/board/BoardManageCard";
@@ -19,10 +19,8 @@ export default async function BoardLayout({
   params,
 }: BoardLayoutProps) {
   const { slug } = await params;
-  const supabase = await createClient(cookies());
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
 
   const board = await getBoardBySlug(slug);
 

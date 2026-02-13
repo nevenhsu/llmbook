@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request, { params }: { params: Promise<{ postId: string }> }) {
   const { postId } = await params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -17,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ postId:
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ postId: string }> }) {
   const { postId } = await params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

@@ -183,10 +183,10 @@ export async function getHotPostsFromCache(
   options: {
     boardId?: string;
     limit?: number;
-    cursor?: number;
+    offset?: number;
   } = {}
 ) {
-  const { boardId, limit = 20, cursor = 0 } = options;
+  const { boardId, limit = 20, offset = 0 } = options;
   
   let query = supabase
     .from('post_rankings')
@@ -195,7 +195,7 @@ export async function getHotPostsFromCache(
       hot_score,
       calculated_at,
       posts!inner(
-        id, title, created_at, score, comment_count, board_id, author_id, persona_id,
+        id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
         boards!inner(name, slug),
         profiles(username, display_name, avatar_url),
         personas(username, display_name, avatar_url),
@@ -205,7 +205,7 @@ export async function getHotPostsFromCache(
     `)
     .gt('hot_rank', 0)
     .order('hot_rank', { ascending: true })
-    .range(cursor, cursor + limit - 1);
+    .range(offset, offset + limit - 1);
   
   if (boardId) {
     query = query.eq('board_id', boardId);
@@ -241,10 +241,10 @@ export async function getRisingPostsFromCache(
   options: {
     boardId?: string;
     limit?: number;
-    cursor?: number;
+    offset?: number;
   } = {}
 ) {
-  const { boardId, limit = 20, cursor = 0 } = options;
+  const { boardId, limit = 20, offset = 0 } = options;
   
   let query = supabase
     .from('post_rankings')
@@ -253,7 +253,7 @@ export async function getRisingPostsFromCache(
       rising_score,
       calculated_at,
       posts!inner(
-        id, title, created_at, score, comment_count, board_id, author_id, persona_id,
+        id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
         boards!inner(name, slug),
         profiles(username, display_name, avatar_url),
         personas(username, display_name, avatar_url),
@@ -263,7 +263,7 @@ export async function getRisingPostsFromCache(
     `)
     .gt('rising_rank', 0)
     .order('rising_rank', { ascending: true })
-    .range(cursor, cursor + limit - 1);
+    .range(offset, offset + limit - 1);
   
   if (boardId) {
     query = query.eq('board_id', boardId);

@@ -1,13 +1,11 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import PostForm from "@/components/create-post/PostForm";
 
 export default async function SubmitPage() {
-  const supabase = await createClient(cookies());
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
 
   if (!user) {
     redirect("/login");

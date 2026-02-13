@@ -8,7 +8,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 
@@ -26,7 +25,7 @@ export interface ApiSuccessResponse<T> {
  * Create authenticated Supabase client for route handlers
  */
 export async function getSupabaseServerClient() {
-  return createClient(await cookies());
+  return createClient();
 }
 
 /**

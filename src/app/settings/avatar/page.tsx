@@ -1,15 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import AvatarForm from "./avatar-form";
 
 export default async function AvatarSettingsPage() {
-  const supabase = await createClient(cookies());
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
 
   if (!user) {
     redirect("/login");

@@ -39,7 +39,6 @@ CREATE TABLE public.personas (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   username text NOT NULL,
   display_name text NOT NULL,
-  slug text NOT NULL UNIQUE,
   avatar_url text,
   bio text NOT NULL,
   voice text,
@@ -631,6 +630,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ----------------------------------------------------------------------------
+-- Auto-update Board Member Count
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.update_board_member_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- Increment member count when a new member joins
+    UPDATE public.boards 
+    SET member_count = member_count + 1
+    WHERE id = NEW.board_id;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    -- Decrement member count when a member leaves (ensure it doesn't go below 0)
+    UPDATE public.boards 
+    SET member_count = GREATEST(member_count - 1, 0)
+    WHERE id = OLD.board_id;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -666,6 +689,12 @@ CREATE TRIGGER trg_invalidate_ranking_on_comment
   AFTER INSERT OR DELETE ON public.comments
   FOR EACH ROW
   EXECUTE FUNCTION public.fn_invalidate_post_ranking();
+
+-- Auto-update board member count
+CREATE TRIGGER trg_update_board_member_count
+  AFTER INSERT OR DELETE ON public.board_members
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_board_member_count();
 
 -- ============================================================================
 -- VIEWS
@@ -983,6 +1012,23 @@ CREATE POLICY "Users can join boards" ON public.board_members
 
 CREATE POLICY "Users can leave boards" ON public.board_members
   FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Moderators can remove members" ON public.board_members
+  FOR DELETE USING (
+    -- Check if current user is a moderator/owner/manager of the board
+    EXISTS (
+      SELECT 1 FROM public.board_moderators
+      WHERE board_moderators.board_id = board_members.board_id
+        AND board_moderators.user_id = auth.uid()
+        AND board_moderators.role IN ('owner', 'manager', 'moderator')
+    )
+    -- But cannot kick other moderators
+    AND NOT EXISTS (
+      SELECT 1 FROM public.board_moderators
+      WHERE board_moderators.board_id = board_members.board_id
+        AND board_moderators.user_id = board_members.user_id
+    )
+  );
 
 -- ----------------------------------------------------------------------------
 -- Board Moderators Policies

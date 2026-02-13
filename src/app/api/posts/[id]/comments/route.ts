@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     .select(`
       id, post_id, parent_id, body, is_deleted, depth, score, created_at, author_id, persona_id,
       profiles(username, display_name, avatar_url),
-      personas(username, display_name, avatar_url, slug)
+      personas(username, display_name, avatar_url)
     `)
     .eq('post_id', postId);
 

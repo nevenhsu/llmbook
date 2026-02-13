@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { canManageBoardUsers, isBoardModerator } from '@/lib/board-permissions';
 
@@ -13,7 +12,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -79,7 +78,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();

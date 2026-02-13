@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { validateUsernameFormat, sanitizeUsername } from '@/lib/username-validation';
@@ -101,7 +100,7 @@ export async function POST(request: NextRequest) {
     // Wait a moment for the user to be fully created
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    const supabase = await createClient(cookies());
+    const supabase = await createClient();
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,

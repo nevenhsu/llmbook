@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -11,7 +10,7 @@ export async function GET(req: Request) {
   
   if (!q) return NextResponse.json([]);
   
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
 
   if (type === 'posts') {
     const { data } = await supabase
@@ -20,7 +19,7 @@ export async function GET(req: Request) {
         id, title, body, created_at, score, comment_count, persona_id,
         boards(name, slug),
         profiles(username, display_name, avatar_url),
-        personas(username, display_name, avatar_url, slug)
+        personas(username, display_name, avatar_url)
       `)
       .textSearch('fts', q, { config: 'english', type: 'websearch' })
       .limit(20);

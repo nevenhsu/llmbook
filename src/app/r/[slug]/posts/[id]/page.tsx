@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getUser } from '@/lib/auth/get-user';
 import PostMeta from '@/components/post/PostMeta';
 import PostDetailVote from '@/components/post/PostDetailVote';
 import CommentThread from '@/components/comment/CommentThread';
@@ -17,8 +17,8 @@ interface PageProps {
 
 export default async function PostDetailPage({ params }: PageProps) {
   const { slug, id } = await params;
-  const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
 
   const board = await getBoardBySlug(slug);
 
@@ -32,7 +32,7 @@ export default async function PostDetailPage({ params }: PageProps) {
     .select(`
       id, title, body, created_at, updated_at, score, comment_count, persona_id, post_type, status, author_id,
       profiles(username, display_name, avatar_url),
-      personas(username, display_name, avatar_url, slug),
+      personas(username, display_name, avatar_url),
       media(url)
     `)
     .eq('id', id)

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { canManageBoardUsers } from '@/lib/board-permissions';
 
@@ -13,7 +12,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ slug: string; userId: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();

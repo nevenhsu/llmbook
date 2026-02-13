@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -11,7 +10,7 @@ export async function POST(
   context: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await context.params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -63,7 +62,7 @@ export async function DELETE(
   context: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await context.params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
 
   const {
     data: { user },

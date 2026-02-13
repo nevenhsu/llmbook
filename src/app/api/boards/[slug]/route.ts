@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { canManageBoard } from '@/lib/board-permissions';
 import { isAdmin } from '@/lib/admin';
@@ -14,7 +13,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -127,7 +126,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();

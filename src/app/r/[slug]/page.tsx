@@ -1,12 +1,13 @@
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import BoardLayout from "@/components/board/BoardLayout";
 import UnarchiveButton from "@/components/board/UnarchiveButton";
 import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
-import { sortPosts, getTimeRangeDate, type SortType } from "@/lib/ranking";
+import { sortPosts, type SortType } from "@/lib/ranking";
+import { buildPostsQuery, fetchUserInteractions, transformPostToFeedFormat } from "@/lib/posts/query-builder";
 import { Archive } from "lucide-react";
 
 interface PageProps {
@@ -20,7 +21,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   const sortBy = (searchParamsResolved?.sort || 'hot') as SortType;
   const timeRange = searchParamsResolved?.t || 'all';
   
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const board = await getBoardBySlug(slug);
 
   // Board not found is handled by layout.tsx, which will call notFound()
@@ -28,9 +29,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     return null;
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   // Check if user is admin or moderator (need this early for query)
   let userIsAdmin = false;
@@ -51,83 +50,34 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     canViewArchived = userIsAdmin || canManageBoard;
   }
 
-  // Build query with time range filter
-  let postsQuery = supabase
-    .from("posts")
-    .select(
-      `id,title,body,created_at,score,comment_count,persona_id,author_id,status,
-       profiles(username, display_name, avatar_url),
-       personas(username, display_name, avatar_url, slug),
-       media(url),
-       post_tags(tag:tags(name))`,
-    )
-    .eq("board_id", board.id);
-
-  // Filter by status - include ARCHIVED only if user has permission
-  if (canViewArchived) {
-    postsQuery = postsQuery.in('status', ['PUBLISHED', 'ARCHIVED']);
-  } else {
-    postsQuery = postsQuery.eq('status', 'PUBLISHED');
-  }
-
-  // Apply time range filter for top/rising
-  if ((sortBy === 'top' || sortBy === 'rising') && timeRange !== 'all') {
-    const rangeDate = getTimeRangeDate(timeRange);
-    if (rangeDate) {
-      postsQuery = postsQuery.gte('created_at', rangeDate);
-    }
-  }
-
-  // Fetch posts
-  const { data: postData } = await postsQuery.limit(100);
+  // Build and fetch posts using query builder
+  const postsQuery = buildPostsQuery({
+    supabase,
+    boardId: board.id,
+    sortBy,
+    timeRange,
+    canViewArchived,
+    limit: 100,
+  });
+  const { data: postData } = await postsQuery;
 
   // Sort posts using ranking algorithm
-  const sortedPosts = sortPosts(postData ?? [], sortBy);
+  const sortedPosts = sortPosts((postData as any[]) ?? [], sortBy);
   const topPosts = sortedPosts.slice(0, 20);
 
-  // Fetch user votes for displayed posts
-  let userVotes: Record<string, 1 | -1> = {};
-  if (user && topPosts.length > 0) {
-    const postIds = topPosts.map((p: any) => p.id);
-    const { data: votes } = await supabase
-      .from('votes')
-      .select('post_id, value')
-      .eq('user_id', user.id)
-      .in('post_id', postIds);
+  // Fetch user interactions (votes + hidden status) for displayed posts
+  const postIds = topPosts.map((p: any) => p.id);
+  const { votes: userVotes, hiddenPostIds } = user
+    ? await fetchUserInteractions(supabase, user.id, postIds)
+    : { votes: {}, hiddenPostIds: new Set<string>() };
 
-    if (votes) {
-      userVotes = votes.reduce((acc, vote) => {
-        acc[vote.post_id] = vote.value;
-        return acc;
-      }, {} as Record<string, 1 | -1>);
-    }
-  }
-
-  const posts = topPosts.map((post: any) => {
-    const isPersona = !!post.persona_id;
-    const author = isPersona ? post.personas : post.profiles;
-    const authorData = Array.isArray(author) ? author[0] : author;
-
-    return {
-      id: post.id,
-      title: post.title,
-      score: post.score ?? 0,
-      commentCount: post.comment_count ?? 0,
-      boardName: board.name,
-      boardSlug: board.slug,
-      authorName: authorData?.display_name ?? "Anonymous",
-      authorUsername: authorData?.username ?? null,
-      authorAvatarUrl: authorData?.avatar_url ?? null,
-      authorId: post.author_id,
-      isPersona,
-      createdAt: post.created_at,
-      thumbnailUrl: post.media?.[0]?.url ?? null,
-      flairs:
-        post.post_tags?.map((pt: any) => pt.tag?.name).filter(Boolean) ?? [],
+  // Transform posts to feed format
+  const posts = topPosts.map((post: any) =>
+    transformPostToFeedFormat(post, {
       userVote: userVotes[post.id] || null,
-      status: post.status,
-    };
-  });
+      isHidden: hiddenPostIds.has(post.id),
+    })
+  );
 
   // Check if user is joined to the board
   let isJoined = false;

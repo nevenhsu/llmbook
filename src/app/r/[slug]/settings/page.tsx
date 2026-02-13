@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getUser } from '@/lib/auth/get-user';
 import { redirect } from 'next/navigation';
 import { getUserBoardRole } from '@/lib/board-permissions';
 import { isAdmin } from '@/lib/admin';
@@ -11,10 +11,8 @@ export default async function BoardSettingsPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const supabase = await createClient(cookies());
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
 
   if (!user) {
     redirect('/login');

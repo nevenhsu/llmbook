@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getUser } from '@/lib/auth/get-user';
 import Link from 'next/link';
 import { Archive } from 'lucide-react';
 import { isAdmin } from '@/lib/admin';
@@ -11,10 +11,8 @@ export default async function ArchiveBoardsPage({
 }: {
   searchParams: { page?: string };
 }) {
-  const supabase = await createClient(cookies());
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const user = await getUser();
   const userIsAdmin = user ? await isAdmin(user.id, supabase) : false;
   const page = parseInt(searchParams.page || '1', 10);
   const pageSize = 20;

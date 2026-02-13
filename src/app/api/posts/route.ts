@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { getTimeRangeDate, getHotPostsFromCache, getRisingPostsFromCache } from '@/lib/ranking';
+import { getHotPostsFromCache, getRisingPostsFromCache } from '@/lib/ranking';
 import { isAdmin } from '@/lib/admin';
 import { canManageBoard } from '@/lib/board-permissions';
+import { buildPostsQuery, fetchUserInteractions } from '@/lib/posts/query-builder';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +12,7 @@ export const revalidate = 60;
 
 export async function GET(request: Request) {
   const startTime = Date.now();
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const board = searchParams.get('board');
   const tag = searchParams.get('tag');
@@ -22,7 +22,6 @@ export async function GET(request: Request) {
   const t = searchParams.get('t') || 'today';
   const includeArchived = searchParams.get('includeArchived') === 'true';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50);
-  const offset = cursor ? parseInt(cursor, 10) : 0;
 
   // Parallel execution of independent queries
   const [{ data: { user } }, boardData, tagData] = await Promise.all([
@@ -49,30 +48,16 @@ export async function GET(request: Request) {
     return NextResponse.json([]);
   }
 
-  // Fetch hidden posts info for logged in user (instead of filtering)
-  const hiddenPostIds: Set<string> = new Set();
-  if (user?.id) {
-    const { data: hidden } = await supabase
-      .from('hidden_posts')
-      .select('post_id')
-      .eq('user_id', user.id)
-      .limit(100);
-
-    if (hidden && hidden.length > 0) {
-      hidden.forEach(h => hiddenPostIds.add(h.post_id));
-    }
-  }
-
   let posts: any[] = [];
   let useCache = false;
 
   // Use cached rankings for hot and rising sorts
   if (sort === 'hot' && !tagId && !author) {
-    // Use hot rankings cache
+    const offset = cursor ? parseInt(cursor, 10) : 0;
     const { posts: cachedPosts, error } = await getHotPostsFromCache(supabase, {
       boardId: boardId || undefined,
       limit,
-      cursor: offset,
+      offset,
     });
     
     if (!error && cachedPosts.length > 0) {
@@ -80,11 +65,11 @@ export async function GET(request: Request) {
       useCache = true;
     }
   } else if (sort === 'rising' && !tagId && !author) {
-    // Use rising rankings cache
+    const offset = cursor ? parseInt(cursor, 10) : 0;
     const { posts: cachedPosts, error } = await getRisingPostsFromCache(supabase, {
       boardId: boardId || undefined,
       limit,
-      cursor: offset,
+      offset,
     });
     
     if (!error && cachedPosts.length > 0) {
@@ -93,69 +78,22 @@ export async function GET(request: Request) {
     }
   }
 
-  // If not using cache, query posts directly
+  // If not using cache, query posts directly using query builder
   if (!useCache) {
-    // Build base query with minimal fields
-    // Exclude 'body' to reduce payload size - only fetch title and metadata
-    let query = supabase
-      .from('posts')
-      .select(
-        `id,title,created_at,score,comment_count,board_id,author_id,persona_id,status,
-         boards!inner(name,slug),
-         profiles(username,display_name,avatar_url),
-         personas(username,display_name,avatar_url),
-         media(url),
-         post_tags(tag:tags(name))`
-      );
-    
-    // Filter by status - include ARCHIVED only if user has permission
-    if (canViewArchived) {
-      query = query.in('status', ['PUBLISHED', 'ARCHIVED']);
-    } else {
-      query = query.eq('status', 'PUBLISHED');
-    }
+    const postsQuery = buildPostsQuery({
+      supabase,
+      boardId: boardId || undefined,
+      tagId: tagId || undefined,
+      authorId: author || undefined,
+      sortBy: sort as any,
+      timeRange: t,
+      canViewArchived,
+      limit,
+      offset: sort === 'top' && cursor ? parseInt(cursor, 10) : undefined,
+      cursor: sort === 'new' && cursor ? cursor : undefined,
+    });
 
-    if (boardId) {
-      query = query.eq('board_id', boardId);
-    }
-
-    if (author) {
-      query = query.eq('author_id', author);
-    }
-
-    if (tagId) {
-      query = query
-        .select(
-          `id,title,created_at,score,comment_count,board_id,author_id,persona_id,status,
-           boards!inner(name,slug),
-           profiles(username,display_name,avatar_url),
-           personas(username,display_name,avatar_url),
-           media(url),
-           post_tags!inner(tag:tags(name))`
-        )
-        .eq('post_tags.tag_id', tagId);
-    }
-
-    if (cursor) {
-      const date = new Date(cursor);
-      if (!Number.isNaN(date.getTime())) {
-        query = query.lt('created_at', date.toISOString());
-      }
-    }
-
-    // Apply sort-specific filters
-    if (sort === 'top') {
-      const since = getTimeRangeDate(t);
-      if (since) query = query.gte('created_at', since);
-      query = query.order('score', { ascending: false });
-    } else if (sort === 'new') {
-      query = query.order('created_at', { ascending: false });
-    } else {
-      // Fallback for hot/rising when cache is empty
-      query = query.order('created_at', { ascending: false });
-    }
-
-    const { data, error } = await query.limit(limit);
+    const { data, error } = await postsQuery;
 
     if (error) {
       console.error('API Error:', error);
@@ -165,21 +103,14 @@ export async function GET(request: Request) {
     posts = (data ?? []) as any[];
   }
 
-  // Fetch user votes for displayed posts
+  // Fetch user interactions (votes + hidden status) for displayed posts
   if (user && posts.length > 0) {
     const postIds = posts.map(p => p.id);
-    const { data: votes } = await supabase
-      .from('votes')
-      .select('post_id, value')
-      .eq('user_id', user.id)
-      .in('post_id', postIds);
-
-    const userVotes: Record<string, 1 | -1> = {};
-    if (votes) {
-      votes.forEach(vote => {
-        userVotes[vote.post_id] = vote.value;
-      });
-    }
+    const { votes: userVotes, hiddenPostIds } = await fetchUserInteractions(
+      supabase,
+      user.id,
+      postIds
+    );
 
     // Add userVote and isHidden to each post
     posts = posts.map(post => ({
@@ -201,7 +132,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();

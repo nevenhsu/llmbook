@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 import { createClient } from "@/lib/supabase/server";
@@ -13,7 +12,7 @@ const DEFAULT_BUCKET = "media";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

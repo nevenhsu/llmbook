@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import PostForm from "@/components/create-post/PostForm";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 
@@ -10,7 +10,7 @@ interface PageProps {
 
 export default async function EditPostPage({ params }: PageProps) {
   const { slug, id } = await params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const board = await getBoardBySlug(slug);
 
   if (!board) {
@@ -18,9 +18,7 @@ export default async function EditPostPage({ params }: PageProps) {
   }
 
   // Check authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   if (!user) {
     redirect("/login");

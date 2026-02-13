@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient(cookies());
+    const supabase = await createClient();
     const adminClient = createAdminClient();
 
     // Check if identifier is email or username

@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const { data, error } = await supabase.from('tags').select('*').order('name');
 
   if (error) {

@@ -1,7 +1,8 @@
 import "./globals.css";
 import type { ReactNode } from "react";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import Header from "@/components/layout/Header";
 import DrawerSidebar from "@/components/layout/DrawerSidebar";
 import { Toaster } from "react-hot-toast";
@@ -22,16 +23,14 @@ export default async function RootLayout({
 }: {
   children: ReactNode;
 }) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || '';
   
   // Check if current route should hide drawer
   const shouldHideDrawer = HIDDEN_DRAWER_ROUTES.some(route => pathname.startsWith(route));
   
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   let profile = null;
   let userIsAdmin = false;

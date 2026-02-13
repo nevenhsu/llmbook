@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { CalendarClock, Flame, UserPlus, Settings, UserRound, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
 import FollowButton from "@/components/profile/FollowButton";
@@ -17,12 +17,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   const searchParamsResolved = searchParams ? await searchParams : {};
   const tab = searchParamsResolved.tab ?? "posts";
 
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
 
   // Get current user (for checking if viewing own profile)
-  const {
-    data: { user: currentUser },
-  } = await supabase.auth.getUser();
+  const currentUser = await getUser();
 
   // Decode username from URL
   const decodedUsername = decodeURIComponent(username).toLowerCase();

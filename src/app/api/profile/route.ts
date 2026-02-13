@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { validateUsernameFormat, sanitizeUsername } from '@/lib/username-validation';
 
 export const runtime = 'nodejs';
 
 export async function PUT(request: Request) {
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();

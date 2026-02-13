@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getUser } from '@/lib/auth/get-user';
 import FeedContainer from '@/components/feed/FeedContainer';
 
 interface PageProps {
@@ -9,7 +9,7 @@ interface PageProps {
 
 export default async function TagPage({ params }: PageProps) {
   const { slug } = await params;
-  const supabase = await createClient(cookies());
+  const supabase = await createClient();
   
   const { data: tag } = await supabase
     .from("tags")
@@ -29,7 +29,7 @@ export default async function TagPage({ params }: PageProps) {
   }
 
   // Get current user for vote states
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getUser();
 
   // Fetch posts - unified data structure matching board feed
   const { data: postsData } = await supabase

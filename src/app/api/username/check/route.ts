@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { validateUsernameFormat, sanitizeUsername } from '@/lib/username-validation';
 
 export async function POST(request: NextRequest) {
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient(cookies());
+    const supabase = await createClient();
 
     // Check in profiles table
     const { data: profileExists } = await supabase
