@@ -3,7 +3,6 @@ import { getUser } from "@/lib/auth/get-user";
 import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import BoardLayout from "@/components/board/BoardLayout";
-import UnarchiveButton from "@/components/board/UnarchiveButton";
 import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { sortPosts, type SortType } from "@/lib/ranking";
@@ -82,7 +81,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
 
   // Check if user is joined to the board
   let isJoined = false;
-  let canManage = canManageBoard;
+  let canManage = userIsAdmin || canManageBoard;
   
   if (user) {
     const { data: membership } = await supabase
@@ -101,6 +100,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
       slug={slug}
       isJoined={isJoined}
       canManage={canManage}
+      isAdmin={userIsAdmin}
     >
       {/* Archived Banner */}
       {board.is_archived && (
@@ -112,7 +112,6 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
                 This community has been archived and is read-only
               </p>
             </div>
-            {userIsAdmin && <UnarchiveButton slug={board.slug} compact />}
           </div>
         </div>
       )}

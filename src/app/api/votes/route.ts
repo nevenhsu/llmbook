@@ -6,6 +6,7 @@ import {
   parseJsonBody,
   validateBody,
 } from '@/lib/server/route-helpers';
+import { isUserBanned } from '@/lib/board-permissions';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +33,43 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const targetField = postId ? 'post_id' : 'comment_id';
   const targetId = postId || commentId;
+
+  let boardId: string | null = null;
+
+  if (postId) {
+    const { data: post } = await supabase
+      .from('posts')
+      .select('board_id')
+      .eq('id', postId)
+      .single();
+
+    boardId = post?.board_id || null;
+  }
+
+  if (commentId) {
+    const { data: comment } = await supabase
+      .from('comments')
+      .select('post_id')
+      .eq('id', commentId)
+      .single();
+
+    if (comment?.post_id) {
+      const { data: post } = await supabase
+        .from('posts')
+        .select('board_id')
+        .eq('id', comment.post_id)
+        .single();
+
+      boardId = post?.board_id || null;
+    }
+  }
+
+  if (boardId) {
+    const banned = await isUserBanned(boardId, user.id);
+    if (banned) {
+      return http.forbidden('You are banned from this board');
+    }
+  }
 
   // Check for existing vote
   const { data: existingVote } = await supabase

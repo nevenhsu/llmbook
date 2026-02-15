@@ -1,10 +1,12 @@
 "use client";
 
-import { ReactNode } from 'react';
-import Link from 'next/link';
-import { MoreVertical, Users, Settings, Hash } from 'lucide-react';
-import { MemberCountProvider, useMemberCount } from './BoardMemberCount';
-import MobileJoinButton from './MobileJoinButton';
+import { ReactNode, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { MoreVertical, Users, Settings, Hash, ShieldBan } from "lucide-react";
+import { MemberCountProvider, useMemberCount } from "./BoardMemberCount";
+import JoinButton from "./JoinButton";
+import toast from "react-hot-toast";
 
 interface BoardLayoutProps {
   children: ReactNode;
@@ -19,78 +21,179 @@ interface BoardLayoutProps {
   slug: string;
   isJoined: boolean;
   canManage?: boolean;
+  isAdmin?: boolean;
 }
 
-export default function BoardLayout({ children, board, slug, isJoined, canManage = false }: BoardLayoutProps) {
+export default function BoardLayout({
+  children,
+  board,
+  slug,
+  isJoined,
+  canManage = false,
+  isAdmin = false,
+}: BoardLayoutProps) {
   return (
     <MemberCountProvider initialCount={board.member_count}>
-      <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Hash size={24} className="text-primary" />
-          </div>
-          <MemberCountDisplay slug={board.slug} />
-          {canManage && (
-            <div className="dropdown dropdown-end">
-              <button tabIndex={0} className="btn btn-ghost btn-sm btn-circle" aria-label="Board menu">
-                <MoreVertical size={16} />
-              </button>
-              <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1">
-                <li>
-                  <Link href={`/r/${slug}/member`}>
-                    <Users size={14} />
-                    Members & Bans
-                  </Link>
-                </li>
-                <li>
-                  <Link href={`/r/${slug}/settings`}>
-                    <Settings size={14} />
-                    Board Settings
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          )}
-        </div>
-        
-        {!board.is_archived && (
-          <MobileJoinButton slug={slug} isJoined={isJoined} />
-        )}
-        
-        {/* Expandable description */}
-        {board.description && (
-          <details className="mt-3">
-            <summary className="text-sm text-accent cursor-pointer">About this community</summary>
-            <p className="text-sm text-[#818384] mt-2">{board.description}</p>
-          </details>
-        )}
-
-        {/* Rules drawer */}
-        {board.rules && board.rules.length > 0 && (
-          <details className="mt-2">
-            <summary className="text-sm font-medium cursor-pointer">
-              Community Rules ({board.rules.length})
-            </summary>
-            <ol className="list-decimal list-inside text-sm text-[#818384] mt-2 space-y-1">
-              {board.rules.map((rule: any, idx: number) => (
-                <li key={idx}>{rule.title}</li>
-              ))}
-            </ol>
-          </details>
-        )}
-      </div>
+      <MobileBoardHeader
+        board={board}
+        slug={slug}
+        isJoined={isJoined}
+        canManage={canManage}
+        isAdmin={isAdmin}
+      />
       {children}
     </MemberCountProvider>
   );
 }
 
+function MobileBoardHeader({
+  board,
+  slug,
+  isJoined,
+  canManage,
+  isAdmin,
+}: {
+  board: BoardLayoutProps["board"];
+  slug: string;
+  isJoined: boolean;
+  canManage: boolean;
+  isAdmin: boolean;
+}) {
+  const router = useRouter();
+  const { setMemberCount } = useMemberCount();
+  const [isArchived, setIsArchived] = useState(board.is_archived);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+
+  useEffect(() => {
+    setIsArchived(board.is_archived);
+  }, [board.is_archived]);
+
+  const handleArchiveToggle = async () => {
+    setArchiveLoading(true);
+    try {
+      const res = await fetch(`/api/boards/${slug}`, {
+        method: isArchived ? "PATCH" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: isArchived ? JSON.stringify({ is_archived: false }) : undefined,
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      setIsArchived(!isArchived);
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        isArchived ? "Failed to unarchive board" : "Failed to archive board",
+      );
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
+  return (
+    <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <Hash size={24} className="text-primary" />
+        </div>
+        <MemberCountDisplay slug={board.slug} />
+        <div className="dropdown dropdown-end">
+          <button
+            tabIndex={0}
+            className="btn btn-ghost btn-sm btn-circle"
+            aria-label="Board menu"
+          >
+            <MoreVertical size={16} />
+          </button>
+          <ul
+            tabIndex={0}
+            className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1"
+          >
+            <li>
+              <Link href={`/r/${slug}/member`}>
+                <Users size={14} />
+                Members
+              </Link>
+            </li>
+            <li>
+              <Link href={`/r/${slug}/ban`}>
+                <ShieldBan size={14} />
+                Bans
+              </Link>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 overflow-x-auto">
+        {!isArchived && (
+          <JoinButton
+            slug={slug}
+            isJoined={isJoined}
+            refreshOnSuccess={false}
+            onMemberCountChange={setMemberCount}
+          />
+        )}
+
+        {canManage && (
+          <Link
+            href={`/r/${slug}/settings`}
+            className="btn btn-sm btn-outline rounded-full text-base-content"
+          >
+            <Settings size={14} />
+            Settings
+          </Link>
+        )}
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleArchiveToggle}
+            disabled={archiveLoading}
+            className={`btn btn-sm rounded-full ${isArchived ? "btn-success" : "btn-warning text-warning-content"}`}
+          >
+            {archiveLoading ? "..." : isArchived ? "Unarchive" : "Archive"}
+          </button>
+        )}
+      </div>
+
+      {board.description && (
+        <details className="mt-3">
+          <summary className="text-sm text-accent cursor-pointer">
+            About this community
+          </summary>
+          <p className="text-sm text-base-content/70 mt-2">
+            {board.description}
+          </p>
+        </details>
+      )}
+
+      {board.rules && board.rules.length > 0 && (
+        <details className="mt-2">
+          <summary className="text-sm font-medium cursor-pointer">
+            Community Rules ({board.rules.length})
+          </summary>
+          <ol className="list-decimal list-inside text-sm text-base-content/70 mt-2 space-y-1">
+            {board.rules.map((rule: any, idx: number) => (
+              <li key={idx}>{rule.title}</li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function MemberCountDisplay({ slug }: { slug: string }) {
   const { memberCount } = useMemberCount();
-  
+
   return (
     <div className="flex-1 min-w-0">
       <h1 className="text-lg font-bold">r/{slug}</h1>
-      <p className="text-xs text-[#818384]">{memberCount} members</p>
+      <p className="text-xs text-base-content/70">{memberCount} members</p>
     </div>
   );
 }

@@ -542,9 +542,14 @@ export default function BoardSettingsForm({
             {loading ? <span className="loading loading-spinner"></span> : 'Save Rules'}
           </button>
           <div className="pt-2">
-            <Link href={`/r/${board.slug}/member`} className="btn btn-outline btn-sm">
-              Open Members & Bans Page
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/r/${board.slug}/member`} className="btn btn-outline btn-sm">
+                Open Members Page
+              </Link>
+              <Link href={`/r/${board.slug}/ban`} className="btn btn-outline btn-sm">
+                Open Bans Page
+              </Link>
+            </div>
           </div>
         </div>
       )}

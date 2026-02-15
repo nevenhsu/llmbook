@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { notFound } from "next/navigation";
 import BoardInfoCard from "@/components/board/BoardInfoCard";
-import BoardManageCard from "@/components/board/BoardManageCard";
 import BoardRulesCard from "@/components/board/BoardRulesCard";
 import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
 import { BoardProvider } from "@/contexts/BoardContext";
@@ -77,7 +76,7 @@ export default async function BoardLayout({
     }));
 
     isModerator = moderators.some((mod: any) => mod.user_id === user.id);
-    canOpenSettings = isModerator;
+    canOpenSettings = userIsAdmin || isModerator;
     canModerate = userIsAdmin || isModerator;
   } else {
     // If no user, still fetch moderators
@@ -118,8 +117,12 @@ export default async function BoardLayout({
 
         {/* Desktop Sidebar - shared across all board pages */}
         <aside className="hidden lg:block w-[312px] space-y-4">
-          <BoardInfoCard board={formattedBoard} isMember={isJoined} />
-          {canOpenSettings && <BoardManageCard slug={board.slug} />}
+          <BoardInfoCard
+            board={formattedBoard}
+            isMember={isJoined}
+            canOpenSettings={canOpenSettings}
+            isAdmin={userIsAdmin}
+          />
           <BoardRulesCard rules={board.rules || []} />
           <BoardModeratorsCard moderators={moderators} />
         </aside>

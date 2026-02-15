@@ -1,25 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { isBoardModerator } from '@/lib/board-permissions';
+import { getOffset, getTotalPages, parsePageParam, parsePerPageParam } from '@/lib/board-pagination';
 
 export const runtime = 'nodejs';
 
 /**
  * GET /api/boards/[slug]/members
- * Get board members list (moderators only)
+ * Get board members list (public)
  */
 export async function GET(
   request: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
   const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const { searchParams } = new URL(request.url);
+  const page = parsePageParam(searchParams.get('page'));
+  const perPage = parsePerPageParam(searchParams.get('perPage'));
+  const offset = getOffset(page, perPage);
 
   const { slug } = await context.params;
 
@@ -33,12 +30,7 @@ export async function GET(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  const isMod = await isBoardModerator(board.id, user.id);
-  if (!isMod) {
-    return new NextResponse('Forbidden: Not a moderator', { status: 403 });
-  }
-
-  const { data: members, error } = await supabase
+  const { data: members, error, count } = await supabase
     .from('board_members')
     .select(`
       *,
@@ -46,9 +38,10 @@ export async function GET(
         display_name,
         avatar_url
       )
-    `)
+    `, { count: 'exact' })
     .eq('board_id', board.id)
-    .order('user_id', { ascending: true });
+    .order('joined_at', { ascending: false })
+    .range(offset, offset + perPage - 1);
 
   if (error) {
     // Do not leak internal error details to clients; log for auditing
@@ -80,5 +73,14 @@ export async function GET(
     moderator_role: moderatorMap.get(member.user_id) || null
   }));
 
-  return NextResponse.json(normalized);
+  const total = count || 0;
+  const totalPages = getTotalPages(total, perPage);
+
+  return NextResponse.json({
+    items: normalized,
+    page,
+    perPage,
+    total,
+    totalPages,
+  });
 }

@@ -1,25 +1,24 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { canManageBoardUsers, isBoardModerator } from '@/lib/board-permissions';
+import { isBoardModerator } from '@/lib/board-permissions';
+import { isAdmin } from '@/lib/admin';
+import { getOffset, getTotalPages, parsePageParam, parsePerPageParam } from '@/lib/board-pagination';
 
 export const runtime = 'nodejs';
 
 /**
  * GET /api/boards/[slug]/bans
- * Get list of banned users (moderators only)
+ * Get list of banned users (public)
  */
 export async function GET(
   request: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
   const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const { searchParams } = new URL(request.url);
+  const page = parsePageParam(searchParams.get('page'));
+  const perPage = parsePerPageParam(searchParams.get('perPage'));
+  const offset = getOffset(page, perPage);
 
   const { slug } = await context.params;
 
@@ -34,14 +33,8 @@ export async function GET(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  // Any moderator can view bans
-  const isMod = await isBoardModerator(board.id, user.id);
-  if (!isMod) {
-    return new NextResponse('Forbidden: Not a moderator', { status: 403 });
-  }
-
   // Get bans with user profile info
-  const { data: bans, error } = await supabase
+  const { data: bans, error, count } = await supabase
     .from('board_bans')
     .select(`
       id,
@@ -57,9 +50,10 @@ export async function GET(
       banned_by_user:banned_by (
         display_name
       )
-    `)
+    `, { count: 'exact' })
     .eq('board_id', board.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(offset, offset + perPage - 1);
 
   if (error) {
     // Do not leak internal error details to clients; log for auditing
@@ -67,7 +61,16 @@ export async function GET(
     return new NextResponse('Failed to fetch bans', { status: 500 });
   }
 
-  return NextResponse.json(bans);
+  const total = count || 0;
+  const totalPages = getTotalPages(total, perPage);
+
+  return NextResponse.json({
+    items: bans || [],
+    page,
+    perPage,
+    total,
+    totalPages,
+  });
 }
 
 /**
@@ -100,10 +103,13 @@ export async function POST(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  // Only owner or managers can edit bans
-  const canManageUsers = await canManageBoardUsers(board.id, user.id);
-  if (!canManageUsers) {
-    return new NextResponse('Forbidden: Only owner or managers can edit bans', { status: 403 });
+  const [userIsAdmin, userIsModerator] = await Promise.all([
+    isAdmin(user.id, supabase),
+    isBoardModerator(board.id, user.id),
+  ]);
+
+  if (!userIsAdmin && !userIsModerator) {
+    return new NextResponse('Forbidden: Only admins or moderators can edit bans', { status: 403 });
   }
 
   const { user_id, reason, expires_at } = await request.json();

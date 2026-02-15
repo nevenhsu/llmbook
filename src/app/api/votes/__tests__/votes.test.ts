@@ -108,6 +108,9 @@ describe('POST /api/votes', () => {
     
     // First call to check existing vote returns null
     supabaseMock.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
+    // Board lookup for ban check
+    supabaseMock.single.mockResolvedValueOnce({ data: { board_id: 'board123' }, error: null });
     
     // Call to get post details for notification
     supabaseMock.single.mockResolvedValueOnce({ data: { author_id: 'author123', title: 'Post Title' }, error: null });
@@ -172,9 +175,15 @@ describe('POST /api/votes', () => {
     const postId = 'post123';
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
     
+    // Ban check should pass first
+    supabaseMock.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
     // Existing vote with different value
     const existingVote = { id: 'vote123', value: -1 };
     supabaseMock.maybeSingle.mockResolvedValueOnce({ data: existingVote, error: null });
+
+    // Board lookup for ban check
+    supabaseMock.single.mockResolvedValueOnce({ data: { board_id: 'board123' }, error: null });
     
     // Call to get updated score
     supabaseMock.single.mockResolvedValueOnce({ data: { score: 1 }, error: null });
@@ -200,6 +209,12 @@ describe('POST /api/votes', () => {
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
     
     supabaseMock.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
+    // Lookup comment post_id for ban check
+    supabaseMock.single.mockResolvedValueOnce({ data: { post_id: 'post123' }, error: null });
+
+    // Lookup board_id for ban check
+    supabaseMock.single.mockResolvedValueOnce({ data: { board_id: 'board123' }, error: null });
     
     // Comment details for notification
     supabaseMock.single.mockResolvedValueOnce({ data: { author_id: 'author123', post_id: 'post123' }, error: null });

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { isUserBanned } from '@/lib/board-permissions';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,11 @@ export async function POST(
 
   if (post.post_type !== 'poll') {
     return new NextResponse('Post is not a poll', { status: 400 });
+  }
+
+  const banned = await isUserBanned(post.board_id, user.id);
+  if (banned) {
+    return new NextResponse('You are banned from this board', { status: 403 });
   }
 
   // Verify option belongs to this post

@@ -1,0 +1,148 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+interface BanActionsProps {
+  boardSlug: string;
+  canEditBans: boolean;
+}
+
+export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
+  const router = useRouter();
+  const [userId, setUserId] = useState('');
+  const [reason, setReason] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleBan = async () => {
+    if (!userId) {
+      setError('Please enter a user ID.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const payload: Record<string, string> = { user_id: userId.trim() };
+
+      if (reason.trim()) {
+        payload.reason = reason.trim();
+      }
+
+      if (expiresAt) {
+        const parsed = new Date(expiresAt);
+        if (!Number.isNaN(parsed.getTime())) {
+          payload.expires_at = parsed.toISOString();
+        }
+      }
+
+      const res = await fetch(`/api/boards/${boardSlug}/bans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Failed to ban user');
+      }
+
+      setUserId('');
+      setReason('');
+      setExpiresAt('');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to ban user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!canEditBans) {
+    return null;
+  }
+
+  return (
+    <div className="card bg-base-100 border border-neutral p-4 space-y-3">
+      <h2 className="font-semibold">Add ban</h2>
+      <input
+        className="input input-bordered bg-base-100 border-neutral"
+        placeholder="User ID"
+        value={userId}
+        onChange={(event) => setUserId(event.target.value)}
+      />
+      <input
+        className="input input-bordered bg-base-100 border-neutral"
+        placeholder="Reason (optional)"
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+      />
+      <input
+        type="datetime-local"
+        className="input input-bordered bg-base-100 border-neutral"
+        value={expiresAt}
+        onChange={(event) => setExpiresAt(event.target.value)}
+      />
+
+      {error ? <p className="text-sm text-error">{error}</p> : null}
+
+      <button
+        type="button"
+        className="btn btn-warning w-full sm:w-fit"
+        onClick={handleBan}
+        disabled={loading || !userId.trim()}
+      >
+        {loading ? 'Banning...' : 'Ban user'}
+      </button>
+    </div>
+  );
+}
+
+interface UnbanButtonProps {
+  boardSlug: string;
+  userId: string;
+  canEditBans: boolean;
+}
+
+export function UnbanButton({ boardSlug, userId, canEditBans }: UnbanButtonProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  if (!canEditBans) {
+    return null;
+  }
+
+  const handleUnban = async () => {
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/boards/${boardSlug}/bans/${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-xs"
+      onClick={handleUnban}
+      disabled={loading}
+    >
+      {loading ? '...' : 'Unban'}
+    </button>
+  );
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { canManageBoardUsers } from '@/lib/board-permissions';
+import { isBoardModerator } from '@/lib/board-permissions';
+import { isAdmin } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 
@@ -34,10 +35,13 @@ export async function DELETE(
     return new NextResponse('Board not found', { status: 404 });
   }
 
-  // Check if user can manage bans (owner or manage_users moderators)
-  const canManageUsers = await canManageBoardUsers(board.id, user.id);
-  if (!canManageUsers) {
-    return new NextResponse('Forbidden: Only owner or managers can edit bans', { status: 403 });
+  const [userIsAdmin, userIsModerator] = await Promise.all([
+    isAdmin(user.id, supabase),
+    isBoardModerator(board.id, user.id),
+  ]);
+
+  if (!userIsAdmin && !userIsModerator) {
+    return new NextResponse('Forbidden: Only admins or moderators can edit bans', { status: 403 });
   }
 
   // Remove ban

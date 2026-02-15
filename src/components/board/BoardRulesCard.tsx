@@ -24,7 +24,7 @@ export default function BoardRulesCard({ rules }: BoardRulesCardProps) {
             </div>
             {rule.description && (
               <div className="collapse-content">
-                <p className="text-xs text-[#818384]">{rule.description}</p>
+                <p className="text-xs text-base-content/70">{rule.description}</p>
               </div>
             )}
           </div>

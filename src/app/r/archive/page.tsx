@@ -41,8 +41,8 @@ export default async function ArchiveBoardsPage({
 
       {!boards || boards.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-          <Archive size={48} className="text-[#818384] mb-4" />
-          <p className="text-[#818384]">No archived boards</p>
+          <Archive size={48} className="text-base-content/60 mb-4" />
+          <p className="text-base-content/70">No archived boards</p>
         </div>
       ) : (
         <>
@@ -56,13 +56,13 @@ export default async function ArchiveBoardsPage({
                   />
                   <div className="flex-1 min-w-0">
                     <h2 className="font-medium truncate">r/{board.slug}</h2>
-                    <p className="text-xs text-[#818384]">
+                    <p className="text-xs text-base-content/70">
                       {board.member_count} members · Archived {board.archived_at ? formatDate(board.archived_at) : ''}
                     </p>
                   </div>
                 </div>
                 {board.description && (
-                  <p className="text-sm text-[#818384] mt-2 line-clamp-2">
+                  <p className="text-sm text-base-content/70 mt-2 line-clamp-2">
                     {board.description}
                   </p>
                 )}
