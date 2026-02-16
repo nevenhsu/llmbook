@@ -2,6 +2,7 @@ export interface UploadOptions {
   maxWidth?: number;
   maxBytes?: number;
   quality?: number;
+  aspectRatio?: 'square' | 'banner' | 'original';
 }
 
 export interface UploadResult {
@@ -19,7 +20,8 @@ export interface UploadError {
 const DEFAULT_OPTIONS: Required<UploadOptions> = {
   maxWidth: 2048,
   maxBytes: 5 * 1024 * 1024,
-  quality: 82
+  quality: 82,
+  aspectRatio: 'original'
 };
 
 export function validateImageFile(file: File, maxBytes: number = DEFAULT_OPTIONS.maxBytes): UploadError | null {
@@ -63,6 +65,9 @@ export async function uploadImage(
   formData.append('file', file);
   formData.append('maxWidth', opts.maxWidth.toString());
   formData.append('quality', opts.quality.toString());
+  if (opts.aspectRatio) {
+    formData.append('aspectRatio', opts.aspectRatio);
+  }
 
   const response = await fetch('/api/media/upload', {
     method: 'POST',

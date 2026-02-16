@@ -1059,9 +1059,22 @@ CREATE POLICY "Persona souls are viewable by everyone" ON public.persona_souls
 -- ----------------------------------------------------------------------------
 -- Boards Policies
 -- ----------------------------------------------------------------------------
+-- Note: Board creation uses admin client (no INSERT policy needed)
+-- Note: Board deletion/archiving uses admin client (no DELETE policy)
 
 CREATE POLICY "Boards are viewable by everyone" ON public.boards
   FOR SELECT USING (true);
+
+CREATE POLICY "Board owners can update boards" ON public.boards
+  FOR UPDATE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.board_moderators
+      WHERE board_moderators.board_id = boards.id
+        AND board_moderators.user_id = auth.uid()
+        AND board_moderators.role = 'owner'
+    )
+  );
 
 -- ----------------------------------------------------------------------------
 -- Tags Policies

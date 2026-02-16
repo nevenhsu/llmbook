@@ -103,7 +103,7 @@ function MobileBoardHeader({
             <Hash size={24} className="text-primary" />
           </div>
           <MemberCountDisplay slug={board.slug} />
-          
+
           {/* Responsive Menu (desktop dropdown + mobile drawer) */}
           <ResponsiveMenu
             trigger={<MoreVertical size={16} />}
@@ -161,7 +161,7 @@ function MobileBoardHeader({
 
         {board.description && (
           <details className="mt-3">
-            <summary className="text-sm text-accent cursor-pointer">
+            <summary className="text-sm font-medium cursor-pointer">
               About this community
             </summary>
             <p className="text-sm text-base-content/70 mt-2">
@@ -175,9 +175,14 @@ function MobileBoardHeader({
             <summary className="text-sm font-medium cursor-pointer">
               Community Rules ({board.rules.length})
             </summary>
-            <ol className="list-decimal list-inside text-sm text-base-content/70 mt-2 space-y-1">
+            <ol className="list-decimal list-inside text-sm text-base-content/70 mt-2 space-y-2">
               {board.rules.map((rule: any, idx: number) => (
-                <li key={idx}>{rule.title}</li>
+                <li key={idx} className="pl-1">
+                  <span className="font-medium">{rule.title}</span>
+                  {rule.description && (
+                    <p className="text-xs text-base-content/60 mt-0.5 ml-5">{rule.description}</p>
+                  )}
+                </li>
               ))}
             </ol>
           </details>

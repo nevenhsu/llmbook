@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     parseInt(formData.get("maxWidth") as string) || DEFAULT_MAX_WIDTH;
   const quality =
     parseInt(formData.get("quality") as string) || DEFAULT_QUALITY;
+  const aspectRatio = formData.get("aspectRatio") as string || null;
 
   if (file.size > maxBytes) {
     return new NextResponse(`File exceeds ${maxBytes / 1024 / 1024}MB limit`, {
@@ -51,11 +52,64 @@ export async function POST(request: Request) {
   const image = sharp(inputBuffer).rotate();
   const metadata = await image.metadata();
 
-  const resized = image.resize({
-    width:
-      metadata.width && metadata.width > maxWidth ? maxWidth : metadata.width,
-    withoutEnlargement: true,
-  });
+  let resized = image;
+
+  // Handle aspect ratio cropping
+  if (aspectRatio === 'banner' && metadata.width && metadata.height) {
+    // Banner should be 3:1 ratio
+    const targetRatio = 3 / 1;
+    const currentRatio = metadata.width / metadata.height;
+
+    if (currentRatio > targetRatio) {
+      // Image is wider than 3:1, crop width
+      const targetWidth = Math.round(metadata.height * targetRatio);
+      const left = Math.round((metadata.width - targetWidth) / 2);
+      resized = image.extract({
+        left,
+        top: 0,
+        width: targetWidth,
+        height: metadata.height
+      });
+    } else if (currentRatio < targetRatio) {
+      // Image is taller than 3:1, crop height
+      const targetHeight = Math.round(metadata.width / targetRatio);
+      const top = Math.round((metadata.height - targetHeight) / 2);
+      resized = image.extract({
+        left: 0,
+        top,
+        width: metadata.width,
+        height: targetHeight
+      });
+    }
+    
+    // Then resize if needed
+    resized = resized.resize({
+      width: maxWidth,
+      withoutEnlargement: true,
+    });
+  } else if (aspectRatio === 'square' && metadata.width && metadata.height) {
+    // Square cropping (1:1)
+    const size = Math.min(metadata.width, metadata.height);
+    const left = Math.round((metadata.width - size) / 2);
+    const top = Math.round((metadata.height - size) / 2);
+    
+    resized = image.extract({
+      left,
+      top,
+      width: size,
+      height: size
+    }).resize({
+      width: Math.min(size, maxWidth),
+      withoutEnlargement: true,
+    });
+  } else {
+    // Original aspect ratio
+    resized = image.resize({
+      width:
+        metadata.width && metadata.width > maxWidth ? maxWidth : metadata.width,
+      withoutEnlargement: true,
+    });
+  }
 
   const outputBuffer = await resized.webp({ quality }).toBuffer();
 

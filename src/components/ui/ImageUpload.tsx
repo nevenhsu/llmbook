@@ -54,7 +54,7 @@ export default function ImageUpload({
       setPreview(localPreview);
 
       // Upload with options
-      const options: UploadOptions = { maxWidth, maxBytes, quality };
+      const options: UploadOptions = { maxWidth, maxBytes, quality, aspectRatio };
       const result = await uploadImage(file, options);
       
       onChange(result.url);
@@ -209,19 +209,6 @@ export default function ImageUpload({
         )}
       </div>
 
-      {/* Manual URL input fallback */}
-      <div className="mt-2">
-        <input
-          type="url"
-          value={value || ''}
-          onChange={(e) => {
-            onChange(e.target.value);
-            setPreview(e.target.value || null);
-          }}
-          placeholder="或輸入圖片 URL"
-          className="input input-bordered input-sm w-full bg-base-100 border-neutral"
-        />
-      </div>
     </div>
   );
 }

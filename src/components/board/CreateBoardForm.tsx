@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { X, Plus } from 'lucide-react';
-import ImageUpload from '@/components/ui/ImageUpload';
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { X, Plus, AlertCircle, CheckCircle } from "lucide-react";
+import toast from "react-hot-toast";
+import ImageUpload from "@/components/ui/ImageUpload";
 
 interface Rule {
   title: string;
@@ -13,29 +14,104 @@ interface Rule {
 export default function CreateBoardForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [description, setDescription] = useState('');
+
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
   const [rules, setRules] = useState<Rule[]>([]);
-  const [bannerUrl, setBannerUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState("");
+
+  // Validation states
+  const [nameError, setNameError] = useState("");
+  const [slugError, setSlugError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+
+  // Debounced availability check
+  const checkAvailability = useCallback(async (name: string, slug: string) => {
+    if (!name || !slug) return;
+
+    setChecking(true);
+    try {
+      const params = new URLSearchParams();
+      if (name) params.append("name", name);
+      if (slug) params.append("slug", slug);
+
+      const response = await fetch(`/api/boards/check-availability?${params}`);
+      const data = await response.json();
+
+      setNameAvailable(data.nameAvailable);
+      setSlugAvailable(data.slugAvailable);
+    } catch (err) {
+      console.error("Failed to check availability:", err);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  // Debounce effect for availability check
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (name && slug && !nameError && !slugError) {
+        checkAvailability(name, slug);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [name, slug, nameError, slugError, checkAvailability]);
 
   // Auto-generate slug from name
   const handleNameChange = (value: string) => {
     setName(value);
-    if (!slug || slug === name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')) {
-      setSlug(value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
+
+    // Validate English only
+    if (value && !/^[a-zA-Z0-9_]+$/.test(value)) {
+      setNameError("Only English letters, numbers, and underscores allowed");
+    } else if (value.length > 0 && value.length < 3) {
+      setNameError("Name must be at least 3 characters");
+    } else if (value.length > 21) {
+      setNameError("Name must be at most 21 characters");
+    } else {
+      setNameError("");
     }
+
+    // Auto-generate slug
+    const autoSlug = value
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
+    setSlug(autoSlug);
+
+    // Reset availability
+    setNameAvailable(null);
+    setSlugAvailable(null);
+  };
+
+  const handleSlugChange = (value: string) => {
+    const lowerValue = value.toLowerCase();
+    setSlug(lowerValue);
+
+    if (lowerValue && !/^[a-z0-9_]+$/.test(lowerValue)) {
+      setSlugError("Only lowercase letters, numbers, and underscores allowed");
+    } else {
+      setSlugError("");
+    }
+
+    setSlugAvailable(null);
   };
 
   const addRule = () => {
     if (rules.length < 15) {
-      setRules([...rules, { title: '', description: '' }]);
+      setRules([...rules, { title: "", description: "" }]);
     }
   };
 
-  const updateRule = (index: number, field: 'title' | 'description', value: string) => {
+  const updateRule = (
+    index: number,
+    field: "title" | "description",
+    value: string,
+  ) => {
     const newRules = [...rules];
     newRules[index][field] = value;
     setRules(newRules);
@@ -47,89 +123,163 @@ export default function CreateBoardForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Final validation
+    if (nameError || slugError) {
+      toast.error("Please fix validation errors");
+      return;
+    }
+
+    if (!nameAvailable) {
+      toast.error("Board name is already taken");
+      return;
+    }
+
+    if (!slugAvailable) {
+      toast.error("Board slug is already taken");
+      return;
+    }
+
     setLoading(true);
-    setError('');
 
     try {
-      const response = await fetch('/api/boards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/boards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           slug,
           description: description || undefined,
           banner_url: bannerUrl || undefined,
-          rules: rules.filter(r => r.title.trim())
-        })
+          rules: rules.filter((r) => r.title.trim()),
+        }),
       });
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(text || 'Failed to create board');
+        throw new Error(text || "Failed to create board");
       }
 
       const { board } = await response.json();
+      toast.success(`Board "${board.name}" created successfully!`);
       router.push(`/r/${board.slug}`);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || "Failed to create board");
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="pb-20 sm:pb-6">
-      {error && (
-        <div className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
-      )}
-
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Name */}
       <div className="form-control mb-4">
         <label className="label">
-          <span className="label-text">Board Name *</span>
+          <span className="label-text font-semibold">Board Name *</span>
         </label>
-        <input
-          type="text"
-          className="input input-bordered w-full bg-base-100 border-neutral"
-          value={name}
-          onChange={(e) => handleNameChange(e.target.value)}
-          placeholder="gaming"
-          minLength={3}
-          maxLength={21}
-          required
-        />
+        <div className="relative">
+          <input
+            type="text"
+            className={`input input-bordered w-full bg-base-100 ${
+              nameError
+                ? "border-error"
+                : name && nameAvailable
+                  ? "border-success"
+                  : "border-neutral"
+            }`}
+            value={name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            placeholder="gaming"
+            minLength={3}
+            maxLength={21}
+            required
+          />
+          {checking && name && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              <span className="loading loading-spinner loading-sm"></span>
+            </span>
+          )}
+          {!checking && name && !nameError && nameAvailable !== null && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              {nameAvailable ? (
+                <CheckCircle size={20} className="text-success" />
+              ) : (
+                <AlertCircle size={20} className="text-error" />
+              )}
+            </span>
+          )}
+        </div>
         <label className="label">
-          <span className="label-text-base-content/70">3-21 characters, alphanumeric and underscores only</span>
+          {nameError ? (
+            <span className="label-text text-error flex items-center gap-1">
+              <AlertCircle size={14} />
+              {nameError}
+            </span>
+          ) : !nameAvailable && nameAvailable !== null ? (
+            <span className="label-text text-error">Name already taken</span>
+          ) : (
+            <span className="label-text text-base-content/70">
+              3-21 characters, English letters, numbers, and underscores only
+            </span>
+          )}
         </label>
       </div>
 
-      {/* Slug */}
-      <div className="form-control mb-4">
+      {/* Slug (Auto-generated, read-only display) */}
+      <div className="form-control mb-6">
         <label className="label">
-          <span className="label-text">URL Slug *</span>
+          <span className="label-text font-semibold">URL Slug *</span>
         </label>
-        <div className="join w-full">
-          <span className="join-item btn btn-sm btn-disabled">r/</span>
-          <input
-            type="text"
-            className="input input-bordered join-item flex-1 bg-base-100 border-neutral"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value.toLowerCase())}
-            placeholder="gaming"
-            pattern="[a-z0-9_]+"
-            required
-          />
+        <div className="flex items-center gap-2">
+          <div className="join flex-1">
+            <span className="join-item flex items-center px-3 bg-base-300 text-base-content/70 text-sm border border-neutral rounded-l-lg">
+              r/
+            </span>
+            <input
+              type="text"
+              className={`input input-bordered join-item flex-1 bg-base-100 ${
+                slugError
+                  ? "border-error"
+                  : slug && slugAvailable
+                    ? "border-success"
+                    : "border-neutral"
+              }`}
+              value={slug}
+              onChange={(e) => handleSlugChange(e.target.value)}
+              placeholder="gaming"
+              pattern="[a-z0-9_]+"
+              required
+            />
+          </div>
+          {!checking && slug && !slugError && slugAvailable !== null && (
+            <span>
+              {slugAvailable ? (
+                <CheckCircle size={20} className="text-success" />
+              ) : (
+                <AlertCircle size={20} className="text-error" />
+              )}
+            </span>
+          )}
         </div>
         <label className="label">
-          <span className="label-text-base-content/70">Lowercase, alphanumeric and underscores only</span>
+          {slugError ? (
+            <span className="label-text text-error flex items-center gap-1">
+              <AlertCircle size={14} />
+              {slugError}
+            </span>
+          ) : !slugAvailable && slugAvailable !== null ? (
+            <span className="label-text text-error">Slug already taken</span>
+          ) : (
+            <span className="label-text text-base-content/70">
+              Auto-generated from name (lowercase)
+            </span>
+          )}
         </label>
       </div>
 
       {/* Description */}
-      <div className="form-control mb-4">
+      <div className="form-control mb-6">
         <label className="label">
-          <span className="label-text">Description</span>
+          <span className="label-text font-semibold">Description</span>
         </label>
         <textarea
           className="textarea textarea-bordered w-full bg-base-100 border-neutral"
@@ -140,30 +290,26 @@ export default function CreateBoardForm() {
           rows={3}
         />
         <label className="label">
-          <span className="label-text-base-content/70">{description.length}/500</span>
+          <span className="label-text text-base-content/70">
+            {description.length}/500
+          </span>
         </label>
-      </div>
-
-      {/* Banner */}
-      <div className="mb-4">
-        <ImageUpload
-          label="Banner"
-          value={bannerUrl}
-          onChange={setBannerUrl}
-          onError={(err) => setError(err)}
-          aspectRatio="banner"
-          placeholder="上傳 Banner 圖片"
-        />
       </div>
 
       {/* Rules */}
-      <div className="form-control mb-4">
+      <div className="form-control mb-6">
         <label className="label">
-          <span className="label-text">Community Rules</span>
+          <span className="label-text font-semibold">Community Rules</span>
+          <span className="label-text-alt text-base-content/70">
+            {rules.length}/15
+          </span>
         </label>
         <div className="space-y-2">
           {rules.map((rule, index) => (
-            <div key={index} className="collapse collapse-arrow bg-base-100 border border-neutral">
+            <div
+              key={index}
+              className="collapse collapse-arrow bg-base-100 border border-neutral"
+            >
               <input type="checkbox" defaultChecked />
               <div className="collapse-title font-medium flex items-center justify-between">
                 <span>Rule {index + 1}</span>
@@ -173,15 +319,17 @@ export default function CreateBoardForm() {
                   type="text"
                   className="input input-bordered input-sm w-full bg-base-100 border-neutral"
                   value={rule.title}
-                  onChange={(e) => updateRule(index, 'title', e.target.value)}
+                  onChange={(e) => updateRule(index, "title", e.target.value)}
                   placeholder="Rule title"
                   maxLength={100}
                 />
                 <textarea
                   className="textarea textarea-bordered textarea-sm w-full bg-base-100 border-neutral"
                   value={rule.description}
-                  onChange={(e) => updateRule(index, 'description', e.target.value)}
-                  placeholder="Rule description"
+                  onChange={(e) =>
+                    updateRule(index, "description", e.target.value)
+                  }
+                  placeholder="Rule description (optional)"
                   maxLength={500}
                   rows={2}
                 />
@@ -208,17 +356,41 @@ export default function CreateBoardForm() {
         </button>
       </div>
 
-      {/* Sticky Submit Button */}
-      <div className="fixed bottom-0 left-0 right-0 sm:relative bg-base-200 border-t border-neutral p-3 sm:p-0 sm:border-0 z-40">
+      {/* Banner */}
+      <div className="mb-6">
+        <ImageUpload
+          label="Banner Image"
+          value={bannerUrl}
+          onChange={setBannerUrl}
+          onError={(err) => toast.error(err)}
+          aspectRatio="banner"
+          placeholder="Upload banner (3:1 ratio recommended)"
+        />
+        <p className="text-sm text-base-content/70 mt-2">
+          Banner will be automatically cropped to 3:1 aspect ratio
+        </p>
+      </div>
+
+      {/* Submit Button */}
+      <div className="flex pt-2">
         <button
           type="submit"
-          className="btn btn-primary w-full sm:w-auto rounded-full"
-          disabled={loading || !name || !slug}
+          className="btn btn-primary rounded-full px-8"
+          disabled={
+            loading ||
+            !name ||
+            !slug ||
+            !!nameError ||
+            !!slugError ||
+            checking ||
+            !nameAvailable ||
+            !slugAvailable
+          }
         >
           {loading ? (
             <span className="loading loading-spinner loading-sm"></span>
           ) : (
-            'Create Board'
+            "Create Board"
           )}
         </button>
       </div>

@@ -8,6 +8,7 @@ import { isBoardModerator } from '@/lib/board-permissions';
 import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import { BanActions } from '@/components/board/BanActions';
 import { DEFAULT_BOARD_LIST_PER_PAGE, parsePageParam } from '@/lib/board-pagination';
+import BackToBoard from '@/components/board/BackToBoard';
 
 interface BanItem {
   id: string;
@@ -96,9 +97,7 @@ export default async function BoardBanPage({
     <div className="space-y-4">
       <div className="space-y-3">
         <div className="text-sm px-4 sm:px-0">
-          <Link href={`/r/${board.slug}`} className="link link-hover text-base-content/80">
-            Back to Board
-          </Link>
+          <BackToBoard slug={board.slug} />
         </div>
         <div className="card bg-base-100 rounded-none sm:rounded-box p-4 space-y-3">
           <div className="flex items-center gap-3">

@@ -4,6 +4,7 @@ import {
   http,
   parseJsonBody,
 } from '@/lib/server/route-helpers';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 
@@ -82,16 +83,19 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     }
   }
 
+  // Use admin client for creating board and related records
+  // This bypasses RLS and ensures atomic operations
+  const admin = createAdminClient();
+
   // Create board
-  const { data: board, error: boardError } = await supabase
+  const { data: board, error: boardError } = await admin
     .from('boards')
     .insert({
       name,
       slug,
       description: description || null,
       banner_url: banner_url || null,
-      rules: rules || [],
-      creator_id: user.id
+      rules: rules || []
     })
     .select('id, slug, name, description, banner_url, created_at')
     .single();
@@ -109,7 +113,7 @@ export const POST = withAuth(async (request, { user, supabase }) => {
   }
 
   // Add creator as owner in board_moderators
-  const { error: modError } = await supabase
+  const { error: modError } = await admin
     .from('board_moderators')
     .insert({
       board_id: board.id,
@@ -123,14 +127,14 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     });
 
   if (modError) {
-    // Rollback: delete the board
-    await supabase.from('boards').delete().eq('id', board.id);
+    // Rollback: delete the board using admin client
+    await admin.from('boards').delete().eq('id', board.id);
     console.error('Error assigning board owner:', modError);
     return http.internalError('Failed to assign board owner');
   }
 
   // Auto-join creator as member
-  const { error: memberError } = await supabase
+  const { error: memberError } = await admin
     .from('board_members')
     .insert({
       board_id: board.id,
@@ -138,8 +142,11 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     });
 
   if (memberError) {
-    // Non-critical error, just log it
+    // Rollback both board and moderator
+    await admin.from('board_moderators').delete().eq('board_id', board.id);
+    await admin.from('boards').delete().eq('id', board.id);
     console.error('Failed to auto-join creator:', memberError);
+    return http.internalError('Failed to setup board membership');
   }
 
   return http.created({ board });

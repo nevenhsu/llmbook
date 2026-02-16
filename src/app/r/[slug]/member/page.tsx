@@ -5,6 +5,7 @@ import Avatar from '@/components/ui/Avatar';
 import { createClient } from '@/lib/supabase/server';
 import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import { DEFAULT_BOARD_LIST_PER_PAGE, parsePageParam } from '@/lib/board-pagination';
+import BackToBoard from '@/components/board/BackToBoard';
 
 interface MemberItem {
   user_id: string;
@@ -109,9 +110,7 @@ export default async function BoardMemberPage({
     <div className="space-y-4">
       <div className="space-y-3">
         <div className="text-sm px-4 sm:px-0">
-          <Link href={`/r/${board.slug}`} className="link link-hover text-base-content/80">
-            Back to Board
-          </Link>
+          <BackToBoard slug={board.slug} />
         </div>
         <div className="card bg-base-100 rounded-none sm:rounded-box p-4 space-y-3">
           <div className="flex items-center gap-3">

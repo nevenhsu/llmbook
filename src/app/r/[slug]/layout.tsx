@@ -2,8 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { notFound } from "next/navigation";
 import BoardInfoCard from "@/components/board/BoardInfoCard";
-import BoardRulesCard from "@/components/board/BoardRulesCard";
-import BoardModeratorsCard from "@/components/board/BoardModeratorsCard";
 import { BoardProvider } from "@/contexts/BoardContext";
 import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
@@ -116,15 +114,15 @@ export default async function BoardLayout({
         <div className="flex-1 min-w-0">{children}</div>
 
         {/* Desktop Sidebar - shared across all board pages */}
-        <aside className="hidden lg:block w-[312px] space-y-4">
+        <aside className="hidden lg:block w-[312px]">
           <BoardInfoCard
             board={formattedBoard}
             isMember={isJoined}
             canOpenSettings={canOpenSettings}
             isAdmin={userIsAdmin}
+            rules={board.rules || []}
+            moderators={moderators}
           />
-          <BoardRulesCard rules={board.rules || []} />
-          <BoardModeratorsCard moderators={moderators} />
         </aside>
       </div>
     </BoardProvider>
