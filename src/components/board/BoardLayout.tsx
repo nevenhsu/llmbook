@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { MoreVertical, Users, Settings, Hash, ShieldBan } from "lucide-react";
 import { MemberCountProvider, useMemberCount } from "./BoardMemberCount";
 import JoinButton from "./JoinButton";
+import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
 import toast from "react-hot-toast";
 
 interface BoardLayoutProps {
@@ -94,95 +95,94 @@ function MobileBoardHeader({
   };
 
   return (
-    <div className="lg:hidden px-4 py-3 border-b border-neutral mb-4">
-      <div className="flex items-start gap-3 mb-3">
-        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Hash size={24} className="text-primary" />
-        </div>
-        <MemberCountDisplay slug={board.slug} />
-        <div className="dropdown dropdown-end">
-          <button
-            tabIndex={0}
-            className="btn btn-ghost btn-sm btn-circle"
-            aria-label="Board menu"
-          >
-            <MoreVertical size={16} />
-          </button>
-          <ul
-            tabIndex={0}
-            className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1"
+    <div className="lg:hidden">
+      {/* Main Board Header */}
+      <div className="px-4 py-3 border-b border-neutral mb-4">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Hash size={24} className="text-primary" />
+          </div>
+          <MemberCountDisplay slug={board.slug} />
+          
+          {/* Responsive Menu (desktop dropdown + mobile drawer) */}
+          <ResponsiveMenu
+            trigger={<MoreVertical size={16} />}
+            title="Board menu"
+            ariaLabel="Board menu"
           >
             <li>
               <Link href={`/r/${slug}/member`}>
-                <Users size={14} />
+                <Users size={14} className="md:inline hidden" />
+                <Users size={20} className="md:hidden" />
                 Members
               </Link>
             </li>
             <li>
               <Link href={`/r/${slug}/ban`}>
-                <ShieldBan size={14} />
+                <ShieldBan size={14} className="md:inline hidden" />
+                <ShieldBan size={20} className="md:hidden" />
                 Bans
               </Link>
             </li>
-          </ul>
+          </ResponsiveMenu>
         </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {!isArchived && (
+            <JoinButton
+              slug={slug}
+              isJoined={isJoined}
+              refreshOnSuccess={false}
+              onMemberCountChange={setMemberCount}
+            />
+          )}
+
+          {canManage && (
+            <Link
+              href={`/r/${slug}/settings`}
+              className="btn btn-sm btn-outline rounded-full text-base-content"
+            >
+              <Settings size={14} />
+              Settings
+            </Link>
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleArchiveToggle}
+              disabled={archiveLoading}
+              className={`btn btn-sm rounded-full ${isArchived ? "btn-success" : "btn-warning text-warning-content"}`}
+            >
+              {archiveLoading ? "..." : isArchived ? "Unarchive" : "Archive"}
+            </button>
+          )}
+        </div>
+
+        {board.description && (
+          <details className="mt-3">
+            <summary className="text-sm text-accent cursor-pointer">
+              About this community
+            </summary>
+            <p className="text-sm text-base-content/70 mt-2">
+              {board.description}
+            </p>
+          </details>
+        )}
+
+        {board.rules && board.rules.length > 0 && (
+          <details className="mt-2">
+            <summary className="text-sm font-medium cursor-pointer">
+              Community Rules ({board.rules.length})
+            </summary>
+            <ol className="list-decimal list-inside text-sm text-base-content/70 mt-2 space-y-1">
+              {board.rules.map((rule: any, idx: number) => (
+                <li key={idx}>{rule.title}</li>
+              ))}
+            </ol>
+          </details>
+        )}
       </div>
-
-      <div className="flex items-center gap-2 overflow-x-auto">
-        {!isArchived && (
-          <JoinButton
-            slug={slug}
-            isJoined={isJoined}
-            refreshOnSuccess={false}
-            onMemberCountChange={setMemberCount}
-          />
-        )}
-
-        {canManage && (
-          <Link
-            href={`/r/${slug}/settings`}
-            className="btn btn-sm btn-outline rounded-full text-base-content"
-          >
-            <Settings size={14} />
-            Settings
-          </Link>
-        )}
-
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={handleArchiveToggle}
-            disabled={archiveLoading}
-            className={`btn btn-sm rounded-full ${isArchived ? "btn-success" : "btn-warning text-warning-content"}`}
-          >
-            {archiveLoading ? "..." : isArchived ? "Unarchive" : "Archive"}
-          </button>
-        )}
-      </div>
-
-      {board.description && (
-        <details className="mt-3">
-          <summary className="text-sm text-accent cursor-pointer">
-            About this community
-          </summary>
-          <p className="text-sm text-base-content/70 mt-2">
-            {board.description}
-          </p>
-        </details>
-      )}
-
-      {board.rules && board.rules.length > 0 && (
-        <details className="mt-2">
-          <summary className="text-sm font-medium cursor-pointer">
-            Community Rules ({board.rules.length})
-          </summary>
-          <ol className="list-decimal list-inside text-sm text-base-content/70 mt-2 space-y-1">
-            {board.rules.map((rule: any, idx: number) => (
-              <li key={idx}>{rule.title}</li>
-            ))}
-          </ol>
-        </details>
-      )}
     </div>
   );
 }

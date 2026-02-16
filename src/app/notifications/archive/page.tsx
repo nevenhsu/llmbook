@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MessageSquare, MoreHorizontal, Settings, ArrowUp, User, EyeOff, CheckCircle2, ChevronLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
 
 interface NotificationItem {
   id: number;
@@ -156,36 +157,27 @@ export default function NotificationArchivePage() {
                 </Link>
 
                 <div className="absolute right-3 top-4">
-                  <div className="dropdown dropdown-end">
-                    <button 
-                      tabIndex={0}
-                      className="btn btn-ghost btn-circle btn-xs"
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label="More options"
-                    >
-                      <MoreHorizontal size={16} className="text-[#818384]" />
-                    </button>
-                    <ul 
-                      tabIndex={0} 
-                      className="dropdown-content menu p-2 shadow-lg bg-base-100 border border-neutral rounded-box w-52 z-[1]"
-                    >
-                      <li>
-                        <button 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            hideNotification(notif.id);
-                            if (document.activeElement instanceof HTMLElement) {
-                              document.activeElement.blur();
-                            }
-                          }}
-                          className="flex items-center gap-2 py-2"
-                        >
-                          <EyeOff size={16} /> Remove from archive
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
+                  <ResponsiveMenu
+                    trigger={<MoreHorizontal size={16} className="text-[#818384]" />}
+                    title="Notification actions"
+                    triggerClassName="btn btn-ghost btn-circle btn-xs"
+                    ariaLabel="More options"
+                  >
+                    <li>
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          hideNotification(notif.id);
+                        }}
+                        className="flex items-center gap-2 py-2"
+                      >
+                        <EyeOff size={20} className="md:hidden" />
+                        <EyeOff size={16} className="hidden md:inline" />
+                        Remove from archive
+                      </button>
+                    </li>
+                  </ResponsiveMenu>
                 </div>
               </div>
             ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
@@ -14,6 +14,7 @@ import {
   ShieldOff,
 } from "lucide-react";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
 import toast from "react-hot-toast";
 
 interface PostActionsProps {
@@ -55,11 +56,9 @@ export default function PostActions({
   onDelete,
 }: PostActionsProps) {
   const router = useRouter();
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isUndeleting, setIsUndeleting] = useState(false);
-  const modalRef = useRef<HTMLDialogElement>(null);
 
   const isAuthor = !!(authorId && userId && authorId === userId);
   const isModerator = !!canModerate;
@@ -90,18 +89,10 @@ export default function PostActions({
     }
   };
 
-  const openMoreMenu = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    modalRef.current?.showModal();
-  };
 
-  const closeMoreMenu = () => {
-    modalRef.current?.close();
-  };
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    closeMoreMenu();
     // Edit page will need to be created at /r/[slug]/posts/[id]/edit
     if (boardSlug) {
       router.push(`/r/${boardSlug}/posts/${postId}/edit`);
@@ -118,7 +109,6 @@ export default function PostActions({
       if (!res.ok) throw new Error('Failed to delete post');
 
       onDelete?.();
-      closeMoreMenu();
       router.refresh();
     } catch (err) {
       console.error('Failed to delete post:', err);
@@ -140,7 +130,6 @@ export default function PostActions({
 
       if (!res.ok) throw new Error('Failed to undelete post');
 
-      closeMoreMenu();
       router.refresh();
     } catch (err) {
       console.error('Failed to undelete post:', err);
@@ -160,7 +149,6 @@ export default function PostActions({
 
       if (!res.ok) throw new Error('Failed to unarchive post');
 
-      closeMoreMenu();
       router.refresh();
     } catch (err) {
       console.error('Failed to unarchive post:', err);
@@ -182,7 +170,6 @@ export default function PostActions({
 
       if (!res.ok) throw new Error('Failed to archive post');
 
-      closeMoreMenu();
       router.refresh();
     } catch (err) {
       console.error('Failed to archive post:', err);
@@ -191,109 +178,116 @@ export default function PostActions({
   };
 
   const menuItems = (
-    <div className="space-y-1">
+    <>
       {/* Hide/Unhide - logged in only */}
       {canHide && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isHidden) {
-              onUnhide?.();
-            } else {
-              onHide?.();
-            }
-            closeMoreMenu();
-          }}
-          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-base-content hover:bg-base-200 rounded-lg transition-colors"
-        >
-          {isHidden ? (
-            <>
-              <Eye size={20} className="md:w-4 md:h-4" />
-              Unhide post
-            </>
-          ) : (
-            <>
-              <EyeOff size={20} className="md:w-4 md:h-4" />
-              Hide post
-            </>
-          )}
-        </button>
+        <li>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isHidden) {
+                onUnhide?.();
+              } else {
+                onHide?.();
+              }
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-base-content"
+          >
+            <Eye size={20} className="md:hidden" />
+            <Eye size={16} className="hidden md:inline" />
+            {isHidden ? 'Unhide post' : 'Hide post'}
+          </button>
+        </li>
       )}
 
       {/* Edit - author only, not archived/deleted */}
       {canEdit && (
-        <button
-          onClick={handleEdit}
-          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-base-content hover:bg-base-200 rounded-lg transition-colors"
-        >
-          <Edit size={20} className="md:w-4 md:h-4" />
-          Edit post
-        </button>
+        <li>
+          <button
+            onClick={handleEdit}
+            className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-base-content"
+          >
+            <Edit size={20} className="md:hidden" />
+            <Edit size={16} className="hidden md:inline" />
+            Edit post
+          </button>
+        </li>
       )}
 
       {/* Delete - author or moderator */}
       {canDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowDeleteConfirm(true);
-            closeMoreMenu();
-          }}
-          disabled={isDeleting}
-          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-error hover:bg-base-200 rounded-lg transition-colors"
-        >
-          <Trash2 size={20} className="md:w-4 md:h-4" />
-          {isDeleting ? 'Deleting...' : 'Delete post'}
-        </button>
+        <li>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm(true);
+            }}
+            disabled={isDeleting}
+            className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-error"
+          >
+            <Trash2 size={20} className="md:hidden" />
+            <Trash2 size={16} className="hidden md:inline" />
+            {isDeleting ? 'Deleting...' : 'Delete post'}
+          </button>
+        </li>
       )}
 
       {/* Moderator Actions */}
       {canUndelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleUndelete();
-          }}
-          disabled={isUndeleting}
-          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-success hover:bg-base-200 rounded-lg transition-colors"
-        >
-          <ShieldOff size={20} className="md:w-4 md:h-4" />
-          {isUndeleting ? 'Restoring...' : 'Restore post'}
-        </button>
+        <li>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleUndelete();
+            }}
+            disabled={isUndeleting}
+            className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-success"
+          >
+            <ShieldOff size={20} className="md:hidden" />
+            <ShieldOff size={16} className="hidden md:inline" />
+            {isUndeleting ? 'Restoring...' : 'Restore post'}
+          </button>
+        </li>
       )}
 
       {canArchive && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleArchive(e);
-          }}
-          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-warning hover:bg-base-200 rounded-lg transition-colors"
-        >
-          <ShieldOff size={20} className="md:w-4 md:h-4" />
-          Archive post
-        </button>
+        <li>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleArchive(e);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-warning"
+          >
+            <ShieldOff size={20} className="md:hidden" />
+            <ShieldOff size={16} className="hidden md:inline" />
+            Archive post
+          </button>
+        </li>
       )}
 
       {canUnarchive && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleUnarchive();
-          }}
-          className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-success hover:bg-base-200 rounded-lg transition-colors"
-        >
-          <ShieldOff size={20} className="md:w-4 md:h-4" />
-          Unarchive post
-        </button>
+        <li>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleUnarchive();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 md:px-3 md:py-2 text-base md:text-sm text-success"
+          >
+            <ShieldOff size={20} className="md:hidden" />
+            <ShieldOff size={16} className="hidden md:inline" />
+            Unarchive post
+          </button>
+        </li>
       )}
 
       {!hasAnyAction && (
-        <div className="px-4 py-3 text-base md:text-sm text-base-content/50 text-center">
+        <li className="px-4 py-3 text-base md:text-sm text-base-content/50 text-center">
           No actions available
-        </div>
+        </li>
       )}
-    </div>
+    </>
   );
 
   return (
@@ -338,45 +332,15 @@ export default function PostActions({
       )}
       {/* More button - logged in only and if there are actions */}
       {isLoggedIn && hasAnyAction && (
-        <>
-          {/* Desktop Dropdown */}
-          <div className="hidden md:block dropdown dropdown-end">
-            <button 
-              tabIndex={0}
-              className="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
-            >
-              <MoreHorizontal size={16} />
-            </button>
-            <div tabIndex={0} className="dropdown-content z-[20] menu p-1 shadow-lg bg-base-100 rounded-lg w-48 border border-neutral mt-1">
-              {menuItems}
-            </div>
-          </div>
-
-          {/* Mobile Button (opens modal) */}
-          <button 
-            onClick={openMoreMenu}
-            className="md:hidden flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-        </>
-      )}
-
-      {/* More menu modal - bottom sheet on mobile, centered on desktop */}
-      <dialog ref={modalRef} className="modal modal-bottom md:hidden">
-        <div className="modal-box">
-          <h3 className="font-bold text-lg mb-4">Post actions</h3>
+        <ResponsiveMenu
+          trigger={<MoreHorizontal size={16} />}
+          title="Post actions"
+          triggerClassName="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
+          ariaLabel="Post actions"
+        >
           {menuItems}
-          <div className="modal-action">
-            <form method="dialog">
-              <button className="btn btn-ghost">Close</button>
-            </form>
-          </div>
-        </div>
-        <form method="dialog" className="modal-backdrop">
-          <button>close</button>
-        </form>
-      </dialog>
+        </ResponsiveMenu>
+      )}
 
       <ConfirmModal
         isOpen={showDeleteConfirm}

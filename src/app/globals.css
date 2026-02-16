@@ -192,4 +192,6 @@
   .ProseMirror h3 {
     @apply text-lg font-bold mt-2 mb-1;
   }
+
+
 }

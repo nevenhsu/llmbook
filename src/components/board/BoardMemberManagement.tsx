@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MoreHorizontal, UserX, Ban } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import ResponsiveMenu from '@/components/ui/ResponsiveMenu';
 
 interface BoardMember {
   user_id: string;
@@ -210,6 +212,7 @@ export default function BoardMemberManagement({
               {membersList.map((member) => {
                 const isSelf = member.user_id === currentUserId;
                 const isKickDisabled = !canEditBans || member.is_moderator || isSelf || kickLoadingUserId === member.user_id;
+                const hasActions = canEditBans && !member.is_moderator && !isSelf;
 
                 return (
                   <div key={member.user_id} className="card bg-base-100 p-3 flex flex-row items-center gap-3">
@@ -223,26 +226,30 @@ export default function BoardMemberManagement({
                       <p className="text-xs opacity-70">Joined: {formatDateTime(member.joined_at)}</p>
                       {member.is_moderator && <span className="badge badge-ghost badge-xs mt-1">moderator</span>}
                     </div>
-                    <button
-                      className="btn btn-ghost btn-xs"
-                      onClick={() => kickMember(member.user_id)}
-                      disabled={isKickDisabled}
-                      title={
-                        !canEditBans
-                          ? 'Insufficient permissions'
-                          : member.is_moderator
-                            ? 'Use moderator management for moderators'
-                            : isSelf
-                              ? 'You cannot kick yourself'
-                              : 'Kick member'
-                      }
-                    >
-                      {kickLoadingUserId === member.user_id ? (
-                        <span className="loading loading-spinner loading-xs"></span>
-                      ) : (
-                        'Kick'
-                      )}
-                    </button>
+                    {hasActions ? (
+                      <ResponsiveMenu
+                        trigger={<MoreHorizontal size={16} />}
+                        title="Member actions"
+                        ariaLabel="Member actions"
+                      >
+                        <li>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              kickMember(member.user_id);
+                            }}
+                            disabled={kickLoadingUserId === member.user_id}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-error"
+                          >
+                            <UserX size={20} className="md:hidden" />
+                            <UserX size={16} className="hidden md:inline" />
+                            {kickLoadingUserId === member.user_id ? 'Kicking...' : 'Kick member'}
+                          </button>
+                        </li>
+                      </ResponsiveMenu>
+                    ) : (
+                      <div className="w-8"></div>
+                    )}
                   </div>
                 );
               })}
@@ -329,17 +336,30 @@ export default function BoardMemberManagement({
                     <p className="text-xs opacity-70">Reason: {ban.reason || 'N/A'}</p>
                     <p className="text-xs opacity-70">Expires: {formatDateTime(ban.expires_at)}</p>
                   </div>
-                  <button
-                    className="btn btn-ghost btn-xs"
-                    onClick={() => handleUnbanUser(ban.user_id)}
-                    disabled={unbanLoadingUserId === ban.user_id || !canEditBans}
-                  >
-                    {unbanLoadingUserId === ban.user_id ? (
-                      <span className="loading loading-spinner loading-xs"></span>
-                    ) : (
-                      'Unban'
-                    )}
-                  </button>
+                  {canEditBans ? (
+                    <ResponsiveMenu
+                      trigger={<MoreHorizontal size={16} />}
+                      title="Ban actions"
+                      ariaLabel="Ban actions"
+                    >
+                      <li>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnbanUser(ban.user_id);
+                          }}
+                          disabled={unbanLoadingUserId === ban.user_id}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-success"
+                        >
+                          <Ban size={20} className="md:hidden" />
+                          <Ban size={16} className="hidden md:inline" />
+                          {unbanLoadingUserId === ban.user_id ? 'Unbanning...' : 'Unban user'}
+                        </button>
+                      </li>
+                    </ResponsiveMenu>
+                  ) : (
+                    <div className="w-8"></div>
+                  )}
                 </div>
               ))}
             </div>
