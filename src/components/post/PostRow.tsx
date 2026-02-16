@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import PostMeta from "./PostMeta";
 import PostActions from "./PostActions";
-import Badge from "@/components/ui/Badge";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 
 interface PostRowProps {
@@ -152,7 +151,7 @@ export default function PostRow({
     <article
       onClick={() => !isReadOnly && router.push(`/r/${boardSlug}/posts/${id}`)}
       className={`group flex items-start gap-2 px-2 py-3 border-b border-neutral transition-colors ${
-        isHiddenAndCollapsed ? 'bg-base-200/50' : isArchived ? 'bg-warning/5' : 'hover:bg-base-300'
+        isHiddenAndCollapsed ? 'bg-base-200/50' : 'hover:bg-base-300'
       } ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
     >
       {isHiddenAndCollapsed ? (
@@ -192,48 +191,37 @@ export default function PostRow({
             userVote={userVote}
             onVote={(v) => !isArchived && onVote(id, v)}
             size="sm"
-            orientation="horizontal"
+            orientation="vertical"
             disabled={isArchived}
           />
 
-          {thumbnailUrl && (
-            <div className="flex-shrink-0 w-[56px] h-[42px] rounded-md overflow-hidden bg-base-100">
-              <img
-                src={thumbnailUrl}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
-
           <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-lg font-bold text-base-content line-clamp-2">
-                {title}
-              </span>
-              {status === 'ARCHIVED' && (
-                <span className="inline-flex items-center rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-warning border border-warning/30">
-                  ARCHIVED
+            <div className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <span className="text-lg font-bold text-base-content line-clamp-2">
+                  {title}
                 </span>
-              )}
-              {localHidden && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleExpanded();
-                  }}
-                  className="inline-flex items-center rounded-full bg-base-300 px-2 py-0.5 text-xs font-medium text-base-content/70 hover:bg-base-content/10 transition-colors ml-auto"
-                  title="Click to collapse"
-                >
-                  <EyeOff size={12} className="mr-1" />
-                  Hidden
-                </button>
-              )}
-              {flairs?.map((f) => (
-                <Badge key={f} variant="flair">
-                  {f}
-                </Badge>
-              ))}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {localHidden && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpanded();
+                    }}
+                    className="inline-flex items-center rounded-full bg-base-300 px-2 py-0.5 text-xs font-medium text-base-content/70 hover:bg-base-content/10 transition-colors"
+                    title="Click to collapse"
+                  >
+                    <EyeOff size={12} className="mr-1" />
+                    Hidden
+                  </button>
+                )}
+                {status === 'ARCHIVED' && (
+                  <span className="inline-flex items-center rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-warning border border-warning/30">
+                    ARCHIVED
+                  </span>
+                )}
+              </div>
             </div>
 
             <PostMeta

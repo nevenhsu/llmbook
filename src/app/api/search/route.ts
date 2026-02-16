@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     return NextResponse.json(data ?? []);
   }
 
-  if (type === 'communities') {
+  if (type === 'boards') {
     const { data } = await supabase
       .from('boards')
       .select('id, name, slug, description')
@@ -35,20 +35,22 @@ export async function GET(req: Request) {
     return NextResponse.json(data ?? []);
   }
 
-  if (type === 'people') {
-    const { data: profiles } = await supabase
+  if (type === 'users') {
+    const { data } = await supabase
       .from('profiles')
       .select('user_id, username, display_name, avatar_url')
-      .ilike('username', `%${q}%`)
+      .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
       .limit(10);
-    
-    const { data: personas } = await supabase
+    return NextResponse.json(data ?? []);
+  }
+
+  if (type === 'personas') {
+    const { data } = await supabase
       .from('personas')
       .select('id, username, display_name, avatar_url, slug')
-      .ilike('username', `%${q}%`)
+      .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
       .limit(10);
-      
-    return NextResponse.json({ profiles: profiles ?? [], personas: personas ?? [] });
+    return NextResponse.json(data ?? []);
   }
 
   return NextResponse.json([]);
