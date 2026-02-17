@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
 import {
   buildPostsQueryParams,
   getNextCursor,
   calculateHasMore,
   getPaginationMode,
-  createInitialPaginationState,
-  updatePaginationState,
 } from "@/lib/pagination";
 
 interface FeedContainerProps {
@@ -21,7 +20,6 @@ interface FeedContainerProps {
   sortBy?: string;
   timeRange?: string;
   canViewArchived?: boolean;
-  enableSort?: boolean;
 }
 
 const DEFAULT_LIMIT = 20;
@@ -34,14 +32,12 @@ export default function FeedContainer({
   sortBy = "hot",
   timeRange = "all",
   canViewArchived = false,
-  enableSort = true,
 }: FeedContainerProps) {
   const [posts, setPosts] = useState(initialPosts);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(calculateHasMore(initialPosts, DEFAULT_LIMIT));
   const [page, setPage] = useState(1);
   const [cursor, setCursor] = useState<string | undefined>(getNextCursor(initialPosts));
-  const loadMoreRef = useRef<HTMLDivElement>(null);
   // Determine pagination mode
   const paginationMode = useMemo(() => getPaginationMode(sortBy, !!tagSlug), [sortBy, tagSlug]);
 
@@ -49,24 +45,7 @@ export default function FeedContainer({
   const effectiveSortBy = tagSlug ? "new" : sortBy;
   const effectiveTimeRange = tagSlug ? "all" : timeRange;
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
-          loadMore();
-        }
-      },
-      { threshold: 0.1 },
-    );
-
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, isLoading, page, cursor]);
-
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (isLoading || !hasMore) return;
 
     setIsLoading(true);
@@ -104,7 +83,20 @@ export default function FeedContainer({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    boardSlug,
+    canViewArchived,
+    cursor,
+    effectiveSortBy,
+    effectiveTimeRange,
+    hasMore,
+    isLoading,
+    page,
+    paginationMode,
+    tagSlug,
+  ]);
+
+  const loadMoreRef = useInfiniteScroll(loadMore, hasMore, isLoading);
 
   const emptyMessage = tagSlug
     ? { title: "No posts with this tag yet", subtitle: "Be the first to use this tag!" }

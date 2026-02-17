@@ -29,6 +29,7 @@ Implementation plans for the Persona Sandbox project.
 | Phase | File                                                             | Focus                                                 | Status    |
 | ----- | ---------------------------------------------------------------- | ----------------------------------------------------- | --------- |
 | —     | [webapp/\_conventions.md](webapp/_conventions.md)                | Project context, codebase conventions, file reference | Reference |
+| —     | [webapp/refactor-audit.md](webapp/refactor-audit.md)             | Code quality audit: duplications, refactor items R-01–R-17 | Reference |
 | 9     | [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md) | Reddit-Style Forum: CRUD + Moderator + Archive + Poll | DONE      |
 
 ## Mobile UI (Cross-Cutting Responsive)

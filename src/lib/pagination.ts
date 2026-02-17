@@ -2,8 +2,8 @@
  * Pagination utilities for posts feed
  *
  * Supports two modes:
- * 1. Offset-based: for cached sorts (hot/rising) with page numbers
- * 2. Cursor-based: for time-based sorts (new/top) with ISO date cursor
+ * 1. Offset-based: for cached sorts (hot/rising) and score sort (top)
+ * 2. Cursor-based: for time-based sort (new) with ISO date cursor
  */
 
 export interface PaginationParams {
@@ -82,7 +82,7 @@ export function getPaginationMode(sort: string, tagMode?: boolean): PaginationMo
   if (tagMode) return "cursor";
 
   // Cached sorts use offset
-  if (sort === "hot" || sort === "rising") return "offset";
+  if (sort === "hot" || sort === "rising" || sort === "top") return "offset";
 
   // Time-based sorts use cursor
   return "cursor";

@@ -1,74 +1,91 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
 import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import FeedLoadingPlaceholder from "@/components/feed/FeedLoadingPlaceholder";
 import RightSidebar from "@/components/layout/RightSidebar";
-import { useOptionalUserContext } from "@/contexts/UserContext";
-import { FeedPost } from "@/lib/posts/query-builder";
+import { sortPosts, type SortType } from "@/lib/ranking";
+import {
+  buildPostsQuery,
+  fetchUserInteractions,
+  transformPostToFeedFormat,
+} from "@/lib/posts/query-builder";
 
-export default function HomePage() {
-  const searchParams = useSearchParams();
-  const userContext = useOptionalUserContext();
-  const userId = userContext?.user?.id;
-  const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sort, setSort] = useState(() => searchParams.get("sort") || "new");
-  const [timeRange, setTimeRange] = useState(() => searchParams.get("t") || "all");
+type TimeRange = "hour" | "day" | "week" | "month" | "year" | "all";
 
-  const fetchPosts = async (currentSort: string, currentTimeRange: string = "all") => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append("sort", currentSort);
-      if (currentSort === "top") {
-        params.append("t", currentTimeRange);
-      }
+function toSortType(value: string | undefined): SortType {
+  if (value === "new" || value === "hot" || value === "rising" || value === "top") return value;
+  return "new";
+}
 
-      const response = await fetch(`/api/posts?${params.toString()}`);
-      if (!response.ok) throw new Error("Failed to fetch posts");
+function toTimeRange(value: string | undefined): TimeRange {
+  if (
+    value === "hour" ||
+    value === "day" ||
+    value === "week" ||
+    value === "month" ||
+    value === "year" ||
+    value === "all"
+  ) {
+    return value;
+  }
+  return "all";
+}
 
-      const data = await response.json();
-      // API now returns transformed FeedPost objects
-      setPosts(data);
-    } catch (error) {
-      console.error("Error fetching posts:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+async function HomeFeed({ sortBy, timeRange }: { sortBy: SortType; timeRange: TimeRange }) {
+  const supabase = await createClient();
+  const user = await getUser();
 
-  useEffect(() => {
-    fetchPosts(sort, timeRange);
-  }, [sort, timeRange]);
+  const postsQuery = buildPostsQuery({
+    supabase,
+    sortBy,
+    timeRange,
+    limit: 100,
+  });
 
-  const handleSortChange = (newSort: string, newTimeRange?: string) => {
-    setSort(newSort);
-    if (newTimeRange) {
-      setTimeRange(newTimeRange);
-    }
-    // Update URL without page reload
-    const params = new URLSearchParams(window.location.search);
-    params.set("sort", newSort);
-    if (newTimeRange) {
-      params.set("t", newTimeRange);
-    } else if (newSort !== "top") {
-      params.delete("t");
-    }
-    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
-  };
+  const { data: postData } = await postsQuery;
+  const sortedPosts = sortPosts((postData as any[]) ?? [], sortBy);
+  const topPosts = sortedPosts.slice(0, 20);
+
+  const postIds = topPosts.map((p: any) => p.id);
+  const {
+    votes: userVotes,
+    hiddenPostIds,
+    savedPostIds,
+  } = user
+    ? await fetchUserInteractions(supabase, user.id, postIds)
+    : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
+
+  const posts = topPosts.map((post: any) =>
+    transformPostToFeedFormat(post, {
+      userVote: userVotes[post.id] || null,
+      isHidden: hiddenPostIds.has(post.id),
+      isSaved: savedPostIds.has(post.id),
+    }),
+  );
+
+  return (
+    <FeedContainer initialPosts={posts} userId={user?.id} sortBy={sortBy} timeRange={timeRange} />
+  );
+}
+
+interface PageProps {
+  searchParams?: Promise<{ sort?: string; t?: string }>;
+}
+
+export default async function HomePage({ searchParams }: PageProps) {
+  const searchParamsResolved = searchParams ? await searchParams : {};
+  const sortBy = toSortType(searchParamsResolved.sort);
+  const timeRange = toTimeRange(searchParamsResolved.t);
 
   return (
     <div className="flex gap-4">
       <div className="min-w-0 flex-1">
-        <FeedSortBar onSortChange={handleSortChange} />
-        {loading ? (
-          <FeedLoadingPlaceholder />
-        ) : (
-          <FeedContainer initialPosts={posts} userId={userId} />
-        )}
+        <FeedSortBar basePath="/" />
+        <Suspense fallback={<FeedLoadingPlaceholder />}>
+          <HomeFeed sortBy={sortBy} timeRange={timeRange} />
+        </Suspense>
       </div>
       <RightSidebar />
     </div>

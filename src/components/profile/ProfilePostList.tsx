@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 import Link from "next/link";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { voteComment } from "@/lib/api/votes";
 import { useVote } from "@/hooks/useVote";
 import VotePill from "@/components/ui/VotePill";
@@ -204,7 +205,32 @@ export default function ProfilePostList({
   const [savedCursor, setSavedCursor] = useState<string | undefined>(undefined);
   const [hasLoadedSaved, setHasLoadedSaved] = useState(false);
 
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadMoreSaved = useCallback(async () => {
+    if (savedLoading || !savedHasMore || !isOwnProfile) return;
+
+    setSavedLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (savedCursor) params.append("cursor", savedCursor);
+      params.append("limit", DEFAULT_LIMIT.toString());
+
+      const res = await fetch(`/api/profile/saved?${params}`);
+      if (!res.ok) throw new Error("Failed to load saved posts");
+
+      const data = await res.json();
+      const newPosts = data.posts ?? [];
+
+      setSavedHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
+      // Use last saved_at as cursor (standardized in API now)
+      const lastSavedAt = data.savedAt?.[data.savedAt.length - 1];
+      setSavedCursor(lastSavedAt);
+      setSavedPosts((prev) => [...prev, ...newPosts]);
+    } catch (err) {
+      console.error("Failed to load more saved posts:", err);
+    } finally {
+      setSavedLoading(false);
+    }
+  }, [isOwnProfile, savedCursor, savedHasMore, savedLoading]);
 
   // Reset state when tab changes
   useEffect(() => {
@@ -222,47 +248,9 @@ export default function ProfilePostList({
       loadMoreSaved();
       setHasLoadedSaved(true);
     }
-  }, [tab, initialPosts, initialComments, isOwnProfile, hasLoadedSaved]);
+  }, [tab, initialPosts, initialComments, isOwnProfile, hasLoadedSaved, loadMoreSaved]);
 
-  // Setup intersection observer for infinite scroll - ONLY ON DESKTOP
-  useEffect(() => {
-    if (isMobile) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          if (tab === "posts" && postsHasMore && !postsLoading) {
-            loadMorePosts();
-          } else if (tab === "comments" && commentsHasMore && !commentsLoading) {
-            loadMoreComments();
-          } else if (tab === "saved" && savedHasMore && !savedLoading) {
-            loadMoreSaved();
-          }
-        }
-      },
-      { threshold: 0.1 },
-    );
-
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [
-    tab,
-    postsHasMore,
-    postsLoading,
-    commentsHasMore,
-    commentsLoading,
-    savedHasMore,
-    savedLoading,
-    postsCursor,
-    commentsCursor,
-    savedCursor,
-    isMobile,
-  ]);
-
-  const loadMorePosts = async () => {
+  const loadMorePosts = useCallback(async () => {
     if (postsLoading || !postsHasMore || (!authorId && !personaId)) return;
 
     setPostsLoading(true);
@@ -287,9 +275,9 @@ export default function ProfilePostList({
     } finally {
       setPostsLoading(false);
     }
-  };
+  }, [authorId, personaId, postsCursor, postsHasMore, postsLoading]);
 
-  const loadMoreComments = async () => {
+  const loadMoreComments = useCallback(async () => {
     if (commentsLoading || !commentsHasMore || (!authorId && !personaId)) return;
 
     setCommentsLoading(true);
@@ -318,34 +306,7 @@ export default function ProfilePostList({
     } finally {
       setCommentsLoading(false);
     }
-  };
-
-  const loadMoreSaved = async () => {
-    if (savedLoading || !savedHasMore || !isOwnProfile) return;
-
-    setSavedLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (savedCursor) params.append("cursor", savedCursor);
-      params.append("limit", DEFAULT_LIMIT.toString());
-
-      const res = await fetch(`/api/profile/saved?${params}`);
-      if (!res.ok) throw new Error("Failed to load saved posts");
-
-      const data = await res.json();
-      const newPosts = data.posts ?? [];
-
-      setSavedHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
-      // Use last saved_at as cursor (standardized in API now)
-      const lastSavedAt = data.savedAt?.[data.savedAt.length - 1];
-      setSavedCursor(lastSavedAt);
-      setSavedPosts((prev) => [...prev, ...newPosts]);
-    } catch (err) {
-      console.error("Failed to load more saved posts:", err);
-    } finally {
-      setSavedLoading(false);
-    }
-  };
+  }, [authorId, personaId, commentsCursor, commentsHasMore, commentsLoading]);
 
   // Get current items based on tab
   const getCurrentItems = () => {
@@ -391,6 +352,24 @@ export default function ProfilePostList({
   const isLoading = getIsLoading();
   const hasMore = getHasMore();
 
+  const handleInfiniteLoad = useCallback(() => {
+    if (tab === "posts") {
+      void loadMorePosts();
+      return;
+    }
+    if (tab === "comments") {
+      void loadMoreComments();
+      return;
+    }
+    if (tab === "saved") {
+      void loadMoreSaved();
+    }
+  }, [loadMoreComments, loadMorePosts, loadMoreSaved, tab]);
+
+  const loadMoreRef = useInfiniteScroll(handleInfiniteLoad, hasMore, isLoading, {
+    enabled: !isMobile,
+  });
+
   if (items.length === 0 && !isLoading) {
     return (
       <div className="rounded-2xl px-5 py-14 text-center sm:py-20">
@@ -399,7 +378,7 @@ export default function ProfilePostList({
         </div>
         <h2 className="text-base-content text-lg font-semibold">No {tab} yet</h2>
         <p className="text-base-content/70 mt-1 text-sm">
-          {username} 還沒有內容，開始互動來建立第一筆資料。
+          {displayName || username} 還沒有內容，開始互動來建立第一筆資料。
         </p>
       </div>
     );

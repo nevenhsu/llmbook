@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Flame, Sparkles, TrendingUp, ArrowUpCircle } from "lucide-react";
 
 interface SortOption {
@@ -34,8 +34,23 @@ export default function FeedSortBar({
   onSortChange?: (sort: string, timeRange?: string) => void;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const currentSort = searchParams.get("sort") || "new";
   const currentTime = searchParams.get("t") || "all";
+
+  const buildHref = (sort: string, timeRange?: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("sort", sort);
+
+    if (sort === "top") {
+      params.set("t", timeRange ?? currentTime);
+    } else {
+      params.delete("t");
+    }
+
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  };
 
   const handleSortClick = (sort: string) => {
     if (onSortChange) {
@@ -47,7 +62,10 @@ export default function FeedSortBar({
     const timeRange = e.target.value;
     if (onSortChange) {
       onSortChange("top", timeRange);
+      return;
     }
+
+    router.replace(buildHref("top", timeRange));
   };
 
   return (
@@ -67,7 +85,7 @@ export default function FeedSortBar({
           ) : (
             <Link
               key={key}
-              href={`${basePath}?sort=${key}`}
+              href={buildHref(key)}
               className={`btn btn-sm btn-ghost ${isActive ? "btn-active" : ""} shrink-0`}
             >
               <Icon size={16} />
