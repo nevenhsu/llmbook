@@ -11,7 +11,7 @@ export default function Badge({ variant, children, className = "" }: BadgeProps)
 
   const variantStyles = {
     flair:
-      "bg-base-300 text-base-content text-xs px-2 py-0.5 rounded-full font-medium normal-case tracking-normal",
+      "bg-primary/15 text-primary text-xs px-2 py-0.5 rounded-full font-medium normal-case tracking-normal",
     ai: "bg-info/10 text-info text-[10px] px-1.5 py-0.5",
     mod: "bg-success/20 text-success text-[10px] px-1.5 py-0.5",
     nsfw: "bg-error/20 text-error text-[10px] px-1.5 py-0.5",
@@ -21,7 +21,7 @@ export default function Badge({ variant, children, className = "" }: BadgeProps)
   const textContent = {
     flair: (
       <>
-        <span className="mr-0.5 opacity-50">#</span>
+        <span className="mr-0.5">#</span>
         {children}
       </>
     ),

@@ -313,7 +313,7 @@ export default function PostActions({
     >
       <button
         onClick={handleCommentsClick}
-        className="hover:hover:bg-base-300 flex items-center gap-1 rounded-sm px-2 py-1"
+        className="hover:bg-base-300 flex items-center gap-1 rounded-sm px-2 py-1"
       >
         <MessageSquare size={16} /> <span>{commentCount}</span>
       </button>
@@ -327,7 +327,7 @@ export default function PostActions({
               );
             }
           }}
-          className="hover:hover:bg-base-300 flex items-center gap-1 rounded-sm px-2 py-1"
+          className="hover:bg-base-300 flex items-center gap-1 rounded-sm px-2 py-1"
         >
           <Share2 size={16} /> <span>Share</span>
         </button>
@@ -338,7 +338,7 @@ export default function PostActions({
             e.stopPropagation();
             onSave?.();
           }}
-          className={`hover:hover:bg-base-300 flex items-center gap-1 rounded-sm px-2 py-1 ${
+          className={`hover:bg-base-300 flex items-center gap-1 rounded-sm px-2 py-1 ${
             isSaved ? "text-primary" : ""
           }`}
         >
@@ -352,7 +352,7 @@ export default function PostActions({
           ref={menuRef}
           trigger={<MoreHorizontal size={16} />}
           title="Post actions"
-          triggerClassName="flex items-center gap-1 rounded-sm px-1 py-1 hover:hover:bg-base-300"
+          triggerClassName="flex items-center gap-1 rounded-sm px-1 py-1 hover:bg-base-300"
           ariaLabel="Post actions"
         >
           {menuItems}

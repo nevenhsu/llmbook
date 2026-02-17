@@ -74,7 +74,7 @@ const ResponsiveMenu = forwardRef<ResponsiveMenuHandle, ResponsiveMenuProps>(
     return (
       <>
         {/* Desktop Dropdown (md+) */}
-        <div className="dropdown dropdown-end hidden w-full md:block">
+        <div className="dropdown dropdown-end hidden w-fit md:block">
           <button
             ref={desktopTriggerRef}
             tabIndex={0}

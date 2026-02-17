@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Hash, ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import FeedContainer from "@/components/feed/FeedContainer";
+import RightSidebar from "@/components/layout/RightSidebar";
 import { transformPostToFeedFormat } from "@/lib/posts/query-builder";
 
 interface PageProps {
@@ -14,38 +16,33 @@ export default async function TagPage({ params }: PageProps) {
 
   const { data: tag } = await supabase
     .from("tags")
-    .select("id,name")
+    .select("id, name")
     .eq("slug", slug)
     .maybeSingle();
 
   if (!tag) {
     return (
-      <div className="bg-base-100 rounded-box border-neutral border p-6">
-        <h1 className="text-xl font-semibold">Tag not found</h1>
-        <Link href="/" className="btn btn-ghost mt-4">
+      <div className="p-6">
+        <Link
+          href="/"
+          className="text-base-content/70 hover:text-base-content inline-flex items-center gap-2 text-sm transition-colors"
+        >
+          <ArrowLeft size={16} />
           Back to feed
         </Link>
+        <h1 className="text-base-content mt-3 text-xl font-semibold">Tag not found</h1>
       </div>
     );
   }
 
-  // Get current user for vote states
   const user = await getUser();
 
-  // Fetch posts - unified data structure matching board feed
   const { data: postsData } = await supabase
     .from("posts")
     .select(
       `
-      id,
-      title,
-      created_at,
-      score,
-      comment_count,
-      board_id,
-      author_id,
-      persona_id,
-      status,
+      id, title, created_at, score, comment_count, board_id, author_id,
+      persona_id, status,
       boards!inner(name, slug),
       profiles(display_name, username, avatar_url),
       personas(display_name, username, avatar_url),
@@ -58,7 +55,6 @@ export default async function TagPage({ params }: PageProps) {
     .order("created_at", { ascending: false })
     .limit(20);
 
-  // Get user votes if logged in
   let userVotes: Record<string, 1 | -1> = {};
   if (user && postsData) {
     const postIds = postsData.map((p) => p.id);
@@ -73,20 +69,24 @@ export default async function TagPage({ params }: PageProps) {
     }
   }
 
-  // Transform to unified post structure (matching FeedContainer expectation)
-  const posts = (postsData ?? []).map((post: any) => {
-    return transformPostToFeedFormat(post, {
+  const posts = (postsData ?? []).map((post: any) =>
+    transformPostToFeedFormat(post, {
       userVote: userVotes[post.id] || null,
-    });
-  });
+    }),
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="bg-base-100 rounded-box border-neutral border p-6">
-        <h1 className="text-base-content text-2xl font-bold">#{tag.name}</h1>
+    <div className="flex gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="mb-3 px-1 py-2">
+          <div className="flex items-center gap-2">
+            <Hash size={20} className="text-primary shrink-0" />
+            <h1 className="text-base-content text-2xl font-bold leading-none">{tag.name}</h1>
+          </div>
+        </div>
+        <FeedContainer initialPosts={posts} tagSlug={slug} userId={user?.id} />
       </div>
-
-      <FeedContainer initialPosts={posts} tagSlug={slug} userId={user?.id} enableSort={false} />
+      <RightSidebar />
     </div>
   );
 }

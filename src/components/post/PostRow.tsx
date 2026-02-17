@@ -4,16 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import VotePill from "@/components/ui/VotePill";
-import {
-  MessageSquare,
-  Share2,
-  Bookmark,
-  EyeOff,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  ShieldOff,
-} from "lucide-react";
+import { EyeOff, Trash2 } from "lucide-react";
 import PostMeta from "./PostMeta";
 import PostActions from "./PostActions";
 import { useLoginModal } from "@/contexts/LoginModalContext";
@@ -259,7 +250,7 @@ export default function PostRow({
               createdAt={createdAt}
             />
 
-            <div className="opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100 md:opacity-0">
+            <div>
               <PostActions
                 postId={id}
                 boardSlug={boardSlug}
