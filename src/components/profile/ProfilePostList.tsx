@@ -444,13 +444,13 @@ export default function ProfilePostList({
   
   return (
     <>
-      <div className="bg-base-200 border border-neutral rounded-2xl divide-y divide-neutral overflow-hidden">
+      <div className="flex flex-col gap-3">
         {currentPosts.map((post: any) => (
           <PostRow
             key={post.id}
             {...post}
-
             userId={userId}
+            variant="card"
           />
         ))}
       </div>

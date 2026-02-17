@@ -18,7 +18,7 @@ export default function Badge({ variant, children, className = '' }: BadgeProps)
   };
 
   const textContent = {
-    flair: children,
+    flair: <><span className="opacity-50 mr-0.5">#</span>{children}</>,
     ai: "AI",
     mod: "MOD",
     nsfw: "NSFW",

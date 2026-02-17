@@ -33,7 +33,6 @@ interface PostRowProps {
   isPersona?: boolean;
   createdAt: string;
   thumbnailUrl?: string | null;
-  flairs?: string[];
   userVote?: 1 | -1 | null;
   isSaved?: boolean;
   authorId?: string;
@@ -41,6 +40,8 @@ interface PostRowProps {
   canModerate?: boolean;
   status?: string;
   isHidden?: boolean;
+  /** Layout style: default keeps the old divider list look */
+  variant?: "list" | "card";
   /** Optional: called after optimistic update and server reconcile with updated score/userVote */
   onScoreChange?: (postId: string, score: number, userVote: 1 | -1 | null) => void;
 }
@@ -58,7 +59,6 @@ export default function PostRow({
   isPersona = false,
   createdAt,
   thumbnailUrl,
-  flairs,
   userVote,
   isSaved = false,
   authorId,
@@ -66,6 +66,7 @@ export default function PostRow({
   canModerate = false,
   status,
   isHidden = false,
+  variant = "list",
   onScoreChange,
 }: PostRowProps) {
   const router = useRouter();
@@ -143,9 +144,14 @@ export default function PostRow({
     setDeleted(true);
   };
 
+  const containerBorderClass = variant === "card" ? "border border-neutral rounded-md" : "border-b border-neutral";
+  const baseBgClass = variant === "card" ? "bg-base-200" : "";
+
   if (deleted || status === "DELETED") {
     return (
-      <article className="flex items-center gap-2 px-3 py-2 border-b border-neutral bg-base-200/30 cursor-default">
+      <article
+        className={`flex items-center gap-2 px-3 py-2 ${containerBorderClass} ${baseBgClass} bg-base-200/30 cursor-default`}
+      >
         <Trash2 size={14} className="text-base-content/40 flex-shrink-0" />
         <div className="flex items-center gap-2 min-w-0 text-xs text-base-content/50">
           <span className="font-bold text-[10px] uppercase tracking-tight bg-base-300 px-1 rounded flex-shrink-0">
@@ -167,7 +173,7 @@ export default function PostRow({
   return (
     <article
       onClick={() => !isReadOnly && router.push(`/r/${boardSlug}/posts/${id}`)}
-      className={`group flex items-start gap-2 px-2 py-3 border-b border-neutral transition-colors ${
+      className={`group flex items-start gap-2 px-2 py-3 transition-colors ${containerBorderClass} ${baseBgClass} ${
         isHiddenAndCollapsed ? 'bg-base-200/50' : 'hover:bg-base-300'
       } ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
     >

@@ -109,7 +109,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         profiles(display_name, avatar_url, username),
         personas(display_name, avatar_url, username),
         media(url),
-        post_tags(tag:tags(name))
+        post_tags(tag:tags(name, slug))
       `,
         { count: "exact" }
       )
@@ -146,10 +146,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
           id, title, body, created_at, score, comment_count, author_id, persona_id, status,
           boards(name, slug),
           profiles(display_name, avatar_url, username),
-          personas(display_name, avatar_url, username),
-          media(url),
-          post_tags(tag:tags(name))
-        )
+           personas(display_name, avatar_url, username),
+           media(url),
+           post_tags(tag:tags(name, slug))
+         )
       `, { count: "exact" })
       .eq("user_id", currentUser.id)
       .order("created_at", { ascending: false })

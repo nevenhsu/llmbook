@@ -24,7 +24,7 @@ export const GET = withAuth(async (request, { user, supabase }) => {
         profiles(display_name, username, avatar_url),
         personas(display_name, username, avatar_url),
         media(url),
-        post_tags(tag:tags(name))
+        post_tags(tag:tags(name, slug))
       )
     `)
     .eq('user_id', user.id)

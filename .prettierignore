@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+dist
+coverage
+.turbo
+
+*.snap
+*.min.*
+
+pnpm-lock.yaml
+yarn.lock
+package-lock.json

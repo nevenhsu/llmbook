@@ -23,6 +23,11 @@ describe("Supabase Storage", () => {
   const supabase = createAdminClient();
   const uploadedFiles: string[] = [];
 
+  // Minimal 1x1 PNG image (base64 encoded)
+  const pngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const pngBuffer = Buffer.from(pngBase64, "base64");
+
   // Helper function to track and clean up uploaded files
   const trackUpload = (path: string) => {
     uploadedFiles.push(path);
@@ -83,14 +88,13 @@ describe("Supabase Storage", () => {
   });
 
   describe("File Operations", () => {
-    it("should upload a text file", async () => {
-      const testContent = `Test file created at ${new Date().toISOString()}`;
-      const testPath = `test/${Date.now()}-test.txt`;
+    it("should upload a file", async () => {
+      const testPath = `test/${Date.now()}-test.png`;
 
       const { data, error } = await supabase.storage
         .from(privateEnv.storageBucket)
-        .upload(testPath, testContent, {
-          contentType: "text/plain",
+        .upload(testPath, pngBuffer, {
+          contentType: "image/png",
           upsert: false,
         });
 
@@ -102,11 +106,6 @@ describe("Supabase Storage", () => {
     });
 
     it("should upload an image file", async () => {
-      // Create a minimal 1x1 PNG image (base64 encoded)
-      const pngBase64 =
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-      const pngBuffer = Buffer.from(pngBase64, "base64");
-
       const testPath = `test/${Date.now()}-test-image.png`;
 
       const { data, error } = await supabase.storage
@@ -124,14 +123,13 @@ describe("Supabase Storage", () => {
     });
 
     it("should generate public URL for uploaded file", async () => {
-      const testContent = "Public URL test";
-      const testPath = `test/${Date.now()}-public-url-test.txt`;
+      const testPath = `test/${Date.now()}-public-url-test.png`;
 
       // Upload file first
       const { error: uploadError } = await supabase.storage
         .from(privateEnv.storageBucket)
-        .upload(testPath, testContent, {
-          contentType: "text/plain",
+        .upload(testPath, pngBuffer, {
+          contentType: "image/png",
         });
 
       expect(uploadError).toBeNull();
@@ -152,8 +150,8 @@ describe("Supabase Storage", () => {
       expect(response.ok).toBe(true);
       expect(response.status).toBe(200);
 
-      const content = await response.text();
-      expect(content).toBe(testContent);
+      const body = Buffer.from(await response.arrayBuffer());
+      expect(body.equals(pngBuffer)).toBe(true);
     });
 
     it("should list files in a folder", async () => {
@@ -171,13 +169,12 @@ describe("Supabase Storage", () => {
     });
 
     it("should delete a file", async () => {
-      const testContent = "Delete test";
-      const testPath = `test/${Date.now()}-delete-test.txt`;
+      const testPath = `test/${Date.now()}-delete-test.png`;
 
       // Upload file
       const { error: uploadError } = await supabase.storage
         .from(privateEnv.storageBucket)
-        .upload(testPath, testContent);
+        .upload(testPath, pngBuffer, { contentType: "image/png" });
 
       expect(uploadError).toBeNull();
 
@@ -194,16 +191,16 @@ describe("Supabase Storage", () => {
     it("should support user folder structure", async () => {
       const testUserId = "test-user-id";
       const paths = [
-        `${testUserId}/posts/test-post.txt`,
-        `${testUserId}/avatars/test-avatar.txt`,
-        `${testUserId}/boards/test-board.txt`,
+        `${testUserId}/posts/test-post.png`,
+        `${testUserId}/avatars/test-avatar.png`,
+        `${testUserId}/boards/test-board.png`,
       ];
 
       for (const path of paths) {
         const { data, error } = await supabase.storage
           .from(privateEnv.storageBucket)
-          .upload(path, "test content", {
-            contentType: "text/plain",
+          .upload(path, pngBuffer, {
+            contentType: "image/png",
             upsert: true,
           });
 
@@ -217,15 +214,15 @@ describe("Supabase Storage", () => {
 
     it("should support persona folder structure", async () => {
       const paths = [
-        "personas/avatars/test-persona-avatar.txt",
-        "personas/posts/test-persona-id/test-post.txt",
+        "personas/avatars/test-persona-avatar.png",
+        "personas/posts/test-persona-id/test-post.png",
       ];
 
       for (const path of paths) {
         const { data, error } = await supabase.storage
           .from(privateEnv.storageBucket)
-          .upload(path, "test content", {
-            contentType: "text/plain",
+          .upload(path, pngBuffer, {
+            contentType: "image/png",
             upsert: true,
           });
 
@@ -241,15 +238,16 @@ describe("Supabase Storage", () => {
   describe("Storage Policies", () => {
     it("should allow service role to upload to any path", async () => {
       const paths = [
-        "test/service-role-test.txt",
-        "random/path/to/file.txt",
-        "personas/avatars/service-test.txt",
+        "test/service-role-test.png",
+        "random/path/to/file.png",
+        "personas/avatars/service-test.png",
       ];
 
       for (const path of paths) {
         const { error } = await supabase.storage
           .from(privateEnv.storageBucket)
-          .upload(path, "service role test", {
+          .upload(path, pngBuffer, {
+            contentType: "image/png",
             upsert: true,
           });
 
@@ -261,12 +259,12 @@ describe("Supabase Storage", () => {
     });
 
     it("should allow service role to delete any file", async () => {
-      const testPath = `test/${Date.now()}-service-delete-test.txt`;
+      const testPath = `test/${Date.now()}-service-delete-test.png`;
 
       // Upload
       await supabase.storage
         .from(privateEnv.storageBucket)
-        .upload(testPath, "delete test");
+        .upload(testPath, pngBuffer, { contentType: "image/png" });
 
       // Delete
       const { error } = await supabase.storage

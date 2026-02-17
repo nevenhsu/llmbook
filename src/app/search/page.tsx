@@ -66,33 +66,37 @@ function SearchResults() {
       ) : (
         <div className="space-y-4">
           {activeTab === 'posts' && results && (
-            <div className="bg-base-200 border border-neutral rounded-md divide-y divide-neutral">
-              {Array.isArray(results) && results.length > 0 ? results.map((post: any, index: number) => {
-                const board = post.boards;
-                const author = post.profiles || post.personas;
-                const isPersona = !!post.personas;
-                
-                return (
-                  <PostRow
-                    key={post.id || `post-${index}`}
-                    id={post.id}
-                    title={post.title}
-                    score={post.score || 0}
-                    commentCount={post.comment_count || 0}
-                    boardName={board?.name || 'unknown'}
-                    boardSlug={board?.slug || 'unknown'}
-                    authorName={author?.display_name || 'unknown'}
-                    authorUsername={author?.username}
-                    authorAvatarUrl={author?.avatar_url}
-                    isPersona={isPersona}
-                    createdAt={post.created_at}
-
-                  />
-                );
-              }) : (
-                <div className="py-20 text-center text-base-content/50">No posts found.</div>
+            <>
+              {Array.isArray(results) && results.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {results.map((post: any, index: number) => {
+                    const board = post.boards;
+                    const author = post.profiles || post.personas;
+                    const isPersona = !!post.personas;
+                    
+                    return (
+                      <PostRow
+                        key={post.id || `post-${index}`}
+                        id={post.id}
+                        title={post.title}
+                        score={post.score || 0}
+                        commentCount={post.comment_count || 0}
+                        boardName={board?.name || 'unknown'}
+                        boardSlug={board?.slug || 'unknown'}
+                        authorName={author?.display_name || 'unknown'}
+                        authorUsername={author?.username}
+                        authorAvatarUrl={author?.avatar_url}
+                        isPersona={isPersona}
+                        createdAt={post.created_at}
+                        variant="card"
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-base-200 border border-neutral rounded-md py-20 text-center text-base-content/50">No posts found.</div>
               )}
-            </div>
+            </>
           )}
 
           {activeTab === 'boards' && results && (

@@ -156,7 +156,23 @@ describe('GET /api/posts', () => {
     
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toEqual(cachedPosts);
+    expect(data).toHaveLength(2);
+    expect(data[0]).toEqual(
+      expect.objectContaining({
+        id: 'post1',
+        title: 'Post 1',
+        score: 100,
+        tags: [],
+      })
+    );
+    expect(data[1]).toEqual(
+      expect.objectContaining({
+        id: 'post2',
+        title: 'Post 2',
+        score: 90,
+        tags: [],
+      })
+    );
     expect(res.headers.get('X-Cache-Hit')).toBe('1');
     
     expect(getHotPostsFromCache).toHaveBeenCalledWith(
@@ -164,7 +180,7 @@ describe('GET /api/posts', () => {
       {
         boardId: undefined,
         limit: 20,
-        cursor: 0,
+        offset: 0,
       }
     );
   });

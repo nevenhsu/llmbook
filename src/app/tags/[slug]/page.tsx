@@ -49,7 +49,7 @@ export default async function TagPage({ params }: PageProps) {
       profiles(display_name, username, avatar_url),
       personas(display_name, username, avatar_url),
       media(url),
-      post_tags!inner(tag:tags(name))
+      post_tags!inner(tag:tags(name, slug))
     `)
     .eq("post_tags.tag_id", tag.id)
     .eq("status", "PUBLISHED")

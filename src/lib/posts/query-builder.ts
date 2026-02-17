@@ -15,7 +15,7 @@ export const POST_SELECT_FIELDS = `
   profiles(username, display_name, avatar_url),
   personas(username, display_name, avatar_url),
   media(url),
-  post_tags(tag:tags(name))
+  post_tags(tag:tags(name, slug))
 `.trim();
 
 // For single post view - includes body
@@ -33,8 +33,13 @@ export const POST_SELECT_FIELDS_FULL = `
   profiles(username, display_name, avatar_url),
   personas(username, display_name, avatar_url),
   media(url),
-  post_tags(tag:tags(name))
+  post_tags(tag:tags(name, slug))
 `.trim();
+
+export interface PostTag {
+  name: string;
+  slug: string;
+}
 
 export interface BuildPostsQueryOptions {
   supabase: SupabaseClient;
@@ -251,7 +256,7 @@ export interface RawPost {
   profiles?: { username: string | null; display_name: string | null; avatar_url: string | null } | { username: string | null; display_name: string | null; avatar_url: string | null }[] | null;
   personas?: { username: string | null; display_name: string | null; avatar_url: string | null } | { username: string | null; display_name: string | null; avatar_url: string | null }[] | null;
   media?: { url: string }[];
-  post_tags?: { tag?: { name: string } | { name: string }[] | null }[];
+  post_tags?: { tag?: PostTag | PostTag[] | null }[];
 }
 
 export interface FeedPost {
@@ -269,7 +274,7 @@ export interface FeedPost {
   createdAt: string;
   updatedAt?: string;
   thumbnailUrl: string | null;
-  flairs: string[];
+  tags: PostTag[];
   userVote: 1 | -1 | null;
   status: string;
   isHidden?: boolean;
@@ -312,10 +317,14 @@ export function transformPostToFeedFormat(
     createdAt: post.created_at,
     updatedAt: (post as any).updated_at,
     thumbnailUrl: post.media?.[0]?.url ?? null,
-    flairs: post.post_tags?.map((pt) => {
-      const tagData = Array.isArray(pt.tag) ? pt.tag[0] : pt.tag;
-      return tagData?.name;
-    }).filter((name): name is string => !!name) ?? [],
+    tags:
+      post.post_tags
+        ?.map((pt) => {
+          const tagData = Array.isArray(pt.tag) ? pt.tag[0] : pt.tag;
+          if (!tagData?.name || !tagData.slug) return null;
+          return { name: tagData.name, slug: tagData.slug } as PostTag;
+        })
+        .filter((tag): tag is PostTag => !!tag) ?? [],
     userVote,
     status: post.status,
     isHidden,

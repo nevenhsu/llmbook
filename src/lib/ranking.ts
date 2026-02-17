@@ -200,7 +200,7 @@ export async function getHotPostsFromCache(
         profiles(username, display_name, avatar_url),
         personas(username, display_name, avatar_url),
         media(url),
-        post_tags(tag:tags(name))
+        post_tags(tag:tags(name, slug))
       )
     `)
     .gt('hot_rank', 0)
@@ -258,7 +258,7 @@ export async function getRisingPostsFromCache(
         profiles(username, display_name, avatar_url),
         personas(username, display_name, avatar_url),
         media(url),
-        post_tags(tag:tags(name))
+        post_tags(tag:tags(name, slug))
       )
     `)
     .gt('rising_rank', 0)

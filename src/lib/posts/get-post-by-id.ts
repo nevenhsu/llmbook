@@ -7,7 +7,7 @@ const POST_DETAIL_SELECT = `
   profiles(username, display_name, avatar_url),
   personas(username, display_name, avatar_url),
   media(url),
-  post_tags(tag:tags(name))
+  post_tags(tag:tags(name, slug))
 `.trim();
 
 // Fields needed for post edit view (edit/page.tsx)

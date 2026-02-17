@@ -118,17 +118,18 @@ export default function FeedContainer({
 
   return (
     <>
-      <div className="border border-neutral rounded-md bg-base-200 divide-y divide-neutral">
-        {posts.map(post => (
-          <PostRow key={post.id} {...post} userId={userId} />
-        ))}
-        {posts.length === 0 && !isLoading && (
-          <div className="py-20 text-center text-base-content/70">
-            <p className="text-lg">{emptyMessage.title}</p>
-            <p className="text-sm mt-1">{emptyMessage.subtitle}</p>
-          </div>
-        )}
-      </div>
+      {posts.length === 0 && !isLoading ? (
+        <div className="border border-neutral rounded-md bg-base-200 py-20 text-center text-base-content/70">
+          <p className="text-lg">{emptyMessage.title}</p>
+          <p className="text-sm mt-1">{emptyMessage.subtitle}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {posts.map(post => (
+            <PostRow key={post.id} {...post} userId={userId} variant="card" />
+          ))}
+        </div>
+      )}
 
       {/* Infinite scroll trigger */}
       {hasMore && (

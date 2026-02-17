@@ -11,6 +11,7 @@ import PostActionsWrapper from '@/components/post/PostActionsWrapper';
 import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import { transformPostToFeedFormat } from '@/lib/posts/query-builder';
 import { getPostForDetail } from '@/lib/posts/get-post-by-id';
+import TagList from '@/components/post/TagList';
 import type { PostPageProps } from '@/types/pages';
 
 export default async function PostDetailPage({ params }: PostPageProps) {
@@ -115,6 +116,8 @@ export default async function PostDetailPage({ params }: PostPageProps) {
           <h1 className="text-2xl sm:text-3xl font-bold text-base-content mt-2 mb-2 font-display">
             {post.title}
           </h1>
+
+          <TagList tags={post.tags ?? []} className="mb-3" />
 
           {/* Show "Edited" badge if post was updated */}
           {post.updatedAt && new Date(post.updatedAt).getTime() > new Date(post.createdAt).getTime() + 60000 && (
