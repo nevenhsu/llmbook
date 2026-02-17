@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isBoardOwner, getUserBoardRole } from "@/lib/board-permissions";
+import { isBoardOwner } from "@/lib/board-permissions";
+import { DEFAULT_MODERATOR_PERMISSIONS, type ModeratorPermissions } from "@/types/board";
+import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
+import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
+
+type AddModeratorPayload = {
+  user_id?: string;
+  role?: string;
+  permissions?: Partial<ModeratorPermissions>;
+};
 
 /**
  * GET /api/boards/[slug]/moderators
@@ -13,11 +22,14 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   const { slug } = await context.params;
 
   // Get board ID
-  const { data: board } = await supabase.from("boards").select("id").eq("slug", slug).single();
-
-  if (!board) {
-    return new NextResponse("Board not found", { status: 404 });
+  const boardIdResult = await getBoardIdBySlug(supabase, slug);
+  if ("error" in boardIdResult) {
+    if (boardIdResult.error === "not_found") {
+      return http.notFound("Board not found");
+    }
+    return http.internalError("Failed to load board");
   }
+  const boardId = boardIdResult.boardId;
 
   // Get moderators with profile info
   const { data: moderators, error } = await supabase
@@ -35,57 +47,55 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       )
     `,
     )
-    .eq("board_id", board.id)
+    .eq("board_id", boardId)
     .order("created_at", { ascending: true });
 
   if (error) {
-    return new NextResponse(error.message, { status: 500 });
+    console.error("Error fetching moderators", { boardId, slug }, error);
+    return http.internalError("Failed to fetch moderators");
   }
 
-  return NextResponse.json(moderators);
+  return http.ok(moderators || []);
 }
 
 /**
  * POST /api/boards/[slug]/moderators
  * Add a new moderator (owner only)
  */
-export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
+export const POST = withAuth<{ slug: string }>(async (request, { user, supabase }, context) => {
   const { slug } = await context.params;
 
   // Get board ID
-  const { data: board } = await supabase.from("boards").select("id").eq("slug", slug).single();
-
-  if (!board) {
-    return new NextResponse("Board not found", { status: 404 });
+  const boardIdResult = await getBoardIdBySlug(supabase, slug);
+  if ("error" in boardIdResult) {
+    if (boardIdResult.error === "not_found") {
+      return http.notFound("Board not found");
+    }
+    return http.internalError("Failed to load board");
   }
+  const boardId = boardIdResult.boardId;
 
   // Check if user is the owner
-  const isOwner = await isBoardOwner(board.id, user.id);
+  const isOwner = await isBoardOwner(boardId, user.id);
   if (!isOwner) {
-    return new NextResponse("Forbidden: Only board owner can add moderators", { status: 403 });
+    return http.forbidden("Forbidden: Only board owner can add moderators");
   }
 
-  const { user_id, role, permissions } = await request.json();
+  const body = await parseJsonBody<AddModeratorPayload>(request);
+  if (body instanceof NextResponse) {
+    return body;
+  }
 
-  if (!user_id) {
-    return new NextResponse("Missing user_id", { status: 400 });
+  const { user_id, role, permissions } = body;
+
+  if (!user_id || typeof user_id !== "string") {
+    return http.badRequest("Missing or invalid user_id");
   }
 
   // Default permissions for moderator
-  const modPermissions = permissions || {
-    manage_posts: true,
-    manage_users: true,
-    manage_settings: false,
-  };
+  const modPermissions = permissions
+    ? { ...permissions }
+    : { ...DEFAULT_MODERATOR_PERMISSIONS };
 
   // Don't allow creating another owner
   const modRole = role === "owner" ? "moderator" : role || "moderator";
@@ -94,7 +104,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   const { data: newMod, error } = await supabase
     .from("board_moderators")
     .insert({
-      board_id: board.id,
+      board_id: boardId,
       user_id,
       role: modRole,
       permissions: modPermissions,
@@ -117,10 +127,11 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (error) {
     if (error.code === "23505") {
       // Unique violation
-      return new NextResponse("User is already a moderator", { status: 409 });
+      return http.conflict("User is already a moderator");
     }
-    return new NextResponse(error.message, { status: 400 });
+    console.error("Error adding moderator", { boardId, slug, user_id, role: modRole }, error);
+    return http.badRequest("Failed to add moderator");
   }
 
-  return NextResponse.json(newMod);
-}
+  return http.created(newMod);
+});

@@ -124,8 +124,8 @@ describe("getPaginationMode", () => {
     expect(getPaginationMode("new", false)).toBe("cursor");
   });
 
-  it("returns cursor for top sort", () => {
-    expect(getPaginationMode("top", false)).toBe("cursor");
+  it("returns offset for top sort", () => {
+    expect(getPaginationMode("top", false)).toBe("offset");
   });
 });
 

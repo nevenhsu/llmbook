@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isBoardModerator } from "@/lib/board-permissions";
 import { isAdmin } from "@/lib/admin";
+import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
+import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
 import {
   getOffset,
   getTotalPages,
@@ -10,6 +11,12 @@ import {
 } from "@/lib/board-pagination";
 
 export const runtime = "nodejs";
+
+type CreateBanPayload = {
+  user_id?: string;
+  reason?: string;
+  expires_at?: string;
+};
 
 /**
  * GET /api/boards/[slug]/bans
@@ -25,11 +32,14 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   const { slug } = await context.params;
 
   // Get board ID
-  const { data: board } = await supabase.from("boards").select("id").eq("slug", slug).single();
-
-  if (!board) {
-    return new NextResponse("Board not found", { status: 404 });
+  const boardIdResult = await getBoardIdBySlug(supabase, slug);
+  if ("error" in boardIdResult) {
+    if (boardIdResult.error === "not_found") {
+      return http.notFound("Board not found");
+    }
+    return http.internalError("Failed to load board");
   }
+  const boardId = boardIdResult.boardId;
 
   // Get bans with user profile info
   const {
@@ -56,20 +66,20 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     `,
       { count: "exact" },
     )
-    .eq("board_id", board.id)
+    .eq("board_id", boardId)
     .order("created_at", { ascending: false })
     .range(offset, offset + perPage - 1);
 
   if (error) {
     // Do not leak internal error details to clients; log for auditing
-    console.error("Error fetching bans for board", board?.id, error);
-    return new NextResponse("Failed to fetch bans", { status: 500 });
+    console.error("Error fetching bans for board", boardId, error);
+    return http.internalError("Failed to fetch bans");
   }
 
   const total = count || 0;
   const totalPages = getTotalPages(total, perPage);
 
-  return NextResponse.json({
+  return http.ok({
     items: bans || [],
     page,
     perPage,
@@ -82,65 +92,64 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
  * POST /api/boards/[slug]/bans
  * Ban a user from the board (moderators only)
  */
-export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
+export const POST = withAuth<{ slug: string }>(async (request, { user, supabase }, context) => {
   const { slug } = await context.params;
 
   // Get board ID
-  const { data: board } = await supabase.from("boards").select("id").eq("slug", slug).single();
-
-  if (!board) {
-    return new NextResponse("Board not found", { status: 404 });
+  const boardIdResult = await getBoardIdBySlug(supabase, slug);
+  if ("error" in boardIdResult) {
+    if (boardIdResult.error === "not_found") {
+      return http.notFound("Board not found");
+    }
+    return http.internalError("Failed to load board");
   }
+  const boardId = boardIdResult.boardId;
 
   const [userIsAdmin, userIsModerator] = await Promise.all([
     isAdmin(user.id, supabase),
-    isBoardModerator(board.id, user.id),
+    isBoardModerator(boardId, user.id),
   ]);
 
   if (!userIsAdmin && !userIsModerator) {
-    return new NextResponse("Forbidden: Only admins or moderators can edit bans", { status: 403 });
+    return http.forbidden("Forbidden: Only admins or moderators can edit bans");
   }
 
-  const { user_id, reason, expires_at } = await request.json();
+  const body = await parseJsonBody<CreateBanPayload>(request);
+  if (body instanceof Response) {
+    return body;
+  }
 
-  if (!user_id) {
-    return new NextResponse("Missing user_id", { status: 400 });
+  const { user_id, reason, expires_at } = body;
+
+  if (!user_id || typeof user_id !== "string") {
+    return http.badRequest("Missing or invalid user_id");
   }
 
   let normalizedExpiresAt: string | null = null;
   if (expires_at) {
     const parsed = new Date(expires_at);
     if (Number.isNaN(parsed.getTime())) {
-      return new NextResponse("Invalid expires_at", { status: 400 });
+      return http.badRequest("Invalid expires_at");
     }
     normalizedExpiresAt = parsed.toISOString();
   }
 
   // Cannot ban yourself
   if (user_id === user.id) {
-    return new NextResponse("Cannot ban yourself", { status: 400 });
+    return http.badRequest("Cannot ban yourself");
   }
 
   // Cannot ban other moderators
-  const isTargetMod = await isBoardModerator(board.id, user_id);
+  const isTargetMod = await isBoardModerator(boardId, user_id);
   if (isTargetMod) {
-    return new NextResponse("Cannot ban moderators", { status: 400 });
+    return http.badRequest("Cannot ban moderators");
   }
 
   // Create ban
   const { data: ban, error } = await supabase
     .from("board_bans")
     .insert({
-      board_id: board.id,
+      board_id: boardId,
       user_id,
       banned_by: user.id,
       reason: reason || null,
@@ -165,16 +174,16 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (error) {
     if (error.code === "23505") {
       // Unique violation
-      return new NextResponse("User is already banned", { status: 409 });
+      return http.conflict("User is already banned");
     }
     // Do not leak internal error details; log for auditing
     console.error(
       "Error banning user on board",
-      { boardId: board?.id, user_id, reason, expires_at: normalizedExpiresAt },
+      { boardId, user_id, reason, expires_at: normalizedExpiresAt },
       error,
     );
-    return new NextResponse("Failed to ban user", { status: 500 });
+    return http.internalError("Failed to ban user");
   }
 
-  return NextResponse.json(ban);
-}
+  return http.created(ban);
+});

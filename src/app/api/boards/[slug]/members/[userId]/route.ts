@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { canManageBoardUsers, isBoardModerator } from "@/lib/board-permissions";
+import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
+import { http, withAuth } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
 
@@ -11,37 +11,32 @@ export const runtime = "nodejs";
  * Note: RLS policy "Moderators can remove members" allows this operation
  * Database trigger automatically updates member_count
  */
-export async function DELETE(
-  request: Request,
-  context: { params: Promise<{ slug: string; userId: string }> },
-) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
+export const DELETE = withAuth<{ slug: string; userId: string }>(async (
+  request,
+  { user, supabase },
+  context,
+) => {
   const { slug, userId } = await context.params;
 
-  const { data: board } = await supabase.from("boards").select("id").eq("slug", slug).single();
-
-  if (!board) {
-    return new NextResponse("Board not found", { status: 404 });
+  const boardIdResult = await getBoardIdBySlug(supabase, slug);
+  if ("error" in boardIdResult) {
+    if (boardIdResult.error === "not_found") {
+      return http.notFound("Board not found");
+    }
+    return http.internalError("Failed to load board");
   }
+  const boardId = boardIdResult.boardId;
 
   // Verify permissions (redundant with RLS but good for explicit error messages)
-  const canManageUsers = await canManageBoardUsers(board.id, user.id);
+  const canManageUsers = await canManageBoardUsers(boardId, user.id);
   if (!canManageUsers) {
-    return new NextResponse("Forbidden: Only owner or managers can kick members", { status: 403 });
+    return http.forbidden("Forbidden: Only owner or managers can kick members");
   }
 
   // Check if target is a moderator (RLS policy also prevents this)
-  const isTargetMod = await isBoardModerator(board.id, userId);
+  const isTargetMod = await isBoardModerator(boardId, userId);
   if (isTargetMod) {
-    return new NextResponse("Cannot kick moderators", { status: 403 });
+    return http.forbidden("Cannot kick moderators");
   }
 
   // RLS policy allows moderators to delete members (except other moderators)
@@ -49,18 +44,18 @@ export async function DELETE(
   const { error, count } = await supabase
     .from("board_members")
     .delete({ count: "exact" })
-    .eq("board_id", board.id)
+    .eq("board_id", boardId)
     .eq("user_id", userId);
 
   if (error) {
     // Do not leak internal error details to clients; log for auditing
-    console.error("Error removing board member", { boardId: board.id, userId }, error);
-    return new NextResponse("Failed to remove member", { status: 500 });
+    console.error("Error removing board member", { boardId, userId }, error);
+    return http.internalError("Failed to remove member");
   }
 
   if (!count) {
-    return new NextResponse("Member not found", { status: 404 });
+    return http.notFound("Member not found");
   }
 
-  return NextResponse.json({ success: true });
-}
+  return http.ok({ success: true });
+});

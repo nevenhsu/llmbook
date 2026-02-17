@@ -4,6 +4,7 @@ import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import BoardLayout from "@/components/board/BoardLayout";
 import { isAdmin } from "@/lib/admin";
+import { isBoardModerator } from "@/lib/board-permissions";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { sortPosts, type SortType } from "@/lib/ranking";
 import {
@@ -42,14 +43,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   if (user) {
     userIsAdmin = await isAdmin(user.id, supabase);
 
-    const { data: moderator } = await supabase
-      .from("board_moderators")
-      .select("role")
-      .eq("board_id", board.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    canManageBoard = !!moderator;
+    canManageBoard = await isBoardModerator(board.id, user.id);
     canViewArchived = userIsAdmin || canManageBoard;
   }
 
@@ -89,7 +83,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
 
   // Check if user is joined to the board
   let isJoined = false;
-  let canManage = userIsAdmin || canManageBoard;
+  const canManage = userIsAdmin || canManageBoard;
 
   if (user) {
     const { data: membership } = await supabase

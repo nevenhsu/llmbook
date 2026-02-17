@@ -11,6 +11,7 @@ This document describes the shared libraries available in `src/lib/` for common 
 | [Optimistic Vote](#optimistic-vote) | Vote state calculations | `import { applyVote } from '@/lib/optimistic/vote'`           |
 | [Pagination](#pagination)           | Feed pagination         | `import { buildPostsQueryParams } from '@/lib/pagination'`    |
 | [Route Helpers](#route-helpers)     | API route utilities     | `import { withAuth, http } from '@/lib/server/route-helpers'` |
+| [Boards](#boards)                   | Board utilities         | `import { getBoardIdBySlug } from '@/lib/boards/get-board-id-by-slug'` |
 
 ---
 
@@ -176,8 +177,8 @@ const nextCursor = getNextCursor(posts);
 
 | Mode     | Use Case                     | Parameter                  |
 | -------- | ---------------------------- | -------------------------- |
-| `offset` | Cached rankings (hot/rising) | `cursor` = page number     |
-| `cursor` | Time-based sorts (new/top)   | `cursor` = ISO date string |
+| `offset` | Cached rankings (hot/rising/top) | `cursor` = page number |
+| `cursor` | Time-based sorts (new)       | `cursor` = ISO date string |
 
 ---
 
@@ -348,4 +349,33 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   // User is guaranteed to be authenticated
   // ... handler logic
 });
+```
+
+---
+
+## Boards
+
+**File:** [`src/lib/boards/get-board-id-by-slug.ts`](../../src/lib/boards/get-board-id-by-slug.ts)
+
+Shared helper to resolve `boardId` from a `slug` using an existing Supabase client.
+
+### `getBoardIdBySlug(supabase, slug)`
+
+```typescript
+import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
+import { http } from "@/lib/server/route-helpers";
+
+const result = await getBoardIdBySlug(supabase, slug);
+if ("error" in result) {
+  if (result.error === "not_found") return http.notFound("Board not found");
+  return http.internalError("Failed to load board");
+}
+
+const boardId = result.boardId;
+```
+
+Use this helper in API routes to avoid duplicating:
+
+```typescript
+await supabase.from("boards").select("id").eq("slug", slug).single();
 ```

@@ -7,6 +7,10 @@ import Avatar from "@/components/ui/Avatar";
 import ImageUpload from "@/components/ui/ImageUpload";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
+import {
+  DEFAULT_MODERATOR_PERMISSIONS,
+  type ModeratorPermissions,
+} from "@/types/board";
 
 interface Rule {
   title: string;
@@ -17,26 +21,10 @@ interface Moderator {
   id: string;
   user_id: string;
   role: string;
-  permissions?: {
-    manage_posts?: boolean;
-    manage_users?: boolean;
-    manage_settings?: boolean;
-  };
+  permissions?: Partial<ModeratorPermissions>;
   // profiles shape can vary between backend responses; use any to avoid type conflicts
   profiles: any;
 }
-
-type ModeratorPermissions = {
-  manage_posts: boolean;
-  manage_users: boolean;
-  manage_settings: boolean;
-};
-
-const DEFAULT_MODERATOR_PERMISSIONS: ModeratorPermissions = {
-  manage_posts: true,
-  manage_users: true,
-  manage_settings: false,
-};
 
 interface SearchProfile {
   user_id: string;

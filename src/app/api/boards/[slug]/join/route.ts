@@ -1,22 +1,24 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { http, withAuth } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+export const POST = withAuth<{ slug: string }>(async (req, { user, supabase }, { params }) => {
   const { slug } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: board } = await supabase
+  const { data: board, error: boardError } = await supabase
     .from("boards")
     .select("id,member_count")
     .eq("slug", slug)
-    .single();
-  if (!board) return NextResponse.json({ error: "Board not found" }, { status: 404 });
+    .maybeSingle();
+
+  if (boardError) {
+    console.error("Error loading board for join", { slug }, boardError);
+    return http.internalError("Failed to load board");
+  }
+
+  if (!board) {
+    return http.notFound("Board not found");
+  }
 
   const { error } = await supabase
     .from("board_members")
@@ -24,10 +26,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   // If duplicate, return current count without updating
   if (error?.code === "23505") {
-    return NextResponse.json({ success: true, memberCount: board.member_count });
+    return http.ok({ success: true, memberCount: board.member_count });
   }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Error joining board", { slug, boardId: board.id, userId: user.id }, error);
+    return http.internalError("Failed to join board");
+  }
 
   // Trigger automatically updates member_count, fetch the updated value
   const { data: updatedBoard } = await supabase
@@ -36,26 +41,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .eq("id", board.id)
     .single();
 
-  return NextResponse.json({
+  return http.ok({
     success: true,
     memberCount: updatedBoard?.member_count ?? board.member_count,
   });
-}
+});
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+export const DELETE = withAuth<{ slug: string }>(async (req, { user, supabase }, { params }) => {
   const { slug } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: board } = await supabase
+  const { data: board, error: boardError } = await supabase
     .from("boards")
     .select("id,member_count")
     .eq("slug", slug)
-    .single();
-  if (!board) return NextResponse.json({ error: "Board not found" }, { status: 404 });
+    .maybeSingle();
+
+  if (boardError) {
+    console.error("Error loading board for leave", { slug }, boardError);
+    return http.internalError("Failed to load board");
+  }
+
+  if (!board) {
+    return http.notFound("Board not found");
+  }
 
   const { error, count: deletedCount } = await supabase
     .from("board_members")
@@ -63,11 +71,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ slug:
     .eq("user_id", user.id)
     .eq("board_id", board.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Error leaving board", { slug, boardId: board.id, userId: user.id }, error);
+    return http.internalError("Failed to leave board");
+  }
 
   // If no rows were deleted, user was not a member
   if (deletedCount === 0) {
-    return NextResponse.json({ success: true, memberCount: board.member_count });
+    return http.ok({ success: true, memberCount: board.member_count });
   }
 
   // Trigger automatically updates member_count, fetch the updated value
@@ -77,8 +88,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ slug:
     .eq("id", board.id)
     .single();
 
-  return NextResponse.json({
+  return http.ok({
     success: true,
     memberCount: updatedBoard?.member_count ?? board.member_count,
   });
-}
+});

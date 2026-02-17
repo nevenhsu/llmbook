@@ -19,7 +19,7 @@ Each item is numbered and tagged with a status for tracking discussion progress.
 ## 🔴 High Priority (Bugs / Significant Duplication)
 
 ### R-01 `use-vote-mutation.ts` — Delete (has bug)
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `src/hooks/use-vote-mutation.ts:111` passes `state.score.toString()` as `postId`:
 ```ts
@@ -32,6 +32,9 @@ A complete, correct implementation already exists in `src/hooks/useVote.ts` with
 - `isVoting` ref to prevent double-submit
 
 **Proposal:** Delete `use-vote-mutation.ts` entirely, ensure all usages point to `useVote.ts`.
+
+**Implemented:**
+- Deleted `src/hooks/use-vote-mutation.ts`
 
 ---
 
@@ -61,7 +64,7 @@ export function usePostInteractions(postId: string, initialSaved: boolean, initi
 ---
 
 ### R-03 API Routes — Auth Boilerplate Not Using `withAuth`
-**Status:** `[ ]`
+**Status:** `[>]`
 
 The following pattern appears in 10+ route handlers manually instead of using the existing `withAuth` wrapper:
 ```ts
@@ -85,10 +88,17 @@ Routes already using `withAuth` correctly (reference):
 
 **Proposal:** Migrate all above routes to `withAuth`.
 
+**Implemented (partial):**
+- Migrated board-related routes to `withAuth`: `src/app/api/boards/[slug]/route.ts`, `src/app/api/boards/[slug]/moderators/route.ts`, `src/app/api/boards/[slug]/moderators/[userId]/route.ts`, `src/app/api/boards/[slug]/bans/route.ts`, `src/app/api/boards/[slug]/bans/[userId]/route.ts`, `src/app/api/boards/[slug]/members/[userId]/route.ts`, `src/app/api/boards/[slug]/join/route.ts`
+
+**Remaining:**
+- `src/app/api/posts/[id]/route.ts` (PATCH, DELETE)
+- `src/app/api/profile/route.ts`
+
 ---
 
 ### R-04 API Error Response Format — 3 Inconsistent Styles
-**Status:** `[ ]`
+**Status:** `[>]`
 
 Three different formats are used across routes:
 
@@ -107,10 +117,13 @@ Style A is problematic: `new NextResponse("text")` sets `Content-Type: text/plai
 
 **Proposal:** Standardise on Style B (`http.*` helpers from `src/lib/server/route-helpers.ts`) across all routes.
 
+**Implemented (partial):**
+- Standardised board-related routes on `http.*` + `parseJsonBody` where applicable (same set as R-03 above).
+
 ---
 
 ### R-05 Board Slug → ID Lookup Duplicated in 8+ Routes
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 This exact pattern appears in at least 8 route files:
 ```ts
@@ -133,15 +146,27 @@ Files affected:
 export async function getBoardIdBySlug(
   supabase: SupabaseClient,
   slug: string,
-): Promise<{ boardId: string } | { error: NextResponse }>
+): Promise<{ boardId: string } | { error: "not_found" } | { error: "query_failed" }>
 ```
+
+**Implemented:**
+- Added `src/lib/boards/get-board-id-by-slug.ts`
+- Updated usages in:
+  - `src/app/api/boards/[slug]/route.ts`
+  - `src/app/api/boards/[slug]/bans/route.ts`
+  - `src/app/api/boards/[slug]/bans/[userId]/route.ts`
+  - `src/app/api/boards/[slug]/members/route.ts`
+  - `src/app/api/boards/[slug]/members/[userId]/route.ts`
+  - `src/app/api/boards/[slug]/moderators/route.ts`
+  - `src/app/api/boards/[slug]/moderators/[userId]/route.ts`
+  - `src/app/api/boards/[slug]/join/route.ts`
 
 ---
 
 ## 🟡 Medium Priority (Shared Logic / Type Inconsistency)
 
 ### R-06 `ModeratorPermissions` Type Defined in 3 Places
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 The same type is independently declared in:
 - `src/components/board/BoardSettingsForm.tsx:29-39`
@@ -149,6 +174,13 @@ The same type is independently declared in:
 - `src/app/api/boards/[slug]/moderators/route.ts:83-88` (inline)
 
 **Proposal:** Centralise in `src/types/board.ts` or `src/lib/boards/permissions.ts`, import everywhere.
+
+**Implemented:**
+- Added `src/types/board.ts` exporting `ModeratorPermissions` and `DEFAULT_MODERATOR_PERMISSIONS`
+- Updated:
+  - `src/components/board/BoardSettingsForm.tsx`
+  - `src/app/api/boards/[slug]/moderators/route.ts`
+  - `src/app/api/boards/[slug]/moderators/[userId]/route.ts`
 
 ---
 
@@ -214,11 +246,14 @@ export async function isBoardModerator(
 ---
 
 ### R-10 `canModerate` Check in `r/[slug]/page.tsx` Bypasses Library
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `src/app/r/[slug]/page.tsx:38-54` manually queries `board_moderators` with raw SQL instead of using `isBoardModerator()` from `src/lib/board-permissions.ts`.
 
 **Proposal:** Replace inline raw query with the library function.
+
+**Implemented:**
+- Updated `src/app/r/[slug]/page.tsx` to use `isBoardModerator()`
 
 ---
 
