@@ -4,15 +4,40 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 import Link from "next/link";
-import { votePost, voteComment } from "@/lib/api/votes";
-import { applyVote } from "@/lib/optimistic/vote";
-import { useLoginModal } from "@/contexts/LoginModalContext";
-import { ApiError } from "@/lib/api/fetch-json";
+import { voteComment } from "@/lib/api/votes";
+import { useVote } from "@/hooks/useVote";
+import VotePill from "@/components/ui/VotePill";
 import {
   buildPostsQueryParams as buildPostsQueryParamsLib,
   getNextCursor as getNextCursorLib,
   calculateHasMore as calculateHasMoreLib
 } from "@/lib/pagination";
+
+function CommentVoteRow({
+  commentId,
+  initialScore,
+  initialUserVote,
+}: {
+  commentId: string;
+  initialScore: number;
+  initialUserVote: 1 | -1 | null;
+}) {
+  const { score, userVote, handleVote, voteDisabled } = useVote({
+    id: commentId,
+    initialScore,
+    initialUserVote,
+    voteFn: voteComment,
+  });
+  return (
+    <VotePill
+      score={score}
+      userVote={userVote}
+      onVote={handleVote}
+      disabled={voteDisabled}
+      size="sm"
+    />
+  );
+}
 
 interface ProfilePostListProps {
   posts: any[];
@@ -45,7 +70,6 @@ export default function ProfilePostList({
   commentsCount = 0,
   savedCount = 0,
 }: ProfilePostListProps) {
-  const { openLoginModal } = useLoginModal();
   // State
   const [posts, setPosts] = useState(initialPosts);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -158,7 +182,7 @@ export default function ProfilePostList({
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsHasMore, setCommentsHasMore] = useState(calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT));
   const [commentsCursor, setCommentsCursor] = useState<string | undefined>(getNextCursorLib(initialComments ?? []));
-  const [commentVotes, setCommentVotes] = useState<Record<string, 1 | -1>>({});
+
   
   // Saved posts state
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
@@ -260,12 +284,10 @@ export default function ProfilePostList({
       
       setCommentsHasMore(calculateHasMoreLib(newComments, DEFAULT_LIMIT));
       setCommentsCursor(getNextCursorLib(newComments));
-      setComments(prev => [...prev, ...newComments]);
-      
-      // Merge user votes
-      if (data.userVotes) {
-        setCommentVotes(prev => ({ ...prev, ...data.userVotes }));
-      }
+      const commentsWithVotes = data.userVotes
+        ? newComments.map((c: any) => ({ ...c, userVote: data.userVotes[c.id] ?? null }))
+        : newComments;
+      setComments(prev => [...prev, ...commentsWithVotes]);
     } catch (err) {
       console.error('Failed to load more comments:', err);
     } finally {
@@ -300,92 +322,9 @@ export default function ProfilePostList({
     }
   };
 
-  const handlePostVote = async (postId: string, value: 1 | -1) => {
-    const postList = tab === 'saved' ? savedPosts : posts;
-    const post = postList.find((p: any) => p.id === postId);
-    if (!post) return;
 
-    const oldPosts = [...postList];
-    
-    const optimisticResult = applyVote(
-      { score: post.score || 0, userVote: post.userVote },
-      value
-    );
 
-    const updatePosts = (prev: any[]) => prev.map((p: any) => 
-      p.id === postId 
-        ? { ...p, score: optimisticResult.score, userVote: optimisticResult.userVote }
-        : p
-    );
 
-    if (tab === 'saved') {
-      setSavedPosts(updatePosts);
-    } else {
-      setPosts(updatePosts);
-    }
-
-    try {
-      const data = await votePost(postId, value);
-      const reconcilePosts = (prev: any[]) => prev.map((p: any) => 
-        p.id === postId ? { ...p, score: data.score } : p
-      );
-      
-      if (tab === 'saved') {
-        setSavedPosts(reconcilePosts);
-      } else {
-        setPosts(reconcilePosts);
-      }
-    } catch (err) {
-      console.error('Failed to vote:', err);
-      if (err instanceof ApiError && err.status === 401) {
-        openLoginModal();
-      }
-      if (tab === 'saved') {
-        setSavedPosts(oldPosts);
-      } else {
-        setPosts(oldPosts);
-      }
-    }
-  };
-
-  const handleCommentVote = async (commentId: string, value: 1 | -1) => {
-    const comment = comments.find(c => c.id === commentId);
-    if (!comment) return;
-
-    const prevVote = commentVotes[commentId] || null;
-    const oldComments = [...comments];
-    
-    // Optimistic update
-    const optimisticResult = applyVote(
-      { score: comment.score || 0, userVote: prevVote },
-      value
-    );
-    
-    setCommentVotes(prev => ({
-      ...prev,
-      [commentId]: optimisticResult.userVote as 1 | -1,
-    }));
-    
-    setComments(prev => prev.map(c => 
-      c.id === commentId 
-        ? { ...c, score: optimisticResult.score }
-        : c
-    ));
-
-    try {
-      const data = await voteComment(commentId, value);
-      setComments(prev => prev.map(c => 
-        c.id === commentId ? { ...c, score: data.score } : c
-      ));
-    } catch (err) {
-      console.error('Failed to vote:', err);
-      if (err instanceof ApiError && err.status === 401) {
-        openLoginModal();
-      }
-      setComments(oldComments);
-      setCommentVotes(prev => ({ ...prev, [commentId]: prevVote as 1 | -1 }));
-    }
-  };
 
   // Get current items based on tab
   const getCurrentItems = () => {
@@ -465,19 +404,11 @@ export default function ProfilePostList({
                 </div>
                 <p className="text-sm text-base-content">{comment.body}</p>
                 <div className="flex items-center gap-3 mt-2 text-xs text-base-content/60">
-                  <button
-                    onClick={() => handleCommentVote(comment.id, 1)}
-                    className={`hover:text-accent ${commentVotes[comment.id] === 1 ? 'text-accent' : ''}`}
-                  >
-                    ▲
-                  </button>
-                  <span>{comment.score ?? 0} points</span>
-                  <button
-                    onClick={() => handleCommentVote(comment.id, -1)}
-                    className={`hover:text-error ${commentVotes[comment.id] === -1 ? 'text-error' : ''}`}
-                  >
-                    ▼
-                  </button>
+                  <CommentVoteRow
+                    commentId={comment.id}
+                    initialScore={comment.score ?? 0}
+                    initialUserVote={comment.userVote ?? null}
+                  />
                   <span>•</span>
                   <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
                 </div>
@@ -518,7 +449,7 @@ export default function ProfilePostList({
           <PostRow
             key={post.id}
             {...post}
-            onVote={handlePostVote}
+
             userId={userId}
           />
         ))}

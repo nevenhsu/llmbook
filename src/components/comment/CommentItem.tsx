@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import Avatar from "@/components/ui/Avatar";
 import Timestamp from "@/components/ui/Timestamp";
 import VotePill from "@/components/ui/VotePill";
@@ -16,11 +15,12 @@ import SafeHtml from "@/components/ui/SafeHtml";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
+import { useVote } from "@/hooks/useVote";
+import { voteComment } from "@/lib/api/votes";
 
 interface CommentItemProps {
   comment: any;
   userVote?: 1 | -1 | null;
-  onVote: (commentId: string, value: 1 | -1) => void;
   userId?: string;
   canModerate?: boolean;
   onRequestReply?: (comment: any) => void;
@@ -34,8 +34,7 @@ interface CommentItemProps {
 
 export default function CommentItem({
   comment,
-  userVote,
-  onVote,
+  userVote: initialUserVote,
   userId,
   canModerate = false,
   onRequestReply,
@@ -52,6 +51,14 @@ export default function CommentItem({
   const [isUndeleting, setIsUndeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { openLoginModal } = useLoginModal();
+
+  const { score, userVote, handleVote, voteDisabled } = useVote({
+    id: comment.id,
+    initialScore: comment.score ?? 0,
+    initialUserVote: initialUserVote ?? null,
+    voteFn: voteComment,
+    disabled: isArchived,
+  });
 
   // Standardized fields from transformCommentToFormat
   const isPersona = comment.isPersona;
@@ -188,11 +195,11 @@ export default function CommentItem({
 
         <div className="flex items-center gap-4 text-base-content/70">
           <VotePill
-            score={comment.score}
+            score={score}
             userVote={userVote}
-            onVote={(v) => onVote(comment.id, v)}
+            onVote={handleVote}
             size="sm"
-            disabled={isArchived}
+            disabled={voteDisabled}
           />
           {!isArchived && (
             <>

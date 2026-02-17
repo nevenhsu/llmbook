@@ -3,10 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import PostRow from '@/components/post/PostRow';
-import { votePost } from '@/lib/api/votes';
-import { applyVote } from '@/lib/optimistic/vote';
-import { useLoginModal } from '@/contexts/LoginModalContext';
-import { ApiError } from '@/lib/api/fetch-json';
+
 import {
   buildPostsQueryParams,
   getNextCursor,
@@ -45,8 +42,6 @@ export default function FeedContainer({
   const [page, setPage] = useState(1);
   const [cursor, setCursor] = useState<string | undefined>(getNextCursor(initialPosts));
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const { openLoginModal } = useLoginModal();
-
   // Determine pagination mode
   const paginationMode = useMemo(
     () => getPaginationMode(sortBy, !!tagSlug),
@@ -117,37 +112,6 @@ export default function FeedContainer({
     }
   };
 
-  const handleVote = async (postId: string, value: 1 | -1) => {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-
-    const oldPosts = [...posts];
-    
-    const optimisticResult = applyVote(
-      { score: post.score, userVote: post.userVote },
-      value
-    );
-    
-    setPosts(posts.map(p => 
-      p.id === postId 
-        ? { ...p, score: optimisticResult.score, userVote: optimisticResult.userVote }
-        : p
-    ));
-
-    try {
-      const data = await votePost(postId, value);
-      setPosts(currentPosts => currentPosts.map(p => 
-        p.id === postId ? { ...p, score: data.score } : p
-      ));
-    } catch (err) {
-      console.error('Failed to vote:', err);
-      if (err instanceof ApiError && err.status === 401) {
-        openLoginModal();
-      }
-      setPosts(oldPosts);
-    }
-  };
-
   const emptyMessage = tagSlug 
     ? { title: 'No posts with this tag yet', subtitle: 'Be the first to use this tag!' }
     : { title: 'No posts yet', subtitle: 'Be the first to post something!' };
@@ -156,7 +120,7 @@ export default function FeedContainer({
     <>
       <div className="border border-neutral rounded-md bg-base-200 divide-y divide-neutral">
         {posts.map(post => (
-          <PostRow key={post.id} {...post} onVote={handleVote} userId={userId} />
+          <PostRow key={post.id} {...post} userId={userId} />
         ))}
         {posts.length === 0 && !isLoading && (
           <div className="py-20 text-center text-base-content/70">

@@ -3,17 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+import TagSelector from "@/components/tags/TagSelector";
+import BoardSelector from "@/components/boards/BoardSelector";
 import toast from "react-hot-toast";
 
 interface Board {
   id: string;
   name: string;
   slug: string;
-}
-
-interface Tag {
-  id: string;
-  name: string;
 }
 
 interface PollOption {
@@ -28,6 +25,7 @@ interface InitialData {
   body: string;
   boardId: string;
   boardSlug: string;
+  boardName?: string;
   tagIds: string[];
   postType: "TEXT" | "POLL";
   pollOptions?: PollOption[];
@@ -35,8 +33,7 @@ interface InitialData {
 }
 
 interface Props {
-  boards: Board[];
-  tags: Tag[];
+  userJoinedBoards: Board[];
   editMode?: boolean;
   initialData?: InitialData;
 }
@@ -52,8 +49,7 @@ interface UploadedMedia {
 type Tab = "text" | "poll";
 
 export default function PostForm({
-  boards,
-  tags,
+  userJoinedBoards,
   editMode = false,
   initialData,
 }: Props) {
@@ -74,6 +70,23 @@ export default function PostForm({
   const [boardId, setBoardId] = useState(initialData?.boardId || "");
   const [tagIds, setTagIds] = useState<string[]>(initialData?.tagIds || []);
   const [showTagSelector, setShowTagSelector] = useState(false);
+  const [showBoardSelector, setShowBoardSelector] = useState(false);
+  
+  // Initialize selectedBoard
+  const getInitialBoard = (): Board | null => {
+    if (editMode && initialData) {
+      // In edit mode, use initialData board info
+      return {
+        id: initialData.boardId,
+        name: initialData.boardName || initialData.boardSlug,
+        slug: initialData.boardSlug,
+      };
+    }
+    // In create mode, find from userJoinedBoards
+    return userJoinedBoards.find((b) => b.id === boardId) || null;
+  };
+  
+  const [selectedBoard, setSelectedBoard] = useState<Board | null>(getInitialBoard());
   // Store pending images to upload when post button is clicked
   const [pendingImages, setPendingImages] = useState<Map<string, File>>(
     new Map(),
@@ -91,10 +104,12 @@ export default function PostForm({
   const [showDrafts, setShowDrafts] = useState(false);
   const [drafts, setDrafts] = useState<any[]>([]);
 
-  // Initialize boardId when boards are available
-  if (!boardId && boards.length > 0) {
-    setBoardId(boards[0].id);
+  // Initialize boardId when userJoinedBoards are available
+  if (!boardId && userJoinedBoards.length > 0) {
+    setBoardId(userJoinedBoards[0].id);
   }
+
+
 
   // Load drafts from localStorage on mount
   useEffect(() => {
@@ -172,7 +187,7 @@ export default function PostForm({
   function loadDraft(draft: any) {
     setTitle(draft.title || "");
     setBody(draft.body || "");
-    setBoardId(draft.boardId || (boards.length > 0 ? boards[0].id : ""));
+    setBoardId(draft.boardId || (userJoinedBoards.length > 0 ? userJoinedBoards[0].id : ""));
     setTagIds(draft.tagIds || []);
     setPollOptions(draft.pollOptions || ["", ""]);
     setPollDuration(draft.pollDuration || "3");
@@ -330,8 +345,8 @@ export default function PostForm({
         console.log('Post created:', data);
         console.log('Selected boardId:', boardId);
         
-        // Use boardSlug from API response, fallback to boards array
-        const boardSlug = data.boardSlug || boards.find((b) => b.id === boardId)?.slug;
+        // Use boardSlug from API response, fallback to selectedBoard
+        const boardSlug = data.boardSlug || selectedBoard?.slug;
         console.log('Board slug for redirect:', boardSlug);
         
         if (boardSlug) {
@@ -363,8 +378,11 @@ export default function PostForm({
 
       {/* Community Selector */}
       <div className="mb-6">
-        <div
-          className={`inline-flex h-10 items-center gap-2 rounded-full border border-neutral bg-base-100 py-1 pl-1 pr-3 group relative ${editMode ? "opacity-60 cursor-not-allowed" : "hover:hover:bg-base-300 cursor-pointer"}`}
+        <button
+          type="button"
+          onClick={() => !editMode && setShowBoardSelector(true)}
+          disabled={editMode}
+          className={`inline-flex h-10 items-center gap-2 rounded-full border border-neutral bg-base-100 py-1 pl-1 pr-3 ${editMode ? "opacity-60 cursor-not-allowed" : "hover:bg-base-300 cursor-pointer"}`}
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-base-300">
             <svg
@@ -376,8 +394,8 @@ export default function PostForm({
             </svg>
           </div>
           <span className="text-sm font-bold text-base-content">
-            {boards.find((b) => b.id === boardId)?.name
-              ? `r/${boards.find((b) => b.id === boardId)?.name}`
+            {selectedBoard?.name
+              ? `r/${selectedBoard.name}`
               : "Select a community"}
           </span>
           {!editMode && (
@@ -396,24 +414,20 @@ export default function PostForm({
               />
             </svg>
           )}
+        </button>
 
-          {!editMode && (
-            <select
-              value={boardId}
-              onChange={(e) => setBoardId(e.target.value)}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full"
-            >
-              <option value="" disabled>
-                Select a community
-              </option>
-              {boards.map((board) => (
-                <option key={board.id} value={board.id}>
-                  r/{board.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <BoardSelector
+          isOpen={showBoardSelector}
+          onClose={() => setShowBoardSelector(false)}
+          selectedBoardId={boardId}
+          selectedBoard={selectedBoard}
+          onBoardSelect={(id, board) => {
+            setBoardId(id);
+            setSelectedBoard(board);
+          }}
+          userJoinedBoards={userJoinedBoards}
+        />
+
         {editMode && (
           <p className="text-xs text-base-content/50 mt-2">
             Community cannot be changed after posting
@@ -461,10 +475,10 @@ export default function PostForm({
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
                 maxLength={300}
-                className="w-full rounded-[20px] border border-neutral bg-base-100 p-4 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus: focus:outline-none transition-colors"
+                className="input input-bordered w-full"
               />
               {!title && (
-                <span className="absolute left-[44px] top-[14.5px] pointer-events-none text-error text-sm">
+                <span className="absolute left-[52px] top-1/2 -translate-y-1/2 pointer-events-none text-error text-sm">
                   *
                 </span>
               )}
@@ -476,118 +490,20 @@ export default function PostForm({
 
           {/* Tags */}
           <div className="space-y-2">
-            {/* Selected tags */}
-            {tagIds.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {tagIds.map((tagId) => {
-                  const tag = tags.find((t) => t.id === tagId);
-                  return tag ? (
-                    <div
-                      key={tagId}
-                      className="flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary"
-                    >
-                      {tag.name}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTagIds(tagIds.filter((id) => id !== tagId))
-                        }
-                        className="hover:hover:bg-primary/30 rounded-full p-0.5 transition-colors"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-3 w-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowTagSelector(true)}
+              className="btn btn-outline"
+            >
+              {tagIds.length > 0 ? `已選擇 ${tagIds.length} 個標籤` : "選擇標籤"}
+            </button>
 
-            {/* Add tags button */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowTagSelector(!showTagSelector)}
-                className="px-4 py-1 text-xs font-bold rounded-full bg-base-300 text-base-content/70 hover:text-base-content transition-colors"
-              >
-                {tagIds.length > 0 ? "Edit tags" : "Add tags"}
-              </button>
-
-              {/* Tag selector dropdown */}
-              {showTagSelector && (
-                <div className="absolute left-0 top-full mt-2 w-64 max-h-64 overflow-y-auto rounded-md border border-neutral bg-base-100 shadow-xl z-50">
-                  <div className="p-2">
-                    {tags.length === 0 ? (
-                      <p className="text-sm text-base-content/50 p-2">
-                        No tags available
-                      </p>
-                    ) : (
-                      tags.map((tag) => {
-                        const isSelected = tagIds.includes(tag.id);
-                        return (
-                          <button
-                            key={tag.id}
-                            type="button"
-                            onClick={() => {
-                              if (isSelected) {
-                                setTagIds(tagIds.filter((id) => id !== tag.id));
-                              } else {
-                                setTagIds([...tagIds, tag.id]);
-                              }
-                            }}
-                            className={`w-full text-left px-3 py-2 text-sm rounded hover:hover:bg-base-300 transition-colors ${
-                              isSelected
-                                ? "bg-primary/20 text-primary font-bold"
-                                : "text-base-content"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                                  isSelected
-                                    ? "bg-primary border-primary"
-                                    : "border-neutral"
-                                }`}
-                              >
-                                {isSelected && (
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="h-3 w-3 text-base-100"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={3}
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
-                                )}
-                              </div>
-                              {tag.name}
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <TagSelector
+              isOpen={showTagSelector}
+              onClose={() => setShowTagSelector(false)}
+              selectedTagIds={tagIds}
+              onTagsChange={setTagIds}
+            />
           </div>
 
           {/* Body / Editor */}
@@ -609,7 +525,7 @@ export default function PostForm({
                     {pollOptions.map((opt, idx) => (
                       <div key={`existing-${idx}`} className="flex gap-2">
                         <input
-                          className="w-full rounded-[20px] border border-neutral bg-base-200 p-3 text-sm text-base-content cursor-not-allowed flex-1"
+                          className="input input-bordered flex-1 cursor-not-allowed"
                           value={opt}
                           readOnly
                           disabled
@@ -648,7 +564,7 @@ export default function PostForm({
                     {newPollOptions.map((opt, idx) => (
                       <div key={`new-${idx}`} className="flex gap-2">
                         <input
-                          className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus:outline-none transition-colors flex-1"
+                          className="input input-bordered flex-1"
                           placeholder={`New option ${idx + 1}`}
                           value={opt}
                           onChange={(e) => {
@@ -661,7 +577,7 @@ export default function PostForm({
                         {newPollOptions.length > 1 && (
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-full hover:bg-base-300 text-base-content/70 transition-colors"
+                            className="btn btn-ghost btn-sm btn-circle"
                             onClick={() =>
                               setNewPollOptions(
                                 newPollOptions.filter((_, i) => i !== idx),
@@ -689,7 +605,7 @@ export default function PostForm({
 
                     <button
                       type="button"
-                      className="px-6 py-2 rounded-full border text-base-content text-sm font-bold hover:bg-base-300 transition-colors w-full mt-2"
+                      className="btn btn-outline btn-sm w-full mt-2"
                       onClick={() => setNewPollOptions([...newPollOptions, ""])}
                       disabled={pollOptions.length + newPollOptions.length >= 6}
                     >
@@ -707,7 +623,7 @@ export default function PostForm({
                     {pollOptions.map((opt, idx) => (
                       <div key={idx} className="flex gap-2">
                         <input
-                          className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content placeholder-text-base-content/50 hover:border-neutral focus:outline-none transition-colors flex-1"
+                          className="input input-bordered flex-1"
                           placeholder={`Option ${idx + 1}`}
                           value={opt}
                           onChange={(e) => {
@@ -720,7 +636,7 @@ export default function PostForm({
                         {pollOptions.length > 2 && (
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-full hover:bg-base-300 text-base-content/70 transition-colors"
+                            className="btn btn-ghost btn-sm btn-circle"
                             onClick={() =>
                               setPollOptions(
                                 pollOptions.filter((_, i) => i !== idx),
@@ -747,14 +663,14 @@ export default function PostForm({
                     ))}
                     <button
                       type="button"
-                      className="px-6 py-2 rounded-full border text-base-content text-sm font-bold hover:bg-base-300 transition-colors w-full mt-2"
+                      className="btn btn-outline btn-sm w-full mt-2"
                       onClick={() => setPollOptions([...pollOptions, ""])}
                       disabled={pollOptions.length >= 6}
                     >
                       + Add Option
                     </button>
                     <select
-                      className="w-full rounded-[20px] border border-neutral bg-base-100 p-3 text-sm text-base-content focus:outline-none transition-colors mt-4"
+                      className="select select-bordered w-full mt-4"
                       value={pollDuration}
                       onChange={(e) => setPollDuration(e.target.value)}
                     >
@@ -777,7 +693,7 @@ export default function PostForm({
               <button
                 type="button"
                 onClick={() => setShowDrafts(!showDrafts)}
-                className="text-xs font-bold text-base-content uppercase tracking-wider hover:hover:bg-base-300 px-3 py-1.5 rounded transition-colors"
+                className="btn btn-ghost btn-sm"
               >
                 Drafts {drafts.length > 0 && `(${drafts.length})`}
               </button>
@@ -845,7 +761,7 @@ export default function PostForm({
             <button
               type="button"
               onClick={saveDraft}
-              className="px-6 py-2 rounded-full text-base-content/70 font-bold text-sm hover:bg-base-100 transition-colors"
+              className="btn btn-ghost btn-sm"
             >
               Save Draft
             </button>
@@ -857,29 +773,10 @@ export default function PostForm({
                 !boardId ||
                 loading
               }
-              className="px-8 py-2 rounded-full bg-primary text-primary-content text-sm font-bold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="btn btn-primary btn-sm"
             >
               {loading && (
-                <svg
-                  className="animate-spin h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
+                <span className="loading loading-spinner loading-xs"></span>
               )}
               {loading
                 ? editMode

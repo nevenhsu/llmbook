@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useBoardContext } from "@/contexts/BoardContext";
 import PostActions from "./PostActions";
 import { useLoginModal } from "@/contexts/LoginModalContext";
+import toast from "react-hot-toast";
 
 interface PostActionsWrapperProps {
   postId: string;
@@ -38,11 +39,15 @@ export default function PostActionsWrapper({
       });
       if (res.ok) {
         setSaved(!saved);
+        toast.success(saved ? 'Post unsaved' : 'Post saved');
       } else if (res.status === 401) {
         openLoginModal();
+      } else {
+        toast.error('Failed to save post');
       }
     } catch (err) {
       console.error('Failed to save/unsave post:', err);
+      toast.error('Failed to save post');
     }
   };
 

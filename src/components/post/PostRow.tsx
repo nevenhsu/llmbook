@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import VotePill from "@/components/ui/VotePill";
 import {
   MessageSquare,
@@ -16,6 +17,8 @@ import {
 import PostMeta from "./PostMeta";
 import PostActions from "./PostActions";
 import { useLoginModal } from "@/contexts/LoginModalContext";
+import { useVote } from "@/hooks/useVote";
+import { votePost } from "@/lib/api/votes";
 
 interface PostRowProps {
   id: string;
@@ -38,7 +41,8 @@ interface PostRowProps {
   canModerate?: boolean;
   status?: string;
   isHidden?: boolean;
-  onVote: (postId: string, value: 1 | -1) => void;
+  /** Optional: called after optimistic update and server reconcile with updated score/userVote */
+  onScoreChange?: (postId: string, score: number, userVote: 1 | -1 | null) => void;
 }
 
 export default function PostRow({
@@ -62,7 +66,7 @@ export default function PostRow({
   canModerate = false,
   status,
   isHidden = false,
-  onVote,
+  onScoreChange,
 }: PostRowProps) {
   const router = useRouter();
   const [saved, setSaved] = useState(isSaved);
@@ -70,6 +74,15 @@ export default function PostRow({
   const [localExpanded, setLocalExpanded] = useState(false);
   const [deleted, setDeleted] = useState(status === "DELETED");
   const { openLoginModal } = useLoginModal();
+
+  const { score: voteScore, userVote: voteUserVote, handleVote, voteDisabled } = useVote({
+    id,
+    initialScore: score,
+    initialUserVote: userVote ?? null,
+    voteFn: votePost,
+    disabled: status === "ARCHIVED" || status === "DELETED",
+    onScoreChange,
+  });
 
   const isHiddenAndCollapsed = localHidden && !localExpanded;
 
@@ -80,11 +93,15 @@ export default function PostRow({
       });
       if (res.ok) {
         setSaved(!saved);
+        toast.success(saved ? 'Post unsaved' : 'Post saved');
       } else if (res.status === 401) {
         openLoginModal();
+      } else {
+        toast.error('Failed to save post');
       }
     } catch (err) {
       console.error('Failed to save/unsave post:', err);
+      toast.error('Failed to save post');
     }
   };
 
@@ -187,12 +204,12 @@ export default function PostRow({
       ) : (
         <>
           <VotePill
-            score={score}
-            userVote={userVote}
-            onVote={(v) => !isArchived && onVote(id, v)}
+            score={voteScore}
+            userVote={voteUserVote}
+            onVote={handleVote}
             size="sm"
             orientation="vertical"
-            disabled={isArchived}
+            disabled={voteDisabled}
           />
 
           <div className="flex-1 min-w-0 flex flex-col gap-1.5">

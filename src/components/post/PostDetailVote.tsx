@@ -1,64 +1,36 @@
 "use client";
 
-import { useState } from 'react';
-import VotePill from '@/components/ui/VotePill';
-import { votePost } from '@/lib/api/votes';
-import { applyVote } from '@/lib/optimistic/vote';
-import { ApiError } from '@/lib/api/fetch-json';
-import { useLoginModal } from '@/contexts/LoginModalContext';
+import VotePill from "@/components/ui/VotePill";
+import { votePost } from "@/lib/api/votes";
+import { useVote } from "@/hooks/useVote";
 
 interface PostDetailVoteProps {
   postId: string;
   initialScore: number;
   initialUserVote: 1 | -1 | null;
+  status?: string;
 }
 
 export default function PostDetailVote({
   postId,
   initialScore,
   initialUserVote,
+  status,
 }: PostDetailVoteProps) {
-  const [score, setScore] = useState(initialScore);
-  const [userVote, setUserVote] = useState<1 | -1 | null>(initialUserVote);
-  const [isLoading, setIsLoading] = useState(false);
-  const { openLoginModal } = useLoginModal();
-
-  const handleVote = async (value: 1 | -1) => {
-    if (isLoading) return;
-
-    // Save previous state for rollback
-    const previousState = { score, userVote };
-    
-    // Optimistic update using shared logic
-    const optimisticResult = applyVote({ score, userVote }, value);
-    setScore(optimisticResult.score);
-    setUserVote(optimisticResult.userVote);
-    setIsLoading(true);
-
-    try {
-      const data = await votePost(postId, value);
-      // Reconcile with server response
-      setScore(data.score);
-    } catch (error) {
-      // Revert on error
-      console.error('Vote error:', error);
-      setScore(previousState.score);
-      setUserVote(previousState.userVote);
-      
-      if (error instanceof ApiError && error.status === 401) {
-        openLoginModal();
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { score, userVote, handleVote, voteDisabled } = useVote({
+    id: postId,
+    initialScore,
+    initialUserVote,
+    voteFn: votePost,
+    disabled: status === "ARCHIVED" || status === "DELETED",
+  });
 
   return (
     <VotePill
       score={score}
       userVote={userVote}
       onVote={handleVote}
-      disabled={isLoading}
+      disabled={voteDisabled}
       orientation="vertical"
       size="md"
     />

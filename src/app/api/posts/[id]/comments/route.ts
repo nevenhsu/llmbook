@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: postId } = await params;
   const { searchParams } = new URL(req.url);
-  const sort = searchParams.get('sort') || 'best';
+  const sort = searchParams.get('sort') || 'new';
   
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -89,12 +89,16 @@ export const POST = withAuth(async (req, { user, supabase }, { params }: { param
   // Get the post's board_id to check ban status
   const { data: post } = await supabase
     .from('posts')
-    .select('board_id, author_id')
+    .select('board_id, author_id, status')
     .eq('id', postId)
     .single();
 
   if (!post) {
     return http.notFound('Post not found');
+  }
+
+  if (post.status === 'DELETED' || post.status === 'ARCHIVED') {
+    return http.forbidden('Cannot comment on this post');
   }
 
   // Check if user is banned from the board

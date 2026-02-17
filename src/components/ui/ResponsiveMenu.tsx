@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useRef } from "react";
+import { ReactNode, forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 
 interface ResponsiveMenuProps {
   /** Trigger button content (icon or text) */
@@ -15,20 +15,25 @@ interface ResponsiveMenuProps {
   ariaLabel?: string;
 }
 
+export interface ResponsiveMenuHandle {
+  close: () => void;
+}
+
 /**
  * Responsive menu component that uses:
  * - Desktop (md+): dropdown
  * - Mobile (<md): bottom drawer modal
  */
-export default function ResponsiveMenu({
+const ResponsiveMenu = forwardRef<ResponsiveMenuHandle, ResponsiveMenuProps>(function ResponsiveMenu({
   trigger,
   title,
   children,
   triggerClassName = "btn btn-ghost btn-sm btn-circle",
   ariaLabel = "Menu",
-}: ResponsiveMenuProps) {
+}, ref) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const desktopTriggerRef = useRef<HTMLButtonElement>(null);
 
   const openDrawer = useCallback(() => {
     dialogRef.current?.showModal();
@@ -38,6 +43,16 @@ export default function ResponsiveMenu({
     dialogRef.current?.close();
     triggerRef.current?.focus();
   }, []);
+
+  // Expose close() to parent via ref
+  useImperativeHandle(ref, () => ({
+    close() {
+      // Mobile: close dialog
+      closeDrawer();
+      // Desktop: blur the dropdown trigger so DaisyUI dropdown collapses
+      desktopTriggerRef.current?.blur();
+    },
+  }), [closeDrawer]);
 
   // Restore focus to trigger on ESC (native cancel event)
   useEffect(() => {
@@ -51,8 +66,9 @@ export default function ResponsiveMenu({
   return (
     <>
       {/* Desktop Dropdown (md+) */}
-      <div className="hidden md:block dropdown dropdown-end">
+      <div className="hidden md:block dropdown dropdown-end w-full">
         <button
+          ref={desktopTriggerRef}
           tabIndex={0}
           className={triggerClassName}
           aria-label={ariaLabel}
@@ -61,7 +77,7 @@ export default function ResponsiveMenu({
         </button>
         <ul
           tabIndex={0}
-          className="dropdown-content menu bg-base-200 rounded-box w-52 shadow-lg z-[60] mt-1"
+          className="dropdown-content menu bg-base-200 rounded-box w-full min-w-max shadow-lg z-[60] mt-1"
         >
           {children}
         </ul>
@@ -82,7 +98,7 @@ export default function ResponsiveMenu({
       <dialog ref={dialogRef} className="modal modal-bottom md:hidden">
         <div className="modal-box rounded-t-2xl rounded-b-none p-6 !max-w-none">
           <h3 className="font-bold text-lg mb-4">{title}</h3>
-          <ul className="menu p-0 space-y-1" onClick={closeDrawer}>
+          <ul className="menu p-0 space-y-1 w-full [&>li]:w-full [&>li>*]:w-full" onClick={closeDrawer}>
             {children}
           </ul>
         </div>
@@ -92,4 +108,6 @@ export default function ResponsiveMenu({
       </dialog>
     </>
   );
-}
+});
+
+export default ResponsiveMenu;

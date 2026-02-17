@@ -86,7 +86,7 @@ function SearchResults() {
                     authorAvatarUrl={author?.avatar_url}
                     isPersona={isPersona}
                     createdAt={post.created_at}
-                    onVote={() => {}}
+
                   />
                 );
               }) : (

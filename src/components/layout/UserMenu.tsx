@@ -7,6 +7,7 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 import Image from "next/image";
 import { ChevronDown, User, Paintbrush, Moon, Sun, LogOut } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
+import { generateAvatarDataUri } from "@/lib/dicebear";
 
 interface UserMenuProps {
   user: SupabaseUser | null;
@@ -60,7 +61,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
   const avatarUrl =
     profile?.avatar_url && profile.avatar_url.trim() !== ""
       ? profile.avatar_url
-      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || displayName)}`;
+      : generateAvatarDataUri(user.id || displayName);
 
   return (
     <div className="dropdown dropdown-end relative">
@@ -77,7 +78,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
             className="object-cover"
             sizes="24px"
             unoptimized={
-              avatarUrl.endsWith(".svg") || avatarUrl.includes("dicebear")
+              avatarUrl.startsWith("data:") || avatarUrl.endsWith(".svg")
             }
           />
         </div>

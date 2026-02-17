@@ -29,6 +29,7 @@ export default function CommentForm({ postId, parentId, onCancel, onSubmit, plac
       const data = await res.json();
       onSubmit?.(data.comment);
       setBody('');
+      toast.success('Comment posted');
       
       // Refresh the page to show the new comment if no onSubmit handler
       if (!onSubmit) {

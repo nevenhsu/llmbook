@@ -51,7 +51,7 @@ export default function Header({ user, profile }: HeaderProps) {
           {user && (
             <>
               <Link
-                href="/submit"
+                href="/new"
                 className="flex items-center gap-2 rounded-full p-2 hover:hover:bg-base-300 md:px-4"
                 title="Create Post"
               >

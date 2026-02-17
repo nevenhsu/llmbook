@@ -70,11 +70,25 @@ export default async function EditPostPage({ params }: PageProps) {
   // Check if post is deleted - show deleted state instead of notFound
   const isDeleted = post.status === "DELETED";
 
-  // Fetch all boards and tags for the form
-  const [{ data: boards }, { data: tags }] = await Promise.all([
-    supabase.from("boards").select("id,name,slug").order("name"),
-    supabase.from("tags").select("id,name").order("name"),
-  ]);
+  // Get user's joined boards (最多10個，按加入時間排序)
+  const { data: joinedBoards } = await supabase
+    .from('board_members')
+    .select('boards(id,name,slug)')
+    .eq('user_id', user.id)
+    .order('joined_at', { ascending: false })
+    .limit(10);
+
+  const userBoards = joinedBoards
+    ?.map(jb => {
+      const board = jb.boards as any;
+      if (!board || typeof board !== 'object' || Array.isArray(board)) return null;
+      return {
+        id: board.id as string,
+        name: board.name as string,
+        slug: board.slug as string,
+      };
+    })
+    .filter((b): b is { id: string; name: string; slug: string } => b !== null) ?? [];
 
   // Prepare initial data for the form
   const tagIds = post.post_tags?.map((pt: any) => pt.tag_id) || [];
@@ -122,6 +136,7 @@ export default async function EditPostPage({ params }: PageProps) {
     body: post.body || "",
     boardId: board.id,
     boardSlug: board.slug,
+    boardName: board.name,
     tagIds,
     postType: post.post_type,
     media: mediaFormatted,
@@ -131,8 +146,7 @@ export default async function EditPostPage({ params }: PageProps) {
   return (
     <div>
       <PostForm
-        boards={boards ?? []}
-        tags={tags ?? []}
+        userJoinedBoards={userBoards}
         editMode={true}
         initialData={initialData}
       />

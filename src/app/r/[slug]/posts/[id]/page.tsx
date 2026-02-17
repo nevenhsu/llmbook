@@ -110,7 +110,8 @@ export default async function PostDetailPage({ params }: PageProps) {
           <PostDetailVote 
             postId={id} 
             initialScore={post.score ?? 0} 
-            initialUserVote={userVote} 
+            initialUserVote={userVote}
+            status={post.status}
           />
         </div>
 
@@ -208,9 +209,11 @@ export default async function PostDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="bg-base-200 border-t border-neutral p-4">
-        <CommentThread postId={id} userId={user?.id} isArchived={post.status === 'ARCHIVED'} />
-      </div>
+      {post.status !== 'DELETED' && (
+        <div className="bg-base-200 border-t border-neutral p-4">
+          <CommentThread postId={id} userId={user?.id} isArchived={post.status === 'ARCHIVED'} isDeleted={post.status === 'DELETED'} />
+        </div>
+      )}
     </article>
   );
 }

@@ -1,24 +1,22 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
 import CommentEditorModal from "./CommentEditorModal";
-import { voteComment } from "@/lib/api/votes";
 import { useLoginModal } from "@/contexts/LoginModalContext";
-import { ApiError } from "@/lib/api/fetch-json";
 
 interface CommentThreadProps {
   postId: string;
   userId?: string;
   isArchived?: boolean;
+  isDeleted?: boolean;
 }
 
-export default function CommentThread({ postId, userId, isArchived = false }: CommentThreadProps) {
+export default function CommentThread({ postId, userId, isArchived = false, isDeleted = false }: CommentThreadProps) {
+  const isLocked = isArchived || isDeleted;
   const [comments, setComments] = useState<any[]>([]);
-  const [userVotes, setUserVotes] = useState<Record<string, number | null>>({});
-  const [sort, setSort] = useState("best");
+  const [sort, setSort] = useState("new");
   const [isLoading, setIsLoading] = useState(true);
   const { openLoginModal, openRegisterModal } = useLoginModal();
 
@@ -41,8 +39,12 @@ export default function CommentThread({ postId, userId, isArchived = false }: Co
     try {
       const res = await fetch(`/api/posts/${postId}/comments?sort=${sort}`);
       const data = await res.json();
-      setComments(data.comments || []);
-      setUserVotes(data.userVotes || {});
+      const userVotes: Record<string, number | null> = data.userVotes || {};
+      const commentsWithVotes = (data.comments || []).map((c: any) => ({
+        ...c,
+        userVote: userVotes[c.id] ?? null,
+      }));
+      setComments(commentsWithVotes);
     } catch (err) {
       console.error(err);
     } finally {
@@ -84,30 +86,6 @@ export default function CommentThread({ postId, userId, isArchived = false }: Co
     });
   };
 
-  const handleVote = async (commentId: string, value: 1 | -1) => {
-    const oldVote = userVotes[commentId] ?? null;
-
-    // Optimistic update
-    const newVote = oldVote === value ? null : value;
-    setUserVotes((prev) => ({
-      ...prev,
-      [commentId]: newVote,
-    }));
-
-    try {
-      const data = await voteComment(commentId, value);
-      setComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, score: data.score } : c)),
-      );
-    } catch (err) {
-      // Revert on error
-      setUserVotes((prev) => ({ ...prev, [commentId]: oldVote }));
-      if (err instanceof ApiError && err.status === 401) {
-        openLoginModal();
-      }
-    }
-  };
-
   const tree = useMemo(() => {
     const map: Record<string, any> = {};
     comments.forEach((c) => {
@@ -131,13 +109,12 @@ export default function CommentThread({ postId, userId, isArchived = false }: Co
       <CommentItem
         key={node.id}
         comment={node}
-        userVote={userVotes[node.id] as 1 | -1 | null}
-        onVote={handleVote}
+        userVote={node.userVote ?? null}
         userId={userId}
-        onRequestReply={!isArchived ? openReply : undefined}
-        onRequestEdit={!isArchived ? openEdit : undefined}
+        onRequestReply={!isLocked ? openReply : undefined}
+        onRequestEdit={!isLocked ? openEdit : undefined}
         onChanged={fetchComments}
-        isArchived={isArchived}
+        isArchived={isArchived || isDeleted}
       >
         {node.children.length > 0 && (
           <div className="ml-2 border-l border-neutral pl-4">
@@ -159,7 +136,7 @@ export default function CommentThread({ postId, userId, isArchived = false }: Co
     <div className="mt-4">
       <div className="flex items-start justify-between gap-3">
         <CommentSort currentSort={sort} onChange={setSort} />
-        {userId && !isArchived ? (
+        {userId && !isLocked ? (
           <button onClick={openCreate} className="btn btn-sm btn-primary">
             Add a comment
           </button>
@@ -200,8 +177,18 @@ export default function CommentThread({ postId, userId, isArchived = false }: Co
           initialContent={editorState.initialContent}
           commentId={editorState.commentId}
           mode={editorState.mode}
-          onSuccess={() => {
-            fetchComments();
+          onSuccess={(newComment) => {
+            if (newComment && editorState.mode !== 'edit') {
+              // Optimistically append new comment to state (avoids full refetch)
+              setComments((prev) =>
+                sort === 'new'
+                  ? [{ ...newComment, userVote: null }, ...prev]
+                  : [...prev, { ...newComment, userVote: null }]
+              );
+            } else {
+              // For edits, or if comment data is missing, do a full refetch
+              fetchComments();
+            }
           }}
         />
       )}

@@ -5,6 +5,7 @@ import { MessageSquare, MoreHorizontal, Settings, ArrowUp, User, EyeOff, CheckCi
 import Link from "next/link";
 import Image from "next/image";
 import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
+import { generateAvatarDataUri } from "@/lib/dicebear";
 
 interface NotificationItem {
   id: number;
@@ -26,7 +27,7 @@ const ARCHIVED_NOTIFICATIONS: NotificationItem[] = [
     content: "remember when the internet was just text? 'Those were the days...'",
     time: "1w",
     isUnread: false,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=old",
+    avatar: generateAvatarDataUri("old"),
   },
   {
     id: 102,
@@ -36,7 +37,7 @@ const ARCHIVED_NOTIFICATIONS: NotificationItem[] = [
     content: "upvoted your post: 'The fall of Rome was inevitable.'",
     time: "2w",
     isUnread: false,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=history",
+    avatar: generateAvatarDataUri("history"),
   },
   {
     id: 103,
@@ -46,7 +47,7 @@ const ARCHIVED_NOTIFICATIONS: NotificationItem[] = [
     content: "mentioned you in 'Best practices for digital archiving'",
     time: "1m",
     isUnread: false,
-    avatar: "https://api.dicebear.com/9.x/avataaars/svg?seed=library",
+    avatar: generateAvatarDataUri("library"),
   },
 ];
 
@@ -71,7 +72,7 @@ export default function NotificationArchivePage() {
         content: "replied to your comment from 3 months ago.",
         time: "3m",
         isUnread: false,
-        avatar: `https://api.dicebear.com/9.x/avataaars/svg?seed=${Date.now()}`,
+        avatar: generateAvatarDataUri(String(Date.now())),
       }
     ];
 

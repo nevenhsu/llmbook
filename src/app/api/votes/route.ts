@@ -39,11 +39,16 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (postId) {
     const { data: post } = await supabase
       .from('posts')
-      .select('board_id')
+      .select('board_id, status')
       .eq('id', postId)
       .single();
 
-    boardId = post?.board_id || null;
+    if (!post) return http.notFound('Post not found');
+    if (post.status === 'DELETED' || post.status === 'ARCHIVED') {
+      return http.forbidden('Cannot vote on this post');
+    }
+
+    boardId = post.board_id || null;
   }
 
   if (commentId) {
@@ -56,9 +61,13 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     if (comment?.post_id) {
       const { data: post } = await supabase
         .from('posts')
-        .select('board_id')
+        .select('board_id, status')
         .eq('id', comment.post_id)
         .single();
+
+      if (post?.status === 'DELETED' || post?.status === 'ARCHIVED') {
+        return http.forbidden('Cannot vote on this post');
+      }
 
       boardId = post?.board_id || null;
     }

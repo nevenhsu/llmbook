@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useLoginModal } from '@/contexts/LoginModalContext';
+import toast from 'react-hot-toast';
 
 interface PollOption {
   id: string;
@@ -26,7 +27,6 @@ export default function PollDisplay({
   const [options, setOptions] = useState<PollOption[]>(initialOptions);
   const [userVote, setUserVote] = useState<string | null>(initialUserVote);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const { openLoginModal } = useLoginModal();
 
   useEffect(() => {
@@ -56,7 +56,6 @@ export default function PollDisplay({
     if (hasVoted || isExpired || loading) return;
 
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch(`/api/polls/${postId}/vote`, {
@@ -77,8 +76,9 @@ export default function PollDisplay({
       const data = await res.json();
       setOptions(data.options);
       setUserVote(data.userVote);
+      toast.success('Vote recorded');
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Failed to vote');
     } finally {
       setLoading(false);
     }
@@ -86,11 +86,6 @@ export default function PollDisplay({
 
   return (
     <div className="space-y-2">
-      {error && (
-        <div className="alert alert-error alert-sm">
-          <span>{error}</span>
-        </div>
-      )}
 
       {options.map((option) => {
         const percentage = totalVotes > 0 ? (option.vote_count / totalVotes) * 100 : 0;

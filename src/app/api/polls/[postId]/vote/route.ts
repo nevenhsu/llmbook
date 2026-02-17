@@ -31,7 +31,7 @@ export async function POST(
   // Verify post is a poll
   const { data: post } = await supabase
     .from('posts')
-    .select('post_type, board_id')
+    .select('post_type, board_id, status')
     .eq('id', postId)
     .single();
 
@@ -41,6 +41,10 @@ export async function POST(
 
   if (post.post_type !== 'poll') {
     return new NextResponse('Post is not a poll', { status: 400 });
+  }
+
+  if (post.status === 'DELETED' || post.status === 'ARCHIVED') {
+    return new NextResponse('Cannot vote on this post', { status: 403 });
   }
 
   const banned = await isUserBanned(post.board_id, user.id);

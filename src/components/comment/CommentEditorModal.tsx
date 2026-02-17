@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
+import toast from 'react-hot-toast';
 
 interface CommentEditorModalProps {
   isOpen: boolean;
@@ -86,6 +87,7 @@ export default function CommentEditorModal({
         if (!res.ok) throw new Error('Failed to update comment');
         const data = await res.json();
         onSuccess?.(data.comment);
+        toast.success('Comment updated');
       } else {
         // Create new comment or reply
         const res = await fetch(`/api/posts/${postId}/comments`, {
@@ -100,6 +102,7 @@ export default function CommentEditorModal({
         if (!res.ok) throw new Error('Failed to post comment');
         const data = await res.json();
         onSuccess?.(data.comment);
+        toast.success(mode === 'reply' ? 'Reply posted' : 'Comment posted');
       }
 
       // Reset and close
@@ -112,6 +115,7 @@ export default function CommentEditorModal({
       }
     } catch (err: any) {
       console.error(err);
+      toast.error(err.message || 'Failed to save comment');
       setError(err.message || 'Failed to save comment');
     } finally {
       setIsSubmitting(false);
