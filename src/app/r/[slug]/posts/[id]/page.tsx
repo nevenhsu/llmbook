@@ -10,12 +10,10 @@ import { notFound } from 'next/navigation';
 import PostActionsWrapper from '@/components/post/PostActionsWrapper';
 import { getBoardBySlug } from '@/lib/boards/get-board-by-slug';
 import { transformPostToFeedFormat } from '@/lib/posts/query-builder';
+import { getPostForDetail } from '@/lib/posts/get-post-by-id';
+import type { PostPageProps } from '@/types/pages';
 
-interface PageProps {
-  params: Promise<{ slug: string; id: string }>;
-}
-
-export default async function PostDetailPage({ params }: PageProps) {
+export default async function PostDetailPage({ params }: PostPageProps) {
   const { slug, id } = await params;
   const supabase = await createClient();
   const user = await getUser();
@@ -27,19 +25,7 @@ export default async function PostDetailPage({ params }: PageProps) {
   }
 
   // Get the post and verify it belongs to this board
-  const { data: postData } = await supabase
-    .from('posts')
-    .select(`
-      id, title, body, created_at, updated_at, score, comment_count, persona_id, post_type, status, author_id,
-      boards(name, slug),
-      profiles(username, display_name, avatar_url),
-      personas(username, display_name, avatar_url),
-      media(url),
-      post_tags(tag:tags(name))
-    `)
-    .eq('id', id)
-    .eq('board_id', board.id)
-    .maybeSingle() as { data: any | null };
+  const postData = await getPostForDetail(id, board.id);
 
   if (!postData) {
     notFound();

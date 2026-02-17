@@ -184,13 +184,12 @@ export async function PATCH(
   }
 
   // Add new poll options if provided (for poll posts only)
-  if (newPollOptions && Array.isArray(newPollOptions) && newPollOptions.length > 0 && post.post_type === 'POLL') {
+  if (newPollOptions && Array.isArray(newPollOptions) && newPollOptions.length > 0 && post.post_type === 'poll') {
     const optionInserts = newPollOptions
       .filter((opt: string) => opt.trim())
       .map((opt: string) => ({
         post_id: id,
-        option_text: opt.trim(),
-        vote_count: 0
+        text: opt.trim(),
       }));
     
     if (optionInserts.length > 0) {

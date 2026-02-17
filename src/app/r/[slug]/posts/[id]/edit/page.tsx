@@ -1,16 +1,12 @@
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import PostForm from "@/components/create-post/PostForm";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
+import { getPostForEdit } from "@/lib/posts/get-post-by-id";
+import type { PostPageProps } from "@/types/pages";
 
-interface PageProps {
-  params: Promise<{ slug: string; id: string }>;
-}
-
-export default async function EditPostPage({ params }: PageProps) {
+export default async function EditPostPage({ params }: PostPageProps) {
   const { slug, id } = await params;
-  const supabase = await createClient();
   const board = await getBoardBySlug(slug);
 
   if (!board) {
@@ -25,92 +21,14 @@ export default async function EditPostPage({ params }: PageProps) {
   }
 
   // Fetch the post
-  const { data: post, error: postError } = await supabase
-    .from("posts")
-    .select(
-      `
-      id,
-      title,
-      body,
-      board_id,
-      author_id,
-      persona_id,
-      post_type,
-      status,
-      personas(id, username),
-      post_tags(tag_id),
-      media(id, url, width, height, file_size),
-      poll_options(id, option_text, vote_count)
-    `
-    )
-    .eq("id", id)
-    .eq("board_id", board.id)
-    .maybeSingle();
+  const { data: post, error: postError } = await getPostForEdit(id, board.id);
 
   if (postError || !post) {
     notFound();
   }
 
-  // Check permissions
-  const isPersonaPost = !!post.persona_id;
-
-  // TODO: Persona posts editing - currently not supported
-  // Need to determine: who can edit persona posts? Admin only? Board moderators?
-  if (isPersonaPost) {
-    redirect(`/r/${slug}/posts/${id}`);
-  }
-
-  // For user posts: check if user is the author
-  const canEdit = post.author_id === user.id;
-
-  if (!canEdit) {
-    redirect(`/r/${slug}/posts/${id}`);
-  }
-
-  // Check if post is deleted - show deleted state instead of notFound
-  const isDeleted = post.status === "DELETED";
-
-  // Get user's joined boards (最多10個，按加入時間排序)
-  const { data: joinedBoards } = await supabase
-    .from('board_members')
-    .select('boards(id,name,slug)')
-    .eq('user_id', user.id)
-    .order('joined_at', { ascending: false })
-    .limit(10);
-
-  const userBoards = joinedBoards
-    ?.map(jb => {
-      const board = jb.boards as any;
-      if (!board || typeof board !== 'object' || Array.isArray(board)) return null;
-      return {
-        id: board.id as string,
-        name: board.name as string,
-        slug: board.slug as string,
-      };
-    })
-    .filter((b): b is { id: string; name: string; slug: string } => b !== null) ?? [];
-
-  // Prepare initial data for the form
-  const tagIds = post.post_tags?.map((pt: any) => pt.tag_id) || [];
-  
-  // Format media
-  const mediaFormatted = post.media?.map((m: any) => ({
-    mediaId: m.id,
-    url: m.url,
-    width: m.width,
-    height: m.height,
-    sizeBytes: m.file_size,
-  })) || [];
-
-  // Format poll options
-  const pollOptionsFormatted = post.poll_options?.map((opt: any) => ({
-    id: opt.id,
-    option_text: opt.option_text,
-    vote_count: opt.vote_count,
-  })) || [];
-
-  // If deleted, show deleted message
-  if (isDeleted) {
+  // Check if post is deleted - show deleted state immediately before any more DB queries
+  if (post.status === "DELETED") {
     return (
       <div className="mx-auto max-w-[740px] pb-20 sm:pb-10 px-4 sm:px-0">
         <div className="py-6">
@@ -130,6 +48,41 @@ export default async function EditPostPage({ params }: PageProps) {
     );
   }
 
+  // Check permissions
+  const isPersonaPost = !!post.persona_id;
+
+  // TODO: Persona posts editing - currently not supported
+  // Need to determine: who can edit persona posts? Admin only? Board moderators?
+  if (isPersonaPost) {
+    redirect(`/r/${slug}/posts/${id}`);
+  }
+
+  // For user posts: check if user is the author
+  const canEdit = post.author_id === user.id;
+
+  if (!canEdit) {
+    redirect(`/r/${slug}/posts/${id}`);
+  }
+
+  // Prepare initial data for the form
+  const tagIds = post.post_tags?.map((pt: any) => pt.tag_id) || [];
+  
+  // Format media
+  const mediaFormatted = post.media?.map((m: any) => ({
+    mediaId: m.id,
+    url: m.url,
+    width: m.width,
+    height: m.height,
+    sizeBytes: m.size_bytes,
+  })) || [];
+
+  // Format poll options
+  const pollOptionsFormatted = post.poll_options?.map((opt: any) => ({
+    id: opt.id,
+    text: opt.text,
+    voteCount: opt.vote_count,
+  })) || [];
+
   const initialData = {
     postId: post.id,
     title: post.title,
@@ -138,7 +91,7 @@ export default async function EditPostPage({ params }: PageProps) {
     boardSlug: board.slug,
     boardName: board.name,
     tagIds,
-    postType: post.post_type,
+    postType: post.post_type as "text" | "poll",
     media: mediaFormatted,
     pollOptions: pollOptionsFormatted,
   };
@@ -146,7 +99,6 @@ export default async function EditPostPage({ params }: PageProps) {
   return (
     <div>
       <PostForm
-        userJoinedBoards={userBoards}
         editMode={true}
         initialData={initialData}
       />
