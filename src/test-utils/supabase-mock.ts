@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 export class SupabaseMockBuilder {
   private data: any;
@@ -27,8 +27,18 @@ export class SupabaseMockBuilder {
   contains = vi.fn().mockReturnValue(this);
   containedBy = vi.fn().mockReturnValue(this);
   range = vi.fn().mockReturnValue(this);
-  single = vi.fn().mockImplementation(async () => ({ data: Array.isArray(this.data) ? this.data[0] : this.data, error: this.error }));
-  maybeSingle = vi.fn().mockImplementation(async () => ({ data: Array.isArray(this.data) ? (this.data.length > 0 ? this.data[0] : null) : this.data, error: this.error }));
+  single = vi
+    .fn()
+    .mockImplementation(async () => ({
+      data: Array.isArray(this.data) ? this.data[0] : this.data,
+      error: this.error,
+    }));
+  maybeSingle = vi
+    .fn()
+    .mockImplementation(async () => ({
+      data: Array.isArray(this.data) ? (this.data.length > 0 ? this.data[0] : null) : this.data,
+      error: this.error,
+    }));
   order = vi.fn().mockReturnValue(this);
   limit = vi.fn().mockReturnValue(this);
   auth = {
@@ -38,8 +48,14 @@ export class SupabaseMockBuilder {
   };
 
   // Allow dynamic resolution of data/error for sequential calls
-  setData(data: any) { this.data = data; return this; }
-  setError(error: any) { this.error = error; return this; }
+  setData(data: any) {
+    this.data = data;
+    return this;
+  }
+  setError(error: any) {
+    this.error = error;
+    return this;
+  }
 
   // Promise-like behavior for the final call in most cases
   then(onfulfilled?: (value: any) => any) {

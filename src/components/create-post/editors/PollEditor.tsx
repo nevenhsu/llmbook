@@ -16,8 +16,8 @@ interface CreatePollEditorProps {
 
 interface EditPollEditorProps {
   editMode: true;
-  existingOptions: string[];   // read-only (from DB)
-  newOptions: string[];        // editable additions
+  existingOptions: string[]; // read-only (from DB)
+  newOptions: string[]; // editable additions
   onNewOptionsChange: (options: string[]) => void;
 }
 
@@ -34,7 +34,12 @@ export default function PollEditor(props: PollEditorProps) {
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
-function CreatePollEditor({ options, duration, onOptionsChange, onDurationChange }: CreatePollEditorProps) {
+function CreatePollEditor({
+  options,
+  duration,
+  onOptionsChange,
+  onDurationChange,
+}: CreatePollEditorProps) {
   function updateOption(idx: number, value: string) {
     const next = [...options];
     next[idx] = value;
@@ -75,7 +80,7 @@ function CreatePollEditor({ options, duration, onOptionsChange, onDurationChange
 
       <button
         type="button"
-        className="btn btn-outline btn-sm w-full mt-2"
+        className="btn btn-outline btn-sm mt-2 w-full"
         onClick={addOption}
         disabled={options.length >= MAX_OPTIONS}
       >
@@ -83,7 +88,7 @@ function CreatePollEditor({ options, duration, onOptionsChange, onDurationChange
       </button>
 
       <select
-        className="select select-bordered w-full mt-4"
+        className="select select-bordered mt-4 w-full"
         value={duration}
         onChange={(e) => onDurationChange(e.target.value)}
       >
@@ -125,7 +130,7 @@ function EditPollEditor({ existingOptions, newOptions, onNewOptionsChange }: Edi
             readOnly
             disabled
           />
-          <div className="px-3 py-2 flex items-center text-base-content/40">
+          <div className="text-base-content/40 flex items-center px-3 py-2">
             <Lock size={16} />
           </div>
         </div>
@@ -134,9 +139,9 @@ function EditPollEditor({ existingOptions, newOptions, onNewOptionsChange }: Edi
       {/* Separator */}
       {newOptions.length > 0 && existingOptions.length > 0 && (
         <div className="flex items-center gap-2 py-2">
-          <div className="flex-1 border-t border-neutral" />
-          <span className="text-xs text-base-content/50 font-semibold">New Options</span>
-          <div className="flex-1 border-t border-neutral" />
+          <div className="border-neutral flex-1 border-t" />
+          <span className="text-base-content/50 text-xs font-semibold">New Options</span>
+          <div className="border-neutral flex-1 border-t" />
         </div>
       )}
 
@@ -165,14 +170,14 @@ function EditPollEditor({ existingOptions, newOptions, onNewOptionsChange }: Edi
 
       <button
         type="button"
-        className="btn btn-outline btn-sm w-full mt-2"
+        className="btn btn-outline btn-sm mt-2 w-full"
         onClick={addNew}
         disabled={totalOptions >= MAX_OPTIONS}
       >
         + Add New Option
       </button>
 
-      <p className="text-xs text-base-content/50 mt-2">
+      <p className="text-base-content/50 mt-2 text-xs">
         Existing poll options cannot be removed or edited. You can only add new options.
       </p>
     </div>

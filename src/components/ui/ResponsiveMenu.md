@@ -1,6 +1,7 @@
 # ResponsiveMenu Component
 
 Reusable responsive menu component that automatically adapts based on screen size:
+
 - **Desktop (≥ md)**: Dropdown menu
 - **Mobile (< md)**: Bottom drawer (slide-up modal)
 
@@ -19,37 +20,33 @@ Reusable responsive menu component that automatically adapts based on screen siz
 import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
 import { MoreVertical, Users, Settings } from "lucide-react";
 
-<ResponsiveMenu
-  trigger={<MoreVertical size={16} />}
-  title="Menu Title"
-  ariaLabel="Options menu"
->
+<ResponsiveMenu trigger={<MoreVertical size={16} />} title="Menu Title" ariaLabel="Options menu">
   <li>
     <Link href="/users">
-      <Users size={14} className="md:inline hidden" />
+      <Users size={14} className="hidden md:inline" />
       <Users size={20} className="md:hidden" />
       Users
     </Link>
   </li>
   <li>
     <Link href="/settings">
-      <Settings size={14} className="md:inline hidden" />
+      <Settings size={14} className="hidden md:inline" />
       <Settings size={20} className="md:hidden" />
       Settings
     </Link>
   </li>
-</ResponsiveMenu>
+</ResponsiveMenu>;
 ```
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `trigger` | `ReactNode` | required | Content for the trigger button (icon or text) |
-| `title` | `string` | required | Title shown in mobile drawer |
-| `children` | `ReactNode` | required | Menu items (`<li>` elements) |
-| `triggerClassName` | `string` | `"btn btn-ghost btn-sm btn-circle"` | Custom classes for trigger button |
-| `ariaLabel` | `string` | `"Menu"` | Accessible label for screen readers |
+| Prop               | Type        | Default                             | Description                                   |
+| ------------------ | ----------- | ----------------------------------- | --------------------------------------------- |
+| `trigger`          | `ReactNode` | required                            | Content for the trigger button (icon or text) |
+| `title`            | `string`    | required                            | Title shown in mobile drawer                  |
+| `children`         | `ReactNode` | required                            | Menu items (`<li>` elements)                  |
+| `triggerClassName` | `string`    | `"btn btn-ghost btn-sm btn-circle"` | Custom classes for trigger button             |
+| `ariaLabel`        | `string`    | `"Menu"`                            | Accessible label for screen readers           |
 
 ## Icon Sizing
 
@@ -67,21 +64,17 @@ For optimal UX, use different icon sizes for desktop and mobile:
 See `src/components/board/BoardLayout.tsx`:
 
 ```tsx
-<ResponsiveMenu
-  trigger={<MoreVertical size={16} />}
-  title="Board menu"
-  ariaLabel="Board menu"
->
+<ResponsiveMenu trigger={<MoreVertical size={16} />} title="Board menu" ariaLabel="Board menu">
   <li>
     <Link href={`/r/${slug}/member`}>
-      <Users size={14} className="md:inline hidden" />
+      <Users size={14} className="hidden md:inline" />
       <Users size={20} className="md:hidden" />
       Members
     </Link>
   </li>
   <li>
     <Link href={`/r/${slug}/ban`}>
-      <ShieldBan size={14} className="md:inline hidden" />
+      <ShieldBan size={14} className="hidden md:inline" />
       <ShieldBan size={20} className="md:hidden" />
       Bans
     </Link>
@@ -101,14 +94,14 @@ See `src/components/post/PostActions.tsx`:
   ariaLabel="Post actions"
 >
   <li>
-    <button onClick={handleEdit} className="w-full flex items-center gap-3">
+    <button onClick={handleEdit} className="flex w-full items-center gap-3">
       <Edit size={20} className="md:hidden" />
       <Edit size={16} className="hidden md:inline" />
       Edit post
     </button>
   </li>
   <li>
-    <button onClick={handleDelete} className="w-full flex items-center gap-3 text-error">
+    <button onClick={handleDelete} className="text-error flex w-full items-center gap-3">
       <Trash2 size={20} className="md:hidden" />
       <Trash2 size={16} className="hidden md:inline" />
       Delete post
@@ -161,11 +154,13 @@ See `src/app/notifications/archive/page.tsx`:
 ## Technical Details
 
 ### Desktop (≥ md)
+
 - Uses daisyUI `dropdown dropdown-end`
 - Positioned in top-right corner
 - Standard menu styling with `bg-base-200`
 
 ### Mobile (< md)
+
 - Uses native `<dialog>` element with `modal modal-bottom`
 - Slides up from bottom with animation
 - Click on menu item automatically closes the drawer

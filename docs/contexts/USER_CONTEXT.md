@@ -8,9 +8,9 @@
 
 ```typescript
 interface UserContextData {
-  user: User | null;              // Supabase auth user
-  profile: UserProfile | null;    // User profile data (display_name, avatar_url, username, karma)
-  isAdmin: boolean;               // Whether user is a site admin
+  user: User | null; // Supabase auth user
+  profile: UserProfile | null; // User profile data (display_name, avatar_url, username, karma)
+  isAdmin: boolean; // Whether user is a site admin
 }
 ```
 
@@ -67,13 +67,15 @@ export default function OptionalComponent() {
 
 ```tsx
 // Server Component
-import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
-import { isAdmin } from '@/lib/admin';
+import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/admin";
 
 export default async function ServerPage() {
   const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const userIsAdmin = user ? await isAdmin(user.id, supabase) : false;
 
   // Use user and userIsAdmin here
@@ -159,11 +161,7 @@ export default function AuthenticatedButton() {
     // Perform authenticated action
   };
 
-  return (
-    <button onClick={handleAction}>
-      {user ? "Do Action" : "Log In to Continue"}
-    </button>
-  );
+  return <button onClick={handleAction}>{user ? "Do Action" : "Log In to Continue"}</button>;
 }
 ```
 
@@ -197,7 +195,9 @@ export default function UserGreeting() {
 // ❌ Old way - inefficient, multiple queries
 export default async function Page() {
   const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const userIsAdmin = user ? await isAdmin(user.id) : false;
   // ... rest of component
 }

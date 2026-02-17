@@ -7,11 +7,7 @@ export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <button
-      onClick={toggleTheme}
-      className="btn btn-ghost btn-circle"
-      aria-label="Toggle theme"
-    >
+    <button onClick={toggleTheme} className="btn btn-ghost btn-circle" aria-label="Toggle theme">
       {theme === "black" ? (
         <Sun size={20} className="text-base-content" />
       ) : (

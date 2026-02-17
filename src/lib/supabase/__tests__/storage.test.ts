@@ -42,22 +42,20 @@ describe("Supabase Storage", () => {
     // Clean up all uploaded test files
     if (uploadedFiles.length > 0) {
       console.log(`Cleaning up ${uploadedFiles.length} test file(s)...`);
-      
+
       // Remove files in batches of 10 (Supabase limit)
       const batchSize = 10;
       for (let i = 0; i < uploadedFiles.length; i += batchSize) {
         const batch = uploadedFiles.slice(i, i + batchSize);
-        const { error } = await supabase.storage
-          .from(privateEnv.storageBucket)
-          .remove(batch);
-        
+        const { error } = await supabase.storage.from(privateEnv.storageBucket).remove(batch);
+
         if (error) {
           console.error(`Failed to delete batch ${i / batchSize + 1}:`, error.message);
         } else {
           console.log(`✓ Deleted ${batch.length} file(s) (batch ${i / batchSize + 1})`);
         }
       }
-      
+
       console.log(`✅ Cleanup complete! Removed ${uploadedFiles.length} test file(s)`);
     }
   });
@@ -77,9 +75,7 @@ describe("Supabase Storage", () => {
 
       expect(error).toBeNull();
 
-      const mediaBucket = buckets!.find(
-        (b) => b.name === privateEnv.storageBucket,
-      );
+      const mediaBucket = buckets!.find((b) => b.name === privateEnv.storageBucket);
 
       expect(mediaBucket).toBeDefined();
       expect(mediaBucket!.name).toBe(privateEnv.storageBucket);
@@ -136,9 +132,7 @@ describe("Supabase Storage", () => {
       trackUpload(testPath);
 
       // Get public URL
-      const { data } = supabase.storage
-        .from(privateEnv.storageBucket)
-        .getPublicUrl(testPath);
+      const { data } = supabase.storage.from(privateEnv.storageBucket).getPublicUrl(testPath);
 
       expect(data.publicUrl).toBeDefined();
       expect(data.publicUrl).toContain(publicEnv.supabaseUrl);
@@ -155,12 +149,10 @@ describe("Supabase Storage", () => {
     });
 
     it("should list files in a folder", async () => {
-      const { data, error } = await supabase.storage
-        .from(privateEnv.storageBucket)
-        .list("test", {
-          limit: 100,
-          sortBy: { column: "created_at", order: "desc" },
-        });
+      const { data, error } = await supabase.storage.from(privateEnv.storageBucket).list("test", {
+        limit: 100,
+        sortBy: { column: "created_at", order: "desc" },
+      });
 
       expect(error).toBeNull();
       expect(data).toBeDefined();
@@ -267,9 +259,7 @@ describe("Supabase Storage", () => {
         .upload(testPath, pngBuffer, { contentType: "image/png" });
 
       // Delete
-      const { error } = await supabase.storage
-        .from(privateEnv.storageBucket)
-        .remove([testPath]);
+      const { error } = await supabase.storage.from(privateEnv.storageBucket).remove([testPath]);
 
       expect(error).toBeNull();
     });
@@ -324,9 +314,7 @@ describe("Supabase Storage", () => {
 
       expect(error).toBeNull();
 
-      const mediaBucket = buckets!.find(
-        (b) => b.name === privateEnv.storageBucket,
-      );
+      const mediaBucket = buckets!.find((b) => b.name === privateEnv.storageBucket);
 
       expect(mediaBucket).toBeDefined();
       expect(mediaBucket!.public).toBe(true);

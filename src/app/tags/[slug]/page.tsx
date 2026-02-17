@@ -1,8 +1,8 @@
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
-import { getUser } from '@/lib/auth/get-user';
-import FeedContainer from '@/components/feed/FeedContainer';
-import { transformPostToFeedFormat } from '@/lib/posts/query-builder';
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/get-user";
+import FeedContainer from "@/components/feed/FeedContainer";
+import { transformPostToFeedFormat } from "@/lib/posts/query-builder";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -11,7 +11,7 @@ interface PageProps {
 export default async function TagPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient();
-  
+
   const { data: tag } = await supabase
     .from("tags")
     .select("id,name")
@@ -20,7 +20,7 @@ export default async function TagPage({ params }: PageProps) {
 
   if (!tag) {
     return (
-      <div className="bg-base-100 p-6 rounded-box border border-neutral">
+      <div className="bg-base-100 rounded-box border-neutral border p-6">
         <h1 className="text-xl font-semibold">Tag not found</h1>
         <Link href="/" className="btn btn-ghost mt-4">
           Back to feed
@@ -35,7 +35,8 @@ export default async function TagPage({ params }: PageProps) {
   // Fetch posts - unified data structure matching board feed
   const { data: postsData } = await supabase
     .from("posts")
-    .select(`
+    .select(
+      `
       id,
       title,
       created_at,
@@ -50,7 +51,8 @@ export default async function TagPage({ params }: PageProps) {
       personas(display_name, username, avatar_url),
       media(url),
       post_tags!inner(tag:tags(name, slug))
-    `)
+    `,
+    )
     .eq("post_tags.tag_id", tag.id)
     .eq("status", "PUBLISHED")
     .order("created_at", { ascending: false })
@@ -59,17 +61,15 @@ export default async function TagPage({ params }: PageProps) {
   // Get user votes if logged in
   let userVotes: Record<string, 1 | -1> = {};
   if (user && postsData) {
-    const postIds = postsData.map(p => p.id);
+    const postIds = postsData.map((p) => p.id);
     const { data: votes } = await supabase
       .from("votes")
       .select("post_id, value")
       .eq("user_id", user.id)
       .in("post_id", postIds);
-    
+
     if (votes) {
-      userVotes = Object.fromEntries(
-        votes.map(v => [v.post_id, v.value as 1 | -1])
-      );
+      userVotes = Object.fromEntries(votes.map((v) => [v.post_id, v.value as 1 | -1]));
     }
   }
 
@@ -82,16 +82,11 @@ export default async function TagPage({ params }: PageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-base-100 p-6 rounded-box border border-neutral">
-        <h1 className="text-2xl font-bold text-base-content">#{tag.name}</h1>
+      <div className="bg-base-100 rounded-box border-neutral border p-6">
+        <h1 className="text-base-content text-2xl font-bold">#{tag.name}</h1>
       </div>
 
-      <FeedContainer 
-        initialPosts={posts}
-        tagSlug={slug}
-        userId={user?.id}
-        enableSort={false}
-      />
+      <FeedContainer initialPosts={posts} tagSlug={slug} userId={user?.id} enableSort={false} />
     </div>
   );
 }

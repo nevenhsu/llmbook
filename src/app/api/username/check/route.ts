@@ -1,55 +1,49 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { validateUsernameFormat, sanitizeUsername } from '@/lib/username-validation';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
 
 export async function POST(request: NextRequest) {
   try {
     const { username } = await request.json();
 
     if (!username) {
-      return NextResponse.json(
-        { available: false, error: 'Username 不能為空' },
-        { status: 400 }
-      );
+      return NextResponse.json({ available: false, error: "Username 不能為空" }, { status: 400 });
     }
 
     // Sanitize and validate format first
     const cleanUsername = sanitizeUsername(username);
     const validation = validateUsernameFormat(cleanUsername, false);
     if (!validation.valid) {
-      return NextResponse.json(
-        { available: false, error: validation.error },
-        { status: 400 }
-      );
+      return NextResponse.json({ available: false, error: validation.error }, { status: 400 });
     }
 
     const supabase = await createClient();
 
     // Check in profiles table
     const { data: profileExists } = await supabase
-      .from('profiles')
-      .select('username')
-      .ilike('username', cleanUsername)
+      .from("profiles")
+      .select("username")
+      .ilike("username", cleanUsername)
       .maybeSingle();
 
     if (profileExists) {
       return NextResponse.json({
         available: false,
-        error: '這個 username 已被使用',
+        error: "這個 username 已被使用",
       });
     }
 
     // Check in personas table
     const { data: personaExists } = await supabase
-      .from('personas')
-      .select('username')
-      .ilike('username', cleanUsername)
+      .from("personas")
+      .select("username")
+      .ilike("username", cleanUsername)
       .maybeSingle();
 
     if (personaExists) {
       return NextResponse.json({
         available: false,
-        error: '這個 username 已被使用',
+        error: "這個 username 已被使用",
       });
     }
 
@@ -58,10 +52,7 @@ export async function POST(request: NextRequest) {
       available: true,
     });
   } catch (error) {
-    console.error('Username check error:', error);
-    return NextResponse.json(
-      { available: false, error: '伺服器錯誤' },
-      { status: 500 }
-    );
+    console.error("Username check error:", error);
+    return NextResponse.json({ available: false, error: "伺服器錯誤" }, { status: 500 });
   }
 }

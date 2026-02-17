@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface BanActionsProps {
   boardSlug: string;
@@ -10,20 +10,20 @@ interface BanActionsProps {
 
 export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
   const router = useRouter();
-  const [userId, setUserId] = useState('');
-  const [reason, setReason] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [userId, setUserId] = useState("");
+  const [reason, setReason] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleBan = async () => {
     if (!userId) {
-      setError('Please enter a user ID.');
+      setError("Please enter a user ID.");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       const payload: Record<string, string> = { user_id: userId.trim() };
@@ -40,22 +40,22 @@ export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
       }
 
       const res = await fetch(`/api/boards/${boardSlug}/bans`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const message = await res.text();
-        throw new Error(message || 'Failed to ban user');
+        throw new Error(message || "Failed to ban user");
       }
 
-      setUserId('');
-      setReason('');
-      setExpiresAt('');
+      setUserId("");
+      setReason("");
+      setExpiresAt("");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to ban user');
+      setError(err instanceof Error ? err.message : "Failed to ban user");
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
   }
 
   return (
-    <div className="card bg-base-100 border border-neutral p-4 space-y-3">
+    <div className="card bg-base-100 border-neutral space-y-3 border p-4">
       <h2 className="font-semibold">Add ban</h2>
       <input
         className="input input-bordered bg-base-100 border-neutral"
@@ -87,7 +87,7 @@ export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
         onChange={(event) => setExpiresAt(event.target.value)}
       />
 
-      {error ? <p className="text-sm text-error">{error}</p> : null}
+      {error ? <p className="text-error text-sm">{error}</p> : null}
 
       <button
         type="button"
@@ -95,7 +95,7 @@ export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
         onClick={handleBan}
         disabled={loading || !userId.trim()}
       >
-        {loading ? 'Banning...' : 'Ban user'}
+        {loading ? "Banning..." : "Ban user"}
       </button>
     </div>
   );
@@ -120,7 +120,7 @@ export function UnbanButton({ boardSlug, userId, canEditBans }: UnbanButtonProps
 
     try {
       const res = await fetch(`/api/boards/${boardSlug}/bans/${userId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (!res.ok) {
@@ -136,13 +136,8 @@ export function UnbanButton({ boardSlug, userId, canEditBans }: UnbanButtonProps
   };
 
   return (
-    <button
-      type="button"
-      className="btn btn-ghost btn-xs"
-      onClick={handleUnban}
-      disabled={loading}
-    >
-      {loading ? '...' : 'Unban'}
+    <button type="button" className="btn btn-ghost btn-xs" onClick={handleUnban} disabled={loading}>
+      {loading ? "..." : "Unban"}
     </button>
   );
 }

@@ -29,8 +29,9 @@ serverClient.auth.signInWithPassword() (設定 session cookie)
 ## 檔案清單
 
 ### 1. API Route
+
 - **路徑**: `src/app/api/auth/register/route.ts`
-- **功能**: 
+- **功能**:
   - 驗證輸入 (email, password, username)
   - 檢查 username 格式和可用性
   - 使用 Admin Client 建立用戶
@@ -38,6 +39,7 @@ serverClient.auth.signInWithPassword() (設定 session cookie)
   - 使用 Server Client 登入用戶（自動設定 session cookie）
 
 ### 2. 前端表單
+
 - **路徑**: `src/app/register/register-form.tsx`
 - **修改**:
   - 移除直接呼叫 Supabase client
@@ -46,7 +48,9 @@ serverClient.auth.signInWithPassword() (設定 session cookie)
   - 簡化錯誤處理
 
 ### 3. 環境變數
+
 確保以下環境變數已設定：
+
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
@@ -60,6 +64,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 此實作方式在 API 層面處理，**不需要額外的資料庫 migration**。
 
 只需確保：
+
 1. ✅ `profiles` 表存在（已在 schema.sql 中定義）
 2. ✅ 環境變數已正確設定
 3. ✅ Service Role Key 有權限操作 auth 和 profiles
@@ -69,6 +74,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### 手動測試（透過 UI）
 
 1. 啟動開發伺服器:
+
 ```bash
 npm run dev
 ```
@@ -95,6 +101,7 @@ npx tsx scripts/test-register.ts
 ### POST /api/auth/register
 
 **Request Body:**
+
 ```json
 {
   "email": "user@example.com",
@@ -104,6 +111,7 @@ npx tsx scripts/test-register.ts
 ```
 
 **Response (成功 - 自動登入):**
+
 ```json
 {
   "success": true,
@@ -117,6 +125,7 @@ npx tsx scripts/test-register.ts
 ```
 
 **Response (成功 - 需手動登入):**
+
 ```json
 {
   "success": true,
@@ -130,11 +139,13 @@ npx tsx scripts/test-register.ts
 }
 ```
 
-**注意**: 
+**注意**:
+
 - 正常情況下，Session 會透過 HTTP-only cookie 自動設定
 - 如果自動登入失敗，會回傳 `needsManualLogin: true`，用戶需手動登入
 
 **Response (錯誤):**
+
 ```json
 {
   "error": "Username 已被使用"
@@ -163,11 +174,13 @@ npx tsx scripts/test-register.ts
 ## 錯誤處理
 
 ### API 層面
+
 - **400**: 缺少必要欄位、格式錯誤、密碼太短
 - **409**: Username 已被使用
 - **500**: 伺服器錯誤、Profile 建立失敗
 
 ### 交易回滾
+
 - 如果 profile 建立失敗，自動刪除已建立的 auth.users 記錄
 - 確保資料一致性（user 和 profile 同時存在或都不存在）
 
@@ -177,12 +190,12 @@ npx tsx scripts/test-register.ts
    - ⚠️ 絕對不要將此 key 暴露給前端
    - 只在 API route 中使用
 
-2. **Session 管理**: 
+2. **Session 管理**:
    - 使用 Server Client 的 `signInWithPassword()` 自動設定 HTTP-only cookie
    - 前端不需要手動處理 session
    - 使用 `window.location.href` 跳轉以觸發頁面重新載入
 
-3. **Username 處理**: 
+3. **Username 處理**:
    - 使用 `sanitizeUsername()` 清理輸入
    - 自動轉為小寫儲存
 

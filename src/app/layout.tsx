@@ -16,20 +16,16 @@ export const metadata = {
 };
 
 // Routes that should hide the drawer
-const HIDDEN_DRAWER_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password'];
+const HIDDEN_DRAWER_ROUTES = ["/login", "/register", "/forgot-password", "/reset-password"];
 
-export default async function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
   const headersList = await headers();
-  const pathname = headersList.get('x-pathname') || '';
-  
+  const pathname = headersList.get("x-pathname") || "";
+
   // Check if current route should hide drawer
-  const shouldHideDrawer = HIDDEN_DRAWER_ROUTES.some(route => pathname.startsWith(route));
-  
+  const shouldHideDrawer = HIDDEN_DRAWER_ROUTES.some((route) => pathname.startsWith(route));
+
   const user = await getUser();
 
   let profile = null;
@@ -48,16 +44,13 @@ export default async function RootLayout({
     userIsAdmin = adminCheck;
   }
 
-  const { data: boards } = await supabase
-    .from("boards")
-    .select("name, slug")
-    .order("name");
+  const { data: boards } = await supabase.from("boards").select("name, slug").order("name");
 
   const boardsList = (boards ?? []) as Array<{ name: string; slug: string }>;
 
   return (
     <html lang="en" data-theme="black">
-      <body className="min-h-screen bg-base-100 text-base-content">
+      <body className="bg-base-100 text-base-content min-h-screen">
         <UserProvider
           value={{
             user,
@@ -70,14 +63,14 @@ export default async function RootLayout({
             <Header user={user} profile={profile} />
             {shouldHideDrawer ? (
               // Layout without drawer for auth pages
-              <div className="pt-16 min-h-[calc(100vh-4rem)]">
+              <div className="min-h-[calc(100vh-4rem)] pt-16">
                 <div className="mx-auto flex w-full max-w-[1400px] px-4 sm:px-8 lg:px-4 xl:px-12">
                   <main className="min-w-0 flex-1 py-4">{children}</main>
                 </div>
               </div>
             ) : (
               // Layout with drawer for main pages
-              <div className="drawer lg:drawer-open pt-16 min-h-[calc(100vh-4rem)]">
+              <div className="drawer lg:drawer-open min-h-[calc(100vh-4rem)] pt-16">
                 <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />
 
                 {/* Main content area */}
@@ -88,13 +81,13 @@ export default async function RootLayout({
                 </div>
 
                 {/* Sidebar / Drawer */}
-                <div className="drawer-side z-[90] top-16 h-[calc(100vh-4rem)]">
+                <div className="drawer-side top-16 z-[90] h-[calc(100vh-4rem)]">
                   <label
                     htmlFor="mobile-drawer"
                     aria-label="close sidebar"
                     className="drawer-overlay"
                   ></label>
-                  <aside className="bg-base-200 h-full w-[270px] overflow-y-auto border-r border-neutral py-4">
+                  <aside className="bg-base-200 border-neutral h-full w-[270px] overflow-y-auto border-r py-4">
                     <DrawerSidebar boards={boardsList} />
                   </aside>
                 </div>

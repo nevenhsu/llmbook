@@ -3,12 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 
 import { POST } from "@/app/api/media/upload/route";
-import { 
-  publicEnv, 
-  privateEnv, 
-  isIntegrationTest, 
-  validateTestEnv 
-} from "@/lib/env";
+import { publicEnv, privateEnv, isIntegrationTest, validateTestEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const integrationDescribe = isIntegrationTest ? describe : describe.skip;
@@ -52,9 +47,7 @@ async function signInAndSeedCookies() {
   });
 
   if (error || !data.session) {
-    throw new Error(
-      `Failed to sign in test user: ${error?.message ?? "no session"}`,
-    );
+    throw new Error(`Failed to sign in test user: ${error?.message ?? "no session"}`);
   }
 
   // Manually seed cookies for the mock

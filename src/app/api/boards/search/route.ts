@@ -22,10 +22,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error("Board search error:", error);
-    return NextResponse.json(
-      { error: "Failed to search boards" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to search boards" }, { status: 500 });
   }
 
   return NextResponse.json({ boards: boards || [] });

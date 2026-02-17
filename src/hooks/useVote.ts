@@ -64,50 +64,53 @@ export function useVote({
     }
   }, [initialScore, initialUserVote]);
 
-  const handleVote = useCallback(async (value: 1 | -1) => {
-    if (isVotingRef.current || disabled) return;
+  const handleVote = useCallback(
+    async (value: 1 | -1) => {
+      if (isVotingRef.current || disabled) return;
 
-    const previousScore = scoreRef.current;
-    const previousUserVote = userVoteRef.current;
+      const previousScore = scoreRef.current;
+      const previousUserVote = userVoteRef.current;
 
-    // Optimistic update — update local UI immediately, no external callback yet
-    const optimistic = applyVote({ score: previousScore, userVote: previousUserVote }, value);
-    setScore(optimistic.score);
-    setUserVote(optimistic.userVote);
+      // Optimistic update — update local UI immediately, no external callback yet
+      const optimistic = applyVote({ score: previousScore, userVote: previousUserVote }, value);
+      setScore(optimistic.score);
+      setUserVote(optimistic.userVote);
 
-    isVotingRef.current = true;
-    setIsVoting(true);
+      isVotingRef.current = true;
+      setIsVoting(true);
 
-    // Claim this sequence slot — stale responses from older calls are ignored
-    const seq = ++seqRef.current;
+      // Claim this sequence slot — stale responses from older calls are ignored
+      const seq = ++seqRef.current;
 
-    try {
-      const data = await voteFn(id, value);
-      if (seq !== seqRef.current) return;
+      try {
+        const data = await voteFn(id, value);
+        if (seq !== seqRef.current) return;
 
-      // Reconcile score with server-confirmed value
-      setScore(data.score);
-      // Notify parent only once, after server confirmation
-      onScoreChange?.(id, data.score, optimistic.userVote);
-    } catch (err) {
-      if (seq !== seqRef.current) return;
+        // Reconcile score with server-confirmed value
+        setScore(data.score);
+        // Notify parent only once, after server confirmation
+        onScoreChange?.(id, data.score, optimistic.userVote);
+      } catch (err) {
+        if (seq !== seqRef.current) return;
 
-      // Rollback optimistic update
-      setScore(previousScore);
-      setUserVote(previousUserVote);
+        // Rollback optimistic update
+        setScore(previousScore);
+        setUserVote(previousUserVote);
 
-      if (err instanceof ApiError && err.status === 401) {
-        openLoginModal();
-      } else {
-        toast.error("Failed to vote");
+        if (err instanceof ApiError && err.status === 401) {
+          openLoginModal();
+        } else {
+          toast.error("Failed to vote");
+        }
+      } finally {
+        if (seq === seqRef.current) {
+          isVotingRef.current = false;
+          setIsVoting(false);
+        }
       }
-    } finally {
-      if (seq === seqRef.current) {
-        isVotingRef.current = false;
-        setIsVoting(false);
-      }
-    }
-  }, [id, disabled, voteFn, onScoreChange, openLoginModal]);
+    },
+    [id, disabled, voteFn, onScoreChange, openLoginModal],
+  );
 
   return {
     score,

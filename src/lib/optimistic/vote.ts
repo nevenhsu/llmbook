@@ -10,16 +10,13 @@ export interface VoteUpdateResult {
 
 /**
  * Calculate new vote state after a vote action (optimistic update)
- * 
+ *
  * Rules:
  * - Same value again → toggle off (remove vote)
  * - Different value → flip vote
  * - No previous vote → add new vote
  */
-export function applyVote(
-  current: VoteState,
-  value: 1 | -1
-): VoteUpdateResult {
+export function applyVote(current: VoteState, value: 1 | -1): VoteUpdateResult {
   const { score, userVote } = current;
 
   if (userVote === value) {
@@ -47,10 +44,7 @@ export function applyVote(
  * Calculate score delta for a vote transition
  * Useful for updating multiple items
  */
-export function getVoteScoreDelta(
-  previousVote: 1 | -1 | null,
-  newVote: 1 | -1 | null
-): number {
+export function getVoteScoreDelta(previousVote: 1 | -1 | null, newVote: 1 | -1 | null): number {
   if (previousVote === newVote) return 0;
   if (previousVote === null && newVote === 1) return 1;
   if (previousVote === null && newVote === -1) return -1;

@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 export const mockCookieJar = new Map<string, string>();
 
@@ -16,6 +16,6 @@ export const mockCookieStore = {
   }),
 };
 
-vi.mock('next/headers', () => ({
+vi.mock("next/headers", () => ({
   cookies: vi.fn(() => mockCookieStore),
 }));

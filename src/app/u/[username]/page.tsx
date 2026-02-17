@@ -6,7 +6,11 @@ import { getUser } from "@/lib/auth/get-user";
 import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
 import FollowButton from "@/components/profile/FollowButton";
-import { transformPostToFeedFormat, transformProfileToFormat, fetchUserInteractions } from "@/lib/posts/query-builder";
+import {
+  transformPostToFeedFormat,
+  transformProfileToFormat,
+  fetchUserInteractions,
+} from "@/lib/posts/query-builder";
 
 interface PageProps {
   params: Promise<{ username: string }>;
@@ -51,7 +55,15 @@ export default async function UserPage({ params, searchParams }: PageProps) {
 
   const isProfile = !!profile;
   const formattedProfile = transformProfileToFormat(isProfile ? profile : persona, !isProfile);
-  const { displayName, username: usernameDisplay, karma, avatarUrl, bio, createdAt: profileCreatedAt, id: profileOrPersonaId } = formattedProfile;
+  const {
+    displayName,
+    username: usernameDisplay,
+    karma,
+    avatarUrl,
+    bio,
+    createdAt: profileCreatedAt,
+    id: profileOrPersonaId,
+  } = formattedProfile;
 
   // Check if viewing own profile
   const isOwnProfile = isProfile && currentUser?.id === profile?.user_id;
@@ -86,9 +98,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   }
 
   const createdAtDate = new Date(profileCreatedAt ?? Date.now());
-  const joinYear = Number.isNaN(createdAtDate.getTime())
-    ? "Now"
-    : createdAtDate.getFullYear();
+  const joinYear = Number.isNaN(createdAtDate.getTime()) ? "Now" : createdAtDate.getFullYear();
 
   // Fetch initial data and total counts
   let posts: any[] = [];
@@ -96,7 +106,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   let postsCount = 0;
   let commentsCount = 0;
   let savedCount = 0;
-  
+
   const LIMIT = 10;
 
   if (tab === "posts") {
@@ -111,26 +121,32 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         media(url),
         post_tags(tag:tags(name, slug))
       `,
-        { count: "exact" }
+        { count: "exact" },
       )
       .eq(isProfile ? "author_id" : "persona_id", profileOrPersonaId)
       .in("status", ["PUBLISHED", "DELETED"])
       .order("created_at", { ascending: false })
       .limit(LIMIT);
-    
+
     const { data: postData, count } = await query;
     postsCount = count ?? 0;
-    
-    const postIds = (postData ?? []).map(p => p.id);
-    const { votes: userVotes, hiddenPostIds, savedPostIds } = currentUser
+
+    const postIds = (postData ?? []).map((p) => p.id);
+    const {
+      votes: userVotes,
+      hiddenPostIds,
+      savedPostIds,
+    } = currentUser
       ? await fetchUserInteractions(supabase, currentUser.id, postIds)
       : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
-    posts = (postData ?? []).map(p => transformPostToFeedFormat(p as any, {
-      userVote: userVotes[p.id] || null,
-      isHidden: hiddenPostIds.has(p.id),
-      isSaved: savedPostIds.has(p.id),
-    }));
+    posts = (postData ?? []).map((p) =>
+      transformPostToFeedFormat(p as any, {
+        userVote: userVotes[p.id] || null,
+        isHidden: hiddenPostIds.has(p.id),
+        isSaved: savedPostIds.has(p.id),
+      }),
+    );
   } else if (tab === "comments") {
     const { count } = await supabase
       .from("comments")
@@ -140,7 +156,8 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   } else if (tab === "saved" && isOwnProfile && currentUser) {
     const { data: savedData, count } = await supabase
       .from("saved_posts")
-      .select(`
+      .select(
+        `
         post_id,
         posts (
           id, title, body, created_at, score, comment_count, author_id, persona_id, status,
@@ -150,27 +167,35 @@ export default async function UserPage({ params, searchParams }: PageProps) {
            media(url),
            post_tags(tag:tags(name, slug))
          )
-      `, { count: "exact" })
+      `,
+        { count: "exact" },
+      )
       .eq("user_id", currentUser.id)
       .order("created_at", { ascending: false })
       .limit(LIMIT);
-    
-    savedCount = count ?? 0;
-    const savedPostsData = (savedData ?? []).map(s => s.posts).filter(Boolean) as any[];
-    const postIds = savedPostsData.map(p => p.id);
-    const { votes: userVotes, hiddenPostIds, savedPostIds } = await fetchUserInteractions(supabase, currentUser.id, postIds);
 
-    posts = savedPostsData.map(p => transformPostToFeedFormat(p, {
-      userVote: userVotes[p.id] || null,
-      isHidden: hiddenPostIds.has(p.id),
-      isSaved: savedPostIds.has(p.id),
-    }));
+    savedCount = count ?? 0;
+    const savedPostsData = (savedData ?? []).map((s) => s.posts).filter(Boolean) as any[];
+    const postIds = savedPostsData.map((p) => p.id);
+    const {
+      votes: userVotes,
+      hiddenPostIds,
+      savedPostIds,
+    } = await fetchUserInteractions(supabase, currentUser.id, postIds);
+
+    posts = savedPostsData.map((p) =>
+      transformPostToFeedFormat(p, {
+        userVote: userVotes[p.id] || null,
+        isHidden: hiddenPostIds.has(p.id),
+        isSaved: savedPostIds.has(p.id),
+      }),
+    );
   }
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-4 px-0 pb-8 sm:px-2">
-      <section className="overflow-hidden rounded-2xl border border-neutral bg-base-100">
-        <div className="h-20 bg-gradient-to-br from-neutral/30 to-neutral/10" />
+      <section className="border-neutral bg-base-100 overflow-hidden rounded-2xl border">
+        <div className="from-neutral/30 to-neutral/10 h-20 bg-gradient-to-br" />
         <div className="-mt-8 flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
           <div className="flex items-end gap-4">
             <div className="-mt-8">
@@ -178,31 +203,27 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                 fallbackSeed={displayName}
                 src={avatarUrl ?? undefined}
                 size="lg"
-                className="bg-white rounded-full"
+                className="rounded-full bg-white"
                 isPersona={!isProfile}
               />
             </div>
             <div className="pb-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-base-content">
-                  {displayName}
-                </h1>
+                <h1 className="text-base-content text-2xl font-bold">{displayName}</h1>
                 {!isProfile && (
-                  <span className="bg-info/10 text-info font-bold text-xs px-2 py-0.5 rounded">
+                  <span className="bg-info/10 text-info rounded px-2 py-0.5 text-xs font-bold">
                     AI PERSONA
                   </span>
                 )}
               </div>
-              <p className="text-sm text-base-content/70">
-                u/{usernameDisplay}
-              </p>
+              <p className="text-base-content/70 text-sm">u/{usernameDisplay}</p>
             </div>
           </div>
 
           {!isOwnProfile && isProfile && profileOrPersonaId && (
             <div className="flex gap-2">
-              <FollowButton 
-                userId={profileOrPersonaId} 
+              <FollowButton
+                userId={profileOrPersonaId}
                 initialIsFollowing={isFollowing}
                 currentUserId={currentUser?.id}
               />
@@ -213,7 +234,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
             <div>
               <Link
                 href="/settings/profile"
-                className="px-4 py-2 bg-base-300 text-base-content rounded-full text-sm font-semibold hover:bg-base-200 transition-colors"
+                className="bg-base-300 text-base-content hover:bg-base-200 rounded-full px-4 py-2 text-sm font-semibold transition-colors"
               >
                 Edit Profile
               </Link>
@@ -222,14 +243,12 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="overflow-x-auto rounded-full border border-neutral bg-base-100 p-1 scrollbar-hide">
+      <section className="border-neutral bg-base-100 scrollbar-hide overflow-x-auto rounded-full border p-1">
         <div className="flex min-w-max items-center gap-1">
           {[
             { key: "posts", label: "Posts" },
             { key: "comments", label: "Comments" },
-            ...(isOwnProfile ? [
-              { key: "saved", label: "Saved" },
-            ] : []),
+            ...(isOwnProfile ? [{ key: "saved", label: "Saved" }] : []),
           ].map((t) => (
             <Link
               key={t.key}
@@ -265,56 +284,49 @@ export default async function UserPage({ params, searchParams }: PageProps) {
         </section>
 
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-neutral bg-base-100 p-4">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-base-content/70">
+          <div className="border-neutral bg-base-100 rounded-2xl border p-4">
+            <h3 className="text-base-content/70 text-sm font-bold tracking-wide uppercase">
               About
             </h3>
-            <p className="mt-3 text-sm text-base-content">
-              {bio?.trim() ||
-                `This ${isProfile ? "user" : "persona"} has not added a bio yet.`}
+            <p className="text-base-content mt-3 text-sm">
+              {bio?.trim() || `This ${isProfile ? "user" : "persona"} has not added a bio yet.`}
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               {isProfile && (
                 <>
-                  <div className="rounded-xl bg-base-300 p-3">
-                    <div className="font-semibold text-base-content">
-                      {karma}
-                    </div>
-                    <div className="text-xs text-base-content/70">Karma</div>
+                  <div className="bg-base-300 rounded-xl p-3">
+                    <div className="text-base-content font-semibold">{karma}</div>
+                    <div className="text-base-content/70 text-xs">Karma</div>
                   </div>
-                  <div className="rounded-xl bg-base-300 p-3">
-                    <div className="font-semibold text-base-content">{followersCount}</div>
-                    <div className="text-xs text-base-content/70">
-                      Followers
-                    </div>
+                  <div className="bg-base-300 rounded-xl p-3">
+                    <div className="text-base-content font-semibold">{followersCount}</div>
+                    <div className="text-base-content/70 text-xs">Followers</div>
                   </div>
                 </>
               )}
-              <div className="col-span-2 rounded-xl bg-base-300 p-3">
-                <div className="flex items-center gap-2 text-base-content">
+              <div className="bg-base-300 col-span-2 rounded-xl p-3">
+                <div className="text-base-content flex items-center gap-2">
                   <CalendarClock size={16} />
                   <span className="font-semibold">
                     {isProfile ? `Joined ${joinYear}` : `Created ${joinYear}`}
                   </span>
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-base-content/70">
+                <div className="text-base-content/70 mt-1 flex items-center gap-2 text-xs">
                   <Flame size={14} />
-                  {isProfile
-                    ? "Profile activity will appear here."
-                    : "AI-generated persona"}
+                  {isProfile ? "Profile activity will appear here." : "AI-generated persona"}
                 </div>
               </div>
             </div>
           </div>
 
           {isOwnProfile && (
-            <div className="rounded-2xl border border-neutral bg-base-100 p-2">
+            <div className="border-neutral bg-base-100 rounded-2xl border p-2">
               <ul className="space-y-1">
                 <li>
                   <Link
                     href="/settings/profile"
-                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                    className="text-base-content hover:bg-base-300 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors"
                   >
                     <Settings size={16} className="text-base-content/70" />
                     Settings
@@ -323,7 +335,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                 <li>
                   <Link
                     href="/settings/avatar"
-                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                    className="text-base-content hover:bg-base-300 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors"
                   >
                     <UserRound size={16} className="text-base-content/70" />
                     Update avatar
@@ -333,7 +345,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                   <form action="/auth/signout" method="post">
                     <button
                       type="submit"
-                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-base-content transition-colors hover:bg-base-300"
+                      className="text-base-content hover:bg-base-300 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold transition-colors"
                     >
                       <LogOut size={16} className="text-base-content/70" />
                       Log out

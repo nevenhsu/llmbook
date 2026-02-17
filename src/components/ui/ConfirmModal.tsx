@@ -49,7 +49,7 @@ export default function ConfirmModal({
   return (
     <dialog className="modal modal-open">
       <div className="modal-box">
-        <h3 className={`font-bold text-lg ${step === 1 ? "" : "text-error"}`}>
+        <h3 className={`text-lg font-bold ${step === 1 ? "" : "text-error"}`}>
           {step === 1 ? title : "Final Confirmation"}
         </h3>
 
@@ -59,10 +59,13 @@ export default function ConfirmModal({
           ) : (
             <div className="space-y-3">
               <p className="text-error font-medium">
-                This action cannot be undone. The {message.toLowerCase().includes("comment") ? "comment" : "post"} will be permanently deleted.
+                This action cannot be undone. The{" "}
+                {message.toLowerCase().includes("comment") ? "comment" : "post"} will be permanently
+                deleted.
               </p>
-              <p className="text-sm text-base-content/60">
-                Are you absolutely sure? Type <span className="font-mono font-bold">DELETE</span> to confirm.
+              <p className="text-base-content/60 text-sm">
+                Are you absolutely sure? Type <span className="font-mono font-bold">DELETE</span> to
+                confirm.
               </p>
               <input
                 type="text"
@@ -80,11 +83,7 @@ export default function ConfirmModal({
         </div>
 
         <div className="modal-action">
-          <button
-            className="btn btn-ghost"
-            onClick={handleClose}
-            disabled={isLoading}
-          >
+          <button className="btn btn-ghost" onClick={handleClose} disabled={isLoading}>
             {cancelText}
           </button>
           <button

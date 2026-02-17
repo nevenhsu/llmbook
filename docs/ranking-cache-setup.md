@@ -27,6 +27,7 @@ npm run update-rankings:once
 ```
 
 腳本會：
+
 1. 計算 Hot 排序（30 天內貼文）
 2. 計算 Rising 排序（7 天內貼文）
 3. 等待 24 小時
@@ -52,24 +53,24 @@ npm install -g pm2
 module.exports = {
   apps: [
     {
-      name: 'ranking-updater',
-      script: 'scripts/update-rankings.ts',
-      interpreter: 'ts-node',
-      interpreter_args: '-r tsconfig-paths/register',
+      name: "ranking-updater",
+      script: "scripts/update-rankings.ts",
+      interpreter: "ts-node",
+      interpreter_args: "-r tsconfig-paths/register",
       instances: 1,
-      exec_mode: 'fork',
+      exec_mode: "fork",
       env: {
-        NODE_ENV: 'production',
+        NODE_ENV: "production",
       },
       // 自動重啟策略
       autorestart: true,
       // 記憶體限制重啟
-      max_memory_restart: '500M',
+      max_memory_restart: "500M",
       // 日誌配置
-      log_file: './logs/ranking-updater.log',
-      out_file: './logs/ranking-updater-out.log',
-      error_file: './logs/ranking-updater-error.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      log_file: "./logs/ranking-updater.log",
+      out_file: "./logs/ranking-updater-out.log",
+      error_file: "./logs/ranking-updater-error.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       // 不合并日誌
       merge_logs: false,
     },
@@ -270,6 +271,7 @@ LIMIT 10;
 ### 檢查腳本日誌
 
 如果使用 PM2：
+
 ```bash
 # 實時查看日誌
 pm2 logs ranking-updater
@@ -282,6 +284,7 @@ pm2 logs ranking-updater --err
 ```
 
 如果直接執行：
+
 ```bash
 # 輸出到文件
 npm run update-rankings > ranking.log 2>&1 &
@@ -332,6 +335,7 @@ X-Response-Time: 45ms
 ### 快取一直顯示過期
 
 1. **檢查腳本是否在運行**：
+
    ```bash
    pm2 status
    # 或
@@ -339,6 +343,7 @@ X-Response-Time: 45ms
    ```
 
 2. **檢查日誌錯誤**：
+
    ```bash
    pm2 logs ranking-updater --err
    ```
@@ -351,6 +356,7 @@ X-Response-Time: 45ms
 ### API 回應很慢
 
 檢查回應標頭確認是否使用快取：
+
 - `X-Cache-Hit: 0` 表示快取未命中，檢查快取表是否有資料
 - 如果經常未命中，可能是更新間隔太長
 

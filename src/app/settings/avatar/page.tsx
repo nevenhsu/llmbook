@@ -24,18 +24,20 @@ export default async function AvatarSettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-0 pb-10 sm:px-2">
-      <section className="rounded-2xl border border-neutral bg-base-100 p-4 sm:p-5">
+      <section className="border-neutral bg-base-100 rounded-2xl border p-4 sm:p-5">
         <div className="mb-4">
           <Link
             href={`/u/${username}`}
-            className="inline-flex items-center gap-1 text-sm font-semibold text-[#818384] transition-colors hover:text-base-content"
+            className="hover:text-base-content inline-flex items-center gap-1 text-sm font-semibold text-[#818384] transition-colors"
           >
             <ChevronLeft size={16} /> Back to profile
           </Link>
         </div>
 
-        <h1 className="text-xl font-bold text-base-content">Avatar Settings</h1>
-        <p className="mt-1 text-sm text-[#818384]">Update your avatar with the same save flow as profile updates.</p>
+        <h1 className="text-base-content text-xl font-bold">Avatar Settings</h1>
+        <p className="mt-1 text-sm text-[#818384]">
+          Update your avatar with the same save flow as profile updates.
+        </p>
 
         <div className="mt-5">
           <AvatarForm

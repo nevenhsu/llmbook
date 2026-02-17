@@ -1,6 +1,6 @@
 /**
  * Pagination utilities for posts feed
- * 
+ *
  * Supports two modes:
  * 1. Offset-based: for cached sorts (hot/rising) with page numbers
  * 2. Cursor-based: for time-based sorts (new/top) with ISO date cursor
@@ -34,24 +34,24 @@ export function buildPostsQueryParams(options: {
   offset?: number;
 }): URLSearchParams {
   const params = new URLSearchParams();
-  
-  if (options.board) params.append('board', options.board);
-  if (options.tag) params.append('tag', options.tag);
-  if (options.author) params.append('author', options.author);
-  if (options.sort) params.append('sort', options.sort);
-  if (options.timeRange) params.append('t', options.timeRange);
-  if (options.includeArchived) params.append('includeArchived', 'true');
-  if (options.limit) params.append('limit', options.limit.toString());
-  
+
+  if (options.board) params.append("board", options.board);
+  if (options.tag) params.append("tag", options.tag);
+  if (options.author) params.append("author", options.author);
+  if (options.sort) params.append("sort", options.sort);
+  if (options.timeRange) params.append("t", options.timeRange);
+  if (options.includeArchived) params.append("includeArchived", "true");
+  if (options.limit) params.append("limit", options.limit.toString());
+
   // Use cursor for tag feeds (time-based)
   if (options.cursor) {
-    params.append('cursor', options.cursor);
+    params.append("cursor", options.cursor);
   }
   // Use offset for board feeds (cached rankings)
   else if (options.offset !== undefined) {
-    params.append('cursor', options.offset.toString());
+    params.append("cursor", options.offset.toString());
   }
-  
+
   return params;
 }
 
@@ -59,7 +59,7 @@ export function buildPostsQueryParams(options: {
  * Get cursor for next page from last item
  */
 export function getNextCursor<T extends { created_at?: string; createdAt?: string }>(
-  items: T[]
+  items: T[],
 ): string | undefined {
   const lastItem = items[items.length - 1];
   return lastItem?.created_at || lastItem?.createdAt;
@@ -75,17 +75,17 @@ export function calculateHasMore(items: unknown[], limit: number): boolean {
 /**
  * Pagination mode detection
  */
-export type PaginationMode = 'offset' | 'cursor';
+export type PaginationMode = "offset" | "cursor";
 
 export function getPaginationMode(sort: string, tagMode?: boolean): PaginationMode {
   // Tag feeds always use cursor (time-based)
-  if (tagMode) return 'cursor';
-  
+  if (tagMode) return "cursor";
+
   // Cached sorts use offset
-  if (sort === 'hot' || sort === 'rising') return 'offset';
-  
+  if (sort === "hot" || sort === "rising") return "offset";
+
   // Time-based sorts use cursor
-  return 'cursor';
+  return "cursor";
 }
 
 /**
@@ -100,7 +100,7 @@ export interface FeedPaginationState {
 
 export function createInitialPaginationState(
   initialItems: unknown[],
-  limit: number = 20
+  limit: number = 20,
 ): FeedPaginationState {
   return {
     page: 1,
@@ -116,11 +116,11 @@ export function updatePaginationState<T extends { created_at?: string }>(
   state: FeedPaginationState,
   newItems: T[],
   limit: number,
-  mode: PaginationMode
+  mode: PaginationMode,
 ): FeedPaginationState {
   const hasMore = calculateHasMore(newItems, limit);
-  
-  if (mode === 'cursor') {
+
+  if (mode === "cursor") {
     return {
       ...state,
       cursor: getNextCursor(newItems),
@@ -128,7 +128,7 @@ export function updatePaginationState<T extends { created_at?: string }>(
       isLoading: false,
     };
   }
-  
+
   return {
     ...state,
     page: state.page + 1,

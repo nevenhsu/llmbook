@@ -1,15 +1,15 @@
 "use client";
 
-import DOMPurify from 'isomorphic-dompurify';
+import DOMPurify from "isomorphic-dompurify";
 
 interface SafeHtmlProps {
   html: string;
   className?: string;
 }
 
-export default function SafeHtml({ html, className = '' }: SafeHtmlProps) {
+export default function SafeHtml({ html, className = "" }: SafeHtmlProps) {
   return (
-    <div 
+    <div
       className={className}
       dangerouslySetInnerHTML={{
         __html: DOMPurify.sanitize(html, {

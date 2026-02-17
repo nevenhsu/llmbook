@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, MoreHorizontal, Settings, ArrowUp, User, EyeOff, CheckCircle2, ChevronLeft, Loader2 } from "lucide-react";
+import {
+  MessageSquare,
+  MoreHorizontal,
+  Settings,
+  ArrowUp,
+  User,
+  EyeOff,
+  CheckCircle2,
+  ChevronLeft,
+  Loader2,
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
@@ -61,8 +71,8 @@ export default function NotificationArchivePage() {
   const loadMore = async () => {
     setIsLoading(true);
     // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     const moreNotifications: NotificationItem[] = [
       {
         id: Date.now(),
@@ -73,7 +83,7 @@ export default function NotificationArchivePage() {
         time: "3m",
         isUnread: false,
         avatar: generateAvatarDataUri(String(Date.now())),
-      }
+      },
     ];
 
     setNotifications((prev) => {
@@ -83,28 +93,28 @@ export default function NotificationArchivePage() {
       }
       return next;
     });
-    
+
     setIsLoading(false);
   };
 
   const hideNotification = (id: number) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+    setNotifications(notifications.filter((n) => n.id !== id));
   };
 
   return (
     <div className="mx-auto max-w-[800px]">
-      <div className="flex items-center gap-4 mb-4 px-2">
-        <Link 
-          href="/notifications" 
+      <div className="mb-4 flex items-center gap-4 px-2">
+        <Link
+          href="/notifications"
           className="btn btn-ghost btn-circle btn-sm"
           aria-label="Back to notifications"
         >
           <ChevronLeft size={24} />
         </Link>
-        <h1 className="text-2xl font-bold text-base-content">Archive</h1>
+        <h1 className="text-base-content text-2xl font-bold">Archive</h1>
       </div>
 
-      <div className="bg-base-100 rounded-lg overflow-hidden border border-neutral">
+      <div className="bg-base-100 border-neutral overflow-hidden rounded-lg border">
         {notifications.length === 0 ? (
           <div className="p-12 text-center text-[#818384]">
             <p>Your archive is empty.</p>
@@ -112,18 +122,18 @@ export default function NotificationArchivePage() {
         ) : (
           <>
             {notifications.map((notif) => (
-              <div 
-                key={notif.id} 
-                className="relative border-b border-neutral last:border-0 hover:bg-base-300 transition-colors"
+              <div
+                key={notif.id}
+                className="border-neutral hover:bg-base-300 relative border-b transition-colors last:border-0"
               >
                 <Link
                   href={`/notifications/${notif.id}`}
                   className="flex items-start gap-3 p-4 pr-12"
                 >
                   <div className="relative flex-shrink-0">
-                    <div className="h-10 w-10 rounded-full overflow-hidden bg-base-200 relative">
-                      <Image 
-                        src={notif.avatar} 
+                    <div className="bg-base-200 relative h-10 w-10 overflow-hidden rounded-full">
+                      <Image
+                        src={notif.avatar}
                         alt={`${notif.user}'s avatar`}
                         fill
                         className="object-cover"
@@ -131,33 +141,33 @@ export default function NotificationArchivePage() {
                         unoptimized
                       />
                     </div>
-                    <div className="absolute -bottom-1 -right-1 bg-base-100 rounded-full p-0.5">
+                    <div className="bg-base-100 absolute -right-1 -bottom-1 rounded-full p-0.5">
                       {notif.type === "upvote" ? (
-                        <div className="bg-[#FF4500] text-white rounded-full p-0.5">
+                        <div className="rounded-full bg-[#FF4500] p-0.5 text-white">
                           <ArrowUp size={10} strokeWidth={4} />
                         </div>
                       ) : notif.type === "reply" ? (
-                        <div className="bg-info text-white rounded-full p-0.5">
+                        <div className="bg-info rounded-full p-0.5 text-white">
                           <MessageSquare size={10} fill="currentColor" />
                         </div>
                       ) : (
-                        <div className="bg-neutral text-white rounded-full p-0.5">
+                        <div className="bg-neutral rounded-full p-0.5 text-white">
                           <User size={10} fill="currentColor" />
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className="font-bold text-sm text-base-content">u/{notif.user}</span>
-                      <span className="text-[#818384] text-sm">{notif.content}</span>
-                      <span className="text-[#818384] text-sm">• {notif.time}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-base-content text-sm font-bold">u/{notif.user}</span>
+                      <span className="text-sm text-[#818384]">{notif.content}</span>
+                      <span className="text-sm text-[#818384]">• {notif.time}</span>
                     </div>
                   </div>
                 </Link>
 
-                <div className="absolute right-3 top-4">
+                <div className="absolute top-4 right-3">
                   <ResponsiveMenu
                     trigger={<MoreHorizontal size={16} className="text-[#818384]" />}
                     title="Notification actions"
@@ -165,7 +175,7 @@ export default function NotificationArchivePage() {
                     ariaLabel="More options"
                   >
                     <li>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -182,10 +192,10 @@ export default function NotificationArchivePage() {
                 </div>
               </div>
             ))}
-            
+
             {hasMore ? (
-              <div className="p-4 flex justify-center">
-                <button 
+              <div className="flex justify-center p-4">
+                <button
                   onClick={loadMore}
                   disabled={isLoading}
                   className="btn btn-primary btn-sm rounded-full px-6"
@@ -196,12 +206,12 @@ export default function NotificationArchivePage() {
                       Loading...
                     </>
                   ) : (
- "Load more"
+                    "Load more"
                   )}
                 </button>
               </div>
             ) : (
-              <div className="p-4 text-center text-[#818384] text-sm border-t border-neutral/50">
+              <div className="border-neutral/50 border-t p-4 text-center text-sm text-[#818384]">
                 No more archived notifications
               </div>
             )}

@@ -1,5 +1,5 @@
-import { createAvatar } from '@dicebear/core';
-import { avataaars } from '@dicebear/collection';
+import { createAvatar } from "@dicebear/core";
+import { avataaars } from "@dicebear/collection";
 
 /**
  * Generate a deterministic avatar data URI from a seed string.
@@ -9,6 +9,6 @@ export function generateAvatarDataUri(seed: string): string {
   return createAvatar(avataaars, {
     seed,
     randomizeIds: true,
-    backgroundColor: ['transparent'],
+    backgroundColor: ["transparent"],
   }).toDataUri();
 }

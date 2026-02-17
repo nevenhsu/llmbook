@@ -4,13 +4,13 @@ This document describes the shared libraries available in `src/lib/` for common 
 
 ## Quick Reference
 
-| Library | Purpose | Import |
-|---------|---------|--------|
-| [API Client](#api-client) | Typed HTTP requests | `import { apiPost, ApiError } from '@/lib/api/fetch-json'` |
-| [Votes API](#votes-api) | Post/comment voting | `import { votePost, voteComment } from '@/lib/api/votes'` |
-| [Optimistic Vote](#optimistic-vote) | Vote state calculations | `import { applyVote } from '@/lib/optimistic/vote'` |
-| [Pagination](#pagination) | Feed pagination | `import { buildPostsQueryParams } from '@/lib/pagination'` |
-| [Route Helpers](#route-helpers) | API route utilities | `import { withAuth, http } from '@/lib/server/route-helpers'` |
+| Library                             | Purpose                 | Import                                                        |
+| ----------------------------------- | ----------------------- | ------------------------------------------------------------- |
+| [API Client](#api-client)           | Typed HTTP requests     | `import { apiPost, ApiError } from '@/lib/api/fetch-json'`    |
+| [Votes API](#votes-api)             | Post/comment voting     | `import { votePost, voteComment } from '@/lib/api/votes'`     |
+| [Optimistic Vote](#optimistic-vote) | Vote state calculations | `import { applyVote } from '@/lib/optimistic/vote'`           |
+| [Pagination](#pagination)           | Feed pagination         | `import { buildPostsQueryParams } from '@/lib/pagination'`    |
+| [Route Helpers](#route-helpers)     | API route utilities     | `import { withAuth, http } from '@/lib/server/route-helpers'` |
 
 ---
 
@@ -21,17 +21,17 @@ This document describes the shared libraries available in `src/lib/` for common 
 ### Usage
 
 ```typescript
-import { apiFetchJson, apiPost, ApiError } from '@/lib/api/fetch-json';
+import { apiFetchJson, apiPost, ApiError } from "@/lib/api/fetch-json";
 
 // GET request
-const data = await apiFetchJson<User>('/api/users/123');
+const data = await apiFetchJson<User>("/api/users/123");
 
 // POST request
-const result = await apiPost<VoteResponse>('/api/votes', { postId: '123', value: 1 });
+const result = await apiPost<VoteResponse>("/api/votes", { postId: "123", value: 1 });
 
 // Error handling
 try {
-  await apiPost('/api/votes', { postId: '123', value: 1 });
+  await apiPost("/api/votes", { postId: "123", value: 1 });
 } catch (err) {
   if (err instanceof ApiError) {
     console.log(err.status); // 401, 400, etc.
@@ -58,14 +58,15 @@ try {
 #### `votePost(postId: string, value: 1 | -1): Promise<VoteResponse>`
 
 Vote on a post. The server handles:
+
 - Creating new vote
 - Toggling off (send same value again)
 - Flipping vote (send opposite value)
 
 ```typescript
-import { votePost } from '@/lib/api/votes';
+import { votePost } from "@/lib/api/votes";
 
-const { score } = await votePost('post-123', 1);
+const { score } = await votePost("post-123", 1);
 ```
 
 #### `voteComment(commentId: string, value: 1 | -1): Promise<VoteResponse>`
@@ -73,9 +74,9 @@ const { score } = await votePost('post-123', 1);
 Vote on a comment.
 
 ```typescript
-import { voteComment } from '@/lib/api/votes';
+import { voteComment } from "@/lib/api/votes";
 
-const { score } = await voteComment('comment-123', -1);
+const { score } = await voteComment("comment-123", -1);
 ```
 
 ### API Contract
@@ -98,7 +99,7 @@ Calculate vote state changes for optimistic UI updates.
 Calculate new score and userVote after a vote action.
 
 ```typescript
-import { applyVote } from '@/lib/optimistic/vote';
+import { applyVote } from "@/lib/optimistic/vote";
 
 const current = { score: 10, userVote: null };
 const result = applyVote(current, 1);
@@ -118,11 +119,11 @@ const flip = applyVote({ score: 11, userVote: -1 }, 1);
 Calculate score change between two vote states.
 
 ```typescript
-import { getVoteScoreDelta } from '@/lib/optimistic/vote';
+import { getVoteScoreDelta } from "@/lib/optimistic/vote";
 
-getVoteScoreDelta(null, 1);      // 1 (new upvote)
-getVoteScoreDelta(1, null);      // -1 (toggle off upvote)
-getVoteScoreDelta(-1, 1);        // 2 (flip downvote to upvote)
+getVoteScoreDelta(null, 1); // 1 (new upvote)
+getVoteScoreDelta(1, null); // -1 (toggle off upvote)
+getVoteScoreDelta(-1, 1); // 2 (flip downvote to upvote)
 ```
 
 ---
@@ -138,12 +139,12 @@ Utilities for feed pagination supporting both offset and cursor-based modes.
 Build query parameters for `/api/posts` endpoint.
 
 ```typescript
-import { buildPostsQueryParams } from '@/lib/pagination';
+import { buildPostsQueryParams } from "@/lib/pagination";
 
 // Board feed with offset
 const params = buildPostsQueryParams({
-  board: 'general',
-  sort: 'hot',
+  board: "general",
+  sort: "hot",
   offset: 20,
   limit: 20,
 });
@@ -151,9 +152,9 @@ const params = buildPostsQueryParams({
 
 // Tag feed with cursor (time-based)
 const params = buildPostsQueryParams({
-  tag: 'javascript',
-  sort: 'new',
-  cursor: '2024-01-15T00:00:00.000Z',
+  tag: "javascript",
+  sort: "new",
+  cursor: "2024-01-15T00:00:00.000Z",
   limit: 20,
 });
 // Result: ?tag=javascript&sort=new&cursor=2024-01-15T00:00:00.000Z&limit=20
@@ -173,10 +174,10 @@ const nextCursor = getNextCursor(posts);
 
 ### Pagination Modes
 
-| Mode | Use Case | Parameter |
-|------|----------|-----------|
-| `offset` | Cached rankings (hot/rising) | `cursor` = page number |
-| `cursor` | Time-based sorts (new/top) | `cursor` = ISO date string |
+| Mode     | Use Case                     | Parameter                  |
+| -------- | ---------------------------- | -------------------------- |
+| `offset` | Cached rankings (hot/rising) | `cursor` = page number     |
+| `cursor` | Time-based sorts (new/top)   | `cursor` = ISO date string |
 
 ---
 
@@ -191,31 +192,31 @@ Reduce boilerplate in Next.js API routes.
 Wrap route handler with authentication check.
 
 ```typescript
-import { withAuth, http, parseJsonBody } from '@/lib/server/route-helpers';
+import { withAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
 
 export const POST = withAuth(async (req, { user, supabase }) => {
   // User is guaranteed to be authenticated
   const body = await parseJsonBody(req);
-  
+
   // Your logic here...
-  
-  return http.ok({ id: '123' });
+
+  return http.ok({ id: "123" });
 });
 ```
 
 ### HTTP Helpers
 
 ```typescript
-import { http } from '@/lib/server/route-helpers';
+import { http } from "@/lib/server/route-helpers";
 
-http.ok(data);                    // 200
-http.created(data);               // 201
-http.badRequest(message);         // 400
-http.unauthorized(message);       // 401
-http.forbidden(message);          // 403
-http.notFound(message);           // 404
-http.conflict(message);           // 409
-http.internalError(message);      // 500
+http.ok(data); // 200
+http.created(data); // 201
+http.badRequest(message); // 400
+http.unauthorized(message); // 401
+http.forbidden(message); // 403
+http.notFound(message); // 404
+http.conflict(message); // 409
+http.internalError(message); // 500
 ```
 
 ### `parseJsonBody(req)`
@@ -223,7 +224,7 @@ http.internalError(message);      // 500
 Parse JSON body with error handling.
 
 ```typescript
-import { parseJsonBody } from '@/lib/server/route-helpers';
+import { parseJsonBody } from "@/lib/server/route-helpers";
 
 const body = await parseJsonBody(req);
 if (body instanceof Response) {
@@ -238,9 +239,9 @@ if (body instanceof Response) {
 Validate required fields in request body.
 
 ```typescript
-import { validateBody } from '@/lib/server/route-helpers';
+import { validateBody } from "@/lib/server/route-helpers";
 
-const validation = validateBody(body, ['title', 'boardId']);
+const validation = validateBody(body, ["title", "boardId"]);
 if (!validation.valid) {
   return validation.response; // 400 with missing fields message
 }
@@ -258,10 +259,10 @@ const { title, boardId } = validation.data;
 **File:** [`src/test-utils/next-headers.ts`](../../src/test-utils/next-headers.ts)
 
 ```typescript
-import { mockCookieJar, mockCookieStore } from '@/test-utils/next-headers';
+import { mockCookieJar, mockCookieStore } from "@/test-utils/next-headers";
 
 // Set cookies before test
-mockCookieJar.set('sb-access-token', 'test-token');
+mockCookieJar.set("sb-access-token", "test-token");
 ```
 
 ### Supabase Mock Builder
@@ -269,12 +270,12 @@ mockCookieJar.set('sb-access-token', 'test-token');
 **File:** [`src/test-utils/supabase-mock.ts`](../../src/test-utils/supabase-mock.ts)
 
 ```typescript
-import { createSupabaseMock } from '@/test-utils/supabase-mock';
+import { createSupabaseMock } from "@/test-utils/supabase-mock";
 
 const supabaseMock = createSupabaseMock();
 supabaseMock.auth.getUser.mockResolvedValue({
-  data: { user: { id: 'user123' } },
-  error: null
+  data: { user: { id: "user123" } },
+  error: null,
 });
 ```
 
@@ -309,33 +310,39 @@ npm test src/lib/server/route-helpers.test.ts
 ### Migrating Existing Components
 
 **Before:**
+
 ```typescript
-const res = await fetch('/api/votes', {
-  method: 'POST',
-  body: JSON.stringify({ post_id: postId, value })
+const res = await fetch("/api/votes", {
+  method: "POST",
+  body: JSON.stringify({ post_id: postId, value }),
 });
 const data = await res.json();
 ```
 
 **After:**
+
 ```typescript
-import { votePost } from '@/lib/api/votes';
+import { votePost } from "@/lib/api/votes";
 const { score } = await votePost(postId, value);
 ```
 
 ### Migrating API Routes
 
 **Before:**
+
 ```typescript
 export async function POST(req: Request) {
   const supabase = await createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   // ... handler logic
 }
 ```
 
 **After:**
+
 ```typescript
 export const POST = withAuth(async (req, { user, supabase }) => {
   // User is guaranteed to be authenticated

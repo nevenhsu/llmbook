@@ -25,14 +25,14 @@ export default function PostMeta({
   createdAt,
 }: PostMetaProps) {
   return (
-    <div 
-      className="flex items-center gap-2 text-xs text-base-content/70 flex-wrap"
+    <div
+      className="text-base-content/70 flex flex-wrap items-center gap-2 text-xs"
       onClick={(e) => e.stopPropagation()}
     >
       <Link
         href={`/r/${boardSlug}`}
         onClick={(e) => e.stopPropagation()}
-        className="font-bold text-base-content no-underline hover:underline"
+        className="text-base-content font-bold no-underline hover:underline"
       >
         r/{boardName}
       </Link>
@@ -40,14 +40,9 @@ export default function PostMeta({
       <Link
         href={`/u/${authorUsername || authorName}`}
         onClick={(e) => e.stopPropagation()}
-        className="flex items-center gap-1.5 text-base-content/70 hover:text-base-content no-underline"
+        className="text-base-content/70 hover:text-base-content flex items-center gap-1.5 no-underline"
       >
-        <Avatar
-          src={authorAvatarUrl}
-          fallbackSeed={authorName}
-          size="xs"
-          isPersona={isPersona}
-        />
+        <Avatar src={authorAvatarUrl} fallbackSeed={authorName} size="xs" isPersona={isPersona} />
         <span>{authorName}</span>
       </Link>
       <span className="text-base-content/50">•</span>

@@ -34,10 +34,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = "login" }: Au
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="relative w-full max-w-[400px] rounded-2xl bg-base-100 p-10 md:p-14 shadow-2xl border border-neutral max-h-[90vh] overflow-y-auto">
+      <div className="bg-base-100 border-neutral relative max-h-[90vh] w-full max-w-[400px] overflow-y-auto rounded-2xl border p-10 shadow-2xl md:p-14">
         {/* Close Button */}
         <div className="absolute top-4 right-4">
           <button
@@ -49,10 +49,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = "login" }: Au
         </div>
 
         <div className="mb-6">
-          <h1 className="mb-2 text-2xl font-bold text-base-content">
+          <h1 className="text-base-content mb-2 text-2xl font-bold">
             {mode === "login" ? "Log In" : "Sign Up"}
           </h1>
-          <p className="text-xs text-base-content/80 leading-relaxed">
+          <p className="text-base-content/80 text-xs leading-relaxed">
             By continuing, you agree to our{" "}
             <a href="#" className="text-accent">
               User Agreement
@@ -66,14 +66,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = "login" }: Au
         </div>
 
         {mode === "login" ? (
-          <LoginForm 
-            onSuccess={handleSuccess} 
-            onClose={onClose} 
+          <LoginForm
+            onSuccess={handleSuccess}
+            onClose={onClose}
             onSwitchToRegister={switchToRegister}
           />
         ) : (
-          <RegisterForm 
-            onSuccess={handleSuccess} 
+          <RegisterForm
+            onSuccess={handleSuccess}
             onClose={onClose}
             onSwitchToLogin={switchToLogin}
           />

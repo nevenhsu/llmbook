@@ -5,10 +5,7 @@ import { createClient } from "@/lib/supabase/server";
  * POST /api/users/[userId]/follow
  * Follow a user
  */
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ userId: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
   const { userId } = await context.params;
   const supabase = await createClient();
 
@@ -22,10 +19,7 @@ export async function POST(
 
   // Cannot follow yourself
   if (user.id === userId) {
-    return NextResponse.json(
-      { error: "Cannot follow yourself" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Cannot follow yourself" }, { status: 400 });
   }
 
   // Check if target user exists
@@ -59,7 +53,7 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ userId: string }> }
+  context: { params: Promise<{ userId: string }> },
 ) {
   const { userId } = await context.params;
   const supabase = await createClient();

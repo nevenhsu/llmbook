@@ -60,7 +60,7 @@ function ToolbarButton({
   return (
     <button
       type="button"
-      className={`p-1.5 rounded hover:hover:bg-base-300 transition-colors ${active ? "bg-base-300 text-base-content" : "text-base-content/70 hover:text-base-content"}`}
+      className={`hover:hover:bg-base-300 rounded p-1.5 transition-colors ${active ? "bg-base-300 text-base-content" : "text-base-content/70 hover:text-base-content"}`}
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
@@ -71,11 +71,11 @@ function ToolbarButton({
   );
 }
 
-function MenuBar({ 
-  editor, 
-  onOpenLinkModal, 
-  onOpenImageModal 
-}: { 
+function MenuBar({
+  editor,
+  onOpenLinkModal,
+  onOpenImageModal,
+}: {
   editor: Editor;
   onOpenLinkModal: () => void;
   onOpenImageModal: () => void;
@@ -83,7 +83,7 @@ function MenuBar({
   const headingLevels = [1, 2, 3] as const;
 
   return (
-    <div className="relative z-50 flex flex-wrap items-center gap-0.5 overflow-visible border-b border-neutral bg-base-100/60 px-2 py-1 backdrop-blur-sm">
+    <div className="border-neutral bg-base-100/60 relative z-50 flex flex-wrap items-center gap-0.5 overflow-visible border-b px-2 py-1 backdrop-blur-sm">
       <ToolbarButton
         label="Undo"
         onClick={() => editor.chain().focus().undo().run()}
@@ -99,27 +99,27 @@ function MenuBar({
         <Redo2 size={16} />
       </ToolbarButton>
 
-      <div className="mx-1 h-6 w-px bg-neutral" />
+      <div className="bg-neutral mx-1 h-6 w-px" />
 
       <div className="dropdown dropdown-bottom">
         <button
           type="button"
           tabIndex={0}
-          className="flex items-center gap-1 p-1.5 rounded hover:hover:bg-base-300 text-base-content/70 hover:text-base-content transition-colors"
+          className="hover:hover:bg-base-300 text-base-content/70 hover:text-base-content flex items-center gap-1 rounded p-1.5 transition-colors"
           aria-label="Text style"
           title="Text style"
         >
-          <span className="text-xs font-bold uppercase tracking-wider">Text</span>
+          <span className="text-xs font-bold tracking-wider uppercase">Text</span>
           <ChevronDown size={14} />
         </button>
         <ul
           tabIndex={-1}
-          className="dropdown-content absolute left-0 mt-1 w-44 rounded-md border border-neutral bg-base-100 p-1 shadow-xl z-[110]"
+          className="dropdown-content border-neutral bg-base-100 absolute left-0 z-[110] mt-1 w-44 rounded-md border p-1 shadow-xl"
         >
           <li>
             <button
               type="button"
-              className={`w-full text-left px-3 py-2 text-sm rounded hover:hover:bg-base-300 ${editor.isActive("paragraph") ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
+              className={`hover:hover:bg-base-300 w-full rounded px-3 py-2 text-left text-sm ${editor.isActive("paragraph") ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
               onClick={() => editor.chain().focus().setParagraph().run()}
             >
               Paragraph
@@ -129,10 +129,8 @@ function MenuBar({
             <li key={level}>
               <button
                 type="button"
-                className={`w-full text-left px-3 py-2 text-sm rounded hover:hover:bg-base-300 ${editor.isActive("heading", { level }) ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
-                onClick={() =>
-                  editor.chain().focus().toggleHeading({ level }).run()
-                }
+                className={`hover:hover:bg-base-300 w-full rounded px-3 py-2 text-left text-sm ${editor.isActive("heading", { level }) ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
+                onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
               >
                 Heading {level}
               </button>
@@ -196,7 +194,7 @@ function MenuBar({
         <Quote size={16} />
       </ToolbarButton>
 
-      <div className="mx-1 h-6 w-px bg-neutral" />
+      <div className="bg-neutral mx-1 h-6 w-px" />
 
       <ToolbarButton
         label="Add or edit link"
@@ -219,12 +217,7 @@ function MenuBar({
   );
 }
 
-export function SimpleEditor({
-  content,
-  onChange,
-  placeholder,
-  onImageUpload,
-}: SimpleEditorProps) {
+export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: SimpleEditorProps) {
   const [internalContent, setInternalContent] = useState<string>(content ?? "");
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -247,7 +240,7 @@ export function SimpleEditor({
       Placeholder.configure({
         placeholder: placeholder || "Text (optional)",
         emptyEditorClass:
- "is-editor-empty before:text-base-content/50 before:content-[attr(data-placeholder)] before:float-left before:pointer-events-none before:h-0",
+          "is-editor-empty before:text-base-content/50 before:content-[attr(data-placeholder)] before:float-left before:pointer-events-none before:h-0",
       }),
       Link.configure({
         openOnClick: false,
@@ -265,7 +258,7 @@ export function SimpleEditor({
     editorProps: {
       attributes: {
         class:
- "prose prose-invert max-w-none p-4 min-h-[250px] sm:min-h-[200px] focus:outline-none text-sm leading-relaxed text-base-content",
+          "prose prose-invert max-w-none p-4 min-h-[250px] sm:min-h-[200px] focus:outline-none text-sm leading-relaxed text-base-content",
       },
     },
     immediatelyRender: false,
@@ -287,7 +280,7 @@ export function SimpleEditor({
   function handleSetLink() {
     if (!editor) return;
     const trimmed = linkUrl.trim();
-    
+
     if (!trimmed) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       setShowLinkModal(false);
@@ -334,11 +327,11 @@ export function SimpleEditor({
     try {
       // Get placeholder URL from parent component
       const result = await onImageUpload(imageFile);
-      
+
       // Insert image with placeholder URL
       // The parent component will replace this with the real URL when post is submitted
       editor.chain().focus().setImage({ src: result.url }).run();
-      
+
       setShowImageModal(false);
       setImageFile(null);
       setImagePreview("");
@@ -351,11 +344,11 @@ export function SimpleEditor({
 
   return (
     <>
-      <div className="relative isolate overflow-x-auto rounded-md border border-neutral bg-base-100 transition-colors focus-within:border-neutral">
+      <div className="border-neutral bg-base-100 focus-within:border-neutral relative isolate overflow-x-auto rounded-md border transition-colors">
         <div className="relative z-20">
           {editor ? (
-            <MenuBar 
-              editor={editor} 
+            <MenuBar
+              editor={editor}
               onOpenLinkModal={handleOpenLinkModal}
               onOpenImageModal={() => setShowImageModal(true)}
             />
@@ -369,15 +362,15 @@ export function SimpleEditor({
       {/* Link Modal */}
       {showLinkModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg border border-neutral bg-base-100 p-6 shadow-xl">
+          <div className="border-neutral bg-base-100 w-full max-w-md rounded-lg border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-base-content">Add Link</h3>
+              <h3 className="text-base-content text-lg font-bold">Add Link</h3>
               <button
                 onClick={() => {
                   setShowLinkModal(false);
                   setLinkUrl("");
                 }}
-                className="rounded-full p-1 hover:bg-base-300 transition-colors"
+                className="hover:bg-base-300 rounded-full p-1 transition-colors"
               >
                 <X size={20} />
               </button>
@@ -387,7 +380,7 @@ export function SimpleEditor({
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full rounded-lg border border-neutral bg-base-100 px-4 py-2 text-sm text-base-content focus:outline-none focus:border-primary mb-4"
+              className="border-neutral bg-base-100 text-base-content focus:border-primary mb-4 w-full rounded-lg border px-4 py-2 text-sm focus:outline-none"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -402,13 +395,13 @@ export function SimpleEditor({
                   setShowLinkModal(false);
                   setLinkUrl("");
                 }}
-                className="px-4 py-2 rounded-full text-sm font-bold text-base-content/70 hover:bg-base-300 transition-colors"
+                className="text-base-content/70 hover:bg-base-300 rounded-full px-4 py-2 text-sm font-bold transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSetLink}
-                className="px-4 py-2 rounded-full bg-primary text-primary-content text-sm font-bold hover:bg-primary/90 transition-colors"
+                className="bg-primary text-primary-content hover:bg-primary/90 rounded-full px-4 py-2 text-sm font-bold transition-colors"
               >
                 {linkUrl ? "Set Link" : "Remove Link"}
               </button>
@@ -420,30 +413,30 @@ export function SimpleEditor({
       {/* Image Upload Modal */}
       {showImageModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg border border-neutral bg-base-100 p-6 shadow-xl">
+          <div className="border-neutral bg-base-100 w-full max-w-md rounded-lg border p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-base-content">Upload Image</h3>
+              <h3 className="text-base-content text-lg font-bold">Upload Image</h3>
               <button
                 onClick={() => {
                   setShowImageModal(false);
                   setImageFile(null);
                   setImagePreview("");
                 }}
-                className="rounded-full p-1 hover:bg-base-300 transition-colors"
+                className="hover:bg-base-300 rounded-full p-1 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="mb-4">
               <label className="block w-full cursor-pointer">
-                <div className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-neutral bg-base-200 p-8 hover:bg-base-300 transition-colors">
+                <div className="border-neutral bg-base-200 hover:bg-base-300 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors">
                   {imagePreview ? (
                     <img src={imagePreview} alt="Preview" className="max-h-48 rounded" />
                   ) : (
                     <>
                       <ImagePlus size={32} className="text-base-content/50" />
-                      <span className="text-sm text-base-content/70">Click to select image</span>
+                      <span className="text-base-content/70 text-sm">Click to select image</span>
                     </>
                   )}
                 </div>
@@ -454,9 +447,7 @@ export function SimpleEditor({
                   className="hidden"
                 />
               </label>
-              {imageFile && (
-                <p className="mt-2 text-xs text-base-content/70">{imageFile.name}</p>
-              )}
+              {imageFile && <p className="text-base-content/70 mt-2 text-xs">{imageFile.name}</p>}
             </div>
 
             <div className="flex justify-end gap-2">
@@ -466,14 +457,14 @@ export function SimpleEditor({
                   setImageFile(null);
                   setImagePreview("");
                 }}
-                className="px-4 py-2 rounded-full text-sm font-bold text-base-content/70 hover:bg-base-300 transition-colors"
+                className="text-base-content/70 hover:bg-base-300 rounded-full px-4 py-2 text-sm font-bold transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleInsertImage}
                 disabled={!imageFile || uploadingImage}
-                className="px-4 py-2 rounded-full bg-primary text-primary-content text-sm font-bold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                className="bg-primary text-primary-content hover:bg-primary/90 rounded-full px-4 py-2 text-sm font-bold transition-colors disabled:opacity-50"
               >
                 {uploadingImage ? "Uploading..." : "Insert Image"}
               </button>

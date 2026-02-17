@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { MoreHorizontal, UserX, Ban } from 'lucide-react';
-import Avatar from '@/components/ui/Avatar';
-import ConfirmModal from '@/components/ui/ConfirmModal';
-import ResponsiveMenu from '@/components/ui/ResponsiveMenu';
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { MoreHorizontal, UserX, Ban } from "lucide-react";
+import Avatar from "@/components/ui/Avatar";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
 
 interface BoardMember {
   user_id: string;
@@ -41,9 +41,9 @@ interface BoardMemberManagementProps {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return 'N/A';
+  if (!value) return "N/A";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'N/A';
+  if (Number.isNaN(date.getTime())) return "N/A";
   return date.toLocaleString();
 }
 
@@ -52,26 +52,27 @@ export default function BoardMemberManagement({
   currentUserId,
   canEditBans,
   members,
-  bans
+  bans,
 }: BoardMemberManagementProps) {
   const router = useRouter();
-  const [memberTab, setMemberTab] = useState<'members' | 'bans'>('members');
+  const [memberTab, setMemberTab] = useState<"members" | "bans">("members");
   const [membersList, setMembersList] = useState<BoardMember[]>(members);
   const [bansList, setBansList] = useState<BannedUser[]>(bans);
-  const [banUserId, setBanUserId] = useState('');
-  const [banReason, setBanReason] = useState('');
-  const [banExpiresAt, setBanExpiresAt] = useState('');
+  const [banUserId, setBanUserId] = useState("");
+  const [banReason, setBanReason] = useState("");
+  const [banExpiresAt, setBanExpiresAt] = useState("");
   const [kickLoadingUserId, setKickLoadingUserId] = useState<string | null>(null);
   const [banLoading, setBanLoading] = useState(false);
   const [unbanLoadingUserId, setUnbanLoadingUserId] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showKickModal, setShowKickModal] = useState(false);
   const [memberToKick, setMemberToKick] = useState<string | null>(null);
 
   const bannedUserIds = useMemo(() => new Set(bansList.map((ban) => ban.user_id)), [bansList]);
   const bannableMembers = useMemo(
-    () => membersList.filter((member) => !member.is_moderator && !bannedUserIds.has(member.user_id)),
-    [membersList, bannedUserIds]
+    () =>
+      membersList.filter((member) => !member.is_moderator && !bannedUserIds.has(member.user_id)),
+    [membersList, bannedUserIds],
   );
 
   const kickMember = async (userId: string) => {
@@ -83,15 +84,15 @@ export default function BoardMemberManagement({
     if (!memberToKick) return;
 
     setKickLoadingUserId(memberToKick);
-    setError('');
+    setError("");
 
     try {
       const res = await fetch(`/api/boards/${boardSlug}/members/${memberToKick}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
       if (!res.ok) {
-        throw new Error('Failed to kick member.');
+        throw new Error("Failed to kick member.");
       }
 
       setMembersList((prev) => prev.filter((member) => member.user_id !== memberToKick));
@@ -100,7 +101,7 @@ export default function BoardMemberManagement({
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError('Failed to kick member.');
+      setError("Failed to kick member.");
     } finally {
       setKickLoadingUserId(null);
     }
@@ -108,12 +109,12 @@ export default function BoardMemberManagement({
 
   const handleBanUser = async () => {
     if (!banUserId) {
-      setError('Please select a member to ban.');
+      setError("Please select a member to ban.");
       return;
     }
 
     setBanLoading(true);
-    setError('');
+    setError("");
 
     try {
       const payload: Record<string, string> = { user_id: banUserId };
@@ -126,25 +127,25 @@ export default function BoardMemberManagement({
       }
 
       const res = await fetch(`/api/boards/${boardSlug}/bans`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        throw new Error('Failed to ban user.');
+        throw new Error("Failed to ban user.");
       }
 
       const ban: BannedUser = await res.json();
       setBansList((prev) => [ban, ...prev.filter((item) => item.user_id !== ban.user_id)]);
       setMembersList((prev) => prev.filter((member) => member.user_id !== ban.user_id));
-      setBanUserId('');
-      setBanReason('');
-      setBanExpiresAt('');
+      setBanUserId("");
+      setBanReason("");
+      setBanExpiresAt("");
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError('Failed to ban user.');
+      setError("Failed to ban user.");
     } finally {
       setBanLoading(false);
     }
@@ -152,29 +153,31 @@ export default function BoardMemberManagement({
 
   const handleUnbanUser = async (userId: string) => {
     setUnbanLoadingUserId(userId);
-    setError('');
+    setError("");
 
     try {
       const res = await fetch(`/api/boards/${boardSlug}/bans/${userId}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
       if (!res.ok) {
-        throw new Error('Failed to unban user.');
+        throw new Error("Failed to unban user.");
       }
 
       setBansList((prev) => prev.filter((ban) => ban.user_id !== userId));
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError('Failed to unban user.');
+      setError("Failed to unban user.");
     } finally {
       setUnbanLoadingUserId(null);
     }
   };
 
-  const getBanDisplayName = (ban: BannedUser) => ban.user?.display_name || ban.profiles?.display_name || 'Unknown';
-  const getBanAvatar = (ban: BannedUser) => ban.user?.avatar_url || ban.profiles?.avatar_url || null;
+  const getBanDisplayName = (ban: BannedUser) =>
+    ban.user?.display_name || ban.profiles?.display_name || "Unknown";
+  const getBanAvatar = (ban: BannedUser) =>
+    ban.user?.avatar_url || ban.profiles?.avatar_url || null;
 
   return (
     <div className="space-y-4">
@@ -187,44 +190,57 @@ export default function BoardMemberManagement({
       <div role="tablist" className="tabs tabs-boxed w-fit">
         <button
           role="tab"
-          className={`tab ${memberTab === 'members' ? 'tab-active' : ''}`}
-          onClick={() => setMemberTab('members')}
+          className={`tab ${memberTab === "members" ? "tab-active" : ""}`}
+          onClick={() => setMemberTab("members")}
         >
           Members ({membersList.length})
         </button>
         <button
           role="tab"
-          className={`tab ${memberTab === 'bans' ? 'tab-active' : ''}`}
-          onClick={() => setMemberTab('bans')}
+          className={`tab ${memberTab === "bans" ? "tab-active" : ""}`}
+          onClick={() => setMemberTab("bans")}
         >
           Bans ({bansList.length})
         </button>
       </div>
 
-      {memberTab === 'members' && (
+      {memberTab === "members" && (
         <div className="space-y-3">
           {membersList.length === 0 ? (
             <div className="alert">
               <span>No members found.</span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {membersList.map((member) => {
                 const isSelf = member.user_id === currentUserId;
-                const isKickDisabled = !canEditBans || member.is_moderator || isSelf || kickLoadingUserId === member.user_id;
+                const isKickDisabled =
+                  !canEditBans ||
+                  member.is_moderator ||
+                  isSelf ||
+                  kickLoadingUserId === member.user_id;
                 const hasActions = canEditBans && !member.is_moderator && !isSelf;
 
                 return (
-                  <div key={member.user_id} className="card bg-base-100 p-3 flex flex-row items-center gap-3">
+                  <div
+                    key={member.user_id}
+                    className="card bg-base-100 flex flex-row items-center gap-3 p-3"
+                  >
                     <Avatar
                       src={member.profiles?.avatar_url || undefined}
                       fallbackSeed={member.profiles?.display_name || member.user_id}
                       size="sm"
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate font-medium">{member.profiles?.display_name || 'Unknown'}</p>
-                      <p className="text-xs opacity-70">Joined: {formatDateTime(member.joined_at)}</p>
-                      {member.is_moderator && <span className="badge badge-ghost badge-xs mt-1">moderator</span>}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {member.profiles?.display_name || "Unknown"}
+                      </p>
+                      <p className="text-xs opacity-70">
+                        Joined: {formatDateTime(member.joined_at)}
+                      </p>
+                      {member.is_moderator && (
+                        <span className="badge badge-ghost badge-xs mt-1">moderator</span>
+                      )}
                     </div>
                     {hasActions ? (
                       <ResponsiveMenu
@@ -239,11 +255,11 @@ export default function BoardMemberManagement({
                               kickMember(member.user_id);
                             }}
                             disabled={kickLoadingUserId === member.user_id}
-                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-error"
+                            className="text-error flex w-full items-center gap-3 px-3 py-2 text-sm"
                           >
                             <UserX size={20} className="md:hidden" />
                             <UserX size={16} className="hidden md:inline" />
-                            {kickLoadingUserId === member.user_id ? 'Kicking...' : 'Kick member'}
+                            {kickLoadingUserId === member.user_id ? "Kicking..." : "Kick member"}
                           </button>
                         </li>
                       </ResponsiveMenu>
@@ -258,9 +274,9 @@ export default function BoardMemberManagement({
         </div>
       )}
 
-      {memberTab === 'bans' && (
+      {memberTab === "bans" && (
         <div className="space-y-4">
-          <div className="card bg-base-100 p-4 border border-neutral space-y-3">
+          <div className="card bg-base-100 border-neutral space-y-3 border p-4">
             <h4 className="font-semibold">Ban User</h4>
             <div className="form-control">
               <label className="label">
@@ -311,7 +327,11 @@ export default function BoardMemberManagement({
               onClick={handleBanUser}
               disabled={banLoading || !banUserId || !canEditBans}
             >
-              {banLoading ? <span className="loading loading-spinner loading-xs"></span> : 'Ban User'}
+              {banLoading ? (
+                <span className="loading loading-spinner loading-xs"></span>
+              ) : (
+                "Ban User"
+              )}
             </button>
             {!canEditBans && (
               <p className="text-xs opacity-70">Only owner and managers can edit ban list.</p>
@@ -325,15 +345,15 @@ export default function BoardMemberManagement({
           ) : (
             <div className="space-y-2">
               {bansList.map((ban) => (
-                <div key={ban.id} className="card bg-base-100 p-3 flex flex-row items-center gap-3">
+                <div key={ban.id} className="card bg-base-100 flex flex-row items-center gap-3 p-3">
                   <Avatar
                     src={getBanAvatar(ban) || undefined}
                     fallbackSeed={getBanDisplayName(ban)}
                     size="sm"
                   />
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{getBanDisplayName(ban)}</p>
-                    <p className="text-xs opacity-70">Reason: {ban.reason || 'N/A'}</p>
+                    <p className="text-xs opacity-70">Reason: {ban.reason || "N/A"}</p>
                     <p className="text-xs opacity-70">Expires: {formatDateTime(ban.expires_at)}</p>
                   </div>
                   {canEditBans ? (
@@ -349,11 +369,11 @@ export default function BoardMemberManagement({
                             handleUnbanUser(ban.user_id);
                           }}
                           disabled={unbanLoadingUserId === ban.user_id}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-success"
+                          className="text-success flex w-full items-center gap-3 px-3 py-2 text-sm"
                         >
                           <Ban size={20} className="md:hidden" />
                           <Ban size={16} className="hidden md:inline" />
-                          {unbanLoadingUserId === ban.user_id ? 'Unbanning...' : 'Unban user'}
+                          {unbanLoadingUserId === ban.user_id ? "Unbanning..." : "Unban user"}
                         </button>
                       </li>
                     </ResponsiveMenu>

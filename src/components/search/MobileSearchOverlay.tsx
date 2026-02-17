@@ -66,17 +66,20 @@ export default function MobileSearchOverlay() {
 
       {/* Modal — full screen on mobile */}
       <dialog ref={modalRef} className="modal modal-top">
-        <div className="modal-box w-full max-w-full sm:max-w-lg rounded-none sm:rounded-box bg-base-200 p-0">
+        <div className="modal-box sm:rounded-box bg-base-200 w-full max-w-full rounded-none p-0 sm:max-w-lg">
           {/* Search header */}
-          <form onSubmit={handleSearch} className="flex items-center gap-2 border-b border-neutral px-4 py-3">
-            <Search size={20} className="text-[#818384] flex-shrink-0" />
+          <form
+            onSubmit={handleSearch}
+            className="border-neutral flex items-center gap-2 border-b px-4 py-3"
+          >
+            <Search size={20} className="flex-shrink-0 text-[#818384]" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search..."
-              className="flex-1 bg-transparent text-base-content placeholder:text-[#818384] outline-none text-sm"
+              className="text-base-content flex-1 bg-transparent text-sm outline-none placeholder:text-[#818384]"
             />
             <button type="button" onClick={closeModal} className="btn btn-ghost btn-circle btn-sm">
               <X size={18} />
@@ -86,29 +89,25 @@ export default function MobileSearchOverlay() {
           {/* Results area */}
           <div className="max-h-[calc(100dvh-60px)] overflow-y-auto">
             {query.length === 0 ? (
-              <p className="text-[#818384] text-sm text-center py-8">
+              <p className="py-8 text-center text-sm text-[#818384]">
                 Type to search posts, communities, and people
               </p>
             ) : query.length > 1 ? (
               <div className="py-2">
                 {results.length > 0 ? (
-                  results.slice(0, 5).map(post => {
+                  results.slice(0, 5).map((post) => {
                     const board = post.boards;
                     return (
                       <Link
                         key={post.id}
-                        href={`/r/${board?.slug || 'unknown'}/posts/${post.id}`}
+                        href={`/r/${board?.slug || "unknown"}/posts/${post.id}`}
                         onClick={closeModal}
-                        className="block px-4 py-3 hover:bg-base-300 border-b border-neutral last:border-b-0"
+                        className="hover:bg-base-300 border-neutral block border-b px-4 py-3 last:border-b-0"
                       >
-                        <p className="text-sm font-medium text-base-content line-clamp-2">
+                        <p className="text-base-content line-clamp-2 text-sm font-medium">
                           {post.title}
                         </p>
-                        {board && (
-                          <p className="text-xs text-[#818384] mt-1">
-                            r/{board.slug}
-                          </p>
-                        )}
+                        {board && <p className="mt-1 text-xs text-[#818384]">r/{board.slug}</p>}
                       </Link>
                     );
                   })
@@ -119,15 +118,13 @@ export default function MobileSearchOverlay() {
                 )}
                 <button
                   onClick={handleSearch}
-                  className="w-full text-left px-4 py-3 border-t border-neutral bg-base-200 hover:bg-base-300 text-sm font-bold text-accent"
+                  className="border-neutral bg-base-200 hover:bg-base-300 text-accent w-full border-t px-4 py-3 text-left text-sm font-bold"
                 >
                   Search for "{query}"
                 </button>
               </div>
             ) : (
-              <p className="text-[#818384] text-sm text-center py-8">
-                Type at least 2 characters
-              </p>
+              <p className="py-8 text-center text-sm text-[#818384]">Type at least 2 characters</p>
             )}
           </div>
         </div>

@@ -6,7 +6,11 @@ import BoardLayout from "@/components/board/BoardLayout";
 import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { sortPosts, type SortType } from "@/lib/ranking";
-import { buildPostsQuery, fetchUserInteractions, transformPostToFeedFormat } from "@/lib/posts/query-builder";
+import {
+  buildPostsQuery,
+  fetchUserInteractions,
+  transformPostToFeedFormat,
+} from "@/lib/posts/query-builder";
 import { Archive } from "lucide-react";
 
 interface PageProps {
@@ -17,9 +21,9 @@ interface PageProps {
 export default async function BoardPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const searchParamsResolved = await searchParams;
-  const sortBy = (searchParamsResolved?.sort || 'hot') as SortType;
-  const timeRange = searchParamsResolved?.t || 'all';
-  
+  const sortBy = (searchParamsResolved?.sort || "hot") as SortType;
+  const timeRange = searchParamsResolved?.t || "all";
+
   const supabase = await createClient();
   const board = await getBoardBySlug(slug);
 
@@ -34,17 +38,17 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   let userIsAdmin = false;
   let canManageBoard = false;
   let canViewArchived = false;
-  
+
   if (user) {
     userIsAdmin = await isAdmin(user.id, supabase);
-    
+
     const { data: moderator } = await supabase
-      .from('board_moderators')
-      .select('role')
-      .eq('board_id', board.id)
-      .eq('user_id', user.id)
+      .from("board_moderators")
+      .select("role")
+      .eq("board_id", board.id)
+      .eq("user_id", user.id)
       .maybeSingle();
-    
+
     canManageBoard = !!moderator;
     canViewArchived = userIsAdmin || canManageBoard;
   }
@@ -66,7 +70,11 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
 
   // Fetch user interactions (votes + hidden status + saved status) for displayed posts
   const postIds = topPosts.map((p: any) => p.id);
-  const { votes: userVotes, hiddenPostIds, savedPostIds } = user
+  const {
+    votes: userVotes,
+    hiddenPostIds,
+    savedPostIds,
+  } = user
     ? await fetchUserInteractions(supabase, user.id, postIds)
     : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
@@ -76,21 +84,21 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
       userVote: userVotes[post.id] || null,
       isHidden: hiddenPostIds.has(post.id),
       isSaved: savedPostIds.has(post.id),
-    })
+    }),
   );
 
   // Check if user is joined to the board
   let isJoined = false;
   let canManage = userIsAdmin || canManageBoard;
-  
+
   if (user) {
     const { data: membership } = await supabase
-      .from('board_members')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .eq('board_id', board.id)
+      .from("board_members")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .eq("board_id", board.id)
       .maybeSingle();
-    
+
     isJoined = !!membership;
   }
 
@@ -104,11 +112,11 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     >
       {/* Archived Banner */}
       {board.is_archived && (
-        <div className="rounded-none sm:rounded-box bg-warning/10 border-y sm:border border-warning px-4 py-3 mb-4">
-          <div className="flex items-start sm:items-center justify-between gap-3">
+        <div className="sm:rounded-box bg-warning/10 border-warning mb-4 rounded-none border-y px-4 py-3 sm:border">
+          <div className="flex items-start justify-between gap-3 sm:items-center">
             <div className="flex items-center gap-2">
               <Archive size={18} className="text-warning shrink-0" />
-              <p className="text-sm text-warning">
+              <p className="text-warning text-sm">
                 This community has been archived and is read-only
               </p>
             </div>
@@ -117,9 +125,9 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
       )}
 
       <FeedSortBar basePath={`/r/${slug}`} />
-      <FeedContainer 
-        initialPosts={posts} 
-        userId={user?.id} 
+      <FeedContainer
+        initialPosts={posts}
+        userId={user?.id}
         boardSlug={slug}
         sortBy={sortBy}
         timeRange={timeRange}

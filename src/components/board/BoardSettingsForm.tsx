@@ -59,9 +59,9 @@ export default function BoardSettingsForm({
   isAdmin,
 }: BoardSettingsFormProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<
-    "general" | "rules" | "moderators" | "danger"
-  >("general");
+  const [activeTab, setActiveTab] = useState<"general" | "rules" | "moderators" | "danger">(
+    "general",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -71,28 +71,17 @@ export default function BoardSettingsForm({
   const [showAddModeratorModal, setShowAddModeratorModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchProfile[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState<SearchProfile | null>(
-    null,
-  );
+  const [selectedProfile, setSelectedProfile] = useState<SearchProfile | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [removeLoadingUserId, setRemoveLoadingUserId] = useState<string | null>(
-    null,
-  );
-  const [expandedPermissionUserId, setExpandedPermissionUserId] = useState<
-    string | null
-  >(null);
+  const [removeLoadingUserId, setRemoveLoadingUserId] = useState<string | null>(null);
+  const [expandedPermissionUserId, setExpandedPermissionUserId] = useState<string | null>(null);
   const [editingPermissions, setEditingPermissions] = useState<
     Record<string, ModeratorPermissions>
   >({});
-  const [savePermissionsUserId, setSavePermissionsUserId] = useState<
-    string | null
-  >(null);
-  const [showRemoveModeratorModal, setShowRemoveModeratorModal] =
-    useState(false);
-  const [moderatorToRemove, setModeratorToRemove] = useState<string | null>(
-    null,
-  );
+  const [savePermissionsUserId, setSavePermissionsUserId] = useState<string | null>(null);
+  const [showRemoveModeratorModal, setShowRemoveModeratorModal] = useState(false);
+  const [moderatorToRemove, setModeratorToRemove] = useState<string | null>(null);
 
   // General settings state
   const [name, setName] = useState(board.name);
@@ -124,22 +113,16 @@ export default function BoardSettingsForm({
 
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/search?type=people&q=${encodeURIComponent(query)}`,
-        );
+        const res = await fetch(`/api/search?type=people&q=${encodeURIComponent(query)}`);
         if (!res.ok) {
           throw new Error(await res.text());
         }
 
         const data = await res.json();
         const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
-        const nextResults: SearchProfile[] = profiles.filter(
-          (profile: SearchProfile) => {
-            return !moderatorsList.some(
-              (mod) => mod.user_id === profile.user_id,
-            );
-          },
-        );
+        const nextResults: SearchProfile[] = profiles.filter((profile: SearchProfile) => {
+          return !moderatorsList.some((mod) => mod.user_id === profile.user_id);
+        });
 
         if (!cancelled) {
           setSearchResults(nextResults);
@@ -147,11 +130,7 @@ export default function BoardSettingsForm({
             if (!prev) {
               return prev;
             }
-            return nextResults.some(
-              (profile) => profile.user_id === prev.user_id,
-            )
-              ? prev
-              : null;
+            return nextResults.some((profile) => profile.user_id === prev.user_id) ? prev : null;
           });
         }
       } catch (err: any) {
@@ -256,18 +235,11 @@ export default function BoardSettingsForm({
     setSearchLoading(false);
   };
 
-  const getPermissionsFromModerator = (
-    mod: Moderator,
-  ): ModeratorPermissions => ({
-    manage_posts:
-      mod.permissions?.manage_posts ??
-      DEFAULT_MODERATOR_PERMISSIONS.manage_posts,
-    manage_users:
-      mod.permissions?.manage_users ??
-      DEFAULT_MODERATOR_PERMISSIONS.manage_users,
+  const getPermissionsFromModerator = (mod: Moderator): ModeratorPermissions => ({
+    manage_posts: mod.permissions?.manage_posts ?? DEFAULT_MODERATOR_PERMISSIONS.manage_posts,
+    manage_users: mod.permissions?.manage_users ?? DEFAULT_MODERATOR_PERMISSIONS.manage_users,
     manage_settings:
-      mod.permissions?.manage_settings ??
-      DEFAULT_MODERATOR_PERMISSIONS.manage_settings,
+      mod.permissions?.manage_settings ?? DEFAULT_MODERATOR_PERMISSIONS.manage_settings,
   });
 
   const openPermissionsEditor = (mod: Moderator) => {
@@ -301,21 +273,17 @@ export default function BoardSettingsForm({
   };
 
   const handleSavePermissions = async (mod: Moderator) => {
-    const nextPermissions =
-      editingPermissions[mod.user_id] || getPermissionsFromModerator(mod);
+    const nextPermissions = editingPermissions[mod.user_id] || getPermissionsFromModerator(mod);
 
     setSavePermissionsUserId(mod.user_id);
     setError("");
 
     try {
-      const res = await fetch(
-        `/api/boards/${board.slug}/moderators/${mod.user_id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ permissions: nextPermissions }),
-        },
-      );
+      const res = await fetch(`/api/boards/${board.slug}/moderators/${mod.user_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: nextPermissions }),
+      });
 
       if (!res.ok) {
         throw new Error(await res.text());
@@ -403,20 +371,15 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(
-        `/api/boards/${board.slug}/moderators/${moderatorToRemove}`,
-        {
-          method: "DELETE",
-        },
-      );
+      const res = await fetch(`/api/boards/${board.slug}/moderators/${moderatorToRemove}`, {
+        method: "DELETE",
+      });
 
       if (!res.ok) {
         throw new Error(await res.text());
       }
 
-      setModeratorsList((prev) =>
-        prev.filter((mod) => mod.user_id !== moderatorToRemove),
-      );
+      setModeratorsList((prev) => prev.filter((mod) => mod.user_id !== moderatorToRemove));
       setShowRemoveModeratorModal(false);
       setModeratorToRemove(null);
       router.refresh();
@@ -434,11 +397,7 @@ export default function BoardSettingsForm({
     }
   };
 
-  const updateRule = (
-    index: number,
-    field: "title" | "description",
-    value: string,
-  ) => {
+  const updateRule = (index: number, field: "title" | "description", value: string) => {
     const newRules = [...rules];
     newRules[index][field] = value;
     setRules(newRules);
@@ -457,10 +416,7 @@ export default function BoardSettingsForm({
       )}
 
       {/* Tab Navigation */}
-      <div
-        role="tablist"
-        className="tabs tabs-bordered overflow-x-auto scrollbar-hide mb-6"
-      >
+      <div role="tablist" className="tabs tabs-bordered scrollbar-hide mb-6 overflow-x-auto">
         <button
           role="tab"
           className={`tab whitespace-nowrap ${activeTab === "general" ? "tab-active" : ""}`}
@@ -504,7 +460,7 @@ export default function BoardSettingsForm({
             </label>
             <input
               type="text"
-              className="input input-bordered w-full bg-base-100 border-neutral"
+              className="input input-bordered bg-base-100 border-neutral w-full"
               value={name}
               onChange={(e) => setName(e.target.value)}
               minLength={3}
@@ -517,7 +473,7 @@ export default function BoardSettingsForm({
               <span className="label-text">Description</span>
             </label>
             <textarea
-              className="textarea textarea-bordered w-full bg-base-100 border-neutral"
+              className="textarea textarea-bordered bg-base-100 border-neutral w-full"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
@@ -536,16 +492,8 @@ export default function BoardSettingsForm({
             />
           </div>
 
-          <button
-            className="btn btn-primary"
-            onClick={handleUpdateGeneral}
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="loading loading-spinner"></span>
-            ) : (
-              "Save Changes"
-            )}
+          <button className="btn btn-primary" onClick={handleUpdateGeneral} disabled={loading}>
+            {loading ? <span className="loading loading-spinner"></span> : "Save Changes"}
           </button>
         </div>
       )}
@@ -554,33 +502,25 @@ export default function BoardSettingsForm({
       {activeTab === "rules" && (
         <div className="space-y-4">
           {rules.map((rule, index) => (
-            <div
-              key={index}
-              className="card bg-base-100 p-4 border border-neutral"
-            >
-              <div className="flex items-center justify-between mb-2">
+            <div key={index} className="card bg-base-100 border-neutral border p-4">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="font-medium">Rule {index + 1}</span>
-                <button
-                  className="btn btn-ghost btn-xs"
-                  onClick={() => removeRule(index)}
-                >
+                <button className="btn btn-ghost btn-xs" onClick={() => removeRule(index)}>
                   <X size={14} />
                 </button>
               </div>
               <input
                 type="text"
-                className="input input-bordered input-sm w-full bg-base-100 border-neutral mb-2"
+                className="input input-bordered input-sm bg-base-100 border-neutral mb-2 w-full"
                 value={rule.title}
                 onChange={(e) => updateRule(index, "title", e.target.value)}
                 placeholder="Rule title"
                 maxLength={100}
               />
               <textarea
-                className="textarea textarea-bordered textarea-sm w-full bg-base-100 border-neutral"
+                className="textarea textarea-bordered textarea-sm bg-base-100 border-neutral w-full"
                 value={rule.description}
-                onChange={(e) =>
-                  updateRule(index, "description", e.target.value)
-                }
+                onChange={(e) => updateRule(index, "description", e.target.value)}
                 placeholder="Rule description"
                 maxLength={500}
                 rows={2}
@@ -594,16 +534,8 @@ export default function BoardSettingsForm({
           >
             + Add Rule
           </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleUpdateRules}
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="loading loading-spinner"></span>
-            ) : (
-              "Save Rules"
-            )}
+          <button className="btn btn-primary" onClick={handleUpdateRules} disabled={loading}>
+            {loading ? <span className="loading loading-spinner"></span> : "Save Rules"}
           </button>
         </div>
       )}
@@ -611,11 +543,11 @@ export default function BoardSettingsForm({
       {/* Moderators Tab */}
       {activeTab === "moderators" && userRole === "owner" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {moderatorsList.map((mod) => (
               <div
                 key={mod.id}
-                className="card bg-base-100 p-3 flex flex-row items-center gap-3 cursor-pointer hover:bg-base-200 transition-colors"
+                className="card bg-base-100 hover:bg-base-200 flex cursor-pointer flex-row items-center gap-3 p-3 transition-colors"
                 onClick={() => router.push(`/u/${mod.profiles.username}`)}
               >
                 <Avatar
@@ -623,13 +555,9 @@ export default function BoardSettingsForm({
                   fallbackSeed={mod.profiles.display_name}
                   size="sm"
                 />
-                <div className="flex-1 min-w-0">
-                  <p className="truncate font-medium">
-                    {mod.profiles.display_name}
-                  </p>
-                  <p className="text-sm text-base-content/60 truncate">
-                    @{mod.profiles.username}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{mod.profiles.display_name}</p>
+                  <p className="text-base-content/60 truncate text-sm">@{mod.profiles.username}</p>
                 </div>
                 {mod.role !== "owner" && (userRole === "owner" || isAdmin) && (
                   <button
@@ -639,8 +567,7 @@ export default function BoardSettingsForm({
                       handleRemoveModerator(mod.user_id);
                     }}
                     disabled={
-                      removeLoadingUserId === mod.user_id ||
-                      savePermissionsUserId === mod.user_id
+                      removeLoadingUserId === mod.user_id || savePermissionsUserId === mod.user_id
                     }
                   >
                     {removeLoadingUserId === mod.user_id ? (
@@ -655,25 +582,22 @@ export default function BoardSettingsForm({
           </div>
 
           {expandedPermissionUserId && (
-            <div className="card bg-base-100 p-4 border border-neutral">
+            <div className="card bg-base-100 border-neutral border p-4">
               {(() => {
                 const target = moderatorsList.find(
                   (mod) => mod.user_id === expandedPermissionUserId,
                 );
                 if (!target) {
-                  return (
-                    <p className="text-sm opacity-70">Moderator not found.</p>
-                  );
+                  return <p className="text-sm opacity-70">Moderator not found.</p>;
                 }
 
                 const current =
-                  editingPermissions[target.user_id] ||
-                  getPermissionsFromModerator(target);
+                  editingPermissions[target.user_id] || getPermissionsFromModerator(target);
                 const isSaving = savePermissionsUserId === target.user_id;
 
                 return (
                   <>
-                    <h4 className="font-semibold mb-3">
+                    <h4 className="mb-3 font-semibold">
                       Permissions: {target.profiles.display_name}
                     </h4>
                     <div className="space-y-3">
@@ -752,10 +676,7 @@ export default function BoardSettingsForm({
             </div>
           )}
 
-          <button
-            className="btn btn-outline w-full"
-            onClick={openAddModeratorModal}
-          >
+          <button className="btn btn-outline w-full" onClick={openAddModeratorModal}>
             <UserPlus size={16} />
             Add Moderator
           </button>
@@ -766,14 +687,9 @@ export default function BoardSettingsForm({
       {activeTab === "danger" && isAdmin && (
         <div className="space-y-4">
           <div className="alert alert-error">
-            <span>
-              Archiving is permanent and will make this board read-only.
-            </span>
+            <span>Archiving is permanent and will make this board read-only.</span>
           </div>
-          <button
-            className="btn btn-error w-full"
-            onClick={() => setShowArchiveModal(true)}
-          >
+          <button className="btn btn-error w-full" onClick={() => setShowArchiveModal(true)}>
             <Archive size={16} />
             Archive Board
           </button>
@@ -784,10 +700,10 @@ export default function BoardSettingsForm({
       {showArchiveModal && (
         <dialog className="modal modal-open modal-bottom sm:modal-middle">
           <div className="modal-box">
-            <h3 className="font-bold text-lg">Archive r/{board.slug}?</h3>
+            <h3 className="text-lg font-bold">Archive r/{board.slug}?</h3>
             <p className="py-4">
-              This action cannot be undone. The board will become read-only and
-              will be moved to the archive.
+              This action cannot be undone. The board will become read-only and will be moved to the
+              archive.
             </p>
             <div className="modal-action">
               <button
@@ -797,16 +713,8 @@ export default function BoardSettingsForm({
               >
                 Cancel
               </button>
-              <button
-                className="btn btn-error"
-                onClick={handleArchive}
-                disabled={loading}
-              >
-                {loading ? (
-                  <span className="loading loading-spinner"></span>
-                ) : (
-                  "Archive"
-                )}
+              <button className="btn btn-error" onClick={handleArchive} disabled={loading}>
+                {loading ? <span className="loading loading-spinner"></span> : "Archive"}
               </button>
             </div>
           </div>
@@ -820,7 +728,7 @@ export default function BoardSettingsForm({
       {showAddModeratorModal && (
         <dialog className="modal modal-open modal-middle">
           <div className="modal-box">
-            <h3 className="font-bold text-lg">Add Moderator</h3>
+            <h3 className="text-lg font-bold">Add Moderator</h3>
             <p className="py-2 text-sm opacity-80">
               Search users by username and add them as moderators.
             </p>
@@ -831,7 +739,7 @@ export default function BoardSettingsForm({
               </label>
               <input
                 type="text"
-                className="input input-bordered w-full bg-base-100 border-neutral"
+                className="input input-bordered bg-base-100 border-neutral w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Enter username"
@@ -847,25 +755,21 @@ export default function BoardSettingsForm({
             </div>
 
             {searchQuery.trim().length >= 2 && (
-              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-neutral">
+              <div className="border-neutral mt-3 max-h-64 overflow-y-auto rounded-lg border">
                 {searchLoading ? (
-                  <div className="p-4 text-sm flex items-center gap-2">
+                  <div className="flex items-center gap-2 p-4 text-sm">
                     <span className="loading loading-spinner loading-sm"></span>
                     Searching users...
                   </div>
                 ) : searchResults.length === 0 ? (
-                  <p className="p-4 text-sm opacity-70">
-                    No eligible users found.
-                  </p>
+                  <p className="p-4 text-sm opacity-70">No eligible users found.</p>
                 ) : (
-                  <div className="divide-y divide-neutral">
+                  <div className="divide-neutral divide-y">
                     {searchResults.map((profile) => (
                       <button
                         key={profile.user_id}
-                        className={`w-full text-left p-3 flex items-center gap-3 hover:bg-base-200 transition-colors ${
-                          selectedProfile?.user_id === profile.user_id
-                            ? "bg-base-200"
-                            : ""
+                        className={`hover:bg-base-200 flex w-full items-center gap-3 p-3 text-left transition-colors ${
+                          selectedProfile?.user_id === profile.user_id ? "bg-base-200" : ""
                         }`}
                         onClick={() => setSelectedProfile(profile)}
                       >
@@ -874,11 +778,9 @@ export default function BoardSettingsForm({
                           fallbackSeed={profile.display_name}
                           size="sm"
                         />
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate font-medium">
-                            {profile.display_name}
-                          </p>
-                          <p className="text-sm text-base-content/60 truncate">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{profile.display_name}</p>
+                          <p className="text-base-content/60 truncate text-sm">
                             @{profile.username}
                           </p>
                         </div>
@@ -890,14 +792,9 @@ export default function BoardSettingsForm({
             )}
 
             {selectedProfile && (
-              <div className="mt-3 p-3 rounded-lg bg-base-200 text-sm">
-                Selected:{" "}
-                <span className="font-medium">
-                  {selectedProfile.display_name}
-                </span>{" "}
-                <span className="text-base-content/60">
-                  @{selectedProfile.username}
-                </span>
+              <div className="bg-base-200 mt-3 rounded-lg p-3 text-sm">
+                Selected: <span className="font-medium">{selectedProfile.display_name}</span>{" "}
+                <span className="text-base-content/60">@{selectedProfile.username}</span>
               </div>
             )}
 

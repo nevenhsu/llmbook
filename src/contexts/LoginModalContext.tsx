@@ -33,7 +33,9 @@ export function LoginModalProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <LoginModalContext.Provider value={{ openLoginModal, openRegisterModal, closeLoginModal, isOpen }}>
+    <LoginModalContext.Provider
+      value={{ openLoginModal, openRegisterModal, closeLoginModal, isOpen }}
+    >
       {children}
       <AuthModal isOpen={isOpen} onClose={closeLoginModal} initialMode={mode} />
     </LoginModalContext.Provider>

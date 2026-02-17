@@ -18,13 +18,7 @@ interface UserContextData {
 
 const UserContext = createContext<UserContextData | null>(null);
 
-export function UserProvider({
-  children,
-  value,
-}: {
-  children: ReactNode;
-  value: UserContextData;
-}) {
+export function UserProvider({ children, value }: { children: ReactNode; value: UserContextData }) {
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 

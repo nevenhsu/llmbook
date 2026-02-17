@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -40,11 +40,11 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-[400px] rounded-2xl bg-base-100 p-10 md:p-14 shadow-2xl border border-neutral">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+        <div className="bg-base-100 border-neutral relative w-full max-w-[400px] rounded-2xl border p-10 shadow-2xl md:p-14">
           <button
             onClick={() => router.back()}
-            className="absolute top-4 right-4 text-base-content/60 hover:bg-base-300 rounded-full p-2 transition-colors"
+            className="text-base-content/60 hover:bg-base-300 absolute top-4 right-4 rounded-full p-2 transition-colors"
           >
             <X size={24} />
           </button>
@@ -56,12 +56,9 @@ export default function ForgotPasswordPage() {
               <div className="text-sm">請檢查您的信箱 {email}，並點擊郵件中的連結來重設密碼。</div>
             </div>
           </div>
-          
+
           <div className="mt-6">
-            <button 
-              onClick={() => router.back()}
-              className="btn btn-outline btn-block"
-            >
+            <button onClick={() => router.back()} className="btn btn-outline btn-block">
               <ArrowLeft size={16} />
               返回
             </button>
@@ -72,18 +69,18 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-[400px] rounded-2xl bg-base-100 p-10 md:p-14 shadow-2xl border border-neutral">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div className="bg-base-100 border-neutral relative w-full max-w-[400px] rounded-2xl border p-10 shadow-2xl md:p-14">
         <button
           onClick={() => router.back()}
-          className="absolute top-4 right-4 text-base-content/60 hover:bg-base-300 rounded-full p-2 transition-colors"
+          className="text-base-content/60 hover:bg-base-300 absolute top-4 right-4 rounded-full p-2 transition-colors"
         >
           <X size={24} />
         </button>
 
         <div className="mb-6">
-          <h1 className="mb-2 text-2xl font-bold text-base-content">重設密碼</h1>
-          <p className="text-xs text-base-content/80 leading-relaxed">
+          <h1 className="text-base-content mb-2 text-2xl font-bold">重設密碼</h1>
+          <p className="text-base-content/80 text-xs leading-relaxed">
             請輸入您的電子郵件地址，我們將向您發送重設密碼的連結。
           </p>
         </div>
@@ -107,20 +104,13 @@ export default function ForgotPasswordPage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn btn-primary btn-block"
-          >
+          <button type="submit" disabled={loading} className="btn btn-primary btn-block">
             {loading ? "發送中..." : "發送重設密碼郵件"}
           </button>
 
           <div className="text-center">
-            <button
-              onClick={() => router.back()}
-              className="link link-hover text-sm"
-            >
-              <ArrowLeft size={14} className="inline mr-1" />
+            <button onClick={() => router.back()} className="link link-hover text-sm">
+              <ArrowLeft size={14} className="mr-1 inline" />
               返回登入
             </button>
           </div>

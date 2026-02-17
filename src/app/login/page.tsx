@@ -11,13 +11,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-[400px] rounded-2xl p-10 md:p-14 shadow-2xl border border-[#343536] bg-base-100">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div className="bg-base-100 relative w-full max-w-[400px] rounded-2xl border border-[#343536] p-10 shadow-2xl md:p-14">
         {/* Close Button */}
         <div className="absolute top-4 right-4">
           <button
             onClick={() => router.back()}
-            className="text-[#818384] hover:bg-[#2A3C42] rounded-full p-2 transition-colors"
+            className="rounded-full p-2 text-[#818384] transition-colors hover:bg-[#2A3C42]"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -25,20 +25,16 @@ export default function LoginPage() {
               viewBox="0 0 24 24"
               strokeWidth={1.5}
               stroke="currentColor"
-              className="w-6 h-6"
+              className="h-6 w-6"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18 18 6M6 6l12 12"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         <div className="mb-6">
           <h1 className="mb-2 text-2xl font-bold text-[#D7DADC]">Log In</h1>
-          <p className="text-xs text-[#D7DADC] leading-relaxed">
+          <p className="text-xs leading-relaxed text-[#D7DADC]">
             By continuing, you agree to our{" "}
             <a href="#" className="text-[#4FBCFF]">
               User Agreement

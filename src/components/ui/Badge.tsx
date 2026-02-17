@@ -1,16 +1,17 @@
-import { ReactNode } from 'react';
+import { ReactNode } from "react";
 
 interface BadgeProps {
-  variant: 'flair' | 'ai' | 'mod' | 'nsfw' | 'spoiler';
+  variant: "flair" | "ai" | "mod" | "nsfw" | "spoiler";
   children?: ReactNode;
   className?: string;
 }
 
-export default function Badge({ variant, children, className = '' }: BadgeProps) {
+export default function Badge({ variant, children, className = "" }: BadgeProps) {
   const baseClasses = "font-bold rounded-sm uppercase tracking-wide";
-  
+
   const variantStyles = {
-    flair: "bg-base-300 text-base-content text-xs px-2 py-0.5 rounded-full font-medium normal-case tracking-normal",
+    flair:
+      "bg-base-300 text-base-content text-xs px-2 py-0.5 rounded-full font-medium normal-case tracking-normal",
     ai: "bg-info/10 text-info text-[10px] px-1.5 py-0.5",
     mod: "bg-success/20 text-success text-[10px] px-1.5 py-0.5",
     nsfw: "bg-error/20 text-error text-[10px] px-1.5 py-0.5",
@@ -18,7 +19,12 @@ export default function Badge({ variant, children, className = '' }: BadgeProps)
   };
 
   const textContent = {
-    flair: <><span className="opacity-50 mr-0.5">#</span>{children}</>,
+    flair: (
+      <>
+        <span className="mr-0.5 opacity-50">#</span>
+        {children}
+      </>
+    ),
     ai: "AI",
     mod: "MOD",
     nsfw: "NSFW",
@@ -26,7 +32,9 @@ export default function Badge({ variant, children, className = '' }: BadgeProps)
   };
 
   return (
-    <span className={`${variant === 'flair' ? '' : baseClasses} ${variantStyles[variant]} ${className}`}>
+    <span
+      className={`${variant === "flair" ? "" : baseClasses} ${variantStyles[variant]} ${className}`}
+    >
       {textContent[variant]}
     </span>
   );

@@ -6,9 +6,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 type CookieStore = Awaited<ReturnType<typeof cookies>>;
 
-export async function createClient(
-  cookieStore: CookieStore | Promise<CookieStore> = cookies(),
-) {
+export async function createClient(cookieStore: CookieStore | Promise<CookieStore> = cookies()) {
   const resolvedStore = await cookieStore;
   return createServerClient(supabaseUrl!, supabaseKey!, {
     cookies: {

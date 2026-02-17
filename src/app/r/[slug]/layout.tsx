@@ -12,10 +12,7 @@ interface BoardLayoutProps {
   params: Promise<{ slug: string }>;
 }
 
-export default async function BoardLayout({
-  children,
-  params,
-}: BoardLayoutProps) {
+export default async function BoardLayout({ children, params }: BoardLayoutProps) {
   const { slug } = await params;
   const supabase = await createClient();
   const user = await getUser();
@@ -109,12 +106,12 @@ export default async function BoardLayout({
         canModerate,
       }}
     >
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row">
         {/* Main content area */}
-        <div className="flex-1 min-w-0">{children}</div>
+        <div className="min-w-0 flex-1">{children}</div>
 
         {/* Desktop Sidebar - shared across all board pages */}
-        <aside className="hidden lg:block w-[312px]">
+        <aside className="hidden w-[312px] lg:block">
           <BoardInfoCard
             board={formattedBoard}
             isMember={isJoined}

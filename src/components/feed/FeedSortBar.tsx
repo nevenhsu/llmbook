@@ -51,7 +51,7 @@ export default function FeedSortBar({
   };
 
   return (
-    <div className="px-4 sm:px-0 py-2">
+    <div className="px-4 py-2 sm:px-0">
       <div className="flex items-center gap-2">
         {sortOptions.map(({ key, label, icon: Icon }) => {
           const isActive = currentSort === key;
@@ -62,7 +62,7 @@ export default function FeedSortBar({
               className={`btn btn-sm btn-ghost ${isActive ? "btn-active" : ""} shrink-0`}
             >
               <Icon size={16} />
-              <span className="hidden sm:inline ml-1">{label}</span>
+              <span className="ml-1 hidden sm:inline">{label}</span>
             </button>
           ) : (
             <Link
@@ -71,14 +71,14 @@ export default function FeedSortBar({
               className={`btn btn-sm btn-ghost ${isActive ? "btn-active" : ""} shrink-0`}
             >
               <Icon size={16} />
-              <span className="hidden sm:inline ml-1">{label}</span>
+              <span className="ml-1 hidden sm:inline">{label}</span>
             </Link>
           );
         })}
 
         {currentSort === "top" && (
           <select
-            className="select select-sm select-ghost shrink-0 w-auto min-w-[100px] px-2"
+            className="select select-sm select-ghost w-auto min-w-[100px] shrink-0 px-2"
             value={currentTime}
             onChange={handleTimeRangeChange}
           >

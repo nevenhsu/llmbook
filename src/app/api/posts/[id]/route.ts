@@ -1,14 +1,11 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { isAdmin } from '@/lib/admin';
-import { canManageBoardPosts } from '@/lib/board-permissions';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/admin";
+import { canManageBoardPosts } from "@/lib/board-permissions";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -24,57 +21,54 @@ export async function GET(
     .maybeSingle();
 
   if (error || !data) {
-    return new NextResponse('Not found', { status: 404 });
+    return new NextResponse("Not found", { status: 404 });
   }
 
   // Strip body for deleted posts
-  if (data.status === 'DELETED') {
+  if (data.status === "DELETED") {
     data.body = null;
   }
 
   return NextResponse.json(data);
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return new NextResponse('Unauthorized', { status: 401 });
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const { data: post, error: postError } = await supabase
-    .from('posts')
-    .select('id, author_id, status')
-    .eq('id', id)
+    .from("posts")
+    .select("id, author_id, status")
+    .eq("id", id)
     .maybeSingle();
 
   if (postError || !post) {
-    return new NextResponse('Not found', { status: 404 });
+    return new NextResponse("Not found", { status: 404 });
   }
 
   if (post.author_id !== user.id) {
-    return new NextResponse('Forbidden: Only author can delete', { status: 403 });
+    return new NextResponse("Forbidden: Only author can delete", { status: 403 });
   }
 
-  if (post.status === 'DELETED') {
+  if (post.status === "DELETED") {
     return NextResponse.json({ success: true });
   }
 
   const { error: updateError } = await supabase
-    .from('posts')
+    .from("posts")
     .update({
-      status: 'DELETED',
-      updated_at: new Date().toISOString()
+      status: "DELETED",
+      updated_at: new Date().toISOString(),
     })
-    .eq('id', id)
-    .eq('author_id', user.id);
+    .eq("id", id)
+    .eq("author_id", user.id);
 
   if (updateError) {
     return new NextResponse(updateError.message, { status: 400 });
@@ -83,18 +77,15 @@ export async function DELETE(
   return NextResponse.json({ success: true });
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return new NextResponse('Unauthorized', { status: 401 });
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const payload = await request.json();
@@ -102,32 +93,32 @@ export async function PATCH(
 
   // Fetch post with author info
   const { data: post, error: postError } = await supabase
-    .from('posts')
-    .select('id, author_id, board_id, post_type')
-    .eq('id', id)
+    .from("posts")
+    .select("id, author_id, board_id, post_type")
+    .eq("id", id)
     .maybeSingle();
 
   if (postError || !post) {
-    return new NextResponse('Not found', { status: 404 });
+    return new NextResponse("Not found", { status: 404 });
   }
 
   // Handle status update (Archive/Unarchive - admin/moderator only)
-  if (nextStatus && (nextStatus === 'ARCHIVED' || nextStatus === 'PUBLISHED')) {
+  if (nextStatus && (nextStatus === "ARCHIVED" || nextStatus === "PUBLISHED")) {
     const userIsAdmin = await isAdmin(user.id, supabase);
-    const canManagePosts = userIsAdmin || await canManageBoardPosts(post.board_id, user.id);
+    const canManagePosts = userIsAdmin || (await canManageBoardPosts(post.board_id, user.id));
 
     if (!canManagePosts) {
-      return new NextResponse('Forbidden: Missing manage_posts permission', { status: 403 });
+      return new NextResponse("Forbidden: Missing manage_posts permission", { status: 403 });
     }
 
     const { data: updatedPost, error: updateError } = await supabase
-      .from('posts')
+      .from("posts")
       .update({
         status: nextStatus,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', id)
-      .select('id, status')
+      .eq("id", id)
+      .select("id, status")
       .single();
 
     if (updateError) {
@@ -139,17 +130,17 @@ export async function PATCH(
 
   // Handle content update (author only)
   if (post.author_id !== user.id) {
-    return new NextResponse('Forbidden: Only author can edit content', { status: 403 });
+    return new NextResponse("Forbidden: Only author can edit content", { status: 403 });
   }
 
   // Build update object
   const updates: any = {
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   };
 
   if (title !== undefined) {
     if (!title.trim()) {
-      return new NextResponse('Title is required', { status: 400 });
+      return new NextResponse("Title is required", { status: 400 });
     }
     updates.title = title.trim();
   }
@@ -159,10 +150,7 @@ export async function PATCH(
   }
 
   // Update post
-  const { error: updateError } = await supabase
-    .from('posts')
-    .update(updates)
-    .eq('id', id);
+  const { error: updateError } = await supabase.from("posts").update(updates).eq("id", id);
 
   if (updateError) {
     return new NextResponse(updateError.message, { status: 400 });
@@ -171,29 +159,34 @@ export async function PATCH(
   // Update tags if provided
   if (tagIds !== undefined && Array.isArray(tagIds)) {
     // Delete existing tags
-    await supabase.from('post_tags').delete().eq('post_id', id);
+    await supabase.from("post_tags").delete().eq("post_id", id);
 
     // Insert new tags
     if (tagIds.length > 0) {
-      const tagInserts = tagIds.map(tagId => ({
+      const tagInserts = tagIds.map((tagId) => ({
         post_id: id,
-        tag_id: tagId
+        tag_id: tagId,
       }));
-      await supabase.from('post_tags').insert(tagInserts);
+      await supabase.from("post_tags").insert(tagInserts);
     }
   }
 
   // Add new poll options if provided (for poll posts only)
-  if (newPollOptions && Array.isArray(newPollOptions) && newPollOptions.length > 0 && post.post_type === 'poll') {
+  if (
+    newPollOptions &&
+    Array.isArray(newPollOptions) &&
+    newPollOptions.length > 0 &&
+    post.post_type === "poll"
+  ) {
     const optionInserts = newPollOptions
       .filter((opt: string) => opt.trim())
       .map((opt: string) => ({
         post_id: id,
         text: opt.trim(),
       }));
-    
+
     if (optionInserts.length > 0) {
-      await supabase.from('poll_options').insert(optionInserts);
+      await supabase.from("poll_options").insert(optionInserts);
     }
   }
 

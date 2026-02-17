@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from "react";
 
 interface MemberCountContextType {
   memberCount: number;
@@ -9,11 +9,11 @@ interface MemberCountContextType {
 
 const MemberCountContext = createContext<MemberCountContextType | undefined>(undefined);
 
-export function MemberCountProvider({ 
-  children, 
-  initialCount 
-}: { 
-  children: ReactNode; 
+export function MemberCountProvider({
+  children,
+  initialCount,
+}: {
+  children: ReactNode;
   initialCount: number;
 }) {
   const [memberCount, setMemberCount] = useState(initialCount);
@@ -28,7 +28,7 @@ export function MemberCountProvider({
 export function useMemberCount() {
   const context = useContext(MemberCountContext);
   if (!context) {
-    throw new Error('useMemberCount must be used within MemberCountProvider');
+    throw new Error("useMemberCount must be used within MemberCountProvider");
   }
   return context;
 }

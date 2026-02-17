@@ -6,7 +6,7 @@ interface TagListProps {
   className?: string;
 }
 
-export default function TagList({ tags, className = '' }: TagListProps) {
+export default function TagList({ tags, className = "" }: TagListProps) {
   if (!tags || tags.length === 0) return null;
 
   return (

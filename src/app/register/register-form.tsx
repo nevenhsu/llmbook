@@ -27,17 +27,17 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
-    
+
     // Auto-fill username from email prefix if not manually edited
-    if (!isUsernameManuallyEdited && newEmail.includes('@')) {
-      const prefix = newEmail.split('@')[0];
+    if (!isUsernameManuallyEdited && newEmail.includes("@")) {
+      const prefix = newEmail.split("@")[0];
       // Sanitize: lowercase, remove invalid chars for username
       const sanitized = prefix
         .toLowerCase()
-        .replace(/[^a-z0-9_.]/g, '')
-        .replace(/^\.+/, '')
-        .replace(/\.+$/, '')
-        .replace(/\.{2,}/g, '.')
+        .replace(/[^a-z0-9_.]/g, "")
+        .replace(/^\.+/, "")
+        .replace(/\.+$/, "")
+        .replace(/\.{2,}/g, ".")
         .substring(0, 20);
       if (sanitized) {
         setUsername(sanitized);
@@ -66,10 +66,10 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
 
     try {
       // Call register API
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email,
@@ -81,14 +81,14 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || '註冊失敗');
+        setError(data.error || "註冊失敗");
         setLoading(false);
         return;
       }
 
       // Success - user is registered
-      setNotice(data.message || '註冊成功！');
-      
+      setNotice(data.message || "註冊成功！");
+
       // If needs manual login, redirect to login page or switch to login modal
       if (data.needsManualLogin) {
         setTimeout(() => {
@@ -96,18 +96,18 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
             onSuccess();
             onSwitchToLogin?.();
           } else {
-            window.location.href = '/login';
+            window.location.href = "/login";
           }
         }, 1500);
         return;
       }
-      
+
       // Auto-login successful
       if (onSuccess) {
         onSuccess();
       } else {
         setTimeout(() => {
-          window.location.href = '/';
+          window.location.href = "/";
         }, 500);
       }
     } catch (err: any) {
@@ -152,7 +152,7 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
           minLength={6}
         />
         <label className="label !whitespace-normal">
-          <span className="label-text-alt text-xs opacity-70 break-words">
+          <span className="label-text-alt text-xs break-words opacity-70">
             密碼長度至少 6 個字元
           </span>
         </label>
@@ -170,7 +170,7 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
           checkAvailability={true}
         />
         <label className="label !whitespace-normal">
-          <span className="label-text-alt text-xs opacity-70 break-words">
+          <span className="label-text-alt text-xs break-words opacity-70">
             您的 username 會顯示在 URL 中 (例如: yoursite.com/u/username)
           </span>
         </label>
@@ -203,18 +203,11 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
       <div className="text-center">
         <span className="text-sm opacity-70">已經有帳號了？ </span>
         {onSwitchToLogin ? (
-          <button 
-            onClick={onSwitchToLogin}
-            className="link link-hover text-sm font-semibold"
-          >
+          <button onClick={onSwitchToLogin} className="link link-hover text-sm font-semibold">
             登入
           </button>
         ) : (
-          <Link 
-            href="/login" 
-            className="link link-hover text-sm font-semibold"
-            onClick={onClose}
-          >
+          <Link href="/login" className="link link-hover text-sm font-semibold" onClick={onClose}>
             登入
           </Link>
         )}

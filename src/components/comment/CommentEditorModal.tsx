@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
-import toast from 'react-hot-toast';
+import { useState, useRef, useEffect } from "react";
+import { X } from "lucide-react";
+import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+import toast from "react-hot-toast";
 
 interface CommentEditorModalProps {
   isOpen: boolean;
@@ -12,7 +12,7 @@ interface CommentEditorModalProps {
   parentId?: string;
   initialContent?: string;
   commentId?: string; // For edit mode
-  mode: 'create' | 'edit' | 'reply';
+  mode: "create" | "edit" | "reply";
   onSuccess?: (comment: any) => void;
 }
 
@@ -21,14 +21,14 @@ export default function CommentEditorModal({
   onClose,
   postId,
   parentId,
-  initialContent = '',
+  initialContent = "",
   commentId,
   mode,
-  onSuccess
+  onSuccess,
 }: CommentEditorModalProps) {
   const [content, setContent] = useState(initialContent);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const isEmptyTiptapHtml = (html: string) => {
@@ -43,70 +43,70 @@ export default function CommentEditorModal({
   useEffect(() => {
     if (isOpen && dialogRef.current) {
       dialogRef.current.showModal();
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     } else if (dialogRef.current) {
       dialogRef.current.close();
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     }
 
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     };
   }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
     setContent(initialContent);
-    setError('');
+    setError("");
   }, [isOpen, initialContent]);
 
   const handleClose = () => {
     setContent(initialContent);
-    setError('');
+    setError("");
     onClose();
   };
 
   const handleSubmit = async () => {
     if (isEmptyTiptapHtml(content)) {
-      setError('Comment cannot be empty');
+      setError("Comment cannot be empty");
       return;
     }
 
     setIsSubmitting(true);
-    setError('');
+    setError("");
 
     try {
-      if (mode === 'edit' && commentId) {
+      if (mode === "edit" && commentId) {
         // Edit existing comment
         const res = await fetch(`/api/comments/${commentId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body: content })
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: content }),
         });
 
-        if (!res.ok) throw new Error('Failed to update comment');
+        if (!res.ok) throw new Error("Failed to update comment");
         const data = await res.json();
         onSuccess?.(data.comment);
-        toast.success('Comment updated');
+        toast.success("Comment updated");
       } else {
         // Create new comment or reply
         const res = await fetch(`/api/posts/${postId}/comments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             body: content,
-            parentId: parentId || undefined
-          })
+            parentId: parentId || undefined,
+          }),
         });
 
-        if (!res.ok) throw new Error('Failed to post comment');
+        if (!res.ok) throw new Error("Failed to post comment");
         const data = await res.json();
         onSuccess?.(data.comment);
-        toast.success(mode === 'reply' ? 'Reply posted' : 'Comment posted');
+        toast.success(mode === "reply" ? "Reply posted" : "Comment posted");
       }
 
       // Reset and close
-      setContent('');
+      setContent("");
       handleClose();
 
       // Reload page if no success handler
@@ -115,8 +115,8 @@ export default function CommentEditorModal({
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || 'Failed to save comment');
-      setError(err.message || 'Failed to save comment');
+      toast.error(err.message || "Failed to save comment");
+      setError(err.message || "Failed to save comment");
     } finally {
       setIsSubmitting(false);
     }
@@ -124,12 +124,12 @@ export default function CommentEditorModal({
 
   const getTitle = () => {
     switch (mode) {
-      case 'edit':
-        return 'Edit Comment';
-      case 'reply':
-        return 'Reply to Comment';
+      case "edit":
+        return "Edit Comment";
+      case "reply":
+        return "Reply to Comment";
       default:
-        return 'Add a Comment';
+        return "Add a Comment";
     }
   };
 
@@ -145,10 +145,10 @@ export default function CommentEditorModal({
         }
       }}
     >
-      <div className="modal-box w-11/12 max-w-3xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
+      <div className="modal-box flex max-h-[90vh] w-11/12 max-w-3xl flex-col overflow-hidden p-0">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-neutral sticky top-0 bg-base-100 z-10">
-          <h3 className="font-bold text-lg">{getTitle()}</h3>
+        <div className="border-neutral bg-base-100 sticky top-0 z-10 flex items-center justify-between border-b p-4">
+          <h3 className="text-lg font-bold">{getTitle()}</h3>
           <button
             onClick={handleClose}
             className="btn btn-sm btn-circle btn-ghost"
@@ -176,12 +176,8 @@ export default function CommentEditorModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 p-4 border-t border-neutral sticky bottom-0 bg-base-100">
-          <button
-            onClick={handleClose}
-            className="btn btn-ghost"
-            disabled={isSubmitting}
-          >
+        <div className="border-neutral bg-base-100 sticky bottom-0 flex justify-end gap-2 border-t p-4">
+          <button onClick={handleClose} className="btn btn-ghost" disabled={isSubmitting}>
             Cancel
           </button>
           <button
@@ -192,12 +188,12 @@ export default function CommentEditorModal({
             {isSubmitting ? (
               <>
                 <span className="loading loading-spinner loading-sm"></span>
-                {mode === 'edit' ? 'Updating...' : 'Posting...'}
+                {mode === "edit" ? "Updating..." : "Posting..."}
               </>
-            ) : mode === 'edit' ? (
-              'Update'
+            ) : mode === "edit" ? (
+              "Update"
             ) : (
-              'Comment'
+              "Comment"
             )}
           </button>
         </div>

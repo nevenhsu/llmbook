@@ -86,9 +86,7 @@ function MobileBoardHeader({
       router.refresh();
     } catch (error) {
       console.error(error);
-      toast.error(
-        isArchived ? "Failed to unarchive board" : "Failed to archive board",
-      );
+      toast.error(isArchived ? "Failed to unarchive board" : "Failed to archive board");
     } finally {
       setArchiveLoading(false);
     }
@@ -97,9 +95,9 @@ function MobileBoardHeader({
   return (
     <div className="lg:hidden">
       {/* Main Board Header */}
-      <div className="px-4 py-3 border-b border-neutral mb-4">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+      <div className="border-neutral mb-4 border-b px-4 py-3">
+        <div className="mb-3 flex items-start gap-3">
+          <div className="bg-primary/10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full">
             <Hash size={24} className="text-primary" />
           </div>
           <MemberCountDisplay slug={board.slug} />
@@ -112,14 +110,14 @@ function MobileBoardHeader({
           >
             <li>
               <Link href={`/r/${slug}/member`}>
-                <Users size={14} className="md:inline hidden" />
+                <Users size={14} className="hidden md:inline" />
                 <Users size={20} className="md:hidden" />
                 Members
               </Link>
             </li>
             <li>
               <Link href={`/r/${slug}/ban`}>
-                <ShieldBan size={14} className="md:inline hidden" />
+                <ShieldBan size={14} className="hidden md:inline" />
                 <ShieldBan size={20} className="md:hidden" />
                 Bans
               </Link>
@@ -140,7 +138,7 @@ function MobileBoardHeader({
           {canManage && (
             <Link
               href={`/r/${slug}/settings`}
-              className="btn btn-sm btn-outline rounded-full text-base-content"
+              className="btn btn-sm btn-outline text-base-content rounded-full"
             >
               <Settings size={14} />
               Settings
@@ -161,26 +159,22 @@ function MobileBoardHeader({
 
         {board.description && (
           <details className="mt-3">
-            <summary className="text-sm font-medium cursor-pointer">
-              About this community
-            </summary>
-            <p className="text-sm text-base-content/70 mt-2">
-              {board.description}
-            </p>
+            <summary className="cursor-pointer text-sm font-medium">About this community</summary>
+            <p className="text-base-content/70 mt-2 text-sm">{board.description}</p>
           </details>
         )}
 
         {board.rules && board.rules.length > 0 && (
           <details className="mt-2">
-            <summary className="text-sm font-medium cursor-pointer">
+            <summary className="cursor-pointer text-sm font-medium">
               Community Rules ({board.rules.length})
             </summary>
-            <ol className="list-decimal list-inside text-sm text-base-content/70 mt-2 space-y-2">
+            <ol className="text-base-content/70 mt-2 list-inside list-decimal space-y-2 text-sm">
               {board.rules.map((rule: any, idx: number) => (
                 <li key={idx} className="pl-1">
                   <span className="font-medium">{rule.title}</span>
                   {rule.description && (
-                    <p className="text-xs text-base-content/60 mt-0.5 ml-5">{rule.description}</p>
+                    <p className="text-base-content/60 mt-0.5 ml-5 text-xs">{rule.description}</p>
                   )}
                 </li>
               ))}
@@ -196,9 +190,9 @@ function MemberCountDisplay({ slug }: { slug: string }) {
   const { memberCount } = useMemberCount();
 
   return (
-    <div className="flex-1 min-w-0">
+    <div className="min-w-0 flex-1">
       <h1 className="text-lg font-bold">r/{slug}</h1>
-      <p className="text-xs text-base-content/70">{memberCount} members</p>
+      <p className="text-base-content/70 text-xs">{memberCount} members</p>
     </div>
   );
 }

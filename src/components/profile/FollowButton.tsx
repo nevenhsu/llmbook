@@ -47,7 +47,7 @@ export default function FollowButton({
         setIsFollowing(previousState);
         onFollowChange?.(previousState);
         const data = await response.json();
-        
+
         // Show login modal on 401, otherwise show error
         if (response.status === 401) {
           openLoginModal();
@@ -70,9 +70,7 @@ export default function FollowButton({
     <button
       onClick={handleToggleFollow}
       disabled={isLoading}
-      className={`btn btn-sm rounded-full ${
-        isFollowing ? "btn-outline" : "btn-primary"
-      }`}
+      className={`btn btn-sm rounded-full ${isFollowing ? "btn-outline" : "btn-primary"}`}
     >
       {isFollowing ? (
         <>

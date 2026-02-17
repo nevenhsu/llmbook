@@ -117,11 +117,11 @@
   }
 
   .tiptap-html ul {
-    @apply list-disc pl-5 my-2;
+    @apply my-2 list-disc pl-5;
   }
 
   .tiptap-html ol {
-    @apply list-decimal pl-5 my-2;
+    @apply my-2 list-decimal pl-5;
   }
 
   .tiptap-html li {
@@ -129,28 +129,28 @@
   }
 
   .tiptap-html blockquote {
-    @apply border-l-4 border-neutral pl-3 my-2 text-base-content/80;
+    @apply border-neutral text-base-content/80 my-2 border-l-4 pl-3;
   }
 
   .tiptap-html pre {
-    @apply bg-base-200 border border-neutral rounded-md p-3 my-2 overflow-x-auto text-xs;
+    @apply bg-base-200 border-neutral my-2 overflow-x-auto rounded-md border p-3 text-xs;
   }
 
   .tiptap-html code {
-    @apply bg-base-200 px-1 py-0.5 rounded;
+    @apply bg-base-200 rounded px-1 py-0.5;
   }
 
   .tiptap-html img {
-    @apply max-w-full h-auto rounded-md border border-neutral my-2;
+    @apply border-neutral my-2 h-auto max-w-full rounded-md border;
   }
 
   /* TipTap Editor styles */
   .ProseMirror ul {
-    @apply list-disc pl-5 my-2;
+    @apply my-2 list-disc pl-5;
   }
 
   .ProseMirror ol {
-    @apply list-decimal pl-5 my-2;
+    @apply my-2 list-decimal pl-5;
   }
 
   .ProseMirror li {
@@ -158,7 +158,7 @@
   }
 
   .ProseMirror blockquote {
-    @apply border-l-4 border-neutral pl-3 my-2 text-base-content/80;
+    @apply border-neutral text-base-content/80 my-2 border-l-4 pl-3;
   }
 
   .ProseMirror p {
@@ -170,28 +170,26 @@
   }
 
   .ProseMirror pre {
-    @apply bg-base-200 border border-neutral rounded-md p-3 my-2 overflow-x-auto;
+    @apply bg-base-200 border-neutral my-2 overflow-x-auto rounded-md border p-3;
   }
 
   .ProseMirror code {
-    @apply bg-base-200 px-1 py-0.5 rounded text-sm;
+    @apply bg-base-200 rounded px-1 py-0.5 text-sm;
   }
 
   .ProseMirror img {
-    @apply max-w-full h-auto rounded-md border border-neutral my-2;
+    @apply border-neutral my-2 h-auto max-w-full rounded-md border;
   }
 
   .ProseMirror h1 {
-    @apply text-2xl font-bold mt-4 mb-2;
+    @apply mt-4 mb-2 text-2xl font-bold;
   }
 
   .ProseMirror h2 {
-    @apply text-xl font-bold mt-3 mb-2;
+    @apply mt-3 mb-2 text-xl font-bold;
   }
 
   .ProseMirror h3 {
-    @apply text-lg font-bold mt-2 mb-1;
+    @apply mt-2 mb-1 text-lg font-bold;
   }
-
-
 }

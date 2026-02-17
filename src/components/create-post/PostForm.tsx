@@ -22,10 +22,10 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
   const form = usePostForm({ editMode, initialData, userJoinedBoards });
 
   return (
-    <div className="mx-auto max-w-[740px] pb-20 sm:pb-10 px-4 sm:px-0">
+    <div className="mx-auto max-w-[740px] px-4 pb-20 sm:px-0 sm:pb-10">
       {/* Header */}
       <div className="flex items-center justify-between py-6">
-        <h1 className="text-2xl font-bold text-base-content">
+        <h1 className="text-base-content text-2xl font-bold">
           {editMode ? "Edit post" : "Create post"}
         </h1>
       </div>
@@ -36,20 +36,27 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
           type="button"
           onClick={() => !editMode && setShowBoardSelector(true)}
           disabled={editMode}
-          className={`inline-flex h-10 items-center gap-2 rounded-full border border-neutral bg-base-100 py-1 pl-1 pr-3 ${
-            editMode ? "opacity-60 cursor-not-allowed" : "hover:bg-base-300 cursor-pointer"
+          className={`border-neutral bg-base-100 inline-flex h-10 items-center gap-2 rounded-full border py-1 pr-3 pl-1 ${
+            editMode ? "cursor-not-allowed opacity-60" : "hover:bg-base-300 cursor-pointer"
           }`}
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-base-300">
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 text-base-content">
+          <div className="bg-base-300 flex h-8 w-8 items-center justify-center rounded-full">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="text-base-content h-5 w-5">
               <path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm5.21 13.91a4.93 4.93 0 0 1-3.6 1.76c-2.3 0-3.8-1.57-3.8-1.57s-1.5 1.57-3.8 1.57a4.93 4.93 0 0 1-3.6-1.76 2.05 2.05 0 0 1-.36-2.5 5.56 5.56 0 0 1 3.52-2.58 3.32 3.32 0 0 1 .44-.29 3.86 3.86 0 0 1-1.09-2.73 3.61 3.61 0 1 1 5.95-2.15 3.62 3.62 0 1 1 5.97 2.14 3.86 3.86 0 0 1-1.1 2.73 3.32 3.32 0 0 1 .45.3 5.56 5.56 0 0 1 3.52 2.58 2.05 2.05 0 0 1-.36 2.5Z" />
             </svg>
           </div>
-          <span className="text-sm font-bold text-base-content">
+          <span className="text-base-content text-sm font-bold">
             {form.selectedBoard?.name ? `r/${form.selectedBoard.name}` : "Select a community"}
           </span>
           {!editMode && (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4 text-base-content">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2.5}
+              stroke="currentColor"
+              className="text-base-content h-4 w-4"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
             </svg>
           )}
@@ -68,23 +75,26 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
         />
 
         {editMode && (
-          <p className="text-xs text-base-content/50 mt-2">
+          <p className="text-base-content/50 mt-2 text-xs">
             Community cannot be changed after posting
           </p>
         )}
       </div>
 
       {/* Tabs */}
-      <div role="tablist" className="flex border-b border-neutral mb-6 overflow-x-auto scrollbar-hide">
+      <div
+        role="tablist"
+        className="border-neutral scrollbar-hide mb-6 flex overflow-x-auto border-b"
+      >
         {(["text", "poll"] as const).map((tab) => (
           <button
             key={tab}
             role="tab"
             disabled={editMode}
-            className={`px-6 py-3 text-sm font-bold whitespace-nowrap transition-colors border-b-2 capitalize ${
+            className={`border-b-2 px-6 py-3 text-sm font-bold whitespace-nowrap capitalize transition-colors ${
               form.activeTab === tab
                 ? "text-base-content border-primary"
-                : "text-base-content/70 border-transparent hover:text-base-content"
+                : "text-base-content/70 hover:text-base-content border-transparent"
             } ${editMode ? "cursor-not-allowed opacity-60" : ""}`}
             onClick={() => !editMode && form.setActiveTab(tab)}
           >
@@ -107,17 +117,21 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
               className="input input-bordered w-full"
             />
             {!form.title && (
-              <span className="absolute left-[52px] top-1/2 -translate-y-1/2 pointer-events-none text-error text-sm">
+              <span className="text-error pointer-events-none absolute top-1/2 left-[52px] -translate-y-1/2 text-sm">
                 *
               </span>
             )}
           </div>
-          <div className="text-right text-xs text-base-content/70">{form.title.length}/300</div>
+          <div className="text-base-content/70 text-right text-xs">{form.title.length}/300</div>
         </div>
 
         {/* Tags */}
         <div className="space-y-2">
-          <button type="button" onClick={() => setShowTagSelector(true)} className="btn btn-outline">
+          <button
+            type="button"
+            onClick={() => setShowTagSelector(true)}
+            className="btn btn-outline"
+          >
             {form.tagIds.length > 0 ? `已選擇 ${form.tagIds.length} 個標籤` : "選擇標籤"}
           </button>
           <TagSelector
@@ -137,8 +151,8 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
           />
         )}
 
-        {form.activeTab === "poll" && (
-          editMode ? (
+        {form.activeTab === "poll" &&
+          (editMode ? (
             <PollEditor
               editMode={true}
               existingOptions={form.pollOptions}
@@ -153,12 +167,11 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
               onOptionsChange={form.setPollOptions}
               onDurationChange={form.setPollDuration}
             />
-          )
-        )}
+          ))}
       </div>
 
       {/* Footer */}
-      <div className="fixed bottom-0 left-0 right-0 z-[101] flex justify-between items-center gap-2 border-t border-neutral bg-base-200/95 p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:border-0 sm:p-0 sm:bg-transparent sm:mt-8 sm:backdrop-blur-none">
+      <div className="border-neutral bg-base-200/95 fixed right-0 bottom-0 left-0 z-[101] flex items-center justify-between gap-2 border-t p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:mt-8 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
         {/* Left: Drafts */}
         <div className="relative">
           <button
@@ -170,28 +183,28 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
           </button>
 
           {form.showDrafts && (
-            <div className="absolute left-0 bottom-full mb-2 w-80 max-h-96 overflow-y-auto rounded-md border border-neutral bg-base-100 shadow-xl z-[110]">
+            <div className="border-neutral bg-base-100 absolute bottom-full left-0 z-[110] mb-2 max-h-96 w-80 overflow-y-auto rounded-md border shadow-xl">
               {editMode ? (
                 form.editDraftSavedAt ? (
                   <div className="p-2">
-                    <div className="p-3 rounded border-neutral">
+                    <div className="border-neutral rounded p-3">
                       <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
                           onClick={form.loadEditDraft}
                           className="flex-1 text-left"
                         >
-                          <p className="font-bold text-sm text-base-content line-clamp-1">
+                          <p className="text-base-content line-clamp-1 text-sm font-bold">
                             {form.title || "Untitled draft"}
                           </p>
-                          <p className="text-xs text-base-content/50 mt-1">
+                          <p className="text-base-content/50 mt-1 text-xs">
                             {new Date(form.editDraftSavedAt).toLocaleString()}
                           </p>
                         </button>
                         <button
                           type="button"
                           onClick={form.deleteEditDraft}
-                          className="p-1 hover:bg-error/20 rounded text-error transition-colors"
+                          className="hover:bg-error/20 text-error rounded p-1 transition-colors"
                           title="Delete draft"
                         >
                           <Trash2 size={16} />
@@ -200,44 +213,42 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-base-content/50 p-4">No draft saved</p>
+                  <p className="text-base-content/50 p-4 text-sm">No draft saved</p>
                 )
+              ) : form.drafts.length === 0 ? (
+                <p className="text-base-content/50 p-4 text-sm">No drafts saved</p>
               ) : (
-                form.drafts.length === 0 ? (
-                  <p className="text-sm text-base-content/50 p-4">No drafts saved</p>
-                ) : (
-                  <div className="p-2">
-                    {form.drafts.map((draft) => (
-                      <div
-                        key={draft.id}
-                        className="p-3 rounded hover:bg-base-300 border-b border-neutral last:border-0 transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => form.loadCreateDraft(draft)}
-                            className="flex-1 text-left"
-                          >
-                            <p className="font-bold text-sm text-base-content line-clamp-1">
-                              {draft.title || "Untitled draft"}
-                            </p>
-                            <p className="text-xs text-base-content/50 mt-1">
-                              {new Date(draft.savedAt).toLocaleString()}
-                            </p>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => form.deleteCreateDraft(draft.id)}
-                            className="p-1 hover:bg-error/20 rounded text-error transition-colors"
-                            title="Delete draft"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                <div className="p-2">
+                  {form.drafts.map((draft) => (
+                    <div
+                      key={draft.id}
+                      className="hover:bg-base-300 border-neutral rounded border-b p-3 transition-colors last:border-0"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => form.loadCreateDraft(draft)}
+                          className="flex-1 text-left"
+                        >
+                          <p className="text-base-content line-clamp-1 text-sm font-bold">
+                            {draft.title || "Untitled draft"}
+                          </p>
+                          <p className="text-base-content/50 mt-1 text-xs">
+                            {new Date(draft.savedAt).toLocaleString()}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => form.deleteCreateDraft(draft.id)}
+                          className="hover:bg-error/20 text-error rounded p-1 transition-colors"
+                          title="Delete draft"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
@@ -256,8 +267,12 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
           >
             {form.loading && <span className="loading loading-spinner loading-xs" />}
             {form.loading
-              ? editMode ? "Updating..." : "Posting..."
-              : editMode ? "Update" : "Post"}
+              ? editMode
+                ? "Updating..."
+                : "Posting..."
+              : editMode
+                ? "Update"
+                : "Post"}
           </button>
         </div>
       </div>
@@ -265,7 +280,7 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
       {/* Upload progress overlay */}
       {form.showUploadProgress && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-lg border border-neutral bg-base-100 p-6 shadow-xl">
+          <div className="border-neutral bg-base-100 w-full max-w-md rounded-lg border p-6 shadow-xl">
             <progress className="progress progress-primary w-full" />
           </div>
         </div>
@@ -273,7 +288,7 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
 
       {/* Error */}
       {form.error && (
-        <div className="mt-4 rounded bg-error/20 p-3 text-sm text-error border border-error/30">
+        <div className="bg-error/20 text-error border-error/30 mt-4 rounded border p-3 text-sm">
           {form.error}
         </div>
       )}

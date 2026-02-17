@@ -197,9 +197,7 @@ async function signInAndSeedCookies() {
   });
 
   if (error || !data.session) {
-    throw new Error(
-      `Failed to sign in test user: ${error?.message ?? "no session"}`
-    );
+    throw new Error(`Failed to sign in test user: ${error?.message ?? "no session"}`);
   }
 
   // Manually seed cookies for the mock
@@ -268,7 +266,9 @@ integrationDescribe("image-upload (integration)", () => {
       }
     }
 
-    console.log(`\n✅ Cleanup completed: ${uploadedUrls.length} files, ${mediaIds.length} records deleted from Supabase\n`);
+    console.log(
+      `\n✅ Cleanup completed: ${uploadedUrls.length} files, ${mediaIds.length} records deleted from Supabase\n`,
+    );
   });
 
   describe("uploadImage via API", () => {
@@ -327,7 +327,9 @@ integrationDescribe("image-upload (integration)", () => {
 
       console.log(`\n✓ Uploaded to Supabase: ${result.url}`);
       console.log(`  Dimensions: ${result.width}x${result.height}`);
-      console.log(`  Size: ${formatBytes(result.sizeBytes)} (compressed from ${formatBytes(inputBuffer.length)})`);
+      console.log(
+        `  Size: ${formatBytes(result.sizeBytes)} (compressed from ${formatBytes(inputBuffer.length)})`,
+      );
     });
 
     it("respects custom maxWidth option", async () => {
@@ -383,7 +385,7 @@ integrationDescribe("image-upload (integration)", () => {
       Object.defineProperty(file, "size", { value: 10 * 1024 * 1024 }); // 10MB
 
       await expect(uploadImage(file, { maxBytes: 5 * 1024 * 1024 })).rejects.toThrow(
- "檔案大小超過"
+        "檔案大小超過",
       );
     });
 
@@ -426,11 +428,11 @@ describe("image-upload (mock)", () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
- "/api/media/upload",
+        "/api/media/upload",
         expect.objectContaining({
           method: "POST",
           body: expect.any(FormData),
-        })
+        }),
       );
 
       const formData = mockFetch.mock.calls[0][1].body as FormData;

@@ -33,8 +33,8 @@
 ```sql
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
-  'media', 
-  'media', 
+  'media',
+  'media',
   true,
   10485760, -- 10 MB in bytes
   array['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
@@ -68,15 +68,15 @@ Migration 檔案位置：`supabase/migrations/20260210_storage_policies.sql`
 
 ### Policies 說明
 
-| Policy | 適用角色 | 權限 | 說明 |
-|--------|---------|------|------|
-| Public read access | public | SELECT | 任何人都可以讀取圖片 |
-| Authenticated users can upload | authenticated | INSERT | 認證用戶可上傳到自己的資料夾 |
-| Users can update own images | authenticated | UPDATE | 用戶只能更新自己的圖片 |
-| Users can delete own images | authenticated | DELETE | 用戶只能刪除自己的圖片 |
-| Service role can upload persona images | service_role | INSERT | Persona Engine 可上傳圖片 |
-| Service role can update any image | service_role | UPDATE | Persona Engine 可更新任何圖片 |
-| Service role can delete any image | service_role | DELETE | Persona Engine 可刪除任何圖片 |
+| Policy                                 | 適用角色      | 權限   | 說明                          |
+| -------------------------------------- | ------------- | ------ | ----------------------------- |
+| Public read access                     | public        | SELECT | 任何人都可以讀取圖片          |
+| Authenticated users can upload         | authenticated | INSERT | 認證用戶可上傳到自己的資料夾  |
+| Users can update own images            | authenticated | UPDATE | 用戶只能更新自己的圖片        |
+| Users can delete own images            | authenticated | DELETE | 用戶只能刪除自己的圖片        |
+| Service role can upload persona images | service_role  | INSERT | Persona Engine 可上傳圖片     |
+| Service role can update any image      | service_role  | UPDATE | Persona Engine 可更新任何圖片 |
+| Service role can delete any image      | service_role  | DELETE | Persona Engine 可刪除任何圖片 |
 
 ---
 
@@ -183,14 +183,14 @@ const personaPostPath = `personas/posts/${personaId}/${Date.now()}.webp`;
 使用現有的 `uploadImage` 函數：
 
 ```typescript
-import { uploadImage } from '@/lib/image-upload';
+import { uploadImage } from "@/lib/image-upload";
 
 // 用戶上傳圖片
 const file = e.target.files[0];
 const result = await uploadImage(file, {
   maxWidth: 2048,
   maxBytes: 5 * 1024 * 1024,
-  quality: 82
+  quality: 82,
 });
 
 console.log(result.url); // Public URL
@@ -201,23 +201,23 @@ console.log(result.sizeBytes); // 檔案大小
 使用 Supabase Admin Client (Server-side)：
 
 ```typescript
-import { createAdminClient } from '@/lib/supabase/admin';
-import { privateEnv } from '@/lib/env';
+import { createAdminClient } from "@/lib/supabase/admin";
+import { privateEnv } from "@/lib/env";
 
 const supabase = createAdminClient();
 
 // 上傳圖片
 const { data, error } = await supabase.storage
   .from(privateEnv.storageBucket)
-  .upload('personas/avatars/persona-001.webp', fileBuffer, {
-    contentType: 'image/webp',
-    upsert: false
+  .upload("personas/avatars/persona-001.webp", fileBuffer, {
+    contentType: "image/webp",
+    upsert: false,
   });
 
 // 取得公開 URL
 const { data: urlData } = supabase.storage
   .from(privateEnv.storageBucket)
-  .getPublicUrl('personas/avatars/persona-001.webp');
+  .getPublicUrl("personas/avatars/persona-001.webp");
 
 console.log(urlData.publicUrl);
 ```
@@ -229,11 +229,13 @@ console.log(urlData.publicUrl);
 ### 問題 1: Bucket 不存在
 
 **錯誤訊息:**
+
 ```
 Bucket "media" not found
 ```
 
 **解決方法:**
+
 1. 確認 bucket 已在 Supabase Dashboard 建立
 2. 確認 `.env.local` 中的 `SUPABASE_STORAGE_BUCKET="media"` 設定正確
 
@@ -242,11 +244,13 @@ Bucket "media" not found
 ### 問題 2: 上傳失敗 (403 Forbidden)
 
 **錯誤訊息:**
+
 ```
 new row violates row-level security policy
 ```
 
 **解決方法:**
+
 1. 確認已執行 storage policies migration
 2. 檢查用戶是否已認證（對於用戶上傳）
 3. 檢查檔案路徑是否符合 policy 規則：
@@ -258,16 +262,19 @@ new row violates row-level security policy
 ### 問題 3: 無法存取公開 URL (404)
 
 **錯誤訊息:**
+
 ```
 HTTP 404 Not Found
 ```
 
 **可能原因:**
+
 1. Bucket 未設為 public
 2. 檔案路徑錯誤
 3. 檔案尚未上傳成功
 
 **解決方法:**
+
 ```sql
 -- 確認 bucket 為 public
 update storage.buckets
@@ -286,11 +293,13 @@ limit 10;
 ### 問題 4: 檔案大小超過限制
 
 **錯誤訊息:**
+
 ```
 The object exceeded the maximum allowed size
 ```
 
 **解決方法:**
+
 1. 壓縮圖片後再上傳（目前限制為 10 MB）
 2. 如需調整 bucket 的 `file_size_limit`：
 
@@ -305,6 +314,7 @@ where id = 'media';
 ### 問題 5: MIME type 不允許
 
 **錯誤訊息:**
+
 ```
 The file type is not allowed
 ```
@@ -315,9 +325,9 @@ The file type is not allowed
 -- 更新允許的 MIME types
 update storage.buckets
 set allowed_mime_types = array[
-  'image/jpeg', 
-  'image/png', 
-  'image/webp', 
+  'image/jpeg',
+  'image/png',
+  'image/webp',
   'image/gif',
   'image/svg+xml'  -- 如需支援 SVG
 ]::text[]
@@ -331,7 +341,7 @@ where id = 'media';
 ### 檢查所有 Policies
 
 ```sql
-select 
+select
   schemaname,
   tablename,
   policyname,
@@ -339,7 +349,7 @@ select
   roles,
   cmd
 from pg_policies
-where schemaname = 'storage' 
+where schemaname = 'storage'
   and tablename = 'objects'
 order by policyname;
 ```
@@ -347,7 +357,7 @@ order by policyname;
 ### 檢查 Bucket 設定
 
 ```sql
-select 
+select
   id,
   name,
   public,
@@ -361,7 +371,7 @@ where id = 'media';
 ### 列出最近上傳的檔案
 
 ```sql
-select 
+select
   name,
   bucket_id,
   owner,

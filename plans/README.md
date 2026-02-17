@@ -26,33 +26,33 @@ Implementation plans for the Persona Sandbox project.
 
 ## Web App (Reddit-Clone UI)
 
-| Phase | File                                                                     | Focus                                                                 | Status      |
-| ----- | ------------------------------------------------------------------------ | --------------------------------------------------------------------- | ----------- |
-| —     | [webapp/_conventions.md](webapp/_conventions.md)                         | Project context, codebase conventions, file reference                 | Reference   |
-| 9     | [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md)         | Reddit-Style Forum: CRUD + Moderator + Archive + Poll                 | DONE        |
+| Phase | File                                                             | Focus                                                 | Status    |
+| ----- | ---------------------------------------------------------------- | ----------------------------------------------------- | --------- |
+| —     | [webapp/\_conventions.md](webapp/_conventions.md)                | Project context, codebase conventions, file reference | Reference |
+| 9     | [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md) | Reddit-Style Forum: CRUD + Moderator + Archive + Poll | DONE      |
 
 ## Mobile UI (Cross-Cutting Responsive)
 
-| Phase | File                                                               | Focus                                                        | Status     |
-| ------| -------------------------------------------------------------------| -------------------------------------------------------------| ---------- |
-| —     | [mobile/_conventions.md](mobile/_conventions.md)                   | Responsive rules, UI kit decisions (DaisyUI)                 | Reference  |
-| M6    | [mobile/phase-m6-boards-forum.md](mobile/phase-m6-boards-forum.md) | Board Forum Mobile Adaptation                                | DONE       |
+| Phase | File                                                               | Focus                                        | Status    |
+| ----- | ------------------------------------------------------------------ | -------------------------------------------- | --------- |
+| —     | [mobile/\_conventions.md](mobile/_conventions.md)                  | Responsive rules, UI kit decisions (DaisyUI) | Reference |
+| M6    | [mobile/phase-m6-boards-forum.md](mobile/phase-m6-boards-forum.md) | Board Forum Mobile Adaptation                | DONE      |
 
 ---
 
 ## Phase 9 Feature Summary
 
-| Feature                | Description                                                      |
-| ---------------------- | ---------------------------------------------------------------- |
-| Board Create           | Any logged-in user can create a board                            |
-| Board Archive          | Soft-delete + read-only, accessible via /boards/archive          |
-| Moderator System       | Owner + Moderators with permissions                              |
-| Ban System             | Moderators can ban users from boards                             |
-| Feed Sorting           | Hot/New/Top/Rising with time decay algorithm                     |
-| Board Customization    | Banner, description, community rules                             |
-| Poll Posts             | Create polls with 2-6 options, voting system                     |
-| Post Types             | Text, Image, Link, Poll                                          |
-| Tags (Flair)           | Uses existing tags system for post categorization                |
+| Feature             | Description                                             |
+| ------------------- | ------------------------------------------------------- |
+| Board Create        | Any logged-in user can create a board                   |
+| Board Archive       | Soft-delete + read-only, accessible via /boards/archive |
+| Moderator System    | Owner + Moderators with permissions                     |
+| Ban System          | Moderators can ban users from boards                    |
+| Feed Sorting        | Hot/New/Top/Rising with time decay algorithm            |
+| Board Customization | Banner, description, community rules                    |
+| Poll Posts          | Create polls with 2-6 options, voting system            |
+| Post Types          | Text, Image, Link, Poll                                 |
+| Tags (Flair)        | Uses existing tags system for post categorization       |
 
 ---
 

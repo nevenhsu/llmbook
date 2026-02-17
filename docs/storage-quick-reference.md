@@ -22,37 +22,37 @@ npm run test:watch
 ### 2. 使用現有函數上傳圖片 (Browser)
 
 ```typescript
-import { uploadImage } from '@/lib/image-upload';
+import { uploadImage } from "@/lib/image-upload";
 
 const result = await uploadImage(file, {
   maxWidth: 2048,
   maxBytes: 5 * 1024 * 1024,
-  quality: 82
+  quality: 82,
 });
 
-console.log(result.url);      // Public URL
-console.log(result.width);    // 1920
-console.log(result.height);   // 1080
+console.log(result.url); // Public URL
+console.log(result.width); // 1920
+console.log(result.height); // 1080
 console.log(result.sizeBytes); // 245678
 ```
 
 ### 3. 使用 Admin Client (Server-side)
 
 ```typescript
-import { createAdminClient } from '@/lib/supabase/admin';
-import { privateEnv } from '@/lib/env';
+import { createAdminClient } from "@/lib/supabase/admin";
+import { privateEnv } from "@/lib/env";
 
 const supabase = createAdminClient();
 
 // 上傳
 const { data, error } = await supabase.storage
   .from(privateEnv.storageBucket)
-  .upload('path/to/file.png', fileBuffer);
+  .upload("path/to/file.png", fileBuffer);
 
 // 取得 Public URL
 const { data: urlData } = supabase.storage
   .from(privateEnv.storageBucket)
-  .getPublicUrl('path/to/file.png');
+  .getPublicUrl("path/to/file.png");
 
 console.log(urlData.publicUrl);
 ```
@@ -79,7 +79,7 @@ console.log(urlData.publicUrl);
 // personas/avatars/persona-001.webp
 
 // Persona 貼文圖片
-`personas/posts/${personaId}/${Date.now()}.webp`
+`personas/posts/${personaId}/${Date.now()}.webp`;
 // personas/posts/persona-001/1707565200000.webp
 ```
 
@@ -91,26 +91,24 @@ console.log(urlData.publicUrl);
 
 ```typescript
 const { data, error } = await supabase.storage
-  .from('media')
-  .upload('path/to/file.png', fileBuffer, {
-    contentType: 'image/png',
-    upsert: false,        // true = 覆蓋同名檔案
-    cacheControl: '3600'  // Cache 1 hour
+  .from("media")
+  .upload("path/to/file.png", fileBuffer, {
+    contentType: "image/png",
+    upsert: false, // true = 覆蓋同名檔案
+    cacheControl: "3600", // Cache 1 hour
   });
 
 if (error) {
-  console.error('Upload failed:', error.message);
+  console.error("Upload failed:", error.message);
 } else {
-  console.log('Uploaded:', data.path);
+  console.log("Uploaded:", data.path);
 }
 ```
 
 ### 取得公開 URL
 
 ```typescript
-const { data } = supabase.storage
-  .from('media')
-  .getPublicUrl('path/to/file.png');
+const { data } = supabase.storage.from("media").getPublicUrl("path/to/file.png");
 
 console.log(data.publicUrl);
 // https://xxx.supabase.co/storage/v1/object/public/media/path/to/file.png
@@ -119,15 +117,13 @@ console.log(data.publicUrl);
 ### 列出檔案
 
 ```typescript
-const { data, error } = await supabase.storage
-  .from('media')
-  .list('folder/path', {
-    limit: 100,
-    offset: 0,
-    sortBy: { column: 'created_at', order: 'desc' }
-  });
+const { data, error } = await supabase.storage.from("media").list("folder/path", {
+  limit: 100,
+  offset: 0,
+  sortBy: { column: "created_at", order: "desc" },
+});
 
-data.forEach(file => {
+data.forEach((file) => {
   console.log(file.name, file.metadata.size);
 });
 ```
@@ -135,9 +131,7 @@ data.forEach(file => {
 ### 下載檔案
 
 ```typescript
-const { data, error } = await supabase.storage
-  .from('media')
-  .download('path/to/file.png');
+const { data, error } = await supabase.storage.from("media").download("path/to/file.png");
 
 if (data) {
   const blob = data;
@@ -150,34 +144,28 @@ if (data) {
 
 ```typescript
 // 刪除單一檔案
-const { error } = await supabase.storage
-  .from('media')
-  .remove(['path/to/file.png']);
+const { error } = await supabase.storage.from("media").remove(["path/to/file.png"]);
 
 // 刪除多個檔案
 const { error } = await supabase.storage
-  .from('media')
-  .remove([
-    'path/to/file1.png',
-    'path/to/file2.png',
-    'path/to/file3.png'
-  ]);
+  .from("media")
+  .remove(["path/to/file1.png", "path/to/file2.png", "path/to/file3.png"]);
 ```
 
 ### 移動/重新命名檔案
 
 ```typescript
 const { data, error } = await supabase.storage
-  .from('media')
-  .move('old/path/file.png', 'new/path/file.png');
+  .from("media")
+  .move("old/path/file.png", "new/path/file.png");
 ```
 
 ### 複製檔案
 
 ```typescript
 const { data, error } = await supabase.storage
-  .from('media')
-  .copy('source/path/file.png', 'destination/path/file.png');
+  .from("media")
+  .copy("source/path/file.png", "destination/path/file.png");
 ```
 
 ---
@@ -205,11 +193,11 @@ const { data, error } = await supabase.storage
 
 ## ⚠️ 限制
 
-| 限制 | 值 | 說明 |
-|-----|---|------|
-| 檔案大小 | 10 MB | 可在 Dashboard 調整 |
-| MIME types | image/* | jpeg, png, webp, gif |
-| Public bucket | Yes | 允許公開存取 |
+| 限制          | 值       | 說明                 |
+| ------------- | -------- | -------------------- |
+| 檔案大小      | 10 MB    | 可在 Dashboard 調整  |
+| MIME types    | image/\* | jpeg, png, webp, gif |
+| Public bucket | Yes      | 允許公開存取         |
 
 ---
 
@@ -262,14 +250,14 @@ where bucket_id = 'media'
 
 ## 📚 相關檔案
 
-| 檔案 | 說明 |
-|-----|------|
-| `src/lib/supabase/__tests__/storage.test.ts` | Storage 測試 |
-| `src/lib/image-upload.ts` | 圖片上傳函數 |
-| `src/lib/supabase/admin.ts` | Admin Client |
-| `src/lib/env.ts` | 環境變數 |
+| 檔案                                                | 說明             |
+| --------------------------------------------------- | ---------------- |
+| `src/lib/supabase/__tests__/storage.test.ts`        | Storage 測試     |
+| `src/lib/image-upload.ts`                           | 圖片上傳函數     |
+| `src/lib/supabase/admin.ts`                         | Admin Client     |
+| `src/lib/env.ts`                                    | 環境變數         |
 | `supabase/migrations/20260210_storage_policies.sql` | Storage Policies |
-| `docs/storage-setup.md` | 完整設定指南 |
+| `docs/storage-setup.md`                             | 完整設定指南     |
 
 ---
 

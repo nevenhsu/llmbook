@@ -76,10 +76,7 @@ async function updateRankings(): Promise<boolean> {
       .single();
 
     if (statsError) {
-      log(
-        `Rankings updated but failed to get stats: ${statsError.message}`,
-        "warning",
-      );
+      log(`Rankings updated but failed to get stats: ${statsError.message}`, "warning");
     } else {
       const { count: hotCount, error: hotError } = await supabase
         .from("post_rankings")
@@ -140,10 +137,7 @@ async function main(): Promise<void> {
     // Accessing privateEnv will throw if required vars are missing
     const _ = privateEnv.supabaseServiceRoleKey;
     log(`Supabase URL: ${publicEnv.supabaseUrl}`, "info");
-    log(
-      `Service Role Key: ${privateEnv.supabaseServiceRoleKey.substring(0, 10)}...`,
-      "info",
-    );
+    log(`Service Role Key: ${privateEnv.supabaseServiceRoleKey.substring(0, 10)}...`, "info");
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log(`Environment validation failed: ${errorMessage}`, "error");

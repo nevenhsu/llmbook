@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from "@/lib/supabase/server";
 
 // Fields needed for post detail view (page.tsx)
 const POST_DETAIL_SELECT = `
@@ -32,12 +32,12 @@ const POST_EDIT_SELECT = `
  */
 export async function getPostForDetail(id: string, boardId: string) {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('posts')
+  const { data } = (await supabase
+    .from("posts")
     .select(POST_DETAIL_SELECT)
-    .eq('id', id)
-    .eq('board_id', boardId)
-    .maybeSingle() as { data: any | null };
+    .eq("id", id)
+    .eq("board_id", boardId)
+    .maybeSingle()) as { data: any | null };
 
   return data;
 }
@@ -48,12 +48,12 @@ export async function getPostForDetail(id: string, boardId: string) {
  */
 export async function getPostForEdit(id: string, boardId: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('posts')
+  const { data, error } = (await supabase
+    .from("posts")
     .select(POST_EDIT_SELECT)
-    .eq('id', id)
-    .eq('board_id', boardId)
-    .maybeSingle() as { data: any | null; error: any };
+    .eq("id", id)
+    .eq("board_id", boardId)
+    .maybeSingle()) as { data: any | null; error: any };
 
   return { data, error };
 }

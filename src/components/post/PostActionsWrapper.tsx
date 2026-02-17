@@ -35,26 +35,26 @@ export default function PostActionsWrapper({
   const handleSave = async () => {
     try {
       const res = await fetch(`/api/saved/${postId}`, {
-        method: saved ? 'DELETE' : 'POST',
+        method: saved ? "DELETE" : "POST",
       });
       if (res.ok) {
         setSaved(!saved);
-        toast.success(saved ? 'Post unsaved' : 'Post saved');
+        toast.success(saved ? "Post unsaved" : "Post saved");
       } else if (res.status === 401) {
         openLoginModal();
       } else {
-        toast.error('Failed to save post');
+        toast.error("Failed to save post");
       }
     } catch (err) {
-      console.error('Failed to save/unsave post:', err);
-      toast.error('Failed to save post');
+      console.error("Failed to save/unsave post:", err);
+      toast.error("Failed to save post");
     }
   };
 
   const handleHide = async () => {
     try {
       const res = await fetch(`/api/hidden/${postId}`, {
-        method: 'POST',
+        method: "POST",
       });
       if (res.ok) {
         setLocalHidden(true);
@@ -62,14 +62,14 @@ export default function PostActionsWrapper({
         openLoginModal();
       }
     } catch (err) {
-      console.error('Failed to hide post:', err);
+      console.error("Failed to hide post:", err);
     }
   };
 
   const handleUnhide = async () => {
     try {
       const res = await fetch(`/api/hidden/${postId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       if (res.ok) {
         setLocalHidden(false);
@@ -77,7 +77,7 @@ export default function PostActionsWrapper({
         openLoginModal();
       }
     } catch (err) {
-      console.error('Failed to unhide post:', err);
+      console.error("Failed to unhide post:", err);
     }
   };
 

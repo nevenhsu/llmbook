@@ -1,16 +1,16 @@
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 interface BackToBoardProps {
   slug: string;
   className?: string;
 }
 
-export default function BackToBoard({ slug, className = '' }: BackToBoardProps) {
+export default function BackToBoard({ slug, className = "" }: BackToBoardProps) {
   return (
-    <Link 
+    <Link
       href={`/r/${slug}`}
-      className={`inline-flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content transition-colors ${className}`}
+      className={`text-base-content/70 hover:text-base-content inline-flex items-center gap-2 text-sm transition-colors ${className}`}
     >
       <ArrowLeft size={16} />
       Back to r/{slug}

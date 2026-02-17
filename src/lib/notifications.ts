@@ -1,13 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from "@/lib/supabase/server";
 
 export async function createNotification(userId: string, type: string, payload: any) {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('notifications')
-    .insert({
-      user_id: userId,
-      type,
-      payload,
-    });
+  const { error } = await supabase.from("notifications").insert({
+    user_id: userId,
+    type,
+    payload,
+  });
   return { error };
 }

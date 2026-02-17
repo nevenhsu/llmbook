@@ -1,8 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Loader2, Info } from 'lucide-react';
-import { validateUsernameFormat, checkUsernameAvailability, getUsernameRules, sanitizeUsername } from '@/lib/username-validation';
+import { useState, useEffect } from "react";
+import { CheckCircle, XCircle, Loader2, Info } from "lucide-react";
+import {
+  validateUsernameFormat,
+  checkUsernameAvailability,
+  getUsernameRules,
+  sanitizeUsername,
+} from "@/lib/username-validation";
 
 interface UsernameInputProps {
   value: string;
@@ -21,7 +26,7 @@ export default function UsernameInput({
   onValidChange,
   isPersona = false,
   required = true,
-  label = 'Username',
+  label = "Username",
   showRules = true,
   checkAvailability = true,
 }: UsernameInputProps) {
@@ -88,7 +93,7 @@ export default function UsernameInput({
           <button
             type="button"
             onClick={() => setShowRulesList(!showRulesList)}
-            className="label-text-alt text-xs flex items-center gap-1 hover:text-base-content ml-auto"
+            className="label-text-alt hover:text-base-content ml-auto flex items-center gap-1 text-xs"
           >
             <Info size={12} />
             規則
@@ -103,13 +108,9 @@ export default function UsernameInput({
           value={value}
           onChange={handleChange}
           className={`input w-full pr-10 ${
-            showError
-              ? 'input-error'
-              : showSuccess
-              ? 'input-success'
-              : 'input-bordered'
+            showError ? "input-error" : showSuccess ? "input-success" : "input-bordered"
           }`}
-          placeholder={isPersona ? 'ai_example' : 'example.username'}
+          placeholder={isPersona ? "ai_example" : "example.username"}
           spellCheck={false}
           autoComplete="off"
           autoCapitalize="off"
@@ -117,7 +118,7 @@ export default function UsernameInput({
         />
 
         {/* Status icon */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+        <div className="absolute top-1/2 right-3 -translate-y-1/2">
           {isChecking && <Loader2 size={18} className="animate-spin opacity-70" />}
           {!isChecking && showSuccess && <CheckCircle size={18} className="text-success" />}
           {!isChecking && showError && <XCircle size={18} className="text-error" />}
@@ -127,22 +128,24 @@ export default function UsernameInput({
       {/* Error message */}
       {showError && (
         <label className="label !whitespace-normal">
-          <span className="label-text-alt text-xs text-error break-words">{formatError || availabilityError}</span>
+          <span className="label-text-alt text-error text-xs break-words">
+            {formatError || availabilityError}
+          </span>
         </label>
       )}
 
       {/* Success message */}
       {showSuccess && (
         <label className="label !whitespace-normal">
-          <span className="label-text-alt text-xs text-success">✓ Username 可以使用</span>
+          <span className="label-text-alt text-success text-xs">✓ Username 可以使用</span>
         </label>
       )}
 
       {/* Rules list (collapsible) */}
       {showRules && showRulesList && (
-        <div className="rounded-lg bg-base-200 p-3 text-sm space-y-1 mt-2">
-          <p className="font-semibold mb-2">Username 規則：</p>
-          <ul className="space-y-1 list-disc list-inside opacity-70">
+        <div className="bg-base-200 mt-2 space-y-1 rounded-lg p-3 text-sm">
+          <p className="mb-2 font-semibold">Username 規則：</p>
+          <ul className="list-inside list-disc space-y-1 opacity-70">
             {rules.map((rule, index) => (
               <li key={index}>{rule}</li>
             ))}

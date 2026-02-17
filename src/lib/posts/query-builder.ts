@@ -62,8 +62,8 @@ export function buildPostsQuery(options: BuildPostsQueryOptions) {
     tagId,
     authorId,
     personaId,
-    sortBy = 'hot',
-    timeRange = 'all',
+    sortBy = "hot",
+    timeRange = "all",
     canViewArchived = false,
     limit = 100,
     offset,
@@ -136,7 +136,7 @@ export function buildPostsQuery(options: BuildPostsQueryOptions) {
 export async function fetchUserVotes(
   supabase: SupabaseClient,
   userId: string,
-  postIds: string[]
+  postIds: string[],
 ): Promise<Record<string, 1 | -1>> {
   if (!userId || postIds.length === 0) {
     return {};
@@ -149,7 +149,7 @@ export async function fetchUserVotes(
     .in("post_id", postIds);
 
   if (error) {
-    console.error('Failed to fetch user votes:', error);
+    console.error("Failed to fetch user votes:", error);
     return {};
   }
 
@@ -157,16 +157,19 @@ export async function fetchUserVotes(
     return {};
   }
 
-  return votes.reduce((acc, vote) => {
-    acc[vote.post_id] = vote.value;
-    return acc;
-  }, {} as Record<string, 1 | -1>);
+  return votes.reduce(
+    (acc, vote) => {
+      acc[vote.post_id] = vote.value;
+      return acc;
+    },
+    {} as Record<string, 1 | -1>,
+  );
 }
 
 export async function fetchHiddenPostIds(
   supabase: SupabaseClient,
   userId: string,
-  postIds: string[]
+  postIds: string[],
 ): Promise<Set<string>> {
   if (!userId || postIds.length === 0) {
     return new Set();
@@ -179,7 +182,7 @@ export async function fetchHiddenPostIds(
     .in("post_id", postIds);
 
   if (error) {
-    console.error('Failed to fetch hidden posts:', error);
+    console.error("Failed to fetch hidden posts:", error);
     return new Set();
   }
 
@@ -193,7 +196,7 @@ export async function fetchHiddenPostIds(
 export async function fetchSavedPostIds(
   supabase: SupabaseClient,
   userId: string,
-  postIds: string[]
+  postIds: string[],
 ): Promise<Set<string>> {
   if (!userId || postIds.length === 0) {
     return new Set();
@@ -206,7 +209,7 @@ export async function fetchSavedPostIds(
     .in("post_id", postIds);
 
   if (error) {
-    console.error('Failed to fetch saved posts:', error);
+    console.error("Failed to fetch saved posts:", error);
     return new Set();
   }
 
@@ -220,7 +223,7 @@ export async function fetchSavedPostIds(
 export async function fetchUserInteractions(
   supabase: SupabaseClient,
   userId: string,
-  postIds: string[]
+  postIds: string[],
 ): Promise<{
   votes: Record<string, 1 | -1>;
   hiddenPostIds: Set<string>;
@@ -253,8 +256,14 @@ export interface RawPost {
   author_id: string;
   status: string;
   boards?: { name: string; slug: string } | { name: string; slug: string }[];
-  profiles?: { username: string | null; display_name: string | null; avatar_url: string | null } | { username: string | null; display_name: string | null; avatar_url: string | null }[] | null;
-  personas?: { username: string | null; display_name: string | null; avatar_url: string | null } | { username: string | null; display_name: string | null; avatar_url: string | null }[] | null;
+  profiles?:
+    | { username: string | null; display_name: string | null; avatar_url: string | null }
+    | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+    | null;
+  personas?:
+    | { username: string | null; display_name: string | null; avatar_url: string | null }
+    | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+    | null;
   media?: { url: string }[];
   post_tags?: { tag?: PostTag | PostTag[] | null }[];
 }
@@ -289,10 +298,10 @@ export interface TransformPostOptions {
 
 export function transformPostToFeedFormat(
   post: RawPost,
-  options: TransformPostOptions = {}
+  options: TransformPostOptions = {},
 ): FeedPost {
   const { userVote = null, isHidden = false, isSaved = false } = options;
-  
+
   const isPersona = !!post.persona_id;
   const author = isPersona ? post.personas : post.profiles;
   const authorData = Array.isArray(author) ? author[0] : author;
@@ -341,25 +350,37 @@ export interface RawComment {
   persona_id?: string;
   post_id?: string;
   parent_id?: string;
-  profiles?: { username: string | null; display_name: string | null; avatar_url: string | null } | { username: string | null; display_name: string | null; avatar_url: string | null }[] | null;
-  personas?: { username: string | null; display_name: string | null; avatar_url: string | null } | { username: string | null; display_name: string | null; avatar_url: string | null }[] | null;
-  posts?: {
-    id: string;
-    title: string;
-    boards?: {
-      slug: string;
-    } | {
-      slug: string;
-    }[];
-  } | {
-    id: string;
-    title: string;
-    boards?: {
-      slug: string;
-    } | {
-      slug: string;
-    }[];
-  }[];
+  profiles?:
+    | { username: string | null; display_name: string | null; avatar_url: string | null }
+    | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+    | null;
+  personas?:
+    | { username: string | null; display_name: string | null; avatar_url: string | null }
+    | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+    | null;
+  posts?:
+    | {
+        id: string;
+        title: string;
+        boards?:
+          | {
+              slug: string;
+            }
+          | {
+              slug: string;
+            }[];
+      }
+    | {
+        id: string;
+        title: string;
+        boards?:
+          | {
+              slug: string;
+            }
+          | {
+              slug: string;
+            }[];
+      }[];
 }
 
 export interface FormattedComment {
@@ -382,10 +403,14 @@ export interface FormattedComment {
 
 export function transformCommentToFormat(
   comment: RawComment,
-  userVote: number | null = null
+  userVote: number | null = null,
 ): FormattedComment {
   const postData = Array.isArray(comment.posts) ? comment.posts[0] : comment.posts;
-  const boardData = postData?.boards ? (Array.isArray(postData.boards) ? postData.boards[0] : postData.boards) : null;
+  const boardData = postData?.boards
+    ? Array.isArray(postData.boards)
+      ? postData.boards[0]
+      : postData.boards
+    : null;
 
   const isPersona = !!comment.persona_id;
   const author = isPersona ? comment.personas : comment.profiles;
@@ -452,8 +477,8 @@ export interface FormattedProfile {
 export function transformProfileToFormat(data: any, isPersona: boolean = false): FormattedProfile {
   return {
     id: isPersona ? data.id : data.user_id,
-    username: data.username || 'unknown',
-    displayName: data.display_name || 'Unknown',
+    username: data.username || "unknown",
+    displayName: data.display_name || "Unknown",
     avatarUrl: data.avatar_url,
     bio: data.bio,
     karma: data.karma ?? 0,

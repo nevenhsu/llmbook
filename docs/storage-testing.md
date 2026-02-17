@@ -10,15 +10,15 @@ Storage 測試已整合進 Vitest，執行 `npm test` 會自動測試所有 Stor
 
 ### 測試內容
 
-| 測試分類 | 測試數量 | 說明 |
-|---------|---------|------|
-| Bucket Configuration | 2 | 驗證 bucket 存在和配置 |
-| File Operations | 5 | 上傳、下載、列表、刪除 |
-| Path Structure | 2 | 用戶和 Persona 資料夾結構 |
-| Storage Policies | 2 | Service role 權限測試 |
-| File Validation | 2 | 檔案大小和類型驗證 |
-| Bucket Info | 1 | Bucket 配置檢查 |
-| **總計** | **14** | - |
+| 測試分類             | 測試數量 | 說明                      |
+| -------------------- | -------- | ------------------------- |
+| Bucket Configuration | 2        | 驗證 bucket 存在和配置    |
+| File Operations      | 5        | 上傳、下載、列表、刪除    |
+| Path Structure       | 2        | 用戶和 Persona 資料夾結構 |
+| Storage Policies     | 2        | Service role 權限測試     |
+| File Validation      | 2        | 檔案大小和類型驗證        |
+| Bucket Info          | 1        | Bucket 配置檢查           |
+| **總計**             | **14**   | -                         |
 
 ---
 
@@ -102,11 +102,11 @@ Test Files  1 passed (1)
 
 ### Bucket 限制
 
-| 設定 | 值 |
-|-----|---|
-| Bucket 名稱 | `media` |
-| Public | ✅ Yes |
-| 檔案大小限制 | 10 MB (10485760 bytes) |
+| 設定              | 值                                           |
+| ----------------- | -------------------------------------------- |
+| Bucket 名稱       | `media`                                      |
+| Public            | ✅ Yes                                       |
+| 檔案大小限制      | 10 MB (10485760 bytes)                       |
 | 允許的 MIME types | image/jpeg, image/png, image/webp, image/gif |
 
 ### 測試檔案
@@ -162,6 +162,7 @@ media/
 ### 測試環境要求
 
 1. **環境變數**: 必須設定所有必要的環境變數
+
    ```env
    NEXT_PUBLIC_SUPABASE_URL="https://xxx.supabase.co"
    SUPABASE_SERVICE_ROLE_KEY="eyJxxx..."
@@ -223,9 +224,7 @@ const trackUpload = (path: string) => {
 
 // 使用範例
 const testPath = `test/${Date.now()}-test.txt`;
-const { data, error } = await supabase.storage
-  .from('media')
-  .upload(testPath, 'content');
+const { data, error } = await supabase.storage.from("media").upload(testPath, "content");
 
 if (!error) {
   trackUpload(testPath); // 記錄成功上傳的檔案
@@ -238,21 +237,19 @@ if (!error) {
 afterAll(async () => {
   if (uploadedFiles.length > 0) {
     console.log(`Cleaning up ${uploadedFiles.length} test file(s)...`);
-    
+
     const batchSize = 10;
     for (let i = 0; i < uploadedFiles.length; i += batchSize) {
       const batch = uploadedFiles.slice(i, i + batchSize);
-      const { error } = await supabase.storage
-        .from('media')
-        .remove(batch);
-      
+      const { error } = await supabase.storage.from("media").remove(batch);
+
       if (error) {
         console.error(`Failed to delete batch ${i / batchSize + 1}:`, error.message);
       } else {
         console.log(`✓ Deleted ${batch.length} file(s) (batch ${i / batchSize + 1})`);
       }
     }
-    
+
     console.log(`✅ Cleanup complete! Removed ${uploadedFiles.length} test file(s)`);
   }
 });
@@ -266,7 +263,7 @@ afterAll(async () => {
 
 ```sql
 -- 列出所有測試檔案
-select 
+select
   name,
   created_at,
   metadata->>'size' as size_bytes,
@@ -274,7 +271,7 @@ select
 from storage.objects
 where bucket_id = 'media'
   and (
-    name like 'test/%' 
+    name like 'test/%'
     or name like 'test-user-id/%'
     or name like 'personas/avatars/test-%'
   )
@@ -289,7 +286,7 @@ select count(*) as remaining_test_files
 from storage.objects
 where bucket_id = 'media'
   and (
-    name like 'test/%' 
+    name like 'test/%'
     or name like 'test-user-id/%'
     or name like 'personas/avatars/test-%'
     or name like 'personas/avatars/service-%'

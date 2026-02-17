@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { Search, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, useRef } from "react";
+import { Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function SearchBar() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const router = useRouter();
@@ -50,46 +50,55 @@ export default function SearchBar() {
   };
 
   return (
-    <div className="relative flex-1 max-w-[640px]" ref={dropdownRef}>
-      <form onSubmit={handleSearch} className="flex items-center rounded-full border border-neutral bg-base-100 px-4 py-2 transition-colors hover:hover:bg-base-300 focus-within:">
+    <div className="relative max-w-[640px] flex-1" ref={dropdownRef}>
+      <form
+        onSubmit={handleSearch}
+        className="border-neutral bg-base-100 hover:hover:bg-base-300 focus-within: flex items-center rounded-full border px-4 py-2 transition-colors"
+      >
         <Search size={20} className="text-base-content/70" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search Reddit"
-          className="ml-2 w-full bg-transparent text-sm text-base-content outline-none placeholder:text-base-content/70"
+          className="text-base-content placeholder:text-base-content/70 ml-2 w-full bg-transparent text-sm outline-none"
         />
         {query && (
-          <button type="button" onClick={() => setQuery('')} className="text-base-content/70 hover:text-base-content">
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="text-base-content/70 hover:text-base-content"
+          >
             <X size={16} />
           </button>
         )}
       </form>
 
       {showDropdown && query.length > 1 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-base-100 border border-neutral rounded-md shadow-xl z-[110] overflow-hidden">
+        <div className="bg-base-100 border-neutral absolute top-full right-0 left-0 z-[110] mt-2 overflow-hidden rounded-md border shadow-xl">
           <div className="py-2">
             {results.length > 0 ? (
-              results.slice(0, 5).map(post => {
+              results.slice(0, 5).map((post) => {
                 const board = post.boards;
                 return (
-                  <Link 
-                    key={post.id} 
-                    href={`/r/${board?.slug || 'unknown'}/posts/${post.id}`}
+                  <Link
+                    key={post.id}
+                    href={`/r/${board?.slug || "unknown"}/posts/${post.id}`}
                     onClick={() => setShowDropdown(false)}
-                    className="block px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content truncate"
+                    className="hover:hover:bg-base-300 text-base-content block truncate px-4 py-2 text-sm"
                   >
                     {post.title}
                   </Link>
                 );
               })
             ) : (
-              <div className="px-4 py-2 text-sm text-base-content/70">No quick results found. Press Enter to search everywhere.</div>
+              <div className="text-base-content/70 px-4 py-2 text-sm">
+                No quick results found. Press Enter to search everywhere.
+              </div>
             )}
-            <button 
+            <button
               onClick={() => handleSearch()}
-              className="w-full text-left px-4 py-2 border-t border-neutral hover:hover:bg-base-300 text-sm font-bold text-accent"
+              className="border-neutral hover:hover:bg-base-300 text-accent w-full border-t px-4 py-2 text-left text-sm font-bold"
             >
               Search for "{query}"
             </button>

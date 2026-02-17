@@ -107,11 +107,7 @@ export default function CreateBoardForm() {
     }
   };
 
-  const updateRule = (
-    index: number,
-    field: "title" | "description",
-    value: string,
-  ) => {
+  const updateRule = (index: number, field: "title" | "description", value: string) => {
     const newRules = [...rules];
     newRules[index][field] = value;
     setRules(newRules);
@@ -179,7 +175,7 @@ export default function CreateBoardForm() {
         <div className="relative">
           <input
             type="text"
-            className={`input input-bordered w-full bg-base-100 ${
+            className={`input input-bordered bg-base-100 w-full ${
               nameError
                 ? "border-error"
                 : name && nameAvailable
@@ -194,12 +190,12 @@ export default function CreateBoardForm() {
             required
           />
           {checking && name && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            <span className="absolute top-1/2 right-3 -translate-y-1/2">
               <span className="loading loading-spinner loading-sm"></span>
             </span>
           )}
           {!checking && name && !nameError && nameAvailable !== null && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            <span className="absolute top-1/2 right-3 -translate-y-1/2">
               {nameAvailable ? (
                 <CheckCircle size={20} className="text-success" />
               ) : (
@@ -231,12 +227,12 @@ export default function CreateBoardForm() {
         </label>
         <div className="flex items-center gap-2">
           <div className="join flex-1">
-            <span className="join-item flex items-center px-3 bg-base-300 text-base-content/70 text-sm border border-neutral rounded-l-lg">
+            <span className="join-item bg-base-300 text-base-content/70 border-neutral flex items-center rounded-l-lg border px-3 text-sm">
               r/
             </span>
             <input
               type="text"
-              className={`input input-bordered join-item flex-1 bg-base-100 ${
+              className={`input input-bordered join-item bg-base-100 flex-1 ${
                 slugError
                   ? "border-error"
                   : slug && slugAvailable
@@ -282,7 +278,7 @@ export default function CreateBoardForm() {
           <span className="label-text font-semibold">Description</span>
         </label>
         <textarea
-          className="textarea textarea-bordered w-full bg-base-100 border-neutral"
+          className="textarea textarea-bordered bg-base-100 border-neutral w-full"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What is this board about?"
@@ -290,9 +286,7 @@ export default function CreateBoardForm() {
           rows={3}
         />
         <label className="label">
-          <span className="label-text text-base-content/70">
-            {description.length}/500
-          </span>
+          <span className="label-text text-base-content/70">{description.length}/500</span>
         </label>
       </div>
 
@@ -300,35 +294,28 @@ export default function CreateBoardForm() {
       <div className="form-control mb-6">
         <label className="label">
           <span className="label-text font-semibold">Community Rules</span>
-          <span className="label-text-alt text-base-content/70">
-            {rules.length}/15
-          </span>
+          <span className="label-text-alt text-base-content/70">{rules.length}/15</span>
         </label>
         <div className="space-y-2">
           {rules.map((rule, index) => (
-            <div
-              key={index}
-              className="collapse collapse-arrow bg-base-100 border border-neutral"
-            >
+            <div key={index} className="collapse-arrow bg-base-100 border-neutral collapse border">
               <input type="checkbox" defaultChecked />
-              <div className="collapse-title font-medium flex items-center justify-between">
+              <div className="collapse-title flex items-center justify-between font-medium">
                 <span>Rule {index + 1}</span>
               </div>
               <div className="collapse-content space-y-2">
                 <input
                   type="text"
-                  className="input input-bordered input-sm w-full bg-base-100 border-neutral"
+                  className="input input-bordered input-sm bg-base-100 border-neutral w-full"
                   value={rule.title}
                   onChange={(e) => updateRule(index, "title", e.target.value)}
                   placeholder="Rule title"
                   maxLength={100}
                 />
                 <textarea
-                  className="textarea textarea-bordered textarea-sm w-full bg-base-100 border-neutral"
+                  className="textarea textarea-bordered textarea-sm bg-base-100 border-neutral w-full"
                   value={rule.description}
-                  onChange={(e) =>
-                    updateRule(index, "description", e.target.value)
-                  }
+                  onChange={(e) => updateRule(index, "description", e.target.value)}
                   placeholder="Rule description (optional)"
                   maxLength={500}
                   rows={2}
@@ -347,7 +334,7 @@ export default function CreateBoardForm() {
         </div>
         <button
           type="button"
-          className="btn btn-outline btn-sm w-full sm:w-auto mt-2"
+          className="btn btn-outline btn-sm mt-2 w-full sm:w-auto"
           onClick={addRule}
           disabled={rules.length >= 15}
         >
@@ -366,7 +353,7 @@ export default function CreateBoardForm() {
           aspectRatio="banner"
           placeholder="Upload banner (3:1 ratio recommended)"
         />
-        <p className="text-sm text-base-content/70 mt-2">
+        <p className="text-base-content/70 mt-2 text-sm">
           Banner will be automatically cropped to 3:1 aspect ratio
         </p>
       </div>
@@ -387,11 +374,7 @@ export default function CreateBoardForm() {
             !slugAvailable
           }
         >
-          {loading ? (
-            <span className="loading loading-spinner loading-sm"></span>
-          ) : (
-            "Create Board"
-          )}
+          {loading ? <span className="loading loading-spinner loading-sm"></span> : "Create Board"}
         </button>
       </div>
     </form>

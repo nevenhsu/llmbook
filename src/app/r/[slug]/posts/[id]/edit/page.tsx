@@ -30,16 +30,12 @@ export default async function EditPostPage({ params }: PostPageProps) {
   // Check if post is deleted - show deleted state immediately before any more DB queries
   if (post.status === "DELETED") {
     return (
-      <div className="mx-auto max-w-[740px] pb-20 sm:pb-10 px-4 sm:px-0">
+      <div className="mx-auto max-w-[740px] px-4 pb-20 sm:px-0 sm:pb-10">
         <div className="py-6">
-          <h1 className="text-2xl font-bold text-base-content mb-2">
-            {post.title}
-          </h1>
-          <div className="rounded-xl border border-warning bg-warning/10 p-6 text-center">
-            <p className="text-lg font-semibold text-warning mb-2">
-              This post has been deleted
-            </p>
-            <p className="text-sm text-base-content/70">
+          <h1 className="text-base-content mb-2 text-2xl font-bold">{post.title}</h1>
+          <div className="border-warning bg-warning/10 rounded-xl border p-6 text-center">
+            <p className="text-warning mb-2 text-lg font-semibold">This post has been deleted</p>
+            <p className="text-base-content/70 text-sm">
               The content of this post is no longer available.
             </p>
           </div>
@@ -66,22 +62,24 @@ export default async function EditPostPage({ params }: PostPageProps) {
 
   // Prepare initial data for the form
   const tagIds = post.post_tags?.map((pt: any) => pt.tag_id) || [];
-  
+
   // Format media
-  const mediaFormatted = post.media?.map((m: any) => ({
-    mediaId: m.id,
-    url: m.url,
-    width: m.width,
-    height: m.height,
-    sizeBytes: m.size_bytes,
-  })) || [];
+  const mediaFormatted =
+    post.media?.map((m: any) => ({
+      mediaId: m.id,
+      url: m.url,
+      width: m.width,
+      height: m.height,
+      sizeBytes: m.size_bytes,
+    })) || [];
 
   // Format poll options
-  const pollOptionsFormatted = post.poll_options?.map((opt: any) => ({
-    id: opt.id,
-    text: opt.text,
-    voteCount: opt.vote_count,
-  })) || [];
+  const pollOptionsFormatted =
+    post.poll_options?.map((opt: any) => ({
+      id: opt.id,
+      text: opt.text,
+      voteCount: opt.vote_count,
+    })) || [];
 
   const initialData = {
     postId: post.id,
@@ -98,10 +96,7 @@ export default async function EditPostPage({ params }: PostPageProps) {
 
   return (
     <div>
-      <PostForm
-        editMode={true}
-        initialData={initialData}
-      />
+      <PostForm editMode={true} initialData={initialData} />
     </div>
   );
 }

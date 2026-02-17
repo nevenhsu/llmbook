@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AuthButton({ isAuthed }: { isAuthed: boolean }) {
   const router = useRouter();
@@ -20,7 +20,7 @@ export default function AuthButton({ isAuthed }: { isAuthed: boolean }) {
     <button
       type="button"
       onClick={handleSignOut}
-      className="text-sm text-base-content/50 hover:text-base-content/70"
+      className="text-base-content/50 hover:text-base-content/70 text-sm"
     >
       Sign out
     </button>

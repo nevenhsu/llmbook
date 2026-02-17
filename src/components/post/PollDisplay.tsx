@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useLoginModal } from '@/contexts/LoginModalContext';
-import toast from 'react-hot-toast';
+import { useState, useEffect } from "react";
+import { useLoginModal } from "@/contexts/LoginModalContext";
+import toast from "react-hot-toast";
 
 interface PollOption {
   id: string;
@@ -22,7 +22,7 @@ export default function PollDisplay({
   postId,
   initialOptions = [],
   initialUserVote = null,
-  isExpired = false
+  isExpired = false,
 }: PollDisplayProps) {
   const [options, setOptions] = useState<PollOption[]>(initialOptions);
   const [userVote, setUserVote] = useState<string | null>(initialUserVote);
@@ -45,7 +45,7 @@ export default function PollDisplay({
         setUserVote(data.userVote);
       }
     } catch (err) {
-      console.error('Failed to fetch poll data:', err);
+      console.error("Failed to fetch poll data:", err);
     }
   };
 
@@ -59,9 +59,9 @@ export default function PollDisplay({
 
     try {
       const res = await fetch(`/api/polls/${postId}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionId })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optionId }),
       });
 
       if (!res.ok) {
@@ -70,15 +70,15 @@ export default function PollDisplay({
           return;
         }
         const text = await res.text();
-        throw new Error(text || 'Failed to vote');
+        throw new Error(text || "Failed to vote");
       }
 
       const data = await res.json();
       setOptions(data.options);
       setUserVote(data.userVote);
-      toast.success('Vote recorded');
+      toast.success("Vote recorded");
     } catch (err: any) {
-      toast.error(err.message || 'Failed to vote');
+      toast.error(err.message || "Failed to vote");
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,6 @@ export default function PollDisplay({
 
   return (
     <div className="space-y-2">
-
       {options.map((option) => {
         const percentage = totalVotes > 0 ? (option.vote_count / totalVotes) * 100 : 0;
         const isUserChoice = userVote === option.id;
@@ -96,25 +95,18 @@ export default function PollDisplay({
             key={option.id}
             onClick={() => handleVote(option.id)}
             disabled={hasVoted || isExpired || loading}
-            className={`
-              w-full text-left p-3 rounded-box border transition-all bg-base-100
-              ${hasVoted || isExpired ? 'border-neutral cursor-default' : 'border-neutral hover:border-neutral active:scale-[0.98]'}
-              ${isUserChoice ? 'border-neutral ring-1 ring-neutral' : ''}
-              ${loading ? 'opacity-50' : ''}
-            `}
+            className={`rounded-box bg-base-100 w-full border p-3 text-left transition-all ${hasVoted || isExpired ? "border-neutral cursor-default" : "border-neutral hover:border-neutral active:scale-[0.98]"} ${isUserChoice ? "border-neutral ring-neutral ring-1" : ""} ${loading ? "opacity-50" : ""} `}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm flex-1">{option.text}</span>
+              <span className="flex-1 text-sm">{option.text}</span>
               {hasVoted && (
-                <span className="text-xs text-[#818384]">
-                  {Math.round(percentage)}%
-                </span>
+                <span className="text-xs text-[#818384]">{Math.round(percentage)}%</span>
               )}
             </div>
             {hasVoted && (
-              <div className="mt-2 h-1 bg-base-300 rounded-full overflow-hidden">
+              <div className="bg-base-300 mt-2 h-1 overflow-hidden rounded-full">
                 <div
-                  className="h-full bg-neutral transition-all duration-300"
+                  className="bg-neutral h-full transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 />
               </div>
@@ -123,8 +115,10 @@ export default function PollDisplay({
         );
       })}
 
-      <div className="flex items-center justify-between text-xs text-[#818384] mt-3">
-        <span>{totalVotes} vote{totalVotes !== 1 ? 's' : ''}</span>
+      <div className="mt-3 flex items-center justify-between text-xs text-[#818384]">
+        <span>
+          {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
+        </span>
         {isExpired && <span>Voting closed</span>}
       </div>
     </div>

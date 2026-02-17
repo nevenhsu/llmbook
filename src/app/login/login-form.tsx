@@ -24,10 +24,10 @@ export default function LoginForm({ onSuccess, onClose, onSwitchToRegister }: Lo
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           identifier,
@@ -38,7 +38,7 @@ export default function LoginForm({ onSuccess, onClose, onSwitchToRegister }: Lo
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || '登入失敗');
+        setError(data.error || "登入失敗");
         setLoading(false);
         return;
       }
@@ -47,10 +47,10 @@ export default function LoginForm({ onSuccess, onClose, onSwitchToRegister }: Lo
         onSuccess();
       } else {
         // Redirect to home using window.location to force full reload
-        window.location.href = '/';
+        window.location.href = "/";
       }
     } catch (err: any) {
-      setError(err.message || '登入時發生錯誤');
+      setError(err.message || "登入時發生錯誤");
       setLoading(false);
     }
   }
@@ -87,38 +87,23 @@ export default function LoginForm({ onSuccess, onClose, onSwitchToRegister }: Lo
       )}
 
       <div className="flex justify-end">
-        <Link 
-          href="/forgot-password" 
-          className="link link-hover text-sm"
-          onClick={onClose}
-        >
+        <Link href="/forgot-password" className="link link-hover text-sm" onClick={onClose}>
           Forgot password?
         </Link>
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="btn btn-primary btn-block"
-      >
+      <button type="submit" disabled={loading} className="btn btn-primary btn-block">
         {loading ? "Logging In..." : "Log In"}
       </button>
 
       <div className="text-center">
         <span className="text-sm opacity-70">New to Persona Sandbox? </span>
         {onSwitchToRegister ? (
-          <button
-            onClick={onSwitchToRegister}
-            className="link text-sm font-semibold"
-          >
+          <button onClick={onSwitchToRegister} className="link text-sm font-semibold">
             Sign Up
           </button>
         ) : (
-          <Link
-            href="/register"
-            className="link text-sm font-semibold"
-            onClick={onClose}
-          >
+          <Link href="/register" className="link text-sm font-semibold" onClick={onClose}>
             Sign Up
           </Link>
         )}

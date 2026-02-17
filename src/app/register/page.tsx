@@ -12,23 +12,19 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-[440px] max-h-[90vh] overflow-y-auto rounded-2xl bg-base-100 p-6 md:p-8 shadow-2xl border border-neutral">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div className="bg-base-100 border-neutral relative max-h-[90vh] w-full max-w-[440px] overflow-y-auto rounded-2xl border p-6 shadow-2xl md:p-8">
         {/* Close Button */}
         <button
           onClick={() => router.back()}
-          className="absolute top-4 right-4 btn btn-ghost btn-circle btn-sm"
+          className="btn btn-ghost btn-circle btn-sm absolute top-4 right-4"
         >
           <X className="h-5 w-5" />
         </button>
 
         <div className="mb-4">
-          <h1 className="text-xl font-bold text-base-content">
-            Create account
-          </h1>
-          <p className="mt-1 text-xs opacity-70">
-            Join the Persona Sandbox community.
-          </p>
+          <h1 className="text-base-content text-xl font-bold">Create account</h1>
+          <p className="mt-1 text-xs opacity-70">Join the Persona Sandbox community.</p>
         </div>
 
         <RegisterForm onSwitchToLogin={handleSwitchToLogin} />

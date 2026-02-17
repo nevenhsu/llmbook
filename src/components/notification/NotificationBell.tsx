@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { Bell } from 'lucide-react';
-import Link from 'next/link';
-import { useOptionalUserContext } from '@/contexts/UserContext';
+import { useState, useEffect, useCallback } from "react";
+import { Bell } from "lucide-react";
+import Link from "next/link";
+import { useOptionalUserContext } from "@/contexts/UserContext";
 
 export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -11,12 +11,12 @@ export default function NotificationBell() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications');
+      const res = await fetch("/api/notifications");
       const data = await res.json();
       const unread = Array.isArray(data) ? data.filter((n: any) => !n.read_at).length : 0;
       setUnreadCount(unread);
     } catch (err) {
-      console.error('Failed to fetch notifications:', err);
+      console.error("Failed to fetch notifications:", err);
     }
   }, []);
 
@@ -44,15 +44,15 @@ export default function NotificationBell() {
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === "visible") {
         fetchNotifications();
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [userContext?.user, fetchNotifications]);
 
@@ -62,15 +62,15 @@ export default function NotificationBell() {
   }
 
   return (
-    <Link 
-      href="/notifications" 
-      className="relative p-2 rounded-full hover:hover:bg-base-300 text-base-content"
+    <Link
+      href="/notifications"
+      className="hover:hover:bg-base-300 text-base-content relative rounded-full p-2"
       aria-label="Notifications"
     >
       <Bell size={22} />
       {unreadCount > 0 && (
-        <span className="absolute top-1.5 right-1.5 bg-error text-error-content text-[10px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
-          {unreadCount > 9 ? '9+' : unreadCount}
+        <span className="bg-error text-error-content absolute top-1.5 right-1.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full px-0.5 text-[10px] font-bold">
+          {unreadCount > 9 ? "9+" : unreadCount}
         </span>
       )}
     </Link>

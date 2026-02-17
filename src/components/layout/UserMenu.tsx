@@ -44,20 +44,15 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
             <Moon size={20} className="text-base-content" />
           )}
         </button>
-        <Link
-          href="/login"
-          className="btn btn-primary btn-sm rounded-full"
-        >
+        <Link href="/login" className="btn btn-primary btn-sm rounded-full">
           Log In
         </Link>
       </div>
     );
   }
 
-  const displayName =
-    profile?.display_name || user.email?.split("@")[0] || "User";
-  const username =
-    profile?.username || displayName.toLowerCase().replace(/\s+/g, "");
+  const displayName = profile?.display_name || user.email?.split("@")[0] || "User";
+  const username = profile?.username || displayName.toLowerCase().replace(/\s+/g, "");
   const avatarUrl =
     profile?.avatar_url && profile.avatar_url.trim() !== ""
       ? profile.avatar_url
@@ -68,7 +63,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
       <div
         tabIndex={0}
         role="button"
-        className="flex items-center gap-2 p-1 md:p-2 rounded-md hover:hover:bg-base-300 cursor-pointer"
+        className="hover:hover:bg-base-300 flex cursor-pointer items-center gap-2 rounded-md p-1 md:p-2"
       >
         <div className="relative h-6 w-6 overflow-hidden rounded-full bg-white">
           <Image
@@ -77,20 +72,18 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
             fill
             className="object-cover"
             sizes="24px"
-            unoptimized={
-              avatarUrl.startsWith("data:") || avatarUrl.endsWith(".svg")
-            }
+            unoptimized={avatarUrl.startsWith("data:") || avatarUrl.endsWith(".svg")}
           />
         </div>
         <div className="hidden flex-col items-start text-xs md:flex">
-          <span className="font-semibold text-base-content">{displayName}</span>
+          <span className="text-base-content font-semibold">{displayName}</span>
           <span className="text-base-content/70">{profile?.karma || 0} karma</span>
         </div>
         <ChevronDown size={16} className="text-base-content/70" />
       </div>
       <ul
         tabIndex={-1}
-        className="dropdown-content absolute right-0 mt-2 w-64 bg-base-100 border border-neutral rounded-md shadow-lg z-50 py-2"
+        className="dropdown-content bg-base-100 border-neutral absolute right-0 z-50 mt-2 w-64 rounded-md border py-2 shadow-lg"
         onClick={(e) => {
           // DaisyUI dropdown stays open via :focus-within; blur the focused item to close.
           if (document.activeElement instanceof HTMLElement) {
@@ -101,7 +94,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         <li>
           <Link
             href={`/u/${username}`}
-            className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content"
+            className="hover:hover:bg-base-300 text-base-content flex items-center gap-3 px-4 py-2 text-sm"
           >
             <User size={18} className="text-base-content/70" /> View Profile
           </Link>
@@ -109,16 +102,15 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         <li>
           <Link
             href="/settings/avatar"
-            className="flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content"
+            className="hover:hover:bg-base-300 text-base-content flex items-center gap-3 px-4 py-2 text-sm"
           >
-            <Paintbrush size={18} className="text-base-content/70" /> Edit
-            Avatar
+            <Paintbrush size={18} className="text-base-content/70" /> Edit Avatar
           </Link>
         </li>
         <li>
           <button
             onClick={toggleTheme}
-            className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left"
+            className="hover:hover:bg-base-300 text-base-content flex w-full items-center gap-3 px-4 py-2 text-left text-sm"
           >
             {theme === "black" ? (
               <Sun size={18} className="text-base-content/70" />
@@ -128,11 +120,11 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
             Display Mode
           </button>
         </li>
-        <div className="border-t border-neutral my-1"></div>
+        <div className="border-neutral my-1 border-t"></div>
         <li>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-4 py-2 hover:hover:bg-base-300 text-sm text-base-content text-left"
+            className="hover:hover:bg-base-300 text-base-content flex w-full items-center gap-3 px-4 py-2 text-left text-sm"
           >
             <LogOut size={18} className="text-base-content/70" /> Log Out
           </button>

@@ -76,7 +76,12 @@ export default function PostRow({
   const [deleted, setDeleted] = useState(status === "DELETED");
   const { openLoginModal } = useLoginModal();
 
-  const { score: voteScore, userVote: voteUserVote, handleVote, voteDisabled } = useVote({
+  const {
+    score: voteScore,
+    userVote: voteUserVote,
+    handleVote,
+    voteDisabled,
+  } = useVote({
     id,
     initialScore: score,
     initialUserVote: userVote ?? null,
@@ -90,26 +95,26 @@ export default function PostRow({
   const handleSave = async () => {
     try {
       const res = await fetch(`/api/saved/${id}`, {
-        method: saved ? 'DELETE' : 'POST',
+        method: saved ? "DELETE" : "POST",
       });
       if (res.ok) {
         setSaved(!saved);
-        toast.success(saved ? 'Post unsaved' : 'Post saved');
+        toast.success(saved ? "Post unsaved" : "Post saved");
       } else if (res.status === 401) {
         openLoginModal();
       } else {
-        toast.error('Failed to save post');
+        toast.error("Failed to save post");
       }
     } catch (err) {
-      console.error('Failed to save/unsave post:', err);
-      toast.error('Failed to save post');
+      console.error("Failed to save/unsave post:", err);
+      toast.error("Failed to save post");
     }
   };
 
   const handleHide = async () => {
     try {
       const res = await fetch(`/api/hidden/${id}`, {
-        method: 'POST',
+        method: "POST",
       });
       if (res.ok) {
         setLocalHidden(true);
@@ -117,14 +122,14 @@ export default function PostRow({
         openLoginModal();
       }
     } catch (err) {
-      console.error('Failed to hide post:', err);
+      console.error("Failed to hide post:", err);
     }
   };
 
   const handleUnhide = async () => {
     try {
       const res = await fetch(`/api/hidden/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       if (res.ok) {
         setLocalHidden(false);
@@ -132,7 +137,7 @@ export default function PostRow({
         openLoginModal();
       }
     } catch (err) {
-      console.error('Failed to unhide post:', err);
+      console.error("Failed to unhide post:", err);
     }
   };
 
@@ -144,7 +149,8 @@ export default function PostRow({
     setDeleted(true);
   };
 
-  const containerBorderClass = variant === "card" ? "border border-neutral rounded-md" : "border-b border-neutral";
+  const containerBorderClass =
+    variant === "card" ? "border border-neutral rounded-md" : "border-b border-neutral";
   const baseBgClass = variant === "card" ? "bg-base-200" : "";
 
   if (deleted || status === "DELETED") {
@@ -153,40 +159,38 @@ export default function PostRow({
         className={`flex items-center gap-2 px-3 py-2 ${containerBorderClass} ${baseBgClass} bg-base-200/30 cursor-default`}
       >
         <Trash2 size={14} className="text-base-content/40 flex-shrink-0" />
-        <div className="flex items-center gap-2 min-w-0 text-xs text-base-content/50">
-          <span className="font-bold text-[10px] uppercase tracking-tight bg-base-300 px-1 rounded flex-shrink-0">
+        <div className="text-base-content/50 flex min-w-0 items-center gap-2 text-xs">
+          <span className="bg-base-300 flex-shrink-0 rounded px-1 text-[10px] font-bold tracking-tight uppercase">
             deleted
           </span>
-          <span className="font-medium truncate max-w-[200px] sm:max-w-[400px]">
-            {title}
-          </span>
+          <span className="max-w-[200px] truncate font-medium sm:max-w-[400px]">{title}</span>
           <span className="flex-shrink-0">•</span>
-          <span className="truncate flex-shrink-0">{authorName}</span>
+          <span className="flex-shrink-0 truncate">{authorName}</span>
         </div>
       </article>
     );
   }
 
-  const isArchived = status === 'ARCHIVED';
+  const isArchived = status === "ARCHIVED";
   const isReadOnly = isArchived || isHiddenAndCollapsed;
 
   return (
     <article
       onClick={() => !isReadOnly && router.push(`/r/${boardSlug}/posts/${id}`)}
       className={`group flex items-start gap-2 px-2 py-3 transition-colors ${containerBorderClass} ${baseBgClass} ${
-        isHiddenAndCollapsed ? 'bg-base-200/50' : 'hover:bg-base-300'
-      } ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
+        isHiddenAndCollapsed ? "bg-base-200/50" : "hover:bg-base-300"
+      } ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}
     >
       {isHiddenAndCollapsed ? (
-        <div className="w-full flex items-center gap-2 py-1">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-base-300 flex items-center justify-center">
+        <div className="flex w-full items-center gap-2 py-1">
+          <div className="bg-base-300 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
             <EyeOff size={16} className="text-base-content/60" />
           </div>
-          <div className="flex-1 min-w-0 flex flex-col">
-            <span className="text-sm font-medium text-base-content/60">Hidden by you</span>
-            <span className="text-xs text-base-content/40">author: {authorName}</span>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="text-base-content/60 text-sm font-medium">Hidden by you</span>
+            <span className="text-base-content/40 text-xs">author: {authorName}</span>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -203,7 +207,7 @@ export default function PostRow({
               }}
               className="btn btn-xs btn-ghost"
             >
-              {localExpanded ? 'Hide' : 'Show'}
+              {localExpanded ? "Hide" : "Show"}
             </button>
           </div>
         </div>
@@ -218,29 +222,27 @@ export default function PostRow({
             disabled={voteDisabled}
           />
 
-          <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex items-start gap-2">
-              <div className="flex-1 min-w-0">
-                <span className="text-lg font-bold text-base-content line-clamp-2">
-                  {title}
-                </span>
+              <div className="min-w-0 flex-1">
+                <span className="text-base-content line-clamp-2 text-lg font-bold">{title}</span>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 {localHidden && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleExpanded();
                     }}
-                    className="inline-flex items-center rounded-full bg-base-300 px-2 py-0.5 text-xs font-medium text-base-content/70 hover:bg-base-content/10 transition-colors"
+                    className="bg-base-300 text-base-content/70 hover:bg-base-content/10 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
                     title="Click to collapse"
                   >
                     <EyeOff size={12} className="mr-1" />
                     Hidden
                   </button>
                 )}
-                {status === 'ARCHIVED' && (
-                  <span className="inline-flex items-center rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-warning border border-warning/30">
+                {status === "ARCHIVED" && (
+                  <span className="bg-warning/20 text-warning border-warning/30 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold">
                     ARCHIVED
                   </span>
                 )}
@@ -257,11 +259,11 @@ export default function PostRow({
               createdAt={createdAt}
             />
 
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity md:opacity-0 max-md:opacity-100">
-              <PostActions 
+            <div className="opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100 md:opacity-0">
+              <PostActions
                 postId={id}
                 boardSlug={boardSlug}
-                commentCount={commentCount} 
+                commentCount={commentCount}
                 isSaved={saved}
                 authorId={authorId}
                 userId={userId}

@@ -10,7 +10,7 @@ import VotePill from "@/components/ui/VotePill";
 import {
   buildPostsQueryParams as buildPostsQueryParamsLib,
   getNextCursor as getNextCursorLib,
-  calculateHasMore as calculateHasMoreLib
+  calculateHasMore as calculateHasMoreLib,
 } from "@/lib/pagination";
 
 function CommentVoteRow({
@@ -56,11 +56,11 @@ interface ProfilePostListProps {
 
 const DEFAULT_LIMIT = 10;
 
-export default function ProfilePostList({ 
-  posts: initialPosts, 
-  comments: initialComments, 
-  displayName, 
-  username, 
+export default function ProfilePostList({
+  posts: initialPosts,
+  comments: initialComments,
+  displayName,
+  username,
   tab,
   userId,
   authorId,
@@ -73,63 +73,68 @@ export default function ProfilePostList({
   // State
   const [posts, setPosts] = useState(initialPosts);
   const [postsLoading, setPostsLoading] = useState(false);
-  const [postsHasMore, setPostsHasMore] = useState(calculateHasMoreLib(initialPosts, DEFAULT_LIMIT));
-  const [postsCursor, setPostsCursor] = useState<string | undefined>(getNextCursorLib(initialPosts));
+  const [postsHasMore, setPostsHasMore] = useState(
+    calculateHasMoreLib(initialPosts, DEFAULT_LIMIT),
+  );
+  const [postsCursor, setPostsCursor] = useState<string | undefined>(
+    getNextCursorLib(initialPosts),
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
-  
+
   // Detection for mobile
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const totalItems = tab === 'posts' ? postsCount : tab === 'comments' ? commentsCount : savedCount;
+  const totalItems = tab === "posts" ? postsCount : tab === "comments" ? commentsCount : savedCount;
   const totalPages = Math.ceil(totalItems / DEFAULT_LIMIT);
 
   const handlePageChange = async (page: number) => {
     if (page === currentPage || page < 1 || page > totalPages) return;
-    
+
     setPostsLoading(true);
     setCurrentPage(page);
-    
+
     try {
       const offset = (page - 1) * DEFAULT_LIMIT;
       let url = "";
-      
-      if (tab === 'posts') {
+
+      if (tab === "posts") {
         const params = new URLSearchParams();
-        if (authorId) params.append('author', authorId);
-        if (personaId) params.append('persona', personaId);
-        params.append('sort', 'new');
-        params.append('limit', DEFAULT_LIMIT.toString());
-        params.append('offset', offset.toString());
+        if (authorId) params.append("author", authorId);
+        if (personaId) params.append("persona", personaId);
+        params.append("sort", "new");
+        params.append("limit", DEFAULT_LIMIT.toString());
+        params.append("offset", offset.toString());
         url = `/api/posts?${params.toString()}`;
-      } else if (tab === 'comments') {
+      } else if (tab === "comments") {
         const params = new URLSearchParams();
-        if (authorId) params.append('authorId', authorId);
-        if (personaId) params.append('personaId', personaId);
-        params.append('limit', DEFAULT_LIMIT.toString());
-        params.append('offset', offset.toString());
+        if (authorId) params.append("authorId", authorId);
+        if (personaId) params.append("personaId", personaId);
+        params.append("limit", DEFAULT_LIMIT.toString());
+        params.append("offset", offset.toString());
         url = `/api/profile/comments?${params.toString()}`;
-      } else if (tab === 'saved') {
+      } else if (tab === "saved") {
         url = `/api/profile/saved?limit=${DEFAULT_LIMIT}&offset=${offset}`;
       }
 
       const res = await fetch(url);
       const data = await res.json();
-      const newItems = tab === 'comments' ? (data.comments ?? []) : (tab === 'saved' ? (data.posts ?? []) : data);
-      
+      const newItems =
+        tab === "comments" ? (data.comments ?? []) : tab === "saved" ? (data.posts ?? []) : data;
+
       setPosts(newItems);
-      if (tab === 'comments') setComments(newItems);
-      if (tab === 'saved') setSavedPosts(newItems);
-      
+      if (tab === "comments") setComments(newItems);
+      if (tab === "saved") setSavedPosts(newItems);
+
       // Scroll to top of list
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
-      console.error('Failed to change page:', err);
+      console.error("Failed to change page:", err);
     } finally {
       setPostsLoading(false);
     }
@@ -137,11 +142,11 @@ export default function ProfilePostList({
 
   const renderPagination = () => {
     if (totalPages <= 1) return null;
-    
+
     return (
       <div className="flex justify-center py-6">
-        <div className="join border border-neutral">
-          <button 
+        <div className="join border-neutral border">
+          <button
             className="join-item btn btn-sm bg-base-100"
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
@@ -152,20 +157,25 @@ export default function ProfilePostList({
             const p = i + 1;
             // Only show a few pages around current if many
             if (totalPages > 5 && Math.abs(p - currentPage) > 1 && p !== 1 && p !== totalPages) {
-              if (p === 2 || p === totalPages - 1) return <button key={p} className="join-item btn btn-sm btn-disabled bg-base-100">...</button>;
+              if (p === 2 || p === totalPages - 1)
+                return (
+                  <button key={p} className="join-item btn btn-sm btn-disabled bg-base-100">
+                    ...
+                  </button>
+                );
               return null;
             }
             return (
-              <button 
-                key={p} 
-                className={`join-item btn btn-sm ${currentPage === p ? 'btn-active btn-primary' : 'bg-base-100'}`}
+              <button
+                key={p}
+                className={`join-item btn btn-sm ${currentPage === p ? "btn-active btn-primary" : "bg-base-100"}`}
                 onClick={() => handlePageChange(p)}
               >
                 {p}
               </button>
             );
           })}
-          <button 
+          <button
             className="join-item btn btn-sm bg-base-100"
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
@@ -180,10 +190,13 @@ export default function ProfilePostList({
   // Comments state
   const [comments, setComments] = useState(initialComments ?? []);
   const [commentsLoading, setCommentsLoading] = useState(false);
-  const [commentsHasMore, setCommentsHasMore] = useState(calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT));
-  const [commentsCursor, setCommentsCursor] = useState<string | undefined>(getNextCursorLib(initialComments ?? []));
+  const [commentsHasMore, setCommentsHasMore] = useState(
+    calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT),
+  );
+  const [commentsCursor, setCommentsCursor] = useState<string | undefined>(
+    getNextCursorLib(initialComments ?? []),
+  );
 
-  
   // Saved posts state
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
@@ -196,15 +209,15 @@ export default function ProfilePostList({
   // Reset state when tab changes
   useEffect(() => {
     setCurrentPage(1);
-    if (tab === 'posts') {
+    if (tab === "posts") {
       setPosts(initialPosts);
       setPostsHasMore(calculateHasMoreLib(initialPosts, DEFAULT_LIMIT));
       setPostsCursor(getNextCursorLib(initialPosts));
-    } else if (tab === 'comments') {
+    } else if (tab === "comments") {
       setComments(initialComments ?? []);
       setCommentsHasMore(calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT));
       setCommentsCursor(getNextCursorLib(initialComments ?? []));
-    } else if (tab === 'saved' && isOwnProfile && !hasLoadedSaved) {
+    } else if (tab === "saved" && isOwnProfile && !hasLoadedSaved) {
       // Initial load of saved posts
       loadMoreSaved();
       setHasLoadedSaved(true);
@@ -214,20 +227,20 @@ export default function ProfilePostList({
   // Setup intersection observer for infinite scroll - ONLY ON DESKTOP
   useEffect(() => {
     if (isMobile) return;
-    
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          if (tab === 'posts' && postsHasMore && !postsLoading) {
+          if (tab === "posts" && postsHasMore && !postsLoading) {
             loadMorePosts();
-          } else if (tab === 'comments' && commentsHasMore && !commentsLoading) {
+          } else if (tab === "comments" && commentsHasMore && !commentsLoading) {
             loadMoreComments();
-          } else if (tab === 'saved' && savedHasMore && !savedLoading) {
+          } else if (tab === "saved" && savedHasMore && !savedLoading) {
             loadMoreSaved();
           }
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     if (loadMoreRef.current) {
@@ -235,7 +248,19 @@ export default function ProfilePostList({
     }
 
     return () => observer.disconnect();
-  }, [tab, postsHasMore, postsLoading, commentsHasMore, commentsLoading, savedHasMore, savedLoading, postsCursor, commentsCursor, savedCursor, isMobile]);
+  }, [
+    tab,
+    postsHasMore,
+    postsLoading,
+    commentsHasMore,
+    commentsLoading,
+    savedHasMore,
+    savedLoading,
+    postsCursor,
+    commentsCursor,
+    savedCursor,
+    isMobile,
+  ]);
 
   const loadMorePosts = async () => {
     if (postsLoading || !postsHasMore || (!authorId && !personaId)) return;
@@ -244,21 +269,21 @@ export default function ProfilePostList({
     try {
       const params = buildPostsQueryParamsLib({
         author: authorId || undefined,
-        sort: 'new',
+        sort: "new",
         limit: DEFAULT_LIMIT,
         cursor: postsCursor,
       });
 
       const res = await fetch(`/api/posts?${params}`);
-      if (!res.ok) throw new Error('Failed to load posts');
+      if (!res.ok) throw new Error("Failed to load posts");
 
       const newPosts = await res.json();
-      
+
       setPostsHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
       setPostsCursor(getNextCursorLib(newPosts));
-      setPosts(prev => [...prev, ...newPosts]);
+      setPosts((prev) => [...prev, ...newPosts]);
     } catch (err) {
-      console.error('Failed to load more posts:', err);
+      console.error("Failed to load more posts:", err);
     } finally {
       setPostsLoading(false);
     }
@@ -270,26 +295,26 @@ export default function ProfilePostList({
     setCommentsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (authorId) params.append('authorId', authorId);
-      if (personaId) params.append('personaId', personaId);
-      if (commentsCursor) params.append('cursor', commentsCursor);
-      params.append('limit', DEFAULT_LIMIT.toString());
-      params.append('sort', 'new');
+      if (authorId) params.append("authorId", authorId);
+      if (personaId) params.append("personaId", personaId);
+      if (commentsCursor) params.append("cursor", commentsCursor);
+      params.append("limit", DEFAULT_LIMIT.toString());
+      params.append("sort", "new");
 
       const res = await fetch(`/api/profile/comments?${params}`);
-      if (!res.ok) throw new Error('Failed to load comments');
+      if (!res.ok) throw new Error("Failed to load comments");
 
       const data = await res.json();
       const newComments = data.comments ?? [];
-      
+
       setCommentsHasMore(calculateHasMoreLib(newComments, DEFAULT_LIMIT));
       setCommentsCursor(getNextCursorLib(newComments));
       const commentsWithVotes = data.userVotes
         ? newComments.map((c: any) => ({ ...c, userVote: data.userVotes[c.id] ?? null }))
         : newComments;
-      setComments(prev => [...prev, ...commentsWithVotes]);
+      setComments((prev) => [...prev, ...commentsWithVotes]);
     } catch (err) {
-      console.error('Failed to load more comments:', err);
+      console.error("Failed to load more comments:", err);
     } finally {
       setCommentsLoading(false);
     }
@@ -301,56 +326,64 @@ export default function ProfilePostList({
     setSavedLoading(true);
     try {
       const params = new URLSearchParams();
-      if (savedCursor) params.append('cursor', savedCursor);
-      params.append('limit', DEFAULT_LIMIT.toString());
+      if (savedCursor) params.append("cursor", savedCursor);
+      params.append("limit", DEFAULT_LIMIT.toString());
 
       const res = await fetch(`/api/profile/saved?${params}`);
-      if (!res.ok) throw new Error('Failed to load saved posts');
+      if (!res.ok) throw new Error("Failed to load saved posts");
 
       const data = await res.json();
       const newPosts = data.posts ?? [];
-      
+
       setSavedHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
       // Use last saved_at as cursor (standardized in API now)
       const lastSavedAt = data.savedAt?.[data.savedAt.length - 1];
       setSavedCursor(lastSavedAt);
-      setSavedPosts(prev => [...prev, ...newPosts]);
+      setSavedPosts((prev) => [...prev, ...newPosts]);
     } catch (err) {
-      console.error('Failed to load more saved posts:', err);
+      console.error("Failed to load more saved posts:", err);
     } finally {
       setSavedLoading(false);
     }
   };
 
-
-
-
-
   // Get current items based on tab
   const getCurrentItems = () => {
     switch (tab) {
-      case 'posts': return posts;
-      case 'comments': return comments;
-      case 'saved': return savedPosts;
-      default: return posts;
+      case "posts":
+        return posts;
+      case "comments":
+        return comments;
+      case "saved":
+        return savedPosts;
+      default:
+        return posts;
     }
   };
 
   const getIsLoading = () => {
     switch (tab) {
-      case 'posts': return postsLoading;
-      case 'comments': return commentsLoading;
-      case 'saved': return savedLoading;
-      default: return false;
+      case "posts":
+        return postsLoading;
+      case "comments":
+        return commentsLoading;
+      case "saved":
+        return savedLoading;
+      default:
+        return false;
     }
   };
 
   const getHasMore = () => {
     switch (tab) {
-      case 'posts': return postsHasMore;
-      case 'comments': return commentsHasMore;
-      case 'saved': return savedHasMore;
-      default: return false;
+      case "posts":
+        return postsHasMore;
+      case "comments":
+        return commentsHasMore;
+      case "saved":
+        return savedHasMore;
+      default:
+        return false;
     }
   };
 
@@ -361,13 +394,11 @@ export default function ProfilePostList({
   if (items.length === 0 && !isLoading) {
     return (
       <div className="rounded-2xl px-5 py-14 text-center sm:py-20">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-base-300 text-base-content/70">
+        <div className="bg-base-300 text-base-content/70 mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full">
           <Sparkles size={24} />
         </div>
-        <h2 className="text-lg font-semibold text-base-content">
-          No {tab} yet
-        </h2>
-        <p className="mt-1 text-sm text-base-content/70">
+        <h2 className="text-base-content text-lg font-semibold">No {tab} yet</h2>
+        <p className="text-base-content/70 mt-1 text-sm">
           {username} 還沒有內容，開始互動來建立第一筆資料。
         </p>
       </div>
@@ -375,25 +406,26 @@ export default function ProfilePostList({
   }
 
   // Render comments
-  if (tab === 'comments') {
+  if (tab === "comments") {
     return (
       <>
-        <div className="bg-base-200 border border-neutral rounded-2xl divide-y divide-neutral overflow-hidden">
+        <div className="bg-base-200 border-neutral divide-neutral divide-y overflow-hidden rounded-2xl border">
           {comments.map((comment: any) => {
             return (
-              <div key={comment.id} className="p-4 hover:bg-base-100/50 transition-colors">
-                <div className="text-xs text-base-content/70 mb-2">
-                  評論於{' '}
-                  <Link 
-                    href={`/r/${comment.boardSlug || 'unknown'}/posts/${comment.postId}`}
-                    className="font-semibold text-base-content hover:underline"
+              <div key={comment.id} className="hover:bg-base-100/50 p-4 transition-colors">
+                <div className="text-base-content/70 mb-2 text-xs">
+                  評論於{" "}
+                  <Link
+                    href={`/r/${comment.boardSlug || "unknown"}/posts/${comment.postId}`}
+                    className="text-base-content font-semibold hover:underline"
                   >
                     {comment.postTitle}
                   </Link>
                   {comment.boardSlug && (
                     <>
-                      {' '}在{' '}
-                      <Link 
+                      {" "}
+                      在{" "}
+                      <Link
                         href={`/r/${comment.boardSlug}`}
                         className="text-accent hover:underline"
                       >
@@ -402,8 +434,8 @@ export default function ProfilePostList({
                     </>
                   )}
                 </div>
-                <p className="text-sm text-base-content">{comment.body}</p>
-                <div className="flex items-center gap-3 mt-2 text-xs text-base-content/60">
+                <p className="text-base-content text-sm">{comment.body}</p>
+                <div className="text-base-content/60 mt-2 flex items-center gap-3 text-xs">
                   <CommentVoteRow
                     commentId={comment.id}
                     initialScore={comment.score ?? 0}
@@ -416,20 +448,20 @@ export default function ProfilePostList({
             );
           })}
         </div>
-        
+
         {/* Pagination/Infinite Scroll Controls */}
         {isMobile ? (
           renderPagination()
         ) : (
           <>
             {hasMore && (
-              <div ref={loadMoreRef} className="py-4 flex justify-center">
-                {isLoading && <Loader2 size={24} className="animate-spin text-base-content/50" />}
+              <div ref={loadMoreRef} className="flex justify-center py-4">
+                {isLoading && <Loader2 size={24} className="text-base-content/50 animate-spin" />}
               </div>
             )}
 
             {!hasMore && comments.length > 0 && (
-              <div className="py-8 text-center text-sm text-base-content/50">
+              <div className="text-base-content/50 py-8 text-center text-sm">
                 You've reached the end
               </div>
             )}
@@ -440,34 +472,29 @@ export default function ProfilePostList({
   }
 
   // Render posts (posts or saved tabs)
-  const currentPosts = tab === 'saved' ? savedPosts : posts;
-  
+  const currentPosts = tab === "saved" ? savedPosts : posts;
+
   return (
     <>
       <div className="flex flex-col gap-3">
         {currentPosts.map((post: any) => (
-          <PostRow
-            key={post.id}
-            {...post}
-            userId={userId}
-            variant="card"
-          />
+          <PostRow key={post.id} {...post} userId={userId} variant="card" />
         ))}
       </div>
-      
+
       {/* Pagination/Infinite Scroll Controls */}
       {isMobile ? (
         renderPagination()
       ) : (
         <>
           {hasMore && (
-            <div ref={loadMoreRef} className="py-4 flex justify-center">
-              {isLoading && <Loader2 size={24} className="animate-spin text-base-content/50" />}
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              {isLoading && <Loader2 size={24} className="text-base-content/50 animate-spin" />}
             </div>
           )}
 
           {!hasMore && currentPosts.length > 0 && (
-            <div className="py-8 text-center text-sm text-base-content/50">
+            <div className="text-base-content/50 py-8 text-center text-sm">
               You've reached the end
             </div>
           )}

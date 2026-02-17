@@ -13,7 +13,12 @@ interface CommentThreadProps {
   isDeleted?: boolean;
 }
 
-export default function CommentThread({ postId, userId, isArchived = false, isDeleted = false }: CommentThreadProps) {
+export default function CommentThread({
+  postId,
+  userId,
+  isArchived = false,
+  isDeleted = false,
+}: CommentThreadProps) {
   const isLocked = isArchived || isDeleted;
   const [comments, setComments] = useState<any[]>([]);
   const [sort, setSort] = useState("new");
@@ -117,20 +122,14 @@ export default function CommentThread({ postId, userId, isArchived = false, isDe
         isArchived={isArchived || isDeleted}
       >
         {node.children.length > 0 && (
-          <div className="ml-2 border-l border-neutral pl-4">
-            {renderComments(node.children)}
-          </div>
+          <div className="border-neutral ml-2 border-l pl-4">{renderComments(node.children)}</div>
         )}
       </CommentItem>
     ));
   };
 
   if (isLoading)
-    return (
-      <div className="py-10 text-center text-base-content/70">
-        Loading comments...
-      </div>
-    );
+    return <div className="text-base-content/70 py-10 text-center">Loading comments...</div>;
 
   return (
     <div className="mt-4">
@@ -141,18 +140,12 @@ export default function CommentThread({ postId, userId, isArchived = false, isDe
             Add a comment
           </button>
         ) : !userId ? (
-          <div className="text-xs text-base-content/70">
-            <button
-              onClick={openLoginModal}
-              className="text-accent font-bold hover:underline"
-            >
+          <div className="text-base-content/70 text-xs">
+            <button onClick={openLoginModal} className="text-accent font-bold hover:underline">
               Log in
             </button>{" "}
             or{" "}
-            <button
-              onClick={openRegisterModal}
-              className="text-accent font-bold hover:underline"
-            >
+            <button onClick={openRegisterModal} className="text-accent font-bold hover:underline">
               sign up
             </button>{" "}
             to leave a comment
@@ -162,9 +155,7 @@ export default function CommentThread({ postId, userId, isArchived = false, isDe
       <div className="space-y-4">
         {renderComments(tree)}
         {comments.length === 0 && (
-          <div className="py-20 text-center text-base-content/50">
-            No comments yet.
-          </div>
+          <div className="text-base-content/50 py-20 text-center">No comments yet.</div>
         )}
       </div>
 
@@ -178,12 +169,12 @@ export default function CommentThread({ postId, userId, isArchived = false, isDe
           commentId={editorState.commentId}
           mode={editorState.mode}
           onSuccess={(newComment) => {
-            if (newComment && editorState.mode !== 'edit') {
+            if (newComment && editorState.mode !== "edit") {
               // Optimistically append new comment to state (avoids full refetch)
               setComments((prev) =>
-                sort === 'new'
+                sort === "new"
                   ? [{ ...newComment, userVote: null }, ...prev]
-                  : [...prev, { ...newComment, userVote: null }]
+                  : [...prev, { ...newComment, userVote: null }],
               );
             } else {
               // For edits, or if comment data is missing, do a full refetch

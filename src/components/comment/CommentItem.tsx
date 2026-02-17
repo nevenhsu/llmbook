@@ -4,13 +4,7 @@ import { useState } from "react";
 import Avatar from "@/components/ui/Avatar";
 import Timestamp from "@/components/ui/Timestamp";
 import VotePill from "@/components/ui/VotePill";
-import {
-  MessageSquare,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  ShieldOff,
-} from "lucide-react";
+import { MessageSquare, MoreHorizontal, Edit, Trash2, ShieldOff } from "lucide-react";
 import SafeHtml from "@/components/ui/SafeHtml";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -135,14 +129,12 @@ export default function CommentItem({
       <div className="py-2">
         <button
           onClick={() => setIsCollapsed(false)}
-          className="text-xs text-base-content/70 hover:text-base-content flex items-center gap-2"
+          className="text-base-content/70 hover:text-base-content flex items-center gap-2 text-xs"
         >
-          <span className="w-4 h-4 flex items-center justify-center bg-base-100 rounded-full text-[10px]">
+          <span className="bg-base-100 flex h-4 w-4 items-center justify-center rounded-full text-[10px]">
             +
           </span>
-          <span className="font-bold">
-            {comment.authorName}
-          </span>
+          <span className="font-bold">{comment.authorName}</span>
           <span>•</span>
           <span>{comment.score} points</span>
           <span>•</span>
@@ -156,10 +148,10 @@ export default function CommentItem({
     <div className="flex gap-2 py-2">
       {/* Collapse line */}
       <div
-        className="flex flex-col items-center group cursor-pointer"
+        className="group flex cursor-pointer flex-col items-center"
         onClick={() => setIsCollapsed(true)}
       >
-        <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
+        <div className="h-6 w-6 flex-shrink-0 overflow-hidden rounded-full">
           <Avatar
             fallbackSeed={comment.authorName}
             src={comment.authorAvatarUrl}
@@ -167,33 +159,29 @@ export default function CommentItem({
             isPersona={isPersona}
           />
         </div>
-        <div className="w-0.5 flex-1 bg-neutral group-hover:bg-text-secondary mt-2" />
+        <div className="bg-neutral group-hover:bg-text-secondary mt-2 w-0.5 flex-1" />
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 text-xs mb-1">
-          <span className="font-bold text-base-content">
-            {comment.authorName}
-          </span>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2 text-xs">
+          <span className="text-base-content font-bold">{comment.authorName}</span>
           {isPersona && (
-            <span className="bg-info/10 text-info font-bold text-[8px] px-1 rounded-sm">
-              AI
-            </span>
+            <span className="bg-info/10 text-info rounded-sm px-1 text-[8px] font-bold">AI</span>
           )}
           <span className="text-base-content/50">•</span>
           <Timestamp date={comment.createdAt} />
         </div>
 
         {comment.is_deleted ? (
-          <div className="text-sm text-base-content/60 mb-2">[deleted]</div>
+          <div className="text-base-content/60 mb-2 text-sm">[deleted]</div>
         ) : (
           <SafeHtml
             html={comment.body ?? ""}
-            className="tiptap-html text-sm text-base-content mb-2 break-words"
+            className="tiptap-html text-base-content mb-2 text-sm break-words"
           />
         )}
 
-        <div className="flex items-center gap-4 text-base-content/70">
+        <div className="text-base-content/70 flex items-center gap-4">
           <VotePill
             score={score}
             userVote={userVote}
@@ -206,7 +194,7 @@ export default function CommentItem({
               {userId ? (
                 <button
                   onClick={() => onRequestReply?.(comment)}
-                  className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
+                  className="hover:bg-base-100 flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-bold"
                 >
                   <MessageSquare size={16} />
                   Reply
@@ -214,7 +202,7 @@ export default function CommentItem({
               ) : (
                 <button
                   onClick={openLoginModal}
-                  className="flex items-center gap-1 hover:bg-base-100 rounded-sm px-2 py-1 text-xs font-bold"
+                  className="hover:bg-base-100 flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-bold"
                 >
                   <MessageSquare size={16} />
                   Reply
@@ -227,18 +215,15 @@ export default function CommentItem({
             <div className="relative">
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
-                className="p-1 hover:bg-base-100 rounded-sm"
+                className="hover:bg-base-100 rounded-sm p-1"
               >
                 <MoreHorizontal size={16} />
               </button>
 
               {showMoreMenu && (
                 <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowMoreMenu(false)}
-                  />
-                  <div className="absolute left-0 top-8 z-20 w-48 bg-base-100 border border-neutral rounded-md shadow-lg py-1">
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMoreMenu(false)} />
+                  <div className="bg-base-100 border-neutral absolute top-8 left-0 z-20 w-48 rounded-md border py-1 shadow-lg">
                     {isAuthor && !comment.is_deleted && (
                       <>
                         <button
@@ -246,7 +231,7 @@ export default function CommentItem({
                             onRequestEdit?.(comment);
                             setShowMoreMenu(false);
                           }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-base-content hover:bg-base-200"
+                          className="text-base-content hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
                         >
                           <Edit size={16} />
                           Edit
@@ -256,7 +241,7 @@ export default function CommentItem({
                             setShowDeleteConfirm(true);
                           }}
                           disabled={isDeleting}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-base-200"
+                          className="text-error hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
                         >
                           <Trash2 size={16} />
                           {isDeleting ? "Deleting..." : "Delete"}
@@ -266,7 +251,7 @@ export default function CommentItem({
                     {canModerate && !comment.is_deleted && !isAuthor && (
                       <button
                         onClick={handleRemove}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-warning hover:bg-base-200"
+                        className="text-warning hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
                       >
                         <ShieldOff size={16} />
                         Remove (Mod)
@@ -277,7 +262,7 @@ export default function CommentItem({
                         <button
                           onClick={handleUndelete}
                           disabled={isUndeleting}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-success hover:bg-base-200"
+                          className="text-success hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
                         >
                           <ShieldOff size={16} />
                           {isUndeleting ? "Restoring..." : "Restore"}
@@ -285,7 +270,7 @@ export default function CommentItem({
                       </>
                     )}
                     {!isAuthor && !canModerate && !comment.is_deleted && (
-                      <div className="px-4 py-2 text-sm text-base-content/50">
+                      <div className="text-base-content/50 px-4 py-2 text-sm">
                         No actions available
                       </div>
                     )}

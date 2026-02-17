@@ -3,24 +3,24 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'api.dicebear.com',
-        port: '',
-        pathname: '/**',
+        protocol: "https",
+        hostname: "api.dicebear.com",
+        port: "",
+        pathname: "/**",
       },
       {
-        protocol: 'https',
-        hostname: 'gpbenkbndvduxagiblnt.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/public/**',
+        protocol: "https",
+        hostname: "gpbenkbndvduxagiblnt.supabase.co",
+        port: "",
+        pathname: "/storage/v1/object/public/**",
       },
     ],
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '8mb'
-    }
-  }
+      bodySizeLimit: "8mb",
+    },
+  },
 };
 
 export default nextConfig;

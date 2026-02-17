@@ -14,13 +14,13 @@
 
 ## 排序類型總覽
 
-| 排序 | 主要權重 | 時間範圍 | 用途 |
-|------|----------|----------|------|
-| **New** | 發布時間 | 無限制 | 查看最新貼文 |
-| **Hot** | 評論數 > 分數 > 時間 | 30 天內 | 熱門討論區 |
-| **Rising** | 分數增長速度 | 7 天內 | 快速上升的貼文 |
-| **Top** | 總分數 | 可選篩選 | 最高評分貼文 |
-| **Best** | Wilson Score | 無限制 | 評論排序（信賴度） |
+| 排序       | 主要權重             | 時間範圍 | 用途               |
+| ---------- | -------------------- | -------- | ------------------ |
+| **New**    | 發布時間             | 無限制   | 查看最新貼文       |
+| **Hot**    | 評論數 > 分數 > 時間 | 30 天內  | 熱門討論區         |
+| **Rising** | 分數增長速度         | 7 天內   | 快速上升的貼文     |
+| **Top**    | 總分數               | 可選篩選 | 最高評分貼文       |
+| **Best**   | Wilson Score         | 無限制   | 評論排序（信賴度） |
 
 ---
 
@@ -34,11 +34,11 @@ hot_score = (comment_count × 2) + (score × 1) − min(age_days, 30)
 
 ### 權重說明
 
-| 因素 | 權重 | 說明 |
-|------|------|------|
-| **Comments** | ×2 | 互動數是最重要的因素，代表真實的社群參與 |
-| **Score** | ×1 | 投票分數有加成但較低，避免純粹靠刷票 |
-| **Time** | −1/天 | 舊帖子會慢慢下降，但最多只扣 30 分 |
+| 因素         | 權重  | 說明                                     |
+| ------------ | ----- | ---------------------------------------- |
+| **Comments** | ×2    | 互動數是最重要的因素，代表真實的社群參與 |
+| **Score**    | ×1    | 投票分數有加成但較低，避免純粹靠刷票     |
+| **Time**     | −1/天 | 舊帖子會慢慢下降，但最多只扣 30 分       |
 
 ### 限制條件
 
@@ -48,12 +48,12 @@ hot_score = (comment_count × 2) + (score × 1) − min(age_days, 30)
 ### 實作範例
 
 ```typescript
-import { hotScore } from '@/lib/ranking';
+import { hotScore } from "@/lib/ranking";
 
 const score = hotScore(
-  post.score,           // 投票分數
-  post.comment_count,   // 評論數量
-  post.created_at       // 創建時間 ISO 字串
+  post.score, // 投票分數
+  post.comment_count, // 評論數量
+  post.created_at, // 創建時間 ISO 字串
 );
 ```
 
@@ -87,19 +87,20 @@ const score = hotScore(
 
 ### 快取表結構
 
-| 欄位 | 說明 |
-|------|------|
-| `post_id` | 貼文 ID |
-| `board_id` | 所屬版塊 ID |
-| `hot_score` | Hot 分數 |
-| `hot_rank` | Hot 排名（1, 2, 3...） |
-| `rising_score` | Rising 分數 |
-| `rising_rank` | Rising 排名 |
-| `calculated_at` | 最後計算時間 |
+| 欄位            | 說明                   |
+| --------------- | ---------------------- |
+| `post_id`       | 貼文 ID                |
+| `board_id`      | 所屬版塊 ID            |
+| `hot_score`     | Hot 分數               |
+| `hot_rank`      | Hot 排名（1, 2, 3...） |
+| `rising_score`  | Rising 分數            |
+| `rising_rank`   | Rising 排名            |
+| `calculated_at` | 最後計算時間           |
 
 ### 觸發更新機制
 
 當用戶進行以下操作時，系統會標記快取為過期：
+
 - 投票（Vote）
 - 發表評論（Comment）
 
@@ -110,14 +111,14 @@ Cron job 會定期重新計算所有排名。
 ```typescript
 // Hot 排序 - 使用快取
 const { posts } = await getHotPostsFromCache(supabase, {
-  boardId: 'optional-board-id',
+  boardId: "optional-board-id",
   limit: 20,
   cursor: 0,
 });
 
 // Rising 排序 - 使用快取
 const { posts } = await getRisingPostsFromCache(supabase, {
-  boardId: 'optional-board-id', 
+  boardId: "optional-board-id",
   limit: 20,
   cursor: 0,
 });
@@ -126,6 +127,7 @@ const { posts } = await getRisingPostsFromCache(supabase, {
 ### 設定 Cron Job
 
 參見 `docs/ranking-cache-setup.md` 了解如何設定：
+
 - Supabase pg_cron（推薦）
 - Vercel Cron Jobs
 - GitHub Actions
@@ -133,11 +135,11 @@ const { posts } = await getRisingPostsFromCache(supabase, {
 
 ### 效能提升
 
-| 指標 | 無快取 | 有快取 | 提升 |
-|------|--------|--------|------|
+| 指標         | 無快取    | 有快取  | 提升      |
+| ------------ | --------- | ------- | --------- |
 | API 回應時間 | 200-500ms | 20-50ms | **5-10x** |
-| 資料庫 CPU | 高 | 低 | 顯著降低 |
-| 支援併發 | 有限 | 高 | 大幅提升 |
+| 資料庫 CPU   | 高        | 低      | 顯著降低  |
+| 支援併發     | 有限      | 高      | 大幅提升  |
 
 ---
 
@@ -160,14 +162,14 @@ rising_score = score / hours_since_creation
 
 純粹按總分數排序，支援時間範圍篩選：
 
-| 時間選項 | 範圍 |
-|----------|------|
-| Hour | 1 小時內 |
-| Today | 24 小時內 |
-| Week | 7 天內 |
-| Month | 30 天內 |
-| Year | 365 天內 |
-| All | 無限制 |
+| 時間選項 | 範圍      |
+| -------- | --------- |
+| Hour     | 1 小時內  |
+| Today    | 24 小時內 |
+| Week     | 7 天內    |
+| Month    | 30 天內   |
+| Year     | 365 天內  |
+| All      | 無限制    |
 
 ---
 
@@ -180,6 +182,7 @@ rising_score = score / hours_since_creation
 ## Best 排序（評論專用）
 
 使用 **Wilson Score** 信賴區間算法，綜合考量：
+
 - 正負投票比例
 - 總投票數（樣本大小）
 
@@ -193,7 +196,7 @@ rising_score = score / hours_since_creation
 
 ```typescript
 // 先篩選時間範圍，減少資料量
-query = query.gte('created_at', since);
+query = query.gte("created_at", since);
 
 // 限制返回數量
 query = query.limit(20);
@@ -203,9 +206,10 @@ query = query.limit(20);
 
 ```typescript
 // 在應用層進行精確排序
-posts.sort((a, b) => 
-  hotScore(b.score, b.comment_count, b.created_at) - 
-  hotScore(a.score, a.comment_count, a.created_at)
+posts.sort(
+  (a, b) =>
+    hotScore(b.score, b.comment_count, b.created_at) -
+    hotScore(a.score, a.comment_count, a.created_at),
 );
 ```
 

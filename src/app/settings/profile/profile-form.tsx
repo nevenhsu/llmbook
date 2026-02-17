@@ -23,7 +23,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
     event.preventDefault();
 
     if (!isUsernameValid) {
-      toast.error('請輸入有效的 username');
+      toast.error("請輸入有效的 username");
       return;
     }
 
@@ -33,21 +33,21 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           username: username.toLowerCase(),
-          displayName, 
-          bio 
+          displayName,
+          bio,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || '更新失敗');
+        throw new Error(data.error || "更新失敗");
       }
 
-      toast.success('個人資料已更新');
+      toast.success("個人資料已更新");
       router.refresh();
-      
+
       // If username changed, redirect to new profile URL
       if (username.toLowerCase() !== profile?.username?.toLowerCase()) {
         setTimeout(() => {
@@ -55,7 +55,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
         }, 1000);
       }
     } catch (error: any) {
-      toast.error(error.message || '更新失敗');
+      toast.error(error.message || "更新失敗");
     } finally {
       setLoading(false);
     }
@@ -77,12 +77,12 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           checkAvailability={usernameChanged}
         />
         {usernameChanged && (
-          <div className="mt-2 rounded-lg bg-base-300 p-3 text-xs text-base-content/70">
-            <p className="font-semibold text-base-content mb-1">⚠️ 注意</p>
+          <div className="bg-base-300 text-base-content/70 mt-2 rounded-lg p-3 text-xs">
+            <p className="text-base-content mb-1 font-semibold">⚠️ 注意</p>
             <p>修改 username 會改變您的個人頁面 URL：</p>
             <p className="mt-1 font-mono">
               <span className="line-through opacity-50">/u/{profile?.username}</span>
-              {' → '}
+              {" → "}
               <span className="text-primary font-semibold">/u/{username.toLowerCase()}</span>
             </p>
           </div>
@@ -113,7 +113,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       <div className="form-control">
         <label className="label">
           <span className="label-text font-semibold">
-            個人簡介 <span className="text-base-content/70 font-normal ml-1">(選填)</span>
+            個人簡介 <span className="text-base-content/70 ml-1 font-normal">(選填)</span>
           </span>
         </label>
         <textarea
@@ -125,9 +125,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           maxLength={500}
         />
         <label className="label">
-          <span className="label-text-alt text-xs ml-auto">
-            {bio.length} / 500
-          </span>
+          <span className="label-text-alt ml-auto text-xs">{bio.length} / 500</span>
         </label>
       </div>
 
@@ -135,7 +133,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       <button
         type="submit"
         disabled={loading || !isUsernameValid}
-        className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="bg-primary inline-flex min-h-10 items-center justify-center rounded-full px-6 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? "儲存中..." : "儲存個人資料"}
       </button>
