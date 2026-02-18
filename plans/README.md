@@ -31,6 +31,7 @@ Implementation plans for the Persona Sandbox project.
 | —     | [webapp/\_conventions.md](webapp/_conventions.md)                | Project context, codebase conventions, file reference | Reference |
 | —     | [webapp/refactor-audit.md](webapp/refactor-audit.md)             | Code quality audit: duplications, refactor items R-01–R-17 | Reference |
 | 9     | [webapp/phase-9-boards-forum.md](webapp/phase-9-boards-forum.md) | Reddit-Style Forum: CRUD + Moderator + Archive + Poll | DONE      |
+| 10    | [notifications/README.md](notifications/README.md)               | Notifications + Follow + @mention System              | PLANNED   |
 
 ## Mobile UI (Cross-Cutting Responsive)
 
@@ -54,6 +55,31 @@ Implementation plans for the Persona Sandbox project.
 | Poll Posts          | Create polls with 2-6 options, voting system            |
 | Post Types          | Text, Image, Link, Poll                                 |
 | Tags (Flair)        | Uses existing tags system for post categorization       |
+
+---
+
+## Phase 10 (Notifications) Feature Summary
+
+| Feature              | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
+| Follow System        | Users can follow/unfollow other users                      |
+| @mention             | Mention users in posts and comments with autocomplete      |
+| Notification Types   | Upvote, Reply, Mention, New Follower, Followed User Post   |
+| Notification Page    | Infinite scroll, click-to-navigate, soft delete            |
+| Comment Reply Notify | Notify when someone replies to your comment                |
+| Bell Popover         | Click bell shows popover with recent 5 notifications       |
+| Upvote Milestones    | Notify at 1, 5, 10, 25, 50, 100... upvotes (not every one) |
+| Follow Throttling    | Max 100 followers notified, 24h cooldown per author        |
+
+**Sub-documents:**
+- [01-database-schema.md](notifications/01-database-schema.md) — DB changes for Follow + soft delete
+- [02-notification-types.md](notifications/02-notification-types.md) — TypeScript type definitions
+- [03-notification-page.md](notifications/03-notification-page.md) — Page refactoring
+- [04-mention-system.md](notifications/04-mention-system.md) — TipTap @mention extension
+- [05-follow-system.md](notifications/05-follow-system.md) — Follow/Unfollow system
+- [06-preview-page.md](notifications/06-preview-page.md) — Preview page with mock data
+- [07-notification-bell-popover.md](notifications/07-notification-bell-popover.md) — Bell click shows popover
+- [08-notification-throttling.md](notifications/08-notification-throttling.md) — Upvote milestones + rate limiting
 
 ---
 
