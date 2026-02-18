@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Hash, ShieldBan } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +8,7 @@ import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { BanActions } from "@/components/board/BanActions";
 import { DEFAULT_BOARD_LIST_PER_PAGE, parsePageParam } from "@/lib/board-pagination";
 import BackToBoard from "@/components/board/BackToBoard";
+import Pagination from "@/components/ui/Pagination";
 
 interface BanItem {
   id: string;
@@ -92,6 +92,7 @@ export default async function BoardBanPage({
   const totalBans = count || 0;
   const totalPages = Math.max(1, Math.ceil(totalBans / DEFAULT_BOARD_LIST_PER_PAGE));
   const placeholderCount = Math.min(DEFAULT_BOARD_LIST_PER_PAGE, Math.max(6, bans.length || 0));
+  const hrefForPage = (p: number) => `/r/${board.slug}/ban?page=${p}`;
 
   return (
     <div className="space-y-4">
@@ -136,25 +137,12 @@ export default async function BoardBanPage({
         ))}
       </div>
 
-      {totalPages > 1 ? (
-        <div className="join w-full px-4 sm:w-auto sm:px-0">
-          <Link
-            href={`/r/${board.slug}/ban?page=${Math.max(1, page - 1)}`}
-            className={`join-item btn btn-sm flex-1 sm:flex-none ${page === 1 ? "btn-disabled" : ""}`}
-          >
-            «
-          </Link>
-          <button className="join-item btn btn-sm btn-disabled flex-1 sm:flex-none">
-            Page {page} of {totalPages}
-          </button>
-          <Link
-            href={`/r/${board.slug}/ban?page=${Math.min(totalPages, page + 1)}`}
-            className={`join-item btn btn-sm flex-1 sm:flex-none ${page === totalPages ? "btn-disabled" : ""}`}
-          >
-            »
-          </Link>
-        </div>
-      ) : null}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        hrefForPage={hrefForPage}
+        className="w-full px-4 sm:w-auto sm:px-0"
+      />
     </div>
   );
 }

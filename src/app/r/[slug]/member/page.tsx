@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Hash, Users } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
@@ -6,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { DEFAULT_BOARD_LIST_PER_PAGE, parsePageParam } from "@/lib/board-pagination";
 import BackToBoard from "@/components/board/BackToBoard";
+import Pagination from "@/components/ui/Pagination";
 
 interface MemberItem {
   user_id: string;
@@ -32,31 +32,6 @@ function isMemberRow(value: unknown): value is MemberRow {
   if (!value || typeof value !== "object") return false;
   const row = value as { user_id?: unknown };
   return typeof row.user_id === "string";
-}
-
-function buildPaginationItems(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
-  if (totalPages <= 5) {
-    return Array.from({ length: totalPages }).map((_, index) => index + 1);
-  }
-
-  const items: Array<number | "ellipsis"> = [1];
-  const windowStart = Math.max(2, currentPage - 1);
-  const windowEnd = Math.min(totalPages - 1, currentPage + 1);
-
-  if (windowStart > 2) {
-    items.push("ellipsis");
-  }
-
-  for (let page = windowStart; page <= windowEnd; page += 1) {
-    items.push(page);
-  }
-
-  if (windowEnd < totalPages - 1) {
-    items.push("ellipsis");
-  }
-
-  items.push(totalPages);
-  return items;
 }
 
 function formatDate(value: string | null) {
@@ -127,7 +102,7 @@ export default async function BoardMemberPage({
   });
   const totalMembers = count || 0;
   const totalPages = Math.max(1, Math.ceil(totalMembers / DEFAULT_BOARD_LIST_PER_PAGE));
-  const paginationItems = buildPaginationItems(page, totalPages);
+  const hrefForPage = (p: number) => `/r/${board.slug}/member?page=${p}`;
 
   return (
     <div className="space-y-4">
@@ -180,37 +155,12 @@ export default async function BoardMemberPage({
         </div>
       )}
 
-      {totalPages > 1 ? (
-        <div className="join w-full px-4 sm:w-auto sm:px-0">
-          <Link
-            href={`/r/${board.slug}/member?page=${Math.max(1, page - 1)}`}
-            className={`join-item btn btn-sm flex-1 sm:flex-none ${page === 1 ? "btn-disabled" : ""}`}
-          >
-            «
-          </Link>
-          {paginationItems.map((item, index) =>
-            item === "ellipsis" ? (
-              <button key={`ellipsis-${index}`} className="join-item btn btn-sm btn-disabled">
-                ...
-              </button>
-            ) : (
-              <Link
-                key={`page-${item}`}
-                href={`/r/${board.slug}/member?page=${item}`}
-                className={`join-item btn btn-sm ${item === page ? "btn-active" : ""}`}
-              >
-                {item}
-              </Link>
-            ),
-          )}
-          <Link
-            href={`/r/${board.slug}/member?page=${Math.min(totalPages, page + 1)}`}
-            className={`join-item btn btn-sm flex-1 sm:flex-none ${page === totalPages ? "btn-disabled" : ""}`}
-          >
-            »
-          </Link>
-        </div>
-      ) : null}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        hrefForPage={hrefForPage}
+        className="w-full px-4 sm:w-auto sm:px-0"
+      />
     </div>
   );
 }

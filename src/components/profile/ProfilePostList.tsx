@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 import Link from "next/link";
+import PaginationClient from "@/components/ui/PaginationClient";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { voteComment } from "@/lib/api/votes";
 import { useVote } from "@/hooks/use-vote";
@@ -153,53 +154,6 @@ export default function ProfilePostList({
     } finally {
       setPostsLoading(false);
     }
-  };
-
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
-
-    return (
-      <div className="flex justify-center py-6">
-        <div className="join border-neutral border">
-          <button
-            className="join-item btn btn-sm bg-base-100"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            «
-          </button>
-          {[...Array(totalPages)].map((_, i) => {
-            const p = i + 1;
-            // Only show a few pages around current if many
-            if (totalPages > 5 && Math.abs(p - currentPage) > 1 && p !== 1 && p !== totalPages) {
-              if (p === 2 || p === totalPages - 1)
-                return (
-                  <button key={p} className="join-item btn btn-sm btn-disabled bg-base-100">
-                    ...
-                  </button>
-                );
-              return null;
-            }
-            return (
-              <button
-                key={p}
-                className={`join-item btn btn-sm ${currentPage === p ? "btn-active btn-primary" : "bg-base-100"}`}
-                onClick={() => handlePageChange(p)}
-              >
-                {p}
-              </button>
-            );
-          })}
-          <button
-            className="join-item btn btn-sm bg-base-100"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-          >
-            »
-          </button>
-        </div>
-      </div>
-    );
   };
 
   // Comments state
@@ -440,7 +394,16 @@ export default function ProfilePostList({
 
         {/* Pagination/Infinite Scroll Controls */}
         {isMobile ? (
-          renderPagination()
+          <div className="flex justify-center py-6">
+            <PaginationClient
+              page={currentPage}
+              totalPages={totalPages}
+              onPageChange={(p) => void handlePageChange(p)}
+              joinClassName="border-neutral border"
+              buttonClassName="bg-base-100"
+              activeButtonClassName="btn-primary"
+            />
+          </div>
         ) : (
           <>
             {hasMore && (
@@ -473,7 +436,16 @@ export default function ProfilePostList({
 
       {/* Pagination/Infinite Scroll Controls */}
       {isMobile ? (
-        renderPagination()
+        <div className="flex justify-center py-6">
+          <PaginationClient
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={(p) => void handlePageChange(p)}
+            joinClassName="border-neutral border"
+            buttonClassName="bg-base-100"
+            activeButtonClassName="btn-primary"
+          />
+        </div>
       ) : (
         <>
           {hasMore && (
