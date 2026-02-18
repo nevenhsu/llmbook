@@ -146,8 +146,24 @@ describe("GET /api/posts", () => {
 
   it("uses cached rankings for hot sort", async () => {
     const cachedPosts = [
-      { id: "post1", title: "Post 1", score: 100 },
-      { id: "post2", title: "Post 2", score: 90 },
+      {
+        id: "post1",
+        title: "Post 1",
+        score: 100,
+        comment_count: 0,
+        created_at: new Date().toISOString(),
+        author_id: "user1",
+        status: "PUBLISHED",
+      },
+      {
+        id: "post2",
+        title: "Post 2",
+        score: 90,
+        comment_count: 0,
+        created_at: new Date().toISOString(),
+        author_id: "user2",
+        status: "PUBLISHED",
+      },
     ];
 
     const getHotPostsFromCacheMock = getHotPostsFromCache as unknown as {

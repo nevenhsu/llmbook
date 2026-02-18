@@ -51,6 +51,7 @@ export interface BuildPostsQueryOptions {
   sortBy?: SortType;
   timeRange?: string;
   canViewArchived?: boolean;
+  includeDeleted?: boolean;
   limit?: number;
   offset?: number; // For top sort (offset-based pagination)
   cursor?: string; // For new sort (cursor-based, ISO timestamp)
@@ -66,6 +67,7 @@ export function buildPostsQuery(options: BuildPostsQueryOptions) {
     sortBy = "hot",
     timeRange = "all",
     canViewArchived = false,
+    includeDeleted = true,
     limit = 100,
     offset,
     cursor,
@@ -93,12 +95,13 @@ export function buildPostsQuery(options: BuildPostsQueryOptions) {
     query = query.eq("persona_id", personaId);
   }
 
-  // Filter by status - include ARCHIVED and DELETED
+  // Filter by status
+  // - ARCHIVED is only visible when canViewArchived=true
+  // - DELETED visibility can be controlled via includeDeleted
   if (canViewArchived) {
-    query = query.in("status", ["PUBLISHED", "ARCHIVED", "DELETED"]);
+    query = query.in("status", includeDeleted ? ["PUBLISHED", "ARCHIVED", "DELETED"] : ["PUBLISHED", "ARCHIVED"]);
   } else {
-    // Regular users can see published and deleted (with UI labeling)
-    query = query.in("status", ["PUBLISHED", "DELETED"]);
+    query = query.in("status", includeDeleted ? ["PUBLISHED", "DELETED"] : ["PUBLISHED"]);
   }
 
   // Apply time range filter for top

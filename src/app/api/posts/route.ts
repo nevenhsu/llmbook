@@ -33,6 +33,10 @@ export async function GET(request: Request) {
   const sort = searchParams.get("sort") || "new";
   const t = searchParams.get("t") || "today";
   const includeArchived = searchParams.get("includeArchived") === "true";
+  const includeDeletedParam = searchParams.get("includeDeleted");
+  const includeDeleted = includeDeletedParam == null
+    ? true
+    : includeDeletedParam === "true" || includeDeletedParam === "1";
   const rawLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
   const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 20, 50);
   const pageLimit = limit + 1;
@@ -81,6 +85,14 @@ export async function GET(request: Request) {
     }
   }
 
+  const allowedStatuses = canViewArchived
+    ? includeDeleted
+      ? ["PUBLISHED", "ARCHIVED", "DELETED"]
+      : ["PUBLISHED", "ARCHIVED"]
+    : includeDeleted
+      ? ["PUBLISHED", "DELETED"]
+      : ["PUBLISHED"];
+
   if ((board && !boardId) || (tag && !tagId)) {
     const empty: PaginatedResponse<FeedPost> = { items: [], hasMore: false };
     return NextResponse.json(empty);
@@ -124,6 +136,7 @@ export async function GET(request: Request) {
       sortBy,
       timeRange: t,
       canViewArchived,
+      includeDeleted,
       limit: pageLimit,
       offset: sortBy === "top" ? offset : undefined,
       cursor: sortBy === "new" && paginationMode === "cursor" && cursor ? cursor : undefined,
@@ -138,6 +151,9 @@ export async function GET(request: Request) {
 
     rawPosts = (Array.isArray(data) ? (data as unknown[]) : []).filter(isRawPost);
   }
+
+  // Enforce status visibility consistently (including cached paths)
+  rawPosts = rawPosts.filter((p) => typeof p?.status === "string" && allowedStatuses.includes(p.status));
 
   const rawPagePosts = rawPosts.slice(0, limit);
   const hasMore = rawPosts.length > limit;

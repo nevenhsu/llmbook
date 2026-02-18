@@ -1,29 +1,24 @@
-"use client";
-
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { FeedPost } from "@/lib/posts/query-builder";
-import type { PaginatedResponse } from "@/lib/pagination";
+import { createClient } from "@/lib/supabase/server";
+import { buildPostsQuery, isRawPost, transformPostToFeedFormat } from "@/lib/posts/query-builder";
 
-export default function RightSidebar() {
-  const [recentPosts, setRecentPosts] = useState<FeedPost[]>([]);
+export default async function RightSidebar() {
+  const supabase = await createClient();
 
-  useEffect(() => {
-    const fetchRecentPosts = async () => {
-      try {
-        const res = await fetch("/api/posts?sort=new&limit=5");
-        if (res.ok) {
-          const data = (await res.json()) as PaginatedResponse<FeedPost>;
-          const items = Array.isArray(data?.items) ? data.items : [];
-          setRecentPosts(items.slice(0, 5));
-        }
-      } catch (err) {
-        console.error("Failed to fetch recent posts:", err);
-      }
-    };
+  const postsQuery = buildPostsQuery({
+    supabase,
+    sortBy: "new",
+    limit: 5,
+    includeDeleted: false,
+  });
 
-    fetchRecentPosts();
-  }, []);
+  const { data, error } = await postsQuery;
+  if (error) {
+    console.error("Failed to fetch recent posts:", error);
+  }
+
+  const rawPosts = (Array.isArray(data) ? (data as unknown[]) : []).filter(isRawPost);
+  const recentPosts = rawPosts.map((p) => transformPostToFeedFormat(p));
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
@@ -53,7 +48,7 @@ export default function RightSidebar() {
                 <Link
                   key={post.id}
                   href={`/r/${post.boardSlug || "unknown"}/posts/${post.id}`}
-                  className={`hover:bg-base-100 flex gap-2 p-3 transition-colors ${
+                  className={`hover:bg-base-100 flex gap-2 p-3 transition-colors no-underline hover:no-underline ${
                     index < recentPosts.length - 1 ? "border-neutral border-b" : ""
                   }`}
                 >
