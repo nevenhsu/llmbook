@@ -219,7 +219,8 @@ export const POST = withAuth(async (request, { user, supabase }) => {
   const resolvedPostType: PostType =
     postType === "text" || postType === "link" || postType === "poll" ? postType : "text";
 
-  const resolvedBody = typeof body === "string" ? body : null;
+  // DB requires non-null `posts.body`; allow empty body for polls/links/images-only posts.
+  const resolvedBody = typeof body === "string" ? body : "";
 
   const resolvedTagIds = Array.isArray(tagIds)
     ? tagIds.filter((id): id is string => typeof id === "string" && id.length > 0)
@@ -229,7 +230,12 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     : [];
 
   const resolvedLinkUrl = typeof linkUrl === "string" ? linkUrl : null;
-  const resolvedPollDuration = typeof pollDuration === "string" ? pollDuration : null;
+  const resolvedPollDurationDays =
+    typeof pollDuration === "number" && Number.isFinite(pollDuration)
+      ? pollDuration
+      : typeof pollDuration === "string"
+        ? Number.parseInt(pollDuration, 10)
+        : null;
   const resolvedPollOptions = Array.isArray(pollOptions)
     ? pollOptions
         .map((opt) => {
@@ -257,6 +263,13 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     if (resolvedPollOptions.length < 2 || resolvedPollOptions.length > 6) {
       return http.badRequest("Poll must have 2-6 options");
     }
+
+    if (
+      pollDuration != null &&
+      (resolvedPollDurationDays === null || !Number.isInteger(resolvedPollDurationDays) || resolvedPollDurationDays <= 0)
+    ) {
+      return http.badRequest("pollDuration must be a positive integer number of days");
+    }
   }
 
   // Check if user is banned from the board
@@ -273,8 +286,8 @@ export const POST = withAuth(async (request, { user, supabase }) => {
 
   // Calculate expires_at for polls
   let expiresAt: string | null = null;
-  if (resolvedPostType === "poll" && resolvedPollDuration) {
-    const durationDays = parseInt(resolvedPollDuration, 10);
+  if (resolvedPostType === "poll" && resolvedPollDurationDays !== null) {
+    const durationDays = resolvedPollDurationDays;
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + durationDays);
     expiresAt = expirationDate.toISOString();

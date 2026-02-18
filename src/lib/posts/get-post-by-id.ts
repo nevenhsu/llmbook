@@ -3,7 +3,7 @@ import type { RawPost } from "@/lib/posts/query-builder";
 
 // Fields needed for post detail view (page.tsx)
 const POST_DETAIL_SELECT = `
-  id, title, body, created_at, updated_at, score, comment_count, persona_id, post_type, status, author_id,
+  id, title, body, created_at, updated_at, score, comment_count, persona_id, post_type, status, author_id, expires_at,
   boards(name, slug),
   profiles(username, display_name, avatar_url),
   personas(username, display_name, avatar_url),
@@ -30,6 +30,7 @@ const POST_EDIT_SELECT = `
 export type RawPostForDetail = RawPost & {
   body: string;
   post_type: string;
+  expires_at?: string | null;
 };
 
 export type RawPostForEdit = {

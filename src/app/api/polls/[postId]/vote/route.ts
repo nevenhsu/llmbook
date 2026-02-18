@@ -24,7 +24,7 @@ export const POST = withAuth<{ postId: string }>(async (request, { user, supabas
   // Verify post is a poll
   const { data: post } = await supabase
     .from("posts")
-    .select("post_type, board_id, status")
+    .select("post_type, board_id, status, expires_at")
     .eq("id", postId)
     .single();
 
@@ -38,6 +38,13 @@ export const POST = withAuth<{ postId: string }>(async (request, { user, supabas
 
   if (post.status === "DELETED" || post.status === "ARCHIVED") {
     return http.forbidden("Cannot vote on this post");
+  }
+
+  if (post.expires_at) {
+    const expiresAt = new Date(post.expires_at);
+    if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() <= Date.now()) {
+      return http.forbidden("This poll has ended");
+    }
   }
 
   const banned = await isUserBanned(post.board_id, user.id, supabase);
@@ -56,46 +63,63 @@ export const POST = withAuth<{ postId: string }>(async (request, { user, supabas
     return http.badRequest("Invalid option for this poll");
   }
 
-  // Check if user already voted
+  // One vote per user per poll: create, change, or no-op
   const { data: existingVote } = await supabase
     .from("poll_votes")
-    .select("option_id")
+    .select("id, option_id")
     .eq("user_id", user.id)
-    .eq("option_id", optionId)
+    .eq("post_id", postId)
     .maybeSingle();
 
-  // Also check if user voted on any option for this poll
-  const { data: allOptions } = await supabase
-    .from("poll_options")
-    .select("id")
-    .eq("post_id", postId);
+  // Toggle behavior:
+  // - same option again => retract vote
+  // - different option => change vote
+  // - no existing vote => create vote
+  let nextUserVote: string | null = optionId;
 
-  if (allOptions) {
-    const optionIds = allOptions.map((o) => o.id);
-    const { data: anyVote } = await supabase
-      .from("poll_votes")
-      .select("option_id")
-      .eq("user_id", user.id)
-      .in("option_id", optionIds)
-      .maybeSingle();
+  if (existingVote) {
+    if (existingVote.option_id === optionId) {
+      const { error: deleteError } = await supabase
+        .from("poll_votes")
+        .delete()
+        .eq("id", existingVote.id);
+      if (deleteError) {
+        return http.badRequest(deleteError.message);
+      }
+      nextUserVote = null;
+    } else {
+      const { error: deleteError } = await supabase
+        .from("poll_votes")
+        .delete()
+        .eq("id", existingVote.id);
+      if (deleteError) {
+        return http.badRequest(deleteError.message);
+      }
 
-    if (anyVote) {
-      return http.conflict("You have already voted on this poll");
+      const { error: insertError } = await supabase.from("poll_votes").insert({
+        user_id: user.id,
+        option_id: optionId,
+      });
+
+      if (insertError) {
+        if (insertError.code === "23505") {
+          return http.conflict("You have already voted on this poll");
+        }
+        return http.badRequest(insertError.message);
+      }
     }
-  }
+  } else {
+    const { error: insertError } = await supabase.from("poll_votes").insert({
+      user_id: user.id,
+      option_id: optionId,
+    });
 
-  // Record vote
-  const { error: voteError } = await supabase.from("poll_votes").insert({
-    user_id: user.id,
-    option_id: optionId,
-  });
-
-  if (voteError) {
-    if (voteError.code === "23505") {
-      // Unique violation
-      return http.conflict("You have already voted");
+    if (insertError) {
+      if (insertError.code === "23505") {
+        return http.conflict("You have already voted on this poll");
+      }
+      return http.badRequest(insertError.message);
     }
-    return http.badRequest(voteError.message);
   }
 
   // Get updated options with vote counts
@@ -110,7 +134,71 @@ export const POST = withAuth<{ postId: string }>(async (request, { user, supabas
   }
 
   return http.ok({
-    userVote: optionId,
+    userVote: nextUserVote,
+    options: updatedOptions,
+  });
+});
+
+/**
+ * DELETE /api/polls/[postId]/vote
+ * Retract a poll vote (authenticated users only)
+ */
+export const DELETE = withAuth<{ postId: string }>(async (_request, { user, supabase }, context) => {
+  const { postId } = await context.params;
+
+  // Verify post is a poll
+  const { data: post } = await supabase
+    .from("posts")
+    .select("post_type, board_id, status, expires_at")
+    .eq("id", postId)
+    .single();
+
+  if (!post) {
+    return http.notFound("Post not found");
+  }
+
+  if (post.post_type !== "poll") {
+    return http.badRequest("Post is not a poll");
+  }
+
+  if (post.status === "DELETED" || post.status === "ARCHIVED") {
+    return http.forbidden("Cannot vote on this post");
+  }
+
+  if (post.expires_at) {
+    const expiresAt = new Date(post.expires_at);
+    if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() <= Date.now()) {
+      return http.forbidden("This poll has ended");
+    }
+  }
+
+  const banned = await isUserBanned(post.board_id, user.id, supabase);
+  if (banned) {
+    return http.forbidden("You are banned from this board");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("poll_votes")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("post_id", postId);
+
+  if (deleteError) {
+    return http.badRequest(deleteError.message);
+  }
+
+  const { data: updatedOptions, error: optionsError } = await supabase
+    .from("poll_options")
+    .select("id, text, vote_count, position")
+    .eq("post_id", postId)
+    .order("position");
+
+  if (optionsError) {
+    return http.internalError(optionsError.message);
+  }
+
+  return http.ok({
+    userVote: null,
     options: updatedOptions,
   });
 });

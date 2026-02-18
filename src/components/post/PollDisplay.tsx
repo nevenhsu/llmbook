@@ -16,6 +16,21 @@ interface PollDisplayProps {
   initialOptions?: PollOption[];
   initialUserVote?: string | null;
   isExpired?: boolean;
+  expiresAt?: string | null;
+}
+
+function formatTimeLeft(ms: number) {
+  if (!Number.isFinite(ms) || ms <= 0) return "0s";
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
 }
 
 export default function PollDisplay({
@@ -23,10 +38,13 @@ export default function PollDisplay({
   initialOptions = [],
   initialUserVote = null,
   isExpired = false,
+  expiresAt = null,
 }: PollDisplayProps) {
   const [options, setOptions] = useState<PollOption[]>(initialOptions);
   const [userVote, setUserVote] = useState<string | null>(initialUserVote);
   const [loading, setLoading] = useState(false);
+  const [expired, setExpired] = useState(isExpired);
+  const [timeLeftMs, setTimeLeftMs] = useState<number | null>(null);
   const { openLoginModal } = useLoginModal();
 
   useEffect(() => {
@@ -34,7 +52,34 @@ export default function PollDisplay({
     if (!initialOptions.length) {
       fetchPollData();
     }
-  }, [postId]);
+  }, [postId, initialOptions.length]);
+
+  useEffect(() => {
+    if (!expiresAt || expired) {
+      setTimeLeftMs(null);
+      return;
+    }
+
+    const expiresAtMs = new Date(expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setTimeLeftMs(null);
+      return;
+    }
+
+    const tick = () => {
+      const left = expiresAtMs - Date.now();
+      if (left <= 0) {
+        setExpired(true);
+        setTimeLeftMs(0);
+        return;
+      }
+      setTimeLeftMs(left);
+    };
+
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [expiresAt, expired]);
 
   const fetchPollData = async () => {
     try {
@@ -51,11 +96,13 @@ export default function PollDisplay({
 
   const totalVotes = options.reduce((sum, opt) => sum + opt.vote_count, 0);
   const hasVoted = !!userVote;
+  const maxVotes = options.reduce((m, opt) => Math.max(m, opt.vote_count), 0);
 
   const handleVote = async (optionId: string) => {
-    if (hasVoted || isExpired || loading) return;
+    if (expired || loading) return;
 
     setLoading(true);
+    const prevVote = userVote;
 
     try {
       const res = await fetch(`/api/polls/${postId}/vote`, {
@@ -69,14 +116,31 @@ export default function PollDisplay({
           openLoginModal();
           return;
         }
-        const text = await res.text();
-        throw new Error(text || "Failed to vote");
+
+        const data = await res.json().catch(() => null);
+        const message =
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Failed to vote";
+
+        if (res.status === 403 && message === "This poll has ended") {
+          setExpired(true);
+        }
+        throw new Error(message);
       }
 
       const data = await res.json();
       setOptions(data.options);
       setUserVote(data.userVote);
-      toast.success("Vote recorded");
+
+      const nextVote: string | null = data.userVote ?? null;
+      if (prevVote && nextVote === null) {
+        toast.success("Vote removed");
+      } else if (!prevVote && nextVote) {
+        toast.success("Vote recorded");
+      } else if (prevVote && nextVote && prevVote !== nextVote) {
+        toast.success("Vote updated");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to vote";
       toast.error(message);
@@ -90,24 +154,48 @@ export default function PollDisplay({
       {options.map((option) => {
         const percentage = totalVotes > 0 ? (option.vote_count / totalVotes) * 100 : 0;
         const isUserChoice = userVote === option.id;
+        const isLeading = hasVoted && maxVotes > 0 && option.vote_count === maxVotes;
+        const showUserVote = hasVoted && isUserChoice;
+        const showLeading = hasVoted && isLeading;
+
+        const userBorderClass = showUserVote
+          ? isLeading
+            ? "border-success/70 ring-success ring-2"
+            : "border-base-content/20 ring-base-content/30 ring-2"
+          : "";
 
         return (
           <button
             key={option.id}
             onClick={() => handleVote(option.id)}
-            disabled={hasVoted || isExpired || loading}
-            className={`rounded-box bg-base-100 w-full border p-3 text-left transition-all ${hasVoted || isExpired ? "border-neutral cursor-default" : "border-neutral hover:border-neutral active:scale-[0.98]"} ${isUserChoice ? "border-neutral ring-neutral ring-1" : ""} ${loading ? "opacity-50" : ""} `}
+            disabled={expired || loading}
+            className={`rounded-box bg-base-100 w-full border p-3 text-left transition-all ${expired ? "border-neutral cursor-not-allowed" : "border-neutral hover:border-neutral hover:bg-base-200/60 active:scale-[0.98]"} ${showLeading ? "border-success/40 bg-success/5" : ""} ${userBorderClass} ${loading ? "opacity-50" : ""} `}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex-1 text-sm">{option.text}</span>
-              {hasVoted && (
-                <span className="text-xs text-[#818384]">{Math.round(percentage)}%</span>
-              )}
+            <div className="flex items-start justify-between gap-3">
+              <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">{option.text}</span>
+
+              <div className="flex shrink-0 items-center gap-2">
+                {showUserVote && (
+                  <span className={`badge badge-sm ${isLeading ? "badge-success" : "badge-neutral"}`}>
+                    Your vote
+                  </span>
+                )}
+                {hasVoted && (
+                  <div className="flex flex-col items-end leading-tight">
+                    <span className={`text-xs ${showLeading ? "text-success" : "text-[#818384]"}`}>
+                      {Math.round(percentage)}%
+                    </span>
+                    <span className="text-[11px] text-[#818384]">
+                      {option.vote_count} vote{option.vote_count !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             {hasVoted && (
               <div className="bg-base-300 mt-2 h-1 overflow-hidden rounded-full">
                 <div
-                  className="bg-neutral h-full transition-all duration-300"
+                  className={`h-full transition-all duration-300 ${showLeading ? "bg-success" : "bg-base-content/30"}`}
                   style={{ width: `${percentage}%` }}
                 />
               </div>
@@ -120,7 +208,11 @@ export default function PollDisplay({
         <span>
           {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
         </span>
-        {isExpired && <span>Voting closed</span>}
+        {expired ? (
+          <span>Voting closed</span>
+        ) : timeLeftMs != null ? (
+          <span>Ends in {formatTimeLeft(timeLeftMs)}</span>
+        ) : null}
       </div>
     </div>
   );

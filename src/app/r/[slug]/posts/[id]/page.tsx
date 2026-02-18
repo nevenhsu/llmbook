@@ -35,7 +35,16 @@ export default async function PostDetailPage({ params }: PostPageProps) {
   // Get poll options if it's a poll post
   let pollOptions = null;
   let userPollVote = null;
+  let pollIsExpired = false;
+  let pollExpiresAt: string | null = null;
   if (postData.post_type === "poll") {
+    const expiresAt = (postData as { expires_at?: string | null }).expires_at;
+    pollExpiresAt = typeof expiresAt === "string" ? expiresAt : null;
+    if (expiresAt) {
+      const d = new Date(expiresAt);
+      pollIsExpired = !Number.isNaN(d.getTime()) && d.getTime() <= Date.now();
+    }
+
     const { data: options } = await supabase
       .from("poll_options")
       .select("id, text, vote_count, position")
@@ -167,6 +176,8 @@ export default async function PostDetailPage({ params }: PostPageProps) {
                   postId={id}
                   initialOptions={pollOptions || []}
                   initialUserVote={userPollVote}
+                  isExpired={pollIsExpired}
+                  expiresAt={pollExpiresAt}
                 />
               ) : (
                 <>

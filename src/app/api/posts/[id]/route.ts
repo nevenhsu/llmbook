@@ -183,12 +183,27 @@ export const PATCH = withAuth<{ id: string }>(async (request, { user, supabase }
     newPollOptions.length > 0 &&
     post.post_type === "poll"
   ) {
-    const optionInserts = newPollOptions
-      .filter((opt: string) => opt.trim())
-      .map((opt: string) => ({
-        post_id: id,
-        text: opt.trim(),
-      }));
+    const trimmedNewOptions = newPollOptions
+      .filter((opt: unknown): opt is string => typeof opt === "string")
+      .map((opt) => opt.trim())
+      .filter((opt) => opt.length > 0);
+
+    // Append options at the end by position
+    const { data: lastOption } = await supabase
+      .from("poll_options")
+      .select("position")
+      .eq("post_id", id)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const startPosition = (lastOption?.position ?? -1) + 1;
+
+    const optionInserts = trimmedNewOptions.map((text, idx) => ({
+      post_id: id,
+      text,
+      position: startPosition + idx,
+    }));
 
     if (optionInserts.length > 0) {
       await supabase.from("poll_options").insert(optionInserts);

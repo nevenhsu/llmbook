@@ -173,85 +173,88 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
       {/* Footer */}
       <div className="border-neutral bg-base-200/95 fixed right-0 bottom-0 left-0 z-[101] flex items-center justify-between gap-2 border-t p-3 backdrop-blur sm:relative sm:bottom-0 sm:z-40 sm:mt-8 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
         {/* Left: Drafts */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => form.setShowDrafts(!form.showDrafts)}
-            className="btn btn-ghost btn-sm"
-          >
+        <div className="dropdown dropdown-top">
+          <div tabIndex={0} role="button" className="btn btn-ghost btn-sm">
             Drafts {!editMode && form.drafts.length > 0 && `(${form.drafts.length})`}
-          </button>
+          </div>
 
-          {form.showDrafts && (
-            <div className="border-neutral bg-base-100 absolute bottom-full left-0 z-[110] mb-2 max-h-96 w-80 overflow-y-auto rounded-md border shadow-xl">
-              {editMode ? (
-                form.editDraftSavedAt ? (
-                  <div className="p-2">
-                    <div className="border-neutral rounded p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={form.loadEditDraft}
-                          className="flex-1 text-left"
-                        >
-                          <p className="text-base-content line-clamp-1 text-sm font-bold">
-                            {form.title || "Untitled draft"}
-                          </p>
-                          <p className="text-base-content/50 mt-1 text-xs">
-                            {new Date(form.editDraftSavedAt).toLocaleString()}
-                          </p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={form.deleteEditDraft}
-                          className="hover:bg-error/20 text-error rounded p-1 transition-colors"
-                          title="Delete draft"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+          <div className="dropdown-content border-neutral bg-base-100 z-[110] mb-2 max-h-96 w-80 overflow-y-auto rounded-md border shadow-xl">
+            {editMode ? (
+              form.editDraftSavedAt ? (
+                <div className="p-2">
+                  <div className="border-neutral rounded p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          form.loadEditDraft();
+                          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                        }}
+                        className="flex-1 text-left"
+                      >
+                        <p className="text-base-content line-clamp-1 text-sm font-bold">
+                          {form.title || "Untitled draft"}
+                        </p>
+                        <p className="text-base-content/50 mt-1 text-xs">
+                          {new Date(form.editDraftSavedAt).toLocaleString()}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          form.deleteEditDraft();
+                          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                        }}
+                        className="hover:bg-error/20 text-error rounded p-1 transition-colors"
+                        title="Delete draft"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-base-content/50 p-4 text-sm">No draft saved</p>
-                )
-              ) : form.drafts.length === 0 ? (
-                <p className="text-base-content/50 p-4 text-sm">No drafts saved</p>
-              ) : (
-                <div className="p-2">
-                  {form.drafts.map((draft) => (
-                    <div
-                      key={draft.id}
-                      className="hover:bg-base-300 border-neutral rounded border-b p-3 transition-colors last:border-0"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => form.loadCreateDraft(draft)}
-                          className="flex-1 text-left"
-                        >
-                          <p className="text-base-content line-clamp-1 text-sm font-bold">
-                            {draft.title || "Untitled draft"}
-                          </p>
-                          <p className="text-base-content/50 mt-1 text-xs">
-                            {new Date(draft.savedAt).toLocaleString()}
-                          </p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => form.deleteCreateDraft(draft.id)}
-                          className="hover:bg-error/20 text-error rounded p-1 transition-colors"
-                          title="Delete draft"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              )}
-            </div>
-          )}
+              ) : (
+                <p className="text-base-content/50 p-4 text-sm">No draft saved</p>
+              )
+            ) : form.drafts.length === 0 ? (
+              <p className="text-base-content/50 p-4 text-sm">No drafts saved</p>
+            ) : (
+              <div className="p-2">
+                {form.drafts.map((draft) => (
+                  <div
+                    key={draft.id}
+                    className="hover:bg-base-300 border-neutral rounded border-b p-3 transition-colors last:border-0"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          form.loadCreateDraft(draft);
+                          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                        }}
+                        className="flex-1 text-left"
+                      >
+                        <p className="text-base-content line-clamp-1 text-sm font-bold">
+                          {draft.title || "Untitled draft"}
+                        </p>
+                        <p className="text-base-content/50 mt-1 text-xs">
+                          {new Date(draft.savedAt).toLocaleString()}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => form.deleteCreateDraft(draft.id)}
+                        className="hover:bg-error/20 text-error rounded p-1 transition-colors"
+                        title="Delete draft"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: Save Draft + Submit */}
