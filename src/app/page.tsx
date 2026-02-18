@@ -11,6 +11,7 @@ import {
   buildPostsQuery,
   fetchUserInteractions,
   transformPostToFeedFormat,
+  isRawPost,
   type FeedPost,
   type RawPost,
 } from "@/lib/posts/query-builder";
@@ -48,9 +49,7 @@ async function HomeFeed({ sortBy, timeRange }: { sortBy: SortType; timeRange: Ti
   });
 
   const { data: postData } = await postsQuery;
-  const rawPosts = ((postData ?? []) as unknown as RawPost[]).filter(
-    (p): p is RawPost => !!p && typeof p.id === "string",
-  );
+  const rawPosts = (Array.isArray(postData) ? (postData as unknown[]) : []).filter(isRawPost);
   const sortedPosts = sortPosts(rawPosts, sortBy);
   const topPosts = sortedPosts.slice(0, 20);
 

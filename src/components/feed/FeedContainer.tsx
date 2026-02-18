@@ -11,6 +11,7 @@ import {
   getNextCursor,
   calculateHasMore,
   getPaginationMode,
+  type PaginatedResponse,
 } from "@/lib/pagination";
 
 interface FeedContainerProps {
@@ -37,7 +38,7 @@ export default function FeedContainer({
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(calculateHasMore(initialPosts, DEFAULT_LIMIT));
-  const [page, setPage] = useState(1);
+  const [offset, setOffset] = useState(initialPosts.length);
   const [cursor, setCursor] = useState<string | undefined>(getNextCursor(initialPosts));
   // Determine pagination mode
   const paginationMode = useMemo(() => getPaginationMode(sortBy, !!tagSlug), [sortBy, tagSlug]);
@@ -52,30 +53,29 @@ export default function FeedContainer({
     setIsLoading(true);
     try {
       // Build query params based on pagination mode
-      const params = buildPostsQueryParams({
+        const params = buildPostsQueryParams({
         board: boardSlug,
         tag: tagSlug,
         sort: effectiveSortBy,
         timeRange: effectiveTimeRange,
         includeArchived: canViewArchived,
-        limit: DEFAULT_LIMIT,
-        // Use appropriate pagination parameter based on mode
-        ...(paginationMode === "cursor" && cursor ? { cursor } : { offset: page * DEFAULT_LIMIT }),
-      });
+          limit: DEFAULT_LIMIT,
+          // Use appropriate pagination parameter based on mode
+          ...(paginationMode === "cursor" && cursor ? { cursor } : { offset }),
+        });
 
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error("Failed to load posts");
 
-      const newPosts = (await res.json()) as FeedPost[];
+      const data = (await res.json()) as PaginatedResponse<FeedPost>;
+      const newPosts = Array.isArray(data?.items) ? data.items : [];
 
-      // Update pagination state
-      const newHasMore = calculateHasMore(newPosts, DEFAULT_LIMIT);
-      setHasMore(newHasMore);
+      setHasMore(!!data?.hasMore);
 
       if (paginationMode === "cursor") {
-        setCursor(getNextCursor(newPosts));
+        setCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursor(newPosts));
       } else {
-        setPage((prev) => prev + 1);
+        setOffset(typeof data?.nextOffset === "number" ? data.nextOffset : offset + newPosts.length);
       }
 
       setPosts((prev) => [...prev, ...newPosts]);
@@ -92,7 +92,7 @@ export default function FeedContainer({
     effectiveTimeRange,
     hasMore,
     isLoading,
-    page,
+    offset,
     paginationMode,
     tagSlug,
   ]);

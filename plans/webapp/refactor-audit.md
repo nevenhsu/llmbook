@@ -349,16 +349,10 @@ Two naming conventions in `src/hooks/`:
 ---
 
 ### R-15 `any` Type Overuse
-**Status:** `[>]`
+**Status:** `[✓]`
 
-Key locations using `any`:
-| File | Line | Field |
-|------|------|-------|
-| `components/comment/CommentItem.tsx` | 16 | `comment: any` |
-| `components/profile/ProfilePostList.tsx` | 43 | `posts: any[]` |
-| `components/feed/FeedContainer.tsx` | 17 | `initialPosts: any[]` |
-| `components/board/BoardSettingsForm.tsx` | 49 | `board: any` |
-| `lib/query-builder.ts` | multiple | various |
+Explicit `any` type annotations were removed across app + tests.
+Remaining `any` occurrences should only appear as matcher usage (e.g. `expect.any(...)`) rather than TypeScript types.
 
 **Proposal:** Replace with proper TypeScript types. Start with the most-used components (FeedContainer, PostList).
 
@@ -396,6 +390,38 @@ Key locations using `any`:
   - `src/app/u/[username]/page.tsx`
 - Deduplicated vote parsing helper:
   - Added `src/lib/vote-value.ts` (`toVoteValue`, `VoteValue`) and replaced repeated local helpers
+
+- Removed remaining `any` in a few high-traffic SSR pages/libs:
+  - `src/app/r/[slug]/layout.tsx` (typed moderators + normalization)
+  - `src/app/tags/[slug]/page.tsx` (typed `RawPost` mapping + `VoteValue`)
+  - `src/app/r/[slug]/member/page.tsx` (typed member row mapping)
+  - `src/lib/posts/get-post-by-id.ts` (typed `getPostForDetail` / `getPostForEdit` returns)
+
+- Removed `any` from post detail/edit pages:
+  - `src/app/r/[slug]/posts/[id]/page.tsx` (typed media map)
+  - `src/app/r/[slug]/posts/[id]/edit/page.tsx` (typed post_tags/media/poll_options maps)
+
+- Landed typed raw-to-formatted conversion inputs (avoid creeping `any` in transforms):
+  - `src/lib/posts/query-builder.ts` now defines `RawBoard`, `RawProfile`, `RawPersona`, `BoardRule`
+  - `transformBoardToFormat(board)` and `transformProfileToFormat(data, isPersona)` no longer accept `any`
+
+- Saved Posts API response shape unified to avoid FE/BE destructure drift:
+  - `src/app/api/profile/saved/route.ts` now returns `{ items, hasMore, nextCursor, nextOffset }` and supports `offset`
+  - `src/components/profile/ProfilePostList.tsx` updated to consume the unified shape
+
+- Posts + Profile Comments list APIs now use the same paginated response shape:
+  - `src/app/api/posts/route.ts` returns `{ items, hasMore, nextCursor, nextOffset }` and supports `offset` (with backward-compatible numeric `cursor` for offset mode)
+  - `src/app/api/profile/comments/route.ts` returns `{ items, hasMore, nextCursor, nextOffset }` and supports `offset`
+  - Updated consumers:
+    - `src/components/feed/FeedContainer.tsx`
+    - `src/components/profile/ProfilePostList.tsx`
+    - `src/components/layout/RightSidebar.tsx`
+
+- Cleaned up remaining `any` in forms/config/tests:
+  - `src/app/settings/profile/profile-form.tsx`, `src/app/settings/avatar/avatar-form.tsx`, `src/app/login/login-form.tsx`, `src/app/register/register-form.tsx`, `src/app/reset-password/page.tsx`, `src/app/forgot-password/page.tsx` (use `unknown` in `catch`)
+  - `tailwind.config.ts` (use `Config` instead of `any`)
+  - `src/test-utils/supabase-mock.ts` (generic `PromiseLike` builder, no `any`)
+  - `src/lib/supabase/__tests__/middleware.test.ts`, `src/lib/supabase/__tests__/server.test.ts` (typed mocks; no `any`)
 
 ---
 

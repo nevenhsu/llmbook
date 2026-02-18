@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { FeedPost } from "@/lib/posts/query-builder";
+import type { PaginatedResponse } from "@/lib/pagination";
 
 export default function RightSidebar() {
   const [recentPosts, setRecentPosts] = useState<FeedPost[]>([]);
@@ -12,8 +13,9 @@ export default function RightSidebar() {
       try {
         const res = await fetch("/api/posts?sort=new&limit=5");
         if (res.ok) {
-          const data = await res.json();
-          setRecentPosts(data.slice(0, 5));
+          const data = (await res.json()) as PaginatedResponse<FeedPost>;
+          const items = Array.isArray(data?.items) ? data.items : [];
+          setRecentPosts(items.slice(0, 5));
         }
       } catch (err) {
         console.error("Failed to fetch recent posts:", err);

@@ -16,8 +16,8 @@ import { publicEnv, privateEnv, isIntegrationTest, validateTestEnv } from "./env
 // Mock FileReader for Node.js environment
 class MockFileReader {
   result: string | null = null;
-  onloadend: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null;
-  onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null;
+  onloadend: ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null = null;
+  onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null = null;
 
   readAsDataURL(file: Blob) {
     setTimeout(() => {
@@ -27,7 +27,10 @@ class MockFileReader {
         const type = (file as File).type || "application/octet-stream";
         this.result = `data:${type};base64,${base64}`;
         if (this.onloadend) {
-          this.onloadend.call(this as any, new Event("loadend") as any);
+          this.onloadend.call(
+            this as unknown as FileReader,
+            new Event("loadend") as unknown as ProgressEvent<FileReader>,
+          );
         }
       });
     }, 0);
@@ -36,7 +39,7 @@ class MockFileReader {
 
 // Only define FileReader if it doesn't exist (Node.js environment)
 if (typeof FileReader === "undefined") {
-  global.FileReader = MockFileReader as any;
+  global.FileReader = MockFileReader as unknown as typeof FileReader;
 }
 
 // ============================================
@@ -120,7 +123,9 @@ describe("image-upload (unit)", () => {
     });
 
     it("returns empty string for unknown value", () => {
-      expect(getAspectRatioClass("unknown" as any)).toBe("");
+      expect(
+        getAspectRatioClass("unknown" as unknown as Parameters<typeof getAspectRatioClass>[0]),
+      ).toBe("");
     });
   });
 
@@ -142,19 +147,22 @@ describe("image-upload (unit)", () => {
       // Mock FileReader to simulate error
       const originalFileReader = global.FileReader;
       global.FileReader = class MockFileReader {
-        onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null;
-        onloadend: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null;
+        onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null = null;
+        onloadend: ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null = null;
 
         readAsDataURL() {
           setTimeout(() => {
             if (this.onerror) {
-              this.onerror.call(this as any, new Event("error") as any);
+              this.onerror.call(
+                this as unknown as FileReader,
+                new Event("error") as unknown as ProgressEvent<FileReader>,
+              );
             }
           }, 0);
         }
 
         result = null;
-      } as any;
+      } as unknown as typeof FileReader;
 
       await expect(createImagePreview(mockFile)).rejects.toBeDefined();
 
@@ -302,7 +310,7 @@ integrationDescribe("image-upload (integration)", () => {
         body: formData,
       });
 
-      const response = await POST(request);
+      const response = await POST(request, { params: Promise.resolve({}) });
 
       if (!response.ok) {
         throw new Error(`Upload failed: ${await response.text()}`);
@@ -360,7 +368,7 @@ integrationDescribe("image-upload (integration)", () => {
         body: formData,
       });
 
-      const response = await POST(request);
+      const response = await POST(request, { params: Promise.resolve({}) });
 
       if (!response.ok) {
         throw new Error(`Upload failed: ${await response.text()}`);

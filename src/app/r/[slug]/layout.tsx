@@ -7,6 +7,41 @@ import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { transformBoardToFormat } from "@/lib/posts/query-builder";
 
+type BoardInfoCardModerator = NonNullable<Parameters<typeof BoardInfoCard>[0]["moderators"]>[number];
+
+type ModeratorRowProfile = {
+  display_name: string | null;
+  avatar_url: string | null;
+  username: string | null;
+};
+
+type ModeratorRow = {
+  user_id: string;
+  role: string;
+  profiles: ModeratorRowProfile | ModeratorRowProfile[] | null;
+};
+
+function isModeratorRow(value: unknown): value is ModeratorRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as { user_id?: unknown; role?: unknown };
+  return typeof row.user_id === "string" && typeof row.role === "string";
+}
+
+function normalizeModerators(rows: unknown[]): BoardInfoCardModerator[] {
+  return rows.filter(isModeratorRow).map((mod) => {
+      const profile = Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles;
+      return {
+        user_id: mod.user_id,
+        role: mod.role,
+        profiles: {
+          display_name: profile?.display_name ?? "Unknown",
+          avatar_url: profile?.avatar_url ?? null,
+          username: profile?.username ?? null,
+        },
+      };
+    });
+}
+
 interface BoardLayoutProps {
   children: React.ReactNode;
   params: Promise<{ slug: string }>;
@@ -36,7 +71,7 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
 
   // Get membership status and moderators in parallel
   let isJoined = false;
-  let moderators: any[] = [];
+  let moderators: BoardInfoCardModerator[] = [];
   let canOpenSettings = false;
 
   if (user) {
@@ -65,12 +100,9 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
     ]);
 
     isJoined = !!membershipResult.data;
-    moderators = (moderatorsResult.data || []).map((mod: any) => ({
-      ...mod,
-      profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles,
-    }));
+    moderators = normalizeModerators(Array.isArray(moderatorsResult.data) ? moderatorsResult.data : []);
 
-    isModerator = moderators.some((mod: any) => mod.user_id === user.id);
+    isModerator = moderators.some((mod) => mod.user_id === user.id);
     canOpenSettings = userIsAdmin || isModerator;
     canModerate = userIsAdmin || isModerator;
   } else {
@@ -91,10 +123,7 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
       .eq("board_id", board.id)
       .order("created_at", { ascending: true });
 
-    moderators = (moderatorsResult || []).map((mod: any) => ({
-      ...mod,
-      profiles: Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles,
-    }));
+    moderators = normalizeModerators(Array.isArray(moderatorsResult) ? moderatorsResult : []);
   }
 
   return (

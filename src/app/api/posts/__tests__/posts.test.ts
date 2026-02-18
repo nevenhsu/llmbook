@@ -75,7 +75,11 @@ describe("GET /api/posts", () => {
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      then: vi.fn((callback: any) => Promise.resolve(callback({ data: [], error: null }))),
+      then: vi.fn(
+        (
+          callback: (value: { data: unknown[]; error: null }) => unknown,
+        ) => Promise.resolve(callback({ data: [], error: null })),
+      ),
     };
 
     mockFrom.mockImplementation((table: string) => {
@@ -113,7 +117,7 @@ describe("GET /api/posts", () => {
 
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toEqual([]);
+    expect(data).toEqual({ items: [], hasMore: false });
   });
 
   it("returns empty array for invalid tag", async () => {
@@ -137,7 +141,7 @@ describe("GET /api/posts", () => {
 
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toEqual([]);
+    expect(data).toEqual({ items: [], hasMore: false });
   });
 
   it("uses cached rankings for hot sort", async () => {
@@ -146,7 +150,10 @@ describe("GET /api/posts", () => {
       { id: "post2", title: "Post 2", score: 90 },
     ];
 
-    (getHotPostsFromCache as any).mockResolvedValue({
+    const getHotPostsFromCacheMock = getHotPostsFromCache as unknown as {
+      mockResolvedValue: (value: unknown) => void;
+    };
+    getHotPostsFromCacheMock.mockResolvedValue({
       posts: cachedPosts,
       error: null,
     });
@@ -156,8 +163,9 @@ describe("GET /api/posts", () => {
 
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toHaveLength(2);
-    expect(data[0]).toEqual(
+    expect(Array.isArray(data.items)).toBe(true);
+    expect(data.items).toHaveLength(2);
+    expect(data.items[0]).toEqual(
       expect.objectContaining({
         id: "post1",
         title: "Post 1",
@@ -165,7 +173,7 @@ describe("GET /api/posts", () => {
         tags: [],
       }),
     );
-    expect(data[1]).toEqual(
+    expect(data.items[1]).toEqual(
       expect.objectContaining({
         id: "post2",
         title: "Post 2",
@@ -177,7 +185,7 @@ describe("GET /api/posts", () => {
 
     expect(getHotPostsFromCache).toHaveBeenCalledWith(expect.any(Object), {
       boardId: undefined,
-      limit: 20,
+      limit: 21,
       offset: 0,
     });
   });
@@ -197,7 +205,7 @@ describe("POST /api/posts", () => {
       body: JSON.stringify({ title: "Test", body: "Body", boardId: "board123" }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
   });
 });

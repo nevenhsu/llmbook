@@ -32,8 +32,9 @@ export default function ForgotPasswordPage() {
 
       setSuccess(true);
       setLoading(false);
-    } catch (err: any) {
-      setError(err.message || "發送重設密碼郵件時發生錯誤");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "發送重設密碼郵件時發生錯誤";
+      setError(message);
       setLoading(false);
     }
   }

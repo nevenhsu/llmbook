@@ -270,6 +270,62 @@ export interface RawPost {
   post_tags?: { tag?: PostTag | PostTag[] | null }[];
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+export function isRawPost(value: unknown): value is RawPost {
+  if (!isObject(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.created_at === "string" &&
+    typeof value.author_id === "string" &&
+    typeof value.status === "string" &&
+    typeof value.score === "number" &&
+    typeof value.comment_count === "number"
+  );
+}
+
+export interface BoardRule {
+  title: string;
+  description: string;
+}
+
+export interface RawBoard {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  member_count: number | null;
+  post_count: number | null;
+  created_at: string;
+  is_archived: boolean | null;
+  archived_at?: string | null;
+  rules: BoardRule[] | null;
+  banner_url?: string | null;
+}
+
+export interface RawProfile {
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio?: string | null;
+  karma?: number | null;
+  created_at: string;
+}
+
+export interface RawPersona {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio?: string | null;
+  karma?: number | null;
+  created_at: string;
+}
+
 export type { VoteValue } from "@/lib/vote-value";
 
 export interface FeedPost {
@@ -388,6 +444,17 @@ export interface RawComment {
       }[];
 }
 
+export function isRawComment(value: unknown): value is RawComment {
+  if (!isObject(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.body === "string" &&
+    typeof value.created_at === "string" &&
+    typeof value.author_id === "string" &&
+    typeof value.score === "number"
+  );
+}
+
 export interface FormattedComment {
   id: string;
   body: string;
@@ -452,10 +519,10 @@ export interface FormattedBoard {
   createdAt: string;
   isArchived: boolean;
   archivedAt?: string | null;
-  rules?: string[];
+  rules?: BoardRule[] | null;
 }
 
-export function transformBoardToFormat(board: any): FormattedBoard {
+export function transformBoardToFormat(board: RawBoard): FormattedBoard {
   return {
     id: board.id,
     slug: board.slug,
@@ -481,15 +548,33 @@ export interface FormattedProfile {
   isPersona: boolean;
 }
 
-export function transformProfileToFormat(data: any, isPersona: boolean = false): FormattedProfile {
+export function transformProfileToFormat(
+  data: RawProfile | RawPersona,
+  isPersona: boolean = false,
+): FormattedProfile {
+  if (isPersona) {
+    const persona = data as RawPersona;
+    return {
+      id: persona.id,
+      username: persona.username || "unknown",
+      displayName: persona.display_name || "Unknown",
+      avatarUrl: persona.avatar_url,
+      bio: persona.bio,
+      karma: persona.karma ?? 0,
+      createdAt: persona.created_at,
+      isPersona: true,
+    };
+  }
+
+  const profile = data as RawProfile;
   return {
-    id: isPersona ? data.id : data.user_id,
-    username: data.username || "unknown",
-    displayName: data.display_name || "Unknown",
-    avatarUrl: data.avatar_url,
-    bio: data.bio,
-    karma: data.karma ?? 0,
-    createdAt: data.created_at,
-    isPersona,
+    id: profile.user_id,
+    username: profile.username || "unknown",
+    displayName: profile.display_name || "Unknown",
+    avatarUrl: profile.avatar_url,
+    bio: profile.bio,
+    karma: profile.karma ?? 0,
+    createdAt: profile.created_at,
+    isPersona: false,
   };
 }

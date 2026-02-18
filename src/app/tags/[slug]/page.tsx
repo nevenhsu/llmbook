@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import FeedContainer from "@/components/feed/FeedContainer";
 import RightSidebar from "@/components/layout/RightSidebar";
-import { transformPostToFeedFormat } from "@/lib/posts/query-builder";
+import { toVoteValue } from "@/lib/vote-value";
+import {
+  transformPostToFeedFormat,
+  isRawPost,
+  type VoteValue,
+} from "@/lib/posts/query-builder";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -55,9 +60,11 @@ export default async function TagPage({ params }: PageProps) {
     .order("created_at", { ascending: false })
     .limit(20);
 
-  let userVotes: Record<string, 1 | -1> = {};
-  if (user && postsData) {
-    const postIds = postsData.map((p) => p.id);
+  let userVotes: Record<string, VoteValue> = {};
+  const rawPosts = (Array.isArray(postsData) ? postsData : []).filter(isRawPost);
+
+  if (user && rawPosts.length > 0) {
+    const postIds = rawPosts.map((p) => p.id);
     const { data: votes } = await supabase
       .from("votes")
       .select("post_id, value")
@@ -65,13 +72,17 @@ export default async function TagPage({ params }: PageProps) {
       .in("post_id", postIds);
 
     if (votes) {
-      userVotes = Object.fromEntries(votes.map((v) => [v.post_id, v.value as 1 | -1]));
+      type VoteRow = { post_id: string; value: unknown };
+      const rows = (Array.isArray(votes) ? votes : []).filter((v): v is VoteRow => {
+        return !!v && typeof (v as { post_id?: unknown }).post_id === "string";
+      });
+      userVotes = Object.fromEntries(rows.map((v) => [v.post_id, toVoteValue(v.value)]));
     }
   }
 
-  const posts = (postsData ?? []).map((post: any) =>
+  const posts = rawPosts.map((post) =>
     transformPostToFeedFormat(post, {
-      userVote: userVotes[post.id] || null,
+      userVote: userVotes[post.id] ?? null,
     }),
   );
 

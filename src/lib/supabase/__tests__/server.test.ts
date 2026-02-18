@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-let cookieStore: { getAll: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
-let lastOptions: any;
+type CookieToSet = { name: string; value: string; options?: Record<string, unknown> };
 
-const createServerClient = vi.fn((url: string, key: string, options: any) => {
+type CreateServerClientOptions = {
+  cookies: {
+    getAll: () => Array<{ name: string; value: string }>;
+    setAll: (cookies: CookieToSet[]) => void;
+  };
+};
+
+let cookieStore: { getAll: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
+let lastOptions: CreateServerClientOptions | undefined;
+
+const createServerClient = vi.fn((url: string, key: string, options: CreateServerClientOptions) => {
   lastOptions = options;
   return { __mock: "server-client", url, key };
 });
@@ -51,8 +60,10 @@ describe("server createClient", () => {
     const { createClient } = await import("../server");
     await createClient();
 
+    expect(lastOptions).toBeDefined();
+
     expect(() =>
-      lastOptions.cookies.setAll([{ name: "session", value: "x", options: { path: "/" } }]),
+      lastOptions!.cookies.setAll([{ name: "session", value: "x", options: { path: "/" } }]),
     ).not.toThrow();
   });
 
@@ -60,7 +71,9 @@ describe("server createClient", () => {
     const { createClient } = await import("../server");
     await createClient();
 
-    lastOptions.cookies.setAll([{ name: "session", value: "x", options: { path: "/" } }]);
+    expect(lastOptions).toBeDefined();
+
+    lastOptions!.cookies.setAll([{ name: "session", value: "x", options: { path: "/" } }]);
 
     expect(cookieStore.set).toHaveBeenCalledWith("session", "x", { path: "/" });
   });

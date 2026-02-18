@@ -22,7 +22,7 @@ describe("buildPostsQueryParams", () => {
     expect(params.get("sort")).toBe("hot");
     expect(params.get("t")).toBe("week");
     expect(params.get("limit")).toBe("50");
-    expect(params.get("cursor")).toBe("20");
+    expect(params.get("offset")).toBe("20");
   });
 
   it("prefers cursor over offset when both provided", () => {

@@ -7,6 +7,8 @@ import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import BoardSettingsForm from "@/components/board/BoardSettingsForm";
 import BackToBoard from "@/components/board/BackToBoard";
 
+type BoardSettingsModerator = Parameters<typeof BoardSettingsForm>[0]["moderators"][number];
+
 export default async function BoardSettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const supabase = await createClient();
   const user = await getUser();
@@ -50,13 +52,22 @@ export default async function BoardSettingsPage({ params }: { params: Promise<{ 
     .eq("board_id", board.id)
     .order("created_at", { ascending: true });
 
+  const normalizedModerators: BoardSettingsModerator[] = (moderators ?? []).map((mod) => {
+    const profiles = (mod as { profiles?: BoardSettingsModerator["profiles"] | BoardSettingsModerator["profiles"][] | null })
+      .profiles;
+    return {
+      ...(mod as Omit<BoardSettingsModerator, "profiles">),
+      profiles: (Array.isArray(profiles) ? profiles[0] : profiles) as BoardSettingsModerator["profiles"],
+    };
+  });
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
       <BackToBoard slug={slug} className="mb-4" />
       <h1 className="mb-6 text-2xl font-bold">Board Settings: r/{slug}</h1>
       <BoardSettingsForm
         board={board}
-        moderators={moderators || []}
+        moderators={normalizedModerators}
         userRole={role || "moderator"}
         isAdmin={userIsAdmin}
       />

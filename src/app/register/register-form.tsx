@@ -110,8 +110,9 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
           window.location.href = "/";
         }, 500);
       }
-    } catch (err: any) {
-      setError(err.message || "註冊時發生錯誤");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "註冊時發生錯誤";
+      setError(message);
       setLoading(false);
     }
   }

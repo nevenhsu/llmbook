@@ -11,6 +11,7 @@ import {
   transformPostToFeedFormat,
   transformProfileToFormat,
   fetchUserInteractions,
+  isRawPost,
   type FeedPost,
   type FormattedComment,
   type RawPost,
@@ -135,7 +136,8 @@ export default async function UserPage({ params, searchParams }: PageProps) {
     const { data: postData, count } = await query;
     postsCount = count ?? 0;
 
-    const postIds = (postData ?? []).map((p) => p.id);
+    const rawPosts = (Array.isArray(postData) ? (postData as unknown[]) : []).filter(isRawPost);
+    const postIds = rawPosts.map((p) => p.id);
     const {
       votes: userVotes,
       hiddenPostIds,
@@ -144,7 +146,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
       ? await fetchUserInteractions(supabase, currentUser.id, postIds)
       : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
-    posts = ((postData ?? []) as unknown as RawPost[]).map((p) =>
+    posts = rawPosts.map((p) =>
       transformPostToFeedFormat(p, {
         userVote: toVoteValue(userVotes[p.id]),
         isHidden: hiddenPostIds.has(p.id),
@@ -180,9 +182,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
 
     savedCount = count ?? 0;
     type SavedRow = { posts: RawPost | RawPost[] | null };
-    const savedPostsData = ((savedData ?? []) as unknown as SavedRow[])
+    const savedPostsData = (Array.isArray(savedData) ? (savedData as unknown[]) : [])
+      .filter((row): row is SavedRow => !!row && typeof row === "object" && "posts" in row)
       .map((s) => (Array.isArray(s.posts) ? s.posts[0] : s.posts))
-      .filter((p): p is RawPost => !!p && typeof p.id === "string");
+      .filter(isRawPost);
     const postIds = savedPostsData.map((p) => p.id);
     const {
       votes: userVotes,

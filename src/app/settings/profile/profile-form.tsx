@@ -54,8 +54,9 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           router.push(`/u/${username.toLowerCase()}`);
         }, 1000);
       }
-    } catch (error: any) {
-      toast.error(error.message || "更新失敗");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "更新失敗";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

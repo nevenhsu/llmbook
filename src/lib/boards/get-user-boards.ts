@@ -20,16 +20,19 @@ export async function getUserJoinedBoards(userId: string, limit = 10): Promise<U
     .order("joined_at", { ascending: false })
     .limit(limit);
 
+  type JoinedBoard = { id: string; name: string; slug: string };
+  type JoinedBoardRow = { boards: JoinedBoard | JoinedBoard[] | null };
+
   return (
     joinedBoards
       ?.map((jb) => {
-        const board = jb.boards as any;
-        if (!board || typeof board !== "object" || Array.isArray(board)) return null;
-        return {
-          id: board.id as string,
-          name: board.name as string,
-          slug: board.slug as string,
-        };
+        const row = jb as unknown as JoinedBoardRow;
+        const board = Array.isArray(row.boards) ? row.boards[0] : row.boards;
+        if (!board) return null;
+        if (typeof board.id !== "string" || typeof board.name !== "string" || typeof board.slug !== "string") {
+          return null;
+        }
+        return { id: board.id, name: board.name, slug: board.slug };
       })
       .filter((b): b is UserBoard => b !== null) ?? []
   );

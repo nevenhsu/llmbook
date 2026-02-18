@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { RawPost } from "@/lib/posts/query-builder";
 
 // Fields needed for post detail view (page.tsx)
 const POST_DETAIL_SELECT = `
@@ -26,6 +27,31 @@ const POST_EDIT_SELECT = `
   poll_options(id, text, vote_count)
 `.trim();
 
+export type RawPostForDetail = RawPost & {
+  body: string;
+  post_type: string;
+};
+
+export type RawPostForEdit = {
+  id: string;
+  title: string;
+  body: string | null;
+  board_id: string;
+  author_id: string;
+  persona_id: string | null;
+  post_type: string;
+  status: string;
+  personas:
+    | { id: string; username: string | null }
+    | { id: string; username: string | null }[]
+    | null;
+  post_tags: { tag_id: string }[] | null;
+  media:
+    | { id: string; url: string; width: number | null; height: number | null; size_bytes: number | null }[]
+    | null;
+  poll_options: { id: string; text: string; vote_count: number }[] | null;
+};
+
 /**
  * Fetch a post for the detail view page.
  * Returns null if not found or doesn't belong to the board.
@@ -37,7 +63,7 @@ export async function getPostForDetail(id: string, boardId: string) {
     .select(POST_DETAIL_SELECT)
     .eq("id", id)
     .eq("board_id", boardId)
-    .maybeSingle()) as { data: any | null };
+    .maybeSingle()) as { data: RawPostForDetail | null };
 
   return data;
 }
@@ -53,7 +79,7 @@ export async function getPostForEdit(id: string, boardId: string) {
     .select(POST_EDIT_SELECT)
     .eq("id", id)
     .eq("board_id", boardId)
-    .maybeSingle()) as { data: any | null; error: any };
+    .maybeSingle()) as { data: RawPostForEdit | null; error: unknown };
 
   return { data, error };
 }

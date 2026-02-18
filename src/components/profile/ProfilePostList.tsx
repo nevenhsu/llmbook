@@ -14,6 +14,7 @@ import {
   buildPostsQueryParams as buildPostsQueryParamsLib,
   getNextCursor as getNextCursorLib,
   calculateHasMore as calculateHasMoreLib,
+  type PaginatedResponse,
 } from "@/lib/pagination";
 
 function CommentVoteRow({
@@ -129,11 +130,20 @@ export default function ProfilePostList({
       const data = await res.json();
 
       if (tab === "posts") {
-        setPosts(Array.isArray(data) ? (data as FeedPost[]) : []);
+        const items = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
+        setPosts(items);
+        setPostsHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT);
+        setPostsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       } else if (tab === "comments") {
-        setComments(Array.isArray(data?.comments) ? (data.comments as FormattedComment[]) : []);
+        const items = (Array.isArray(data?.items) ? data.items : []) as FormattedComment[];
+        setComments(items);
+        setCommentsHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT);
+        setCommentsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       } else if (tab === "saved") {
-        setSavedPosts(Array.isArray(data?.posts) ? (data.posts as FeedPost[]) : []);
+        const items = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
+        setSavedPosts(items);
+        setSavedHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT);
+        setSavedCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       }
 
       // Scroll to top of list
@@ -222,12 +232,10 @@ export default function ProfilePostList({
       if (!res.ok) throw new Error("Failed to load saved posts");
 
       const data = await res.json();
-      const newPosts = (Array.isArray(data?.posts) ? data.posts : []) as FeedPost[];
+      const newPosts = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
 
-      setSavedHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
-      // Use last saved_at as cursor (standardized in API now)
-      const lastSavedAt = data.savedAt?.[data.savedAt.length - 1];
-      setSavedCursor(lastSavedAt);
+      setSavedHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
+      setSavedCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       setSavedPosts((prev) => [...prev, ...newPosts]);
     } catch (err) {
       console.error("Failed to load more saved posts:", err);
@@ -269,10 +277,11 @@ export default function ProfilePostList({
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error("Failed to load posts");
 
-      const newPosts = (await res.json()) as FeedPost[];
+      const data = (await res.json()) as PaginatedResponse<FeedPost>;
+      const newPosts = Array.isArray(data?.items) ? data.items : [];
 
-      setPostsHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
-      setPostsCursor(getNextCursorLib(newPosts));
+      setPostsHasMore(!!data?.hasMore);
+      setPostsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newPosts));
       setPosts((prev) => [...prev, ...newPosts]);
     } catch (err) {
       console.error("Failed to load more posts:", err);
@@ -296,19 +305,12 @@ export default function ProfilePostList({
       const res = await fetch(`/api/profile/comments?${params}`);
       if (!res.ok) throw new Error("Failed to load comments");
 
-      const data = await res.json();
-      const newComments =
-        (Array.isArray(data?.comments) ? data.comments : []) as FormattedComment[];
+      const data = (await res.json()) as PaginatedResponse<FormattedComment>;
+      const newComments = Array.isArray(data?.items) ? data.items : [];
 
-      setCommentsHasMore(calculateHasMoreLib(newComments, DEFAULT_LIMIT));
-      setCommentsCursor(getNextCursorLib(newComments));
-      const commentsWithVotes = data?.userVotes
-        ? newComments.map((c) => ({
-            ...c,
-            userVote: toVoteValue(data.userVotes[c.id]),
-          }))
-        : newComments;
-      setComments((prev) => [...prev, ...commentsWithVotes]);
+      setCommentsHasMore(!!data?.hasMore);
+      setCommentsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newComments));
+      setComments((prev) => [...prev, ...newComments]);
     } catch (err) {
       console.error("Failed to load more comments:", err);
     } finally {

@@ -1,15 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-let lastOptions: any;
-const responses: any[] = [];
+import type { NextRequest } from "next/server";
 
-const createServerClient = vi.fn((url: string, key: string, options: any) => {
+type CookieToSet = { name: string; value: string; options?: Record<string, unknown> };
+
+type CreateServerClientOptions = {
+  cookies: {
+    getAll: () => Array<{ name: string; value: string }>;
+    setAll: (cookies: CookieToSet[]) => void;
+  };
+};
+
+type MockNextResponse = {
+  cookies: {
+    set: ReturnType<typeof vi.fn>;
+  };
+  __init: unknown;
+};
+
+type MockNextRequest = {
+  headers: Headers;
+  cookies: {
+    getAll: () => Array<{ name: string; value: string }>;
+    set: ReturnType<typeof vi.fn>;
+  };
+};
+
+let lastOptions: CreateServerClientOptions | undefined;
+const responses: MockNextResponse[] = [];
+
+const createServerClient = vi.fn((url: string, key: string, options: CreateServerClientOptions) => {
   lastOptions = options;
   return { __mock: "middleware-client", url, key };
 });
 
-const nextResponseNext = vi.fn((init: any) => {
-  const response = {
+const nextResponseNext = vi.fn((init: unknown): MockNextResponse => {
+  const response: MockNextResponse = {
     cookies: {
       set: vi.fn(),
     },
@@ -43,15 +69,15 @@ describe("middleware createClient", () => {
   it("creates middleware client and response wrapper", async () => {
     const { createClient } = await import("../middleware");
 
-    const request = {
+    const request: MockNextRequest = {
       headers: new Headers(),
       cookies: {
         getAll: vi.fn(() => [{ name: "a", value: "1" }]),
         set: vi.fn(),
       },
-    } as any;
+    };
 
-    const { supabase, response } = createClient(request);
+    const { supabase, response } = createClient(request as unknown as NextRequest);
 
     expect(supabase).toEqual({
       __mock: "middleware-client",
@@ -63,7 +89,8 @@ describe("middleware createClient", () => {
       request: { headers: request.headers },
     });
 
-    lastOptions.cookies.setAll([{ name: "session", value: "x", options: { path: "/" } }]);
+    expect(lastOptions).toBeDefined();
+    lastOptions!.cookies.setAll([{ name: "session", value: "x", options: { path: "/" } }]);
 
     expect(request.cookies.set).toHaveBeenCalledWith("session", "x");
     expect(responses[1].cookies.set).toHaveBeenCalledWith("session", "x", {

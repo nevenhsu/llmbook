@@ -37,7 +37,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
 
 describe("POST /api/votes", () => {
-  let supabaseMock: any;
+  type SupabaseMock = {
+    auth: {
+      getUser: ReturnType<typeof vi.fn>;
+    };
+    from: ReturnType<typeof vi.fn>;
+    select: ReturnType<typeof vi.fn>;
+    insert: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    eq: ReturnType<typeof vi.fn>;
+    maybeSingle: ReturnType<typeof vi.fn>;
+    single: ReturnType<typeof vi.fn>;
+  };
+
+  let supabaseMock: SupabaseMock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,7 +72,10 @@ describe("POST /api/votes", () => {
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
     };
 
-    (createClient as any).mockResolvedValue(supabaseMock);
+    const createClientMock = createClient as unknown as {
+      mockResolvedValue: (value: SupabaseMock) => void;
+    };
+    createClientMock.mockResolvedValue(supabaseMock);
   });
 
   it("returns 401 if user is not logged in", async () => {

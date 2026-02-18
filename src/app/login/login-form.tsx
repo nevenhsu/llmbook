@@ -49,8 +49,9 @@ export default function LoginForm({ onSuccess, onClose, onSwitchToRegister }: Lo
         // Redirect to home using window.location to force full reload
         window.location.href = "/";
       }
-    } catch (err: any) {
-      setError(err.message || "登入時發生錯誤");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "登入時發生錯誤";
+      setError(message);
       setLoading(false);
     }
   }

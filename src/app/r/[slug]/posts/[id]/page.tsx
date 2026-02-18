@@ -175,7 +175,7 @@ export default async function PostDetailPage({ params }: PostPageProps) {
                     className="tiptap-html text-base-content mb-4 text-sm"
                   />
 
-                  {postData.media?.map((m: any, i: number) => (
+                  {postData.media?.map((m, i: number) => (
                     <div
                       key={i}
                       className="border-neutral mt-4 overflow-hidden rounded-md border bg-black"

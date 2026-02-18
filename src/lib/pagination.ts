@@ -19,6 +19,14 @@ export interface PaginationResult<T> {
   nextOffset?: number;
 }
 
+// Standard API response shape for paginated list endpoints
+export interface PaginatedResponse<T> {
+  items: T[];
+  hasMore: boolean;
+  nextCursor?: string;
+  nextOffset?: number;
+}
+
 /**
  * Build query params for /api/posts
  */
@@ -49,7 +57,7 @@ export function buildPostsQueryParams(options: {
   }
   // Use offset for board feeds (cached rankings)
   else if (options.offset !== undefined) {
-    params.append("cursor", options.offset.toString());
+    params.append("offset", options.offset.toString());
   }
 
   return params;

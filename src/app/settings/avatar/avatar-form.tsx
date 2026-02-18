@@ -59,8 +59,9 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
       URL.revokeObjectURL(localPreview);
 
       toast.success("圖片已準備好，點擊「儲存」套用變更");
-    } catch (err: any) {
-      toast.error(err.message || "上傳失敗");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "上傳失敗";
+      toast.error(message);
       // Revert to current avatar on error
       setPreview(currentAvatarUrl);
       URL.revokeObjectURL(localPreview);
@@ -91,8 +92,9 @@ export default function AvatarForm({ currentAvatarUrl, currentDisplayName }: Ava
 
       toast.success("頭像已更新");
       router.refresh();
-    } catch (err: any) {
-      toast.error(err.message || "更新失敗");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "更新失敗";
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }

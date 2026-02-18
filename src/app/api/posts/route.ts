@@ -4,10 +4,12 @@ import { getHotPostsFromCache, getRisingPostsFromCache } from "@/lib/ranking";
 import { isAdmin } from "@/lib/admin";
 import { canManageBoard } from "@/lib/board-permissions";
 import { http, parseJsonBody, validateBody, withAuth } from "@/lib/server/route-helpers";
+import { getPaginationMode, type PaginatedResponse } from "@/lib/pagination";
 import { toVoteValue } from "@/lib/vote-value";
 import {
   buildPostsQuery,
   fetchUserInteractions,
+  isRawPost,
   type FeedPost,
   type RawPost,
   transformPostToFeedFormat,
@@ -27,10 +29,13 @@ export async function GET(request: Request) {
   const tag = searchParams.get("tag");
   const author = searchParams.get("author");
   const cursor = searchParams.get("cursor");
+  const offsetParam = searchParams.get("offset");
   const sort = searchParams.get("sort") || "new";
   const t = searchParams.get("t") || "today";
   const includeArchived = searchParams.get("includeArchived") === "true";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 50);
+  const rawLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
+  const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 20, 50);
+  const pageLimit = limit + 1;
 
   // Parallel execution of independent queries
   const [
@@ -52,6 +57,19 @@ export async function GET(request: Request) {
   const boardId = boardData?.data?.id ?? null;
   const tagId = tagData?.data?.id ?? null;
 
+  const sortBy: SortType =
+    sort === "new" || sort === "top" || sort === "hot" || sort === "rising" ? sort : "new";
+  const paginationMode = getPaginationMode(sortBy, !!tagId);
+
+  const parsedOffset = offsetParam ? Number.parseInt(offsetParam, 10) : undefined;
+  const offsetFromParam =
+    typeof parsedOffset === "number" && Number.isFinite(parsedOffset) && parsedOffset >= 0
+      ? parsedOffset
+      : undefined;
+  const offsetFromCursor =
+    paginationMode === "offset" && cursor && /^\d+$/.test(cursor) ? Number.parseInt(cursor, 10) : undefined;
+  const offset = offsetFromParam ?? offsetFromCursor ?? 0;
+
   // Check if user can view archived posts
   let canViewArchived = false;
   if (user && includeArchived) {
@@ -64,21 +82,18 @@ export async function GET(request: Request) {
   }
 
   if ((board && !boardId) || (tag && !tagId)) {
-    return NextResponse.json([]);
+    const empty: PaginatedResponse<FeedPost> = { items: [], hasMore: false };
+    return NextResponse.json(empty);
   }
 
   let rawPosts: RawPost[] = [];
   let useCache = false;
 
-  const sortBy: SortType =
-    sort === "new" || sort === "top" || sort === "hot" || sort === "rising" ? sort : "new";
-
   // Use cached rankings for hot and rising sorts
   if (sortBy === "hot" && !tagId && !author) {
-    const offset = cursor ? parseInt(cursor, 10) : 0;
     const { posts: cachedPosts, error } = await getHotPostsFromCache(supabase, {
       boardId: boardId || undefined,
-      limit,
+      limit: pageLimit,
       offset,
     });
 
@@ -87,10 +102,9 @@ export async function GET(request: Request) {
       useCache = true;
     }
   } else if (sortBy === "rising" && !tagId && !author) {
-    const offset = cursor ? parseInt(cursor, 10) : 0;
     const { posts: cachedPosts, error } = await getRisingPostsFromCache(supabase, {
       boardId: boardId || undefined,
-      limit,
+      limit: pageLimit,
       offset,
     });
 
@@ -110,9 +124,9 @@ export async function GET(request: Request) {
       sortBy,
       timeRange: t,
       canViewArchived,
-      limit,
-      offset: sortBy === "top" && cursor ? parseInt(cursor, 10) : undefined,
-      cursor: sortBy === "new" && cursor ? cursor : undefined,
+      limit: pageLimit,
+      offset: sortBy === "top" ? offset : undefined,
+      cursor: sortBy === "new" && paginationMode === "cursor" && cursor ? cursor : undefined,
     });
 
     const { data, error } = await postsQuery;
@@ -122,14 +136,16 @@ export async function GET(request: Request) {
       return http.internalError(error.message);
     }
 
-    rawPosts = (data ?? []) as unknown as RawPost[];
+    rawPosts = (Array.isArray(data) ? (data as unknown[]) : []).filter(isRawPost);
   }
 
+  const rawPagePosts = rawPosts.slice(0, limit);
+  const hasMore = rawPosts.length > limit;
   let posts: FeedPost[] = [];
 
   // Fetch user interactions (votes + hidden status + saved status) for displayed posts
-  if (user && rawPosts.length > 0) {
-    const postIds = rawPosts.map((p) => p.id);
+  if (user && rawPagePosts.length > 0) {
+    const postIds = rawPagePosts.map((p) => p.id);
     const {
       votes: userVotes,
       hiddenPostIds,
@@ -137,7 +153,7 @@ export async function GET(request: Request) {
     } = await fetchUserInteractions(supabase, user.id, postIds);
 
     // Add userVote, isHidden, isSaved and transform to FeedPost format
-    posts = rawPosts.map((post) => {
+    posts = rawPagePosts.map((post) => {
       const userVote = toVoteValue(userVotes[post.id]);
       return transformPostToFeedFormat(post, {
         userVote,
@@ -147,7 +163,7 @@ export async function GET(request: Request) {
     });
   } else {
     // Transform all posts to FeedPost format even if no user logged in
-    posts = rawPosts.map((post) => transformPostToFeedFormat(post));
+    posts = rawPagePosts.map((post) => transformPostToFeedFormat(post));
   }
 
   const duration = Date.now() - startTime;
@@ -155,7 +171,14 @@ export async function GET(request: Request) {
     `API /posts: ${posts.length} posts in ${duration}ms (sort: ${sortBy}, cached: ${useCache})`,
   );
 
-  return NextResponse.json(posts, {
+  const responseBody: PaginatedResponse<FeedPost> = {
+    items: posts,
+    hasMore,
+    nextCursor: paginationMode === "cursor" ? posts[posts.length - 1]?.createdAt : undefined,
+    nextOffset: paginationMode === "offset" ? offset + posts.length : undefined,
+  };
+
+  return NextResponse.json(responseBody, {
     headers: {
       "X-Response-Time": `${duration}ms`,
       "X-Cache-Hit": useCache ? "1" : "0",

@@ -61,25 +61,25 @@ export default async function EditPostPage({ params }: PostPageProps) {
   }
 
   // Prepare initial data for the form
-  const tagIds = post.post_tags?.map((pt: any) => pt.tag_id) || [];
+  const tagIds = post.post_tags?.map((pt) => pt.tag_id) ?? [];
 
   // Format media
   const mediaFormatted =
-    post.media?.map((m: any) => ({
+    post.media?.map((m) => ({
       mediaId: m.id,
       url: m.url,
-      width: m.width,
-      height: m.height,
-      sizeBytes: m.size_bytes,
-    })) || [];
+      width: m.width ?? 0,
+      height: m.height ?? 0,
+      sizeBytes: m.size_bytes ?? 0,
+    })) ?? [];
 
   // Format poll options
   const pollOptionsFormatted =
-    post.poll_options?.map((opt: any) => ({
+    post.poll_options?.map((opt) => ({
       id: opt.id,
       text: opt.text,
       voteCount: opt.vote_count,
-    })) || [];
+    })) ?? [];
 
   const initialData = {
     postId: post.id,

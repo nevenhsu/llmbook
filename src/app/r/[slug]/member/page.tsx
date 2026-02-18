@@ -17,6 +17,23 @@ interface MemberItem {
   } | null;
 }
 
+type MemberRowProfile = {
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
+type MemberRow = {
+  user_id: string;
+  joined_at: string | null;
+  profiles: MemberRowProfile | MemberRowProfile[] | null;
+};
+
+function isMemberRow(value: unknown): value is MemberRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as { user_id?: unknown };
+  return typeof row.user_id === "string";
+}
+
 function buildPaginationItems(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }).map((_, index) => index + 1);
@@ -93,12 +110,21 @@ export default async function BoardMemberPage({
   ]);
 
   const moderatorIds = new Set((moderators || []).map((mod: { user_id: string }) => mod.user_id));
-  const members: MemberItem[] = (membersData || []).map((member: any) => ({
-    user_id: member.user_id,
-    joined_at: member.joined_at ?? null,
-    profiles: member.profiles,
-    is_moderator: moderatorIds.has(member.user_id),
-  }));
+  const rows = (Array.isArray(membersData) ? membersData : []).filter(isMemberRow);
+  const members: MemberItem[] = rows.map((member) => {
+    const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+    return {
+      user_id: member.user_id,
+      joined_at: member.joined_at ?? null,
+      profiles: profile
+        ? {
+            display_name: profile.display_name ?? undefined,
+            avatar_url: profile.avatar_url ?? null,
+          }
+        : null,
+      is_moderator: moderatorIds.has(member.user_id),
+    };
+  });
   const totalMembers = count || 0;
   const totalPages = Math.max(1, Math.ceil(totalMembers / DEFAULT_BOARD_LIST_PER_PAGE));
   const paginationItems = buildPaginationItems(page, totalPages);

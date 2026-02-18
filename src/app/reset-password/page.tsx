@@ -65,8 +65,9 @@ export default function ResetPasswordPage() {
       setTimeout(() => {
         router.push("/");
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || "更新密碼時發生錯誤");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "更新密碼時發生錯誤";
+      setError(message);
       setLoading(false);
     }
   }

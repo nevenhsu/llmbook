@@ -11,6 +11,7 @@ import { toVoteValue } from "@/lib/vote-value";
 import {
   buildPostsQuery,
   fetchUserInteractions,
+  isRawPost,
   transformPostToFeedFormat,
   type FeedPost,
   type RawPost,
@@ -69,9 +70,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   const { data: postData } = await postsQuery;
 
   // Sort posts using ranking algorithm
-  const rawPosts = ((postData ?? []) as unknown as RawPost[]).filter(
-    (p): p is RawPost => !!p && typeof p.id === "string",
-  );
+  const rawPosts = (Array.isArray(postData) ? (postData as unknown[]) : []).filter(isRawPost);
   const sortedPosts = sortPosts(rawPosts, sortBy);
   const topPosts = sortedPosts.slice(0, 20);
 
