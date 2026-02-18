@@ -146,7 +146,7 @@ export function sortPosts<T extends Post>(posts: T[], sort: SortType): T[] {
  * @param supabase - Supabase client (with service role for admin operations)
  * @returns Promise<boolean> - true if update was successful
  */
-export async function updatePostRankings(supabase: any): Promise<boolean> {
+export async function updatePostRankings(supabase: SupabaseClient): Promise<boolean> {
   try {
     const { error } = await supabase.rpc("fn_update_post_rankings");
 
@@ -157,7 +157,7 @@ export async function updatePostRankings(supabase: any): Promise<boolean> {
 
     console.log("Post rankings updated successfully at", new Date().toISOString());
     return true;
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Error updating post rankings:", err);
     return false;
   }
@@ -171,13 +171,21 @@ export async function updatePostRankings(supabase: any): Promise<boolean> {
  * @returns Posts with hot ranking
  */
 export async function getHotPostsFromCache(
-  supabase: any,
+  supabase: SupabaseClient,
   options: {
     boardId?: string;
     limit?: number;
     offset?: number;
   } = {},
 ) {
+  type CachedPost = Record<string, unknown> & { id: string };
+  type HotRankingRow = {
+    hot_rank: number;
+    hot_score: number;
+    calculated_at: string;
+    posts: CachedPost;
+  };
+
   const { boardId, limit = 20, offset = 0 } = options;
 
   let query = supabase
@@ -213,13 +221,15 @@ export async function getHotPostsFromCache(
   }
 
   // Flatten the nested structure
-  const posts =
-    data?.map((item: any) => ({
+  const rows = (data ?? []) as unknown as HotRankingRow[];
+  const posts = rows
+    .filter((item) => !!item?.posts && typeof item.posts.id === "string")
+    .map((item) => ({
       ...item.posts,
       _rank: item.hot_rank,
       _score: item.hot_score,
       _calculated_at: item.calculated_at,
-    })) || [];
+    }));
 
   return { posts, error: null };
 }
@@ -232,13 +242,21 @@ export async function getHotPostsFromCache(
  * @returns Posts with rising ranking
  */
 export async function getRisingPostsFromCache(
-  supabase: any,
+  supabase: SupabaseClient,
   options: {
     boardId?: string;
     limit?: number;
     offset?: number;
   } = {},
 ) {
+  type CachedPost = Record<string, unknown> & { id: string };
+  type RisingRankingRow = {
+    rising_rank: number;
+    rising_score: number;
+    calculated_at: string;
+    posts: CachedPost;
+  };
+
   const { boardId, limit = 20, offset = 0 } = options;
 
   let query = supabase
@@ -274,13 +292,15 @@ export async function getRisingPostsFromCache(
   }
 
   // Flatten the nested structure
-  const posts =
-    data?.map((item: any) => ({
+  const rows = (data ?? []) as unknown as RisingRankingRow[];
+  const posts = rows
+    .filter((item) => !!item?.posts && typeof item.posts.id === "string")
+    .map((item) => ({
       ...item.posts,
       _rank: item.rising_rank,
       _score: item.rising_score,
       _calculated_at: item.calculated_at,
-    })) || [];
+    }));
 
   return { posts, error: null };
 }
@@ -293,7 +313,7 @@ export async function getRisingPostsFromCache(
  * @returns Promise<boolean> - true if cache is stale or empty
  */
 export async function isRankingCacheStale(
-  supabase: any,
+  supabase: SupabaseClient,
   maxAgeMinutes: number = 15,
 ): Promise<boolean> {
   try {
@@ -317,3 +337,4 @@ export async function isRankingCacheStale(
     return true;
   }
 }
+import type { SupabaseClient } from "@supabase/supabase-js";

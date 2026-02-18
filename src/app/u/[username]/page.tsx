@@ -6,10 +6,14 @@ import { getUser } from "@/lib/auth/get-user";
 import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
 import FollowButton from "@/components/profile/FollowButton";
+import { toVoteValue } from "@/lib/vote-value";
 import {
   transformPostToFeedFormat,
   transformProfileToFormat,
   fetchUserInteractions,
+  type FeedPost,
+  type FormattedComment,
+  type RawPost,
 } from "@/lib/posts/query-builder";
 
 interface PageProps {
@@ -101,8 +105,8 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   const joinYear = Number.isNaN(createdAtDate.getTime()) ? "Now" : createdAtDate.getFullYear();
 
   // Fetch initial data and total counts
-  let posts: any[] = [];
-  let comments: any[] = [];
+  let posts: FeedPost[] = [];
+  let comments: FormattedComment[] = [];
   let postsCount = 0;
   let commentsCount = 0;
   let savedCount = 0;
@@ -140,9 +144,9 @@ export default async function UserPage({ params, searchParams }: PageProps) {
       ? await fetchUserInteractions(supabase, currentUser.id, postIds)
       : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
-    posts = (postData ?? []).map((p) =>
-      transformPostToFeedFormat(p as any, {
-        userVote: userVotes[p.id] || null,
+    posts = ((postData ?? []) as unknown as RawPost[]).map((p) =>
+      transformPostToFeedFormat(p, {
+        userVote: toVoteValue(userVotes[p.id]),
         isHidden: hiddenPostIds.has(p.id),
         isSaved: savedPostIds.has(p.id),
       }),
@@ -175,7 +179,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
       .limit(LIMIT);
 
     savedCount = count ?? 0;
-    const savedPostsData = (savedData ?? []).map((s) => s.posts).filter(Boolean) as any[];
+    type SavedRow = { posts: RawPost | RawPost[] | null };
+    const savedPostsData = ((savedData ?? []) as unknown as SavedRow[])
+      .map((s) => (Array.isArray(s.posts) ? s.posts[0] : s.posts))
+      .filter((p): p is RawPost => !!p && typeof p.id === "string");
     const postIds = savedPostsData.map((p) => p.id);
     const {
       votes: userVotes,
@@ -185,7 +192,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
 
     posts = savedPostsData.map((p) =>
       transformPostToFeedFormat(p, {
-        userVote: userVotes[p.id] || null,
+        userVote: toVoteValue(userVotes[p.id]),
         isHidden: hiddenPostIds.has(p.id),
         isSaved: savedPostIds.has(p.id),
       }),

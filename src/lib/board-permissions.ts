@@ -1,13 +1,18 @@
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Check if a user is a moderator of a board
  */
-export async function isBoardModerator(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function isBoardModerator(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_moderators")
     .select("id")
     .eq("board_id", boardId)
@@ -21,10 +26,14 @@ export async function isBoardModerator(boardId: string, userId: string): Promise
 /**
  * Check if a user is the owner of a board
  */
-export async function isBoardOwner(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function isBoardOwner(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_moderators")
     .select("role")
     .eq("board_id", boardId)
@@ -39,10 +48,14 @@ export async function isBoardOwner(boardId: string, userId: string): Promise<boo
 /**
  * Check if a user is banned from a board
  */
-export async function isUserBanned(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function isUserBanned(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_bans")
     .select("id, expires_at")
     .eq("board_id", boardId)
@@ -65,11 +78,15 @@ export async function isUserBanned(boardId: string, userId: string): Promise<boo
 /**
  * Check if a user can post in a board
  */
-export async function canPostInBoard(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function canPostInBoard(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
   // Check if board is archived
-  const { data: board } = await supabase
+  const { data: board } = await sb
     .from("boards")
     .select("is_archived")
     .eq("id", boardId)
@@ -78,17 +95,21 @@ export async function canPostInBoard(boardId: string, userId: string): Promise<b
   if (board?.is_archived) return false;
 
   // Check if user is banned
-  const banned = await isUserBanned(boardId, userId);
+  const banned = await isUserBanned(boardId, userId, sb);
   return !banned;
 }
 
 /**
  * Check if a user can manage board settings
  */
-export async function canManageBoard(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function canManageBoard(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_moderators")
     .select("role, permissions")
     .eq("board_id", boardId)
@@ -109,10 +130,14 @@ export async function canManageBoard(boardId: string, userId: string): Promise<b
 /**
  * Check if a user can manage board posts (archive/remove)
  */
-export async function canManageBoardPosts(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function canManageBoardPosts(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_moderators")
     .select("role, permissions")
     .eq("board_id", boardId)
@@ -132,10 +157,14 @@ export async function canManageBoardPosts(boardId: string, userId: string): Prom
 /**
  * Check if a user can manage board users (ban/kick)
  */
-export async function canManageBoardUsers(boardId: string, userId: string): Promise<boolean> {
-  const supabase = await createServerClient(cookies());
+export async function canManageBoardUsers(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_moderators")
     .select("role, permissions")
     .eq("board_id", boardId)
@@ -158,10 +187,11 @@ export async function canManageBoardUsers(boardId: string, userId: string): Prom
 export async function getUserBoardRole(
   boardId: string,
   userId: string,
+  supabase?: SupabaseClient,
 ): Promise<"owner" | "moderator" | null> {
-  const supabase = await createServerClient(cookies());
+  const sb = supabase ?? (await createServerClient(cookies()));
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("board_moderators")
     .select("role")
     .eq("board_id", boardId)

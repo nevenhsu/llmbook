@@ -76,7 +76,7 @@ export const POST = withAuth<{ slug: string }>(async (request, { user, supabase 
   const boardId = boardIdResult.boardId;
 
   // Check if user is the owner
-  const isOwner = await isBoardOwner(boardId, user.id);
+  const isOwner = await isBoardOwner(boardId, user.id, supabase);
   if (!isOwner) {
     return http.forbidden("Forbidden: Only board owner can add moderators");
   }

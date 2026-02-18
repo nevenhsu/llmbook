@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin";
 import { canManageBoardPosts } from "@/lib/board-permissions";
+import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .maybeSingle();
 
   if (error || !data) {
-    return new NextResponse("Not found", { status: 404 });
+    return http.notFound("Not found");
   }
 
   // Strip body for deleted posts
@@ -32,17 +33,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json(data);
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
+export const DELETE = withAuth<{ id: string }>(async (_request, { user, supabase }, context) => {
+  const { id } = await context.params;
   const { data: post, error: postError } = await supabase
     .from("posts")
     .select("id, author_id, status")
@@ -50,15 +42,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .maybeSingle();
 
   if (postError || !post) {
-    return new NextResponse("Not found", { status: 404 });
+    return http.notFound("Not found");
   }
 
   if (post.author_id !== user.id) {
-    return new NextResponse("Forbidden: Only author can delete", { status: 403 });
+    return http.forbidden("Forbidden: Only author can delete");
   }
 
   if (post.status === "DELETED") {
-    return NextResponse.json({ success: true });
+    return http.ok({ success: true });
   }
 
   const { error: updateError } = await supabase
@@ -71,25 +63,31 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .eq("author_id", user.id);
 
   if (updateError) {
-    return new NextResponse(updateError.message, { status: 400 });
+    return http.badRequest(updateError.message);
   }
 
-  return NextResponse.json({ success: true });
-}
+  return http.ok({ success: true });
+});
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export const PATCH = withAuth<{ id: string }>(async (request, { user, supabase }, context) => {
+  const { id } = await context.params;
 
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
+  const payload = await parseJsonBody<{
+    status?: unknown;
+    title?: unknown;
+    body?: unknown;
+    tagIds?: unknown;
+    newPollOptions?: unknown;
+  }>(request);
+  if (payload instanceof NextResponse) {
+    return payload;
   }
 
-  const payload = await request.json();
-  const { status: nextStatus, title, body, tagIds, newPollOptions } = payload;
+  const nextStatus = payload.status;
+  const title = payload.title;
+  const body = payload.body;
+  const tagIds = payload.tagIds;
+  const newPollOptions = payload.newPollOptions;
 
   // Fetch post with author info
   const { data: post, error: postError } = await supabase
@@ -99,16 +97,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .maybeSingle();
 
   if (postError || !post) {
-    return new NextResponse("Not found", { status: 404 });
+    return http.notFound("Not found");
   }
 
   // Handle status update (Archive/Unarchive - admin/moderator only)
   if (nextStatus && (nextStatus === "ARCHIVED" || nextStatus === "PUBLISHED")) {
     const userIsAdmin = await isAdmin(user.id, supabase);
-    const canManagePosts = userIsAdmin || (await canManageBoardPosts(post.board_id, user.id));
+    const canManagePosts =
+      userIsAdmin || (await canManageBoardPosts(post.board_id, user.id, supabase));
 
     if (!canManagePosts) {
-      return new NextResponse("Forbidden: Missing manage_posts permission", { status: 403 });
+      return http.forbidden("Forbidden: Missing manage_posts permission");
     }
 
     const { data: updatedPost, error: updateError } = await supabase
@@ -122,38 +121,44 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .single();
 
     if (updateError) {
-      return new NextResponse(updateError.message, { status: 400 });
+      return http.badRequest(updateError.message);
     }
 
-    return NextResponse.json({ post: updatedPost });
+    return http.ok({ post: updatedPost });
   }
 
   // Handle content update (author only)
   if (post.author_id !== user.id) {
-    return new NextResponse("Forbidden: Only author can edit content", { status: 403 });
+    return http.forbidden("Forbidden: Only author can edit content");
   }
 
   // Build update object
-  const updates: any = {
-    updated_at: new Date().toISOString(),
-  };
+  const updates: {
+    updated_at: string;
+    title?: string;
+    body?: string | null;
+  } = { updated_at: new Date().toISOString() };
 
   if (title !== undefined) {
-    if (!title.trim()) {
-      return new NextResponse("Title is required", { status: 400 });
+    if (typeof title !== "string" || !title.trim()) {
+      return http.badRequest("Title is required");
     }
     updates.title = title.trim();
   }
 
   if (body !== undefined) {
-    updates.body = body;
+    if (typeof body === "string" || body === null) {
+      updates.body = body;
+    } else {
+      return http.badRequest("Invalid body");
+    }
   }
 
   // Update post
   const { error: updateError } = await supabase.from("posts").update(updates).eq("id", id);
 
   if (updateError) {
-    return new NextResponse(updateError.message, { status: 400 });
+    return http.badRequest(updateError.message);
   }
 
   // Update tags if provided
@@ -190,5 +195,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  return NextResponse.json({ success: true });
-}
+  return http.ok({ success: true });
+});

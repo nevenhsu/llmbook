@@ -1,6 +1,10 @@
-import { NextResponse } from "next/server";
 import { getSupabaseServerClient, http } from "@/lib/server/route-helpers";
-import { transformCommentToFormat } from "@/lib/posts/query-builder";
+import { toVoteValue } from "@/lib/vote-value";
+import {
+  transformCommentToFormat,
+  type RawComment,
+  type VoteValue,
+} from "@/lib/posts/query-builder";
 
 export const runtime = "nodejs";
 
@@ -64,7 +68,7 @@ export async function GET(request: Request) {
   }
 
   // Get user votes if logged in
-  let userVotes: Record<string, number> = {};
+  let userVotes: Record<string, VoteValue> = {};
   if (user && comments && comments.length > 0) {
     const commentIds = comments.map((c) => c.id);
     const { data: votes } = await supabase
@@ -74,13 +78,13 @@ export async function GET(request: Request) {
       .eq("user_id", user.id);
 
     if (votes) {
-      userVotes = Object.fromEntries(votes.map((v) => [v.comment_id, v.value]));
+      userVotes = Object.fromEntries(votes.map((v) => [v.comment_id, toVoteValue(v.value)]));
     }
   }
 
   // Transform comments to consistent format
-  const transformedComments = (comments ?? []).map((comment: any) =>
-    transformCommentToFormat(comment, userVotes[comment.id] || null),
+  const transformedComments = (comments ?? []).map((comment) =>
+    transformCommentToFormat(comment as RawComment, userVotes[comment.id] ?? null),
   );
 
   return http.ok({

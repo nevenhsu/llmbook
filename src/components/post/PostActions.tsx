@@ -366,6 +366,7 @@ export default function PostActions({
         title="Delete Post?"
         message="Are you sure you want to delete this post? This action cannot be undone."
         confirmText="Delete Post"
+        confirmationText="DELETE"
         isLoading={isDeleting}
       />
     </div>

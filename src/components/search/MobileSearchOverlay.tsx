@@ -7,7 +7,19 @@ import Link from "next/link";
 
 export default function MobileSearchOverlay() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  type SearchPostResult = {
+    id: string;
+    title: string;
+    boards?:
+      | {
+          slug: string;
+        }
+      | {
+          slug: string;
+        }[]
+      | null;
+  };
+  const [results, setResults] = useState<SearchPostResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDialogElement>(null);
   const router = useRouter();
@@ -19,7 +31,7 @@ export default function MobileSearchOverlay() {
         try {
           const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=posts`);
           const data = await res.json();
-          setResults(Array.isArray(data) ? data : []);
+          setResults(Array.isArray(data) ? (data as SearchPostResult[]) : []);
         } catch (err) {
           console.error(err);
           setResults([]);
@@ -96,7 +108,7 @@ export default function MobileSearchOverlay() {
               <div className="py-2">
                 {results.length > 0 ? (
                   results.slice(0, 5).map((post) => {
-                    const board = post.boards;
+                    const board = Array.isArray(post.boards) ? post.boards[0] : post.boards;
                     return (
                       <Link
                         key={post.id}

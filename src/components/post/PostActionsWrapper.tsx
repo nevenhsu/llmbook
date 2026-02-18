@@ -1,10 +1,7 @@
 "use client";
-
-import { useState } from "react";
 import { useBoardContext } from "@/contexts/BoardContext";
 import PostActions from "./PostActions";
-import { useLoginModal } from "@/contexts/LoginModalContext";
-import toast from "react-hot-toast";
+import { usePostInteractions } from "@/hooks/use-post-interactions";
 
 interface PostActionsWrapperProps {
   postId: string;
@@ -28,58 +25,11 @@ export default function PostActionsWrapper({
   isSaved = false,
 }: PostActionsWrapperProps) {
   const { userId, canModerate } = useBoardContext();
-  const { openLoginModal } = useLoginModal();
-  const [localHidden, setLocalHidden] = useState(isHidden);
-  const [saved, setSaved] = useState(isSaved);
-
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/saved/${postId}`, {
-        method: saved ? "DELETE" : "POST",
-      });
-      if (res.ok) {
-        setSaved(!saved);
-        toast.success(saved ? "Post unsaved" : "Post saved");
-      } else if (res.status === 401) {
-        openLoginModal();
-      } else {
-        toast.error("Failed to save post");
-      }
-    } catch (err) {
-      console.error("Failed to save/unsave post:", err);
-      toast.error("Failed to save post");
-    }
-  };
-
-  const handleHide = async () => {
-    try {
-      const res = await fetch(`/api/hidden/${postId}`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        setLocalHidden(true);
-      } else if (res.status === 401) {
-        openLoginModal();
-      }
-    } catch (err) {
-      console.error("Failed to hide post:", err);
-    }
-  };
-
-  const handleUnhide = async () => {
-    try {
-      const res = await fetch(`/api/hidden/${postId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setLocalHidden(false);
-      } else if (res.status === 401) {
-        openLoginModal();
-      }
-    } catch (err) {
-      console.error("Failed to unhide post:", err);
-    }
-  };
+  const { saved, hidden, handleSave, handleHide, handleUnhide } = usePostInteractions({
+    postId,
+    initialSaved: isSaved,
+    initialHidden: isHidden,
+  });
 
   return (
     <PostActions
@@ -91,11 +41,11 @@ export default function PostActionsWrapper({
       canModerate={canModerate}
       status={status}
       inDetailPage={inDetailPage}
-      isHidden={localHidden}
+      isHidden={hidden}
       isSaved={saved}
-      onSave={handleSave}
-      onHide={handleHide}
-      onUnhide={handleUnhide}
+      onSave={() => void handleSave()}
+      onHide={() => void handleHide()}
+      onUnhide={() => void handleUnhide()}
     />
   );
 }

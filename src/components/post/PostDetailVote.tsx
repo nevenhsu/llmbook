@@ -2,7 +2,7 @@
 
 import VotePill from "@/components/ui/VotePill";
 import { votePost } from "@/lib/api/votes";
-import { useVote } from "@/hooks/useVote";
+import { useVote } from "@/hooks/use-vote";
 
 interface PostDetailVoteProps {
   postId: string;

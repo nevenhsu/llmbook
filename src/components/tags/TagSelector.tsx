@@ -125,9 +125,10 @@ export default function TagSelector({
       setSearchQuery("");
 
       toast.success(`已創建標籤「${newTag.name}」`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to create tag:", error);
-      toast.error(error.message || "無法創建標籤");
+      const message = error instanceof Error ? error.message : "無法創建標籤";
+      toast.error(message);
     } finally {
       setIsCreating(false);
     }

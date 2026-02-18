@@ -3,11 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { getHotPostsFromCache, getRisingPostsFromCache } from "@/lib/ranking";
 import { isAdmin } from "@/lib/admin";
 import { canManageBoard } from "@/lib/board-permissions";
+import { http, parseJsonBody, validateBody, withAuth } from "@/lib/server/route-helpers";
+import { toVoteValue } from "@/lib/vote-value";
 import {
   buildPostsQuery,
   fetchUserInteractions,
+  type FeedPost,
+  type RawPost,
   transformPostToFeedFormat,
 } from "@/lib/posts/query-builder";
+import type { SortType } from "@/lib/ranking";
 
 export const runtime = "nodejs";
 
@@ -54,7 +59,7 @@ export async function GET(request: Request) {
     if (userIsAdmin) {
       canViewArchived = true;
     } else if (boardId) {
-      canViewArchived = await canManageBoard(boardId, user.id);
+      canViewArchived = await canManageBoard(boardId, user.id, supabase);
     }
   }
 
@@ -62,11 +67,14 @@ export async function GET(request: Request) {
     return NextResponse.json([]);
   }
 
-  let posts: any[] = [];
+  let rawPosts: RawPost[] = [];
   let useCache = false;
 
+  const sortBy: SortType =
+    sort === "new" || sort === "top" || sort === "hot" || sort === "rising" ? sort : "new";
+
   // Use cached rankings for hot and rising sorts
-  if (sort === "hot" && !tagId && !author) {
+  if (sortBy === "hot" && !tagId && !author) {
     const offset = cursor ? parseInt(cursor, 10) : 0;
     const { posts: cachedPosts, error } = await getHotPostsFromCache(supabase, {
       boardId: boardId || undefined,
@@ -75,10 +83,10 @@ export async function GET(request: Request) {
     });
 
     if (!error && cachedPosts.length > 0) {
-      posts = cachedPosts;
+      rawPosts = cachedPosts as unknown as RawPost[];
       useCache = true;
     }
-  } else if (sort === "rising" && !tagId && !author) {
+  } else if (sortBy === "rising" && !tagId && !author) {
     const offset = cursor ? parseInt(cursor, 10) : 0;
     const { posts: cachedPosts, error } = await getRisingPostsFromCache(supabase, {
       boardId: boardId || undefined,
@@ -87,7 +95,7 @@ export async function GET(request: Request) {
     });
 
     if (!error && cachedPosts.length > 0) {
-      posts = cachedPosts;
+      rawPosts = cachedPosts as unknown as RawPost[];
       useCache = true;
     }
   }
@@ -99,27 +107,29 @@ export async function GET(request: Request) {
       boardId: boardId || undefined,
       tagId: tagId || undefined,
       authorId: author || undefined,
-      sortBy: sort as any,
+      sortBy,
       timeRange: t,
       canViewArchived,
       limit,
-      offset: sort === "top" && cursor ? parseInt(cursor, 10) : undefined,
-      cursor: sort === "new" && cursor ? cursor : undefined,
+      offset: sortBy === "top" && cursor ? parseInt(cursor, 10) : undefined,
+      cursor: sortBy === "new" && cursor ? cursor : undefined,
     });
 
     const { data, error } = await postsQuery;
 
     if (error) {
       console.error("API Error:", error);
-      return new NextResponse(error.message, { status: 500 });
+      return http.internalError(error.message);
     }
 
-    posts = (data ?? []) as any[];
+    rawPosts = (data ?? []) as unknown as RawPost[];
   }
 
+  let posts: FeedPost[] = [];
+
   // Fetch user interactions (votes + hidden status + saved status) for displayed posts
-  if (user && posts.length > 0) {
-    const postIds = posts.map((p) => p.id);
+  if (user && rawPosts.length > 0) {
+    const postIds = rawPosts.map((p) => p.id);
     const {
       votes: userVotes,
       hiddenPostIds,
@@ -127,21 +137,22 @@ export async function GET(request: Request) {
     } = await fetchUserInteractions(supabase, user.id, postIds);
 
     // Add userVote, isHidden, isSaved and transform to FeedPost format
-    posts = posts.map((post) =>
-      transformPostToFeedFormat(post, {
-        userVote: userVotes[post.id] || null,
+    posts = rawPosts.map((post) => {
+      const userVote = toVoteValue(userVotes[post.id]);
+      return transformPostToFeedFormat(post, {
+        userVote,
         isHidden: hiddenPostIds.has(post.id),
         isSaved: savedPostIds.has(post.id),
-      }),
-    );
+      });
+    });
   } else {
     // Transform all posts to FeedPost format even if no user logged in
-    posts = posts.map((post) => transformPostToFeedFormat(post));
+    posts = rawPosts.map((post) => transformPostToFeedFormat(post));
   }
 
   const duration = Date.now() - startTime;
   console.log(
-    `API /posts: ${posts.length} posts in ${duration}ms (sort: ${sort}, cached: ${useCache})`,
+    `API /posts: ${posts.length} posts in ${duration}ms (sort: ${sortBy}, cached: ${useCache})`,
   );
 
   return NextResponse.json(posts, {
@@ -152,61 +163,95 @@ export async function GET(request: Request) {
   });
 }
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
+export const POST = withAuth(async (request, { user, supabase }) => {
+  const bodyResult = await parseJsonBody<Record<string, unknown>>(request);
+  if (bodyResult instanceof NextResponse) {
+    return bodyResult;
   }
 
-  const {
-    title,
-    body,
-    boardId,
-    tagIds,
-    mediaIds,
-    postType = "text",
-    linkUrl,
-    pollOptions,
-    pollDuration,
-  } = await request.json();
-
-  if (!title || !boardId) {
-    return new NextResponse("Missing fields", { status: 400 });
+  const validation = validateBody(bodyResult, ["title", "boardId"]);
+  if (!validation.valid) {
+    return validation.response;
   }
+
+  type PostType = "text" | "link" | "poll";
+
+  const title = validation.data.title;
+  const body = validation.data.body;
+  const boardId = validation.data.boardId;
+  const tagIds = validation.data.tagIds;
+  const mediaIds = validation.data.mediaIds;
+  const postType = (validation.data.postType ?? "text") as unknown;
+  const linkUrl = validation.data.linkUrl;
+  const pollOptions = validation.data.pollOptions;
+  const pollDuration = validation.data.pollDuration;
+
+  if (typeof title !== "string" || !title.trim()) {
+    return http.badRequest("Title is required");
+  }
+  if (typeof boardId !== "string" || !boardId) {
+    return http.badRequest("boardId is required");
+  }
+
+  const resolvedPostType: PostType =
+    postType === "text" || postType === "link" || postType === "poll" ? postType : "text";
+
+  const resolvedBody = typeof body === "string" ? body : null;
+
+  const resolvedTagIds = Array.isArray(tagIds)
+    ? tagIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+  const resolvedMediaIds = Array.isArray(mediaIds)
+    ? mediaIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+
+  const resolvedLinkUrl = typeof linkUrl === "string" ? linkUrl : null;
+  const resolvedPollDuration = typeof pollDuration === "string" ? pollDuration : null;
+  const resolvedPollOptions = Array.isArray(pollOptions)
+    ? pollOptions
+        .map((opt) => {
+          if (typeof opt === "string") {
+            return opt;
+          }
+          if (opt && typeof opt === "object" && "text" in opt) {
+            const text = (opt as { text?: unknown }).text;
+            return typeof text === "string" ? text : "";
+          }
+          return "";
+        })
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+    : [];
 
   // Allow text posts with just images (body can be empty or contain only HTML tags)
   // Removed body requirement for text posts since images are allowed
 
-  if (postType === "link" && !linkUrl) {
-    return new NextResponse("Link URL required for link posts", { status: 400 });
+  if (resolvedPostType === "link" && !resolvedLinkUrl) {
+    return http.badRequest("Link URL required for link posts");
   }
 
-  if (postType === "poll") {
-    if (!Array.isArray(pollOptions) || pollOptions.length < 2 || pollOptions.length > 6) {
-      return new NextResponse("Poll must have 2-6 options", { status: 400 });
+  if (resolvedPostType === "poll") {
+    if (resolvedPollOptions.length < 2 || resolvedPollOptions.length > 6) {
+      return http.badRequest("Poll must have 2-6 options");
     }
   }
 
   // Check if user is banned from the board
   const { canPostInBoard, isUserBanned } = await import("@/lib/board-permissions");
-  const canPost = await canPostInBoard(boardId, user.id);
+  const canPost = await canPostInBoard(boardId, user.id, supabase);
 
   if (!canPost) {
-    const banned = await isUserBanned(boardId, user.id);
+    const banned = await isUserBanned(boardId, user.id, supabase);
     if (banned) {
-      return new NextResponse("You are banned from this board", { status: 403 });
+      return http.forbidden("You are banned from this board");
     }
-    return new NextResponse("Cannot post in this board", { status: 403 });
+    return http.forbidden("Cannot post in this board");
   }
 
   // Calculate expires_at for polls
   let expiresAt: string | null = null;
-  if (postType === "poll" && pollDuration) {
-    const durationDays = parseInt(pollDuration, 10);
+  if (resolvedPostType === "poll" && resolvedPollDuration) {
+    const durationDays = parseInt(resolvedPollDuration, 10);
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + durationDays);
     expiresAt = expirationDate.toISOString();
@@ -216,26 +261,26 @@ export async function POST(request: Request) {
     .from("posts")
     .insert({
       title,
-      body: body || null,
+      body: resolvedBody,
       board_id: boardId,
       author_id: user.id,
       status: "PUBLISHED",
-      post_type: postType,
-      link_url: linkUrl || null,
+      post_type: resolvedPostType,
+      link_url: resolvedLinkUrl,
       expires_at: expiresAt,
     })
     .select("id")
     .single();
 
   if (error || !post) {
-    return new NextResponse(error?.message ?? "Could not create post", { status: 400 });
+    return http.badRequest(error?.message ?? "Could not create post");
   }
 
   // Create poll options if poll post
-  if (postType === "poll" && Array.isArray(pollOptions)) {
-    const optionsToInsert = pollOptions.map((option: { text: string }, idx: number) => ({
+  if (resolvedPostType === "poll") {
+    const optionsToInsert = resolvedPollOptions.map((text, idx) => ({
       post_id: post.id,
-      text: option.text,
+      text,
       position: idx,
     }));
 
@@ -244,27 +289,27 @@ export async function POST(request: Request) {
     if (pollError) {
       // Rollback: delete the post
       await supabase.from("posts").delete().eq("id", post.id);
-      return new NextResponse("Failed to create poll options", { status: 400 });
+      return http.badRequest("Failed to create poll options");
     }
   }
 
-  if (Array.isArray(tagIds) && tagIds.length > 0) {
-    const tagRows = tagIds.map((tagId: string) => ({ post_id: post.id, tag_id: tagId }));
+  if (resolvedTagIds.length > 0) {
+    const tagRows = resolvedTagIds.map((tagId) => ({ post_id: post.id, tag_id: tagId }));
     const { error: tagError } = await supabase.from("post_tags").insert(tagRows);
     if (tagError) {
-      return new NextResponse(tagError.message, { status: 400 });
+      return http.badRequest(tagError.message);
     }
   }
 
-  if (Array.isArray(mediaIds) && mediaIds.length > 0) {
+  if (resolvedMediaIds.length > 0) {
     const { error: mediaError } = await supabase
       .from("media")
       .update({ post_id: post.id })
-      .in("id", mediaIds)
+      .in("id", resolvedMediaIds)
       .eq("user_id", user.id);
 
     if (mediaError) {
-      return new NextResponse(mediaError.message, { status: 400 });
+      return http.badRequest(mediaError.message);
     }
   }
 
@@ -277,8 +322,8 @@ export async function POST(request: Request) {
 
   console.log("Created post:", post.id, "in board:", boardId, "slug:", boardData?.slug);
 
-  return NextResponse.json({
+  return http.ok({
     id: post.id,
     boardSlug: boardData?.slug || null,
   });
-}
+});

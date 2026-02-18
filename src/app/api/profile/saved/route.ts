@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
 import { withAuth, http } from "@/lib/server/route-helpers";
-import { transformPostToFeedFormat } from "@/lib/posts/query-builder";
+import { toVoteValue } from "@/lib/vote-value";
+import {
+  transformPostToFeedFormat,
+  type RawPost,
+} from "@/lib/posts/query-builder";
 
 export const runtime = "nodejs";
 
@@ -43,12 +46,17 @@ export const GET = withAuth(async (request, { user, supabase }) => {
     return http.internalError();
   }
 
+  type SavedRow = { created_at: string; post: RawPost | null };
+  const rows = ((savedData ?? []) as unknown as SavedRow[]).filter(
+    (row): row is SavedRow => !!row && typeof row.created_at === "string",
+  );
+
   // Extract posts and get user votes
-  const posts = (savedData ?? []).map((d: any) => d.post).filter(Boolean);
+  const posts = rows.map((d) => d.post).filter((p): p is RawPost => !!p);
 
   let userVotes: Record<string, number> = {};
   if (posts.length > 0) {
-    const postIds = posts.map((p: any) => p.id);
+    const postIds = posts.map((p) => p.id);
     const { data: votes } = await supabase
       .from("votes")
       .select("post_id, value")
@@ -61,9 +69,10 @@ export const GET = withAuth(async (request, { user, supabase }) => {
   }
 
   // Transform posts to match FeedContainer structure
-  const transformedPosts = posts.map((post: any) => {
+  const transformedPosts = posts.map((post) => {
+    const userVote = toVoteValue(userVotes[post.id]);
     return transformPostToFeedFormat(post, {
-      userVote: (userVotes[post.id] as any) || null,
+      userVote,
       isHidden: false,
       isSaved: true,
     });
@@ -71,6 +80,6 @@ export const GET = withAuth(async (request, { user, supabase }) => {
 
   return http.ok({
     posts: transformedPosts,
-    savedAt: (savedData ?? []).map((d: any) => d.created_at),
+    savedAt: rows.map((d) => d.created_at),
   });
 });

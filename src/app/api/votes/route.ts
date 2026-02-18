@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createNotification } from "@/lib/notifications";
 import { withAuth, http, parseJsonBody, validateBody } from "@/lib/server/route-helpers";
 import { isUserBanned } from "@/lib/board-permissions";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
@@ -71,7 +72,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
 
   if (boardId) {
-    const banned = await isUserBanned(boardId, user.id);
+    const banned = await isUserBanned(boardId, user.id, supabase);
     if (banned) {
       return http.forbidden("You are banned from this board");
     }
@@ -119,7 +120,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
 // Helper to trigger notifications
 async function triggerUpvoteNotification(
-  supabase: any,
+  supabase: SupabaseClient,
   postId: string | undefined,
   commentId: string | undefined,
   voterId: string,

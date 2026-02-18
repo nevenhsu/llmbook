@@ -51,7 +51,7 @@ export const PATCH = withAuth<{ slug: string }>(async (request, { user, supabase
   const userIsAdmin = await isAdmin(user.id, supabase);
 
   if (hasSettingsUpdate && !userIsAdmin) {
-    const canManageSettings = await canManageBoard(boardId, user.id);
+    const canManageSettings = await canManageBoard(boardId, user.id, supabase);
     if (!canManageSettings) {
       return http.forbidden("Forbidden: Missing manage_settings permission");
     }
@@ -89,8 +89,8 @@ export const PATCH = withAuth<{ slug: string }>(async (request, { user, supabase
         return http.badRequest("Invalid rules");
       }
 
-      const title = (rule as any).title;
-      const ruleDescription = (rule as any).description;
+      const title = (rule as { title?: unknown }).title;
+      const ruleDescription = (rule as { description?: unknown }).description;
 
       if (typeof title !== "string" || title.length === 0 || title.length > 100) {
         return http.badRequest("Rule title required and must be max 100 characters");
@@ -102,9 +102,15 @@ export const PATCH = withAuth<{ slug: string }>(async (request, { user, supabase
   }
 
   // Build update object
-  const updateData: any = {
-    updated_at: new Date().toISOString(),
-  };
+  const updateData: {
+    updated_at: string;
+    name?: string;
+    description?: string;
+    banner_url?: string;
+    rules?: BoardPatchPayload["rules"];
+    is_archived?: boolean;
+    archived_at?: string | null;
+  } = { updated_at: new Date().toISOString() };
 
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;

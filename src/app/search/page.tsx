@@ -5,13 +5,50 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import PostRow from "@/components/post/PostRow";
 import Avatar from "@/components/ui/Avatar";
+import SearchResultList from "@/components/search/SearchResultList";
 import { Hash } from "lucide-react";
 
 function SearchResults() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
   const [activeTab, setActiveTab] = useState("posts");
-  const [results, setResults] = useState<any>(null);
+
+  type SearchPost = {
+    id: string;
+    title: string;
+    created_at: string;
+    score?: number | null;
+    comment_count?: number | null;
+    persona_id?: string | null;
+    boards?: { name: string; slug: string } | { name: string; slug: string }[] | null;
+    profiles?:
+      | { username: string | null; display_name: string | null; avatar_url: string | null }
+      | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+      | null;
+    personas?:
+      | { username: string | null; display_name: string | null; avatar_url: string | null }
+      | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+      | null;
+  };
+
+  type SearchBoard = { id: string; name: string; slug: string; description?: string | null };
+  type SearchUser = {
+    user_id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+  type SearchPersona = {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+    slug: string;
+  };
+
+  const [results, setResults] = useState<
+    SearchPost[] | SearchBoard[] | SearchUser[] | SearchPersona[] | null
+  >(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -43,11 +80,17 @@ function SearchResults() {
     <div className="mx-auto max-w-[800px] py-8">
       <h1 className="text-base-content mb-6 text-xl font-bold">Search results for "{query}"</h1>
 
-      <div className="border-neutral scrollbar-hide mb-6 flex overflow-x-auto border-b">
+      <div
+        className="border-neutral scrollbar-hide mb-6 flex overflow-x-auto border-b"
+        role="tablist"
+        aria-label="Search result tabs"
+      >
         {["posts", "boards", "users", "personas"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
+            role="tab"
+            aria-selected={activeTab === tab}
             className={`px-4 py-2 text-sm font-bold capitalize transition-colors ${
               activeTab === tab
                 ? "text-base-content border-primary border-b-2"
@@ -67,10 +110,11 @@ function SearchResults() {
             <>
               {Array.isArray(results) && results.length > 0 ? (
                 <div className="flex flex-col gap-3">
-                  {results.map((post: any, index: number) => {
-                    const board = post.boards;
-                    const author = post.profiles || post.personas;
-                    const isPersona = !!post.personas;
+                  {(results as SearchPost[]).map((post, index) => {
+                    const board = Array.isArray(post.boards) ? post.boards[0] : post.boards;
+                    const author = post.personas ?? post.profiles;
+                    const authorData = Array.isArray(author) ? author[0] : author;
+                    const isPersona = !!post.persona_id;
 
                     return (
                       <PostRow
@@ -81,9 +125,9 @@ function SearchResults() {
                         commentCount={post.comment_count || 0}
                         boardName={board?.name || "unknown"}
                         boardSlug={board?.slug || "unknown"}
-                        authorName={author?.display_name || "unknown"}
-                        authorUsername={author?.username}
-                        authorAvatarUrl={author?.avatar_url}
+                        authorName={authorData?.display_name || "unknown"}
+                        authorUsername={authorData?.username}
+                        authorAvatarUrl={authorData?.avatar_url}
                         isPersona={isPersona}
                         createdAt={post.created_at}
                         variant="card"
@@ -100,80 +144,74 @@ function SearchResults() {
           )}
 
           {activeTab === "boards" && results && (
-            <div className="bg-base-200 border-neutral divide-neutral divide-y overflow-hidden rounded-md border">
-              {Array.isArray(results) && results.length > 0 ? (
-                results.map((board: any, index: number) => (
-                  <Link
-                    key={board.id || board.slug || `board-${index}`}
-                    href={`/r/${board.slug}`}
-                    className="hover:bg-base-100 flex items-center gap-3 p-4 no-underline transition-colors"
-                  >
-                    <div className="bg-primary/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full">
-                      <Hash size={20} className="text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base-content font-bold">r/{board.name}</h3>
-                      {board.description && (
-                        <p className="text-base-content/70 line-clamp-1 text-sm">
-                          {board.description}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="text-base-content/50 py-20 text-center">No boards found.</div>
+            <SearchResultList
+              items={Array.isArray(results) ? (results as SearchBoard[]) : []}
+              emptyMessage="No boards found."
+              getKey={(board, index) => board.id || board.slug || `board-${index}`}
+              renderItem={(board) => (
+                <Link
+                  href={`/r/${board.slug}`}
+                  className="hover:bg-base-100 flex items-center gap-3 p-4 no-underline transition-colors"
+                >
+                  <div className="bg-primary/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full">
+                    <Hash size={20} className="text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base-content font-bold">r/{board.name}</h3>
+                    {board.description && (
+                      <p className="text-base-content/70 line-clamp-1 text-sm">
+                        {board.description}
+                      </p>
+                    )}
+                  </div>
+                </Link>
               )}
-            </div>
+            />
           )}
 
           {activeTab === "users" && results && (
-            <div className="bg-base-200 border-neutral divide-neutral divide-y overflow-hidden rounded-md border">
-              {Array.isArray(results) && results.length > 0 ? (
-                results.map((user: any, index: number) => (
-                  <Link
-                    key={user.user_id || user.username || `user-${index}`}
-                    href={`/u/${user.username}`}
-                    className="hover:bg-base-100 flex items-center gap-3 p-4 no-underline transition-colors"
-                  >
-                    <Avatar src={user.avatar_url} fallbackSeed={user.username} size="md" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base-content font-bold">{user.display_name}</div>
-                      <div className="text-base-content/70 text-sm">u/{user.username}</div>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="text-base-content/50 py-20 text-center">No users found.</div>
+            <SearchResultList
+              items={Array.isArray(results) ? (results as SearchUser[]) : []}
+              emptyMessage="No users found."
+              getKey={(user, index) => user.user_id || user.username || `user-${index}`}
+              renderItem={(user) => (
+                <Link
+                  href={`/u/${user.username}`}
+                  className="hover:bg-base-100 flex items-center gap-3 p-4 no-underline transition-colors"
+                >
+                  <Avatar src={user.avatar_url} fallbackSeed={user.username} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base-content font-bold">{user.display_name}</div>
+                    <div className="text-base-content/70 text-sm">u/{user.username}</div>
+                  </div>
+                </Link>
               )}
-            </div>
+            />
           )}
 
           {activeTab === "personas" && results && (
-            <div className="bg-base-200 border-neutral divide-neutral divide-y overflow-hidden rounded-md border">
-              {Array.isArray(results) && results.length > 0 ? (
-                results.map((persona: any, index: number) => (
-                  <Link
-                    key={persona.id || persona.slug || `persona-${index}`}
-                    href={`/p/${persona.slug}`}
-                    className="hover:bg-base-100 flex items-center gap-3 p-4 no-underline transition-colors"
-                  >
-                    <Avatar
-                      src={persona.avatar_url}
-                      fallbackSeed={persona.username}
-                      size="md"
-                      isPersona={true}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base-content font-bold">{persona.display_name}</div>
-                      <div className="text-base-content/70 text-sm">p/{persona.username}</div>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="text-base-content/50 py-20 text-center">No personas found.</div>
+            <SearchResultList
+              items={Array.isArray(results) ? (results as SearchPersona[]) : []}
+              emptyMessage="No personas found."
+              getKey={(persona, index) => persona.id || persona.slug || `persona-${index}`}
+              renderItem={(persona) => (
+                <Link
+                  href={`/p/${persona.slug}`}
+                  className="hover:bg-base-100 flex items-center gap-3 p-4 no-underline transition-colors"
+                >
+                  <Avatar
+                    src={persona.avatar_url}
+                    fallbackSeed={persona.username}
+                    size="md"
+                    isPersona={true}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base-content font-bold">{persona.display_name}</div>
+                    <div className="text-base-content/70 text-sm">p/{persona.username}</div>
+                  </div>
+                </Link>
               )}
-            </div>
+            />
           )}
         </div>
       )}

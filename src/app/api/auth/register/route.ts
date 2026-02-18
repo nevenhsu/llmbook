@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { http } from "@/lib/server/route-helpers";
 import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import type { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,19 +10,19 @@ export async function POST(request: NextRequest) {
 
     // Validate input
     if (!email || !password || !username) {
-      return NextResponse.json({ error: "缺少必要欄位" }, { status: 400 });
+      return http.badRequest("缺少必要欄位");
     }
 
     // Sanitize and validate username format
     const cleanUsername = sanitizeUsername(username);
     const usernameValidation = validateUsernameFormat(cleanUsername, false);
     if (!usernameValidation.valid) {
-      return NextResponse.json({ error: usernameValidation.error }, { status: 400 });
+      return http.badRequest(usernameValidation.error);
     }
 
     // Check password length
     if (password.length < 6) {
-      return NextResponse.json({ error: "密碼長度至少需要 6 個字元" }, { status: 400 });
+      return http.badRequest("密碼長度至少需要 6 個字元");
     }
 
     const adminClient = createAdminClient();
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingProfile) {
-      return NextResponse.json({ error: "Username 已被使用" }, { status: 409 });
+      return http.conflict("Username 已被使用");
     }
 
     // Sign up user with metadata
@@ -50,11 +51,11 @@ export async function POST(request: NextRequest) {
 
     if (signUpError) {
       console.error("Sign up error:", signUpError);
-      return NextResponse.json({ error: signUpError.message }, { status: 400 });
+      return http.badRequest(signUpError.message);
     }
 
     if (!data.user) {
-      return NextResponse.json({ error: "註冊失敗" }, { status: 500 });
+      return http.internalError("註冊失敗");
     }
 
     // Create profile manually
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
       // Rollback: Delete the user if profile creation fails
       await adminClient.auth.admin.deleteUser(data.user.id);
 
-      return NextResponse.json({ error: "建立使用者資料失敗，請重試" }, { status: 500 });
+      return http.internalError("建立使用者資料失敗，請重試");
     }
 
     // Sign in the user using server client to set cookies
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const supabase = await createClient();
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     if (signInError) {
       console.error("Sign in error:", signInError);
       // User is created successfully, just can't auto-login
-      return NextResponse.json({
+      return http.ok({
         success: true,
         user: {
           id: data.user.id,
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    return http.ok({
       success: true,
       user: {
         id: data.user.id,
@@ -107,8 +108,10 @@ export async function POST(request: NextRequest) {
       },
       message: "註冊成功！",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Register API error:", error);
-    return NextResponse.json({ error: error.message || "註冊時發生錯誤" }, { status: 500 });
+
+    const message = error instanceof Error ? error.message : "註冊時發生錯誤";
+    return http.internalError(message);
   }
 }

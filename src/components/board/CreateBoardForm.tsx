@@ -5,11 +5,7 @@ import { useRouter } from "next/navigation";
 import { X, Plus, AlertCircle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import ImageUpload from "@/components/ui/ImageUpload";
-
-interface Rule {
-  title: string;
-  description: string;
-}
+import { useRulesEditor } from "@/hooks/use-rules-editor";
 
 export default function CreateBoardForm() {
   const router = useRouter();
@@ -18,7 +14,7 @@ export default function CreateBoardForm() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
-  const [rules, setRules] = useState<Rule[]>([]);
+  const { rules, addRule, updateRule, removeRule } = useRulesEditor([]);
   const [bannerUrl, setBannerUrl] = useState("");
 
   // Validation states
@@ -101,22 +97,6 @@ export default function CreateBoardForm() {
     setSlugAvailable(null);
   };
 
-  const addRule = () => {
-    if (rules.length < 15) {
-      setRules([...rules, { title: "", description: "" }]);
-    }
-  };
-
-  const updateRule = (index: number, field: "title" | "description", value: string) => {
-    const newRules = [...rules];
-    newRules[index][field] = value;
-    setRules(newRules);
-  };
-
-  const removeRule = (index: number) => {
-    setRules(rules.filter((_, i) => i !== index));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -159,8 +139,9 @@ export default function CreateBoardForm() {
       const { board } = await response.json();
       toast.success(`Board "${board.name}" created successfully!`);
       router.push(`/r/${board.slug}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create board");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create board";
+      toast.error(message);
       setLoading(false);
     }
   };

@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
 
-export async function PUT(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
+export const PUT = withAuth(async (request, { user, supabase }) => {
+  const body = await parseJsonBody<{
+    username?: unknown;
+    displayName?: unknown;
+    avatarUrl?: unknown;
+    bio?: unknown;
+  }>(request);
+  if (body instanceof NextResponse) {
+    return body;
   }
 
-  const { username, displayName, avatarUrl, bio } = await request.json();
+  const { username, displayName, avatarUrl, bio } = body;
 
   const { data: existingProfile } = await supabase
     .from("profiles")
@@ -30,7 +31,7 @@ export async function PUT(request: Request) {
     // Validate format
     const validation = validateUsernameFormat(cleanUsername, false);
     if (!validation.valid) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+      return http.badRequest(validation.error);
     }
 
     // Check if username changed and is available
@@ -44,7 +45,7 @@ export async function PUT(request: Request) {
         .maybeSingle();
 
       if (profileExists) {
-        return NextResponse.json({ error: "Username 已被使用" }, { status: 400 });
+        return http.badRequest("Username 已被使用");
       }
 
       // Check availability in personas
@@ -55,7 +56,7 @@ export async function PUT(request: Request) {
         .maybeSingle();
 
       if (personaExists) {
-        return NextResponse.json({ error: "Username 已被使用" }, { status: 400 });
+        return http.badRequest("Username 已被使用");
       }
     }
 
@@ -69,7 +70,7 @@ export async function PUT(request: Request) {
       : (existingProfile?.display_name ?? nextUsername ?? "Unknown");
 
   if (!nextDisplayName) {
-    return NextResponse.json({ error: "Display name 不能為空" }, { status: 400 });
+    return http.badRequest("Display name 不能為空");
   }
 
   // Validate and process avatar URL
@@ -82,7 +83,7 @@ export async function PUT(request: Request) {
       try {
         new URL(trimmedAvatarUrl);
       } catch {
-        return NextResponse.json({ error: "Avatar URL 格式錯誤" }, { status: 400 });
+        return http.badRequest("Avatar URL 格式錯誤");
       }
       nextAvatarUrl = trimmedAvatarUrl;
     }
@@ -102,8 +103,8 @@ export async function PUT(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return http.badRequest(error.message);
   }
 
-  return NextResponse.json({ success: true, data });
-}
+  return http.ok({ success: true, data });
+});

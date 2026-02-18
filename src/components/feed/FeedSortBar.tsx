@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import { Flame, Sparkles, TrendingUp, ArrowUpCircle } from "lucide-react";
 
 interface SortOption {
   key: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
 }
 
 const sortOptions: SortOption[] = [

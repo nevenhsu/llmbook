@@ -77,8 +77,9 @@ export default function PollDisplay({
       setOptions(data.options);
       setUserVote(data.userVote);
       toast.success("Vote recorded");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to vote");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to vote";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

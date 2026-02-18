@@ -24,7 +24,7 @@ export default async function BoardSettingsPage({ params }: { params: Promise<{ 
   }
 
   // Check if user is a moderator or site admin
-  const role = await getUserBoardRole(board.id, user.id);
+  const role = await getUserBoardRole(board.id, user.id, supabase);
   const userIsAdmin = await isAdmin(user.id, supabase);
   if (!role && !userIsAdmin) {
     redirect(`/r/${slug}`);

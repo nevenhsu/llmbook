@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -12,6 +12,8 @@ interface ConfirmModalProps {
   cancelText?: string;
   isLoading?: boolean;
   variant?: "danger" | "warning";
+  confirmationText?: string;
+  confirmationPlaceholder?: string;
 }
 
 export default function ConfirmModal({
@@ -24,52 +26,67 @@ export default function ConfirmModal({
   cancelText = "Cancel",
   isLoading = false,
   variant = "danger",
+  confirmationText,
+  confirmationPlaceholder,
 }: ConfirmModalProps) {
-  const [step, setStep] = useState(1);
+  const [confirmationValue, setConfirmationValue] = useState("");
 
-  const handleOpen = () => {
-    setStep(1);
-  };
+  useEffect(() => {
+    if (isOpen) {
+      setConfirmationValue("");
+    }
+  }, [isOpen]);
+
+  const needsTextConfirmation = typeof confirmationText === "string" && confirmationText.length > 0;
+  const canConfirm =
+    !isLoading && (!needsTextConfirmation || confirmationValue.trim() === confirmationText);
 
   const handleConfirm = () => {
-    if (step === 1) {
-      setStep(2);
-    } else {
-      onConfirm();
+    if (!canConfirm) {
+      return;
     }
+    onConfirm();
   };
 
   const handleClose = () => {
-    setStep(1);
+    setConfirmationValue("");
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <dialog className="modal modal-open">
+    <dialog
+      className="modal modal-open"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      aria-describedby="confirm-modal-description"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+    >
       <div className="modal-box">
-        <h3 className={`text-lg font-bold ${step === 1 ? "" : "text-error"}`}>
-          {step === 1 ? title : "Final Confirmation"}
+        <h3
+          id="confirm-modal-title"
+          className={`text-lg font-bold ${variant === "danger" ? "text-error" : ""}`}
+        >
+          {title}
         </h3>
 
-        <div className="py-4">
-          {step === 1 ? (
+        <div id="confirm-modal-description" className="py-4">
+          <div className="space-y-3">
             <p className="text-base-content/80">{message}</p>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-error font-medium">
-                This action cannot be undone. The{" "}
-                {message.toLowerCase().includes("comment") ? "comment" : "post"} will be permanently
-                deleted.
-              </p>
-              <p className="text-base-content/60 text-sm">
-                Are you absolutely sure? Type <span className="font-mono font-bold">DELETE</span> to
-                confirm.
-              </p>
+
+            {needsTextConfirmation && (
               <input
                 type="text"
-                placeholder="Type DELETE"
+                value={confirmationValue}
+                onChange={(e) => setConfirmationValue(e.target.value)}
+                placeholder={confirmationPlaceholder ?? `Type ${confirmationText} to confirm`}
+                aria-label={`Type ${confirmationText} to confirm`}
                 className="input input-bordered w-full"
                 autoFocus
                 onKeyDown={(e) => {
@@ -78,8 +95,8 @@ export default function ConfirmModal({
                   }
                 }}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="modal-action">
@@ -89,12 +106,12 @@ export default function ConfirmModal({
           <button
             className={`btn ${variant === "danger" ? "btn-error" : "btn-warning"}`}
             onClick={handleConfirm}
-            disabled={isLoading}
+            disabled={!canConfirm}
           >
             {isLoading ? (
               <>
                 <span className="loading loading-spinner loading-sm"></span>
-                Deleting...
+                Working...
               </>
             ) : (
               confirmText
@@ -103,7 +120,9 @@ export default function ConfirmModal({
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button onClick={handleClose}>close</button>
+        <button onClick={handleClose} aria-label="Close">
+          close
+        </button>
       </form>
     </dialog>
   );

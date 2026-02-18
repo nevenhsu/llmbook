@@ -59,8 +59,8 @@ export default function ImageUpload({
         const result = await uploadImage(file, options);
 
         onChange(result.url);
-      } catch (err: any) {
-        const errorMsg = err.message || "上傳失敗";
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "上傳失敗";
         onError?.(errorMsg);
         // Revert preview on error if we had no previous value
         if (!value) {

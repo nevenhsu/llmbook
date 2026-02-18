@@ -8,6 +8,7 @@ import { MemberCountProvider, useMemberCount } from "./BoardMemberCount";
 import JoinButton from "./JoinButton";
 import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
 import toast from "react-hot-toast";
+import type { Rule } from "@/hooks/use-rules-editor";
 
 interface BoardLayoutProps {
   children: ReactNode;
@@ -17,7 +18,7 @@ interface BoardLayoutProps {
     description?: string | null;
     member_count: number;
     is_archived: boolean;
-    rules?: any[];
+    rules?: Rule[];
   };
   slug: string;
   isJoined: boolean;
@@ -170,7 +171,7 @@ function MobileBoardHeader({
               Community Rules ({board.rules.length})
             </summary>
             <ol className="text-base-content/70 mt-2 list-inside list-decimal space-y-2 text-sm">
-              {board.rules.map((rule: any, idx: number) => (
+              {board.rules.map((rule, idx) => (
                 <li key={idx} className="pl-1">
                   <span className="font-medium">{rule.title}</span>
                   {rule.description && (

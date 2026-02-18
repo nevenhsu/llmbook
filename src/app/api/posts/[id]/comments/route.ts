@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { createNotification } from "@/lib/notifications";
 import {
   getSupabaseServerClient,
@@ -7,7 +6,12 @@ import {
   parseJsonBody,
   validateBody,
 } from "@/lib/server/route-helpers";
-import { transformCommentToFormat } from "@/lib/posts/query-builder";
+import { toVoteValue } from "@/lib/vote-value";
+import {
+  transformCommentToFormat,
+  type RawComment,
+  type VoteValue,
+} from "@/lib/posts/query-builder";
 
 export const runtime = "nodejs";
 
@@ -55,7 +59,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   // Get user votes if logged in
-  let userVotes: Record<string, number> = {};
+  let userVotes: Record<string, VoteValue> = {};
   if (user && comments && comments.length > 0) {
     const commentIds = comments.map((c) => c.id);
     const { data: votes } = await supabase
@@ -65,13 +69,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       .eq("user_id", user.id);
 
     if (votes) {
-      userVotes = Object.fromEntries(votes.map((v) => [v.comment_id, v.value]));
+      userVotes = Object.fromEntries(votes.map((v) => [v.comment_id, toVoteValue(v.value)]));
     }
   }
 
   // Transform comments to consistent format
-  const transformedComments = (comments ?? []).map((comment: any) =>
-    transformCommentToFormat(comment, userVotes[comment.id] || null),
+  const transformedComments = (comments ?? []).map((comment) =>
+    transformCommentToFormat(comment as RawComment, userVotes[comment.id] ?? null),
   );
 
   return http.ok({ comments: transformedComments, userVotes });
@@ -84,7 +88,7 @@ export const POST = withAuth(
 
     // Parse and validate body
     const bodyResult = await parseJsonBody<{ body: string; parentId?: string }>(req);
-    if (bodyResult instanceof NextResponse) return bodyResult;
+    if (bodyResult instanceof Response) return bodyResult;
 
     const validation = validateBody(bodyResult, ["body"]);
     if (!validation.valid) return validation.response;
@@ -108,7 +112,7 @@ export const POST = withAuth(
 
     // Check if user is banned from the board
     const { isUserBanned } = await import("@/lib/board-permissions");
-    const banned = await isUserBanned(post.board_id, user.id);
+    const banned = await isUserBanned(post.board_id, user.id, supabase);
 
     if (banned) {
       return http.forbidden("You are banned from this board");
@@ -141,12 +145,14 @@ export const POST = withAuth(
       await createNotification(post.author_id, "REPLY", {
         postId,
         commentId: comment.id,
-        authorName: (comment.profiles as any)?.display_name || "Someone",
+        authorName:
+          (comment as { profiles?: { display_name?: string | null } }).profiles?.display_name ||
+          "Someone",
       });
     }
 
     // Transform the new comment
-    const transformedComment = transformCommentToFormat(comment as any);
+    const transformedComment = transformCommentToFormat(comment as RawComment);
 
     return http.created({ comment: transformedComment });
   },

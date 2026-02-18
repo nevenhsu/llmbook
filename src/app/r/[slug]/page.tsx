@@ -7,10 +7,13 @@ import { isAdmin } from "@/lib/admin";
 import { isBoardModerator } from "@/lib/board-permissions";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { sortPosts, type SortType } from "@/lib/ranking";
+import { toVoteValue } from "@/lib/vote-value";
 import {
   buildPostsQuery,
   fetchUserInteractions,
   transformPostToFeedFormat,
+  type FeedPost,
+  type RawPost,
 } from "@/lib/posts/query-builder";
 import { Archive } from "lucide-react";
 
@@ -19,10 +22,17 @@ interface PageProps {
   searchParams?: Promise<{ sort?: string; t?: string }>;
 }
 
+function toSortType(value: string | undefined): SortType {
+  if (value === "new" || value === "hot" || value === "rising" || value === "top" || value === "best") {
+    return value;
+  }
+  return "hot";
+}
+
 export default async function BoardPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const searchParamsResolved = await searchParams;
-  const sortBy = (searchParamsResolved?.sort || "hot") as SortType;
+  const sortBy = toSortType(searchParamsResolved?.sort);
   const timeRange = searchParamsResolved?.t || "all";
 
   const supabase = await createClient();
@@ -43,7 +53,7 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   if (user) {
     userIsAdmin = await isAdmin(user.id, supabase);
 
-    canManageBoard = await isBoardModerator(board.id, user.id);
+    canManageBoard = await isBoardModerator(board.id, user.id, supabase);
     canViewArchived = userIsAdmin || canManageBoard;
   }
 
@@ -59,11 +69,14 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   const { data: postData } = await postsQuery;
 
   // Sort posts using ranking algorithm
-  const sortedPosts = sortPosts((postData as any[]) ?? [], sortBy);
+  const rawPosts = ((postData ?? []) as unknown as RawPost[]).filter(
+    (p): p is RawPost => !!p && typeof p.id === "string",
+  );
+  const sortedPosts = sortPosts(rawPosts, sortBy);
   const topPosts = sortedPosts.slice(0, 20);
 
   // Fetch user interactions (votes + hidden status + saved status) for displayed posts
-  const postIds = topPosts.map((p: any) => p.id);
+  const postIds = topPosts.map((p) => p.id);
   const {
     votes: userVotes,
     hiddenPostIds,
@@ -73,13 +86,14 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
     : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
   // Transform posts to feed format
-  const posts = topPosts.map((post: any) =>
-    transformPostToFeedFormat(post, {
-      userVote: userVotes[post.id] || null,
+  const posts: FeedPost[] = topPosts.map((post) => {
+    const userVote = toVoteValue(userVotes[post.id]);
+    return transformPostToFeedFormat(post, {
+      userVote,
       isHidden: hiddenPostIds.has(post.id),
       isSaved: savedPostIds.has(post.id),
-    }),
-  );
+    });
+  });
 
   // Check if user is joined to the board
   let isJoined = false;

@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
 import VotePill from "@/components/ui/VotePill";
 import { EyeOff, Trash2 } from "lucide-react";
 import PostMeta from "./PostMeta";
 import PostActions from "./PostActions";
-import { useLoginModal } from "@/contexts/LoginModalContext";
-import { useVote } from "@/hooks/useVote";
+import { useVote } from "@/hooks/use-vote";
+import { usePostInteractions } from "@/hooks/use-post-interactions";
 import { votePost } from "@/lib/api/votes";
 
 interface PostRowProps {
@@ -61,11 +60,14 @@ export default function PostRow({
   onScoreChange,
 }: PostRowProps) {
   const router = useRouter();
-  const [saved, setSaved] = useState(isSaved);
-  const [localHidden, setLocalHidden] = useState(isHidden);
+  const { saved, hidden: localHidden, handleSave, handleHide, handleUnhide } =
+    usePostInteractions({
+      postId: id,
+      initialSaved: isSaved,
+      initialHidden: isHidden,
+    });
   const [localExpanded, setLocalExpanded] = useState(false);
   const [deleted, setDeleted] = useState(status === "DELETED");
-  const { openLoginModal } = useLoginModal();
 
   const {
     score: voteScore,
@@ -82,55 +84,6 @@ export default function PostRow({
   });
 
   const isHiddenAndCollapsed = localHidden && !localExpanded;
-
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/saved/${id}`, {
-        method: saved ? "DELETE" : "POST",
-      });
-      if (res.ok) {
-        setSaved(!saved);
-        toast.success(saved ? "Post unsaved" : "Post saved");
-      } else if (res.status === 401) {
-        openLoginModal();
-      } else {
-        toast.error("Failed to save post");
-      }
-    } catch (err) {
-      console.error("Failed to save/unsave post:", err);
-      toast.error("Failed to save post");
-    }
-  };
-
-  const handleHide = async () => {
-    try {
-      const res = await fetch(`/api/hidden/${id}`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        setLocalHidden(true);
-      } else if (res.status === 401) {
-        openLoginModal();
-      }
-    } catch (err) {
-      console.error("Failed to hide post:", err);
-    }
-  };
-
-  const handleUnhide = async () => {
-    try {
-      const res = await fetch(`/api/hidden/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setLocalHidden(false);
-      } else if (res.status === 401) {
-        openLoginModal();
-      }
-    } catch (err) {
-      console.error("Failed to unhide post:", err);
-    }
-  };
 
   const toggleExpanded = () => {
     setLocalExpanded(!localExpanded);
@@ -259,12 +212,12 @@ export default function PostRow({
                 authorId={authorId}
                 userId={userId}
                 canModerate={canModerate}
-                onSave={handleSave}
-                onHide={handleHide}
+                onSave={() => void handleSave()}
+                onHide={() => void handleHide()}
                 onDelete={handleDelete}
                 isHidden={localHidden}
                 isExpanded={localExpanded}
-                onUnhide={handleUnhide}
+                onUnhide={() => void handleUnhide()}
                 onToggleExpand={toggleExpanded}
               />
             </div>

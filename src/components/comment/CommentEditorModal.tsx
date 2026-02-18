@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { X } from "lucide-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import toast from "react-hot-toast";
+import type { FormattedComment } from "@/lib/posts/query-builder";
 
 interface CommentEditorModalProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ interface CommentEditorModalProps {
   initialContent?: string;
   commentId?: string; // For edit mode
   mode: "create" | "edit" | "reply";
-  onSuccess?: (comment: any) => void;
+  onSuccess?: (comment: FormattedComment) => void;
 }
 
 export default function CommentEditorModal({
@@ -113,10 +114,11 @@ export default function CommentEditorModal({
       if (!onSuccess) {
         window.location.reload();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || "Failed to save comment");
-      setError(err.message || "Failed to save comment");
+      const message = err instanceof Error ? err.message : "Failed to save comment";
+      toast.error(message);
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

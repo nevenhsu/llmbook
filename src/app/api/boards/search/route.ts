@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { http } from "@/lib/server/route-helpers";
+import type { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -7,7 +8,7 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "10", 10);
 
   if (!query || query.trim().length === 0) {
-    return NextResponse.json({ boards: [] });
+    return http.ok({ boards: [] });
   }
 
   const supabase = await createClient();
@@ -22,8 +23,8 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error("Board search error:", error);
-    return NextResponse.json({ error: "Failed to search boards" }, { status: 500 });
+    return http.internalError("Failed to search boards");
   }
 
-  return NextResponse.json({ boards: boards || [] });
+  return http.ok({ boards: boards ?? [] });
 }

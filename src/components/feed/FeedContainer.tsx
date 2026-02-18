@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import type { FeedPost } from "@/lib/posts/query-builder";
 
 import {
   buildPostsQueryParams,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/pagination";
 
 interface FeedContainerProps {
-  initialPosts: any[];
+  initialPosts: FeedPost[];
   userId?: string;
   boardSlug?: string;
   tagSlug?: string;
@@ -33,7 +34,7 @@ export default function FeedContainer({
   timeRange = "all",
   canViewArchived = false,
 }: FeedContainerProps) {
-  const [posts, setPosts] = useState(initialPosts);
+  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(calculateHasMore(initialPosts, DEFAULT_LIMIT));
   const [page, setPage] = useState(1);
@@ -65,7 +66,7 @@ export default function FeedContainer({
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error("Failed to load posts");
 
-      const newPosts = await res.json();
+      const newPosts = (await res.json()) as FeedPost[];
 
       // Update pagination state
       const newHasMore = calculateHasMore(newPosts, DEFAULT_LIMIT);

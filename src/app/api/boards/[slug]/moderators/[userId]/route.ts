@@ -81,7 +81,7 @@ export const PATCH = withAuth<{ slug: string; userId: string }>(async (
   }
   const boardId = boardIdResult.boardId;
 
-  const isOwner = await isBoardOwner(boardId, user.id);
+  const isOwner = await isBoardOwner(boardId, user.id, supabase);
   if (!isOwner) {
     return http.forbidden("Forbidden: Only board owner can edit moderator permissions");
   }
@@ -172,7 +172,7 @@ export const DELETE = withAuth<{ slug: string; userId: string }>(async (
   const boardId = boardIdResult.boardId;
 
   // Check if user is the owner
-  const isOwner = await isBoardOwner(boardId, user.id);
+  const isOwner = await isBoardOwner(boardId, user.id, supabase);
   if (!isOwner) {
     return http.forbidden("Forbidden: Only board owner can remove moderators");
   }

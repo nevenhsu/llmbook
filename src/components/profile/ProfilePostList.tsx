@@ -6,8 +6,10 @@ import PostRow from "@/components/post/PostRow";
 import Link from "next/link";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { voteComment } from "@/lib/api/votes";
-import { useVote } from "@/hooks/useVote";
+import { useVote } from "@/hooks/use-vote";
 import VotePill from "@/components/ui/VotePill";
+import { toVoteValue } from "@/lib/vote-value";
+import type { FeedPost, FormattedComment, VoteValue } from "@/lib/posts/query-builder";
 import {
   buildPostsQueryParams as buildPostsQueryParamsLib,
   getNextCursor as getNextCursorLib,
@@ -21,7 +23,7 @@ function CommentVoteRow({
 }: {
   commentId: string;
   initialScore: number;
-  initialUserVote: 1 | -1 | null;
+  initialUserVote: VoteValue;
 }) {
   const { score, userVote, handleVote, voteDisabled } = useVote({
     id: commentId,
@@ -41,8 +43,8 @@ function CommentVoteRow({
 }
 
 interface ProfilePostListProps {
-  posts: any[];
-  comments?: any[];
+  posts: FeedPost[];
+  comments?: FormattedComment[];
   displayName: string;
   username: string;
   tab: string;
@@ -72,7 +74,7 @@ export default function ProfilePostList({
   savedCount = 0,
 }: ProfilePostListProps) {
   // State
-  const [posts, setPosts] = useState(initialPosts);
+  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsHasMore, setPostsHasMore] = useState(
     calculateHasMoreLib(initialPosts, DEFAULT_LIMIT),
@@ -125,12 +127,14 @@ export default function ProfilePostList({
 
       const res = await fetch(url);
       const data = await res.json();
-      const newItems =
-        tab === "comments" ? (data.comments ?? []) : tab === "saved" ? (data.posts ?? []) : data;
 
-      setPosts(newItems);
-      if (tab === "comments") setComments(newItems);
-      if (tab === "saved") setSavedPosts(newItems);
+      if (tab === "posts") {
+        setPosts(Array.isArray(data) ? (data as FeedPost[]) : []);
+      } else if (tab === "comments") {
+        setComments(Array.isArray(data?.comments) ? (data.comments as FormattedComment[]) : []);
+      } else if (tab === "saved") {
+        setSavedPosts(Array.isArray(data?.posts) ? (data.posts as FeedPost[]) : []);
+      }
 
       // Scroll to top of list
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -189,7 +193,7 @@ export default function ProfilePostList({
   };
 
   // Comments state
-  const [comments, setComments] = useState(initialComments ?? []);
+  const [comments, setComments] = useState<FormattedComment[]>(initialComments ?? []);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsHasMore, setCommentsHasMore] = useState(
     calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT),
@@ -199,7 +203,7 @@ export default function ProfilePostList({
   );
 
   // Saved posts state
-  const [savedPosts, setSavedPosts] = useState<any[]>([]);
+  const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
   const [savedHasMore, setSavedHasMore] = useState(true);
   const [savedCursor, setSavedCursor] = useState<string | undefined>(undefined);
@@ -218,7 +222,7 @@ export default function ProfilePostList({
       if (!res.ok) throw new Error("Failed to load saved posts");
 
       const data = await res.json();
-      const newPosts = data.posts ?? [];
+      const newPosts = (Array.isArray(data?.posts) ? data.posts : []) as FeedPost[];
 
       setSavedHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
       // Use last saved_at as cursor (standardized in API now)
@@ -265,7 +269,7 @@ export default function ProfilePostList({
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error("Failed to load posts");
 
-      const newPosts = await res.json();
+      const newPosts = (await res.json()) as FeedPost[];
 
       setPostsHasMore(calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
       setPostsCursor(getNextCursorLib(newPosts));
@@ -293,12 +297,16 @@ export default function ProfilePostList({
       if (!res.ok) throw new Error("Failed to load comments");
 
       const data = await res.json();
-      const newComments = data.comments ?? [];
+      const newComments =
+        (Array.isArray(data?.comments) ? data.comments : []) as FormattedComment[];
 
       setCommentsHasMore(calculateHasMoreLib(newComments, DEFAULT_LIMIT));
       setCommentsCursor(getNextCursorLib(newComments));
-      const commentsWithVotes = data.userVotes
-        ? newComments.map((c: any) => ({ ...c, userVote: data.userVotes[c.id] ?? null }))
+      const commentsWithVotes = data?.userVotes
+        ? newComments.map((c) => ({
+            ...c,
+            userVote: toVoteValue(data.userVotes[c.id]),
+          }))
         : newComments;
       setComments((prev) => [...prev, ...commentsWithVotes]);
     } catch (err) {
@@ -389,7 +397,7 @@ export default function ProfilePostList({
     return (
       <>
         <div className="bg-base-200 border-neutral divide-neutral divide-y overflow-hidden rounded-2xl border">
-          {comments.map((comment: any) => {
+          {comments.map((comment) => {
             return (
               <div key={comment.id} className="hover:bg-base-100/50 p-4 transition-colors">
                 <div className="text-base-content/70 mb-2 text-xs">
@@ -418,7 +426,7 @@ export default function ProfilePostList({
                   <CommentVoteRow
                     commentId={comment.id}
                     initialScore={comment.score ?? 0}
-                    initialUserVote={comment.userVote ?? null}
+                    initialUserVote={toVoteValue(comment.userVote)}
                   />
                   <span>•</span>
                   <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
@@ -456,7 +464,7 @@ export default function ProfilePostList({
   return (
     <>
       <div className="flex flex-col gap-3">
-        {currentPosts.map((post: any) => (
+        {currentPosts.map((post: FeedPost) => (
           <PostRow key={post.id} {...post} userId={userId} variant="card" />
         ))}
       </div>

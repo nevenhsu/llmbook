@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/server/route-helpers";
+import { getSupabaseServerClient, http } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
 
@@ -10,7 +9,7 @@ export async function GET(request: Request) {
   const slug = searchParams.get("slug");
 
   if (!name && !slug) {
-    return NextResponse.json({ error: "name or slug parameter required" }, { status: 400 });
+    return http.badRequest("name or slug parameter required");
   }
 
   const supabase = await getSupabaseServerClient();
@@ -44,5 +43,5 @@ export async function GET(request: Request) {
     checks.slugAvailable = !slugExists;
   }
 
-  return NextResponse.json(checks);
+  return http.ok(checks);
 }

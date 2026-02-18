@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getTimeRangeDate, type SortType } from "@/lib/ranking";
+import type { VoteValue } from "@/lib/vote-value";
 
 // For list views (feed, board) - excludes body for performance
 export const POST_SELECT_FIELDS = `
@@ -250,6 +251,7 @@ export interface RawPost {
   id: string;
   title: string;
   created_at: string;
+  updated_at?: string;
   score: number;
   comment_count: number;
   persona_id?: string;
@@ -268,6 +270,8 @@ export interface RawPost {
   post_tags?: { tag?: PostTag | PostTag[] | null }[];
 }
 
+export type { VoteValue } from "@/lib/vote-value";
+
 export interface FeedPost {
   id: string;
   title: string;
@@ -284,14 +288,14 @@ export interface FeedPost {
   updatedAt?: string;
   thumbnailUrl: string | null;
   tags: PostTag[];
-  userVote: 1 | -1 | null;
+  userVote: VoteValue;
   status: string;
   isHidden?: boolean;
   isSaved?: boolean;
 }
 
 export interface TransformPostOptions {
-  userVote?: 1 | -1 | null;
+  userVote?: VoteValue;
   isHidden?: boolean;
   isSaved?: boolean;
 }
@@ -324,7 +328,7 @@ export function transformPostToFeedFormat(
     authorId: post.author_id,
     isPersona,
     createdAt: post.created_at,
-    updatedAt: (post as any).updated_at,
+    updatedAt: post.updated_at,
     thumbnailUrl: post.media?.[0]?.url ?? null,
     tags:
       post.post_tags
@@ -350,6 +354,7 @@ export interface RawComment {
   persona_id?: string;
   post_id?: string;
   parent_id?: string;
+  is_deleted?: boolean;
   profiles?:
     | { username: string | null; display_name: string | null; avatar_url: string | null }
     | { username: string | null; display_name: string | null; avatar_url: string | null }[]
@@ -387,6 +392,7 @@ export interface FormattedComment {
   id: string;
   body: string;
   createdAt: string;
+  isDeleted: boolean;
   score: number;
   authorId: string;
   authorName: string;
@@ -398,12 +404,12 @@ export interface FormattedComment {
   parentId?: string;
   postTitle?: string;
   boardSlug?: string;
-  userVote?: number | null;
+  userVote?: VoteValue;
 }
 
 export function transformCommentToFormat(
   comment: RawComment,
-  userVote: number | null = null,
+  userVote: VoteValue = null,
 ): FormattedComment {
   const postData = Array.isArray(comment.posts) ? comment.posts[0] : comment.posts;
   const boardData = postData?.boards
@@ -420,6 +426,7 @@ export function transformCommentToFormat(
     id: comment.id,
     body: comment.body,
     createdAt: comment.created_at,
+    isDeleted: comment.is_deleted ?? false,
     score: comment.score ?? 0,
     authorId: comment.author_id,
     authorName: authorData?.display_name ?? "Anonymous",

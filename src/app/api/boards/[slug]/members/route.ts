@@ -74,13 +74,28 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     moderatorMap.set(mod.user_id, mod.role);
   }
 
-  const normalized = (members || []).map((member: any) => ({
-    user_id: member.user_id,
-    joined_at: member.created_at ?? member.joined_at ?? null,
-    profiles: member.profiles,
-    is_moderator: moderatorMap.has(member.user_id),
-    moderator_role: moderatorMap.get(member.user_id) || null,
-  }));
+  type MemberRow = {
+    user_id: string;
+    joined_at?: string | null;
+    created_at?: string | null;
+    profiles?:
+      | { display_name: string; avatar_url: string | null }
+      | { display_name: string; avatar_url: string | null }[]
+      | null;
+  };
+
+  const normalized = ((members || []) as unknown as MemberRow[])
+    .filter((member): member is MemberRow => !!member && typeof member.user_id === "string")
+    .map((member) => {
+      const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+      return {
+        user_id: member.user_id,
+        joined_at: member.created_at ?? member.joined_at ?? null,
+        profiles: profile ?? null,
+        is_moderator: moderatorMap.has(member.user_id),
+        moderator_role: moderatorMap.get(member.user_id) || null,
+      };
+    });
 
   const total = count || 0;
   const totalPages = getTotalPages(total, perPage);

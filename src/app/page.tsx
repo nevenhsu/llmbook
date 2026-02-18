@@ -6,10 +6,13 @@ import FeedContainer from "@/components/feed/FeedContainer";
 import FeedLoadingPlaceholder from "@/components/feed/FeedLoadingPlaceholder";
 import RightSidebar from "@/components/layout/RightSidebar";
 import { sortPosts, type SortType } from "@/lib/ranking";
+import { toVoteValue } from "@/lib/vote-value";
 import {
   buildPostsQuery,
   fetchUserInteractions,
   transformPostToFeedFormat,
+  type FeedPost,
+  type RawPost,
 } from "@/lib/posts/query-builder";
 
 type TimeRange = "hour" | "day" | "week" | "month" | "year" | "all";
@@ -45,10 +48,13 @@ async function HomeFeed({ sortBy, timeRange }: { sortBy: SortType; timeRange: Ti
   });
 
   const { data: postData } = await postsQuery;
-  const sortedPosts = sortPosts((postData as any[]) ?? [], sortBy);
+  const rawPosts = ((postData ?? []) as unknown as RawPost[]).filter(
+    (p): p is RawPost => !!p && typeof p.id === "string",
+  );
+  const sortedPosts = sortPosts(rawPosts, sortBy);
   const topPosts = sortedPosts.slice(0, 20);
 
-  const postIds = topPosts.map((p: any) => p.id);
+  const postIds = topPosts.map((p) => p.id);
   const {
     votes: userVotes,
     hiddenPostIds,
@@ -57,13 +63,14 @@ async function HomeFeed({ sortBy, timeRange }: { sortBy: SortType; timeRange: Ti
     ? await fetchUserInteractions(supabase, user.id, postIds)
     : { votes: {}, hiddenPostIds: new Set<string>(), savedPostIds: new Set<string>() };
 
-  const posts = topPosts.map((post: any) =>
-    transformPostToFeedFormat(post, {
-      userVote: userVotes[post.id] || null,
+  const posts: FeedPost[] = topPosts.map((post) => {
+    const userVote = toVoteValue(userVotes[post.id]);
+    return transformPostToFeedFormat(post, {
+      userVote,
       isHidden: hiddenPostIds.has(post.id),
       isSaved: savedPostIds.has(post.id),
-    }),
-  );
+    });
+  });
 
   return (
     <FeedContainer initialPosts={posts} userId={user?.id} sortBy={sortBy} timeRange={timeRange} />

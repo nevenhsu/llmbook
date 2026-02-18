@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function isAdmin(userId: string, supabaseClient?: any): Promise<boolean> {
+export async function isAdmin(userId: string, supabaseClient?: SupabaseClient): Promise<boolean> {
   if (!userId) {
     return false;
   }

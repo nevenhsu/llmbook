@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Avatar from "@/components/ui/Avatar";
 import Timestamp from "@/components/ui/Timestamp";
 import VotePill from "@/components/ui/VotePill";
@@ -9,16 +9,18 @@ import SafeHtml from "@/components/ui/SafeHtml";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
-import { useVote } from "@/hooks/useVote";
+import { useVote } from "@/hooks/use-vote";
 import { voteComment } from "@/lib/api/votes";
+import ResponsiveMenu, { ResponsiveMenuHandle } from "@/components/ui/ResponsiveMenu";
+import type { FormattedComment, VoteValue } from "@/lib/posts/query-builder";
 
 interface CommentItemProps {
-  comment: any;
-  userVote?: 1 | -1 | null;
+  comment: FormattedComment;
+  userVote?: VoteValue;
   userId?: string;
   canModerate?: boolean;
-  onRequestReply?: (comment: any) => void;
-  onRequestEdit?: (comment: any) => void;
+  onRequestReply?: (comment: FormattedComment) => void;
+  onRequestEdit?: (comment: FormattedComment) => void;
   onChanged?: () => void;
   onUpdate?: (commentId: string, newBody: string) => void;
   onDelete?: (commentId: string) => void;
@@ -40,11 +42,11 @@ export default function CommentItem({
   isArchived = false,
 }: CommentItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUndeleting, setIsUndeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { openLoginModal } = useLoginModal();
+  const menuRef = useRef<ResponsiveMenuHandle>(null);
 
   const { score, userVote, handleVote, voteDisabled } = useVote({
     id: comment.id,
@@ -75,7 +77,6 @@ export default function CommentItem({
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
-      setShowMoreMenu(false);
     }
   };
 
@@ -96,7 +97,6 @@ export default function CommentItem({
       toast.error("Failed to undelete comment");
     } finally {
       setIsUndeleting(false);
-      setShowMoreMenu(false);
     }
   };
 
@@ -119,10 +119,94 @@ export default function CommentItem({
     } catch (err) {
       console.error("Failed to remove comment:", err);
       toast.error("Failed to remove comment");
-    } finally {
-      setShowMoreMenu(false);
     }
   };
+
+  const canEdit = isAuthor && !comment.isDeleted;
+  const canDelete = isAuthor && !comment.isDeleted;
+  const canRemove = canModerate && !comment.isDeleted && !isAuthor;
+  const canRestore = canModerate && comment.isDeleted;
+  const hasAnyAction = canEdit || canDelete || canRemove || canRestore;
+
+  const menuItems = (
+    <>
+      {canEdit && (
+        <li>
+          <button
+            aria-label="Edit comment"
+            onClick={() => {
+              menuRef.current?.close();
+              onRequestEdit?.(comment);
+            }}
+            className="text-base-content flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
+          >
+            <Edit size={20} className="md:hidden" />
+            <Edit size={16} className="hidden md:inline" />
+            Edit
+          </button>
+        </li>
+      )}
+
+      {canDelete && (
+        <li>
+          <button
+            aria-label="Delete comment"
+            onClick={() => {
+              menuRef.current?.close();
+              setShowDeleteConfirm(true);
+            }}
+            disabled={isDeleting}
+            className="text-error flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
+          >
+            <Trash2 size={20} className="md:hidden" />
+            <Trash2 size={16} className="hidden md:inline" />
+            {isDeleting ? "Deleting..." : "Delete"}
+          </button>
+        </li>
+      )}
+
+      {canRemove && (
+        <li>
+          <button
+            aria-label="Remove comment (moderator)"
+            onClick={() => {
+              menuRef.current?.close();
+              void handleRemove();
+            }}
+            className="text-warning flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
+          >
+            <ShieldOff size={20} className="md:hidden" />
+            <ShieldOff size={16} className="hidden md:inline" />
+            Remove (Mod)
+          </button>
+        </li>
+      )}
+
+      {canRestore && (
+        <li>
+          <button
+            aria-label="Restore comment"
+            onClick={() => {
+              menuRef.current?.close();
+              void handleUndelete();
+            }}
+            disabled={isUndeleting}
+            className="text-success flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
+          >
+            <ShieldOff size={20} className="md:hidden" />
+            <ShieldOff size={16} className="hidden md:inline" />
+            {isUndeleting ? "Restoring..." : "Restore"}
+          </button>
+        </li>
+      )}
+
+      {!hasAnyAction && (
+        <li className="text-base-content/50 px-4 py-3 text-center text-base md:text-sm">
+          No actions available
+        </li>
+      )}
+    </>
+  );
 
   if (isCollapsed) {
     return (
@@ -172,7 +256,7 @@ export default function CommentItem({
           <Timestamp date={comment.createdAt} />
         </div>
 
-        {comment.is_deleted ? (
+        {comment.isDeleted ? (
           <div className="text-base-content/60 mb-2 text-sm">[deleted]</div>
         ) : (
           <SafeHtml
@@ -212,72 +296,15 @@ export default function CommentItem({
           )}
 
           {!isArchived && (
-            <div className="relative">
-              <button
-                onClick={() => setShowMoreMenu(!showMoreMenu)}
-                className="hover:bg-base-100 rounded-sm p-1"
-              >
-                <MoreHorizontal size={16} />
-              </button>
-
-              {showMoreMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowMoreMenu(false)} />
-                  <div className="bg-base-100 border-neutral absolute top-8 left-0 z-20 w-48 rounded-md border py-1 shadow-lg">
-                    {isAuthor && !comment.is_deleted && (
-                      <>
-                        <button
-                          onClick={() => {
-                            onRequestEdit?.(comment);
-                            setShowMoreMenu(false);
-                          }}
-                          className="text-base-content hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
-                        >
-                          <Edit size={16} />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowDeleteConfirm(true);
-                          }}
-                          disabled={isDeleting}
-                          className="text-error hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
-                        >
-                          <Trash2 size={16} />
-                          {isDeleting ? "Deleting..." : "Delete"}
-                        </button>
-                      </>
-                    )}
-                    {canModerate && !comment.is_deleted && !isAuthor && (
-                      <button
-                        onClick={handleRemove}
-                        className="text-warning hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
-                      >
-                        <ShieldOff size={16} />
-                        Remove (Mod)
-                      </button>
-                    )}
-                    {canModerate && comment.is_deleted && (
-                      <>
-                        <button
-                          onClick={handleUndelete}
-                          disabled={isUndeleting}
-                          className="text-success hover:bg-base-200 flex w-full items-center gap-2 px-4 py-2 text-sm"
-                        >
-                          <ShieldOff size={16} />
-                          {isUndeleting ? "Restoring..." : "Restore"}
-                        </button>
-                      </>
-                    )}
-                    {!isAuthor && !canModerate && !comment.is_deleted && (
-                      <div className="text-base-content/50 px-4 py-2 text-sm">
-                        No actions available
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+            <ResponsiveMenu
+              ref={menuRef}
+              trigger={<MoreHorizontal size={16} />}
+              title="Comment actions"
+              triggerClassName="hover:bg-base-100 rounded-sm p-1"
+              ariaLabel="Comment actions"
+            >
+              {menuItems}
+            </ResponsiveMenu>
           )}
         </div>
 
@@ -290,6 +317,7 @@ export default function CommentItem({
           title="Delete Comment?"
           message="Are you sure you want to delete this comment?"
           confirmText="Delete Comment"
+          confirmationText="DELETE"
           isLoading={isDeleting}
         />
       </div>

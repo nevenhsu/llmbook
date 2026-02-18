@@ -7,23 +7,22 @@ import Avatar from "@/components/ui/Avatar";
 import ImageUpload from "@/components/ui/ImageUpload";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
+import { useRulesEditor, type Rule } from "@/hooks/use-rules-editor";
 import {
   DEFAULT_MODERATOR_PERMISSIONS,
   type ModeratorPermissions,
 } from "@/types/board";
-
-interface Rule {
-  title: string;
-  description: string;
-}
 
 interface Moderator {
   id: string;
   user_id: string;
   role: string;
   permissions?: Partial<ModeratorPermissions>;
-  // profiles shape can vary between backend responses; use any to avoid type conflicts
-  profiles: any;
+  profiles: {
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
 }
 
 interface SearchProfile {
@@ -34,7 +33,13 @@ interface SearchProfile {
 }
 
 interface BoardSettingsFormProps {
-  board: any;
+  board: {
+    slug: string;
+    name: string;
+    description?: string | null;
+    banner_url?: string | null;
+    rules?: Rule[] | null;
+  };
   moderators: Moderator[];
   userRole: "owner" | "moderator";
   isAdmin: boolean;
@@ -77,7 +82,8 @@ export default function BoardSettingsForm({
   const [bannerUrl, setBannerUrl] = useState(board.banner_url || "");
 
   // Rules state
-  const [rules, setRules] = useState<Rule[]>(board.rules || []);
+  const initialRules: Rule[] = Array.isArray(board.rules) ? (board.rules as Rule[]) : [];
+  const { rules, addRule, updateRule, removeRule } = useRulesEditor(initialRules);
 
   useEffect(() => {
     setModeratorsList(moderators);
@@ -121,9 +127,10 @@ export default function BoardSettingsForm({
             return nextResults.some((profile) => profile.user_id === prev.user_id) ? prev : null;
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          setError(err.message || "Failed to search users");
+          const message = err instanceof Error ? err.message : "Failed to search users";
+          setError(message);
           setSearchResults([]);
         }
       } finally {
@@ -160,7 +167,7 @@ export default function BoardSettingsForm({
 
       router.refresh();
       toast.success("Settings updated successfully");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Failed to update board general settings.");
     } finally {
@@ -187,7 +194,7 @@ export default function BoardSettingsForm({
 
       router.refresh();
       toast.success("Rules updated successfully");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Failed to update rules.");
     } finally {
@@ -209,7 +216,7 @@ export default function BoardSettingsForm({
       }
 
       router.push("/r/archive");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Failed to archive board.");
       setLoading(false);
@@ -288,7 +295,7 @@ export default function BoardSettingsForm({
       );
       setExpandedPermissionUserId(null);
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Failed to update moderator permissions.");
     } finally {
@@ -339,7 +346,7 @@ export default function BoardSettingsForm({
       setShowAddModeratorModal(false);
       resetAddModeratorState();
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Failed to add moderator.");
     } finally {
@@ -371,28 +378,12 @@ export default function BoardSettingsForm({
       setShowRemoveModeratorModal(false);
       setModeratorToRemove(null);
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Failed to remove moderator.");
     } finally {
       setRemoveLoadingUserId(null);
     }
-  };
-
-  const addRule = () => {
-    if (rules.length < 15) {
-      setRules([...rules, { title: "", description: "" }]);
-    }
-  };
-
-  const updateRule = (index: number, field: "title" | "description", value: string) => {
-    const newRules = [...rules];
-    newRules[index][field] = value;
-    setRules(newRules);
-  };
-
-  const removeRule = (index: number) => {
-    setRules(rules.filter((_, i) => i !== index));
   };
 
   return (
@@ -685,32 +676,16 @@ export default function BoardSettingsForm({
       )}
 
       {/* Archive Confirmation Modal */}
-      {showArchiveModal && (
-        <dialog className="modal modal-open modal-bottom sm:modal-middle">
-          <div className="modal-box">
-            <h3 className="text-lg font-bold">Archive r/{board.slug}?</h3>
-            <p className="py-4">
-              This action cannot be undone. The board will become read-only and will be moved to the
-              archive.
-            </p>
-            <div className="modal-action">
-              <button
-                className="btn btn-ghost"
-                onClick={() => setShowArchiveModal(false)}
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button className="btn btn-error" onClick={handleArchive} disabled={loading}>
-                {loading ? <span className="loading loading-spinner"></span> : "Archive"}
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button onClick={() => setShowArchiveModal(false)}>close</button>
-          </form>
-        </dialog>
-      )}
+      <ConfirmModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onConfirm={handleArchive}
+        title={`Archive r/${board.slug}?`}
+        message="This action cannot be undone. The board will become read-only and will be moved to the archive."
+        confirmText="Archive"
+        isLoading={loading}
+        variant="danger"
+      />
 
       {/* Add Moderator Modal */}
       {showAddModeratorModal && (

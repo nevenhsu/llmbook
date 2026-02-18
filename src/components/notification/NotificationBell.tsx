@@ -9,11 +9,15 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const userContext = useOptionalUserContext();
 
+  type NotificationRow = { read_at?: string | null };
+
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch("/api/notifications");
       const data = await res.json();
-      const unread = Array.isArray(data) ? data.filter((n: any) => !n.read_at).length : 0;
+      const unread = Array.isArray(data)
+        ? (data as NotificationRow[]).filter((n) => !n.read_at).length
+        : 0;
       setUnreadCount(unread);
     } catch (err) {
       console.error("Failed to fetch notifications:", err);

@@ -39,7 +39,7 @@ A complete, correct implementation already exists in `src/hooks/useVote.ts` with
 ---
 
 ### R-02 Save/Hide Logic Duplicated in Two Components
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `handleSave`, `handleHide`, `handleUnhide` are copy-pasted between:
 - `src/components/post/PostRow.tsx:86-133`
@@ -61,10 +61,16 @@ export function usePostInteractions(postId: string, initialSaved: boolean, initi
 }
 ```
 
+**Implemented:**
+- Added `src/hooks/use-post-interactions.ts`
+- Updated:
+  - `src/components/post/PostRow.tsx`
+  - `src/components/post/PostActionsWrapper.tsx`
+
 ---
 
 ### R-03 API Routes — Auth Boilerplate Not Using `withAuth`
-**Status:** `[>]`
+**Status:** `[✓]`
 
 The following pattern appears in 10+ route handlers manually instead of using the existing `withAuth` wrapper:
 ```ts
@@ -88,17 +94,23 @@ Routes already using `withAuth` correctly (reference):
 
 **Proposal:** Migrate all above routes to `withAuth`.
 
-**Implemented (partial):**
-- Migrated board-related routes to `withAuth`: `src/app/api/boards/[slug]/route.ts`, `src/app/api/boards/[slug]/moderators/route.ts`, `src/app/api/boards/[slug]/moderators/[userId]/route.ts`, `src/app/api/boards/[slug]/bans/route.ts`, `src/app/api/boards/[slug]/bans/[userId]/route.ts`, `src/app/api/boards/[slug]/members/[userId]/route.ts`, `src/app/api/boards/[slug]/join/route.ts`
-
-**Remaining:**
-- `src/app/api/posts/[id]/route.ts` (PATCH, DELETE)
-- `src/app/api/profile/route.ts`
+**Implemented:**
+- Migrated the listed remaining routes to `withAuth`:
+  - `src/app/api/posts/[id]/route.ts` (PATCH, DELETE)
+  - `src/app/api/profile/route.ts`
+- Also migrated additional auth-gated routes discovered during follow-up cleanup:
+  - `src/app/api/posts/route.ts` (POST)
+  - `src/app/api/polls/[postId]/vote/route.ts` (POST)
+  - `src/app/api/tags/route.ts` (POST)
+  - `src/app/api/media/upload/route.ts`
+  - `src/app/api/saved/[postId]/route.ts`
+  - `src/app/api/hidden/[postId]/route.ts`
+  - `src/app/api/users/[userId]/follow/route.ts`
 
 ---
 
 ### R-04 API Error Response Format — 3 Inconsistent Styles
-**Status:** `[>]`
+**Status:** `[✓]`
 
 Three different formats are used across routes:
 
@@ -117,8 +129,12 @@ Style A is problematic: `new NextResponse("text")` sets `Content-Type: text/plai
 
 **Proposal:** Standardise on Style B (`http.*` helpers from `src/lib/server/route-helpers.ts`) across all routes.
 
-**Implemented (partial):**
-- Standardised board-related routes on `http.*` + `parseJsonBody` where applicable (same set as R-03 above).
+**Implemented:**
+- Removed remaining manual `NextResponse.json({ error: ... })` (Style C) in favor of `http.*` helpers (Style B):
+  - `src/app/api/auth/login/route.ts`
+  - `src/app/api/auth/register/route.ts`
+  - `src/app/api/boards/check-availability/route.ts`
+  - `src/app/api/boards/search/route.ts`
 
 ---
 
@@ -208,7 +224,7 @@ export function useInfiniteScroll(
 ---
 
 ### R-08 Rules Editor Logic Duplicated
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `addRule`, `updateRule`, `removeRule` functions are identical in:
 - `src/components/board/CreateBoardForm.tsx:104-118`
@@ -225,10 +241,16 @@ export function useRulesEditor(initialRules: Rule[] = []) {
 }
 ```
 
+**Implemented:**
+- Added `src/hooks/use-rules-editor.ts`
+- Updated:
+  - `src/components/board/CreateBoardForm.tsx`
+  - `src/components/board/BoardSettingsForm.tsx`
+
 ---
 
 ### R-09 `board-permissions.ts` Creates New Supabase Client Per Call
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 Every function in `src/lib/board-permissions.ts` calls `createServerClient(cookies())` internally. When route handlers already have a client, calling these functions opens an additional unnecessary connection.
 
@@ -242,6 +264,10 @@ export async function isBoardModerator(
   supabase?: SupabaseClient,
 ): Promise<boolean>
 ```
+
+**Implemented:**
+- Updated `src/lib/board-permissions.ts` to accept optional `supabase` and reuse it internally
+- Updated common call sites that already have a Supabase client (routes/pages) to pass it
 
 ---
 
@@ -258,7 +284,7 @@ export async function isBoardModerator(
 ---
 
 ### R-11 `BoardSettingsForm.tsx` — Inconsistent Modal Usage
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 Three different dialog patterns in the same file:
 - Archive confirmation → raw `<dialog>` element (line 700)
@@ -267,41 +293,63 @@ Three different dialog patterns in the same file:
 
 **Proposal:** Standardise on `<ConfirmModal>` for all confirmation dialogs.
 
+**Implemented:**
+- Switched board archive confirmation to shared `<ConfirmModal>` and improved `<ConfirmModal>` to be a generic confirmation dialog (optional text confirmation) instead of delete-specific copy.
+
 ---
 
 ## 🟢 Low Priority (Polish / Consistency)
 
 ### R-12 Search Page — Three Identical List Structures
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `src/app/search/page.tsx:102-177` repeats the same list structure for boards, users, and personas tabs (Avatar + name + subtitle + empty state).
 
 **Proposal:** Extract `src/components/search/SearchResultList.tsx` with `items`, `renderItem`, `emptyMessage` props.
 
+**Implemented:**
+- Added `src/components/search/SearchResultList.tsx`
+- Updated `src/app/search/page.tsx` to reuse it for boards/users/personas tabs
+
 ---
 
 ### R-13 `CommentItem.tsx` — Manual Dropdown Instead of `ResponsiveMenu`
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `src/components/comment/CommentItem.tsx:215-280` manually implements a dropdown with `showMoreMenu` state and click-outside overlay. `PostActions.tsx` already uses the shared `<ResponsiveMenu>` component.
 
 **Proposal:** Replace the manual dropdown in `CommentItem` with `<ResponsiveMenu>`.
 
+**Implemented:**
+- Updated `src/components/comment/CommentItem.tsx` to use `src/components/ui/ResponsiveMenu.tsx`
+
 ---
 
 ### R-14 Hook File Naming Inconsistent
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 Two naming conventions in `src/hooks/`:
 - camelCase: `useVote.ts`, `useTheme.ts`
 - kebab-case: `use-vote-mutation.ts`, `use-window-size.ts`, `use-scrolling.ts`
 
-**Proposal:** Standardise all hooks to kebab-case (project convention per `docs/CONVENTIONS_NAMING.md`). Note: R-01 (deleting `use-vote-mutation.ts`) already removes one offender.
+**Proposal:** Standardise all hooks to kebab-case (align with the majority of existing hook files). Note: R-01 (deleting `use-vote-mutation.ts`) already removes one offender.
+
+**Implemented:**
+- Renamed:
+  - `src/hooks/useVote.ts` → `src/hooks/use-vote.ts`
+  - `src/hooks/useTheme.ts` → `src/hooks/use-theme.ts`
+- Updated imports:
+  - `src/components/comment/CommentItem.tsx`
+  - `src/components/post/PostRow.tsx`
+  - `src/components/profile/ProfilePostList.tsx`
+  - `src/components/post/PostDetailVote.tsx`
+  - `src/components/ui/ThemeToggle.tsx`
+  - `src/components/layout/UserMenu.tsx`
 
 ---
 
 ### R-15 `any` Type Overuse
-**Status:** `[ ]`
+**Status:** `[>]`
 
 Key locations using `any`:
 | File | Line | Field |
@@ -314,14 +362,52 @@ Key locations using `any`:
 
 **Proposal:** Replace with proper TypeScript types. Start with the most-used components (FeedContainer, PostList).
 
+**Implemented (partial):**
+- Introduced stronger shared types in `src/lib/posts/query-builder.ts`:
+  - `VoteValue`
+  - `FormattedComment.isDeleted`
+  - `RawPost.updated_at` (remove `(post as any).updated_at`)
+- Removed `any` from key UI surfaces:
+  - `src/components/feed/FeedContainer.tsx` (`initialPosts: FeedPost[]`)
+  - `src/components/comment/CommentItem.tsx` (`comment: FormattedComment`)
+  - `src/components/comment/CommentThread.tsx`
+  - `src/components/profile/ProfilePostList.tsx` (posts/comments/saved typing)
+  - `src/components/feed/FeedSortBar.tsx` (Lucide icon type)
+  - `src/app/search/page.tsx` (typed search result unions)
+  - `src/components/search/SearchBar.tsx`, `src/components/search/MobileSearchOverlay.tsx` (typed quick results)
+  - `src/components/notification/NotificationBell.tsx` (typed notification rows)
+- Reduced route-level `any` in comment/vote related endpoints:
+  - `src/app/api/profile/comments/route.ts`
+  - `src/app/api/posts/[id]/comments/route.ts`
+  - `src/app/api/profile/saved/route.ts`
+- Reduced `any` in board and voting routes:
+  - `src/app/api/boards/[slug]/route.ts`
+  - `src/app/api/boards/[slug]/members/route.ts`
+  - `src/app/api/votes/route.ts`
+- Removed `any` in core post feed/edit endpoints:
+  - `src/app/api/posts/route.ts`
+  - `src/app/api/posts/[id]/route.ts`
+- Removed `any` in ranking/admin/notifications libs and core SSR pages:
+  - `src/lib/ranking.ts`
+  - `src/lib/admin.ts`
+  - `src/lib/notifications.ts`
+  - `src/app/page.tsx`
+  - `src/app/r/[slug]/page.tsx`
+  - `src/app/u/[username]/page.tsx`
+- Deduplicated vote parsing helper:
+  - Added `src/lib/vote-value.ts` (`toVoteValue`, `VoteValue`) and replaced repeated local helpers
+
 ---
 
 ### R-16 `notifications/archive/page.tsx` — Entire Page is Mock Data
-**Status:** `[ ]`
+**Status:** `[✓]`
 
 `src/app/notifications/archive/page.tsx:31-62` uses a hardcoded `ARCHIVED_NOTIFICATIONS` array and a fake `loadMore` function backed by `setTimeout`. No TODO comment marks it as incomplete.
 
 **Proposal:** Either implement the real feature or add a clear `// TODO:` comment and a "Coming soon" UI placeholder.
+
+**Implemented:**
+- Replaced mock archived notifications page content with a "Coming soon" placeholder and added a TODO marker.
 
 ---
 

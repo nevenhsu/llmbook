@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { http } from "@/lib/server/route-helpers";
+import type { NextRequest } from "next/server";
 
 /**
  * Login API - Supports email or username
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     // Validate input
     if (!identifier || !password) {
-      return NextResponse.json({ error: "請輸入 Email/Username 和密碼" }, { status: 400 });
+      return http.badRequest("請輸入 Email/Username 和密碼");
     }
 
     const supabase = await createClient();
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (profileError || !profile) {
-        return NextResponse.json({ error: "Username 或密碼錯誤" }, { status: 401 });
+        return http.unauthorized("Username 或密碼錯誤");
       }
 
       // Get email from auth.users using admin client
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       } = await adminClient.auth.admin.getUserById(profile.user_id);
 
       if (userError || !user?.email) {
-        return NextResponse.json({ error: "Username 或密碼錯誤" }, { status: 401 });
+        return http.unauthorized("Username 或密碼錯誤");
       }
 
       email = user.email;
@@ -54,10 +55,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (signInError) {
-      return NextResponse.json({ error: "Email/Username 或密碼錯誤" }, { status: 401 });
+      return http.unauthorized("Email/Username 或密碼錯誤");
     }
 
-    return NextResponse.json({
+    return http.ok({
       success: true,
       user: {
         id: data.user.id,
@@ -65,8 +66,10 @@ export async function POST(request: NextRequest) {
       },
       message: "登入成功！",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Login API error:", error);
-    return NextResponse.json({ error: error.message || "登入時發生錯誤" }, { status: 500 });
+
+    const message = error instanceof Error ? error.message : "登入時發生錯誤";
+    return http.internalError(message);
   }
 }

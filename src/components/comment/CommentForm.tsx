@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
+import type { FormattedComment } from "@/lib/posts/query-builder";
 
 interface CommentFormProps {
   postId: string;
   parentId?: string;
   onCancel?: () => void;
-  onSubmit?: (comment: any) => void;
+  onSubmit?: (comment: FormattedComment) => void;
   placeholder?: string;
 }
 

@@ -28,13 +28,13 @@ export const DELETE = withAuth<{ slug: string; userId: string }>(async (
   const boardId = boardIdResult.boardId;
 
   // Verify permissions (redundant with RLS but good for explicit error messages)
-  const canManageUsers = await canManageBoardUsers(boardId, user.id);
+  const canManageUsers = await canManageBoardUsers(boardId, user.id, supabase);
   if (!canManageUsers) {
     return http.forbidden("Forbidden: Only owner or managers can kick members");
   }
 
   // Check if target is a moderator (RLS policy also prevents this)
-  const isTargetMod = await isBoardModerator(boardId, userId);
+  const isTargetMod = await isBoardModerator(boardId, userId, supabase);
   if (isTargetMod) {
     return http.forbidden("Cannot kick moderators");
   }

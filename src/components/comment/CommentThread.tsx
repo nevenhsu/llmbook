@@ -5,6 +5,8 @@ import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
 import CommentEditorModal from "./CommentEditorModal";
 import { useLoginModal } from "@/contexts/LoginModalContext";
+import { toVoteValue } from "@/lib/vote-value";
+import type { FormattedComment } from "@/lib/posts/query-builder";
 
 interface CommentThreadProps {
   postId: string;
@@ -20,7 +22,7 @@ export default function CommentThread({
   isDeleted = false,
 }: CommentThreadProps) {
   const isLocked = isArchived || isDeleted;
-  const [comments, setComments] = useState<any[]>([]);
+  const [comments, setComments] = useState<FormattedComment[]>([]);
   const [sort, setSort] = useState("new");
   const [isLoading, setIsLoading] = useState(true);
   const { openLoginModal, openRegisterModal } = useLoginModal();
@@ -43,11 +45,15 @@ export default function CommentThread({
     setIsLoading(true);
     try {
       const res = await fetch(`/api/posts/${postId}/comments?sort=${sort}`);
-      const data = await res.json();
-      const userVotes: Record<string, number | null> = data.userVotes || {};
-      const commentsWithVotes = (data.comments || []).map((c: any) => ({
+      const data = (await res.json()) as {
+        comments?: FormattedComment[];
+        userVotes?: Record<string, unknown>;
+      };
+
+      const userVotes = data.userVotes ?? {};
+      const commentsWithVotes = (data.comments ?? []).map((c) => ({
         ...c,
-        userVote: userVotes[c.id] ?? null,
+        userVote: toVoteValue(userVotes[c.id]),
       }));
       setComments(commentsWithVotes);
     } catch (err) {
@@ -71,7 +77,7 @@ export default function CommentThread({
     });
   };
 
-  const openReply = (comment: any) => {
+  const openReply = (comment: FormattedComment) => {
     setEditorState({
       isOpen: true,
       mode: "reply",
@@ -81,7 +87,7 @@ export default function CommentThread({
     });
   };
 
-  const openEdit = (comment: any) => {
+  const openEdit = (comment: FormattedComment) => {
     setEditorState({
       isOpen: true,
       mode: "edit",
@@ -91,30 +97,33 @@ export default function CommentThread({
     });
   };
 
+  type CommentNode = FormattedComment & { children: CommentNode[] };
+
   const tree = useMemo(() => {
-    const map: Record<string, any> = {};
-    comments.forEach((c) => {
+    const map: Record<string, CommentNode> = {};
+    for (const c of comments) {
       map[c.id] = { ...c, children: [] };
-    });
+    }
 
-    const roots: any[] = [];
-    comments.forEach((c) => {
+    const roots: CommentNode[] = [];
+    for (const c of comments) {
+      const node = map[c.id];
       if (c.parentId && map[c.parentId]) {
-        map[c.parentId].children.push(map[c.id]);
+        map[c.parentId].children.push(node);
       } else {
-        roots.push(map[c.id]);
+        roots.push(node);
       }
-    });
+    }
 
-    return roots;
+    return roots as CommentNode[];
   }, [comments]);
 
-  const renderComments = (nodes: any[]) => {
+  const renderComments = (nodes: CommentNode[]) => {
     return nodes.map((node) => (
       <CommentItem
         key={node.id}
         comment={node}
-        userVote={node.userVote ?? null}
+        userVote={toVoteValue(node.userVote)}
         userId={userId}
         onRequestReply={!isLocked ? openReply : undefined}
         onRequestEdit={!isLocked ? openEdit : undefined}

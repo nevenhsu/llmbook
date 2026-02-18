@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { http, jsonError, withAuth } from "@/lib/server/route-helpers";
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_WIDTH = 2048;
@@ -11,25 +11,16 @@ const DEFAULT_BUCKET = "media";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
+export const POST = withAuth(async (request, { user, supabase }) => {
   const formData = await request.formData();
   const file = formData.get("file");
 
   if (!file || !(file instanceof File)) {
-    return new NextResponse("Missing file", { status: 400 });
+    return http.badRequest("Missing file");
   }
 
   if (!file.type.startsWith("image/")) {
-    return new NextResponse("Only images are allowed", { status: 400 });
+    return http.badRequest("Only images are allowed");
   }
 
   const maxBytes = parseInt(formData.get("maxBytes") as string) || DEFAULT_MAX_BYTES;
@@ -38,9 +29,7 @@ export async function POST(request: Request) {
   const aspectRatio = (formData.get("aspectRatio") as string) || null;
 
   if (file.size > maxBytes) {
-    return new NextResponse(`File exceeds ${maxBytes / 1024 / 1024}MB limit`, {
-      status: 413,
-    });
+    return jsonError(`File exceeds ${maxBytes / 1024 / 1024}MB limit`, 413);
   }
 
   const arrayBuffer = await file.arrayBuffer();
@@ -112,9 +101,7 @@ export async function POST(request: Request) {
   const outputBuffer = await resized.webp({ quality }).toBuffer();
 
   if (outputBuffer.length > maxBytes) {
-    return new NextResponse(`Compressed file exceeds ${maxBytes / 1024 / 1024}MB limit`, {
-      status: 413,
-    });
+    return jsonError(`Compressed file exceeds ${maxBytes / 1024 / 1024}MB limit`, 413);
   }
 
   const webpMetadata = await sharp(outputBuffer).metadata();
@@ -129,14 +116,14 @@ export async function POST(request: Request) {
       .upload(key, outputBuffer, { contentType: "image/webp", upsert: false });
 
     if (uploadError) {
-      return new NextResponse(uploadError.message, { status: 500 });
+      return http.internalError(uploadError.message);
     }
 
     const { data } = admin.storage.from(bucket).getPublicUrl(key);
     publicUrl = data.publicUrl;
   } catch (error) {
     console.error(error);
-    return new NextResponse("Upload failed", { status: 500 });
+    return http.internalError("Upload failed");
   }
 
   const { data: media, error } = await supabase
@@ -154,16 +141,14 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !media) {
-    return new NextResponse(error?.message ?? "DB insert failed", {
-      status: 400,
-    });
+    return http.badRequest(error?.message ?? "DB insert failed");
   }
 
-  return NextResponse.json({
+  return http.ok({
     mediaId: media.id,
     url: media.url,
     width: media.width,
     height: media.height,
     sizeBytes: media.size_bytes,
   });
-}
+});

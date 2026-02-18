@@ -59,7 +59,7 @@ export default async function BoardBanPage({
   if (user) {
     const [userIsAdmin, userIsModerator] = await Promise.all([
       isAdmin(user.id, supabase),
-      isBoardModerator(board.id, user.id),
+      isBoardModerator(board.id, user.id, supabase),
     ]);
 
     canEditBans = userIsAdmin || userIsModerator;

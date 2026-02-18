@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import Image from "next/image";
 import { ChevronDown, User, Paintbrush, Moon, Sun, LogOut } from "lucide-react";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/use-theme";
 import { generateAvatarDataUri } from "@/lib/dicebear";
 
 interface UserMenuProps {

@@ -207,6 +207,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
 ### HTTP Helpers
 
+Use `http.*` for error responses to keep the API error shape consistent (`{ error: string }`) and avoid accidentally returning non-JSON error bodies.
+
 ```typescript
 import { http } from "@/lib/server/route-helpers";
 
@@ -348,6 +350,11 @@ export async function POST(req: Request) {
 export const POST = withAuth(async (req, { user, supabase }) => {
   // User is guaranteed to be authenticated
   // ... handler logic
+
+  // Errors
+  // return http.badRequest("...");
+  // return http.unauthorized();
+  // return http.internalError("...");
 });
 ```
 

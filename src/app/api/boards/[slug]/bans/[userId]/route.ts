@@ -28,7 +28,7 @@ export const DELETE = withAuth<{ slug: string; userId: string }>(async (
 
   const [userIsAdmin, userIsModerator] = await Promise.all([
     isAdmin(user.id, supabase),
-    isBoardModerator(boardId, user.id),
+    isBoardModerator(boardId, user.id, supabase),
   ]);
 
   if (!userIsAdmin && !userIsModerator) {
