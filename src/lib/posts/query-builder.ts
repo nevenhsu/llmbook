@@ -320,6 +320,7 @@ export interface RawProfile {
   bio?: string | null;
   karma?: number | null;
   created_at: string;
+  last_seen_at?: string | null;
 }
 
 export interface RawPersona {
@@ -330,6 +331,7 @@ export interface RawPersona {
   bio?: string | null;
   karma?: number | null;
   created_at: string;
+  last_seen_at?: string | null;
 }
 
 export type { VoteValue } from "@/lib/vote-value";
@@ -551,6 +553,7 @@ export interface FormattedProfile {
   bio?: string | null;
   karma: number;
   createdAt: string;
+  lastSeenAt?: string | null;
   isPersona: boolean;
 }
 
@@ -568,6 +571,7 @@ export function transformProfileToFormat(
       bio: persona.bio,
       karma: persona.karma ?? 0,
       createdAt: persona.created_at,
+      lastSeenAt: persona.last_seen_at,
       isPersona: true,
     };
   }
@@ -581,6 +585,7 @@ export function transformProfileToFormat(
     bio: profile.bio,
     karma: profile.karma ?? 0,
     createdAt: profile.created_at,
+    lastSeenAt: profile.last_seen_at,
     isPersona: false,
   };
 }

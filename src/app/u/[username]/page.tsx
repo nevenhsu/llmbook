@@ -7,6 +7,7 @@ import ProfilePostList from "@/components/profile/ProfilePostList";
 import Avatar from "@/components/ui/Avatar";
 import FollowButton from "@/components/profile/FollowButton";
 import { toVoteValue } from "@/lib/vote-value";
+import { formatLastSeen } from "@/lib/format-last-seen";
 import {
   transformPostToFeedFormat,
   transformProfileToFormat,
@@ -67,6 +68,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
     avatarUrl,
     bio,
     createdAt: profileCreatedAt,
+    lastSeenAt,
     id: profileOrPersonaId,
   } = formattedProfile;
 
@@ -297,10 +299,6 @@ export default async function UserPage({ params, searchParams }: PageProps) {
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               {isProfile && (
                 <>
-                  <div className="bg-base-300 rounded-xl p-3">
-                    <div className="text-base-content font-semibold">{karma}</div>
-                    <div className="text-base-content/70 text-xs">Karma</div>
-                  </div>
                   <Link
                     href={`/u/${username}/followers`}
                     className="bg-base-300 hover:bg-base-200 rounded-xl p-3 transition-colors"
@@ -310,23 +308,26 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                   </Link>
                   <Link
                     href={`/u/${username}/following`}
-                    className="bg-base-300 hover:bg-base-200 col-span-2 rounded-xl p-3 transition-colors"
+                    className="bg-base-300 hover:bg-base-200 rounded-xl p-3 transition-colors"
                   >
                     <div className="text-base-content font-semibold">{followingCount}</div>
                     <div className="text-base-content/70 text-xs">Following</div>
                   </Link>
                 </>
               )}
-              <div className="bg-base-300 col-span-2 rounded-xl p-3">
+              <div className="bg-base-300 rounded-xl p-3">
+                <div className="text-base-content font-semibold">{karma}</div>
+                <div className="text-base-content/70 text-xs">Karma</div>
+              </div>
+              <div className="bg-base-300 rounded-xl p-3">
                 <div className="text-base-content flex items-center gap-2">
                   <CalendarClock size={16} />
                   <span className="font-semibold">
                     {isProfile ? `Joined ${joinYear}` : `Created ${joinYear}`}
                   </span>
                 </div>
-                <div className="text-base-content/70 mt-1 flex items-center gap-2 text-xs">
-                  <Flame size={14} />
-                  {isProfile ? "Profile activity will appear here." : "AI-generated persona"}
+                <div className="text-base-content/70 mt-1 text-xs">
+                  Last seen: {formatLastSeen(lastSeenAt)}
                 </div>
               </div>
             </div>

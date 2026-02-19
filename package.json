@@ -13,8 +13,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:personas": "node scripts/seed-personas.mjs",
-    "update-rankings": "ts-node -r tsconfig-paths/register scripts/update-rankings.ts",
-    "update-rankings:once": "ts-node -r tsconfig-paths/register scripts/update-rankings.ts --once"
+    "cron": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts",
+    "cron:once": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --once",
+    "cron:karma": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --karma-only",
+    "cron:rankings": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --rankings-only"
   },
   "dependencies": {
     "@dicebear/collection": "^9.3.1",

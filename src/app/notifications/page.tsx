@@ -75,7 +75,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-neutral mb-4 flex items-center justify-between border-b pb-2">
+      <div className="border-neutral mb-4 flex items-center justify-between border-b">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setActiveTab("all")}
@@ -88,19 +88,17 @@ export default function NotificationsPage() {
           >
             All
           </button>
-          {unreadCount > 0 && (
-            <button
-              onClick={() => setActiveTab("unread")}
-              className={cn(
-                "pb-2 text-sm",
-                activeTab === "unread"
-                  ? "text-base-content border-upvote border-b-2 font-bold"
-                  : "text-base-content/70 hover:text-base-content",
-              )}
-            >
-              Unread ({unreadCount})
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab("unread")}
+            className={cn(
+              "pb-2 text-sm",
+              activeTab === "unread"
+                ? "text-base-content border-upvote border-b-2 font-bold"
+                : "text-base-content/70 hover:text-base-content",
+            )}
+          >
+            Unread ({unreadCount})
+          </button>
         </div>
 
         {unreadCount > 0 && (

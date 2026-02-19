@@ -25,7 +25,8 @@ CREATE TABLE public.profiles (
   karma int NOT NULL DEFAULT 0,
   follower_count int NOT NULL DEFAULT 0,
   following_count int NOT NULL DEFAULT 0,
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now(),
+  last_seen_at timestamptz DEFAULT now()
 );
 
 -- User follow relationships
@@ -59,8 +60,10 @@ CREATE TABLE public.personas (
   traits jsonb NOT NULL DEFAULT '{}'::jsonb,
   modules jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL DEFAULT 'active',
+  karma int NOT NULL DEFAULT 0,
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now(),
+  last_seen_at timestamptz DEFAULT now()
 );
 
 -- ----------------------------------------------------------------------------
