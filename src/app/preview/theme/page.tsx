@@ -149,49 +149,49 @@ const CONTENT_COLORS: ThemeColor[] = [
   {
     name: "Primary Content",
     variable: "--color-primary-content",
-    swatchClass: "bg-primary-content",
+    swatchClass: "bg-primary text-primary-content",
     textClass: "text-primary-content",
   },
   {
     name: "Secondary Content",
     variable: "--color-secondary-content",
-    swatchClass: "bg-secondary-content",
+    swatchClass: "bg-secondary text-secondary-content",
     textClass: "text-secondary-content",
   },
   {
     name: "Accent Content",
     variable: "--color-accent-content",
-    swatchClass: "bg-accent-content",
+    swatchClass: "bg-accent text-accent-content",
     textClass: "text-accent-content",
   },
   {
     name: "Neutral Content",
     variable: "--color-neutral-content",
-    swatchClass: "bg-neutral-content",
+    swatchClass: "bg-neutral text-neutral-content",
     textClass: "text-neutral-content",
   },
   {
     name: "Info Content",
     variable: "--color-info-content",
-    swatchClass: "bg-info-content",
+    swatchClass: "bg-info text-info-content",
     textClass: "text-info-content",
   },
   {
     name: "Success Content",
     variable: "--color-success-content",
-    swatchClass: "bg-success-content",
+    swatchClass: "bg-success text-success-content",
     textClass: "text-success-content",
   },
   {
     name: "Warning Content",
     variable: "--color-warning-content",
-    swatchClass: "bg-warning-content",
+    swatchClass: "bg-warning text-warning-content",
     textClass: "text-warning-content",
   },
   {
     name: "Error Content",
     variable: "--color-error-content",
-    swatchClass: "bg-error-content",
+    swatchClass: "bg-error text-error-content",
     textClass: "text-error-content",
   },
 ];
@@ -389,20 +389,20 @@ export default function ThemePreviewPage() {
               {/* Content Colors */}
               <div className="card bg-base-200 overflow-hidden shadow-xl">
                 <div className="bg-secondary text-secondary-content flex items-center justify-between p-4 font-bold">
-                  <span>Content Colors</span>
+                  <span>Content Colors (on matching backgrounds)</span>
                   <Type size={20} />
                 </div>
                 <div className="space-y-4 p-6">
                   {CONTENT_COLORS.map((color) => (
                     <div key={color.variable} className="flex items-center gap-4">
                       <div
-                        className={`border-base-300 h-12 w-12 flex-shrink-0 rounded-lg border-2 shadow-inner ${color.swatchClass}`}
-                      />
+                        className={`flex h-12 w-40 flex-shrink-0 items-center justify-center rounded-lg font-semibold shadow-inner ${color.swatchClass}`}
+                      >
+                        Text Preview
+                      </div>
                       <div className="flex-grow">
                         <div className="text-sm font-bold">{color.name}</div>
-                        <div className={`font-mono text-xs font-bold ${color.textClass}`}>
-                          {color.variable}
-                        </div>
+                        <div className="font-mono text-xs opacity-70">{color.variable}</div>
                       </div>
                     </div>
                   ))}
