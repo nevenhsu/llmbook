@@ -4,7 +4,17 @@ import React, { useState } from "react";
 import Badge from "@/components/ui/Badge";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import toast from "react-hot-toast";
-import { Check, Palette, Type, MousePointer2, Settings2, Tag, Bell, Info, Laptop } from "lucide-react";
+import {
+  Check,
+  Palette,
+  Type,
+  MousePointer2,
+  Settings2,
+  Tag,
+  Bell,
+  Info,
+  Laptop,
+} from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import SearchBar from "@/components/ui/SearchBar";
 import VotePill from "@/components/ui/VotePill";
@@ -26,26 +36,164 @@ type TextPreviewToken = {
 
 // --- Constants ---
 const PRIMARY_COLORS: ThemeColor[] = [
-  { name: "Primary", variable: "--color-primary", swatchClass: "bg-primary", textClass: "text-primary" },
-  { name: "Secondary", variable: "--color-secondary", swatchClass: "bg-secondary", textClass: "text-secondary" },
-  { name: "Accent", variable: "--color-accent", swatchClass: "bg-accent", textClass: "text-accent" },
-  { name: "Neutral", variable: "--color-neutral", swatchClass: "bg-neutral", textClass: "text-neutral" },
+  {
+    name: "Primary",
+    variable: "--color-primary",
+    swatchClass: "bg-primary",
+    textClass: "text-primary",
+  },
+  {
+    name: "Secondary",
+    variable: "--color-secondary",
+    swatchClass: "bg-secondary",
+    textClass: "text-secondary",
+  },
+  {
+    name: "Accent",
+    variable: "--color-accent",
+    swatchClass: "bg-accent",
+    textClass: "text-accent",
+  },
+  {
+    name: "Neutral",
+    variable: "--color-neutral",
+    swatchClass: "bg-neutral",
+    textClass: "text-neutral",
+  },
 ];
 
 const GENERAL_COLORS: ThemeColor[] = [
-  { name: "Blue", variable: "--color-blue", swatchClass: "bg-[var(--color-blue)]", textClass: "text-[var(--color-blue)]" },
-  { name: "Green", variable: "--color-green", swatchClass: "bg-[var(--color-green)]", textClass: "text-[var(--color-green)]" },
-  { name: "Red", variable: "--color-red", swatchClass: "bg-[var(--color-red)]", textClass: "text-[var(--color-red)]" },
-  { name: "Yellow", variable: "--color-yellow", swatchClass: "bg-[var(--color-yellow)]", textClass: "text-[var(--color-yellow)]" },
-  { name: "Purple", variable: "--color-purple", swatchClass: "bg-[var(--color-purple)]", textClass: "text-[var(--color-purple)]" },
-  { name: "Orange", variable: "--color-orange", swatchClass: "bg-[var(--color-orange)]", textClass: "text-[var(--color-orange)]" },
+  {
+    name: "Blue",
+    variable: "--color-blue",
+    swatchClass: "bg-[var(--color-blue)]",
+    textClass: "text-[var(--color-blue)]",
+  },
+  {
+    name: "Green",
+    variable: "--color-green",
+    swatchClass: "bg-[var(--color-green)]",
+    textClass: "text-[var(--color-green)]",
+  },
+  {
+    name: "Red",
+    variable: "--color-red",
+    swatchClass: "bg-[var(--color-red)]",
+    textClass: "text-[var(--color-red)]",
+  },
+  {
+    name: "Yellow",
+    variable: "--color-yellow",
+    swatchClass: "bg-[var(--color-yellow)]",
+    textClass: "text-[var(--color-yellow)]",
+  },
+  {
+    name: "Purple",
+    variable: "--color-purple",
+    swatchClass: "bg-[var(--color-purple)]",
+    textClass: "text-[var(--color-purple)]",
+  },
+  {
+    name: "Orange",
+    variable: "--color-orange",
+    swatchClass: "bg-[var(--color-orange)]",
+    textClass: "text-[var(--color-orange)]",
+  },
 ];
 
 const STATE_COLORS: ThemeColor[] = [
   { name: "Info", variable: "--color-info", swatchClass: "bg-info", textClass: "text-info" },
-  { name: "Success", variable: "--color-success", swatchClass: "bg-success", textClass: "text-success" },
-  { name: "Warning", variable: "--color-warning", swatchClass: "bg-warning", textClass: "text-warning" },
+  {
+    name: "Success",
+    variable: "--color-success",
+    swatchClass: "bg-success",
+    textClass: "text-success",
+  },
+  {
+    name: "Warning",
+    variable: "--color-warning",
+    swatchClass: "bg-warning",
+    textClass: "text-warning",
+  },
   { name: "Error", variable: "--color-error", swatchClass: "bg-error", textClass: "text-error" },
+];
+
+const BASE_COLORS: ThemeColor[] = [
+  {
+    name: "Base 100",
+    variable: "--color-base-100",
+    swatchClass: "bg-base-100 border-2 border-base-300",
+    textClass: "text-base-100",
+  },
+  {
+    name: "Base 200",
+    variable: "--color-base-200",
+    swatchClass: "bg-base-200 border-2 border-base-300",
+    textClass: "text-base-200",
+  },
+  {
+    name: "Base 300",
+    variable: "--color-base-300",
+    swatchClass: "bg-base-300 border-2 border-base-200",
+    textClass: "text-base-300",
+  },
+  {
+    name: "Base Content",
+    variable: "--color-base-content",
+    swatchClass: "bg-base-content",
+    textClass: "text-base-content",
+  },
+];
+
+const CONTENT_COLORS: ThemeColor[] = [
+  {
+    name: "Primary Content",
+    variable: "--color-primary-content",
+    swatchClass: "bg-primary-content",
+    textClass: "text-primary-content",
+  },
+  {
+    name: "Secondary Content",
+    variable: "--color-secondary-content",
+    swatchClass: "bg-secondary-content",
+    textClass: "text-secondary-content",
+  },
+  {
+    name: "Accent Content",
+    variable: "--color-accent-content",
+    swatchClass: "bg-accent-content",
+    textClass: "text-accent-content",
+  },
+  {
+    name: "Neutral Content",
+    variable: "--color-neutral-content",
+    swatchClass: "bg-neutral-content",
+    textClass: "text-neutral-content",
+  },
+  {
+    name: "Info Content",
+    variable: "--color-info-content",
+    swatchClass: "bg-info-content",
+    textClass: "text-info-content",
+  },
+  {
+    name: "Success Content",
+    variable: "--color-success-content",
+    swatchClass: "bg-success-content",
+    textClass: "text-success-content",
+  },
+  {
+    name: "Warning Content",
+    variable: "--color-warning-content",
+    swatchClass: "bg-warning-content",
+    textClass: "text-warning-content",
+  },
+  {
+    name: "Error Content",
+    variable: "--color-error-content",
+    swatchClass: "bg-error-content",
+    textClass: "text-error-content",
+  },
 ];
 
 const TEXT_PREVIEW_TOKENS: TextPreviewToken[] = [
@@ -61,6 +209,35 @@ const TEXT_PREVIEW_TOKENS: TextPreviewToken[] = [
   { label: "text-base-content/80", className: "text-base-content/80" },
   { label: "text-base-content/60", className: "text-base-content/60" },
   { label: "text-primary-content", className: "text-primary-content bg-primary rounded px-2 py-1" },
+];
+
+const BACKGROUND_PREVIEW_TOKENS: TextPreviewToken[] = [
+  { label: "bg-base-100", className: "bg-base-100 text-base-content border-2 border-base-300" },
+  { label: "bg-base-200", className: "bg-base-200 text-base-content border-2 border-base-300" },
+  { label: "bg-base-300", className: "bg-base-300 text-base-content border-2 border-base-300" },
+  { label: "bg-primary", className: "bg-primary text-primary-content" },
+  { label: "bg-secondary", className: "bg-secondary text-secondary-content" },
+  { label: "bg-accent", className: "bg-accent text-accent-content" },
+  { label: "bg-neutral", className: "bg-neutral text-neutral-content" },
+  { label: "bg-info", className: "bg-info text-info-content" },
+  { label: "bg-success", className: "bg-success text-success-content" },
+  { label: "bg-warning", className: "bg-warning text-warning-content" },
+  { label: "bg-error", className: "bg-error text-error-content" },
+];
+
+const BORDER_PREVIEW_TOKENS: TextPreviewToken[] = [
+  { label: "border-base-300", className: "border-4 border-base-300 bg-base-100 text-base-content" },
+  { label: "border-primary", className: "border-4 border-primary bg-base-100 text-base-content" },
+  {
+    label: "border-secondary",
+    className: "border-4 border-secondary bg-base-100 text-base-content",
+  },
+  { label: "border-accent", className: "border-4 border-accent bg-base-100 text-base-content" },
+  { label: "border-neutral", className: "border-4 border-neutral bg-base-100 text-base-content" },
+  { label: "border-info", className: "border-4 border-info bg-base-100 text-base-content" },
+  { label: "border-success", className: "border-4 border-success bg-base-100 text-base-content" },
+  { label: "border-warning", className: "border-4 border-warning bg-base-100 text-base-content" },
+  { label: "border-error", className: "border-4 border-error bg-base-100 text-base-content" },
 ];
 
 export default function ThemePreviewPage() {
@@ -186,6 +363,52 @@ export default function ThemePreviewPage() {
                 </div>
               </div>
 
+              {/* Base Colors */}
+              <div className="card bg-base-200 overflow-hidden shadow-xl">
+                <div className="bg-base-300 text-base-content flex items-center justify-between p-4 font-bold">
+                  <span>Base Colors</span>
+                  <Info size={20} />
+                </div>
+                <div className="space-y-4 p-6">
+                  {BASE_COLORS.map((color) => (
+                    <div key={color.variable} className="flex items-center gap-4">
+                      <div
+                        className={`h-12 w-12 flex-shrink-0 rounded-lg shadow-inner ${color.swatchClass}`}
+                      />
+                      <div className="flex-grow">
+                        <div className="text-sm font-bold">{color.name}</div>
+                        <div className={`font-mono text-xs font-bold ${color.textClass}`}>
+                          {color.variable}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Content Colors */}
+              <div className="card bg-base-200 overflow-hidden shadow-xl">
+                <div className="bg-secondary text-secondary-content flex items-center justify-between p-4 font-bold">
+                  <span>Content Colors</span>
+                  <Type size={20} />
+                </div>
+                <div className="space-y-4 p-6">
+                  {CONTENT_COLORS.map((color) => (
+                    <div key={color.variable} className="flex items-center gap-4">
+                      <div
+                        className={`border-base-300 h-12 w-12 flex-shrink-0 rounded-lg border-2 shadow-inner ${color.swatchClass}`}
+                      />
+                      <div className="flex-grow">
+                        <div className="text-sm font-bold">{color.name}</div>
+                        <div className={`font-mono text-xs font-bold ${color.textClass}`}>
+                          {color.variable}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* General Colors */}
               <div className="card bg-base-200 overflow-hidden shadow-xl md:col-span-2">
                 <div className="bg-neutral text-neutral-content flex items-center justify-between p-4 font-bold">
@@ -216,11 +439,48 @@ export default function ThemePreviewPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2">
                   {TEXT_PREVIEW_TOKENS.map((token) => (
-                    <div key={token.label} className="bg-base-100 border-base-300 rounded-lg border p-3">
+                    <div
+                      key={token.label}
+                      className="bg-base-100 border-base-300 rounded-lg border p-3"
+                    >
                       <p className={`text-base font-semibold ${token.className}`}>
                         The quick brown fox jumps over the lazy dog.
                       </p>
                       <p className="font-mono text-xs opacity-70">{token.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Background Utility Classes */}
+              <div className="card bg-base-200 overflow-hidden shadow-xl md:col-span-2">
+                <div className="bg-primary text-primary-content flex items-center justify-between p-4 font-bold">
+                  <span>Background Utility Classes</span>
+                  <Palette size={20} />
+                </div>
+                <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2">
+                  {BACKGROUND_PREVIEW_TOKENS.map((token) => (
+                    <div key={token.label} className={`rounded-lg p-4 ${token.className}`}>
+                      <p className="text-base font-semibold">
+                        The quick brown fox jumps over the lazy dog.
+                      </p>
+                      <p className="mt-2 font-mono text-xs opacity-70">{token.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Border Utility Classes */}
+              <div className="card bg-base-200 overflow-hidden shadow-xl md:col-span-2">
+                <div className="bg-accent text-accent-content flex items-center justify-between p-4 font-bold">
+                  <span>Border Utility Classes</span>
+                  <Settings2 size={20} />
+                </div>
+                <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2 lg:grid-cols-3">
+                  {BORDER_PREVIEW_TOKENS.map((token) => (
+                    <div key={token.label} className={`rounded-lg p-4 ${token.className}`}>
+                      <p className="text-sm font-semibold">Border Preview</p>
+                      <p className="mt-2 font-mono text-xs opacity-70">{token.label}</p>
                     </div>
                   ))}
                 </div>
