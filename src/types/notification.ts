@@ -5,16 +5,16 @@
 // ============================================================================
 
 export const NOTIFICATION_TYPES = {
-  POST_UPVOTE: 'post_upvote',
-  COMMENT_UPVOTE: 'comment_upvote',
-  COMMENT_REPLY: 'comment_reply',
-  COMMENT_REPLY_TO_COMMENT: 'comment_reply_to_comment',
-  MENTION: 'mention',
-  NEW_FOLLOWER: 'new_follower',
-  FOLLOWED_USER_POST: 'followed_user_post',
+  POST_UPVOTE: "post_upvote",
+  COMMENT_UPVOTE: "comment_upvote",
+  COMMENT_REPLY: "comment_reply",
+  COMMENT_REPLY_TO_COMMENT: "comment_reply_to_comment",
+  MENTION: "mention",
+  NEW_FOLLOWER: "new_follower",
+  FOLLOWED_USER_POST: "followed_user_post",
 } as const;
 
-export type NotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATION_TYPES];
+export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];
 
 // ============================================================================
 // Payload Types
@@ -54,7 +54,7 @@ export interface MentionPayload {
   commentId?: string;
   authorName: string;
   authorUsername: string;
-  context: 'post' | 'comment';
+  context: "post" | "comment";
 }
 
 export interface NewFollowerPayload {
@@ -72,7 +72,7 @@ export interface FollowedUserPostPayload {
   authorDisplayName: string;
 }
 
-export type NotificationPayload = 
+export type NotificationPayload =
   | PostUpvotePayload
   | CommentUpvotePayload
   | CommentReplyPayload
@@ -101,12 +101,12 @@ export interface NotificationRow {
 
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength - 3) + '...';
+  return str.slice(0, maxLength - 3) + "...";
 }
 
 export function getNotificationMessage(notification: NotificationRow): string {
   const { type, payload } = notification;
-  
+
   switch (type) {
     case NOTIFICATION_TYPES.POST_UPVOTE: {
       const p = payload as PostUpvotePayload;
@@ -143,13 +143,13 @@ export function getNotificationMessage(notification: NotificationRow): string {
       return `${p.authorDisplayName} posted: "${truncate(p.postTitle, 40)}"`;
     }
     default:
-      return 'You have a new notification';
+      return "You have a new notification";
   }
 }
 
 export function getNotificationLink(notification: NotificationRow): string | null {
   const { type, payload } = notification;
-  
+
   switch (type) {
     case NOTIFICATION_TYPES.POST_UPVOTE: {
       const p = payload as PostUpvotePayload;
@@ -184,23 +184,23 @@ export function getNotificationLink(notification: NotificationRow): string | nul
   }
 }
 
-export type NotificationIconType = 'upvote' | 'reply' | 'mention' | 'follow' | 'post' | 'default';
+export type NotificationIconType = "upvote" | "reply" | "mention" | "follow" | "post" | "default";
 
 export function getNotificationIconType(type: NotificationType): NotificationIconType {
   switch (type) {
     case NOTIFICATION_TYPES.POST_UPVOTE:
     case NOTIFICATION_TYPES.COMMENT_UPVOTE:
-      return 'upvote';
+      return "upvote";
     case NOTIFICATION_TYPES.COMMENT_REPLY:
     case NOTIFICATION_TYPES.COMMENT_REPLY_TO_COMMENT:
-      return 'reply';
+      return "reply";
     case NOTIFICATION_TYPES.MENTION:
-      return 'mention';
+      return "mention";
     case NOTIFICATION_TYPES.NEW_FOLLOWER:
-      return 'follow';
+      return "follow";
     case NOTIFICATION_TYPES.FOLLOWED_USER_POST:
-      return 'post';
+      return "post";
     default:
-      return 'default';
+      return "default";
   }
 }

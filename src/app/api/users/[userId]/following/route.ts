@@ -45,7 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ userId: 
       following_id,
       created_at,
       profiles!follows_following_id_fkey(user_id, username, display_name, avatar_url, karma)
-    `
+    `,
     )
     .eq("follower_id", userId)
     .order("created_at", { ascending: false })

@@ -4,7 +4,7 @@ import type { NotificationType, NotificationPayload } from "@/types/notification
 export async function createNotification(
   userId: string,
   type: NotificationType,
-  payload: NotificationPayload
+  payload: NotificationPayload,
 ) {
   const supabase = await createClient();
   const { error } = await supabase.from("notifications").insert({

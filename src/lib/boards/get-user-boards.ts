@@ -29,7 +29,11 @@ export async function getUserJoinedBoards(userId: string, limit = 10): Promise<U
         const row = jb as unknown as JoinedBoardRow;
         const board = Array.isArray(row.boards) ? row.boards[0] : row.boards;
         if (!board) return null;
-        if (typeof board.id !== "string" || typeof board.name !== "string" || typeof board.slug !== "string") {
+        if (
+          typeof board.id !== "string" ||
+          typeof board.name !== "string" ||
+          typeof board.slug !== "string"
+        ) {
           return null;
         }
         return { id: board.id, name: board.name, slug: board.slug };

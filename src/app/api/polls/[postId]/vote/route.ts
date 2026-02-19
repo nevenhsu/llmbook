@@ -143,65 +143,67 @@ export const POST = withAuth<{ postId: string }>(async (request, { user, supabas
  * DELETE /api/polls/[postId]/vote
  * Retract a poll vote (authenticated users only)
  */
-export const DELETE = withAuth<{ postId: string }>(async (_request, { user, supabase }, context) => {
-  const { postId } = await context.params;
+export const DELETE = withAuth<{ postId: string }>(
+  async (_request, { user, supabase }, context) => {
+    const { postId } = await context.params;
 
-  // Verify post is a poll
-  const { data: post } = await supabase
-    .from("posts")
-    .select("post_type, board_id, status, expires_at")
-    .eq("id", postId)
-    .single();
+    // Verify post is a poll
+    const { data: post } = await supabase
+      .from("posts")
+      .select("post_type, board_id, status, expires_at")
+      .eq("id", postId)
+      .single();
 
-  if (!post) {
-    return http.notFound("Post not found");
-  }
-
-  if (post.post_type !== "poll") {
-    return http.badRequest("Post is not a poll");
-  }
-
-  if (post.status === "DELETED" || post.status === "ARCHIVED") {
-    return http.forbidden("Cannot vote on this post");
-  }
-
-  if (post.expires_at) {
-    const expiresAt = new Date(post.expires_at);
-    if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() <= Date.now()) {
-      return http.forbidden("This poll has ended");
+    if (!post) {
+      return http.notFound("Post not found");
     }
-  }
 
-  const banned = await isUserBanned(post.board_id, user.id, supabase);
-  if (banned) {
-    return http.forbidden("You are banned from this board");
-  }
+    if (post.post_type !== "poll") {
+      return http.badRequest("Post is not a poll");
+    }
 
-  const { error: deleteError } = await supabase
-    .from("poll_votes")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("post_id", postId);
+    if (post.status === "DELETED" || post.status === "ARCHIVED") {
+      return http.forbidden("Cannot vote on this post");
+    }
 
-  if (deleteError) {
-    return http.badRequest(deleteError.message);
-  }
+    if (post.expires_at) {
+      const expiresAt = new Date(post.expires_at);
+      if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() <= Date.now()) {
+        return http.forbidden("This poll has ended");
+      }
+    }
 
-  const { data: updatedOptions, error: optionsError } = await supabase
-    .from("poll_options")
-    .select("id, text, vote_count, position")
-    .eq("post_id", postId)
-    .order("position");
+    const banned = await isUserBanned(post.board_id, user.id, supabase);
+    if (banned) {
+      return http.forbidden("You are banned from this board");
+    }
 
-  if (optionsError) {
-    return http.internalError(optionsError.message);
-  }
+    const { error: deleteError } = await supabase
+      .from("poll_votes")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("post_id", postId);
 
-  return http.ok({
-    userVote: null,
-    options: updatedOptions,
-  });
-});
+    if (deleteError) {
+      return http.badRequest(deleteError.message);
+    }
+
+    const { data: updatedOptions, error: optionsError } = await supabase
+      .from("poll_options")
+      .select("id, text, vote_count, position")
+      .eq("post_id", postId)
+      .order("position");
+
+    if (optionsError) {
+      return http.internalError(optionsError.message);
+    }
+
+    return http.ok({
+      userVote: null,
+      options: updatedOptions,
+    });
+  },
+);
 
 /**
  * GET /api/polls/[postId]/vote

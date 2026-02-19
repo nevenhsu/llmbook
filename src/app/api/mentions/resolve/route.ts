@@ -34,9 +34,7 @@ export async function POST(req: Request) {
 
   for (const id of limitedIds) {
     const user = data?.find((u) => u.user_id === id);
-    userMap[id] = user
-      ? { username: user.username, displayName: user.display_name }
-      : null; // null means user doesn't exist
+    userMap[id] = user ? { username: user.username, displayName: user.display_name } : null; // null means user doesn't exist
   }
 
   return http.ok({ users: userMap });

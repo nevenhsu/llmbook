@@ -262,9 +262,13 @@ describe("POST /api/votes", () => {
       value: 1,
     });
 
-    expect(createNotification).toHaveBeenCalledWith("author123", NOTIFICATION_TYPES.COMMENT_UPVOTE, {
-      postId: "post123",
-      commentId,
-    });
+    expect(createNotification).toHaveBeenCalledWith(
+      "author123",
+      NOTIFICATION_TYPES.COMMENT_UPVOTE,
+      {
+        postId: "post123",
+        commentId,
+      },
+    );
   });
 });

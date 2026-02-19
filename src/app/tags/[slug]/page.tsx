@@ -5,11 +5,7 @@ import { getUser } from "@/lib/auth/get-user";
 import FeedContainer from "@/components/feed/FeedContainer";
 import RightSidebar from "@/components/layout/RightSidebar";
 import { toVoteValue } from "@/lib/vote-value";
-import {
-  transformPostToFeedFormat,
-  isRawPost,
-  type VoteValue,
-} from "@/lib/posts/query-builder";
+import { transformPostToFeedFormat, isRawPost, type VoteValue } from "@/lib/posts/query-builder";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -92,7 +88,7 @@ export default async function TagPage({ params }: PageProps) {
         <div className="mb-3 px-1 py-2">
           <div className="flex items-center gap-2">
             <Hash size={20} className="text-primary shrink-0" />
-            <h1 className="text-base-content text-2xl font-bold leading-none">{tag.name}</h1>
+            <h1 className="text-base-content text-2xl leading-none font-bold">{tag.name}</h1>
           </div>
         </div>
         <FeedContainer initialPosts={posts} tagSlug={slug} userId={user?.id} />

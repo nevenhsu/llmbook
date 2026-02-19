@@ -204,7 +204,7 @@
 
   /* Mention styling in rendered content */
   a.mention {
-    @apply text-primary hover:underline cursor-pointer;
+    @apply text-primary cursor-pointer hover:underline;
   }
 
   /* Invalid/deleted mention */

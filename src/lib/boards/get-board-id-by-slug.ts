@@ -9,11 +9,7 @@ export async function getBoardIdBySlug(
   supabase: SupabaseClient,
   slug: string,
 ): Promise<GetBoardIdBySlugResult> {
-  const { data, error } = await supabase
-    .from("boards")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data, error } = await supabase.from("boards").select("id").eq("slug", slug).maybeSingle();
 
   if (error) {
     return { error: "query_failed" };

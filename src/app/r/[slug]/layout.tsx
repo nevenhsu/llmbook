@@ -7,7 +7,9 @@ import { isAdmin } from "@/lib/admin";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { transformBoardToFormat } from "@/lib/posts/query-builder";
 
-type BoardInfoCardModerator = NonNullable<Parameters<typeof BoardInfoCard>[0]["moderators"]>[number];
+type BoardInfoCardModerator = NonNullable<
+  Parameters<typeof BoardInfoCard>[0]["moderators"]
+>[number];
 
 type ModeratorRowProfile = {
   display_name: string | null;
@@ -29,17 +31,17 @@ function isModeratorRow(value: unknown): value is ModeratorRow {
 
 function normalizeModerators(rows: unknown[]): BoardInfoCardModerator[] {
   return rows.filter(isModeratorRow).map((mod) => {
-      const profile = Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles;
-      return {
-        user_id: mod.user_id,
-        role: mod.role,
-        profiles: {
-          display_name: profile?.display_name ?? "Unknown",
-          avatar_url: profile?.avatar_url ?? null,
-          username: profile?.username ?? null,
-        },
-      };
-    });
+    const profile = Array.isArray(mod.profiles) ? mod.profiles[0] : mod.profiles;
+    return {
+      user_id: mod.user_id,
+      role: mod.role,
+      profiles: {
+        display_name: profile?.display_name ?? "Unknown",
+        avatar_url: profile?.avatar_url ?? null,
+        username: profile?.username ?? null,
+      },
+    };
+  });
 }
 
 interface BoardLayoutProps {
@@ -100,7 +102,9 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
     ]);
 
     isJoined = !!membershipResult.data;
-    moderators = normalizeModerators(Array.isArray(moderatorsResult.data) ? moderatorsResult.data : []);
+    moderators = normalizeModerators(
+      Array.isArray(moderatorsResult.data) ? moderatorsResult.data : [],
+    );
 
     isModerator = moderators.some((mod) => mod.user_id === user.id);
     canOpenSettings = userIsAdmin || isModerator;

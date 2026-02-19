@@ -60,7 +60,7 @@ export function getReachedMilestone(oldScore: number, newScore: number): number 
  */
 export async function getFollowersToNotify(
   supabase: SupabaseClient,
-  authorId: string
+  authorId: string,
 ): Promise<string[]> {
   // 1. Get followers (max 100)
   const { data: followers } = await supabase

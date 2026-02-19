@@ -26,7 +26,7 @@ export function NotificationList({
 
   const loadMore = useCallback(async () => {
     if (isLoading || !hasMore) return;
-    
+
     setIsLoading(true);
     try {
       const params = new URLSearchParams({ limit: "20" });
@@ -35,7 +35,7 @@ export function NotificationList({
 
       const res = await fetch(`/api/notifications?${params}`);
       if (!res.ok) throw new Error("Failed to fetch notifications");
-      
+
       const data = await res.json();
 
       setNotifications((prev) => [...prev, ...data.items]);
@@ -54,7 +54,7 @@ export function NotificationList({
   const handleMarkRead = useCallback(async (id: string) => {
     // Optimistic update
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+      prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
     );
 
     // API call
@@ -67,9 +67,7 @@ export function NotificationList({
     } catch (error) {
       console.error("Error marking notification as read:", error);
       // Revert on error
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read_at: null } : n))
-      );
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: null } : n)));
     }
   }, []);
 
@@ -89,7 +87,7 @@ export function NotificationList({
   }, []);
 
   return (
-    <div className="divide-y divide-neutral">
+    <div className="divide-neutral divide-y">
       {notifications.map((notification) => (
         <NotificationItem
           key={notification.id}
@@ -100,14 +98,12 @@ export function NotificationList({
       ))}
 
       {/* Sentinel element for infinite scroll */}
-      <div ref={sentinelRef} className="h-10 flex items-center justify-center">
-        {isLoading && <Loader2 className="animate-spin text-base-content/50" size={24} />}
+      <div ref={sentinelRef} className="flex h-10 items-center justify-center">
+        {isLoading && <Loader2 className="text-base-content/50 animate-spin" size={24} />}
       </div>
 
       {!hasMore && notifications.length > 0 && (
-        <div className="py-8 text-center text-sm text-base-content/50">
-          No more notifications
-        </div>
+        <div className="text-base-content/50 py-8 text-center text-sm">No more notifications</div>
       )}
     </div>
   );

@@ -16,7 +16,7 @@ export default function NotificationBell() {
     try {
       const res = await fetch("/api/notifications?limit=5");
       const data = await res.json();
-      
+
       if (data.items && Array.isArray(data.items)) {
         setNotifications(data.items);
         const unread = data.items.filter((n: NotificationRow) => !n.read_at).length;

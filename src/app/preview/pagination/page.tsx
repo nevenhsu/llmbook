@@ -48,7 +48,9 @@ export default async function PaginationPreviewPage({
               return (
                 <div key={n} className="py-3">
                   <div className="font-semibold">Row {n}</div>
-                  <div className="text-base-content/70 text-sm">Example content row for pagination layout.</div>
+                  <div className="text-base-content/70 text-sm">
+                    Example content row for pagination layout.
+                  </div>
                 </div>
               );
             })}

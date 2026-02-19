@@ -41,7 +41,11 @@ export default function PaginationClient({
     <nav aria-label="Pagination" className={className}>
       <div className={`join w-full justify-center sm:w-auto ${joinClassName || ""}`.trim()}>
         {current === 1 ? (
-          <span className={`join-item ${btnDisabled}`} aria-disabled="true" aria-label="Previous page">
+          <span
+            className={`join-item ${btnDisabled}`}
+            aria-disabled="true"
+            aria-label="Previous page"
+          >
             «
           </span>
         ) : (
@@ -64,26 +68,24 @@ export default function PaginationClient({
             >
               ...
             </span>
+          ) : t === current ? (
+            <span
+              key={t}
+              className={`join-item ${btnBase} btn-active ${activeButtonClassName || ""}`.trim()}
+              aria-current="page"
+            >
+              {t}
+            </span>
           ) : (
-            t === current ? (
-              <span
-                key={t}
-                className={`join-item ${btnBase} btn-active ${activeButtonClassName || ""}`.trim()}
-                aria-current="page"
-              >
-                {t}
-              </span>
-            ) : (
-              <button
-                key={t}
-                type="button"
-                className={`join-item ${btnEnabled}`}
-                onClick={() => onPageChange(t)}
-                aria-label={`Page ${t}`}
-              >
-                {t}
-              </button>
-            )
+            <button
+              key={t}
+              type="button"
+              className={`join-item ${btnEnabled}`}
+              onClick={() => onPageChange(t)}
+              aria-label={`Page ${t}`}
+            >
+              {t}
+            </button>
           ),
         )}
 

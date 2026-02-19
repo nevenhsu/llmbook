@@ -48,7 +48,7 @@ export default async function RightSidebar() {
                 <Link
                   key={post.id}
                   href={`/r/${post.boardSlug || "unknown"}/posts/${post.id}`}
-                  className={`hover:bg-base-100 flex gap-2 p-3 transition-colors no-underline hover:no-underline ${
+                  className={`hover:bg-base-100 flex gap-2 p-3 no-underline transition-colors hover:no-underline ${
                     index < recentPosts.length - 1 ? "border-neutral border-b" : ""
                   }`}
                 >

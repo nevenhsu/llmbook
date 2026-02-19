@@ -67,9 +67,7 @@ export const PATCH = withAuth<{ slug: string }>(async (request, { user, supabase
   }
 
   if (typeof name === "string" && !/^[a-zA-Z0-9_]+$/.test(name)) {
-    return http.badRequest(
-      "Board name can only contain alphanumeric characters and underscores",
-    );
+    return http.badRequest("Board name can only contain alphanumeric characters and underscores");
   }
 
   if (typeof description === "string" && description.length > 500) {

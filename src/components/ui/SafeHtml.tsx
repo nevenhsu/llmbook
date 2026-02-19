@@ -72,13 +72,13 @@ export default function SafeHtml({ html, className = "" }: SafeHtmlProps) {
 
         const mentionPattern = new RegExp(
           `<span[^>]*data-type="mention"[^>]*data-id="${userId}"[^>]*data-label="[^"]*"[^>]*>@[^<]*</span>`,
-          "g"
+          "g",
         );
 
         if (user) {
           processed = processed.replace(
             mentionPattern,
-            `<a href="/u/${user.username}" class="mention text-primary hover:underline">@${user.username}</a>`
+            `<a href="/u/${user.username}" class="mention text-primary hover:underline">@${user.username}</a>`,
           );
         } else {
           processed = processed.replace(mentionPattern, (match) => {

@@ -27,6 +27,14 @@ Quick reference for shared libraries and conventions.
 ## Documentation Links
 
 - [Library Documentation](./docs/lib/README.md)
-- [Plans Index](./plans/README.md)
-- [Webapp Conventions](./plans/webapp/_conventions.md)
-- [Mobile Conventions](./plans/mobile/_conventions.md)
+- Dev Guidelines (docs/dev-guidelines/README.md)
+- Reuse Rules (docs/dev-guidelines/01-reuse-rules.md)
+- Lib Functions (docs/dev-guidelines/02-lib-functions.md)
+- Refactor Rules (docs/dev-guidelines/03-refactor-rules.md)
+- Schema Maintenance (docs/dev-guidelines/04-schema-maintenance.md)
+- Migration Guidelines (docs/dev-guidelines/05-migration-guidelines.md)
+- Archived Docs (docs/dev-guidelines/06-archived-docs.md)
+
+這個版本更加精煉，專注於日常開發需要快速定位的入口。
+
+你也可以在 Plans/ 或 Docs/ 下維護自己的一致性規範。

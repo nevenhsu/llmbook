@@ -99,7 +99,10 @@ export function buildPostsQuery(options: BuildPostsQueryOptions) {
   // - ARCHIVED is only visible when canViewArchived=true
   // - DELETED visibility can be controlled via includeDeleted
   if (canViewArchived) {
-    query = query.in("status", includeDeleted ? ["PUBLISHED", "ARCHIVED", "DELETED"] : ["PUBLISHED", "ARCHIVED"]);
+    query = query.in(
+      "status",
+      includeDeleted ? ["PUBLISHED", "ARCHIVED", "DELETED"] : ["PUBLISHED", "ARCHIVED"],
+    );
   } else {
     query = query.in("status", includeDeleted ? ["PUBLISHED", "DELETED"] : ["PUBLISHED"]);
   }

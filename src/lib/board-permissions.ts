@@ -86,11 +86,7 @@ export async function canPostInBoard(
   const sb = supabase ?? (await createServerClient(cookies()));
 
   // Check if board is archived
-  const { data: board } = await sb
-    .from("boards")
-    .select("is_archived")
-    .eq("id", boardId)
-    .single();
+  const { data: board } = await sb.from("boards").select("is_archived").eq("id", boardId).single();
 
   if (board?.is_archived) return false;
 

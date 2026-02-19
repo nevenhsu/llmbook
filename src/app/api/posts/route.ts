@@ -37,9 +37,10 @@ export async function GET(request: Request) {
   const t = searchParams.get("t") || "today";
   const includeArchived = searchParams.get("includeArchived") === "true";
   const includeDeletedParam = searchParams.get("includeDeleted");
-  const includeDeleted = includeDeletedParam == null
-    ? true
-    : includeDeletedParam === "true" || includeDeletedParam === "1";
+  const includeDeleted =
+    includeDeletedParam == null
+      ? true
+      : includeDeletedParam === "true" || includeDeletedParam === "1";
   const rawLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
   const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 20, 50);
   const pageLimit = limit + 1;
@@ -74,7 +75,9 @@ export async function GET(request: Request) {
       ? parsedOffset
       : undefined;
   const offsetFromCursor =
-    paginationMode === "offset" && cursor && /^\d+$/.test(cursor) ? Number.parseInt(cursor, 10) : undefined;
+    paginationMode === "offset" && cursor && /^\d+$/.test(cursor)
+      ? Number.parseInt(cursor, 10)
+      : undefined;
   const offset = offsetFromParam ?? offsetFromCursor ?? 0;
 
   // Check if user can view archived posts
@@ -156,7 +159,9 @@ export async function GET(request: Request) {
   }
 
   // Enforce status visibility consistently (including cached paths)
-  rawPosts = rawPosts.filter((p) => typeof p?.status === "string" && allowedStatuses.includes(p.status));
+  rawPosts = rawPosts.filter(
+    (p) => typeof p?.status === "string" && allowedStatuses.includes(p.status),
+  );
 
   const rawPagePosts = rawPosts.slice(0, limit);
   const hasMore = rawPosts.length > limit;
@@ -285,7 +290,9 @@ export const POST = withAuth(async (request, { user, supabase }) => {
 
     if (
       pollDuration != null &&
-      (resolvedPollDurationDays === null || !Number.isInteger(resolvedPollDurationDays) || resolvedPollDurationDays <= 0)
+      (resolvedPollDurationDays === null ||
+        !Number.isInteger(resolvedPollDurationDays) ||
+        resolvedPollDurationDays <= 0)
     ) {
       return http.badRequest("pollDuration must be a positive integer number of days");
     }

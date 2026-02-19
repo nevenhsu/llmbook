@@ -3,7 +3,7 @@
 import { NotificationRow, NOTIFICATION_TYPES } from "@/types/notification";
 
 // 使用固定的基準時間（避免 hydration mismatch）
-const BASE_TIME = '2026-02-19T12:00:00Z';
+const BASE_TIME = "2026-02-19T12:00:00Z";
 
 // 生成假時間（過去幾分鐘）
 const ago = (minutes: number) => {
@@ -27,7 +27,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(2),
   },
-  
+
   // Post Upvote - 未讀 (normal)
   {
     id: "mock-002",
@@ -41,7 +41,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(5),
   },
-  
+
   // Comment Reply - 未讀
   {
     id: "mock-003",
@@ -58,7 +58,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(15),
   },
-  
+
   // Comment Reply to Comment - 未讀
   {
     id: "mock-004",
@@ -76,7 +76,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(30),
   },
-  
+
   // Mention in comment - 未讀
   {
     id: "mock-005",
@@ -93,7 +93,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(45),
   },
-  
+
   // Mention in post - 已讀
   {
     id: "mock-006",
@@ -109,7 +109,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(60),
   },
-  
+
   // New Follower - 已讀
   {
     id: "mock-007",
@@ -125,7 +125,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(120),
   },
-  
+
   // Followed User Post - 已讀
   {
     id: "mock-008",
@@ -142,7 +142,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(180),
   },
-  
+
   // Comment Upvote (milestone) - 已讀
   {
     id: "mock-009",
@@ -157,7 +157,7 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(240),
   },
-  
+
   // Comment Upvote (normal) - 已讀
   {
     id: "mock-010",
@@ -171,61 +171,65 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     deleted_at: null,
     created_at: ago(300),
   },
-  
+
   // More notifications for pagination testing...
-  ...Array.from({ length: 15 }, (_, i) => ({
-    id: `mock-${String(i + 11).padStart(3, '0')}`,
-    user_id: "mock-user",
-    type: i % 3 === 0 
-      ? NOTIFICATION_TYPES.POST_UPVOTE 
-      : i % 3 === 1
-      ? NOTIFICATION_TYPES.COMMENT_REPLY
-      : NOTIFICATION_TYPES.NEW_FOLLOWER,
-    payload: i % 3 === 0 
-      ? { 
-          postId: `post-${i + 10}`, 
-          postTitle: `Sample post title number ${i + 1}` 
-        }
-      : i % 3 === 1
-      ? { 
-          postId: `post-${i + 10}`, 
-          commentId: `comment-${i + 10}`, 
-          authorName: `User ${i + 1}`,
-          authorUsername: `user${i + 1}`,
-        }
-      : {
-          followerId: `follower-${i + 2}`,
-          followerUsername: `user${i + 1}`,
-          followerDisplayName: `User ${i + 1}`,
-        },
-    read_at: i % 4 === 0 ? null : ago(360 + i * 60),
-    deleted_at: null,
-    created_at: ago(360 + i * 60),
-  } as NotificationRow)),
+  ...Array.from(
+    { length: 15 },
+    (_, i) =>
+      ({
+        id: `mock-${String(i + 11).padStart(3, "0")}`,
+        user_id: "mock-user",
+        type:
+          i % 3 === 0
+            ? NOTIFICATION_TYPES.POST_UPVOTE
+            : i % 3 === 1
+              ? NOTIFICATION_TYPES.COMMENT_REPLY
+              : NOTIFICATION_TYPES.NEW_FOLLOWER,
+        payload:
+          i % 3 === 0
+            ? {
+                postId: `post-${i + 10}`,
+                postTitle: `Sample post title number ${i + 1}`,
+              }
+            : i % 3 === 1
+              ? {
+                  postId: `post-${i + 10}`,
+                  commentId: `comment-${i + 10}`,
+                  authorName: `User ${i + 1}`,
+                  authorUsername: `user${i + 1}`,
+                }
+              : {
+                  followerId: `follower-${i + 2}`,
+                  followerUsername: `user${i + 1}`,
+                  followerDisplayName: `User ${i + 1}`,
+                },
+        read_at: i % 4 === 0 ? null : ago(360 + i * 60),
+        deleted_at: null,
+        created_at: ago(360 + i * 60),
+      }) as NotificationRow,
+  ),
 ];
 
 // 模擬分頁
 export function getMockNotifications(cursor?: string, limit: number = 20) {
   let startIndex = 0;
-  
+
   if (cursor) {
-    const cursorIndex = MOCK_NOTIFICATIONS.findIndex(n => n.created_at === cursor);
+    const cursorIndex = MOCK_NOTIFICATIONS.findIndex((n) => n.created_at === cursor);
     if (cursorIndex !== -1) {
       startIndex = cursorIndex + 1;
     }
   }
-  
+
   const items = MOCK_NOTIFICATIONS.slice(startIndex, startIndex + limit + 1);
   const hasMore = items.length > limit;
-  
+
   if (hasMore) {
     items.pop();
   }
-  
-  const nextCursor = hasMore && items.length > 0 
-    ? items[items.length - 1].created_at 
-    : undefined;
-  
+
+  const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].created_at : undefined;
+
   return { items, hasMore, nextCursor };
 }
 

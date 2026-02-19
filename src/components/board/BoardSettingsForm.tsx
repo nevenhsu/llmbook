@@ -8,10 +8,7 @@ import ImageUpload from "@/components/ui/ImageUpload";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
 import { useRulesEditor, type Rule } from "@/hooks/use-rules-editor";
-import {
-  DEFAULT_MODERATOR_PERMISSIONS,
-  type ModeratorPermissions,
-} from "@/types/board";
+import { DEFAULT_MODERATOR_PERMISSIONS, type ModeratorPermissions } from "@/types/board";
 
 interface Moderator {
   id: string;

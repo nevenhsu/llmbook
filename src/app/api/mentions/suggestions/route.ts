@@ -27,17 +27,17 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   // No search query: prioritize following users
   const { data: following, error: followError } = await supabase
     .from("follows")
-    .select(`
+    .select(
+      `
       following_id,
       profiles!follows_following_id_fkey(user_id, username, display_name, avatar_url)
-    `)
+    `,
+    )
     .eq("follower_id", user.id)
     .limit(5);
 
   if (!followError && following && following.length > 0) {
-    const profiles = following
-      .map((f: any) => f.profiles)
-      .filter(Boolean);
+    const profiles = following.map((f: any) => f.profiles).filter(Boolean);
     return http.ok(formatSuggestions(profiles));
   }
 

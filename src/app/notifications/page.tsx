@@ -30,7 +30,7 @@ export default function NotificationsPage() {
 
       const res = await fetch(`/api/notifications?${params}`);
       if (!res.ok) throw new Error("Failed to fetch notifications");
-      
+
       const data = await res.json();
 
       setNotifications(data.items || []);
@@ -59,9 +59,7 @@ export default function NotificationsPage() {
 
       if (!res.ok) throw new Error("Failed to mark as read");
 
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, read_at: new Date().toISOString() }))
-      );
+      setNotifications((prev) => prev.map((n) => ({ ...n, read_at: new Date().toISOString() })));
     } catch (err) {
       console.error("Failed to mark as read:", err);
     } finally {
@@ -85,7 +83,7 @@ export default function NotificationsPage() {
               "pb-2 text-sm font-bold",
               activeTab === "all"
                 ? "text-base-content border-upvote border-b-2"
-                : "text-base-content/70 hover:text-base-content"
+                : "text-base-content/70 hover:text-base-content",
             )}
           >
             All
@@ -97,7 +95,7 @@ export default function NotificationsPage() {
                 "pb-2 text-sm",
                 activeTab === "unread"
                   ? "text-base-content border-upvote border-b-2 font-bold"
-                  : "text-base-content/70 hover:text-base-content"
+                  : "text-base-content/70 hover:text-base-content",
               )}
             >
               Unread ({unreadCount})
@@ -109,7 +107,7 @@ export default function NotificationsPage() {
           <button
             onClick={markAllAsRead}
             disabled={isMarkingAllRead}
-            className="text-upvote flex items-center gap-2 text-sm hover:underline disabled:opacity-50"
+            className="flex items-center gap-2 text-sm hover:underline disabled:opacity-50"
           >
             {isMarkingAllRead ? (
               <Loader2 size={16} className="animate-spin" />

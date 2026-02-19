@@ -53,11 +53,16 @@ export default async function BoardSettingsPage({ params }: { params: Promise<{ 
     .order("created_at", { ascending: true });
 
   const normalizedModerators: BoardSettingsModerator[] = (moderators ?? []).map((mod) => {
-    const profiles = (mod as { profiles?: BoardSettingsModerator["profiles"] | BoardSettingsModerator["profiles"][] | null })
-      .profiles;
+    const profiles = (
+      mod as {
+        profiles?: BoardSettingsModerator["profiles"] | BoardSettingsModerator["profiles"][] | null;
+      }
+    ).profiles;
     return {
       ...(mod as Omit<BoardSettingsModerator, "profiles">),
-      profiles: (Array.isArray(profiles) ? profiles[0] : profiles) as BoardSettingsModerator["profiles"],
+      profiles: (Array.isArray(profiles)
+        ? profiles[0]
+        : profiles) as BoardSettingsModerator["profiles"],
     };
   });
 

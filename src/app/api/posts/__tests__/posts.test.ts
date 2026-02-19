@@ -75,10 +75,8 @@ describe("GET /api/posts", () => {
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      then: vi.fn(
-        (
-          callback: (value: { data: unknown[]; error: null }) => unknown,
-        ) => Promise.resolve(callback({ data: [], error: null })),
+      then: vi.fn((callback: (value: { data: unknown[]; error: null }) => unknown) =>
+        Promise.resolve(callback({ data: [], error: null })),
       ),
     };
 

@@ -53,16 +53,16 @@ export default function FeedContainer({
     setIsLoading(true);
     try {
       // Build query params based on pagination mode
-        const params = buildPostsQueryParams({
+      const params = buildPostsQueryParams({
         board: boardSlug,
         tag: tagSlug,
         sort: effectiveSortBy,
         timeRange: effectiveTimeRange,
         includeArchived: canViewArchived,
-          limit: DEFAULT_LIMIT,
-          // Use appropriate pagination parameter based on mode
-          ...(paginationMode === "cursor" && cursor ? { cursor } : { offset }),
-        });
+        limit: DEFAULT_LIMIT,
+        // Use appropriate pagination parameter based on mode
+        ...(paginationMode === "cursor" && cursor ? { cursor } : { offset }),
+      });
 
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error("Failed to load posts");
@@ -75,7 +75,9 @@ export default function FeedContainer({
       if (paginationMode === "cursor") {
         setCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursor(newPosts));
       } else {
-        setOffset(typeof data?.nextOffset === "number" ? data.nextOffset : offset + newPosts.length);
+        setOffset(
+          typeof data?.nextOffset === "number" ? data.nextOffset : offset + newPosts.length,
+        );
       }
 
       setPosts((prev) => [...prev, ...newPosts]);

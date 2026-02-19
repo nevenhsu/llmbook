@@ -4,11 +4,11 @@ import Link from "next/link";
 import { Trash2, ArrowUp, Reply, AtSign, UserPlus, FileText, MessageSquare } from "lucide-react";
 import Timestamp from "@/components/ui/Timestamp";
 import type { NotificationRow } from "@/types/notification";
-import { 
-  getNotificationMessage, 
-  getNotificationLink, 
+import {
+  getNotificationMessage,
+  getNotificationLink,
   getNotificationIconType,
-  NOTIFICATION_TYPES 
+  NOTIFICATION_TYPES,
 } from "@/types/notification";
 
 interface NotificationItemProps {
@@ -20,28 +20,24 @@ interface NotificationItemProps {
 function NotificationIcon({ type }: { type: string }) {
   const iconType = getNotificationIconType(type as any);
   const iconProps = { size: 20 };
-  
+
   switch (iconType) {
-    case 'upvote':
+    case "upvote":
       return <ArrowUp {...iconProps} className="text-success" />;
-    case 'reply':
+    case "reply":
       return <Reply {...iconProps} className="text-blue-500" />;
-    case 'mention':
+    case "mention":
       return <AtSign {...iconProps} className="text-accent" />;
-    case 'follow':
+    case "follow":
       return <UserPlus {...iconProps} className="text-primary" />;
-    case 'post':
+    case "post":
       return <FileText {...iconProps} className="text-accent" />;
     default:
       return <MessageSquare {...iconProps} className="text-base-content/70" />;
   }
 }
 
-export function NotificationItem({ 
-  notification, 
-  onMarkRead, 
-  onDelete 
-}: NotificationItemProps) {
+export function NotificationItem({ notification, onMarkRead, onDelete }: NotificationItemProps) {
   const link = getNotificationLink(notification);
   const message = getNotificationMessage(notification);
 
@@ -59,10 +55,10 @@ export function NotificationItem({
 
   const handleClick = (e: React.MouseEvent) => {
     // If clicking on a button, don't navigate
-    if ((e.target as HTMLElement).closest('button')) {
+    if ((e.target as HTMLElement).closest("button")) {
       return;
     }
-    
+
     // Auto mark as read when clicking
     if (!notification.read_at) {
       onMarkRead(notification.id);
@@ -71,36 +67,34 @@ export function NotificationItem({
 
   const content = (
     <div
-      className={`group flex items-start gap-3 p-4 hover:bg-base-200 transition-colors ${
+      className={`group hover:bg-base-200 flex items-start gap-3 p-4 transition-colors ${
         !notification.read_at ? "bg-base-200/50" : ""
       }`}
     >
       {/* Icon */}
-      <div className="flex-shrink-0 mt-1">
+      <div className="mt-1 flex-shrink-0">
         <NotificationIcon type={notification.type} />
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-base-content break-words">
-          {message}
-        </p>
+      <div className="min-w-0 flex-1">
+        <p className="text-base-content text-sm break-words">{message}</p>
         <Timestamp date={notification.created_at} className="mt-1" />
       </div>
 
       {/* Actions */}
-      <div className="flex-shrink-0 flex items-center gap-2">
+      <div className="flex flex-shrink-0 items-center gap-2">
         {!notification.read_at && (
           <button
             onClick={handleMarkRead}
-            className="text-xs text-base-content/70 hover:text-base-content"
+            className="text-base-content/70 hover:text-base-content text-xs"
           >
             Mark read
           </button>
         )}
         <button
           onClick={handleDelete}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-error hover:text-error/80"
+          className="text-error hover:text-error/80 opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="Delete notification"
         >
           <Trash2 size={16} />

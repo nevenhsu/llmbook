@@ -1,10 +1,6 @@
 import { withAuth, http } from "@/lib/server/route-helpers";
 import { toVoteValue } from "@/lib/vote-value";
-import {
-  transformPostToFeedFormat,
-  isRawPost,
-  type RawPost,
-} from "@/lib/posts/query-builder";
+import { transformPostToFeedFormat, isRawPost, type RawPost } from "@/lib/posts/query-builder";
 
 export const runtime = "nodejs";
 
@@ -62,7 +58,7 @@ export const GET = withAuth(async (request, { user, supabase }) => {
   type SavedRow = { created_at: string; post: RawPost | RawPost[] | null };
   const rows = (Array.isArray(savedData) ? (savedData as unknown[]) : []).filter(
     (row): row is SavedRow => {
-    return !!row && typeof (row as { created_at?: unknown }).created_at === "string";
+      return !!row && typeof (row as { created_at?: unknown }).created_at === "string";
     },
   );
 
@@ -70,9 +66,7 @@ export const GET = withAuth(async (request, { user, supabase }) => {
   const hasMore = rows.length > limit;
 
   // Extract posts and get user votes
-  const posts = pageRows
-    .map((d) => (Array.isArray(d.post) ? d.post[0] : d.post))
-    .filter(isRawPost);
+  const posts = pageRows.map((d) => (Array.isArray(d.post) ? d.post[0] : d.post)).filter(isRawPost);
 
   let userVotes: Record<string, number> = {};
   if (posts.length > 0) {

@@ -8,14 +8,7 @@ import {
   getNotificationLink,
 } from "@/types/notification";
 import Timestamp from "@/components/ui/Timestamp";
-import {
-  ArrowBigUp,
-  MessageSquare,
-  AtSign,
-  UserPlus,
-  FileText,
-  MessageCircle,
-} from "lucide-react";
+import { ArrowBigUp, MessageSquare, AtSign, UserPlus, FileText, MessageCircle } from "lucide-react";
 import type { NotificationRow } from "@/types/notification";
 
 interface NotificationPopoverProps {
@@ -65,7 +58,7 @@ export default function NotificationPopover({
   return (
     <div
       ref={popoverRef}
-      className="border-neutral bg-base-100 absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border shadow-xl"
+      className="border-neutral bg-base-100 absolute top-full right-0 z-50 mt-2 w-80 rounded-lg border shadow-xl"
     >
       {/* Header */}
       <div className="border-neutral border-b px-4 py-3">
@@ -87,7 +80,7 @@ export default function NotificationPopover({
 
             const content = (
               <div
-                className={`flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-base-200 ${
+                className={`hover:bg-base-200 flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors ${
                   !notification.read_at ? "bg-base-200/50" : ""
                 }`}
               >
@@ -104,7 +97,12 @@ export default function NotificationPopover({
 
             if (link) {
               return (
-                <Link key={notification.id} href={link} onClick={onNotificationClick} className="no-underline hover:no-underline">
+                <Link
+                  key={notification.id}
+                  href={link}
+                  onClick={onNotificationClick}
+                  className="no-underline hover:no-underline"
+                >
                   {content}
                 </Link>
               );
@@ -120,7 +118,7 @@ export default function NotificationPopover({
         <Link
           href="/notifications"
           onClick={onNotificationClick}
-          className="text-base-content/70 text-sm hover:text-base-content no-underline hover:no-underline"
+          className="text-base-content/70 hover:text-base-content text-sm no-underline hover:no-underline"
         >
           View all notifications
         </Link>

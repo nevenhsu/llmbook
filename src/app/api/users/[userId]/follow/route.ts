@@ -70,19 +70,21 @@ export const POST = withAuth<{ userId: string }>(async (_request, { user, supaba
  * DELETE /api/users/[userId]/follow
  * Unfollow a user
  */
-export const DELETE = withAuth<{ userId: string }>(async (_request, { user, supabase }, context) => {
-  const { userId } = await context.params;
+export const DELETE = withAuth<{ userId: string }>(
+  async (_request, { user, supabase }, context) => {
+    const { userId } = await context.params;
 
-  const { error } = await supabase
-    .from("follows")
-    .delete()
-    .eq("follower_id", user.id)
-    .eq("following_id", userId);
+    const { error } = await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", user.id)
+      .eq("following_id", userId);
 
-  if (error) {
-    console.error("Unfollow error:", error);
-    return http.internalError(error.message);
-  }
+    if (error) {
+      console.error("Unfollow error:", error);
+      return http.internalError(error.message);
+    }
 
-  return http.ok({ success: true });
-});
+    return http.ok({ success: true });
+  },
+);

@@ -133,17 +133,23 @@ export default function ProfilePostList({
       if (tab === "posts") {
         const items = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
         setPosts(items);
-        setPostsHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT);
+        setPostsHasMore(
+          typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT,
+        );
         setPostsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       } else if (tab === "comments") {
         const items = (Array.isArray(data?.items) ? data.items : []) as FormattedComment[];
         setComments(items);
-        setCommentsHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT);
+        setCommentsHasMore(
+          typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT,
+        );
         setCommentsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       } else if (tab === "saved") {
         const items = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
         setSavedPosts(items);
-        setSavedHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT);
+        setSavedHasMore(
+          typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT,
+        );
         setSavedCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       }
 
@@ -188,7 +194,11 @@ export default function ProfilePostList({
       const data = await res.json();
       const newPosts = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
 
-      setSavedHasMore(typeof data?.hasMore === "boolean" ? data.hasMore : calculateHasMoreLib(newPosts, DEFAULT_LIMIT));
+      setSavedHasMore(
+        typeof data?.hasMore === "boolean"
+          ? data.hasMore
+          : calculateHasMoreLib(newPosts, DEFAULT_LIMIT),
+      );
       setSavedCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
       setSavedPosts((prev) => [...prev, ...newPosts]);
     } catch (err) {
@@ -235,7 +245,9 @@ export default function ProfilePostList({
       const newPosts = Array.isArray(data?.items) ? data.items : [];
 
       setPostsHasMore(!!data?.hasMore);
-      setPostsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newPosts));
+      setPostsCursor(
+        typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newPosts),
+      );
       setPosts((prev) => [...prev, ...newPosts]);
     } catch (err) {
       console.error("Failed to load more posts:", err);
@@ -263,7 +275,9 @@ export default function ProfilePostList({
       const newComments = Array.isArray(data?.items) ? data.items : [];
 
       setCommentsHasMore(!!data?.hasMore);
-      setCommentsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newComments));
+      setCommentsCursor(
+        typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newComments),
+      );
       setComments((prev) => [...prev, ...newComments]);
     } catch (err) {
       console.error("Failed to load more comments:", err);

@@ -48,7 +48,13 @@ export type RawPostForEdit = {
     | null;
   post_tags: { tag_id: string }[] | null;
   media:
-    | { id: string; url: string; width: number | null; height: number | null; size_bytes: number | null }[]
+    | {
+        id: string;
+        url: string;
+        width: number | null;
+        height: number | null;
+        size_bytes: number | null;
+      }[]
     | null;
   poll_options: { id: string; text: string; vote_count: number }[] | null;
 };

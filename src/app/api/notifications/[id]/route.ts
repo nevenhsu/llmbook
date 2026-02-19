@@ -19,5 +19,5 @@ export const DELETE = withAuth(
     }
 
     return http.ok({ success: true });
-  }
+  },
 );

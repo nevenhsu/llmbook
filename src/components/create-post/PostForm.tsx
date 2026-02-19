@@ -188,7 +188,8 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
                         type="button"
                         onClick={() => {
                           form.loadEditDraft();
-                          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                          if (document.activeElement instanceof HTMLElement)
+                            document.activeElement.blur();
                         }}
                         className="flex-1 text-left"
                       >
@@ -203,7 +204,8 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
                         type="button"
                         onClick={() => {
                           form.deleteEditDraft();
-                          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                          if (document.activeElement instanceof HTMLElement)
+                            document.activeElement.blur();
                         }}
                         className="hover:bg-error/20 text-error rounded p-1 transition-colors"
                         title="Delete draft"
@@ -230,7 +232,8 @@ export default function PostForm({ userJoinedBoards = [], editMode = false, init
                         type="button"
                         onClick={() => {
                           form.loadCreateDraft(draft);
-                          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                          if (document.activeElement instanceof HTMLElement)
+                            document.activeElement.blur();
                         }}
                         className="flex-1 text-left"
                       >

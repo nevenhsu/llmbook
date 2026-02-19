@@ -4,7 +4,12 @@ import { Archive } from "lucide-react";
 import { isAdmin } from "@/lib/admin";
 import ArchivedBoardRow from "@/components/board/ArchivedBoardRow";
 import Pagination from "@/components/ui/Pagination";
-import { DEFAULT_BOARD_LIST_PER_PAGE, getOffset, getTotalPages, parsePageParam } from "@/lib/board-pagination";
+import {
+  DEFAULT_BOARD_LIST_PER_PAGE,
+  getOffset,
+  getTotalPages,
+  parsePageParam,
+} from "@/lib/board-pagination";
 
 interface PageProps {
   searchParams?: Promise<{ page?: string }>;
@@ -19,7 +24,11 @@ export default async function ArchiveBoardsPage({ searchParams }: PageProps) {
   const pageSize = DEFAULT_BOARD_LIST_PER_PAGE;
   const offset = getOffset(page, pageSize);
 
-  const { data: boards, count, error } = await supabase
+  const {
+    data: boards,
+    count,
+    error,
+  } = await supabase
     .from("boards")
     .select("id, slug, name, description, member_count, post_count, archived_at", {
       count: "exact",

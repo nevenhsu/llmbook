@@ -145,8 +145,10 @@ export const POST = withAuth(
     // Trigger notifications asynchronously
     void (async () => {
       try {
-        const profile = (comment as { profiles?: { display_name?: string | null; username?: string | null } }).profiles;
-        
+        const profile = (
+          comment as { profiles?: { display_name?: string | null; username?: string | null } }
+        ).profiles;
+
         // Notify post author about comment
         if (post.author_id && post.author_id !== user.id) {
           await createNotification(post.author_id, NOTIFICATION_TYPES.COMMENT_REPLY, {

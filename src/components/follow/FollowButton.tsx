@@ -28,7 +28,7 @@ export default function FollowButton({
 
   const handleClick = async () => {
     if (isLoading) return;
-    
+
     setIsLoading(true);
     const newState = !isFollowing;
 

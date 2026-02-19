@@ -22,9 +22,7 @@ export default function NotificationsPreviewPage() {
   // 模擬標記已讀
   const handleMarkRead = useCallback((id: string) => {
     setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, read_at: new Date().toISOString() } : n
-      )
+      prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
     );
   }, []);
 
@@ -36,7 +34,7 @@ export default function NotificationsPreviewPage() {
   // 模擬全部標記已讀
   const handleMarkAllRead = () => {
     setNotifications((prev) =>
-      prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
+      prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })),
     );
   };
 
@@ -66,7 +64,7 @@ export default function NotificationsPreviewPage() {
 
       {/* Preview Controls */}
       <div className="bg-base-200 border-neutral mb-4 rounded-lg border p-4">
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-base-content/70">
+        <h2 className="text-base-content/70 mb-2 text-sm font-bold tracking-wider uppercase">
           Preview Controls
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -91,25 +89,23 @@ export default function NotificationsPreviewPage() {
       {/* NotificationBell Dropdown Preview */}
       {showBellPreview && (
         <div className="bg-base-200 border-neutral mb-4 rounded-lg border p-4">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-base-content/70">
+          <h2 className="text-base-content/70 mb-3 text-sm font-bold tracking-wider uppercase">
             NotificationBell Dropdown Preview
           </h2>
-          <div className="bg-base-100 rounded-lg shadow-lg border border-neutral max-w-md">
+          <div className="bg-base-100 border-neutral max-w-md rounded-lg border shadow-lg">
             {/* Bell Icon Header (mock) */}
-            <div className="border-b border-neutral p-3 flex items-center justify-between">
+            <div className="border-neutral flex items-center justify-between border-b p-3">
               <div className="flex items-center gap-2">
                 <Bell size={20} className="text-base-content/70" />
-                <span className="font-semibold text-sm">Recent Notifications</span>
+                <span className="text-sm font-semibold">Recent Notifications</span>
               </div>
               {bellUnreadCount > 0 && (
-                <span className="badge badge-sm bg-error text-white">
-                  {bellUnreadCount}
-                </span>
+                <span className="badge badge-sm bg-error text-white">{bellUnreadCount}</span>
               )}
             </div>
 
             {/* Recent Notifications List */}
-            <div className="divide-y divide-neutral">
+            <div className="divide-neutral divide-y">
               {recentNotifications.length === 0 ? (
                 <div className="p-6 text-center">
                   <Bell size={32} className="text-base-content/30 mx-auto mb-2" />
@@ -127,9 +123,9 @@ export default function NotificationsPreviewPage() {
             </div>
 
             {/* Footer - View All Link */}
-            <div className="border-t border-neutral p-3">
+            <div className="border-neutral border-t p-3">
               <button
-                className="text-base-content/70 hover:text-base-content text-sm w-full text-center font-medium"
+                className="text-base-content/70 hover:text-base-content w-full text-center text-sm font-medium"
                 onClick={() => alert("Would navigate to /notifications")}
               >
                 View all notifications
@@ -146,15 +142,13 @@ export default function NotificationsPreviewPage() {
             All ({notifications.length})
           </span>
           {unreadCount > 0 && (
-            <span className="text-base-content/70 pb-2 text-sm">
-              Unread ({unreadCount})
-            </span>
+            <span className="text-base-content/70 pb-2 text-sm">Unread ({unreadCount})</span>
           )}
         </div>
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllRead}
-            className="text-base-content/70 flex items-center gap-2 text-sm hover:text-base-content"
+            className="text-base-content/70 hover:text-base-content flex items-center gap-2 text-sm"
           >
             <CheckCircle2 size={16} />
             Mark all as read
@@ -166,7 +160,7 @@ export default function NotificationsPreviewPage() {
       {showEmpty ? (
         <NotificationEmpty />
       ) : (
-        <div className="divide-neutral divide-y rounded-lg border border-neutral">
+        <div className="divide-neutral border-neutral divide-y rounded-lg border">
           {notifications.map((notification) => (
             <NotificationItem
               key={notification.id}
@@ -180,10 +174,10 @@ export default function NotificationsPreviewPage() {
 
       {/* Type Reference */}
       <div className="bg-base-200 border-neutral mt-8 rounded-lg border p-4">
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-base-content/70">
+        <h2 className="text-base-content/70 mb-2 text-sm font-bold tracking-wider uppercase">
           Notification Types in Preview
         </h2>
-        <ul className="text-sm text-base-content/70 space-y-1">
+        <ul className="text-base-content/70 space-y-1 text-sm">
           <li>✅ post_upvote - Post received upvote (with/without milestone)</li>
           <li>✅ comment_upvote - Comment received upvote (with/without milestone)</li>
           <li>✅ comment_reply - New comment on your post</li>
@@ -205,7 +199,11 @@ function NotificationItemPreview({
   notification: NotificationRow;
   compact?: boolean;
 }) {
-  const { getNotificationMessage, getNotificationLink, getNotificationIconType } = require("@/types/notification");
+  const {
+    getNotificationMessage,
+    getNotificationLink,
+    getNotificationIconType,
+  } = require("@/types/notification");
   const Timestamp = require("@/components/ui/Timestamp").default;
   const { ArrowUp, Reply, AtSign, UserPlus, FileText, MessageSquare } = require("lucide-react");
 
@@ -215,21 +213,21 @@ function NotificationItemPreview({
 
   const iconProps = { size: compact ? 16 : 20 };
   let icon;
-  
+
   switch (iconType) {
-    case 'upvote':
+    case "upvote":
       icon = <ArrowUp {...iconProps} className="text-success" />;
       break;
-    case 'reply':
+    case "reply":
       icon = <Reply {...iconProps} className="text-blue-500" />;
       break;
-    case 'mention':
+    case "mention":
       icon = <AtSign {...iconProps} className="text-accent" />;
       break;
-    case 'follow':
+    case "follow":
       icon = <UserPlus {...iconProps} className="text-primary" />;
       break;
-    case 'post':
+    case "post":
       icon = <FileText {...iconProps} className="text-accent" />;
       break;
     default:
@@ -238,7 +236,7 @@ function NotificationItemPreview({
 
   const content = (
     <div
-      className={`group flex items-start gap-3 transition-colors hover:bg-base-200 ${
+      className={`group hover:bg-base-200 flex items-start gap-3 transition-colors ${
         compact ? "p-3" : "p-4"
       } ${!notification.read_at ? "bg-base-200/50" : ""}`}
     >
@@ -248,15 +246,15 @@ function NotificationItemPreview({
         <p className={`text-base-content break-words ${compact ? "text-xs" : "text-sm"}`}>
           {message}
         </p>
-        <Timestamp 
-          date={notification.created_at} 
-          className={`text-base-content/50 mt-1 ${compact ? "text-[10px]" : "text-xs"}`} 
+        <Timestamp
+          date={notification.created_at}
+          className={`text-base-content/50 mt-1 ${compact ? "text-[10px]" : "text-xs"}`}
         />
       </div>
 
       {!notification.read_at && (
         <div className="flex-shrink-0">
-          <div className="h-2 w-2 rounded-full bg-error"></div>
+          <div className="bg-error h-2 w-2 rounded-full"></div>
         </div>
       )}
     </div>
@@ -265,10 +263,7 @@ function NotificationItemPreview({
   // In preview mode, clicking shows an alert instead of navigating
   if (link) {
     return (
-      <div
-        onClick={() => alert(`Would navigate to: ${link}`)}
-        className="cursor-pointer"
-      >
+      <div onClick={() => alert(`Would navigate to: ${link}`)} className="cursor-pointer">
         {content}
       </div>
     );

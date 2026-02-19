@@ -60,12 +60,17 @@ export default function PostRow({
   onScoreChange,
 }: PostRowProps) {
   const router = useRouter();
-  const { saved, hidden: localHidden, handleSave, handleHide, handleUnhide } =
-    usePostInteractions({
-      postId: id,
-      initialSaved: isSaved,
-      initialHidden: isHidden,
-    });
+  const {
+    saved,
+    hidden: localHidden,
+    handleSave,
+    handleHide,
+    handleUnhide,
+  } = usePostInteractions({
+    postId: id,
+    initialSaved: isSaved,
+    initialHidden: isHidden,
+  });
   const [localExpanded, setLocalExpanded] = useState(false);
   const [deleted, setDeleted] = useState(status === "DELETED");
 

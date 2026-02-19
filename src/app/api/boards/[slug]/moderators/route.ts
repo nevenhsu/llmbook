@@ -93,9 +93,7 @@ export const POST = withAuth<{ slug: string }>(async (request, { user, supabase 
   }
 
   // Default permissions for moderator
-  const modPermissions = permissions
-    ? { ...permissions }
-    : { ...DEFAULT_MODERATOR_PERMISSIONS };
+  const modPermissions = permissions ? { ...permissions } : { ...DEFAULT_MODERATOR_PERMISSIONS };
 
   // Don't allow creating another owner
   const modRole = role === "owner" ? "moderator" : role || "moderator";

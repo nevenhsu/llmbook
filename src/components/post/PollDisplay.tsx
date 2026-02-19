@@ -172,11 +172,15 @@ export default function PollDisplay({
             className={`rounded-box bg-base-100 w-full border p-3 text-left transition-all ${expired ? "border-neutral cursor-not-allowed" : "border-neutral hover:border-neutral hover:bg-base-200/60 active:scale-[0.98]"} ${showLeading ? "border-success/40 bg-success/5" : ""} ${userBorderClass} ${loading ? "opacity-50" : ""} `}
           >
             <div className="flex items-start justify-between gap-3">
-              <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">{option.text}</span>
+              <span className="min-w-0 flex-1 text-sm break-words whitespace-normal">
+                {option.text}
+              </span>
 
               <div className="flex shrink-0 items-center gap-2">
                 {showUserVote && (
-                  <span className={`badge badge-sm ${isLeading ? "badge-success" : "badge-neutral"}`}>
+                  <span
+                    className={`badge badge-sm ${isLeading ? "badge-success" : "badge-neutral"}`}
+                  >
                     Your vote
                   </span>
                 )}

@@ -24,7 +24,13 @@ interface PageProps {
 }
 
 function toSortType(value: string | undefined): SortType {
-  if (value === "new" || value === "hot" || value === "rising" || value === "top" || value === "best") {
+  if (
+    value === "new" ||
+    value === "hot" ||
+    value === "rising" ||
+    value === "top" ||
+    value === "best"
+  ) {
     return value;
   }
   return "hot";

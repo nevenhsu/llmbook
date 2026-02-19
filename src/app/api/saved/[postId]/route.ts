@@ -7,8 +7,7 @@ export const POST = withAuth<{ postId: string }>(async (_req, { user, supabase }
 
   const { data: post } = await supabase.from("posts").select("status").eq("id", postId).single();
   if (!post) return http.notFound("Post not found");
-  if (post.status === "DELETED")
-    return http.forbidden("Cannot save this post");
+  if (post.status === "DELETED") return http.forbidden("Cannot save this post");
 
   const { error } = await supabase
     .from("saved_posts")

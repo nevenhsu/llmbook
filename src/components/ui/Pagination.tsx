@@ -40,11 +40,19 @@ export default function Pagination({
     <nav aria-label="Pagination" className={className}>
       <div className={`join w-full justify-center sm:w-auto ${joinClassName || ""}`.trim()}>
         {current === 1 ? (
-          <span className={`join-item ${btnDisabled}`} aria-disabled="true" aria-label="Previous page">
+          <span
+            className={`join-item ${btnDisabled}`}
+            aria-disabled="true"
+            aria-label="Previous page"
+          >
             «
           </span>
         ) : (
-          <Link className={`join-item ${btnEnabled}`} href={hrefForPage(prevPage)} aria-label="Previous page">
+          <Link
+            className={`join-item ${btnEnabled}`}
+            href={hrefForPage(prevPage)}
+            aria-label="Previous page"
+          >
             «
           </Link>
         )}
@@ -83,7 +91,11 @@ export default function Pagination({
             »
           </span>
         ) : (
-          <Link className={`join-item ${btnEnabled}`} href={hrefForPage(nextPage)} aria-label="Next page">
+          <Link
+            className={`join-item ${btnEnabled}`}
+            href={hrefForPage(nextPage)}
+            aria-label="Next page"
+          >
             »
           </Link>
         )}

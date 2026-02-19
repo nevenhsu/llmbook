@@ -4,13 +4,13 @@ This document describes the shared libraries available in `src/lib/` for common 
 
 ## Quick Reference
 
-| Library                             | Purpose                 | Import                                                        |
-| ----------------------------------- | ----------------------- | ------------------------------------------------------------- |
-| [API Client](#api-client)           | Typed HTTP requests     | `import { apiPost, ApiError } from '@/lib/api/fetch-json'`    |
-| [Votes API](#votes-api)             | Post/comment voting     | `import { votePost, voteComment } from '@/lib/api/votes'`     |
-| [Optimistic Vote](#optimistic-vote) | Vote state calculations | `import { applyVote } from '@/lib/optimistic/vote'`           |
-| [Pagination](#pagination)           | Feed pagination         | `import { buildPostsQueryParams } from '@/lib/pagination'`    |
-| [Route Helpers](#route-helpers)     | API route utilities     | `import { withAuth, http } from '@/lib/server/route-helpers'` |
+| Library                             | Purpose                 | Import                                                                 |
+| ----------------------------------- | ----------------------- | ---------------------------------------------------------------------- |
+| [API Client](#api-client)           | Typed HTTP requests     | `import { apiPost, ApiError } from '@/lib/api/fetch-json'`             |
+| [Votes API](#votes-api)             | Post/comment voting     | `import { votePost, voteComment } from '@/lib/api/votes'`              |
+| [Optimistic Vote](#optimistic-vote) | Vote state calculations | `import { applyVote } from '@/lib/optimistic/vote'`                    |
+| [Pagination](#pagination)           | Feed pagination         | `import { buildPostsQueryParams } from '@/lib/pagination'`             |
+| [Route Helpers](#route-helpers)     | API route utilities     | `import { withAuth, http } from '@/lib/server/route-helpers'`          |
 | [Boards](#boards)                   | Board utilities         | `import { getBoardIdBySlug } from '@/lib/boards/get-board-id-by-slug'` |
 
 ---
@@ -175,10 +175,10 @@ const nextCursor = getNextCursor(posts);
 
 ### Pagination Modes
 
-| Mode     | Use Case                     | Parameter                  |
-| -------- | ---------------------------- | -------------------------- |
-| `offset` | Cached rankings (hot/rising/top) | `cursor` = page number |
-| `cursor` | Time-based sorts (new)       | `cursor` = ISO date string |
+| Mode     | Use Case                         | Parameter                  |
+| -------- | -------------------------------- | -------------------------- |
+| `offset` | Cached rankings (hot/rising/top) | `cursor` = page number     |
+| `cursor` | Time-based sorts (new)           | `cursor` = ISO date string |
 
 ---
 
@@ -350,7 +350,6 @@ export async function POST(req: Request) {
 export const POST = withAuth(async (req, { user, supabase }) => {
   // User is guaranteed to be authenticated
   // ... handler logic
-
   // Errors
   // return http.badRequest("...");
   // return http.unauthorized();

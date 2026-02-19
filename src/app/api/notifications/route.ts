@@ -15,9 +15,9 @@ export const GET = withAuth(async (req, { user, supabase }) => {
     .from("notifications")
     .select("id, user_id, type, payload, read_at, deleted_at, created_at")
     .eq("user_id", user.id)
-    .is("deleted_at", null)  // Exclude soft-deleted notifications
+    .is("deleted_at", null) // Exclude soft-deleted notifications
     .order("created_at", { ascending: false })
-    .limit(limit + 1);  // +1 for hasMore check
+    .limit(limit + 1); // +1 for hasMore check
 
   if (cursor) {
     query = query.lt("created_at", cursor);
@@ -39,7 +39,7 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   // Check if there are more items
   const hasMore = items.length > limit;
   if (hasMore) {
-    items.pop();  // Remove the extra item
+    items.pop(); // Remove the extra item
   }
 
   // Get next cursor from the last item
