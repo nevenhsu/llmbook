@@ -8,7 +8,7 @@ import { useProfileData } from "@/hooks/use-profile-data";
 import { useUserContext } from "@/contexts/UserContext";
 import Skeleton from "@/components/ui/Skeleton";
 import SearchBar from "@/components/ui/SearchBar";
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, Users, AlertCircle } from "lucide-react";
 
 export default function FollowersPage() {
   const params = useParams();
@@ -25,12 +25,15 @@ export default function FollowersPage() {
     users: followers,
     hasMore,
     isLoading,
+    isLoadingMore,
+    error,
     searchQuery,
     setSearchQuery,
     loadMore,
+    retry,
   } = useUserList({ userId, type: "followers" });
 
-  const sentinelRef = useInfiniteScroll(loadMore, hasMore, isLoading);
+  const sentinelRef = useInfiniteScroll(loadMore, hasMore, isLoading || isLoadingMore);
 
   if (profileLoading || !userId) {
     return (
@@ -59,7 +62,6 @@ export default function FollowersPage() {
         {/* Header */}
         <div className="mb-4">
           <h1 className="text-base-content text-2xl font-bold">Followers</h1>
-          <p className="text-base-content/70 text-sm">People following {displayName}</p>
         </div>
 
         {/* Stats and Search */}
@@ -79,20 +81,39 @@ export default function FollowersPage() {
       </div>
 
       <div className="space-y-3">
-        {followers.map((follower) => (
-          <UserListItem
-            key={follower.userId}
-            userId={follower.userId}
-            username={follower.username}
-            displayName={follower.displayName}
-            avatarUrl={follower.avatarUrl}
-            karma={follower.karma}
-            isFollowing={follower.isFollowing}
-            currentUserId={currentUserId}
-          />
-        ))}
+        {/* Error State */}
+        {error && (
+          <div className="bg-error/10 border-error/20 rounded-lg border p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="text-error mt-0.5 flex-shrink-0" size={20} />
+              <div className="flex-1">
+                <h3 className="text-error mb-1 text-sm font-semibold">Failed to load followers</h3>
+                <p className="text-error/80 mb-3 text-xs">{error.message}</p>
+                <button onClick={retry} className="btn btn-error btn-sm">
+                  Retry
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {isLoading && (
+        {/* User List */}
+        {!error &&
+          followers.map((follower) => (
+            <UserListItem
+              key={follower.userId}
+              userId={follower.userId}
+              username={follower.username}
+              displayName={follower.displayName}
+              avatarUrl={follower.avatarUrl}
+              karma={follower.karma}
+              isFollowing={follower.isFollowing}
+              currentUserId={currentUserId}
+            />
+          ))}
+
+        {/* Initial Loading */}
+        {isLoading && !isLoadingMore && (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-20 w-full" />
@@ -100,17 +121,34 @@ export default function FollowersPage() {
           </div>
         )}
 
-        {!isLoading && followers.length === 0 && (
+        {/* Load More Loading */}
+        {isLoadingMore && (
+          <div className="space-y-3">
+            {[...Array(2)].map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && followers.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12">
             <Users size={48} className="text-base-content/30 mb-4" />
-            <h3 className="text-base-content mb-2 text-lg font-semibold">No followers yet</h3>
+            <h3 className="text-base-content mb-2 text-lg font-semibold">
+              {searchQuery ? "No followers found" : "No followers yet"}
+            </h3>
             <p className="text-base-content/60 text-center text-sm">
-              When people follow this user, they'll appear here
+              {searchQuery
+                ? `No followers match "${searchQuery}"`
+                : "When people follow this user, they'll appear here"}
             </p>
           </div>
         )}
 
-        {hasMore && !isLoading && <div ref={sentinelRef} className="h-4" />}
+        {/* Infinite Scroll Sentinel */}
+        {hasMore && !isLoading && !isLoadingMore && !error && (
+          <div ref={sentinelRef} className="h-4" />
+        )}
       </div>
     </div>
   );

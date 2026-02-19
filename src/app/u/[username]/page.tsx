@@ -198,11 +198,10 @@ export default async function UserPage({ params, searchParams }: PageProps) {
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-4 px-0 pb-8 sm:px-2">
-      <section className="border-neutral bg-base-100 overflow-hidden rounded-2xl border">
-        <div className="from-neutral/30 to-neutral/10 h-20 bg-gradient-to-br" />
-        <div className="-mt-8 flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
+      <section className="bg-base-100 mb-4 overflow-hidden">
+        <div className="flex flex-col gap-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
           <div className="flex items-end gap-4">
-            <div className="-mt-8">
+            <div>
               <Avatar
                 fallbackSeed={displayName}
                 src={avatarUrl ?? undefined}

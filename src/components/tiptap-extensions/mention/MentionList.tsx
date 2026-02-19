@@ -9,6 +9,7 @@ interface MentionListProps {
   items: MentionSuggestion[];
   command: (item: { id: string; label: string }) => void;
   query: string;
+  loading?: boolean; // Add loading prop
 }
 
 export interface MentionListRef {
@@ -16,7 +17,7 @@ export interface MentionListRef {
 }
 
 export const MentionList = forwardRef<MentionListRef, MentionListProps>(
-  ({ items, command, query }, ref) => {
+  ({ items, command, query, loading = false }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     useEffect(() => {
@@ -58,6 +59,19 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
       },
     }));
 
+    // Show loading state while fetching
+    if (loading) {
+      return (
+        <div className="bg-base-100 border-neutral rounded-lg border p-3 shadow-xl">
+          <div className="text-base-content/50 flex items-center gap-2 text-sm">
+            <Loader2 size={14} className="animate-spin" />
+            Loading suggestions...
+          </div>
+        </div>
+      );
+    }
+
+    // Show "no results" if search query provided but no matches
     if (items.length === 0 && query.length > 0) {
       return (
         <div className="bg-base-100 border-neutral rounded-lg border p-3 shadow-xl">
@@ -66,13 +80,11 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
       );
     }
 
+    // Show "no users available" if no query and no results (empty state)
     if (items.length === 0 && query.length === 0) {
       return (
         <div className="bg-base-100 border-neutral rounded-lg border p-3 shadow-xl">
-          <div className="text-base-content/50 flex items-center gap-2 text-sm">
-            <Loader2 size={14} className="animate-spin" />
-            Loading suggestions...
-          </div>
+          <p className="text-base-content/50 text-sm">No users available to mention</p>
         </div>
       );
     }

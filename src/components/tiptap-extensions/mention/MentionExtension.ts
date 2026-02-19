@@ -10,12 +10,25 @@ export interface MentionSuggestion {
   avatarUrl?: string;
 }
 
+// Set to true to simulate slow network for testing loading state
+const SIMULATE_SLOW_NETWORK = false;
+const NETWORK_DELAY_MS = 3000; // 3 seconds to ensure we see loading
+
 async function fetchMentionSuggestions(query: string): Promise<MentionSuggestion[]> {
   try {
     const res = await fetch(`/api/mentions/suggestions?q=${encodeURIComponent(query)}`);
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
+    if (!res.ok) {
+      return [];
+    }
+    const data = await res.json();
+
+    // Simulate slow network for testing (DEV ONLY)
+    if (SIMULATE_SLOW_NETWORK && process.env.NODE_ENV === "development") {
+      await new Promise((resolve) => setTimeout(resolve, NETWORK_DELAY_MS));
+    }
+
+    return data;
+  } catch (error) {
     return [];
   }
 }
@@ -51,11 +64,21 @@ export const MentionExtension = Mention.configure({
     render: () => {
       let component: ReactRenderer<MentionListRef> | null = null;
       let popup: TippyInstance[] | null = null;
+      let hasReceivedUpdate = false;
 
       return {
         onStart: (props) => {
+          hasReceivedUpdate = false;
+
+          // If items are already available, don't show loading
+          // This happens when items() completes before onStart is called
+          const shouldShowLoading = props.items.length === 0;
+
           component = new ReactRenderer(MentionList, {
-            props,
+            props: {
+              ...props,
+              loading: shouldShowLoading,
+            },
             editor: props.editor,
           });
 
@@ -74,7 +97,15 @@ export const MentionExtension = Mention.configure({
         },
 
         onUpdate(props) {
-          component?.updateProps(props);
+          hasReceivedUpdate = true;
+
+          // Show loading when query changes (user is typing)
+          const isSearching = props.query.length > 0 && props.items.length === 0;
+
+          component?.updateProps({
+            ...props,
+            loading: isSearching,
+          });
 
           if (!props.clientRect) return;
 

@@ -237,7 +237,10 @@ export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: 
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // Disable link from StarterKit if it exists to avoid duplicates
+        link: false,
+      }),
       Placeholder.configure({
         placeholder: placeholder || "Text (optional)",
         emptyEditorClass:

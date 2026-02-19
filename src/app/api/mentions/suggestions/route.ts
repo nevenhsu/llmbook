@@ -13,7 +13,6 @@ export const GET = withAuth(async (req, { user, supabase }) => {
       .from("profiles")
       .select("user_id, username, display_name, avatar_url")
       .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
-      .neq("user_id", user.id) // Exclude self
       .limit(5);
 
     if (error) {
@@ -36,6 +35,10 @@ export const GET = withAuth(async (req, { user, supabase }) => {
     .eq("follower_id", user.id)
     .limit(5);
 
+  if (followError) {
+    console.error("Error fetching following:", followError);
+  }
+
   if (!followError && following && following.length > 0) {
     const profiles = following.map((f: any) => f.profiles).filter(Boolean);
     return http.ok(formatSuggestions(profiles));
@@ -45,7 +48,6 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   const { data: recommended, error: recError } = await supabase
     .from("profiles")
     .select("user_id, username, display_name, avatar_url")
-    .neq("user_id", user.id)
     .order("karma", { ascending: false })
     .limit(5);
 

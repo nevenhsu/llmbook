@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, UserPlus, Bell, BarChart3, Layout } from "lucide-react";
+import { Users, UserPlus, Bell, BarChart3, Layout, AtSign } from "lucide-react";
 
 export default function PreviewIndexPage() {
   const previewPages = [
@@ -43,13 +43,21 @@ export default function PreviewIndexPage() {
       color: "text-pink-500",
       bgColor: "bg-pink-500/10",
     },
+    {
+      title: "Mention Suggestions",
+      description: "Preview mention dropdown with different states",
+      href: "/preview/mentions",
+      icon: AtSign,
+      color: "text-cyan-500",
+      bgColor: "bg-cyan-500/10",
+    },
   ];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">UI Preview Pages</h1>
+        <h1 className="mb-2 text-3xl font-bold">UI Preview Pages</h1>
         <p className="text-base-content/70">
           Preview and test UI components with mock data before integration
         </p>
@@ -70,7 +78,7 @@ export default function PreviewIndexPage() {
                   <Icon size={24} className={page.color} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-base-content mb-1 text-lg font-semibold group-hover:text-primary transition-colors">
+                  <h3 className="text-base-content group-hover:text-primary mb-1 text-lg font-semibold transition-colors">
                     {page.title}
                   </h3>
                   <p className="text-base-content/60 text-sm">{page.description}</p>
@@ -103,18 +111,20 @@ export default function PreviewIndexPage() {
 
       {/* Development Notes */}
       <div className="bg-info/10 border-info mt-4 rounded-lg border p-6">
-        <h2 className="text-info mb-3 text-sm font-bold uppercase tracking-wider">
+        <h2 className="text-info mb-3 text-sm font-bold tracking-wider uppercase">
           Development Notes
         </h2>
         <div className="text-base-content/70 space-y-2 text-sm">
           <p>
-            <strong>Location:</strong> <code className="bg-base-300 rounded px-2 py-1">/src/app/preview/*</code>
+            <strong>Location:</strong>{" "}
+            <code className="bg-base-300 rounded px-2 py-1">/src/app/preview/*</code>
           </p>
           <p>
             <strong>Purpose:</strong> Component development, UI testing, and documentation
           </p>
           <p>
-            <strong>Access:</strong> Development only (should be blocked in production via middleware)
+            <strong>Access:</strong> Development only (should be blocked in production via
+            middleware)
           </p>
         </div>
       </div>

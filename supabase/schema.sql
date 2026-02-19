@@ -6,6 +6,7 @@
 -- Required extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- ============================================================================
 -- TABLES
@@ -401,6 +402,12 @@ CREATE TABLE public.post_rankings (
 
 -- Profiles
 CREATE UNIQUE INDEX profiles_username_unique_idx ON public.profiles (LOWER(username));
+
+-- Profiles search optimization (trigram indexes for partial matching)
+CREATE INDEX IF NOT EXISTS idx_profiles_username_trgm 
+  ON public.profiles USING gin (username gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_profiles_display_name_trgm 
+  ON public.profiles USING gin (display_name gin_trgm_ops);
 
 -- Follows
 CREATE INDEX idx_follows_follower ON public.follows(follower_id);
@@ -861,6 +868,85 @@ FROM public.post_rankings pr
 JOIN public.posts p ON p.id = pr.post_id
 WHERE pr.rising_rank > 0
 ORDER BY pr.rising_rank ASC;
+
+-- ----------------------------------------------------------------------------
+-- User Search Functions
+-- ----------------------------------------------------------------------------
+
+-- Function to search followers/following with database-level filtering
+-- This eliminates over-fetching and enables accurate pagination
+-- Added in: Migration 20260220022446
+CREATE OR REPLACE FUNCTION search_user_follows(
+  p_user_id UUID,
+  p_search_term TEXT,
+  p_type TEXT,  -- 'followers' or 'following'
+  p_limit INTEGER DEFAULT 20,
+  p_cursor TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS TABLE (
+  user_id UUID,
+  username TEXT,
+  display_name TEXT,
+  avatar_url TEXT,
+  karma INTEGER,
+  followed_at TIMESTAMPTZ
+) AS $$
+BEGIN
+  IF p_type = 'followers' THEN
+    -- Search users who follow p_user_id
+    RETURN QUERY
+    SELECT 
+      p.user_id,
+      p.username,
+      p.display_name,
+      p.avatar_url,
+      p.karma,
+      f.created_at as followed_at
+    FROM follows f
+    JOIN profiles p ON p.user_id = f.follower_id
+    WHERE f.following_id = p_user_id
+      AND (
+        p_search_term IS NULL
+        OR p.username ILIKE '%' || p_search_term || '%'
+        OR p.display_name ILIKE '%' || p_search_term || '%'
+      )
+      AND (p_cursor IS NULL OR f.created_at < p_cursor)
+    ORDER BY f.created_at DESC
+    LIMIT p_limit;
+  ELSE
+    -- Search users who are followed by p_user_id
+    RETURN QUERY
+    SELECT 
+      p.user_id,
+      p.username,
+      p.display_name,
+      p.avatar_url,
+      p.karma,
+      f.created_at as followed_at
+    FROM follows f
+    JOIN profiles p ON p.user_id = f.following_id
+    WHERE f.follower_id = p_user_id
+      AND (
+        p_search_term IS NULL
+        OR p.username ILIKE '%' || p_search_term || '%'
+        OR p.display_name ILIKE '%' || p_search_term || '%'
+      )
+      AND (p_cursor IS NULL OR f.created_at < p_cursor)
+    ORDER BY f.created_at DESC
+    LIMIT p_limit;
+  END IF;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION search_user_follows TO authenticated;
+
+-- Add comment for documentation
+COMMENT ON FUNCTION search_user_follows IS 
+'Search followers or following list with database-level filtering for improved performance.
+Uses trigram indexes for efficient partial matching on username and display_name.
+Returns paginated results with cursor-based pagination.
+Added in: Migration 20260220022446 (2026-02-20)';
 
 -- ============================================================================
 -- CONSTRAINTS
