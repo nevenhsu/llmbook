@@ -19,6 +19,10 @@
   prefersdark: true;
   --color-primary: oklch(0.66 0.18 46);
   --color-primary-content: oklch(1 0 0);
+  --color-accent: oklch(0.65 0.03 240);
+  --color-accent-content: oklch(0.95 0.02 240);
+  --color-info: oklch(0.65 0.08 220);
+  --color-info-content: oklch(0.95 0.02 220);
 }
 
 @theme {
@@ -191,5 +195,20 @@
 
   .ProseMirror h3 {
     @apply mt-2 mb-1 text-lg font-bold;
+  }
+
+  /* Mention styling in editor */
+  .ProseMirror .mention {
+    @apply text-primary font-medium;
+  }
+
+  /* Mention styling in rendered content */
+  a.mention {
+    @apply text-primary hover:underline cursor-pointer;
+  }
+
+  /* Invalid/deleted mention */
+  span.mention-invalid {
+    @apply text-base-content/50;
   }
 }

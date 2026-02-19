@@ -79,22 +79,14 @@ export default async function UserPage({ params, searchParams }: PageProps) {
   let isFollowing = false;
 
   if (isProfile && profile?.user_id) {
-    const { count: followers } = await supabase
-      .from("user_follows")
-      .select("*", { count: "exact", head: true })
-      .eq("following_id", profile.user_id);
-    followersCount = followers ?? 0;
-
-    const { count: following } = await supabase
-      .from("user_follows")
-      .select("*", { count: "exact", head: true })
-      .eq("follower_id", profile.user_id);
-    followingCount = following ?? 0;
+    // Get follower/following counts from profiles table (maintained by trigger)
+    followersCount = profile.follower_count || 0;
+    followingCount = profile.following_count || 0;
 
     if (currentUser && !isOwnProfile) {
       const { data: followRelation } = await supabase
-        .from("user_follows")
-        .select("follower_id")
+        .from("follows")
+        .select("id")
         .eq("follower_id", currentUser.id)
         .eq("following_id", profile.user_id)
         .maybeSingle();
@@ -309,10 +301,20 @@ export default async function UserPage({ params, searchParams }: PageProps) {
                     <div className="text-base-content font-semibold">{karma}</div>
                     <div className="text-base-content/70 text-xs">Karma</div>
                   </div>
-                  <div className="bg-base-300 rounded-xl p-3">
+                  <Link
+                    href={`/u/${username}/followers`}
+                    className="bg-base-300 hover:bg-base-200 rounded-xl p-3 transition-colors"
+                  >
                     <div className="text-base-content font-semibold">{followersCount}</div>
                     <div className="text-base-content/70 text-xs">Followers</div>
-                  </div>
+                  </Link>
+                  <Link
+                    href={`/u/${username}/following`}
+                    className="bg-base-300 hover:bg-base-200 col-span-2 rounded-xl p-3 transition-colors"
+                  >
+                    <div className="text-base-content font-semibold">{followingCount}</div>
+                    <div className="text-base-content/70 text-xs">Following</div>
+                  </Link>
                 </>
               )}
               <div className="bg-base-300 col-span-2 rounded-xl p-3">

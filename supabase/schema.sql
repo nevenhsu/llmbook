@@ -23,7 +23,20 @@ CREATE TABLE public.profiles (
   avatar_url text,
   bio text,
   karma int NOT NULL DEFAULT 0,
+  follower_count int NOT NULL DEFAULT 0,
+  following_count int NOT NULL DEFAULT 0,
   created_at timestamptz DEFAULT now()
+);
+
+-- User follow relationships
+CREATE TABLE public.follows (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  following_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  
+  CONSTRAINT follows_no_self_follow CHECK (follower_id != following_id),
+  CONSTRAINT follows_unique UNIQUE (follower_id, following_id)
 );
 
 -- Site admins
@@ -244,6 +257,7 @@ CREATE TABLE public.notifications (
   type text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   read_at timestamptz,
+  deleted_at timestamptz,
   created_at timestamptz DEFAULT now()
 );
 
@@ -385,6 +399,19 @@ CREATE TABLE public.post_rankings (
 -- Profiles
 CREATE UNIQUE INDEX profiles_username_unique_idx ON public.profiles (LOWER(username));
 
+-- Follows
+CREATE INDEX idx_follows_follower ON public.follows(follower_id);
+CREATE INDEX idx_follows_following ON public.follows(following_id);
+
+-- Notifications
+CREATE INDEX idx_notifications_not_deleted 
+  ON public.notifications(user_id, created_at DESC) 
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_notifications_throttle 
+  ON public.notifications(user_id, type, created_at DESC)
+  WHERE type = 'followed_user_post';
+
 -- Admin users
 CREATE INDEX idx_admin_users_role ON public.admin_users(role);
 
@@ -456,6 +483,26 @@ CREATE INDEX idx_post_rankings_calculated_at ON public.post_rankings(calculated_
 -- ============================================================================
 -- FUNCTIONS
 -- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Auto-update Follow Counts
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION update_follow_counts()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE profiles SET follower_count = follower_count + 1 WHERE user_id = NEW.following_id;
+    UPDATE profiles SET following_count = following_count + 1 WHERE user_id = NEW.follower_id;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE profiles SET follower_count = GREATEST(0, follower_count - 1) WHERE user_id = OLD.following_id;
+    UPDATE profiles SET following_count = GREATEST(0, following_count - 1) WHERE user_id = OLD.follower_id;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ----------------------------------------------------------------------------
 -- Auto-update Post Score on Vote
@@ -727,6 +774,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- TRIGGERS
 -- ============================================================================
 
+-- Auto-update follow counts
+CREATE TRIGGER trigger_update_follow_counts
+  AFTER INSERT OR DELETE ON public.follows
+  FOR EACH ROW EXECUTE FUNCTION update_follow_counts();
+
 -- Auto-update post score when vote changes
 CREATE TRIGGER trg_vote_post_score
   AFTER INSERT OR UPDATE OR DELETE ON public.votes
@@ -851,6 +903,7 @@ FOREIGN KEY (comment_id) REFERENCES public.comments(id) ON DELETE CASCADE;
 
 -- Enable RLS on all tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.personas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.boards ENABLE ROW LEVEL SECURITY;
@@ -897,6 +950,19 @@ CREATE POLICY "Profiles are viewable by everyone" ON public.profiles
 
 CREATE POLICY "Users can manage their profile" ON public.profiles
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- ----------------------------------------------------------------------------
+-- Follows Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Follows are public" ON public.follows
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can follow others" ON public.follows
+  FOR INSERT WITH CHECK (auth.uid() = follower_id);
+
+CREATE POLICY "Users can unfollow" ON public.follows
+  FOR DELETE USING (auth.uid() = follower_id);
 
 -- ----------------------------------------------------------------------------
 -- Admin Helper Functions

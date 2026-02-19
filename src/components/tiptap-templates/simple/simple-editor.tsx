@@ -6,6 +6,7 @@ import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
+import { MentionExtension } from "@/components/tiptap-extensions/mention";
 import {
   Bold,
   ChevronDown,
@@ -250,6 +251,7 @@ export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: 
       Image.configure({
         allowBase64: true,
       }),
+      MentionExtension,
     ],
     content: effectiveContent,
     onUpdate: ({ editor }) => {

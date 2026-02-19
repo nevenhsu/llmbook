@@ -35,6 +35,7 @@ vi.mock("@/lib/notifications", () => ({
 import { POST } from "../route";
 import { createClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
+import { NOTIFICATION_TYPES } from "@/types/notification";
 
 describe("POST /api/votes", () => {
   type SupabaseMock = {
@@ -157,7 +158,7 @@ describe("POST /api/votes", () => {
     });
 
     // Verify notification was created
-    expect(createNotification).toHaveBeenCalledWith("author123", "UPVOTE", {
+    expect(createNotification).toHaveBeenCalledWith("author123", NOTIFICATION_TYPES.POST_UPVOTE, {
       postId,
       postTitle: "Post Title",
     });
@@ -261,7 +262,7 @@ describe("POST /api/votes", () => {
       value: 1,
     });
 
-    expect(createNotification).toHaveBeenCalledWith("author123", "UPVOTE_COMMENT", {
+    expect(createNotification).toHaveBeenCalledWith("author123", NOTIFICATION_TYPES.COMMENT_UPVOTE, {
       postId: "post123",
       commentId,
     });

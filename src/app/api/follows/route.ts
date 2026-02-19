@@ -1,16 +1,21 @@
-import { http, withAuth } from "@/lib/server/route-helpers";
+import { withAuth, http, parseJsonBody, validateBody } from "@/lib/server/route-helpers";
 import { createNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/types/notification";
 
-/**
- * POST /api/users/[userId]/follow
- * Follow a user
- */
-export const POST = withAuth<{ userId: string }>(async (_request, { user, supabase }, context) => {
-  const { userId } = await context.params;
+export const runtime = "nodejs";
+
+// POST /api/follows - Follow a user
+export const POST = withAuth(async (req, { user, supabase }) => {
+  const bodyResult = await parseJsonBody<{ followingId: string }>(req);
+  if (bodyResult instanceof Response) return bodyResult;
+
+  const validation = validateBody(bodyResult, ["followingId"]);
+  if (!validation.valid) return validation.response;
+
+  const { followingId } = validation.data;
 
   // Cannot follow yourself
-  if (user.id === userId) {
+  if (followingId === user.id) {
     return http.badRequest("Cannot follow yourself");
   }
 
@@ -18,7 +23,7 @@ export const POST = withAuth<{ userId: string }>(async (_request, { user, supaba
   const { data: targetUser } = await supabase
     .from("profiles")
     .select("user_id, username, display_name, avatar_url")
-    .eq("user_id", userId)
+    .eq("user_id", followingId)
     .maybeSingle();
 
   if (!targetUser) {
@@ -30,22 +35,22 @@ export const POST = withAuth<{ userId: string }>(async (_request, { user, supaba
     .from("follows")
     .select("id")
     .eq("follower_id", user.id)
-    .eq("following_id", userId)
+    .eq("following_id", followingId)
     .maybeSingle();
 
   if (existingFollow) {
     return http.badRequest("Already following this user");
   }
 
-  // Insert follow relationship
+  // Create follow relationship
   const { error } = await supabase.from("follows").insert({
     follower_id: user.id,
-    following_id: userId,
+    following_id: followingId,
   });
 
   if (error) {
-    console.error("Follow error:", error);
-    return http.internalError(error.message);
+    console.error("Error creating follow:", error);
+    return http.internalError();
   }
 
   // Get follower info for notification
@@ -56,32 +61,36 @@ export const POST = withAuth<{ userId: string }>(async (_request, { user, supaba
     .single();
 
   // Send notification to the followed user
-  await createNotification(userId, NOTIFICATION_TYPES.NEW_FOLLOWER, {
+  await createNotification(followingId, NOTIFICATION_TYPES.NEW_FOLLOWER, {
     followerId: user.id,
     followerUsername: follower?.username || "",
     followerDisplayName: follower?.display_name || "Someone",
     followerAvatarUrl: follower?.avatar_url,
   });
 
-  return http.ok({ success: true });
+  return http.created({ success: true });
 });
 
-/**
- * DELETE /api/users/[userId]/follow
- * Unfollow a user
- */
-export const DELETE = withAuth<{ userId: string }>(async (_request, { user, supabase }, context) => {
-  const { userId } = await context.params;
+// DELETE /api/follows - Unfollow a user
+export const DELETE = withAuth(async (req, { user, supabase }) => {
+  const bodyResult = await parseJsonBody<{ followingId: string }>(req);
+  if (bodyResult instanceof Response) return bodyResult;
+
+  const { followingId } = bodyResult;
+
+  if (!followingId) {
+    return http.badRequest("followingId is required");
+  }
 
   const { error } = await supabase
     .from("follows")
     .delete()
     .eq("follower_id", user.id)
-    .eq("following_id", userId);
+    .eq("following_id", followingId);
 
   if (error) {
-    console.error("Unfollow error:", error);
-    return http.internalError(error.message);
+    console.error("Error deleting follow:", error);
+    return http.internalError();
   }
 
   return http.ok({ success: true });

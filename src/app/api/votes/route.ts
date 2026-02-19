@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createNotification } from "@/lib/notifications";
+import { NOTIFICATION_TYPES } from "@/types/notification";
 import { withAuth, http, parseJsonBody, validateBody } from "@/lib/server/route-helpers";
 import { isUserBanned } from "@/lib/board-permissions";
+import { shouldNotifyUpvote, getReachedMilestone } from "@/lib/notification-throttle";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -118,7 +120,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   return http.ok({ score: updatedTarget?.score ?? 0 });
 });
 
-// Helper to trigger notifications
+// Helper to trigger notifications with milestone throttling
 async function triggerUpvoteNotification(
   supabase: SupabaseClient,
   postId: string | undefined,
@@ -128,25 +130,46 @@ async function triggerUpvoteNotification(
   if (postId) {
     const { data: post } = await supabase
       .from("posts")
-      .select("author_id, title")
+      .select("author_id, title, score")
       .eq("id", postId)
       .single();
 
     if (post?.author_id && post.author_id !== voterId) {
-      await createNotification(post.author_id, "UPVOTE", { postId, postTitle: post.title });
+      // Calculate old score (before this upvote)
+      const newScore = post.score;
+      const oldScore = newScore - 1;
+
+      // Only notify if we crossed a milestone
+      if (shouldNotifyUpvote(oldScore, newScore)) {
+        const milestone = getReachedMilestone(oldScore, newScore);
+        await createNotification(post.author_id, NOTIFICATION_TYPES.POST_UPVOTE, {
+          postId,
+          postTitle: post.title,
+          milestone: milestone || undefined,
+        });
+      }
     }
   } else if (commentId) {
     const { data: comment } = await supabase
       .from("comments")
-      .select("author_id, post_id")
+      .select("author_id, post_id, score")
       .eq("id", commentId)
       .single();
 
     if (comment?.author_id && comment.author_id !== voterId) {
-      await createNotification(comment.author_id, "UPVOTE_COMMENT", {
-        postId: comment.post_id,
-        commentId,
-      });
+      // Calculate old score (before this upvote)
+      const newScore = comment.score;
+      const oldScore = newScore - 1;
+
+      // Only notify if we crossed a milestone
+      if (shouldNotifyUpvote(oldScore, newScore)) {
+        const milestone = getReachedMilestone(oldScore, newScore);
+        await createNotification(comment.author_id, NOTIFICATION_TYPES.COMMENT_UPVOTE, {
+          postId: comment.post_id,
+          commentId,
+          milestone: milestone || undefined,
+        });
+      }
     }
   }
 }

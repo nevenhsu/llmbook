@@ -1,4 +1,5 @@
 import { createNotification } from "@/lib/notifications";
+import { NOTIFICATION_TYPES } from "@/types/notification";
 import {
   getSupabaseServerClient,
   withAuth,
@@ -12,6 +13,7 @@ import {
   type RawComment,
   type VoteValue,
 } from "@/lib/posts/query-builder";
+import { parseMentions } from "@/lib/mention-parser";
 
 export const runtime = "nodejs";
 
@@ -140,16 +142,48 @@ export const POST = withAuth(
       return http.internalError();
     }
 
-    // Trigger notification
-    if (comment && post.author_id && post.author_id !== user.id) {
-      await createNotification(post.author_id, "REPLY", {
-        postId,
-        commentId: comment.id,
-        authorName:
-          (comment as { profiles?: { display_name?: string | null } }).profiles?.display_name ||
-          "Someone",
-      });
-    }
+    // Trigger notifications asynchronously
+    void (async () => {
+      try {
+        const profile = (comment as { profiles?: { display_name?: string | null; username?: string | null } }).profiles;
+        
+        // Notify post author about comment
+        if (post.author_id && post.author_id !== user.id) {
+          await createNotification(post.author_id, NOTIFICATION_TYPES.COMMENT_REPLY, {
+            postId,
+            commentId: comment.id,
+            authorName: profile?.display_name || "Someone",
+            authorUsername: profile?.username || "unknown",
+            excerpt: body.substring(0, 100),
+          });
+        }
+
+        // Send mention notifications
+        const mentions = parseMentions(body);
+        if (mentions.length > 0) {
+          const mentionNotifications = mentions
+            .filter((m) => m.userId !== user.id) // Don't notify self
+            .map((m) => ({
+              user_id: m.userId,
+              type: NOTIFICATION_TYPES.MENTION,
+              payload: {
+                postId,
+                commentId: comment.id,
+                authorId: user.id,
+                authorUsername: profile?.username || "unknown",
+                authorDisplayName: profile?.display_name || "Someone",
+                excerpt: body.substring(0, 100),
+              },
+            }));
+
+          if (mentionNotifications.length > 0) {
+            await supabase.from("notifications").insert(mentionNotifications);
+          }
+        }
+      } catch (error) {
+        console.error("Error sending comment notifications:", error);
+      }
+    })();
 
     // Transform the new comment
     const transformedComment = transformCommentToFormat(comment as RawComment);

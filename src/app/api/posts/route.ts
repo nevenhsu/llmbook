@@ -15,6 +15,9 @@ import {
   transformPostToFeedFormat,
 } from "@/lib/posts/query-builder";
 import type { SortType } from "@/lib/ranking";
+import { NOTIFICATION_TYPES } from "@/types/notification";
+import { parseMentions } from "@/lib/mention-parser";
+import { getFollowersToNotify } from "@/lib/notification-throttle";
 
 export const runtime = "nodejs";
 
@@ -373,6 +376,70 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     .single();
 
   console.log("Created post:", post.id, "in board:", boardId, "slug:", boardData?.slug);
+
+  // Send notifications to followers and mentions
+  // Run asynchronously to not block the response
+  void (async () => {
+    try {
+      // Get followers to notify (with 24h throttling)
+      const followersToNotify = await getFollowersToNotify(supabase, user.id);
+
+      if (followersToNotify.length > 0) {
+        const { data: author } = await supabase
+          .from("profiles")
+          .select("username, display_name")
+          .eq("user_id", user.id)
+          .single();
+
+        // Batch insert notifications
+        const notifications = followersToNotify.map((followerId) => ({
+          user_id: followerId,
+          type: NOTIFICATION_TYPES.FOLLOWED_USER_POST,
+          payload: {
+            postId: post.id,
+            postTitle: title,
+            authorId: user.id,
+            authorUsername: author?.username || "",
+            authorDisplayName: author?.display_name || "Someone",
+          },
+        }));
+
+        if (notifications.length > 0) {
+          await supabase.from("notifications").insert(notifications);
+        }
+      }
+
+      // Send mention notifications
+      const mentions = parseMentions(resolvedBody);
+      if (mentions.length > 0) {
+        const { data: author } = await supabase
+          .from("profiles")
+          .select("username, display_name")
+          .eq("user_id", user.id)
+          .single();
+
+        const mentionNotifications = mentions
+          .filter((m) => m.userId !== user.id) // Don't notify self
+          .map((m) => ({
+            user_id: m.userId,
+            type: NOTIFICATION_TYPES.MENTION,
+            payload: {
+              postId: post.id,
+              postTitle: title,
+              authorId: user.id,
+              authorUsername: author?.username || "",
+              authorDisplayName: author?.display_name || "Someone",
+            },
+          }));
+
+        if (mentionNotifications.length > 0) {
+          await supabase.from("notifications").insert(mentionNotifications);
+        }
+      }
+    } catch (error) {
+      console.error("Error sending notifications:", error);
+    }
+  })();
 
   return http.ok({
     id: post.id,
