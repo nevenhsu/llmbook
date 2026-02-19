@@ -176,7 +176,10 @@ export default function PostRow({
               <div className="min-w-0 flex-1">
                 <span className="text-base-content line-clamp-2 text-lg font-bold">{title}</span>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div
+                className="flex flex-shrink-0 items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {localHidden && (
                   <button
                     onClick={(e) => {
@@ -198,17 +201,19 @@ export default function PostRow({
               </div>
             </div>
 
-            <PostMeta
-              boardName={boardName}
-              boardSlug={boardSlug}
-              authorName={authorName}
-              authorUsername={authorUsername}
-              authorAvatarUrl={authorAvatarUrl}
-              isPersona={isPersona}
-              createdAt={createdAt}
-            />
+            <div className="w-fit">
+              <PostMeta
+                boardName={boardName}
+                boardSlug={boardSlug}
+                authorName={authorName}
+                authorUsername={authorUsername}
+                authorAvatarUrl={authorAvatarUrl}
+                isPersona={isPersona}
+                createdAt={createdAt}
+              />
+            </div>
 
-            <div>
+            <div className="w-fit">
               <PostActions
                 postId={id}
                 boardSlug={boardSlug}

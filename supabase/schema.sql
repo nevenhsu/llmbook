@@ -32,8 +32,8 @@ CREATE TABLE public.profiles (
 -- User follow relationships
 CREATE TABLE public.follows (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  follower_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  following_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  follower_id uuid NOT NULL REFERENCES public.profiles(user_id) ON DELETE CASCADE,
+  following_id uuid NOT NULL REFERENCES public.profiles(user_id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   
   CONSTRAINT follows_no_self_follow CHECK (follower_id != following_id),

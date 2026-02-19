@@ -1,92 +1,38 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { UserListItem } from "@/components/user/UserListItem";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useUserList } from "@/hooks/use-user-list";
+import { useProfileData } from "@/hooks/use-profile-data";
+import { useUserContext } from "@/contexts/UserContext";
 import Skeleton from "@/components/ui/Skeleton";
-import { ArrowLeft } from "lucide-react";
-import type { UserListItem as UserListItemType } from "@/app/api/users/[userId]/followers/route";
+import SearchBar from "@/components/ui/SearchBar";
+import { ArrowLeft, Users } from "lucide-react";
 
 export default function FollowersPage() {
   const params = useParams();
   const router = useRouter();
   const username = params.username as string;
-  const [userId, setUserId] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string>("");
-  const [followers, setFollowers] = useState<UserListItemType[]>([]);
-  const [hasMore, setHasMore] = useState(true);
-  const [nextCursor, setNextCursor] = useState<string | undefined>();
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch user ID from username
-  useEffect(() => {
-    async function fetchUserId() {
-      try {
-        const res = await fetch(`/api/profile?username=${encodeURIComponent(username)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setUserId(data.user_id);
-          setDisplayName(data.display_name || username);
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      }
-    }
-    fetchUserId();
-  }, [username]);
+  // Use shared hooks
+  const { userId, displayName, isLoading: profileLoading } = useProfileData(username);
+  const { user } = useUserContext();
+  const currentUserId = user?.id || null;
 
-  // Fetch current user
-  useEffect(() => {
-    async function fetchCurrentUser() {
-      try {
-        const res = await fetch("/api/profile");
-        if (res.ok) {
-          const data = await res.json();
-          setCurrentUserId(data.user_id);
-        }
-      } catch {
-        // Not logged in
-      }
-    }
-    fetchCurrentUser();
-  }, []);
-
-  const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore || !userId) return;
-
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (nextCursor) params.set("cursor", nextCursor);
-      params.set("limit", "20");
-
-      const res = await fetch(`/api/users/${userId}/followers?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to fetch followers");
-
-      const data = await res.json();
-
-      setFollowers((prev) => [...prev, ...data.items]);
-      setHasMore(data.hasMore);
-      setNextCursor(data.nextCursor);
-    } catch (error) {
-      console.error("Error loading followers:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userId, nextCursor, hasMore, isLoading]);
-
-  // Initial load
-  useEffect(() => {
-    if (userId && followers.length === 0 && !isLoading) {
-      loadMore();
-    }
-  }, [userId, followers.length, isLoading, loadMore]);
+  // Use shared user list hook
+  const {
+    users: followers,
+    hasMore,
+    isLoading,
+    searchQuery,
+    setSearchQuery,
+    loadMore,
+  } = useUserList({ userId, type: "followers" });
 
   const sentinelRef = useInfiniteScroll(loadMore, hasMore, isLoading);
 
-  if (!userId) {
+  if (profileLoading || !userId) {
     return (
       <div className="bg-base-100 container mx-auto max-w-2xl p-4">
         <div className="space-y-4">
@@ -100,22 +46,40 @@ export default function FollowersPage() {
 
   return (
     <div className="bg-base-100 container mx-auto max-w-2xl p-4">
-      <div className="mb-6 flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="hover:bg-base-200 rounded-full p-2 transition-colors"
-          aria-label="Go back"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div>
+      {/* Back Button */}
+      <button
+        onClick={() => router.back()}
+        className="text-base-content/70 hover:text-base-content mb-4 flex items-center gap-2 text-sm font-medium transition-colors"
+      >
+        <ArrowLeft size={16} />
+        Back to Profile
+      </button>
+
+      <div className="mb-6">
+        {/* Header */}
+        <div className="mb-4">
           <h1 className="text-base-content text-2xl font-bold">Followers</h1>
           <p className="text-base-content/70 text-sm">People following {displayName}</p>
+        </div>
+
+        {/* Stats and Search */}
+        <div className="border-neutral mb-4 flex items-center justify-between border-b pb-2">
+          <div className="flex items-center gap-2">
+            <Users size={20} className="text-base-content/70" />
+            <span className="text-base-content text-sm font-bold">
+              {followers.length} Followers
+            </span>
+          </div>
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search followers..."
+          />
         </div>
       </div>
 
       <div className="space-y-3">
-        {followers.map((follower: UserListItemType) => (
+        {followers.map((follower) => (
           <UserListItem
             key={follower.userId}
             userId={follower.userId}
@@ -137,8 +101,12 @@ export default function FollowersPage() {
         )}
 
         {!isLoading && followers.length === 0 && (
-          <div className="bg-base-200 rounded-lg p-8 text-center">
-            <p className="text-base-content/70">No followers yet</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <Users size={48} className="text-base-content/30 mb-4" />
+            <h3 className="text-base-content mb-2 text-lg font-semibold">No followers yet</h3>
+            <p className="text-base-content/60 text-center text-sm">
+              When people follow this user, they'll appear here
+            </p>
           </div>
         )}
 
