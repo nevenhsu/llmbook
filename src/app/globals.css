@@ -10,19 +10,65 @@
 
 @plugin "daisyui/theme" {
   name: "light";
-  --color-primary: oklch(0.65 0.2 45);
-  --color-primary-content: oklch(1 0 0);
+  /* Light theme aligned to black-theme hues, rebalanced for white surfaces */
+  --color-primary: oklch(0.8416 0.1986 86.29);
+  --color-primary-content: oklch(0.16 0.03 96);
+  --color-secondary: oklch(0.7 0.16 240);
+  --color-secondary-content: oklch(0.16 0.03 240);
+  --color-accent: oklch(0.76 0.15 170);
+  --color-accent-content: oklch(0.16 0.03 170);
+  --color-neutral: oklch(0.62 0.03 250);
+  --color-neutral-content: oklch(0.14 0.02 250);
+  --color-info: oklch(0.6 0.16 250);
+  --color-info-content: oklch(0.16 0.03 250);
+  --color-success: oklch(0.68 0.14 145);
+  --color-success-content: oklch(0.16 0.03 145);
+  --color-warning: oklch(0.8198 0.155 90.62);
+  --color-warning-content: oklch(0.15 0.02 85);
+  --color-error: oklch(0.62 0.16 25);
+  --color-error-content: oklch(0.16 0.03 25);
+  --color-blue: oklch(0.6 0.16 250);
+  --color-green: oklch(0.68 0.14 145);
+  --color-red: oklch(0.62 0.16 25);
+  --color-yellow: oklch(0.8198 0.155 90.62);
+  --color-purple: oklch(0.62 0.15 300);
+  --color-orange: oklch(0.7 0.15 50);
 }
 
 @plugin "daisyui/theme" {
   name: "black";
   prefersdark: true;
-  --color-primary: oklch(0.66 0.18 46);
-  --color-primary-content: oklch(1 0 0);
-  --color-accent: oklch(0.65 0.03 240);
-  --color-accent-content: oklch(0.95 0.02 240);
-  --color-info: oklch(0.65 0.08 220);
-  --color-info-content: oklch(0.95 0.02 220);
+  /* Primary: Cyber Gold+ - Increased saturation for more vibrancy */
+  --color-primary: oklch(0.86 0.18 95);
+  --color-primary-content: oklch(0.2 0.04 95);
+  /* Secondary: Vibrant Slate - Richer blue-gray, maintaining legibility */
+  --color-secondary: oklch(0.65 0.1 240);
+  --color-secondary-content: oklch(0.98 0.02 240);
+  /* Accent: Silver Teal+ - More vibrant teal-sage for harmony */
+  --color-accent: oklch(0.82 0.12 170);
+  --color-accent-content: oklch(0.15 0.03 170);
+  /* Neutral: Polished Steel - Visible medium-gray for text and borders */
+  --color-neutral: oklch(0.55 0.01 0);
+  --color-neutral-content: oklch(0.1 0.01 0);
+  /* Info: Muted Blue */
+  --color-info: oklch(0.63 0.16 250);
+  --color-info-content: oklch(0.98 0.01 250);
+  /* Success: Muted Green */
+  --color-success: oklch(0.72 0.12 145);
+  --color-success-content: oklch(0.15 0.02 145);
+  /* Warning: Muted Yellow */
+  --color-warning: oklch(0.75 0.12 85);
+  --color-warning-content: oklch(0.15 0.02 85);
+  /* Error: Muted Red */
+  --color-error: oklch(0.62 0.14 25);
+  --color-error-content: oklch(0.98 0.01 25);
+  /* General Colors (Muted for dark backgrounds) */
+  --color-blue: oklch(0.63 0.16 250);
+  --color-green: oklch(0.65 0.14 145);
+  --color-red: oklch(0.62 0.16 25);
+  --color-yellow: oklch(0.7 0.14 80);
+  --color-purple: oklch(0.62 0.14 300);
+  --color-orange: oklch(0.66 0.14 50);
 }
 
 @theme {
