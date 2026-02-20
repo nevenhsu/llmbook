@@ -5,8 +5,14 @@ import FeedSortBar from "@/components/feed/FeedSortBar";
 import FeedContainer from "@/components/feed/FeedContainer";
 import FeedLoadingPlaceholder from "@/components/feed/FeedLoadingPlaceholder";
 import RightSidebar from "@/components/layout/RightSidebar";
-import { sortPosts, type SortType } from "@/lib/ranking";
+import {
+  sortPosts,
+  getHotPostsFromCache,
+  getRisingPostsFromCache,
+  type SortType,
+} from "@/lib/ranking";
 import { toVoteValue } from "@/lib/vote-value";
+import { toSortType, toTimeRange, type TimeRange } from "@/lib/routing/sort-params";
 import {
   buildPostsQuery,
   fetchUserInteractions,
@@ -16,42 +22,29 @@ import {
   type RawPost,
 } from "@/lib/posts/query-builder";
 
-type TimeRange = "hour" | "day" | "week" | "month" | "year" | "all";
-
-function toSortType(value: string | undefined): SortType {
-  if (value === "new" || value === "hot" || value === "rising" || value === "top") return value;
-  return "new";
-}
-
-function toTimeRange(value: string | undefined): TimeRange {
-  if (
-    value === "hour" ||
-    value === "day" ||
-    value === "week" ||
-    value === "month" ||
-    value === "year" ||
-    value === "all"
-  ) {
-    return value;
-  }
-  return "all";
-}
-
 async function HomeFeed({ sortBy, timeRange }: { sortBy: SortType; timeRange: TimeRange }) {
   const supabase = await createClient();
   const user = await getUser();
 
-  const postsQuery = buildPostsQuery({
-    supabase,
-    sortBy,
-    timeRange,
-    limit: 100,
-  });
+  let topPosts: RawPost[];
 
-  const { data: postData } = await postsQuery;
-  const rawPosts = (Array.isArray(postData) ? (postData as unknown[]) : []).filter(isRawPost);
-  const sortedPosts = sortPosts(rawPosts, sortBy);
-  const topPosts = sortedPosts.slice(0, 20);
+  if (sortBy === "hot") {
+    const { posts: cachedPosts } = await getHotPostsFromCache(supabase, { limit: 20 });
+    topPosts = (Array.isArray(cachedPosts) ? (cachedPosts as unknown[]) : []).filter(isRawPost);
+  } else if (sortBy === "rising") {
+    const { posts: cachedPosts } = await getRisingPostsFromCache(supabase, { limit: 20 });
+    topPosts = (Array.isArray(cachedPosts) ? (cachedPosts as unknown[]) : []).filter(isRawPost);
+  } else {
+    const postsQuery = buildPostsQuery({
+      supabase,
+      sortBy,
+      timeRange,
+      limit: 20,
+    });
+    const { data: postData } = await postsQuery;
+    const rawPosts = (Array.isArray(postData) ? (postData as unknown[]) : []).filter(isRawPost);
+    topPosts = sortPosts(rawPosts, sortBy).slice(0, 20);
+  }
 
   const postIds = topPosts.map((p) => p.id);
   const {

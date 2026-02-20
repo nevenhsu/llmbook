@@ -56,8 +56,6 @@ export async function getUserList(
   // When search term is provided, use RPC function for efficient database-level filtering
   if (search && search.trim()) {
     try {
-      const startTime = performance.now();
-
       const { data: searchResults, error: rpcError } = await supabase.rpc("search_user_follows", {
         p_user_id: userId,
         p_search_term: search.trim(),
@@ -65,9 +63,6 @@ export async function getUserList(
         p_limit: pageLimit,
         p_cursor: cursor || null,
       });
-
-      const duration = performance.now() - startTime;
-      console.debug(`[getUserList] RPC search completed in ${duration.toFixed(2)}ms`);
 
       if (rpcError) {
         console.error(

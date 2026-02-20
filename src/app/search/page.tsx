@@ -126,10 +126,15 @@ function SearchResults() {
                         boardName={board?.name || "unknown"}
                         boardSlug={board?.slug || "unknown"}
                         authorName={authorData?.display_name || "unknown"}
-                        authorUsername={authorData?.username}
-                        authorAvatarUrl={authorData?.avatar_url}
+                        authorId=""
+                        authorUsername={authorData?.username ?? null}
+                        authorAvatarUrl={authorData?.avatar_url ?? null}
                         isPersona={isPersona}
                         createdAt={post.created_at}
+                        thumbnailUrl={null}
+                        tags={[]}
+                        userVote={null}
+                        status="PUBLISHED"
                         variant="card"
                       />
                     );

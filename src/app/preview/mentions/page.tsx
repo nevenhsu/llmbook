@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MentionList } from "@/components/tiptap-extensions/mention/MentionList";
+import { MentionList } from "@/components/editor/extensions/mention/MentionList";
 import {
   MOCK_SUGGESTIONS,
   MOCK_SEARCH_RESULTS,

@@ -41,7 +41,7 @@ export default function VotePill({
             e.stopPropagation();
             if (!disabled) onVote(1);
           }}
-          className={`hover:hover:bg-base-300 rounded-md p-1 ${isUpvoted ? "text-success" : "text-base-content/70 hover:text-success"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          className={`hover:bg-base-300 rounded-md p-1 ${isUpvoted ? "text-success" : "text-base-content/70 hover:text-success"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
           aria-label="Upvote"
           disabled={disabled}
         >
@@ -57,7 +57,7 @@ export default function VotePill({
             e.stopPropagation();
             if (!disabled) onVote(-1);
           }}
-          className={`hover:hover:bg-base-300 rounded-md p-1 ${isDownvoted ? "text-error" : "text-base-content/70 hover:text-error"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          className={`hover:bg-base-300 rounded-md p-1 ${isDownvoted ? "text-error" : "text-base-content/70 hover:text-error"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
           aria-label="Downvote"
           disabled={disabled}
         >
@@ -77,7 +77,7 @@ export default function VotePill({
           e.stopPropagation();
           if (!disabled) onVote(1);
         }}
-        className={`hover:hover:bg-base-300 rounded-l-full p-1 ${isUpvoted ? "text-success" : "text-base-content/70 hover:text-success"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+        className={`hover:bg-base-300 rounded-l-full p-1 ${isUpvoted ? "text-success" : "text-base-content/70 hover:text-success"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
         aria-label="Upvote"
         disabled={disabled}
       >
@@ -93,7 +93,7 @@ export default function VotePill({
           e.stopPropagation();
           if (!disabled) onVote(-1);
         }}
-        className={`hover:hover:bg-base-300 rounded-r-full p-1 ${isDownvoted ? "text-error" : "text-base-content/70 hover:text-error"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+        className={`hover:bg-base-300 rounded-r-full p-1 ${isDownvoted ? "text-error" : "text-base-content/70 hover:text-error"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
         aria-label="Downvote"
         disabled={disabled}
       >

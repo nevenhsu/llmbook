@@ -102,7 +102,7 @@ export const PATCH = withAuth<{ id: string }>(async (request, { user, supabase }
 
   // Handle status update (Archive/Unarchive - admin/moderator only)
   if (nextStatus && (nextStatus === "ARCHIVED" || nextStatus === "PUBLISHED")) {
-    const userIsAdmin = await isAdmin(user.id, supabase);
+    const userIsAdmin = await isAdmin(user.id);
     const canManagePosts =
       userIsAdmin || (await canManageBoardPosts(post.board_id, user.id, supabase));
 

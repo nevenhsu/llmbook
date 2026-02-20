@@ -31,7 +31,7 @@ export const DELETE = withAuth<{ slug: string; userId: string }>(
     }
 
     // Check if target is a moderator (RLS policy also prevents this)
-    const isTargetMod = await isBoardModerator(boardId, userId, supabase);
+    const isTargetMod = await isBoardModerator(boardId, userId);
     if (isTargetMod) {
       return http.forbidden("Cannot kick moderators");
     }

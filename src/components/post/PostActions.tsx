@@ -18,6 +18,7 @@ import {
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import ResponsiveMenu, { ResponsiveMenuHandle } from "@/components/ui/ResponsiveMenu";
 import toast from "react-hot-toast";
+import { apiDelete, apiPatch, ApiError } from "@/lib/api/fetch-json";
 
 interface PostActionsProps {
   postId: string;
@@ -59,11 +60,16 @@ export default function PostActions({
 }: PostActionsProps) {
   const router = useRouter();
   const menuRef = useRef<ResponsiveMenuHandle>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isUndeleting, setIsUndeleting] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [isUnarchiving, setIsUnarchiving] = useState(false);
+
+  type PostActionState = "idle" | "deleting" | "undeleting" | "archiving" | "unarchiving";
+  const [actionState, setActionState] = useState<PostActionState>("idle");
+
+  const isLoading = actionState !== "idle";
+  const isDeleting = actionState === "deleting";
+  const isUndeleting = actionState === "undeleting";
+  const isArchiving = actionState === "archiving";
+  const isUnarchiving = actionState === "unarchiving";
 
   const isAuthor = !!(authorId && userId && authorId === userId);
   const isModerator = !!canModerate;
@@ -103,88 +109,62 @@ export default function PostActions({
   };
 
   const handleDelete = async () => {
-    setIsDeleting(true);
+    setActionState("deleting");
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) throw new Error("Failed to delete post");
-
+      await apiDelete(`/api/posts/${postId}`);
       onDelete?.();
       router.refresh();
     } catch (err) {
       console.error("Failed to delete post:", err);
-      toast.error("Failed to delete post");
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete post");
     } finally {
-      setIsDeleting(false);
+      setActionState("idle");
       setShowDeleteConfirm(false);
     }
   };
 
   const handleUndelete = async () => {
-    setIsUndeleting(true);
+    setActionState("undeleting");
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "PUBLISHED" }),
-      });
-
-      if (!res.ok) throw new Error("Failed to restore post");
-
+      await apiPatch(`/api/posts/${postId}`, { status: "PUBLISHED" });
       menuRef.current?.close();
       toast.success("Post restored");
       router.refresh();
     } catch (err) {
       console.error("Failed to restore post:", err);
-      toast.error("Failed to restore post");
+      toast.error(err instanceof ApiError ? err.message : "Failed to restore post");
     } finally {
-      setIsUndeleting(false);
+      setActionState("idle");
     }
   };
 
   const handleUnarchive = async () => {
-    setIsUnarchiving(true);
+    setActionState("unarchiving");
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "PUBLISHED" }),
-      });
-
-      if (!res.ok) throw new Error("Failed to unarchive post");
-
+      await apiPatch(`/api/posts/${postId}`, { status: "PUBLISHED" });
       menuRef.current?.close();
       toast.success("Post unarchived");
       router.refresh();
     } catch (err) {
       console.error("Failed to unarchive post:", err);
-      toast.error("Failed to unarchive post");
+      toast.error(err instanceof ApiError ? err.message : "Failed to unarchive post");
     } finally {
-      setIsUnarchiving(false);
+      setActionState("idle");
     }
   };
 
   const handleArchive = async () => {
-    setIsArchiving(true);
+    setActionState("archiving");
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "ARCHIVED" }),
-      });
-
-      if (!res.ok) throw new Error("Failed to archive post");
-
+      await apiPatch(`/api/posts/${postId}`, { status: "ARCHIVED" });
       menuRef.current?.close();
       toast.success("Post archived");
       router.refresh();
     } catch (err) {
       console.error("Failed to archive post:", err);
-      toast.error("Failed to archive post");
+      toast.error(err instanceof ApiError ? err.message : "Failed to archive post");
     } finally {
-      setIsArchiving(false);
+      setActionState("idle");
     }
   };
 
@@ -233,7 +213,7 @@ export default function PostActions({
               e.stopPropagation();
               handleUndelete();
             }}
-            disabled={isUndeleting}
+            disabled={isLoading}
             className="text-base-content flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
           >
             <RotateCcw size={20} className="md:hidden" />
@@ -251,7 +231,7 @@ export default function PostActions({
               e.stopPropagation();
               handleArchive();
             }}
-            disabled={isArchiving}
+            disabled={isLoading}
             className="text-base-content flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
           >
             <Archive size={20} className="md:hidden" />
@@ -269,7 +249,7 @@ export default function PostActions({
               e.stopPropagation();
               handleUnarchive();
             }}
-            disabled={isUnarchiving}
+            disabled={isLoading}
             className="text-base-content flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
           >
             <ArchiveRestore size={20} className="md:hidden" />
@@ -288,7 +268,7 @@ export default function PostActions({
               menuRef.current?.close();
               setShowDeleteConfirm(true);
             }}
-            disabled={isDeleting}
+            disabled={isLoading}
             className="text-error flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
           >
             <Trash2 size={20} className="md:hidden" />

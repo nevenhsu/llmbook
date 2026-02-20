@@ -22,33 +22,36 @@ Quick reference for shared libraries and conventions.
 
 ## Contexts Quick Reference
 
-| Need                       | Import                                                          | Docs                                       |
-| -------------------------- | --------------------------------------------------------------- | ------------------------------------------ |
-| User context (Client)      | `import { useUserContext } from '@/contexts/UserContext'`       | [USER_CONTEXT](docs/contexts/USER_CONTEXT.md) |
-| Board context (Client)     | `import { useBoardContext } from '@/contexts/BoardContext'`     | [BOARD_CONTEXT](docs/contexts/BOARD_CONTEXT.md) |
-| Login modal                | `import { useLoginModal } from '@/contexts/LoginModalContext'`  | [LOGIN_MODAL_CONTEXT](docs/contexts/LOGIN_MODAL_CONTEXT.md) |
+| Need                   | Import                                                         | Docs                                                        |
+| ---------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
+| User context (Client)  | `import { useUserContext } from '@/contexts/UserContext'`      | [USER_CONTEXT](docs/contexts/USER_CONTEXT.md)               |
+| Board context (Client) | `import { useBoardContext } from '@/contexts/BoardContext'`    | [BOARD_CONTEXT](docs/contexts/BOARD_CONTEXT.md)             |
+| Login modal            | `import { useLoginModal } from '@/contexts/LoginModalContext'` | [LOGIN_MODAL_CONTEXT](docs/contexts/LOGIN_MODAL_CONTEXT.md) |
 
 ## Hooks Quick Reference
 
-| Need                       | Import                                                          | Docs                                       |
-| -------------------------- | --------------------------------------------------------------- | ------------------------------------------ |
-| Vote on post/comment       | `import { useVote } from '@/hooks/use-vote'`                    | [use-vote](docs/hooks/use-vote.md) |
-| Save/hide post             | `import { usePostInteractions } from '@/hooks/use-post-interactions'` | [use-post-interactions](docs/hooks/use-post-interactions.md) |
-| Infinite scroll            | `import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'` | [use-infinite-scroll](docs/hooks/use-infinite-scroll.md) |
-| Theme toggle               | `import { useTheme } from '@/hooks/use-theme'`                  | - |
-| Responsive breakpoint      | `import { useIsBreakpoint } from '@/hooks/use-is-breakpoint'`   | - |
-| Rich text editor           | `import { useTiptapEditor } from '@/hooks/use-tiptap-editor'`   | - |
+| Need                            | Import                                                                | Docs                                                         |
+| ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Vote on post/comment            | `import { useVote } from '@/hooks/use-vote'`                          | [use-vote](docs/hooks/use-vote.md)                           |
+| Save/hide post                  | `import { usePostInteractions } from '@/hooks/use-post-interactions'` | [use-post-interactions](docs/hooks/use-post-interactions.md) |
+| Feed pagination (cursor+offset) | `import { useFeedLoader } from '@/hooks/use-feed-loader'`             | -                                                            |
+| Infinite scroll                 | `import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'`     | [use-infinite-scroll](docs/hooks/use-infinite-scroll.md)     |
+| Theme toggle                    | `import { useTheme } from '@/hooks/use-theme'`                        | -                                                            |
+| Responsive breakpoint           | `import { useIsBreakpoint } from '@/hooks/use-is-breakpoint'`         | -                                                            |
+| Rich text editor                | `import { useTiptapEditor } from '@/hooks/use-tiptap-editor'`         | -                                                            |
 
 ---
 
 ## Documentation Links
 
 ### Core Documentation
+
 - **[Contexts Overview](./docs/contexts/README.md)** - React contexts (UserContext, BoardContext, LoginModalContext)
 - **[Hooks Overview](./docs/hooks/README.md)** - Custom hooks (useVote, usePostInteractions, useInfiniteScroll)
 - **[Library Documentation](./docs/lib/README.md)** - Shared utilities and functions
 
 ### Development Guidelines
+
 - [Dev Guidelines](docs/dev-guidelines/README.md)
 - [Reuse Rules](docs/dev-guidelines/01-reuse-rules.md)
 - [Lib Functions](docs/dev-guidelines/02-lib-functions.md)

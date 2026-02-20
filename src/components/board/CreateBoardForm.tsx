@@ -6,6 +6,7 @@ import { X, Plus, AlertCircle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { useRulesEditor } from "@/hooks/use-rules-editor";
+import { apiPost, apiFetchJson, ApiError } from "@/lib/api/fetch-json";
 
 export default function CreateBoardForm() {
   const router = useRouter();
@@ -34,8 +35,9 @@ export default function CreateBoardForm() {
       if (name) params.append("name", name);
       if (slug) params.append("slug", slug);
 
-      const response = await fetch(`/api/boards/check-availability?${params}`);
-      const data = await response.json();
+      const data = await apiFetchJson<{ nameAvailable: boolean; slugAvailable: boolean }>(
+        `/api/boards/check-availability?${params}`,
+      );
 
       setNameAvailable(data.nameAvailable);
       setSlugAvailable(data.slugAvailable);
@@ -119,28 +121,17 @@ export default function CreateBoardForm() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/boards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          slug,
-          description: description || undefined,
-          banner_url: bannerUrl || undefined,
-          rules: rules.filter((r) => r.title.trim()),
-        }),
+      const { board } = await apiPost<{ board: { name: string; slug: string } }>("/api/boards", {
+        name,
+        slug,
+        description: description || undefined,
+        banner_url: bannerUrl || undefined,
+        rules: rules.filter((r) => r.title.trim()),
       });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Failed to create board");
-      }
-
-      const { board } = await response.json();
       toast.success(`Board "${board.name}" created successfully!`);
       router.push(`/r/${board.slug}`);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create board";
+      const message = err instanceof ApiError ? err.message : "Failed to create board";
       toast.error(message);
       setLoading(false);
     }

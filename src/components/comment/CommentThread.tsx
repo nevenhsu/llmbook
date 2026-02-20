@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
 import CommentEditorModal from "./CommentEditorModal";
@@ -41,7 +41,7 @@ export default function CommentThread({
     initialContent: "",
   });
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/posts/${postId}/comments?sort=${sort}`);
@@ -61,11 +61,11 @@ export default function CommentThread({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [postId, sort]);
 
   useEffect(() => {
     fetchComments();
-  }, [postId, sort]);
+  }, [fetchComments]);
 
   const openCreate = () => {
     setEditorState({

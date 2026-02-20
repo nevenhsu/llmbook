@@ -18,7 +18,7 @@ export default function Header({ user, profile }: HeaderProps) {
         <div className="flex items-center gap-2">
           <label
             htmlFor="mobile-drawer"
-            className="hover:hover:bg-base-300 cursor-pointer rounded-full p-2 lg:hidden"
+            className="hover:bg-base-300 cursor-pointer rounded-full p-2 lg:hidden"
             aria-label="Open navigation"
           >
             <Menu size={24} />
@@ -45,7 +45,7 @@ export default function Header({ user, profile }: HeaderProps) {
             <>
               <Link
                 href="/new"
-                className="hover:hover:bg-base-300 flex items-center gap-2 rounded-full p-2 md:px-4"
+                className="hover:bg-base-300 flex items-center gap-2 rounded-full p-2 md:px-4"
                 title="Create Post"
               >
                 <Plus size={22} />

@@ -91,7 +91,6 @@ export function useUserList({ userId, type, limit = 20 }: UseUserListOptions): U
       // Prevent duplicate requests
       const fetchKey = `${url}`;
       if (fetchKey === lastFetchRef.current && !cursor) {
-        console.debug(`[useUserList] Skipping duplicate request:`, fetchKey);
         return;
       }
       lastFetchRef.current = fetchKey;
@@ -105,12 +104,6 @@ export function useUserList({ userId, type, limit = 20 }: UseUserListOptions): U
       setError(null);
 
       try {
-        console.debug(`[useUserList] Fetching ${type}:`, {
-          searchQuery: debouncedSearch,
-          cursor,
-          url,
-        });
-
         const res = await fetch(url, { signal: abortController.signal });
 
         if (!res.ok) {
@@ -132,7 +125,6 @@ export function useUserList({ userId, type, limit = 20 }: UseUserListOptions): U
       } catch (err) {
         // Ignore abort errors
         if (err instanceof Error && err.name === "AbortError") {
-          console.debug(`[useUserList] Request aborted:`, url);
           return;
         }
 

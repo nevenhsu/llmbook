@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { X } from "lucide-react";
-import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+import { SimpleEditor } from "@/components/editor/SimpleEditor";
 import toast from "react-hot-toast";
 import type { FormattedComment } from "@/lib/posts/query-builder";
 

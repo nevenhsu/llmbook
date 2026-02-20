@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { apiPatch, ApiError } from "@/lib/api/fetch-json";
 
 interface UnarchiveButtonProps {
   slug: string;
@@ -22,20 +23,11 @@ export default function UnarchiveButton({
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/boards/${slug}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_archived: false }),
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
+      await apiPatch(`/api/boards/${slug}`, { is_archived: false });
       router.refresh();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to unarchive board");
+      toast.error(error instanceof ApiError ? error.message : "Failed to unarchive board");
     } finally {
       setLoading(false);
     }

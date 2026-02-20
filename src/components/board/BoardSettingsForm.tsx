@@ -9,6 +9,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
 import { useRulesEditor, type Rule } from "@/hooks/use-rules-editor";
 import { DEFAULT_MODERATOR_PERMISSIONS, type ModeratorPermissions } from "@/types/board";
+import { apiPatch, apiDelete, apiPost, ApiError } from "@/lib/api/fetch-json";
 
 interface Moderator {
   id: string;
@@ -148,25 +149,16 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          description,
-          banner_url: bannerUrl || undefined,
-        }),
+      await apiPatch(`/api/boards/${board.slug}`, {
+        name,
+        description,
+        banner_url: bannerUrl || undefined,
       });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
       router.refresh();
       toast.success("Settings updated successfully");
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to update board general settings.");
+      setError(err instanceof ApiError ? err.message : "Failed to update board general settings.");
     } finally {
       setLoading(false);
     }
@@ -177,23 +169,14 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rules: rules.filter((r) => r.title.trim()),
-        }),
+      await apiPatch(`/api/boards/${board.slug}`, {
+        rules: rules.filter((r) => r.title.trim()),
       });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
       router.refresh();
       toast.success("Rules updated successfully");
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to update rules.");
+      setError(err instanceof ApiError ? err.message : "Failed to update rules.");
     } finally {
       setLoading(false);
     }
@@ -204,18 +187,11 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
+      await apiDelete(`/api/boards/${board.slug}`);
       router.push("/r/archive");
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to archive board.");
+      setError(err instanceof ApiError ? err.message : "Failed to archive board.");
       setLoading(false);
     }
   };
@@ -271,17 +247,10 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}/moderators/${mod.user_id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions: nextPermissions }),
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
-      const updatedModerator: Moderator = await res.json();
+      const updatedModerator = await apiPatch<Moderator>(
+        `/api/boards/${board.slug}/moderators/${mod.user_id}`,
+        { permissions: nextPermissions },
+      );
       setModeratorsList((prev) =>
         prev.map((item) => {
           if (item.user_id === updatedModerator.user_id) {
@@ -294,7 +263,7 @@ export default function BoardSettingsForm({
       router.refresh();
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to update moderator permissions.");
+      setError(err instanceof ApiError ? err.message : "Failed to update moderator permissions.");
     } finally {
       setSavePermissionsUserId(null);
     }
@@ -323,17 +292,9 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}/moderators`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: selectedProfile.user_id }),
+      const newModerator = await apiPost<Moderator>(`/api/boards/${board.slug}/moderators`, {
+        user_id: selectedProfile.user_id,
       });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
-      const newModerator: Moderator = await res.json();
       setModeratorsList((prev) => {
         if (prev.some((mod) => mod.user_id === newModerator.user_id)) {
           return prev;
@@ -345,7 +306,7 @@ export default function BoardSettingsForm({
       router.refresh();
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to add moderator.");
+      setError(err instanceof ApiError ? err.message : "Failed to add moderator.");
     } finally {
       setActionLoading(false);
     }
@@ -363,21 +324,14 @@ export default function BoardSettingsForm({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${board.slug}/moderators/${moderatorToRemove}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
+      await apiDelete(`/api/boards/${board.slug}/moderators/${moderatorToRemove}`);
       setModeratorsList((prev) => prev.filter((mod) => mod.user_id !== moderatorToRemove));
       setShowRemoveModeratorModal(false);
       setModeratorToRemove(null);
       router.refresh();
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to remove moderator.");
+      setError(err instanceof ApiError ? err.message : "Failed to remove moderator.");
     } finally {
       setRemoveLoadingUserId(null);
     }

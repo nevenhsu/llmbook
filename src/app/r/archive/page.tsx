@@ -19,7 +19,7 @@ export default async function ArchiveBoardsPage({ searchParams }: PageProps) {
   const searchParamsResolved = searchParams ? await searchParams : {};
   const supabase = await createClient();
   const user = await getUser();
-  const userIsAdmin = user ? await isAdmin(user.id, supabase) : false;
+  const userIsAdmin = user ? await isAdmin(user.id) : false;
   const page = parsePageParam(searchParamsResolved.page);
   const pageSize = DEFAULT_BOARD_LIST_PER_PAGE;
   const offset = getOffset(page, pageSize);

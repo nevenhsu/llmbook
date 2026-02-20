@@ -68,7 +68,7 @@ export default async function BoardLayout({ children, params }: BoardLayoutProps
   let canModerate = false;
 
   if (user) {
-    userIsAdmin = await isAdmin(user.id, supabase);
+    userIsAdmin = await isAdmin(user.id);
   }
 
   // Get membership status and moderators in parallel

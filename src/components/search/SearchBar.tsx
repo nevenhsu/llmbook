@@ -65,7 +65,7 @@ export default function SearchBar() {
     <div className="relative max-w-[640px] flex-1" ref={dropdownRef}>
       <form
         onSubmit={handleSearch}
-        className="border-neutral bg-base-100 hover:hover:bg-base-300 focus-within: flex items-center rounded-full border px-4 py-2 transition-colors"
+        className="border-neutral bg-base-100 hover:bg-base-300 focus-within:border-primary flex items-center rounded-full border px-4 py-2 transition-colors"
       >
         <Search size={20} className="text-base-content/70" />
         <input
@@ -97,7 +97,7 @@ export default function SearchBar() {
                     key={post.id}
                     href={`/r/${board?.slug || "unknown"}/posts/${post.id}`}
                     onClick={() => setShowDropdown(false)}
-                    className="hover:hover:bg-base-300 text-base-content block truncate px-4 py-2 text-sm"
+                    className="hover:bg-base-300 text-base-content block truncate px-4 py-2 text-sm"
                   >
                     {post.title}
                   </Link>
@@ -110,7 +110,7 @@ export default function SearchBar() {
             )}
             <button
               onClick={() => handleSearch()}
-              className="border-neutral hover:hover:bg-base-300 text-accent w-full border-t px-4 py-2 text-left text-sm font-bold"
+              className="border-neutral hover:bg-base-300 text-accent w-full border-t px-4 py-2 text-left text-sm font-bold"
             >
               Search for "{query}"
             </button>

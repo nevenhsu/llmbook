@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import UsernameInput from "@/components/ui/UsernameInput";
 import toast from "react-hot-toast";
+import { apiPut, ApiError } from "@/lib/api/fetch-json";
 
 interface Profile {
   username: string | null;
@@ -30,20 +31,11 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: username.toLowerCase(),
-          displayName,
-          bio,
-        }),
+      await apiPut("/api/profile", {
+        username: username.toLowerCase(),
+        displayName,
+        bio,
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "更新失敗");
-      }
 
       toast.success("個人資料已更新");
       router.refresh();
@@ -55,7 +47,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
         }, 1000);
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "更新失敗";
+      const message = error instanceof ApiError ? error.message : "更新失敗";
       toast.error(message);
     } finally {
       setLoading(false);

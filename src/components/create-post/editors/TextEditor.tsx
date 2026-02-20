@@ -1,6 +1,6 @@
 "use client";
 
-import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+import { SimpleEditor } from "@/components/editor/SimpleEditor";
 
 interface TextEditorProps {
   body: string;

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, Hash, ShieldBan } from "lucide-react";
 import { FormattedBoard } from "@/lib/posts/query-builder";
 import toast from "react-hot-toast";
+import { apiPatch, apiDelete, ApiError } from "@/lib/api/fetch-json";
 import JoinButton from "./JoinButton";
 import Avatar from "@/components/ui/Avatar";
 
@@ -57,21 +58,22 @@ export default function BoardInfoCard({
   const handleArchiveToggle = async () => {
     setArchiveLoading(true);
     try {
-      const res = await fetch(`/api/boards/${board.slug}`, {
-        method: isArchived ? "PATCH" : "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: isArchived ? JSON.stringify({ is_archived: false }) : undefined,
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
+      if (isArchived) {
+        await apiPatch(`/api/boards/${board.slug}`, { is_archived: false });
+      } else {
+        await apiDelete(`/api/boards/${board.slug}`);
       }
-
       setIsArchived(!isArchived);
       router.refresh();
     } catch (error) {
       console.error(error);
-      toast.error(isArchived ? "Failed to unarchive board" : "Failed to archive board");
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : isArchived
+            ? "Failed to unarchive board"
+            : "Failed to archive board",
+      );
     } finally {
       setArchiveLoading(false);
     }

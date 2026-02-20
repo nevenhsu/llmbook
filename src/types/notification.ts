@@ -23,18 +23,21 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICA
 export interface PostUpvotePayload {
   postId: string;
   postTitle: string;
+  boardSlug?: string;
   milestone?: number; // Optional: reached milestone (1, 5, 10, 25, etc.)
 }
 
 export interface CommentUpvotePayload {
   postId: string;
   commentId: string;
+  boardSlug?: string;
   milestone?: number; // Optional: reached milestone (1, 5, 10, 25, etc.)
 }
 
 export interface CommentReplyPayload {
   postId: string;
   commentId: string;
+  boardSlug?: string;
   authorName: string;
   authorUsername: string;
   excerpt?: string;
@@ -44,6 +47,7 @@ export interface CommentReplyToCommentPayload {
   postId: string;
   parentCommentId: string;
   commentId: string;
+  boardSlug?: string;
   authorName: string;
   authorUsername: string;
   excerpt?: string;
@@ -52,6 +56,7 @@ export interface CommentReplyToCommentPayload {
 export interface MentionPayload {
   postId?: string;
   commentId?: string;
+  boardSlug?: string;
   authorName: string;
   authorUsername: string;
   context: "post" | "comment";
@@ -67,6 +72,7 @@ export interface NewFollowerPayload {
 export interface FollowedUserPostPayload {
   postId: string;
   postTitle: string;
+  boardSlug?: string;
   authorId: string;
   authorUsername: string;
   authorDisplayName: string;
@@ -153,31 +159,32 @@ export function getNotificationLink(notification: NotificationRow): string | nul
   switch (type) {
     case NOTIFICATION_TYPES.POST_UPVOTE: {
       const p = payload as PostUpvotePayload;
-      return `/posts/${p.postId}`;
+      return p.boardSlug ? `/r/${p.boardSlug}/posts/${p.postId}` : null;
     }
     case NOTIFICATION_TYPES.COMMENT_UPVOTE:
     case NOTIFICATION_TYPES.COMMENT_REPLY: {
       const p = payload as CommentUpvotePayload | CommentReplyPayload;
-      return `/posts/${p.postId}#comment-${p.commentId}`;
+      return p.boardSlug ? `/r/${p.boardSlug}/posts/${p.postId}#comment-${p.commentId}` : null;
     }
     case NOTIFICATION_TYPES.COMMENT_REPLY_TO_COMMENT: {
       const p = payload as CommentReplyToCommentPayload;
-      return `/posts/${p.postId}#comment-${p.commentId}`;
+      return p.boardSlug ? `/r/${p.boardSlug}/posts/${p.postId}#comment-${p.commentId}` : null;
     }
     case NOTIFICATION_TYPES.MENTION: {
       const p = payload as MentionPayload;
+      if (!p.boardSlug || !p.postId) return null;
       if (p.commentId) {
-        return `/posts/${p.postId}#comment-${p.commentId}`;
+        return `/r/${p.boardSlug}/posts/${p.postId}#comment-${p.commentId}`;
       }
-      return p.postId ? `/posts/${p.postId}` : null;
+      return `/r/${p.boardSlug}/posts/${p.postId}`;
     }
     case NOTIFICATION_TYPES.NEW_FOLLOWER: {
       const p = payload as NewFollowerPayload;
-      return `/profile/${p.followerUsername}`;
+      return `/u/${p.followerUsername}`;
     }
     case NOTIFICATION_TYPES.FOLLOWED_USER_POST: {
       const p = payload as FollowedUserPostPayload;
-      return `/posts/${p.postId}`;
+      return p.boardSlug ? `/r/${p.boardSlug}/posts/${p.postId}` : null;
     }
     default:
       return null;

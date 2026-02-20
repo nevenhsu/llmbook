@@ -63,7 +63,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
       <div
         tabIndex={0}
         role="button"
-        className="hover:hover:bg-base-300 flex cursor-pointer items-center gap-2 rounded-md p-1 md:p-2"
+        className="hover:bg-base-300 flex cursor-pointer items-center gap-2 rounded-md p-1 md:p-2"
       >
         <div className="relative h-6 w-6 overflow-hidden rounded-full bg-white">
           <Image
@@ -94,7 +94,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         <li>
           <Link
             href={`/u/${username}`}
-            className="hover:hover:bg-base-300 text-base-content flex items-center gap-3 px-4 py-2 text-sm"
+            className="hover:bg-base-300 text-base-content flex items-center gap-3 px-4 py-2 text-sm"
           >
             <User size={18} className="text-base-content/70" /> View Profile
           </Link>
@@ -102,7 +102,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         <li>
           <Link
             href="/settings/avatar"
-            className="hover:hover:bg-base-300 text-base-content flex items-center gap-3 px-4 py-2 text-sm"
+            className="hover:bg-base-300 text-base-content flex items-center gap-3 px-4 py-2 text-sm"
           >
             <Paintbrush size={18} className="text-base-content/70" /> Edit Avatar
           </Link>
@@ -110,7 +110,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         <li>
           <button
             onClick={toggleTheme}
-            className="hover:hover:bg-base-300 text-base-content flex w-full items-center gap-3 px-4 py-2 text-left text-sm"
+            className="hover:bg-base-300 text-base-content flex w-full items-center gap-3 px-4 py-2 text-left text-sm"
           >
             {theme === "black" ? (
               <Sun size={18} className="text-base-content/70" />
@@ -124,7 +124,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
         <li>
           <button
             onClick={handleSignOut}
-            className="hover:hover:bg-base-300 text-base-content flex w-full items-center gap-3 px-4 py-2 text-left text-sm"
+            className="hover:bg-base-300 text-base-content flex w-full items-center gap-3 px-4 py-2 text-left text-sm"
           >
             <LogOut size={18} className="text-base-content/70" /> Log Out
           </button>

@@ -1,6 +1,32 @@
+import { cache } from "react";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+interface ModeratorRecord {
+  role: string;
+  permissions: { manage_settings?: boolean; manage_posts?: boolean; manage_users?: boolean } | null;
+}
+
+/**
+ * Fetch the full moderator record (role + permissions) for a user in a board.
+ * Uses React cache() to deduplicate queries within the same server request.
+ * Returns null if the user is not a moderator.
+ */
+const getBoardModeratorRecord = cache(
+  async (boardId: string, userId: string): Promise<ModeratorRecord | null> => {
+    const supabase = await createServerClient(cookies());
+    const { data, error } = await supabase
+      .from("board_moderators")
+      .select("role, permissions")
+      .eq("board_id", boardId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as ModeratorRecord;
+  },
+);
 
 /**
  * Check if a user is a moderator of a board
@@ -8,19 +34,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export async function isBoardModerator(
   boardId: string,
   userId: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const sb = supabase ?? (await createServerClient(cookies()));
-
-  const { data, error } = await sb
-    .from("board_moderators")
-    .select("id")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) return false;
-  return !!data;
+  const record = await getBoardModeratorRecord(boardId, userId);
+  return record !== null;
 }
 
 /**
@@ -29,20 +46,10 @@ export async function isBoardModerator(
 export async function isBoardOwner(
   boardId: string,
   userId: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const sb = supabase ?? (await createServerClient(cookies()));
-
-  const { data, error } = await sb
-    .from("board_moderators")
-    .select("role")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .eq("role", "owner")
-    .maybeSingle();
-
-  if (error) return false;
-  return !!data;
+  const record = await getBoardModeratorRecord(boardId, userId);
+  return record?.role === "owner";
 }
 
 /**
@@ -101,26 +108,12 @@ export async function canPostInBoard(
 export async function canManageBoard(
   boardId: string,
   userId: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const sb = supabase ?? (await createServerClient(cookies()));
-
-  const { data, error } = await sb
-    .from("board_moderators")
-    .select("role, permissions")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !data) return false;
-
-  if (data.role === "owner") {
-    return true;
-  }
-
-  // Check if user has manage_settings permission
-  const permissions = data.permissions as { manage_settings?: boolean };
-  return permissions.manage_settings === true;
+  const record = await getBoardModeratorRecord(boardId, userId);
+  if (!record) return false;
+  if (record.role === "owner") return true;
+  return record.permissions?.manage_settings === true;
 }
 
 /**
@@ -129,25 +122,12 @@ export async function canManageBoard(
 export async function canManageBoardPosts(
   boardId: string,
   userId: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const sb = supabase ?? (await createServerClient(cookies()));
-
-  const { data, error } = await sb
-    .from("board_moderators")
-    .select("role, permissions")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !data) return false;
-
-  if (data.role === "owner") {
-    return true;
-  }
-
-  const permissions = data.permissions as { manage_posts?: boolean };
-  return permissions.manage_posts === true;
+  const record = await getBoardModeratorRecord(boardId, userId);
+  if (!record) return false;
+  if (record.role === "owner") return true;
+  return record.permissions?.manage_posts === true;
 }
 
 /**
@@ -156,25 +136,12 @@ export async function canManageBoardPosts(
 export async function canManageBoardUsers(
   boardId: string,
   userId: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const sb = supabase ?? (await createServerClient(cookies()));
-
-  const { data, error } = await sb
-    .from("board_moderators")
-    .select("role, permissions")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !data) return false;
-
-  if (data.role === "owner") {
-    return true;
-  }
-
-  const permissions = data.permissions as { manage_users?: boolean };
-  return permissions.manage_users === true;
+  const record = await getBoardModeratorRecord(boardId, userId);
+  if (!record) return false;
+  if (record.role === "owner") return true;
+  return record.permissions?.manage_users === true;
 }
 
 /**
@@ -183,17 +150,9 @@ export async function canManageBoardUsers(
 export async function getUserBoardRole(
   boardId: string,
   userId: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<"owner" | "moderator" | null> {
-  const sb = supabase ?? (await createServerClient(cookies()));
-
-  const { data, error } = await sb
-    .from("board_moderators")
-    .select("role")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return data.role as "owner" | "moderator";
+  const record = await getBoardModeratorRecord(boardId, userId);
+  if (!record) return null;
+  return record.role as "owner" | "moderator";
 }

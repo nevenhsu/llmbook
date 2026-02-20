@@ -83,7 +83,7 @@ export async function GET(request: Request) {
   // Check if user can view archived posts
   let canViewArchived = false;
   if (user && includeArchived) {
-    const userIsAdmin = await isAdmin(user.id, supabase);
+    const userIsAdmin = await isAdmin(user.id);
     if (userIsAdmin) {
       canViewArchived = true;
     } else if (boardId) {
@@ -116,7 +116,7 @@ export async function GET(request: Request) {
     });
 
     if (!error && cachedPosts.length > 0) {
-      rawPosts = cachedPosts as unknown as RawPost[];
+      rawPosts = (Array.isArray(cachedPosts) ? (cachedPosts as unknown[]) : []).filter(isRawPost);
       useCache = true;
     }
   } else if (sortBy === "rising" && !tagId && !author) {
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     });
 
     if (!error && cachedPosts.length > 0) {
-      rawPosts = cachedPosts as unknown as RawPost[];
+      rawPosts = (Array.isArray(cachedPosts) ? (cachedPosts as unknown[]) : []).filter(isRawPost);
       useCache = true;
     }
   }
@@ -190,11 +190,6 @@ export async function GET(request: Request) {
     posts = rawPagePosts.map((post) => transformPostToFeedFormat(post));
   }
 
-  const duration = Date.now() - startTime;
-  console.log(
-    `API /posts: ${posts.length} posts in ${duration}ms (sort: ${sortBy}, cached: ${useCache})`,
-  );
-
   const responseBody: PaginatedResponse<FeedPost> = {
     items: posts,
     hasMore,
@@ -204,7 +199,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json(responseBody, {
     headers: {
-      "X-Response-Time": `${duration}ms`,
+      "X-Response-Time": `${Date.now() - startTime}ms`,
       "X-Cache-Hit": useCache ? "1" : "0",
     },
   });
@@ -381,8 +376,6 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     .select("slug")
     .eq("id", boardId)
     .single();
-
-  console.log("Created post:", post.id, "in board:", boardId, "slug:", boardData?.slug);
 
   // Send notifications to followers and mentions
   // Run asynchronously to not block the response

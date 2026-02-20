@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useLoginModal } from "@/contexts/LoginModalContext";
 import toast from "react-hot-toast";
+import { apiFetchJson } from "@/lib/api/fetch-json";
 
 interface PollOption {
   id: string;
@@ -83,12 +84,11 @@ export default function PollDisplay({
 
   const fetchPollData = async () => {
     try {
-      const res = await fetch(`/api/polls/${postId}/vote`);
-      if (res.ok) {
-        const data = await res.json();
-        setOptions(data.options);
-        setUserVote(data.userVote);
-      }
+      const data = await apiFetchJson<{ options: PollOption[]; userVote: string | null }>(
+        `/api/polls/${postId}/vote`,
+      );
+      setOptions(data.options);
+      setUserVote(data.userVote);
     } catch (err) {
       console.error("Failed to fetch poll data:", err);
     }

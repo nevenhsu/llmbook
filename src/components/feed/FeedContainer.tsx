@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useFeedLoader } from "@/hooks/use-feed-loader";
 import type { FeedPost } from "@/lib/posts/query-builder";
 
 import {
@@ -35,24 +36,13 @@ export default function FeedContainer({
   timeRange = "all",
   canViewArchived = false,
 }: FeedContainerProps) {
-  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(calculateHasMore(initialPosts, DEFAULT_LIMIT));
-  const [offset, setOffset] = useState(initialPosts.length);
-  const [cursor, setCursor] = useState<string | undefined>(getNextCursor(initialPosts));
-  // Determine pagination mode
-  const paginationMode = useMemo(() => getPaginationMode(sortBy, !!tagSlug), [sortBy, tagSlug]);
-
   // Tag feeds always use 'new' sort and no time range
   const effectiveSortBy = tagSlug ? "new" : sortBy;
   const effectiveTimeRange = tagSlug ? "all" : timeRange;
+  const paginationMode = getPaginationMode(effectiveSortBy, !!tagSlug);
 
-  const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore) return;
-
-    setIsLoading(true);
-    try {
-      // Build query params based on pagination mode
+  const fetcher = useCallback(
+    async ({ cursor, offset }: { cursor?: string; offset?: number }) => {
       const params = buildPostsQueryParams({
         board: boardSlug,
         tag: tagSlug,
@@ -60,44 +50,28 @@ export default function FeedContainer({
         timeRange: effectiveTimeRange,
         includeArchived: canViewArchived,
         limit: DEFAULT_LIMIT,
-        // Use appropriate pagination parameter based on mode
         ...(paginationMode === "cursor" && cursor ? { cursor } : { offset }),
       });
 
       const res = await fetch(`/api/posts?${params}`);
       if (!res.ok) throw new Error("Failed to load posts");
+      return res.json() as Promise<PaginatedResponse<FeedPost>>;
+    },
+    [boardSlug, canViewArchived, effectiveSortBy, effectiveTimeRange, paginationMode, tagSlug],
+  );
 
-      const data = (await res.json()) as PaginatedResponse<FeedPost>;
-      const newPosts = Array.isArray(data?.items) ? data.items : [];
-
-      setHasMore(!!data?.hasMore);
-
-      if (paginationMode === "cursor") {
-        setCursor(typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursor(newPosts));
-      } else {
-        setOffset(
-          typeof data?.nextOffset === "number" ? data.nextOffset : offset + newPosts.length,
-        );
-      }
-
-      setPosts((prev) => [...prev, ...newPosts]);
-    } catch (err) {
-      console.error("Failed to load more posts:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    boardSlug,
-    canViewArchived,
-    cursor,
-    effectiveSortBy,
-    effectiveTimeRange,
-    hasMore,
+  const {
+    items: posts,
     isLoading,
-    offset,
-    paginationMode,
-    tagSlug,
-  ]);
+    hasMore,
+    loadMore,
+  } = useFeedLoader<FeedPost>({
+    initialItems: initialPosts,
+    initialCursor: paginationMode === "cursor" ? getNextCursor(initialPosts) : undefined,
+    initialOffset: paginationMode === "offset" ? initialPosts.length : 0,
+    initialHasMore: calculateHasMore(initialPosts, DEFAULT_LIMIT),
+    fetcher,
+  });
 
   const loadMoreRef = useInfiniteScroll(loadMore, hasMore, isLoading);
 
@@ -120,7 +94,6 @@ export default function FeedContainer({
         </div>
       )}
 
-      {/* Infinite scroll trigger */}
       {hasMore && (
         <div ref={loadMoreRef} className="flex justify-center py-8">
           {isLoading && <Loader2 size={24} className="text-base-content/50 animate-spin" />}

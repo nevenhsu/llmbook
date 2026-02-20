@@ -1,20 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import PostRow from "@/components/post/PostRow";
 import Link from "next/link";
 import PaginationClient from "@/components/ui/PaginationClient";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useIsBreakpoint } from "@/hooks/use-is-breakpoint";
+import { useFeedLoader } from "@/hooks/use-feed-loader";
 import { voteComment } from "@/lib/api/votes";
 import { useVote } from "@/hooks/use-vote";
 import VotePill from "@/components/ui/VotePill";
 import { toVoteValue } from "@/lib/vote-value";
 import type { FeedPost, FormattedComment, VoteValue } from "@/lib/posts/query-builder";
 import {
-  buildPostsQueryParams as buildPostsQueryParamsLib,
-  getNextCursor as getNextCursorLib,
-  calculateHasMore as calculateHasMoreLib,
+  buildPostsQueryParams,
+  getNextCursor,
+  calculateHasMore,
   type PaginatedResponse,
 } from "@/lib/pagination";
 
@@ -75,279 +77,170 @@ export default function ProfilePostList({
   commentsCount = 0,
   savedCount = 0,
 }: ProfilePostListProps) {
-  // State
-  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
-  const [postsLoading, setPostsLoading] = useState(false);
-  const [postsHasMore, setPostsHasMore] = useState(
-    calculateHasMoreLib(initialPosts, DEFAULT_LIMIT),
-  );
-  const [postsCursor, setPostsCursor] = useState<string | undefined>(
-    getNextCursorLib(initialPosts),
-  );
+  const isMobile = useIsBreakpoint("max", 768);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isMobile, setIsMobile] = useState(false);
 
-  // Detection for mobile
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+  // ── Posts feed ──────────────────────────────────────────────────────────────
+  const postsFetcher = useCallback(
+    async ({ cursor, offset }: { cursor?: string; offset?: number }) => {
+      const params = buildPostsQueryParams({
+        author: authorId || undefined,
+        sort: "new",
+        limit: DEFAULT_LIMIT,
+        cursor,
+        offset,
+      });
+      const res = await fetch(`/api/posts?${params}`);
+      if (!res.ok) throw new Error("Failed to load posts");
+      return res.json() as Promise<PaginatedResponse<FeedPost>>;
+    },
+    [authorId],
+  );
+
+  const postsLoader = useFeedLoader<FeedPost>({
+    initialItems: initialPosts,
+    initialCursor: getNextCursor(initialPosts),
+    initialHasMore: calculateHasMore(initialPosts, DEFAULT_LIMIT),
+    fetcher: postsFetcher,
+  });
+
+  // ── Comments feed ────────────────────────────────────────────────────────────
+  const commentsFetcher = useCallback(
+    async ({ cursor }: { cursor?: string; offset?: number }) => {
+      const params = new URLSearchParams();
+      if (authorId) params.append("authorId", authorId);
+      if (personaId) params.append("personaId", personaId);
+      if (cursor) params.append("cursor", cursor);
+      params.append("limit", DEFAULT_LIMIT.toString());
+      params.append("sort", "new");
+      const res = await fetch(`/api/profile/comments?${params}`);
+      if (!res.ok) throw new Error("Failed to load comments");
+      return res.json() as Promise<PaginatedResponse<FormattedComment>>;
+    },
+    [authorId, personaId],
+  );
+
+  const commentsLoader = useFeedLoader<FormattedComment>({
+    initialItems: initialComments ?? [],
+    initialCursor: getNextCursor(initialComments ?? []),
+    initialHasMore: calculateHasMore(initialComments ?? [], DEFAULT_LIMIT),
+    fetcher: commentsFetcher,
+  });
+
+  // ── Saved posts feed ─────────────────────────────────────────────────────────
+  const savedFetcher = useCallback(async ({ cursor }: { cursor?: string; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (cursor) params.append("cursor", cursor);
+    params.append("limit", DEFAULT_LIMIT.toString());
+    const res = await fetch(`/api/profile/saved?${params}`);
+    if (!res.ok) throw new Error("Failed to load saved posts");
+    return res.json() as Promise<PaginatedResponse<FeedPost>>;
   }, []);
 
+  const savedLoader = useFeedLoader<FeedPost>({
+    initialItems: [],
+    initialHasMore: true,
+    fetcher: savedFetcher,
+  });
+
+  // ── Reset loaders and page when tab changes ──────────────────────────────────
+  const postsReset = postsLoader.reset;
+  const commentsReset = commentsLoader.reset;
+
+  useEffect(() => {
+    setCurrentPage(1);
+    if (tab === "posts") {
+      postsReset(
+        initialPosts,
+        getNextCursor(initialPosts),
+        0,
+        calculateHasMore(initialPosts, DEFAULT_LIMIT),
+      );
+    } else if (tab === "comments") {
+      commentsReset(
+        initialComments ?? [],
+        getNextCursor(initialComments ?? []),
+        0,
+        calculateHasMore(initialComments ?? [], DEFAULT_LIMIT),
+      );
+    }
+  }, [tab, initialPosts, initialComments, postsReset, commentsReset]);
+
+  // ── Load saved posts on first visit to saved tab ─────────────────────────────
+  const savedLoadMore = savedLoader.loadMore;
+  const savedItemCount = savedLoader.items.length;
+
+  useEffect(() => {
+    if (tab === "saved" && isOwnProfile && savedItemCount === 0) {
+      void savedLoadMore();
+    }
+  }, [tab, isOwnProfile, savedItemCount, savedLoadMore]);
+
+  // ── Active loader ────────────────────────────────────────────────────────────
+  const activeLoader =
+    tab === "comments" ? commentsLoader : tab === "saved" ? savedLoader : postsLoader;
+
+  const { items, isLoading, hasMore, loadMore } = activeLoader;
+
+  // ── Pagination state (mobile only) ───────────────────────────────────────────
   const totalItems = tab === "posts" ? postsCount : tab === "comments" ? commentsCount : savedCount;
   const totalPages = Math.ceil(totalItems / DEFAULT_LIMIT);
 
-  const handlePageChange = async (page: number) => {
-    if (page === currentPage || page < 1 || page > totalPages) return;
-
-    setPostsLoading(true);
-    setCurrentPage(page);
-
-    try {
+  const handlePageChange = useCallback(
+    async (page: number) => {
       const offset = (page - 1) * DEFAULT_LIMIT;
-      let url = "";
 
       if (tab === "posts") {
-        const params = new URLSearchParams();
-        if (authorId) params.append("author", authorId);
-        if (personaId) params.append("persona", personaId);
-        params.append("sort", "new");
-        params.append("limit", DEFAULT_LIMIT.toString());
-        params.append("offset", offset.toString());
-        url = `/api/posts?${params.toString()}`;
+        const params = buildPostsQueryParams({
+          author: authorId || undefined,
+          sort: "new",
+          limit: DEFAULT_LIMIT,
+          offset,
+        });
+        const res = await fetch(`/api/posts?${params}`);
+        const data = (await res.json()) as PaginatedResponse<FeedPost>;
+        postsLoader.reset(
+          data.items,
+          data.nextCursor,
+          data.nextOffset ?? offset + data.items.length,
+          data.hasMore,
+        );
       } else if (tab === "comments") {
         const params = new URLSearchParams();
         if (authorId) params.append("authorId", authorId);
         if (personaId) params.append("personaId", personaId);
         params.append("limit", DEFAULT_LIMIT.toString());
         params.append("offset", offset.toString());
-        url = `/api/profile/comments?${params.toString()}`;
+        const res = await fetch(`/api/profile/comments?${params}`);
+        const data = (await res.json()) as PaginatedResponse<FormattedComment>;
+        commentsLoader.reset(
+          data.items,
+          data.nextCursor,
+          data.nextOffset ?? offset + data.items.length,
+          data.hasMore,
+        );
       } else if (tab === "saved") {
-        url = `/api/profile/saved?limit=${DEFAULT_LIMIT}&offset=${offset}`;
+        const res = await fetch(`/api/profile/saved?limit=${DEFAULT_LIMIT}&offset=${offset}`);
+        const data = (await res.json()) as PaginatedResponse<FeedPost>;
+        savedLoader.reset(
+          data.items,
+          data.nextCursor,
+          data.nextOffset ?? offset + data.items.length,
+          data.hasMore,
+        );
       }
 
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (tab === "posts") {
-        const items = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
-        setPosts(items);
-        setPostsHasMore(
-          typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT,
-        );
-        setPostsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
-      } else if (tab === "comments") {
-        const items = (Array.isArray(data?.items) ? data.items : []) as FormattedComment[];
-        setComments(items);
-        setCommentsHasMore(
-          typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT,
-        );
-        setCommentsCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
-      } else if (tab === "saved") {
-        const items = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
-        setSavedPosts(items);
-        setSavedHasMore(
-          typeof data?.hasMore === "boolean" ? data.hasMore : items.length >= DEFAULT_LIMIT,
-        );
-        setSavedCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
-      }
-
-      // Scroll to top of list
+      setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (err) {
-      console.error("Failed to change page:", err);
-    } finally {
-      setPostsLoading(false);
-    }
-  };
-
-  // Comments state
-  const [comments, setComments] = useState<FormattedComment[]>(initialComments ?? []);
-  const [commentsLoading, setCommentsLoading] = useState(false);
-  const [commentsHasMore, setCommentsHasMore] = useState(
-    calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT),
-  );
-  const [commentsCursor, setCommentsCursor] = useState<string | undefined>(
-    getNextCursorLib(initialComments ?? []),
+    },
+    [authorId, commentsLoader, personaId, postsLoader, savedLoader, tab],
   );
 
-  // Saved posts state
-  const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
-  const [savedLoading, setSavedLoading] = useState(false);
-  const [savedHasMore, setSavedHasMore] = useState(true);
-  const [savedCursor, setSavedCursor] = useState<string | undefined>(undefined);
-  const [hasLoadedSaved, setHasLoadedSaved] = useState(false);
-
-  const loadMoreSaved = useCallback(async () => {
-    if (savedLoading || !savedHasMore || !isOwnProfile) return;
-
-    setSavedLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (savedCursor) params.append("cursor", savedCursor);
-      params.append("limit", DEFAULT_LIMIT.toString());
-
-      const res = await fetch(`/api/profile/saved?${params}`);
-      if (!res.ok) throw new Error("Failed to load saved posts");
-
-      const data = await res.json();
-      const newPosts = (Array.isArray(data?.items) ? data.items : []) as FeedPost[];
-
-      setSavedHasMore(
-        typeof data?.hasMore === "boolean"
-          ? data.hasMore
-          : calculateHasMoreLib(newPosts, DEFAULT_LIMIT),
-      );
-      setSavedCursor(typeof data?.nextCursor === "string" ? data.nextCursor : undefined);
-      setSavedPosts((prev) => [...prev, ...newPosts]);
-    } catch (err) {
-      console.error("Failed to load more saved posts:", err);
-    } finally {
-      setSavedLoading(false);
-    }
-  }, [isOwnProfile, savedCursor, savedHasMore, savedLoading]);
-
-  // Reset state when tab changes
-  useEffect(() => {
-    setCurrentPage(1);
-    if (tab === "posts") {
-      setPosts(initialPosts);
-      setPostsHasMore(calculateHasMoreLib(initialPosts, DEFAULT_LIMIT));
-      setPostsCursor(getNextCursorLib(initialPosts));
-    } else if (tab === "comments") {
-      setComments(initialComments ?? []);
-      setCommentsHasMore(calculateHasMoreLib(initialComments ?? [], DEFAULT_LIMIT));
-      setCommentsCursor(getNextCursorLib(initialComments ?? []));
-    } else if (tab === "saved" && isOwnProfile && !hasLoadedSaved) {
-      // Initial load of saved posts
-      loadMoreSaved();
-      setHasLoadedSaved(true);
-    }
-  }, [tab, initialPosts, initialComments, isOwnProfile, hasLoadedSaved, loadMoreSaved]);
-
-  const loadMorePosts = useCallback(async () => {
-    if (postsLoading || !postsHasMore || (!authorId && !personaId)) return;
-
-    setPostsLoading(true);
-    try {
-      const params = buildPostsQueryParamsLib({
-        author: authorId || undefined,
-        sort: "new",
-        limit: DEFAULT_LIMIT,
-        cursor: postsCursor,
-      });
-
-      const res = await fetch(`/api/posts?${params}`);
-      if (!res.ok) throw new Error("Failed to load posts");
-
-      const data = (await res.json()) as PaginatedResponse<FeedPost>;
-      const newPosts = Array.isArray(data?.items) ? data.items : [];
-
-      setPostsHasMore(!!data?.hasMore);
-      setPostsCursor(
-        typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newPosts),
-      );
-      setPosts((prev) => [...prev, ...newPosts]);
-    } catch (err) {
-      console.error("Failed to load more posts:", err);
-    } finally {
-      setPostsLoading(false);
-    }
-  }, [authorId, personaId, postsCursor, postsHasMore, postsLoading]);
-
-  const loadMoreComments = useCallback(async () => {
-    if (commentsLoading || !commentsHasMore || (!authorId && !personaId)) return;
-
-    setCommentsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (authorId) params.append("authorId", authorId);
-      if (personaId) params.append("personaId", personaId);
-      if (commentsCursor) params.append("cursor", commentsCursor);
-      params.append("limit", DEFAULT_LIMIT.toString());
-      params.append("sort", "new");
-
-      const res = await fetch(`/api/profile/comments?${params}`);
-      if (!res.ok) throw new Error("Failed to load comments");
-
-      const data = (await res.json()) as PaginatedResponse<FormattedComment>;
-      const newComments = Array.isArray(data?.items) ? data.items : [];
-
-      setCommentsHasMore(!!data?.hasMore);
-      setCommentsCursor(
-        typeof data?.nextCursor === "string" ? data.nextCursor : getNextCursorLib(newComments),
-      );
-      setComments((prev) => [...prev, ...newComments]);
-    } catch (err) {
-      console.error("Failed to load more comments:", err);
-    } finally {
-      setCommentsLoading(false);
-    }
-  }, [authorId, personaId, commentsCursor, commentsHasMore, commentsLoading]);
-
-  // Get current items based on tab
-  const getCurrentItems = () => {
-    switch (tab) {
-      case "posts":
-        return posts;
-      case "comments":
-        return comments;
-      case "saved":
-        return savedPosts;
-      default:
-        return posts;
-    }
-  };
-
-  const getIsLoading = () => {
-    switch (tab) {
-      case "posts":
-        return postsLoading;
-      case "comments":
-        return commentsLoading;
-      case "saved":
-        return savedLoading;
-      default:
-        return false;
-    }
-  };
-
-  const getHasMore = () => {
-    switch (tab) {
-      case "posts":
-        return postsHasMore;
-      case "comments":
-        return commentsHasMore;
-      case "saved":
-        return savedHasMore;
-      default:
-        return false;
-    }
-  };
-
-  const items = getCurrentItems();
-  const isLoading = getIsLoading();
-  const hasMore = getHasMore();
-
-  const handleInfiniteLoad = useCallback(() => {
-    if (tab === "posts") {
-      void loadMorePosts();
-      return;
-    }
-    if (tab === "comments") {
-      void loadMoreComments();
-      return;
-    }
-    if (tab === "saved") {
-      void loadMoreSaved();
-    }
-  }, [loadMoreComments, loadMorePosts, loadMoreSaved, tab]);
-
-  const loadMoreRef = useInfiniteScroll(handleInfiniteLoad, hasMore, isLoading, {
+  const loadMoreRef = useInfiniteScroll(loadMore, hasMore, isLoading, {
     enabled: !isMobile,
   });
 
+  // ── Empty state ───────────────────────────────────────────────────────────────
   if (items.length === 0 && !isLoading) {
     return (
       <div className="rounded-2xl px-5 py-14 text-center sm:py-20">
@@ -362,118 +255,126 @@ export default function ProfilePostList({
     );
   }
 
-  // Render comments
+  // ── Comments tab ──────────────────────────────────────────────────────────────
   if (tab === "comments") {
     return (
       <>
         <div className="bg-base-200 border-neutral divide-neutral divide-y overflow-hidden rounded-2xl border">
-          {comments.map((comment) => {
-            return (
-              <div key={comment.id} className="hover:bg-base-100/50 p-4 transition-colors">
-                <div className="text-base-content/70 mb-2 text-xs">
-                  評論於{" "}
-                  <Link
-                    href={`/r/${comment.boardSlug || "unknown"}/posts/${comment.postId}`}
-                    className="text-base-content font-semibold hover:underline"
-                  >
-                    {comment.postTitle}
-                  </Link>
-                  {comment.boardSlug && (
-                    <>
-                      {" "}
-                      在{" "}
-                      <Link
-                        href={`/r/${comment.boardSlug}`}
-                        className="text-accent hover:underline"
-                      >
-                        r/{comment.boardSlug}
-                      </Link>
-                    </>
-                  )}
-                </div>
-                <p className="text-base-content text-sm">{comment.body}</p>
-                <div className="text-base-content/60 mt-2 flex items-center gap-3 text-xs">
-                  <CommentVoteRow
-                    commentId={comment.id}
-                    initialScore={comment.score ?? 0}
-                    initialUserVote={toVoteValue(comment.userVote)}
-                  />
-                  <span>•</span>
-                  <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
-                </div>
+          {(items as FormattedComment[]).map((comment) => (
+            <div key={comment.id} className="hover:bg-base-100/50 p-4 transition-colors">
+              <div className="text-base-content/70 mb-2 text-xs">
+                評論於{" "}
+                <Link
+                  href={`/r/${comment.boardSlug || "unknown"}/posts/${comment.postId}`}
+                  className="text-base-content font-semibold hover:underline"
+                >
+                  {comment.postTitle}
+                </Link>
+                {comment.boardSlug && (
+                  <>
+                    {" "}
+                    在{" "}
+                    <Link href={`/r/${comment.boardSlug}`} className="text-accent hover:underline">
+                      r/{comment.boardSlug}
+                    </Link>
+                  </>
+                )}
               </div>
-            );
-          })}
+              <p className="text-base-content text-sm">{comment.body}</p>
+              <div className="text-base-content/60 mt-2 flex items-center gap-3 text-xs">
+                <CommentVoteRow
+                  commentId={comment.id}
+                  initialScore={comment.score ?? 0}
+                  initialUserVote={toVoteValue(comment.userVote)}
+                />
+                <span>•</span>
+                <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Pagination/Infinite Scroll Controls */}
-        {isMobile ? (
-          <div className="flex justify-center py-6">
-            <PaginationClient
-              page={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => void handlePageChange(p)}
-              joinClassName="border-neutral border"
-              buttonClassName="bg-base-100"
-              activeButtonClassName="btn-primary"
-            />
-          </div>
-        ) : (
-          <>
-            {hasMore && (
-              <div ref={loadMoreRef} className="flex justify-center py-4">
-                {isLoading && <Loader2 size={24} className="text-base-content/50 animate-spin" />}
-              </div>
-            )}
-
-            {!hasMore && comments.length > 0 && (
-              <div className="text-base-content/50 py-8 text-center text-sm">
-                You've reached the end
-              </div>
-            )}
-          </>
-        )}
+        <FooterControls
+          isMobile={isMobile}
+          hasMore={hasMore}
+          isLoading={isLoading}
+          loadMoreRef={loadMoreRef}
+          itemCount={items.length}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       </>
     );
   }
 
-  // Render posts (posts or saved tabs)
-  const currentPosts = tab === "saved" ? savedPosts : posts;
-
+  // ── Posts / Saved tab ────────────────────────────────────────────────────────
   return (
     <>
       <div className="flex flex-col gap-3">
-        {currentPosts.map((post: FeedPost) => (
+        {(items as FeedPost[]).map((post) => (
           <PostRow key={post.id} {...post} userId={userId} variant="card" />
         ))}
       </div>
 
-      {/* Pagination/Infinite Scroll Controls */}
-      {isMobile ? (
-        <div className="flex justify-center py-6">
-          <PaginationClient
-            page={currentPage}
-            totalPages={totalPages}
-            onPageChange={(p) => void handlePageChange(p)}
-            joinClassName="border-neutral border"
-            buttonClassName="bg-base-100"
-            activeButtonClassName="btn-primary"
-          />
-        </div>
-      ) : (
-        <>
-          {hasMore && (
-            <div ref={loadMoreRef} className="flex justify-center py-4">
-              {isLoading && <Loader2 size={24} className="text-base-content/50 animate-spin" />}
-            </div>
-          )}
+      <FooterControls
+        isMobile={isMobile}
+        hasMore={hasMore}
+        isLoading={isLoading}
+        loadMoreRef={loadMoreRef}
+        itemCount={items.length}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+      />
+    </>
+  );
+}
 
-          {!hasMore && currentPosts.length > 0 && (
-            <div className="text-base-content/50 py-8 text-center text-sm">
-              You've reached the end
-            </div>
-          )}
-        </>
+// ── Shared footer: pagination (mobile) or infinite scroll sentinel (desktop) ──
+function FooterControls({
+  isMobile,
+  hasMore,
+  isLoading,
+  loadMoreRef,
+  itemCount,
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  isMobile: boolean;
+  hasMore: boolean;
+  isLoading: boolean;
+  loadMoreRef: React.RefObject<HTMLDivElement | null>;
+  itemCount: number;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => Promise<void>;
+}) {
+  if (isMobile) {
+    return (
+      <div className="flex justify-center py-6">
+        <PaginationClient
+          page={currentPage}
+          totalPages={totalPages}
+          onPageChange={(p) => void onPageChange(p)}
+          joinClassName="border-neutral border"
+          buttonClassName="bg-base-100"
+          activeButtonClassName="btn-primary"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {hasMore && (
+        <div ref={loadMoreRef} className="flex justify-center py-4">
+          {isLoading && <Loader2 size={24} className="text-base-content/50 animate-spin" />}
+        </div>
+      )}
+      {!hasMore && itemCount > 0 && (
+        <div className="text-base-content/50 py-8 text-center text-sm">You've reached the end</div>
       )}
     </>
   );

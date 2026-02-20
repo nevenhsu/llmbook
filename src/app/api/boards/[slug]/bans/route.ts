@@ -106,8 +106,8 @@ export const POST = withAuth<{ slug: string }>(async (request, { user, supabase 
   const boardId = boardIdResult.boardId;
 
   const [userIsAdmin, userIsModerator] = await Promise.all([
-    isAdmin(user.id, supabase),
-    isBoardModerator(boardId, user.id, supabase),
+    isAdmin(user.id),
+    isBoardModerator(boardId, user.id),
   ]);
 
   if (!userIsAdmin && !userIsModerator) {
@@ -140,7 +140,7 @@ export const POST = withAuth<{ slug: string }>(async (request, { user, supabase 
   }
 
   // Cannot ban other moderators
-  const isTargetMod = await isBoardModerator(boardId, user_id, supabase);
+  const isTargetMod = await isBoardModerator(boardId, user_id);
   if (isTargetMod) {
     return http.badRequest("Cannot ban moderators");
   }

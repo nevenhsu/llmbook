@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 /**
  * Hot ranking algorithm - 權重: Comments > Score > Time
  *
@@ -155,12 +157,91 @@ export async function updatePostRankings(supabase: SupabaseClient): Promise<bool
       return false;
     }
 
-    console.log("Post rankings updated successfully at", new Date().toISOString());
     return true;
   } catch (err: unknown) {
     console.error("Error updating post rankings:", err);
     return false;
   }
+}
+
+type RankingType = "hot" | "rising";
+
+interface RankingConfig {
+  rankField: string;
+  scoreField: string;
+  rankingGtZeroField: string;
+}
+
+const RANKING_CONFIGS: Record<RankingType, RankingConfig> = {
+  hot: { rankField: "hot_rank", scoreField: "hot_score", rankingGtZeroField: "hot_rank" },
+  rising: {
+    rankField: "rising_rank",
+    scoreField: "rising_score",
+    rankingGtZeroField: "rising_rank",
+  },
+};
+
+/**
+ * Internal: fetch cached post rankings for a given type (hot or rising).
+ */
+async function getCachedPostRankings(
+  supabase: SupabaseClient,
+  type: RankingType,
+  options: { boardId?: string; limit?: number; offset?: number } = {},
+) {
+  type CachedPost = Record<string, unknown> & { id: string };
+  type RankingRow = {
+    [key: string]: unknown;
+    calculated_at: string;
+    posts: CachedPost;
+  };
+
+  const config = RANKING_CONFIGS[type];
+  const { boardId, limit = 20, offset = 0 } = options;
+
+  const selectFields = `
+      ${config.rankField},
+      ${config.scoreField},
+      calculated_at,
+      posts!inner(
+        id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
+        boards!inner(name, slug),
+        profiles(username, display_name, avatar_url),
+        personas(username, display_name, avatar_url),
+        media(url),
+        post_tags(tag:tags(name, slug))
+      )
+    `;
+
+  let query = supabase
+    .from("post_rankings")
+    .select(selectFields)
+    .gt(config.rankingGtZeroField, 0)
+    .order(config.rankField, { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (boardId) {
+    query = query.eq("board_id", boardId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error(`Error fetching ${type} posts from cache:`, error);
+    return { posts: [], error };
+  }
+
+  const rows = (data ?? []) as unknown as RankingRow[];
+  const posts = rows
+    .filter((item) => !!item?.posts && typeof item.posts.id === "string")
+    .map((item) => ({
+      ...item.posts,
+      _rank: item[config.rankField],
+      _score: item[config.scoreField],
+      _calculated_at: item.calculated_at,
+    }));
+
+  return { posts, error: null };
 }
 
 /**
@@ -170,68 +251,11 @@ export async function updatePostRankings(supabase: SupabaseClient): Promise<bool
  * @param options - Query options
  * @returns Posts with hot ranking
  */
-export async function getHotPostsFromCache(
+export function getHotPostsFromCache(
   supabase: SupabaseClient,
-  options: {
-    boardId?: string;
-    limit?: number;
-    offset?: number;
-  } = {},
+  options: { boardId?: string; limit?: number; offset?: number } = {},
 ) {
-  type CachedPost = Record<string, unknown> & { id: string };
-  type HotRankingRow = {
-    hot_rank: number;
-    hot_score: number;
-    calculated_at: string;
-    posts: CachedPost;
-  };
-
-  const { boardId, limit = 20, offset = 0 } = options;
-
-  let query = supabase
-    .from("post_rankings")
-    .select(
-      `
-      hot_rank,
-      hot_score,
-      calculated_at,
-      posts!inner(
-        id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
-        boards!inner(name, slug),
-        profiles(username, display_name, avatar_url),
-        personas(username, display_name, avatar_url),
-        media(url),
-        post_tags(tag:tags(name, slug))
-      )
-    `,
-    )
-    .gt("hot_rank", 0)
-    .order("hot_rank", { ascending: true })
-    .range(offset, offset + limit - 1);
-
-  if (boardId) {
-    query = query.eq("board_id", boardId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error fetching hot posts from cache:", error);
-    return { posts: [], error };
-  }
-
-  // Flatten the nested structure
-  const rows = (data ?? []) as unknown as HotRankingRow[];
-  const posts = rows
-    .filter((item) => !!item?.posts && typeof item.posts.id === "string")
-    .map((item) => ({
-      ...item.posts,
-      _rank: item.hot_rank,
-      _score: item.hot_score,
-      _calculated_at: item.calculated_at,
-    }));
-
-  return { posts, error: null };
+  return getCachedPostRankings(supabase, "hot", options);
 }
 
 /**
@@ -241,68 +265,11 @@ export async function getHotPostsFromCache(
  * @param options - Query options
  * @returns Posts with rising ranking
  */
-export async function getRisingPostsFromCache(
+export function getRisingPostsFromCache(
   supabase: SupabaseClient,
-  options: {
-    boardId?: string;
-    limit?: number;
-    offset?: number;
-  } = {},
+  options: { boardId?: string; limit?: number; offset?: number } = {},
 ) {
-  type CachedPost = Record<string, unknown> & { id: string };
-  type RisingRankingRow = {
-    rising_rank: number;
-    rising_score: number;
-    calculated_at: string;
-    posts: CachedPost;
-  };
-
-  const { boardId, limit = 20, offset = 0 } = options;
-
-  let query = supabase
-    .from("post_rankings")
-    .select(
-      `
-      rising_rank,
-      rising_score,
-      calculated_at,
-      posts!inner(
-        id, title, created_at, score, comment_count, board_id, author_id, persona_id, status,
-        boards!inner(name, slug),
-        profiles(username, display_name, avatar_url),
-        personas(username, display_name, avatar_url),
-        media(url),
-        post_tags(tag:tags(name, slug))
-      )
-    `,
-    )
-    .gt("rising_rank", 0)
-    .order("rising_rank", { ascending: true })
-    .range(offset, offset + limit - 1);
-
-  if (boardId) {
-    query = query.eq("board_id", boardId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error fetching rising posts from cache:", error);
-    return { posts: [], error };
-  }
-
-  // Flatten the nested structure
-  const rows = (data ?? []) as unknown as RisingRankingRow[];
-  const posts = rows
-    .filter((item) => !!item?.posts && typeof item.posts.id === "string")
-    .map((item) => ({
-      ...item.posts,
-      _rank: item.rising_rank,
-      _score: item.rising_score,
-      _calculated_at: item.calculated_at,
-    }));
-
-  return { posts, error: null };
+  return getCachedPostRankings(supabase, "rising", options);
 }
 
 /**
@@ -337,4 +304,3 @@ export async function isRankingCacheStale(
     return true;
   }
 }
-import type { SupabaseClient } from "@supabase/supabase-js";

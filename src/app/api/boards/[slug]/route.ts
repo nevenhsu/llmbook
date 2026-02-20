@@ -48,7 +48,7 @@ export const PATCH = withAuth<{ slug: string }>(async (request, { user, supabase
     return http.badRequest("No valid fields to update");
   }
 
-  const userIsAdmin = await isAdmin(user.id, supabase);
+  const userIsAdmin = await isAdmin(user.id);
 
   if (hasSettingsUpdate && !userIsAdmin) {
     const canManageSettings = await canManageBoard(boardId, user.id, supabase);
@@ -151,7 +151,7 @@ export const DELETE = withAuth<{ slug: string }>(async (request, { user, supabas
   }
   const boardId = boardIdResult.boardId;
 
-  const userIsAdmin = await isAdmin(user.id, supabase);
+  const userIsAdmin = await isAdmin(user.id);
   if (!userIsAdmin) {
     return http.forbidden("Forbidden: Only admins can archive");
   }

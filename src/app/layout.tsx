@@ -38,7 +38,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         .select("display_name, avatar_url, username, karma")
         .eq("user_id", user.id)
         .maybeSingle(),
-      isAdmin(user.id, supabase),
+      isAdmin(user.id),
     ]);
     profile = profileResult.data;
     userIsAdmin = adminCheck;

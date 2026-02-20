@@ -6,7 +6,7 @@ import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
-import { MentionExtension } from "@/components/tiptap-extensions/mention";
+import { MentionExtension } from "@/components/editor/extensions/mention";
 import {
   Bold,
   ChevronDown,
@@ -61,7 +61,7 @@ function ToolbarButton({
   return (
     <button
       type="button"
-      className={`hover:hover:bg-base-300 rounded p-1.5 transition-colors ${active ? "bg-base-300 text-base-content" : "text-base-content/70 hover:text-base-content"}`}
+      className={`hover:bg-base-300 rounded p-1.5 transition-colors ${active ? "bg-base-300 text-base-content" : "text-base-content/70 hover:text-base-content"}`}
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
@@ -106,7 +106,7 @@ function MenuBar({
         <button
           type="button"
           tabIndex={0}
-          className="hover:hover:bg-base-300 text-base-content/70 hover:text-base-content flex items-center gap-1 rounded p-1.5 transition-colors"
+          className="hover:bg-base-300 text-base-content/70 hover:text-base-content flex items-center gap-1 rounded p-1.5 transition-colors"
           aria-label="Text style"
           title="Text style"
         >
@@ -120,7 +120,7 @@ function MenuBar({
           <li>
             <button
               type="button"
-              className={`hover:hover:bg-base-300 w-full rounded px-3 py-2 text-left text-sm ${editor.isActive("paragraph") ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
+              className={`hover:bg-base-300 w-full rounded px-3 py-2 text-left text-sm ${editor.isActive("paragraph") ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
               onClick={() => editor.chain().focus().setParagraph().run()}
             >
               Paragraph
@@ -130,7 +130,7 @@ function MenuBar({
             <li key={level}>
               <button
                 type="button"
-                className={`hover:hover:bg-base-300 w-full rounded px-3 py-2 text-left text-sm ${editor.isActive("heading", { level }) ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
+                className={`hover:bg-base-300 w-full rounded px-3 py-2 text-left text-sm ${editor.isActive("heading", { level }) ? "bg-base-300 text-base-content" : "text-base-content/70"}`}
                 onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
               >
                 Heading {level}

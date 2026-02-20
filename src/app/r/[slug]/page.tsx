@@ -8,6 +8,7 @@ import { isBoardModerator } from "@/lib/board-permissions";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { sortPosts, type SortType } from "@/lib/ranking";
 import { toVoteValue } from "@/lib/vote-value";
+import { toBoardSortType, toTimeRange } from "@/lib/routing/sort-params";
 import {
   buildPostsQuery,
   fetchUserInteractions,
@@ -23,24 +24,11 @@ interface PageProps {
   searchParams?: Promise<{ sort?: string; t?: string }>;
 }
 
-function toSortType(value: string | undefined): SortType {
-  if (
-    value === "new" ||
-    value === "hot" ||
-    value === "rising" ||
-    value === "top" ||
-    value === "best"
-  ) {
-    return value;
-  }
-  return "hot";
-}
-
 export default async function BoardPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const searchParamsResolved = await searchParams;
-  const sortBy = toSortType(searchParamsResolved?.sort);
-  const timeRange = searchParamsResolved?.t || "all";
+  const sortBy = toBoardSortType(searchParamsResolved?.sort);
+  const timeRange = toTimeRange(searchParamsResolved?.t);
 
   const supabase = await createClient();
   const board = await getBoardBySlug(slug);
@@ -58,9 +46,9 @@ export default async function BoardPage({ params, searchParams }: PageProps) {
   let canViewArchived = false;
 
   if (user) {
-    userIsAdmin = await isAdmin(user.id, supabase);
+    userIsAdmin = await isAdmin(user.id);
 
-    canManageBoard = await isBoardModerator(board.id, user.id, supabase);
+    canManageBoard = await isBoardModerator(board.id, user.id);
     canViewArchived = userIsAdmin || canManageBoard;
   }
 

@@ -1,4 +1,4 @@
-import type { MentionSuggestion } from "@/components/tiptap-extensions/mention/MentionExtension";
+import type { MentionSuggestion } from "@/components/editor/extensions/mention/MentionExtension";
 
 /**
  * Mock data for mention suggestions preview

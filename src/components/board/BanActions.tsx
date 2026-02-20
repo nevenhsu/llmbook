@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiPost, apiDelete, ApiError } from "@/lib/api/fetch-json";
 
 interface BanActionsProps {
   boardSlug: string;
@@ -39,23 +40,13 @@ export function BanActions({ boardSlug, canEditBans }: BanActionsProps) {
         }
       }
 
-      const res = await fetch(`/api/boards/${boardSlug}/bans`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const message = await res.text();
-        throw new Error(message || "Failed to ban user");
-      }
-
+      await apiPost(`/api/boards/${boardSlug}/bans`, payload);
       setUserId("");
       setReason("");
       setExpiresAt("");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to ban user");
+      setError(err instanceof ApiError ? err.message : "Failed to ban user");
     } finally {
       setLoading(false);
     }
@@ -119,14 +110,7 @@ export function UnbanButton({ boardSlug, userId, canEditBans }: UnbanButtonProps
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/boards/${boardSlug}/bans/${userId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
+      await apiDelete(`/api/boards/${boardSlug}/bans/${userId}`);
       router.refresh();
     } catch (error) {
       console.error(error);

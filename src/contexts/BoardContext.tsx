@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, ReactNode } from "react";
-import { useUserContext } from "./UserContext";
+import { useUserContext, useOptionalUserContext } from "./UserContext";
 
 interface BoardContextData {
   boardId: string;
@@ -62,6 +62,3 @@ export function useOptionalBoardContext() {
     isAdmin: userContext?.isAdmin || false,
   };
 }
-
-// Import the optional user hook
-import { useOptionalUserContext } from "./UserContext";

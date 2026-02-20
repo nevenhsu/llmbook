@@ -11,6 +11,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
 import { useVote } from "@/hooks/use-vote";
 import { voteComment } from "@/lib/api/votes";
+import { apiDelete, apiPatch, ApiError } from "@/lib/api/fetch-json";
 import ResponsiveMenu, { ResponsiveMenuHandle } from "@/components/ui/ResponsiveMenu";
 import type { FormattedComment, VoteValue } from "@/lib/posts/query-builder";
 
@@ -44,7 +45,10 @@ export default function CommentItem({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUndeleting, setIsUndeleting] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [removeReason, setRemoveReason] = useState("");
   const { openLoginModal } = useLoginModal();
   const menuRef = useRef<ResponsiveMenuHandle>(null);
 
@@ -63,17 +67,12 @@ export default function CommentItem({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/comments/${comment.id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) throw new Error("Failed to delete comment");
-
+      await apiDelete(`/api/comments/${comment.id}`);
       onDelete?.(comment.id);
       onChanged?.();
     } catch (err) {
       console.error("Failed to delete comment:", err);
-      toast.error("Failed to delete comment");
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete comment");
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -83,42 +82,32 @@ export default function CommentItem({
   const handleUndelete = async () => {
     setIsUndeleting(true);
     try {
-      const res = await fetch(`/api/comments/${comment.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_deleted: false }),
-      });
-
-      if (!res.ok) throw new Error("Failed to undelete comment");
-
+      await apiPatch(`/api/comments/${comment.id}`, { is_deleted: false });
       onChanged?.();
     } catch (err) {
       console.error("Failed to undelete comment:", err);
-      toast.error("Failed to undelete comment");
+      toast.error(err instanceof ApiError ? err.message : "Failed to undelete comment");
     } finally {
       setIsUndeleting(false);
     }
   };
 
-  const handleRemove = async () => {
-    const reason = prompt("Reason for removal (optional):");
-    if (reason === null) return;
-
+  const handleConfirmRemove = async () => {
+    setIsRemoving(true);
     try {
-      const res = await fetch(`/api/comments/${comment.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_deleted: true, deletion_reason: reason }),
+      const result = await apiPatch<{ comment: { body: string } }>(`/api/comments/${comment.id}`, {
+        is_deleted: true,
+        deletion_reason: removeReason,
       });
-
-      if (!res.ok) throw new Error("Failed to remove comment");
-
-      const { comment: updatedComment } = await res.json();
-      onUpdate?.(comment.id, updatedComment.body);
+      onUpdate?.(comment.id, result.comment.body);
       onChanged?.();
+      setShowRemoveModal(false);
+      setRemoveReason("");
     } catch (err) {
       console.error("Failed to remove comment:", err);
-      toast.error("Failed to remove comment");
+      toast.error(err instanceof ApiError ? err.message : "Failed to remove comment");
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -171,7 +160,7 @@ export default function CommentItem({
             aria-label="Remove comment (moderator)"
             onClick={() => {
               menuRef.current?.close();
-              void handleRemove();
+              setShowRemoveModal(true);
             }}
             className="text-warning flex w-full items-center gap-3 px-4 py-3 text-base md:px-3 md:py-2 md:text-sm"
           >
@@ -320,6 +309,77 @@ export default function CommentItem({
           confirmationText="DELETE"
           isLoading={isDeleting}
         />
+
+        {showRemoveModal && (
+          <dialog
+            className="modal modal-open"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-comment-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowRemoveModal(false);
+                setRemoveReason("");
+              }
+            }}
+          >
+            <div className="modal-box">
+              <h3 id="remove-comment-title" className="text-warning text-lg font-bold">
+                Remove Comment
+              </h3>
+              <div className="py-4">
+                <p className="text-base-content/80 mb-2">
+                  Provide an optional reason for removing this comment:
+                </p>
+                <textarea
+                  value={removeReason}
+                  onChange={(e) => setRemoveReason(e.target.value)}
+                  placeholder="Reason (optional)"
+                  className="textarea textarea-bordered w-full"
+                  rows={3}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-action">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setShowRemoveModal(false);
+                    setRemoveReason("");
+                  }}
+                  disabled={isRemoving}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-warning"
+                  onClick={() => void handleConfirmRemove()}
+                  disabled={isRemoving}
+                >
+                  {isRemoving ? (
+                    <>
+                      <span className="loading loading-spinner loading-sm"></span>
+                      Removing...
+                    </>
+                  ) : (
+                    "Remove Comment"
+                  )}
+                </button>
+              </div>
+            </div>
+            <form method="dialog" className="modal-backdrop">
+              <button
+                onClick={() => {
+                  setShowRemoveModal(false);
+                  setRemoveReason("");
+                }}
+                aria-label="Close"
+              >
+                close
+              </button>
+            </form>
+          </dialog>
+        )}
       </div>
     </div>
   );

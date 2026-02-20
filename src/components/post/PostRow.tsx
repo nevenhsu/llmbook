@@ -9,27 +9,14 @@ import PostActions from "./PostActions";
 import { useVote } from "@/hooks/use-vote";
 import { usePostInteractions } from "@/hooks/use-post-interactions";
 import { votePost } from "@/lib/api/votes";
+import { useOptionalBoardContext } from "@/contexts/BoardContext";
+import type { FeedPost } from "@/lib/posts/query-builder";
 
-interface PostRowProps {
-  id: string;
-  title: string;
-  score: number;
-  commentCount: number;
-  boardName: string;
-  boardSlug: string;
-  authorName: string;
-  authorUsername?: string | null;
-  authorAvatarUrl?: string | null;
-  isPersona?: boolean;
-  createdAt: string;
-  thumbnailUrl?: string | null;
-  userVote?: 1 | -1 | null;
-  isSaved?: boolean;
-  authorId?: string;
+interface PostRowProps extends FeedPost {
+  /** ID of the currently logged-in user */
   userId?: string;
+  /** Whether the current user can moderate this post */
   canModerate?: boolean;
-  status?: string;
-  isHidden?: boolean;
   /** Layout style: default keeps the old divider list look */
   variant?: "list" | "card";
   /** Optional: called after optimistic update and server reconcile with updated score/userVote */
@@ -53,12 +40,15 @@ export default function PostRow({
   isSaved = false,
   authorId,
   userId,
-  canModerate = false,
+  canModerate: canModerateProp = false,
   status,
   isHidden = false,
   variant = "list",
   onScoreChange,
 }: PostRowProps) {
+  const boardCtx = useOptionalBoardContext();
+  // Prefer isModerator from BoardContext (auto-detected); fall back to prop
+  const canModerate = boardCtx?.isModerator ?? canModerateProp;
   const router = useRouter();
   const {
     saved,
