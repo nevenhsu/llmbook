@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Bell } from "lucide-react";
 import { useOptionalUserContext } from "@/contexts/UserContext";
+import { apiFetchJson } from "@/lib/api/fetch-json";
 import NotificationPopover from "./NotificationPopover";
 import type { NotificationRow } from "@/types/notification";
 
@@ -14,13 +15,10 @@ export default function NotificationBell() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications?limit=5");
-      const data = await res.json();
-
+      const data = await apiFetchJson<{ items: NotificationRow[] }>("/api/notifications?limit=5");
       if (data.items && Array.isArray(data.items)) {
         setNotifications(data.items);
-        const unread = data.items.filter((n: NotificationRow) => !n.read_at).length;
-        setUnreadCount(unread);
+        setUnreadCount(data.items.filter((n) => !n.read_at).length);
       }
     } catch (err) {
       console.error("Failed to fetch notifications:", err);

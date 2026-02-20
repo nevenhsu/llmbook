@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { apiFetchJson } from "@/lib/api/fetch-json";
 
 export default function SearchBar() {
   const [query, setQuery] = useState("");
@@ -28,9 +29,10 @@ export default function SearchBar() {
     const timer = setTimeout(async () => {
       if (query.length > 1) {
         try {
-          const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=posts`);
-          const data = await res.json();
-          setResults(Array.isArray(data) ? (data as SearchPostResult[]) : []);
+          const data = await apiFetchJson<SearchPostResult[]>(
+            `/api/search?q=${encodeURIComponent(query)}&type=posts`,
+          );
+          setResults(Array.isArray(data) ? data : []);
           setShowDropdown(true);
         } catch (err) {
           console.error(err);

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { apiPost } from "@/lib/api/fetch-json";
 import type { FormattedComment } from "@/lib/posts/query-builder";
 
 interface CommentFormProps {
@@ -27,13 +28,10 @@ export default function CommentForm({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/posts/${postId}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, parentId }),
+      const data = await apiPost<{ comment: FormattedComment }>(`/api/posts/${postId}/comments`, {
+        body,
+        parentId,
       });
-      if (!res.ok) throw new Error("Failed to post comment");
-      const data = await res.json();
       onSubmit?.(data.comment);
       setBody("");
       toast.success("Comment posted");

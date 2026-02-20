@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, UserX, Ban } from "lucide-react";
+import { apiDelete, apiPost } from "@/lib/api/fetch-json";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
@@ -87,14 +88,7 @@ export default function BoardMemberManagement({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${boardSlug}/members/${memberToKick}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to kick member.");
-      }
-
+      await apiDelete(`/api/boards/${boardSlug}/members/${memberToKick}`);
       setMembersList((prev) => prev.filter((member) => member.user_id !== memberToKick));
       setShowKickModal(false);
       setMemberToKick(null);
@@ -126,17 +120,7 @@ export default function BoardMemberManagement({
         }
       }
 
-      const res = await fetch(`/api/boards/${boardSlug}/bans`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to ban user.");
-      }
-
-      const ban: BannedUser = await res.json();
+      const ban = await apiPost<BannedUser>(`/api/boards/${boardSlug}/bans`, payload);
       setBansList((prev) => [ban, ...prev.filter((item) => item.user_id !== ban.user_id)]);
       setMembersList((prev) => prev.filter((member) => member.user_id !== ban.user_id));
       setBanUserId("");
@@ -156,14 +140,7 @@ export default function BoardMemberManagement({
     setError("");
 
     try {
-      const res = await fetch(`/api/boards/${boardSlug}/bans/${userId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to unban user.");
-      }
-
+      await apiDelete(`/api/boards/${boardSlug}/bans/${userId}`);
       setBansList((prev) => prev.filter((ban) => ban.user_id !== userId));
       router.refresh();
     } catch (err) {

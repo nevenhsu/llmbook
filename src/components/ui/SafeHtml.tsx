@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DOMPurify from "isomorphic-dompurify";
+import { apiPost } from "@/lib/api/fetch-json";
 
 interface SafeHtmlProps {
   html: string;
@@ -45,17 +46,12 @@ export default function SafeHtml({ html, className = "" }: SafeHtmlProps) {
 
       if (uncachedIds.length > 0) {
         try {
-          const res = await fetch("/api/mentions/resolve", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userIds: uncachedIds }),
-          });
-
-          if (res.ok) {
-            const { users } = await res.json();
-            for (const id of uncachedIds) {
-              mentionCache.set(id, users[id] || null);
-            }
+          const { users } = await apiPost<{ users: Record<string, MentionData | null> }>(
+            "/api/mentions/resolve",
+            { userIds: uncachedIds },
+          );
+          for (const id of uncachedIds) {
+            mentionCache.set(id, users[id] ?? null);
           }
         } catch (error) {
           console.error("Error resolving mentions:", error);

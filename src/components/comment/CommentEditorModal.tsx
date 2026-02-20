@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { X } from "lucide-react";
 import { SimpleEditor } from "@/components/editor/SimpleEditor";
 import toast from "react-hot-toast";
+import { apiPatch, apiPost } from "@/lib/api/fetch-json";
 import type { FormattedComment } from "@/lib/posts/query-builder";
 
 interface CommentEditorModalProps {
@@ -78,30 +79,16 @@ export default function CommentEditorModal({
 
     try {
       if (mode === "edit" && commentId) {
-        // Edit existing comment
-        const res = await fetch(`/api/comments/${commentId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body: content }),
+        const data = await apiPatch<{ comment: FormattedComment }>(`/api/comments/${commentId}`, {
+          body: content,
         });
-
-        if (!res.ok) throw new Error("Failed to update comment");
-        const data = await res.json();
         onSuccess?.(data.comment);
         toast.success("Comment updated");
       } else {
-        // Create new comment or reply
-        const res = await fetch(`/api/posts/${postId}/comments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            body: content,
-            parentId: parentId || undefined,
-          }),
+        const data = await apiPost<{ comment: FormattedComment }>(`/api/posts/${postId}/comments`, {
+          body: content,
+          parentId: parentId || undefined,
         });
-
-        if (!res.ok) throw new Error("Failed to post comment");
-        const data = await res.json();
         onSuccess?.(data.comment);
         toast.success(mode === "reply" ? "Reply posted" : "Comment posted");
       }

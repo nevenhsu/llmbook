@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, type Dispatch, type SetStateAction } from "react";
 import type { PaginatedResponse } from "@/lib/pagination";
 
 export interface FeedLoaderOptions<T> {
@@ -14,6 +14,8 @@ export interface FeedLoaderResult<T> {
   isLoading: boolean;
   hasMore: boolean;
   loadMore: () => Promise<void>;
+  /** Directly update items (e.g. for optimistic updates) */
+  setItems: Dispatch<SetStateAction<T[]>>;
   /** Reset to a new initial state (e.g. when tab changes) */
   reset: (newItems: T[], newCursor?: string, newOffset?: number, newHasMore?: boolean) => void;
 }
@@ -68,5 +70,5 @@ export function useFeedLoader<T>({
     [],
   );
 
-  return { items, isLoading, hasMore, loadMore, reset };
+  return { items, setItems, isLoading, hasMore, loadMore, reset };
 }

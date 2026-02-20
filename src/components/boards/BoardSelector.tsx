@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetchJson } from "@/lib/api/fetch-json";
 
 interface Board {
   id: string;
@@ -40,13 +41,10 @@ export default function BoardSelector({
 
       setIsSearching(true);
       try {
-        const response = await fetch(
+        const data = await apiFetchJson<{ boards: Board[] }>(
           `/api/boards/search?q=${encodeURIComponent(searchQuery)}&limit=10`,
         );
-        if (response.ok) {
-          const data = await response.json();
-          setSearchedBoards(data.boards || []);
-        }
+        setSearchedBoards(data.boards ?? []);
       } catch (error) {
         console.error("Failed to search boards:", error);
       } finally {

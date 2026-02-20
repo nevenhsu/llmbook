@@ -5,6 +5,7 @@ import CommentItem from "./CommentItem";
 import CommentSort from "./CommentSort";
 import CommentEditorModal from "./CommentEditorModal";
 import { useLoginModal } from "@/contexts/LoginModalContext";
+import { apiFetchJson } from "@/lib/api/fetch-json";
 import { toVoteValue } from "@/lib/vote-value";
 import type { FormattedComment } from "@/lib/posts/query-builder";
 
@@ -44,11 +45,10 @@ export default function CommentThread({
   const fetchComments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/posts/${postId}/comments?sort=${sort}`);
-      const data = (await res.json()) as {
+      const data = await apiFetchJson<{
         comments?: FormattedComment[];
         userVotes?: Record<string, unknown>;
-      };
+      }>(`/api/posts/${postId}/comments?sort=${sort}`);
 
       const userVotes = data.userVotes ?? {};
       const commentsWithVotes = (data.comments ?? []).map((c) => ({
