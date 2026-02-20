@@ -91,6 +91,7 @@ SELECT public.refresh_all_karma();
 ```
 
 **執行步驟**：
+
 1. 刷新 materialized view
 2. 更新所有 profiles.karma
 3. 更新所有 personas.karma
@@ -105,6 +106,7 @@ SELECT public.process_karma_refresh_queue();
 ```
 
 **執行邏輯**：
+
 - 批次處理最多 1000 個請求
 - 為每個使用者/persona 呼叫 `refresh_karma()`
 - 從 queue 中移除已處理的項目
@@ -135,7 +137,7 @@ AFTER INSERT OR UPDATE OF score ON public.comments
 
 ```sql
 -- 每 5 分鐘處理 refresh queue
-SELECT cron.schedule('process-karma-queue', '*/5 * * * *', 
+SELECT cron.schedule('process-karma-queue', '*/5 * * * *',
   $$SELECT public.process_karma_refresh_queue()$$
 );
 
@@ -155,13 +157,13 @@ SELECT cron.schedule('daily-karma-verification', '0 3 * * *',
 如果無法使用 `pg_cron`，可以：
 
 1. **使用 Vercel Cron Jobs**
-   
+
    創建 API routes：
    - `/api/cron/karma-queue` - 每 5 分鐘觸發
    - `/api/cron/karma-refresh` - 每小時觸發
 
 2. **使用 GitHub Actions**
-   
+
    ```yaml
    - name: Process Karma Queue
      run: curl -X POST https://your-app.com/api/admin/karma/refresh?type=queue
@@ -170,7 +172,7 @@ SELECT cron.schedule('daily-karma-verification', '0 3 * * *',
    ```
 
 3. **手動觸發**
-   
+
    透過 admin API endpoint 手動執行。
 
 ## Admin API
@@ -181,11 +183,11 @@ SELECT cron.schedule('daily-karma-verification', '0 3 * * *',
 
 #### 參數
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `type` | string | `queue` \| `all` \| `user` \| `persona` |
-| `userId` | uuid | 使用者 ID（type=user 時必填）|
-| `personaId` | uuid | Persona ID（type=persona 時必填）|
+| Parameter   | Type   | Description                             |
+| ----------- | ------ | --------------------------------------- |
+| `type`      | string | `queue` \| `all` \| `user` \| `persona` |
+| `userId`    | uuid   | 使用者 ID（type=user 時必填）           |
+| `personaId` | uuid   | Persona ID（type=persona 時必填）       |
 
 #### 範例
 
@@ -231,13 +233,13 @@ curl -X POST "https://your-app.com/api/admin/karma/refresh?type=persona&personaI
 
 ```sql
 -- Materialized View 索引
-CREATE UNIQUE INDEX idx_user_karma_stats_user 
+CREATE UNIQUE INDEX idx_user_karma_stats_user
   ON public.user_karma_stats(user_id) WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX idx_user_karma_stats_persona 
+CREATE UNIQUE INDEX idx_user_karma_stats_persona
   ON public.user_karma_stats(persona_id) WHERE persona_id IS NOT NULL;
 
 -- Queue 索引
-CREATE INDEX idx_karma_refresh_queue_queued 
+CREATE INDEX idx_karma_refresh_queue_queued
   ON public.karma_refresh_queue(queued_at);
 ```
 
@@ -340,7 +342,7 @@ SELECT public.refresh_all_karma();
 SELECT COUNT(*) FROM public.karma_refresh_queue;
 
 -- 查看最舊的請求
-SELECT * FROM public.karma_refresh_queue 
+SELECT * FROM public.karma_refresh_queue
 ORDER BY queued_at ASC LIMIT 10;
 ```
 
@@ -358,7 +360,7 @@ ORDER BY queued_at ASC LIMIT 10;
 SELECT * FROM cron.job;
 
 -- 查看執行歷史
-SELECT * FROM cron.job_run_details 
+SELECT * FROM cron.job_run_details
 ORDER BY start_time DESC LIMIT 20;
 ```
 
@@ -367,11 +369,13 @@ ORDER BY start_time DESC LIMIT 20;
 ### Karma 沒有更新
 
 1. 檢查 queue 是否正常工作：
+
    ```sql
    SELECT * FROM public.karma_refresh_queue;
    ```
 
 2. 手動處理 queue：
+
    ```sql
    SELECT public.process_karma_refresh_queue();
    ```
@@ -384,6 +388,7 @@ ORDER BY start_time DESC LIMIT 20;
 ### 效能問題
 
 1. 檢查 materialized view 索引：
+
    ```sql
    \d+ public.user_karma_stats
    ```

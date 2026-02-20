@@ -60,15 +60,16 @@ function PostVoteButtons({ post }: { post: Post }) {
 
 ```typescript
 interface UseVoteOptions {
-  id: string;                      // Post or comment ID
-  initialScore: number;            // Initial score from server
-  initialUserVote: 1 | -1 | null;  // User's current vote
-  voteFn: VoteFn;                  // API function (votePost or voteComment)
-  disabled?: boolean;              // Disable voting (e.g., archived posts)
-  onScoreChange?: (                // Callback after server confirms
+  id: string; // Post or comment ID
+  initialScore: number; // Initial score from server
+  initialUserVote: 1 | -1 | null; // User's current vote
+  voteFn: VoteFn; // API function (votePost or voteComment)
+  disabled?: boolean; // Disable voting (e.g., archived posts)
+  onScoreChange?: (
+    // Callback after server confirms
     id: string,
     score: number,
-    userVote: 1 | -1 | null
+    userVote: 1 | -1 | null,
   ) => void;
 }
 
@@ -79,11 +80,11 @@ type VoteFn = (id: string, value: 1 | -1) => Promise<VoteResponse>;
 
 ```typescript
 interface UseVoteReturn {
-  score: number;              // Current score (optimistic)
-  userVote: 1 | -1 | null;    // User's vote (optimistic)
-  isVoting: boolean;          // Loading state
+  score: number; // Current score (optimistic)
+  userVote: 1 | -1 | null; // User's vote (optimistic)
+  isVoting: boolean; // Loading state
   handleVote: (value: 1 | -1) => Promise<void>; // Vote handler
-  voteDisabled: boolean;      // Combined: isVoting || disabled
+  voteDisabled: boolean; // Combined: isVoting || disabled
 }
 ```
 
@@ -95,10 +96,10 @@ Use the provided API functions from `@/lib/api/votes`:
 import { votePost, voteComment } from "@/lib/api/votes";
 
 // For posts
-voteFn: votePost
+voteFn: votePost;
 
 // For comments
-voteFn: voteComment
+voteFn: voteComment;
 ```
 
 ## Behavior Details
@@ -106,6 +107,7 @@ voteFn: voteComment
 ### Optimistic Updates
 
 When user clicks vote:
+
 1. **Immediate UI update**: Score and userVote update instantly
 2. **API call**: Request sent to server in background
 3. **Server reconciliation**: Score updated with server value on success
@@ -113,14 +115,14 @@ When user clicks vote:
 
 ### Vote Toggle Logic
 
-| Current Vote | New Vote | Result |
-|--------------|----------|--------|
-| `null` (no vote) | `1` (upvote) | Upvoted, score +1 |
-| `null` | `-1` (downvote) | Downvoted, score -1 |
-| `1` (upvoted) | `1` (upvote again) | Removed vote, score -1 |
-| `-1` (downvoted) | `-1` (downvote again) | Removed vote, score +1 |
-| `1` (upvoted) | `-1` (downvote) | Changed to downvote, score -2 |
-| `-1` (downvoted) | `1` (upvote) | Changed to upvote, score +2 |
+| Current Vote     | New Vote              | Result                        |
+| ---------------- | --------------------- | ----------------------------- |
+| `null` (no vote) | `1` (upvote)          | Upvoted, score +1             |
+| `null`           | `-1` (downvote)       | Downvoted, score -1           |
+| `1` (upvoted)    | `1` (upvote again)    | Removed vote, score -1        |
+| `-1` (downvoted) | `-1` (downvote again) | Removed vote, score +1        |
+| `1` (upvoted)    | `-1` (downvote)       | Changed to downvote, score -2 |
+| `-1` (downvoted) | `1` (upvote)          | Changed to upvote, score +2   |
 
 This logic is handled by `applyVote` from `@/lib/optimistic/vote`.
 
@@ -138,15 +140,16 @@ The hook uses a sequence counter to ignore stale responses:
 
 ### Error Handling
 
-| Error | Behavior |
-|-------|----------|
+| Error                | Behavior                                |
+| -------------------- | --------------------------------------- |
 | **401 Unauthorized** | Opens login modal (via `useLoginModal`) |
-| **Network error** | Shows toast: "Failed to vote", rollback |
-| **Other errors** | Shows toast: "Failed to vote", rollback |
+| **Network error**    | Shows toast: "Failed to vote", rollback |
+| **Other errors**     | Shows toast: "Failed to vote", rollback |
 
 ### Disabled State
 
 When `disabled={true}` or `isVoting={true}`:
+
 - Vote buttons should be disabled
 - Click handlers return early
 - No API calls made
@@ -217,21 +220,13 @@ function PostList() {
 
   const handleScoreChange = (id: string, score: number, userVote: 1 | -1 | null) => {
     // Update post in parent list after server confirms
-    setPosts(prev =>
-      prev.map(p =>
-        p.id === id ? { ...p, score, user_vote: userVote } : p
-      )
-    );
+    setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, score, user_vote: userVote } : p)));
   };
 
   return (
     <div>
-      {posts.map(post => (
-        <PostCard
-          key={post.id}
-          post={post}
-          onScoreChange={handleScoreChange}
-        />
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} onScoreChange={handleScoreChange} />
       ))}
     </div>
   );
@@ -306,6 +301,7 @@ const { score } = useVote({
 Located at: `src/hooks/use-vote.ts:1`
 
 Key dependencies:
+
 - `@/lib/optimistic/vote` - Vote calculation logic
 - `@/lib/api/votes` - API functions (votePost, voteComment)
 - `@/contexts/LoginModalContext` - Login prompt on 401

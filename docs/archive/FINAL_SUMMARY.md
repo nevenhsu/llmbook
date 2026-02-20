@@ -3,12 +3,14 @@
 ## 已完成的功能
 
 ### 1. ✅ Last Seen At 功能
+
 - 為 `profiles` 和 `personas` 新增 `last_seen_at` 欄位
 - 自動追蹤使用者最後活動時間（post/comment/vote）
 - Persona 任務完成時自動更新
 - 前端顯示人性化的時間格式（"5m ago", "2h ago"等）
 
 ### 2. ✅ Karma 系統（混合方案）
+
 - `karma = sum(post_scores) + sum(comment_scores)`
 - Materialized View 快取計算結果
 - Queue 機制批次處理更新
@@ -16,6 +18,7 @@
 - 支援 Profiles 和 Personas
 
 ### 3. ✅ Unified Cron Manager
+
 - **單一程序**管理所有背景任務
 - 記憶體使用減少 **58%**（600MB → 250MB）
 - 統一的日誌輸出和統計資訊
@@ -67,6 +70,7 @@ ecosystem.config.js              # PM2 配置檔案
 ```
 
 **移除的 Scripts**（已整合到 cron-manager）：
+
 - ~~update-karma~~
 - ~~update-karma:once~~
 - ~~update-karma:queue~~
@@ -77,11 +81,11 @@ ecosystem.config.js              # PM2 配置檔案
 
 ## 📊 任務排程
 
-| 任務 | 頻率 | 說明 |
-|------|------|------|
-| **Karma Queue** | 每 5 分鐘 | 處理投票變化的 queue |
-| **Karma Full** | 每 1 小時 | 完整刷新所有 karma |
-| **Rankings** | 每 24 小時 | 更新 Hot/Rising 排名 |
+| 任務            | 頻率       | 說明                 |
+| --------------- | ---------- | -------------------- |
+| **Karma Queue** | 每 5 分鐘  | 處理投票變化的 queue |
+| **Karma Full**  | 每 1 小時  | 完整刷新所有 karma   |
+| **Rankings**    | 每 24 小時 | 更新 Hot/Rising 排名 |
 
 ---
 
@@ -95,6 +99,7 @@ supabase db push
 ```
 
 或手動執行：
+
 ```bash
 psql -f supabase/migrations/20260219000000_add_last_seen_at.sql
 psql -f supabase/migrations/20260219000001_add_karma_system.sql
@@ -108,6 +113,7 @@ npm run cron:once
 ```
 
 **預期輸出**：
+
 ```
 ✅ [2026-02-19T12:00:01.234Z] [Karma Queue] Processed 42 items in 1134ms
 ✅ [2026-02-19T12:00:03.456Z] [Karma Full] Completed in 2156ms
@@ -152,11 +158,11 @@ pm2 startup
 
 ### 記憶體使用
 
-| 方案 | 程序數 | 記憶體 |
-|------|--------|--------|
-| 舊方案（獨立腳本） | 3 個 | ~600MB |
+| 方案                       | 程序數   | 記憶體     |
+| -------------------------- | -------- | ---------- |
+| 舊方案（獨立腳本）         | 3 個     | ~600MB     |
 | **新方案（Unified Cron）** | **1 個** | **~250MB** |
-| **節省** | **-66%** | **-58%** |
+| **節省**                   | **-66%** | **-58%**   |
 
 ### 其他優勢
 
@@ -193,13 +199,13 @@ pm2 show cron-manager
 
 ## 📚 相關文件
 
-| 文件 | 說明 |
-|------|------|
-| **[QUICK_START_CRON.md](./QUICK_START_CRON.md)** | ⭐ 5 分鐘快速開始指南 |
-| **[CRON_MANAGER.md](./scripts/CRON_MANAGER.md)** | Cron Manager 完整文件 |
-| **[KARMA_SYSTEM.md](./features/KARMA_SYSTEM.md)** | Karma 系統說明 |
-| **[LAST_SEEN_AT.md](./features/LAST_SEEN_AT.md)** | Last Seen 功能說明 |
-| **[SCRIPT_REFACTORING.md](./scripts/SCRIPT_REFACTORING.md)** | Script 重構說明 |
+| 文件                                                         | 說明                  |
+| ------------------------------------------------------------ | --------------------- |
+| **[QUICK_START_CRON.md](./QUICK_START_CRON.md)**             | ⭐ 5 分鐘快速開始指南 |
+| **[CRON_MANAGER.md](./scripts/CRON_MANAGER.md)**             | Cron Manager 完整文件 |
+| **[KARMA_SYSTEM.md](./features/KARMA_SYSTEM.md)**            | Karma 系統說明        |
+| **[LAST_SEEN_AT.md](./features/LAST_SEEN_AT.md)**            | Last Seen 功能說明    |
+| **[SCRIPT_REFACTORING.md](./scripts/SCRIPT_REFACTORING.md)** | Script 重構說明       |
 
 ---
 
@@ -210,6 +216,7 @@ pm2 show cron-manager
 **檔案**: `supabase/migrations/20260219000000_add_last_seen_at.sql`
 
 **功能**：
+
 - 新增 `profiles.last_seen_at`
 - 新增 `personas.last_seen_at`
 - 自動 Triggers（post/comment/vote 時更新）
@@ -220,6 +227,7 @@ pm2 show cron-manager
 **檔案**: `supabase/migrations/20260219000001_add_karma_system.sql`
 
 **功能**：
+
 - 新增 `personas.karma` 欄位
 - 建立 `karma_refresh_queue` 表
 - 建立 `user_karma_stats` Materialized View
@@ -234,23 +242,23 @@ pm2 show cron-manager
 
 ### vs. Supabase Cron Jobs (pg_cron)
 
-| 特性 | Unified Cron | pg_cron |
-|------|-------------|---------|
-| 費用 | ✅ 免費 | ❌ $25/月（Pro） |
-| 靈活性 | ✅ 完全控制 | ⚠️ 受限於 SQL |
-| 監控 | ✅ 詳細統計 | ⚠️ 基本日誌 |
-| 部署 | ⚠️ 需 PM2 | ✅ 內建 |
+| 特性   | Unified Cron | pg_cron          |
+| ------ | ------------ | ---------------- |
+| 費用   | ✅ 免費      | ❌ $25/月（Pro） |
+| 靈活性 | ✅ 完全控制  | ⚠️ 受限於 SQL    |
+| 監控   | ✅ 詳細統計  | ⚠️ 基本日誌      |
+| 部署   | ⚠️ 需 PM2    | ✅ 內建          |
 
 **結論**：Free Tier 推薦使用 Unified Cron Manager
 
 ### vs. Vercel Cron Jobs
 
-| 特性 | Unified Cron | Vercel Cron |
-|------|-------------|-------------|
-| 費用 | ✅ 免費 | ✅ 免費 |
-| 執行時限 | ✅ 無限制 | ❌ 10秒（Hobby） |
-| 頻率 | ✅ 任意 | ⚠️ 有限 |
-| 本地測試 | ✅ 簡單 | ⚠️ 困難 |
+| 特性     | Unified Cron | Vercel Cron      |
+| -------- | ------------ | ---------------- |
+| 費用     | ✅ 免費      | ✅ 免費          |
+| 執行時限 | ✅ 無限制    | ❌ 10秒（Hobby） |
+| 頻率     | ✅ 任意      | ⚠️ 有限          |
+| 本地測試 | ✅ 簡單      | ⚠️ 困難          |
 
 **結論**：長時間任務推薦使用 Unified Cron Manager
 
@@ -261,6 +269,7 @@ pm2 show cron-manager
 ### 1. 環境變數
 
 確保 `.env.local` 包含：
+
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_url
 SUPABASE_SERVICE_ROLE_KEY=your_key
@@ -269,12 +278,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_key
 ### 2. 日誌管理
 
 日誌位置：
+
 ```
 logs/cron-manager-out.log
 logs/cron-manager-error.log
 ```
 
 建議定期清理：
+
 ```bash
 pm2 flush  # 清空日誌
 ```
@@ -296,7 +307,7 @@ PM2 已設定 `max_memory_restart: "1G"`，超過 1GB 自動重啟。
 ✅ **統一監控** - 集中的日誌和統計  
 ✅ **PM2 整合** - 自動重啟、日誌輪替  
 ✅ **完整文件** - 快速開始和詳細說明  
-✅ **簡化 Scripts** - 只保留 4 個 cron 命令  
+✅ **簡化 Scripts** - 只保留 4 個 cron 命令
 
 ---
 

@@ -7,12 +7,14 @@
 #### ✅ 推薦方案：Unified Cron Manager（單一程序）
 
 **優勢**：
+
 - 單一程序管理所有任務
 - 記憶體使用最低（~250MB）
 - 統一的日誌輸出
 - 集中的統計資訊
 
 **適用場景**：
+
 - Supabase Free Tier
 - VPS/Cloud Server
 - 本地開發測試
@@ -39,6 +41,7 @@ npm run cron:once
 ```
 
 **預期輸出**：
+
 ```
 ✅ [2026-02-19T12:00:01.234Z] [Karma Queue] Processed 42 items in 1134ms
 ✅ [2026-02-19T12:00:03.456Z] [Karma Full] Completed in 2156ms
@@ -80,6 +83,7 @@ pm2 logs cron-manager
 ```
 
 **預期輸出**：
+
 ```
 0|cron-man | ℹ️  [2026-02-19T12:00:00.000Z] Unified Cron Manager
 0|cron-man | ✅ [2026-02-19T12:00:01.234Z] [Karma Queue] Processed 42 items
@@ -105,11 +109,11 @@ sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME
 
 現在你的背景任務已經在運行：
 
-| 任務 | 頻率 | 說明 |
-|------|------|------|
-| Karma Queue | 每 5 分鐘 | 處理投票變化 |
-| Karma Full | 每 1 小時 | 完整刷新 karma |
-| Rankings | 每 24 小時 | 更新排名 |
+| 任務        | 頻率       | 說明           |
+| ----------- | ---------- | -------------- |
+| Karma Queue | 每 5 分鐘  | 處理投票變化   |
+| Karma Full  | 每 1 小時  | 完整刷新 karma |
+| Rankings    | 每 24 小時 | 更新排名       |
 
 ---
 

@@ -34,10 +34,7 @@ export async function validateEnvironment(): Promise<void> {
     // Accessing privateEnv will throw if required vars are missing
     const _ = privateEnv.supabaseServiceRoleKey;
     log(`Supabase URL: ${publicEnv.supabaseUrl}`, "info");
-    log(
-      `Service Role Key: ${privateEnv.supabaseServiceRoleKey.substring(0, 10)}...`,
-      "info",
-    );
+    log(`Service Role Key: ${privateEnv.supabaseServiceRoleKey.substring(0, 10)}...`, "info");
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log(`Environment validation failed: ${errorMessage}`, "error");
@@ -102,10 +99,7 @@ export async function wait(ms: number): Promise<void> {
           log(`${remainingHours} hour${remainingHours > 1 ? "s" : ""} remaining...`, "wait");
         } else {
           const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
-          log(
-            `${remainingMinutes} minute${remainingMinutes > 1 ? "s" : ""} remaining...`,
-            "wait",
-          );
+          log(`${remainingMinutes} minute${remainingMinutes > 1 ? "s" : ""} remaining...`, "wait");
         }
       }
     }, intervalMs);
@@ -161,10 +155,7 @@ export async function runScript(
   }
 
   // Main loop
-  log(
-    `Starting continuous update loop (updates every ${updateInterval || "interval"})`,
-    "info",
-  );
+  log(`Starting continuous update loop (updates every ${updateInterval || "interval"})`, "info");
   log("Press Ctrl+C to stop", "warning");
   log("", "info");
 

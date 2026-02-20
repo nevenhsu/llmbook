@@ -19,21 +19,19 @@ export default function FollowingPreviewPage() {
   // Mock follow toggle
   const handleFollowToggle = (userId: string, isFollowing: boolean) => {
     setFollowing((prev) =>
-      prev.map((user) =>
-        user.userId === userId ? { ...user, isFollowing } : user
-      )
+      prev.map((user) => (user.userId === userId ? { ...user, isFollowing } : user)),
     );
   };
 
   // Filter following based on search query
   const filteredFollowing = useMemo(() => {
     if (!searchQuery.trim()) return following;
-    
+
     const searchLower = searchQuery.toLowerCase();
     return following.filter(
       (user) =>
         user.username.toLowerCase().includes(searchLower) ||
-        user.displayName.toLowerCase().includes(searchLower)
+        user.displayName.toLowerCase().includes(searchLower),
     );
   }, [following, searchQuery]);
 
@@ -80,7 +78,9 @@ export default function FollowingPreviewPage() {
         <div className="flex items-center gap-2">
           <UserPlus size={20} className="text-base-content/70" />
           <span className="text-base-content text-sm font-bold">
-            Following {searchQuery ? `${filteredFollowing.length} of ${following.length}` : following.length} users
+            Following{" "}
+            {searchQuery ? `${filteredFollowing.length} of ${following.length}` : following.length}{" "}
+            users
           </span>
         </div>
         <SearchBar
@@ -94,9 +94,7 @@ export default function FollowingPreviewPage() {
       {showEmpty ? (
         <div className="flex flex-col items-center justify-center py-12">
           <UserPlus size={48} className="text-base-content/30 mb-4" />
-          <h3 className="text-base-content mb-2 text-lg font-semibold">
-            Not following anyone yet
-          </h3>
+          <h3 className="text-base-content mb-2 text-lg font-semibold">Not following anyone yet</h3>
           <p className="text-base-content/60 text-center text-sm">
             When this user follows people, they'll appear here
           </p>
@@ -149,21 +147,23 @@ export default function FollowingPreviewPage() {
         </h2>
         <div className="text-base-content/70 space-y-2 text-sm">
           <div>
-            <code className="bg-base-300 rounded px-2 py-1">
-              GET /api/users/[userId]/following
-            </code>
+            <code className="bg-base-300 rounded px-2 py-1">GET /api/users/[userId]/following</code>
           </div>
           <div className="mt-2">
             <strong>Query Parameters:</strong>
-            <ul className="ml-4 mt-1 list-disc">
-              <li><code>cursor</code> - Pagination cursor (ISO timestamp)</li>
-              <li><code>limit</code> - Number of items per page (default: 20, max: 50)</li>
+            <ul className="mt-1 ml-4 list-disc">
+              <li>
+                <code>cursor</code> - Pagination cursor (ISO timestamp)
+              </li>
+              <li>
+                <code>limit</code> - Number of items per page (default: 20, max: 50)
+              </li>
             </ul>
           </div>
           <div className="mt-2">
             <strong>Response:</strong>
             <pre className="bg-base-300 mt-1 overflow-x-auto rounded p-2 text-xs">
-{`{
+              {`{
   "items": [
     {
       "userId": "uuid",
@@ -196,18 +196,22 @@ export default function FollowingPreviewPage() {
             <strong>Following:</strong> People that <em>this user</em> follows
           </div>
           <div className="mt-2">
-            <code className="bg-base-300 text-xs rounded px-2 py-1">
+            <code className="bg-base-300 rounded px-2 py-1 text-xs">
               GET /api/users/[userId]/followers
             </code>
             {" → "}
-            <span className="text-xs">Query: <code>following_id = userId</code></span>
+            <span className="text-xs">
+              Query: <code>following_id = userId</code>
+            </span>
           </div>
           <div>
-            <code className="bg-base-300 text-xs rounded px-2 py-1">
+            <code className="bg-base-300 rounded px-2 py-1 text-xs">
               GET /api/users/[userId]/following
             </code>
             {" → "}
-            <span className="text-xs">Query: <code>follower_id = userId</code></span>
+            <span className="text-xs">
+              Query: <code>follower_id = userId</code>
+            </span>
           </div>
         </div>
       </div>

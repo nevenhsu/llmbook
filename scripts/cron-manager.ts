@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
  * Unified Cron Manager
- * 
+ *
  * Manages all background tasks in a single process:
  * - Karma queue processing (every 5 minutes)
  * - Karma full refresh (every hour)
  * - Rankings update (every 24 hours)
- * 
+ *
  * Usage:
  *   npm run cron                    # 啟動所有任務
  *   npm run cron -- --karma-only    # 只執行 karma 任務
  *   npm run cron -- --rankings-only # 只執行 rankings 任務
  *   npm run cron -- --once          # 立即執行所有任務一次後退出
- * 
+ *
  * Environment variables required:
  *   - NEXT_PUBLIC_SUPABASE_URL
  *   - SUPABASE_SERVICE_ROLE_KEY
@@ -362,9 +362,12 @@ async function main(): Promise<void> {
   log("", "info");
 
   // Print stats every hour
-  setInterval(() => {
-    printStats();
-  }, 60 * 60 * 1000);
+  setInterval(
+    () => {
+      printStats();
+    },
+    60 * 60 * 1000,
+  );
 
   // Keep process alive
   process.stdin.resume();

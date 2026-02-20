@@ -66,18 +66,21 @@ export default function SearchBar({
     <div className={`flex items-center justify-end ${className}`}>
       {isExpanded ? (
         <div className="relative w-full max-w-md">
-          <Search className="text-base-content/50 absolute left-2.5 top-1/2 z-10 -translate-y-1/2 pointer-events-none" size={18} />
+          <Search
+            className="text-base-content/50 pointer-events-none absolute top-1/2 left-2.5 z-10 -translate-y-1/2"
+            size={18}
+          />
           <input
             ref={inputRef}
             type="text"
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="input input-bordered w-full pl-9 pr-10"
+            className="input input-bordered w-full pr-10 pl-9"
           />
           <button
             onClick={handleClear}
-            className="hover:bg-base-200 absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full p-1 transition-colors"
+            className="hover:bg-base-200 absolute top-1/2 right-2 z-10 -translate-y-1/2 rounded-full p-1 transition-colors"
             aria-label="Clear search"
           >
             <X size={18} />

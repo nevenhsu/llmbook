@@ -5,41 +5,46 @@ Custom React hooks for common functionality and patterns.
 ## Categories
 
 ### 🎯 User Interactions
-| Hook | Purpose | Documentation |
-|------|---------|---------------|
-| `useVote` | Vote on posts/comments with optimistic updates | [use-vote.md](./use-vote.md) |
-| `usePostInteractions` | Save/hide posts | [use-post-interactions.md](./use-post-interactions.md) |
+
+| Hook                  | Purpose                                        | Documentation                                          |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------------ |
+| `useVote`             | Vote on posts/comments with optimistic updates | [use-vote.md](./use-vote.md)                           |
+| `usePostInteractions` | Save/hide posts                                | [use-post-interactions.md](./use-post-interactions.md) |
 
 ### 🎨 UI & Display
-| Hook | Purpose | File |
-|------|---------|------|
-| `useInfiniteScroll` | Infinite scroll pagination | [use-infinite-scroll.md](./use-infinite-scroll.md) |
-| `useTheme` | Theme management (light/dark/system) | `src/hooks/use-theme.ts` |
-| `useWindowSize` | Responsive window dimensions | `src/hooks/use-window-size.ts` |
-| `useIsBreakpoint` | Tailwind breakpoint detection | `src/hooks/use-is-breakpoint.ts` |
-| `useElementRect` | Element dimensions tracking | `src/hooks/use-element-rect.ts` |
-| `useCursorVisibility` | Track cursor visibility state | `src/hooks/use-cursor-visibility.ts` |
-| `useScrolling` | Detect scrolling state | `src/hooks/use-scrolling.ts` |
-| `useMenuNavigation` | Keyboard navigation for menus | `src/hooks/use-menu-navigation.ts` |
+
+| Hook                  | Purpose                              | File                                               |
+| --------------------- | ------------------------------------ | -------------------------------------------------- |
+| `useInfiniteScroll`   | Infinite scroll pagination           | [use-infinite-scroll.md](./use-infinite-scroll.md) |
+| `useTheme`            | Theme management (light/dark/system) | `src/hooks/use-theme.ts`                           |
+| `useWindowSize`       | Responsive window dimensions         | `src/hooks/use-window-size.ts`                     |
+| `useIsBreakpoint`     | Tailwind breakpoint detection        | `src/hooks/use-is-breakpoint.ts`                   |
+| `useElementRect`      | Element dimensions tracking          | `src/hooks/use-element-rect.ts`                    |
+| `useCursorVisibility` | Track cursor visibility state        | `src/hooks/use-cursor-visibility.ts`               |
+| `useScrolling`        | Detect scrolling state               | `src/hooks/use-scrolling.ts`                       |
+| `useMenuNavigation`   | Keyboard navigation for menus        | `src/hooks/use-menu-navigation.ts`                 |
 
 ### ✏️ Editors
-| Hook | Purpose | File |
-|------|---------|------|
+
+| Hook              | Purpose                   | File                             |
+| ----------------- | ------------------------- | -------------------------------- |
 | `useTiptapEditor` | Rich text editor (TipTap) | `src/hooks/use-tiptap-editor.ts` |
-| `useRulesEditor` | Board rules editor | `src/hooks/use-rules-editor.ts` |
+| `useRulesEditor`  | Board rules editor        | `src/hooks/use-rules-editor.ts`  |
 
 ### 📊 Data Fetching
-| Hook | Purpose | File |
-|------|---------|------|
+
+| Hook             | Purpose                 | File                            |
+| ---------------- | ----------------------- | ------------------------------- |
 | `useProfileData` | Fetch user profile data | `src/hooks/use-profile-data.ts` |
-| `useUserList` | Fetch user lists | `src/hooks/use-user-list.ts` |
+| `useUserList`    | Fetch user lists        | `src/hooks/use-user-list.ts`    |
 
 ### 🛠️ Utilities
-| Hook | Purpose | File |
-|------|---------|------|
+
+| Hook                   | Purpose                     | File                                  |
+| ---------------------- | --------------------------- | ------------------------------------- |
 | `useThrottledCallback` | Throttle callback execution | `src/hooks/use-throttled-callback.ts` |
-| `useUnmount` | Run cleanup on unmount | `src/hooks/use-unmount.ts` |
-| `useComposedRef` | Compose multiple refs | `src/hooks/use-composed-ref.ts` |
+| `useUnmount`           | Run cleanup on unmount      | `src/hooks/use-unmount.ts`            |
+| `useComposedRef`       | Compose multiple refs       | `src/hooks/use-composed-ref.ts`       |
 
 ## Quick Examples
 
@@ -60,17 +65,11 @@ function PostVoteButtons({ post }: { post: Post }) {
 
   return (
     <div>
-      <button 
-        onClick={() => handleVote(1)} 
-        disabled={voteDisabled}
-      >
+      <button onClick={() => handleVote(1)} disabled={voteDisabled}>
         ▲ {userVote === 1 ? "Upvoted" : "Upvote"}
       </button>
       <span>{score}</span>
-      <button 
-        onClick={() => handleVote(-1)} 
-        disabled={voteDisabled}
-      >
+      <button onClick={() => handleVote(-1)} disabled={voteDisabled}>
         ▼ {userVote === -1 ? "Downvoted" : "Downvote"}
       </button>
     </div>
@@ -93,9 +92,7 @@ function PostActions({ postId, initialSaved }: Props) {
 
   return (
     <div>
-      <button onClick={handleSave}>
-        {saved ? "Unsave" : "Save"}
-      </button>
+      <button onClick={handleSave}>{saved ? "Unsave" : "Save"}</button>
       <button onClick={handleHide}>Hide</button>
     </div>
   );
@@ -112,7 +109,9 @@ function PostList({ posts, hasMore, isLoading, loadMore }: Props) {
 
   return (
     <div>
-      {posts.map(post => <PostCard key={post.id} post={post} />)}
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
       <div ref={sentinelRef} />
       {isLoading && <Spinner />}
     </div>
@@ -144,11 +143,7 @@ import { useIsBreakpoint } from "@/hooks/use-is-breakpoint";
 function ResponsiveComponent() {
   const isMobile = useIsBreakpoint("md", "max"); // max-width: md
 
-  return (
-    <div>
-      {isMobile ? <MobileView /> : <DesktopView />}
-    </div>
-  );
+  return <div>{isMobile ? <MobileView /> : <DesktopView />}</div>;
 }
 ```
 
@@ -157,6 +152,7 @@ function ResponsiveComponent() {
 ### When to Create a Custom Hook
 
 Create a custom hook when:
+
 1. **Reusable logic**: Used in 2+ components
 2. **Complex state management**: Multiple useState/useEffect interactions
 3. **Side effects**: API calls, subscriptions, timers
@@ -191,17 +187,14 @@ interface UseFeatureReturn {
   refetch: () => Promise<void>;
 }
 
-export function useFeature({
-  id,
-  enabled = true,
-}: UseFeatureOptions): UseFeatureReturn {
+export function useFeature({ id, enabled = true }: UseFeatureOptions): UseFeatureReturn {
   const [data, setData] = useState<Data | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const refetch = useCallback(async () => {
     if (!enabled) return;
-    
+
     setIsLoading(true);
     try {
       const result = await fetchData(id);
@@ -238,10 +231,10 @@ See: [useVote](./use-vote.md) for full example
 const handleAction = async () => {
   // 1. Save previous state
   const previous = state;
-  
+
   // 2. Update optimistically
   setState(newState);
-  
+
   try {
     // 3. Call API
     await apiCall();

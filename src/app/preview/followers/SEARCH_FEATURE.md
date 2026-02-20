@@ -9,6 +9,7 @@ Both followers and following lists now support **real-time search functionality*
 ## 🔍 Search Features
 
 ### User Experience
+
 - **Real-time filtering** - Results update as you type
 - **Debounced search** - 300ms delay to reduce API calls
 - **Case-insensitive** - Matches regardless of case
@@ -16,6 +17,7 @@ Both followers and following lists now support **real-time search functionality*
 - **Search scope** - Searches both username and display name
 
 ### UI Components
+
 ```tsx
 // Search bar with icon and clear button
 <div className="relative">
@@ -42,6 +44,7 @@ Both followers and following lists now support **real-time search functionality*
 ### Endpoints Updated
 
 #### GET `/api/users/[userId]/followers`
+
 ```typescript
 // Query Parameters
 {
@@ -52,6 +55,7 @@ Both followers and following lists now support **real-time search functionality*
 ```
 
 #### GET `/api/users/[userId]/following`
+
 ```typescript
 // Query Parameters
 {
@@ -64,6 +68,7 @@ Both followers and following lists now support **real-time search functionality*
 ### Search Implementation
 
 **Backend (API Route):**
+
 ```typescript
 // 1. Extract search parameter
 const search = searchParams.get("search")?.trim();
@@ -74,12 +79,13 @@ if (search) {
   users = users.filter(
     (user) =>
       user.username.toLowerCase().includes(searchLower) ||
-      user.displayName.toLowerCase().includes(searchLower)
+      user.displayName.toLowerCase().includes(searchLower),
   );
 }
 ```
 
 **Frontend (React Component):**
+
 ```typescript
 // 1. State management
 const [searchQuery, setSearchQuery] = useState("");
@@ -112,21 +118,23 @@ if (debouncedSearch) params.set("search", debouncedSearch);
 ## 🎯 Search Behavior
 
 ### What Gets Searched
+
 - ✅ **Username** (e.g., `alice_wonderland`)
 - ✅ **Display Name** (e.g., `Alice Wonderland`)
 
 ### Search Matching
+
 - **Partial match** - `"ali"` matches `"alice_wonderland"`
 - **Case-insensitive** - `"ALICE"` matches `"alice"`
 - **Substring search** - `"wonder"` matches `"alice_wonderland"`
 
 ### Examples
 
-| Search Query | Matches | Doesn't Match |
-|--------------|---------|---------------|
-| `"alice"` | `alice_wonderland`, `Alice Wonderland` | `bob_builder` |
-| `"wonder"` | `alice_wonderland`, `Alice Wonderland` | `charlie_chaplin` |
-| `"ai_"` | `ai_sophia`, `ai_einstein` | `alice_wonderland` |
+| Search Query | Matches                                | Doesn't Match      |
+| ------------ | -------------------------------------- | ------------------ |
+| `"alice"`    | `alice_wonderland`, `Alice Wonderland` | `bob_builder`      |
+| `"wonder"`   | `alice_wonderland`, `Alice Wonderland` | `charlie_chaplin`  |
+| `"ai_"`      | `ai_sophia`, `ai_einstein`             | `alice_wonderland` |
 
 ---
 
@@ -146,7 +154,7 @@ const loadMore = useCallback(async () => {
   if (nextCursor) params.set("cursor", nextCursor);
   if (debouncedSearch) params.set("search", debouncedSearch); // ← Search included
   params.set("limit", "20");
-  
+
   const res = await fetch(`/api/users/${userId}/followers?${params}`);
   // ...
 }, [userId, nextCursor, debouncedSearch]);
@@ -157,14 +165,17 @@ const loadMore = useCallback(async () => {
 ## 📊 Performance Considerations
 
 ### Current Implementation
+
 - **In-memory filtering** - Fetch all, filter in JavaScript
 - **Simple and fast** for small to medium lists (< 1000 items)
 - **No database changes required**
 
 ### Future Optimization (if needed)
+
 If the follower/following lists grow very large:
 
 1. **Database-level search:**
+
    ```sql
    -- Use Postgres ILIKE for case-insensitive search
    SELECT * FROM profiles
@@ -173,6 +184,7 @@ If the follower/following lists grow very large:
    ```
 
 2. **Full-text search:**
+
    ```sql
    -- Add tsvector column for better performance
    ALTER TABLE profiles
@@ -180,7 +192,7 @@ If the follower/following lists grow very large:
    GENERATED ALWAYS AS (
      to_tsvector('simple', username || ' ' || display_name)
    ) STORED;
-   
+
    CREATE INDEX idx_profiles_search ON profiles USING gin(search_vector);
    ```
 
@@ -189,6 +201,7 @@ If the follower/following lists grow very large:
 ## 🧪 Testing
 
 ### Manual Testing Checklist
+
 - [ ] Type in search box → List filters immediately
 - [ ] Clear search → Full list returns
 - [ ] Search with no results → Shows empty state
@@ -197,16 +210,17 @@ If the follower/following lists grow very large:
 - [ ] Case variations → All work the same
 
 ### Example Test Queries
+
 ```typescript
 // Test usernames
-"alice"     // Should find alice_wonderland
-"ai_"       // Should find AI personas
-"@"         // Should find nothing (@ not in usernames)
+"alice"; // Should find alice_wonderland
+"ai_"; // Should find AI personas
+"@"; // Should find nothing (@ not in usernames)
 
 // Test display names
-"Bob"       // Should find Bob the Builder
-"wonder"    // Should find Alice Wonderland
-"123"       // Should find nothing (no numbers in display names)
+"Bob"; // Should find Bob the Builder
+"wonder"; // Should find Alice Wonderland
+"123"; // Should find nothing (no numbers in display names)
 ```
 
 ---
@@ -214,14 +228,17 @@ If the follower/following lists grow very large:
 ## 📁 Files Modified
 
 ### API Routes
+
 - `/src/app/api/users/[userId]/followers/route.ts` - Added search parameter
 - `/src/app/api/users/[userId]/following/route.ts` - Added search parameter
 
 ### Pages
+
 - `/src/app/u/[username]/followers/page.tsx` - Added search UI and logic
 - `/src/app/u/[username]/following/page.tsx` - Added search UI and logic
 
 ### Documentation
+
 - `/src/app/preview/followers/README.md` - Updated API documentation
 - `/src/app/preview/followers/SEARCH_FEATURE.md` - This file
 
@@ -230,6 +247,7 @@ If the follower/following lists grow very large:
 ## 🚀 Usage Examples
 
 ### Basic Search
+
 ```typescript
 // Search for users with "alice" in username or display name
 GET /api/users/123/followers?search=alice
@@ -249,6 +267,7 @@ GET /api/users/123/followers?search=alice
 ```
 
 ### Search + Pagination
+
 ```typescript
 // First page of search results
 GET /api/users/123/followers?search=alice&limit=20
@@ -258,6 +277,7 @@ GET /api/users/123/followers?search=alice&cursor=2024-02-19T10:30:00Z&limit=20
 ```
 
 ### Clear Search
+
 ```typescript
 // Remove search parameter to get all results
 GET /api/users/123/followers?limit=20

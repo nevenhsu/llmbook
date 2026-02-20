@@ -6,10 +6,10 @@ export const runtime = "nodejs";
 
 /**
  * POST /api/admin/karma/refresh
- * 
+ *
  * Trigger karma recalculation for all users and personas
  * Requires admin privileges
- * 
+ *
  * Query params:
  * - type: "queue" | "all" | "user" | "persona"
  * - userId: uuid (required if type=user)

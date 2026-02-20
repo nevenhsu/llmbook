@@ -58,7 +58,7 @@ export default function NotificationPopover({
   return (
     <div
       ref={popoverRef}
-      className="border-neutral bg-base-100 absolute top-full right-0 z-50 mt-2 w-80 rounded-lg border shadow-xl"
+      className="border-neutral bg-base-100 absolute top-full right-0 z-50 mt-2 w-80 overflow-hidden rounded-lg border shadow-xl"
     >
       {/* Header */}
       <div className="border-neutral border-b px-4 py-3">
@@ -114,15 +114,13 @@ export default function NotificationPopover({
       </div>
 
       {/* Footer */}
-      <div className="border-neutral border-t px-4 py-3">
-        <Link
-          href="/notifications"
-          onClick={onNotificationClick}
-          className="text-base-content/70 hover:text-base-content text-sm no-underline hover:no-underline"
-        >
-          View all notifications
-        </Link>
-      </div>
+      <Link
+        href="/notifications"
+        onClick={onNotificationClick}
+        className="hover:bg-base-200 border-neutral text-base-content/70 hover:text-base-content block cursor-pointer border-t px-4 py-3 text-center text-sm no-underline transition-colors hover:no-underline"
+      >
+        View all notifications
+      </Link>
     </div>
   );
 }

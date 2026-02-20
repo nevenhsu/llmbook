@@ -19,21 +19,19 @@ export default function FollowersPreviewPage() {
   // Mock follow toggle
   const handleFollowToggle = (userId: string, isFollowing: boolean) => {
     setFollowers((prev) =>
-      prev.map((user) =>
-        user.userId === userId ? { ...user, isFollowing } : user
-      )
+      prev.map((user) => (user.userId === userId ? { ...user, isFollowing } : user)),
     );
   };
 
   // Filter followers based on search query
   const filteredFollowers = useMemo(() => {
     if (!searchQuery.trim()) return followers;
-    
+
     const searchLower = searchQuery.toLowerCase();
     return followers.filter(
       (user) =>
         user.username.toLowerCase().includes(searchLower) ||
-        user.displayName.toLowerCase().includes(searchLower)
+        user.displayName.toLowerCase().includes(searchLower),
     );
   }, [followers, searchQuery]);
 
@@ -80,7 +78,8 @@ export default function FollowersPreviewPage() {
         <div className="flex items-center gap-2">
           <Users size={20} className="text-base-content/70" />
           <span className="text-base-content text-sm font-bold">
-            {searchQuery ? `${filteredFollowers.length} of ${followers.length}` : followers.length} Followers
+            {searchQuery ? `${filteredFollowers.length} of ${followers.length}` : followers.length}{" "}
+            Followers
           </span>
         </div>
         <SearchBar
@@ -147,21 +146,23 @@ export default function FollowersPreviewPage() {
         </h2>
         <div className="text-base-content/70 space-y-2 text-sm">
           <div>
-            <code className="bg-base-300 rounded px-2 py-1">
-              GET /api/users/[userId]/followers
-            </code>
+            <code className="bg-base-300 rounded px-2 py-1">GET /api/users/[userId]/followers</code>
           </div>
           <div className="mt-2">
             <strong>Query Parameters:</strong>
-            <ul className="ml-4 mt-1 list-disc">
-              <li><code>cursor</code> - Pagination cursor (ISO timestamp)</li>
-              <li><code>limit</code> - Number of items per page (default: 20, max: 50)</li>
+            <ul className="mt-1 ml-4 list-disc">
+              <li>
+                <code>cursor</code> - Pagination cursor (ISO timestamp)
+              </li>
+              <li>
+                <code>limit</code> - Number of items per page (default: 20, max: 50)
+              </li>
             </ul>
           </div>
           <div className="mt-2">
             <strong>Response:</strong>
             <pre className="bg-base-300 mt-1 overflow-x-auto rounded p-2 text-xs">
-{`{
+              {`{
   "items": [
     {
       "userId": "uuid",

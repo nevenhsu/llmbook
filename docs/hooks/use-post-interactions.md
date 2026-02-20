@@ -31,12 +31,8 @@ function PostActions({ post }: { post: Post }) {
 
   return (
     <div className="flex gap-2">
-      <button onClick={handleSave}>
-        {saved ? "★ Saved" : "☆ Save"}
-      </button>
-      <button onClick={handleHide}>
-        Hide Post
-      </button>
+      <button onClick={handleSave}>{saved ? "★ Saved" : "☆ Save"}</button>
+      <button onClick={handleHide}>Hide Post</button>
     </div>
   );
 }
@@ -48,9 +44,9 @@ function PostActions({ post }: { post: Post }) {
 
 ```typescript
 interface UsePostInteractionsOptions {
-  postId: string;              // Post ID
-  initialSaved?: boolean;      // Initial saved state (default: false)
-  initialHidden?: boolean;     // Initial hidden state (default: false)
+  postId: string; // Post ID
+  initialSaved?: boolean; // Initial saved state (default: false)
+  initialHidden?: boolean; // Initial hidden state (default: false)
 }
 ```
 
@@ -58,10 +54,10 @@ interface UsePostInteractionsOptions {
 
 ```typescript
 interface UsePostInteractionsReturn {
-  saved: boolean;                    // Current saved state
-  hidden: boolean;                   // Current hidden state
-  handleSave: () => Promise<void>;   // Toggle save/unsave
-  handleHide: () => Promise<void>;   // Hide post
+  saved: boolean; // Current saved state
+  hidden: boolean; // Current hidden state
+  handleSave: () => Promise<void>; // Toggle save/unsave
+  handleHide: () => Promise<void>; // Hide post
   handleUnhide: () => Promise<void>; // Unhide post
 }
 ```
@@ -71,6 +67,7 @@ interface UsePostInteractionsReturn {
 ### Save/Unsave
 
 When user clicks save:
+
 1. **Optimistic update**: `saved` state toggles immediately
 2. **API call**: `POST /api/saved/:postId` or `DELETE /api/saved/:postId`
 3. **Success**: Shows toast "Post saved" or "Post unsaved"
@@ -80,6 +77,7 @@ When user clicks save:
 ### Hide Post
 
 When user clicks hide:
+
 1. **API call**: `POST /api/hidden/:postId`
 2. **Success**: Sets `hidden = true`
 3. **Error (401)**: Opens login modal
@@ -88,6 +86,7 @@ When user clicks hide:
 ### Unhide Post
 
 When user unhides:
+
 1. **API call**: `DELETE /api/hidden/:postId`
 2. **Success**: Sets `hidden = false`
 3. **Error (401)**: Opens login modal
@@ -109,9 +108,7 @@ function PostCard({ post }: { post: Post }) {
   return (
     <div>
       <h2>{post.title}</h2>
-      <button onClick={handleSave}>
-        {saved ? "Unsave" : "Save"}
-      </button>
+      <button onClick={handleSave}>{saved ? "Unsave" : "Save"}</button>
     </div>
   );
 }
@@ -129,11 +126,7 @@ function PostListItem({ post }: { post: Post }) {
   });
 
   if (hidden) {
-    return (
-      <div className="text-gray-500 italic">
-        Post hidden
-      </div>
-    );
+    return <div className="italic text-gray-500">Post hidden</div>;
   }
 
   return (
@@ -159,9 +152,7 @@ function PostMenu({ post }: { post: Post }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuItem onClick={handleSave}>
-        {saved ? "Unsave" : "Save"}
-      </DropdownMenuItem>
+      <DropdownMenuItem onClick={handleSave}>{saved ? "Unsave" : "Save"}</DropdownMenuItem>
       <DropdownMenuItem onClick={hidden ? handleUnhide : handleHide}>
         {hidden ? "Unhide" : "Hide"}
       </DropdownMenuItem>
@@ -178,13 +169,13 @@ function SavedPostsPage() {
 
   return (
     <div>
-      {posts.map(post => (
+      {posts.map((post) => (
         <SavedPostCard
           key={post.id}
           post={post}
           onUnsave={(id) => {
             // Remove from list when unsaved
-            setPosts(prev => prev.filter(p => p.id !== id));
+            setPosts((prev) => prev.filter((p) => p.id !== id));
           }}
         />
       ))}
@@ -223,12 +214,12 @@ function HiddenPostsPage() {
   return (
     <div>
       <h1>Hidden Posts</h1>
-      {posts.map(post => (
+      {posts.map((post) => (
         <HiddenPostCard
           key={post.id}
           post={post}
           onUnhide={(id) => {
-            setPosts(prev => prev.filter(p => p.id !== id));
+            setPosts((prev) => prev.filter((p) => p.id !== id));
           }}
         />
       ))}
@@ -262,22 +253,22 @@ function HiddenPostCard({ post, onUnhide }: Props) {
 
 This hook calls the following endpoints:
 
-| Action | Method | Endpoint | Response |
-|--------|--------|----------|----------|
-| Save | `POST` | `/api/saved/:postId` | `200 OK` |
-| Unsave | `DELETE` | `/api/saved/:postId` | `200 OK` |
-| Hide | `POST` | `/api/hidden/:postId` | `200 OK` |
+| Action | Method   | Endpoint              | Response |
+| ------ | -------- | --------------------- | -------- |
+| Save   | `POST`   | `/api/saved/:postId`  | `200 OK` |
+| Unsave | `DELETE` | `/api/saved/:postId`  | `200 OK` |
+| Hide   | `POST`   | `/api/hidden/:postId` | `200 OK` |
 | Unhide | `DELETE` | `/api/hidden/:postId` | `200 OK` |
 
 All endpoints return `401` if user is not authenticated.
 
 ## Error Handling
 
-| Error | Behavior |
-|-------|----------|
-| **401 Unauthorized** | Opens login modal (via `useLoginModal`) |
-| **Network error** | Shows toast "Failed to save post" (save only) |
-| **Other errors** | Silent failure (hide/unhide) |
+| Error                | Behavior                                      |
+| -------------------- | --------------------------------------------- |
+| **401 Unauthorized** | Opens login modal (via `useLoginModal`)       |
+| **Network error**    | Shows toast "Failed to save post" (save only) |
+| **Other errors**     | Silent failure (hide/unhide)                  |
 
 ## Common Pitfalls
 
@@ -287,7 +278,7 @@ All endpoints return `401` if user is not authenticated.
 // Bad: Post still visible when hidden
 function PostCard({ post }: { post: Post }) {
   const { handleHide } = usePostInteractions({ postId: post.id });
-  
+
   return (
     <div>
       <h3>{post.title}</h3>
@@ -299,9 +290,9 @@ function PostCard({ post }: { post: Post }) {
 // Good: Conditional rendering
 function PostCard({ post }: { post: Post }) {
   const { hidden, handleHide } = usePostInteractions({ postId: post.id });
-  
+
   if (hidden) return <div>Hidden</div>;
-  
+
   return (
     <div>
       <h3>{post.title}</h3>
@@ -317,8 +308,8 @@ function PostCard({ post }: { post: Post }) {
 // Bad: Post stays in saved list after unsaving
 function SavedPosts() {
   const [posts, setPosts] = useState<Post[]>([]);
-  
-  return posts.map(post => (
+
+  return posts.map((post) => (
     <PostCard post={post} /> // Stays visible after unsave
   ));
 }
@@ -326,14 +317,12 @@ function SavedPosts() {
 // Good: Remove from list
 function SavedPosts() {
   const [posts, setPosts] = useState<Post[]>([]);
-  
+
   const handleUnsave = (id: string) => {
-    setPosts(prev => prev.filter(p => p.id !== id));
+    setPosts((prev) => prev.filter((p) => p.id !== id));
   };
-  
-  return posts.map(post => (
-    <PostCard post={post} onUnsave={handleUnsave} />
-  ));
+
+  return posts.map((post) => <PostCard post={post} onUnsave={handleUnsave} />);
 }
 ```
 
@@ -348,5 +337,6 @@ function SavedPosts() {
 Located at: `src/hooks/use-post-interactions.ts:1`
 
 Key dependencies:
+
 - `@/contexts/LoginModalContext` - Login prompt on 401
 - `react-hot-toast` - Success/error notifications

@@ -26,7 +26,7 @@ function PostList() {
     setIsLoading(true);
     try {
       const newPosts = await fetchMorePosts(posts.length);
-      setPosts(prev => [...prev, ...newPosts]);
+      setPosts((prev) => [...prev, ...newPosts]);
       setHasMore(newPosts.length > 0);
     } finally {
       setIsLoading(false);
@@ -37,7 +37,7 @@ function PostList() {
 
   return (
     <div>
-      {posts.map(post => (
+      {posts.map((post) => (
         <PostCard key={post.id} post={post} />
       ))}
       {/* Sentinel element - triggers loading when visible */}
@@ -55,27 +55,27 @@ function PostList() {
 
 ```typescript
 function useInfiniteScroll(
-  loadMore: () => void | Promise<void>,  // Function to load more data
-  hasMore: boolean,                      // Whether more data is available
-  isLoading: boolean,                    // Whether currently loading
-  options?: UseInfiniteScrollOptions     // Optional configuration
-): RefObject<HTMLDivElement>             // Ref for sentinel element
+  loadMore: () => void | Promise<void>, // Function to load more data
+  hasMore: boolean, // Whether more data is available
+  isLoading: boolean, // Whether currently loading
+  options?: UseInfiniteScrollOptions, // Optional configuration
+): RefObject<HTMLDivElement>; // Ref for sentinel element
 ```
 
 ### Options
 
 ```typescript
 interface UseInfiniteScrollOptions {
-  enabled?: boolean;      // Enable/disable (default: true)
-  threshold?: number;     // Intersection threshold 0-1 (default: 0.1)
-  rootMargin?: string;    // Root margin for IntersectionObserver (e.g., "100px")
+  enabled?: boolean; // Enable/disable (default: true)
+  threshold?: number; // Intersection threshold 0-1 (default: 0.1)
+  rootMargin?: string; // Root margin for IntersectionObserver (e.g., "100px")
 }
 ```
 
 ### Return Value
 
 ```typescript
-RefObject<HTMLDivElement>  // Attach to sentinel element
+RefObject<HTMLDivElement>; // Attach to sentinel element
 ```
 
 ## Behavior Details
@@ -83,6 +83,7 @@ RefObject<HTMLDivElement>  // Attach to sentinel element
 ### When Loading Triggers
 
 Loading triggers when **all** conditions are met:
+
 1. ✅ `enabled === true`
 2. ✅ `hasMore === true`
 3. ✅ `isLoading === false`
@@ -123,7 +124,7 @@ function PostList() {
   const loadMore = async () => {
     setIsLoading(true);
     const newPosts = await fetchPosts({ offset: posts.length, limit: 20 });
-    setPosts(prev => [...prev, ...newPosts]);
+    setPosts((prev) => [...prev, ...newPosts]);
     setHasMore(newPosts.length === 20);
     setIsLoading(false);
   };
@@ -132,7 +133,9 @@ function PostList() {
 
   return (
     <div>
-      {posts.map(post => <PostCard key={post.id} post={post} />)}
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
       <div ref={sentinelRef} className="h-10" /> {/* Sentinel */}
       {isLoading && <LoadingSpinner />}
       {!hasMore && <EndOfList />}
@@ -170,7 +173,7 @@ function PostList({ autoLoad }: { autoLoad: boolean }) {
   const loadMore = async () => {
     setIsLoading(true);
     const newPosts = await fetchPosts({ offset: posts.length });
-    setPosts(prev => [...prev, ...newPosts]);
+    setPosts((prev) => [...prev, ...newPosts]);
     setHasMore(newPosts.length > 0);
     setIsLoading(false);
   };
@@ -181,11 +184,11 @@ function PostList({ autoLoad }: { autoLoad: boolean }) {
 
   return (
     <div>
-      {posts.map(post => <PostCard key={post.id} post={post} />)}
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
       <div ref={sentinelRef} />
-      {!autoLoad && hasMore && (
-        <button onClick={loadMore}>Load More</button>
-      )}
+      {!autoLoad && hasMore && <button onClick={loadMore}>Load More</button>}
     </div>
   );
 }
@@ -202,7 +205,7 @@ function PostList({ initialPosts }: { initialPosts: Post[] }) {
   const loadMore = async () => {
     setIsLoading(true);
     const newPosts = await fetchPosts({ offset: posts.length });
-    setPosts(prev => [...prev, ...newPosts]);
+    setPosts((prev) => [...prev, ...newPosts]);
     setHasMore(newPosts.length > 0);
     setIsLoading(false);
   };
@@ -212,7 +215,9 @@ function PostList({ initialPosts }: { initialPosts: Post[] }) {
 
   return (
     <div>
-      {posts.map(post => <PostCard key={post.id} post={post} />)}
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
       <div ref={sentinelRef} />
       {isLoading && <Spinner />}
     </div>
@@ -235,7 +240,7 @@ function TabbedPostList() {
       filter: activeTab,
       offset: posts.length,
     });
-    setPosts(prev => [...prev, ...newPosts]);
+    setPosts((prev) => [...prev, ...newPosts]);
     setHasMore(newPosts.length > 0);
     setIsLoading(false);
   };
@@ -248,11 +253,11 @@ function TabbedPostList() {
   return (
     <div>
       <Tabs value={activeTab} onChange={setActiveTab} />
-      {posts.map(post => <PostCard key={post.id} post={post} />)}
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
       <div ref={sentinelRef} />
-      {activeTab === "hot" && hasMore && (
-        <button onClick={loadMore}>Load More</button>
-      )}
+      {activeTab === "hot" && hasMore && <button onClick={loadMore}>Load More</button>}
     </div>
   );
 }
@@ -266,14 +271,14 @@ function TabbedPostList() {
 // Bad: Never stops loading
 const loadMore = async () => {
   const newPosts = await fetchPosts();
-  setPosts(prev => [...prev, ...newPosts]);
+  setPosts((prev) => [...prev, ...newPosts]);
   // Missing: setHasMore(newPosts.length > 0);
 };
 
 // Good: Stop when no more data
 const loadMore = async () => {
   const newPosts = await fetchPosts();
-  setPosts(prev => [...prev, ...newPosts]);
+  setPosts((prev) => [...prev, ...newPosts]);
   setHasMore(newPosts.length > 0); // or check specific limit
 };
 ```
@@ -294,7 +299,7 @@ const loadMore = async () => {
 // Bad: Can trigger multiple loads
 const loadMore = async () => {
   const newPosts = await fetchPosts(); // No loading state
-  setPosts(prev => [...prev, ...newPosts]);
+  setPosts((prev) => [...prev, ...newPosts]);
 };
 
 // Good: Set loading state
@@ -302,7 +307,7 @@ const loadMore = async () => {
   setIsLoading(true);
   try {
     const newPosts = await fetchPosts();
-    setPosts(prev => [...prev, ...newPosts]);
+    setPosts((prev) => [...prev, ...newPosts]);
   } finally {
     setIsLoading(false);
   }
@@ -349,5 +354,6 @@ const handleFilterChange = (filter: string) => {
 Located at: `src/hooks/use-infinite-scroll.ts:1`
 
 Key dependencies:
+
 - Uses `IntersectionObserver` API
 - Refs to avoid stale closures

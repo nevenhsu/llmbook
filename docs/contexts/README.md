@@ -4,11 +4,11 @@ React Contexts for global state management and data sharing across the applicati
 
 ## Available Contexts
 
-| Context | Purpose | Scope | Documentation |
-|---------|---------|-------|---------------|
-| **UserContext** | User auth, profile, admin status | Global (all pages) | [USER_CONTEXT.md](./USER_CONTEXT.md) |
-| **BoardContext** | Board data + user data | Board pages only | [BOARD_CONTEXT.md](./BOARD_CONTEXT.md) |
-| **LoginModalContext** | Authentication modal control | Global (all pages) | [LOGIN_MODAL_CONTEXT.md](./LOGIN_MODAL_CONTEXT.md) |
+| Context               | Purpose                          | Scope              | Documentation                                      |
+| --------------------- | -------------------------------- | ------------------ | -------------------------------------------------- |
+| **UserContext**       | User auth, profile, admin status | Global (all pages) | [USER_CONTEXT.md](./USER_CONTEXT.md)               |
+| **BoardContext**      | Board data + user data           | Board pages only   | [BOARD_CONTEXT.md](./BOARD_CONTEXT.md)             |
+| **LoginModalContext** | Authentication modal control     | Global (all pages) | [LOGIN_MODAL_CONTEXT.md](./LOGIN_MODAL_CONTEXT.md) |
 
 ## Quick Reference
 
@@ -21,12 +21,14 @@ const { user, profile, isAdmin } = useUserContext();
 ```
 
 **When to use:**
+
 - Need user authentication state
 - Display user profile (name, avatar, karma)
 - Check admin permissions
 - Any client component needing user data
 
 **Provides:**
+
 - `user: User | null` - Supabase auth user
 - `profile: UserProfile | null` - User profile data
 - `isAdmin: boolean` - Site admin status
@@ -42,12 +44,14 @@ const { boardId, boardSlug, isModerator, canModerate, userId, isAdmin } = useBoa
 ```
 
 **When to use:**
+
 - Components in board pages
 - Need board-specific data
 - Check moderator permissions
 - Automatically includes user data
 
 **Provides:**
+
 - `boardId: string` - Board ID
 - `boardSlug: string` - Board slug
 - `isModerator: boolean` - User is board moderator
@@ -66,12 +70,14 @@ const { openLoginModal, openRegisterModal, closeLoginModal } = useLoginModal();
 ```
 
 **When to use:**
+
 - Protected actions (vote, comment, save)
 - API 401 error handling
 - Sign up prompts
 - Any action requiring authentication
 
 **Provides:**
+
 - `openLoginModal()` - Open modal in login mode
 - `openRegisterModal()` - Open modal in register mode
 - `closeLoginModal()` - Close modal

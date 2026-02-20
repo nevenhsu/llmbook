@@ -5,14 +5,11 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/users/[userId]/followers
- * 
+ *
  * Fetch the list of users who follow a specific user.
  * Supports pagination and search filtering.
  */
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ userId: string }> }
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
   const { searchParams } = new URL(req.url);
 

@@ -5,11 +5,13 @@ Preview pages for testing the followers and following list UI components.
 ## Pages
 
 ### 1. Followers Preview
+
 **URL:** `/preview/followers`
 
 Displays a list of users who follow the target user.
 
 **Features:**
+
 - Shows follower list with avatars
 - Follow/unfollow button for each user
 - Empty state when no followers
@@ -18,11 +20,13 @@ Displays a list of users who follow the target user.
 - Responsive design
 
 **API Endpoint:**
+
 ```
 GET /api/users/[userId]/followers
 ```
 
 Query Parameters:
+
 - `cursor` (optional): ISO timestamp for pagination
 - `limit` (optional): Number of items per page (default: 20, max: 50)
 - `search` (optional): Search query for filtering by username or display name
@@ -30,11 +34,13 @@ Query Parameters:
 ---
 
 ### 2. Following Preview
+
 **URL:** `/preview/following`
 
 Displays a list of users that the target user follows.
 
 **Features:**
+
 - Shows following list with avatars
 - Follow/unfollow button for each user
 - Empty state when not following anyone
@@ -43,11 +49,13 @@ Displays a list of users that the target user follows.
 - Responsive design
 
 **API Endpoint:**
+
 ```
 GET /api/users/[userId]/following
 ```
 
 Query Parameters:
+
 - `cursor` (optional): ISO timestamp for pagination
 - `limit` (optional): Number of items per page (default: 20, max: 50)
 - `search` (optional): Search query for filtering by username or display name
@@ -57,9 +65,11 @@ Query Parameters:
 ## Components Used
 
 ### `UserListItem`
+
 Located at: `/src/components/user/UserListItem.tsx`
 
 **Props:**
+
 ```typescript
 interface UserListItemProps {
   userId: string;
@@ -89,11 +99,14 @@ Mock data is defined in `/src/app/preview/followers/mock-data.ts`:
 ## Testing
 
 ### Preview Controls
+
 Both pages include preview controls:
+
 - **Show Empty State**: Toggle between populated and empty state
 - **Reset**: Reset to initial mock data
 
 ### Interactive Elements
+
 - **Follow/Unfollow buttons**: Click to toggle follow state (mock only)
 - **User avatars/names**: Click to simulate navigation to profile
 - **Pagination**: Load more items (simulated with mock data)
@@ -110,13 +123,14 @@ CREATE TABLE public.follows (
   follower_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   following_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
-  
+
   CONSTRAINT follows_no_self_follow CHECK (follower_id != following_id),
   CONSTRAINT follows_unique UNIQUE (follower_id, following_id)
 );
 ```
 
 **Key differences:**
+
 - **Followers**: `following_id = target_user_id` (people who follow the target)
 - **Following**: `follower_id = target_user_id` (people the target follows)
 
@@ -142,21 +156,21 @@ To integrate into actual user profile pages:
    - `/u/[username]/following`
 
 2. **Fetch real data:**
+
    ```typescript
    const res = await fetch(`/api/users/${userId}/followers?limit=20`);
    const data = await res.json();
    ```
 
 3. **Implement pagination:**
+
    ```typescript
-   const nextPage = await fetch(
-     `/api/users/${userId}/followers?cursor=${nextCursor}&limit=20`
-   );
+   const nextPage = await fetch(`/api/users/${userId}/followers?cursor=${nextCursor}&limit=20`);
    ```
 
 4. **Add real follow/unfollow actions:**
    ```typescript
    await fetch(`/api/users/${targetUserId}/follow`, {
-     method: isFollowing ? 'DELETE' : 'POST',
+     method: isFollowing ? "DELETE" : "POST",
    });
    ```

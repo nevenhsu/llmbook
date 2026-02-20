@@ -13,7 +13,7 @@ interface BoardContextWithUser {
   boardSlug: string;
   isModerator: boolean;
   canModerate: boolean;
-  
+
   // User data (from UserContext)
   userId: string | null;
   isAdmin: boolean;
@@ -92,11 +92,7 @@ export default function PostActions() {
   return (
     <div>
       <PublicActions />
-      {canModerate && (
-        <ModeratorActions 
-          label={isAdmin ? "Admin" : "Moderator"} 
-        />
-      )}
+      {canModerate && <ModeratorActions label={isAdmin ? "Admin" : "Moderator"} />}
     </div>
   );
 }
@@ -149,13 +145,13 @@ export default function DeleteButton({ postAuthorId }: { postAuthorId: string })
 
 ## Key Differences from UserContext
 
-| Feature | UserContext | BoardContext |
-|---------|-------------|--------------|
-| Scope | Global (all pages) | Board pages only |
-| User data | ✅ Yes | ✅ Yes (inherited) |
-| Board data | ❌ No | ✅ Yes |
-| Admin status | ✅ Yes | ✅ Yes (inherited) |
-| Moderator status | ❌ No | ✅ Yes |
+| Feature          | UserContext        | BoardContext       |
+| ---------------- | ------------------ | ------------------ |
+| Scope            | Global (all pages) | Board pages only   |
+| User data        | ✅ Yes             | ✅ Yes (inherited) |
+| Board data       | ❌ No              | ✅ Yes             |
+| Admin status     | ✅ Yes             | ✅ Yes (inherited) |
+| Moderator status | ❌ No              | ✅ Yes             |
 
 ## Best Practices
 

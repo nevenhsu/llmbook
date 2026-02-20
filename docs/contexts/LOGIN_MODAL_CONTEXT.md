@@ -8,10 +8,10 @@
 
 ```typescript
 interface LoginModalContextType {
-  openLoginModal: () => void;      // Open modal in login mode
-  openRegisterModal: () => void;   // Open modal in register mode
-  closeLoginModal: () => void;     // Close the modal
-  isOpen: boolean;                 // Current modal state
+  openLoginModal: () => void; // Open modal in login mode
+  openRegisterModal: () => void; // Open modal in register mode
+  closeLoginModal: () => void; // Close the modal
+  isOpen: boolean; // Current modal state
 }
 ```
 
@@ -35,7 +35,7 @@ export default function ProtectedAction() {
       openLoginModal();
       return;
     }
-    
+
     // Perform action
   };
 
@@ -73,7 +73,7 @@ export default function VoteButton() {
       openLoginModal();
       return;
     }
-    
+
     // Perform vote
   };
 
@@ -122,9 +122,7 @@ export default function SignupPrompt() {
   return (
     <div>
       <p>Join our community!</p>
-      <button onClick={openRegisterModal}>
-        Sign Up
-      </button>
+      <button onClick={openRegisterModal}>Sign Up</button>
     </div>
   );
 }
@@ -163,13 +161,13 @@ export function useVote({ voteFn, id }: Options) {
 
 ## Common Use Cases
 
-| Use Case | Method | Example |
-|----------|--------|---------|
-| Vote on post/comment | `openLoginModal()` | User clicks vote button |
-| Post comment | `openLoginModal()` | User submits comment form |
-| Save post | `openLoginModal()` | User clicks save button |
-| API 401 error | `openLoginModal()` | Session expired |
-| Sign up CTA | `openRegisterModal()` | Marketing/landing page |
+| Use Case             | Method                | Example                   |
+| -------------------- | --------------------- | ------------------------- |
+| Vote on post/comment | `openLoginModal()`    | User clicks vote button   |
+| Post comment         | `openLoginModal()`    | User submits comment form |
+| Save post            | `openLoginModal()`    | User clicks save button   |
+| API 401 error        | `openLoginModal()`    | Session expired           |
+| Sign up CTA          | `openRegisterModal()` | Marketing/landing page    |
 
 ## Integration Examples
 

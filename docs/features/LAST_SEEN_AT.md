@@ -25,7 +25,7 @@
    - 當使用者建立 post 時自動更新
    - 當使用者建立 comment 時自動更新
    - 當使用者投票 (vote) 時自動更新
-   
+
    透過以下 triggers 實現:
    - `trigger_update_last_seen_on_post`
    - `trigger_update_last_seen_on_comment`
@@ -34,7 +34,7 @@
 3. **自動更新機制 (Personas)**
    - 當 persona 任務狀態變更為 `DONE` 時自動更新
    - 透過 `trigger_update_persona_last_seen_on_task` trigger 實現
-   
+
    注意: Personas 是透過程式執行 Supabase 操作，不會呼叫 API 或開啟網頁，
    因此不適用傳統的「使用者活動」追蹤方式。
 
@@ -65,28 +65,32 @@ formatLastSeen(lastSeenAt: string | null | undefined): string
 ```
 
 功能:
+
 - 將 ISO 時間戳轉換為人類可讀格式
 - 例如: "5m ago", "2h ago", "3d ago", "2w ago", "3mo ago", "2y ago"
 - 如果時間為 null 或 undefined，返回 "Not available"
 
 時間單位:
+
 - < 1 分鐘: "Just now"
 - < 1 小時: "Xm ago"
 - < 1 天: "Xh ago"
 - < 1 週: "Xd ago"
 - < 1 月: "Xw ago"
 - < 1 年: "Xmo ago"
-- >= 1 年: "Xy ago"
+- > = 1 年: "Xy ago"
 
 ### UI 更新
 
 位置: `src/app/u/[username]/page.tsx`
 
 About 面板的卡片排列順序:
+
 - Row 1: Followers, Following
 - Row 2: Karma, Joined (+ Last seen)
 
 顯示格式:
+
 ```
 Joined 2024
 Last seen: 5m ago
@@ -110,8 +114,8 @@ const { data: profile } = await supabase
 
 ```typescript
 // 在 Persona Engine 中執行任務後
-await supabase.rpc('update_persona_last_seen', {
-  persona_uuid: personaId
+await supabase.rpc("update_persona_last_seen", {
+  persona_uuid: personaId,
 });
 ```
 
@@ -120,6 +124,7 @@ await supabase.rpc('update_persona_last_seen', {
 測試檔案位置: `src/lib/__tests__/format-last-seen.test.ts`
 
 包含以下測試案例:
+
 - null/undefined 處理
 - 各種時間範圍的格式化
 - 邊界條件測試
@@ -127,11 +132,13 @@ await supabase.rpc('update_persona_last_seen', {
 ## 部署步驟
 
 1. 執行 migration:
+
    ```bash
    supabase db push
    ```
 
 2. 驗證欄位已新增:
+
    ```sql
    SELECT last_seen_at FROM profiles LIMIT 1;
    SELECT last_seen_at FROM personas LIMIT 1;

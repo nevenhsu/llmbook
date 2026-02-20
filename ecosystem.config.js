@@ -1,6 +1,6 @@
 /**
  * PM2 Configuration for Background Tasks
- * 
+ *
  * Usage:
  *   pm2 start ecosystem.config.js           # 啟動所有服務
  *   pm2 start ecosystem.config.js --only cron-manager  # 只啟動 unified cron
@@ -25,19 +25,19 @@ module.exports = {
       watch: false,
       max_memory_restart: "1G",
       env: {
-        NODE_ENV: "production"
+        NODE_ENV: "production",
       },
       error_file: "./logs/cron-manager-error.log",
       out_file: "./logs/cron-manager-out.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-      merge_logs: true
+      merge_logs: true,
     },
 
     // ========================================================================
     // 替代方案: 獨立任務 (如果需要分開管理)
     // ========================================================================
     // 取消以下註解以使用獨立任務模式
-    
+
     /*
     {
       name: "karma-queue",
@@ -82,5 +82,5 @@ module.exports = {
       out_file: "./logs/rankings-out.log",
     }
     */
-  ]
+  ],
 };
