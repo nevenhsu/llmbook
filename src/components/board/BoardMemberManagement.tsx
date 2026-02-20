@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, UserX, Ban } from "lucide-react";
-import { apiDelete, apiPost } from "@/lib/api/fetch-json";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import ResponsiveMenu from "@/components/ui/ResponsiveMenu";
+import { useKickMember } from "@/hooks/use-kick-member";
+import { useBanManagement } from "@/hooks/use-ban-management";
 
 interface BoardMember {
   user_id: string;
@@ -59,102 +60,33 @@ export default function BoardMemberManagement({
   const [memberTab, setMemberTab] = useState<"members" | "bans">("members");
   const [membersList, setMembersList] = useState<BoardMember[]>(members);
   const [bansList, setBansList] = useState<BannedUser[]>(bans);
-  const [banUserId, setBanUserId] = useState("");
-  const [banReason, setBanReason] = useState("");
-  const [banExpiresAt, setBanExpiresAt] = useState("");
-  const [kickLoadingUserId, setKickLoadingUserId] = useState<string | null>(null);
-  const [banLoading, setBanLoading] = useState(false);
-  const [unbanLoadingUserId, setUnbanLoadingUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [showKickModal, setShowKickModal] = useState(false);
-  const [memberToKick, setMemberToKick] = useState<string | null>(null);
 
-  const bannedUserIds = useMemo(() => new Set(bansList.map((ban) => ban.user_id)), [bansList]);
+  const kick = useKickMember({
+    boardSlug,
+    onKicked: (userId) => setMembersList((prev) => prev.filter((m) => m.user_id !== userId)),
+    onError: setError,
+  });
+
+  const ban = useBanManagement({
+    boardSlug,
+    onBanned: (newBan, bannedUserId) => {
+      setBansList((prev) => [newBan, ...prev.filter((b) => b.user_id !== bannedUserId)]);
+      setMembersList((prev) => prev.filter((m) => m.user_id !== bannedUserId));
+    },
+    onUnbanned: (userId) => setBansList((prev) => prev.filter((b) => b.user_id !== userId)),
+    onError: setError,
+  });
+
+  const bannedUserIds = useMemo(() => new Set(bansList.map((b) => b.user_id)), [bansList]);
   const bannableMembers = useMemo(
-    () =>
-      membersList.filter((member) => !member.is_moderator && !bannedUserIds.has(member.user_id)),
+    () => membersList.filter((m) => !m.is_moderator && !bannedUserIds.has(m.user_id)),
     [membersList, bannedUserIds],
   );
 
-  const kickMember = async (userId: string) => {
-    setMemberToKick(userId);
-    setShowKickModal(true);
-  };
-
-  const confirmKickMember = async () => {
-    if (!memberToKick) return;
-
-    setKickLoadingUserId(memberToKick);
-    setError("");
-
-    try {
-      await apiDelete(`/api/boards/${boardSlug}/members/${memberToKick}`);
-      setMembersList((prev) => prev.filter((member) => member.user_id !== memberToKick));
-      setShowKickModal(false);
-      setMemberToKick(null);
-      router.refresh();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to kick member.");
-    } finally {
-      setKickLoadingUserId(null);
-    }
-  };
-
-  const handleBanUser = async () => {
-    if (!banUserId) {
-      setError("Please select a member to ban.");
-      return;
-    }
-
-    setBanLoading(true);
-    setError("");
-
-    try {
-      const payload: Record<string, string> = { user_id: banUserId };
-      if (banReason.trim()) payload.reason = banReason.trim();
-      if (banExpiresAt) {
-        const expiresAt = new Date(banExpiresAt);
-        if (!Number.isNaN(expiresAt.getTime())) {
-          payload.expires_at = expiresAt.toISOString();
-        }
-      }
-
-      const ban = await apiPost<BannedUser>(`/api/boards/${boardSlug}/bans`, payload);
-      setBansList((prev) => [ban, ...prev.filter((item) => item.user_id !== ban.user_id)]);
-      setMembersList((prev) => prev.filter((member) => member.user_id !== ban.user_id));
-      setBanUserId("");
-      setBanReason("");
-      setBanExpiresAt("");
-      router.refresh();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to ban user.");
-    } finally {
-      setBanLoading(false);
-    }
-  };
-
-  const handleUnbanUser = async (userId: string) => {
-    setUnbanLoadingUserId(userId);
-    setError("");
-
-    try {
-      await apiDelete(`/api/boards/${boardSlug}/bans/${userId}`);
-      setBansList((prev) => prev.filter((ban) => ban.user_id !== userId));
-      router.refresh();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to unban user.");
-    } finally {
-      setUnbanLoadingUserId(null);
-    }
-  };
-
-  const getBanDisplayName = (ban: BannedUser) =>
-    ban.user?.display_name || ban.profiles?.display_name || "Unknown";
-  const getBanAvatar = (ban: BannedUser) =>
-    ban.user?.avatar_url || ban.profiles?.avatar_url || null;
+  const getBanDisplayName = (b: BannedUser) =>
+    b.user?.display_name || b.profiles?.display_name || "Unknown";
+  const getBanAvatar = (b: BannedUser) => b.user?.avatar_url || b.profiles?.avatar_url || null;
 
   return (
     <div className="space-y-4">
@@ -191,11 +123,6 @@ export default function BoardMemberManagement({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {membersList.map((member) => {
                 const isSelf = member.user_id === currentUserId;
-                const isKickDisabled =
-                  !canEditBans ||
-                  member.is_moderator ||
-                  isSelf ||
-                  kickLoadingUserId === member.user_id;
                 const hasActions = canEditBans && !member.is_moderator && !isSelf;
 
                 return (
@@ -229,14 +156,14 @@ export default function BoardMemberManagement({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              kickMember(member.user_id);
+                              kick.kickMember(member.user_id);
                             }}
-                            disabled={kickLoadingUserId === member.user_id}
+                            disabled={kick.isKicking(member.user_id)}
                             className="text-error flex w-full items-center gap-3 px-3 py-2 text-sm"
                           >
                             <UserX size={20} className="md:hidden" />
                             <UserX size={16} className="hidden md:inline" />
-                            {kickLoadingUserId === member.user_id ? "Kicking..." : "Kick member"}
+                            {kick.isKicking(member.user_id) ? "Kicking..." : "Kick member"}
                           </button>
                         </li>
                       </ResponsiveMenu>
@@ -261,8 +188,8 @@ export default function BoardMemberManagement({
               </label>
               <select
                 className="select select-bordered bg-base-100 border-neutral"
-                value={banUserId}
-                onChange={(e) => setBanUserId(e.target.value)}
+                value={ban.banForm.userId}
+                onChange={(e) => ban.banForm.setUserId(e.target.value)}
                 disabled={!canEditBans}
               >
                 <option value="">Select a member</option>
@@ -280,8 +207,8 @@ export default function BoardMemberManagement({
               <input
                 type="text"
                 className="input input-bordered bg-base-100 border-neutral"
-                value={banReason}
-                onChange={(e) => setBanReason(e.target.value)}
+                value={ban.banForm.reason}
+                onChange={(e) => ban.banForm.setReason(e.target.value)}
                 maxLength={200}
                 placeholder="Rule violation"
                 disabled={!canEditBans}
@@ -294,17 +221,17 @@ export default function BoardMemberManagement({
               <input
                 type="datetime-local"
                 className="input input-bordered bg-base-100 border-neutral"
-                value={banExpiresAt}
-                onChange={(e) => setBanExpiresAt(e.target.value)}
+                value={ban.banForm.expiresAt}
+                onChange={(e) => ban.banForm.setExpiresAt(e.target.value)}
                 disabled={!canEditBans}
               />
             </div>
             <button
               className="btn btn-warning w-full sm:w-fit"
-              onClick={handleBanUser}
-              disabled={banLoading || !banUserId || !canEditBans}
+              onClick={ban.banUser}
+              disabled={ban.isBanning || !ban.banForm.userId || !canEditBans}
             >
-              {banLoading ? (
+              {ban.isBanning ? (
                 <span className="loading loading-spinner loading-xs"></span>
               ) : (
                 "Ban User"
@@ -321,17 +248,17 @@ export default function BoardMemberManagement({
             </div>
           ) : (
             <div className="space-y-2">
-              {bansList.map((ban) => (
-                <div key={ban.id} className="card bg-base-100 flex flex-row items-center gap-3 p-3">
+              {bansList.map((b) => (
+                <div key={b.id} className="card bg-base-100 flex flex-row items-center gap-3 p-3">
                   <Avatar
-                    src={getBanAvatar(ban) || undefined}
-                    fallbackSeed={getBanDisplayName(ban)}
+                    src={getBanAvatar(b) || undefined}
+                    fallbackSeed={getBanDisplayName(b)}
                     size="sm"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{getBanDisplayName(ban)}</p>
-                    <p className="text-xs opacity-70">Reason: {ban.reason || "N/A"}</p>
-                    <p className="text-xs opacity-70">Expires: {formatDateTime(ban.expires_at)}</p>
+                    <p className="truncate font-medium">{getBanDisplayName(b)}</p>
+                    <p className="text-xs opacity-70">Reason: {b.reason || "N/A"}</p>
+                    <p className="text-xs opacity-70">Expires: {formatDateTime(b.expires_at)}</p>
                   </div>
                   {canEditBans ? (
                     <ResponsiveMenu
@@ -343,14 +270,14 @@ export default function BoardMemberManagement({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleUnbanUser(ban.user_id);
+                            ban.unbanUser(b.user_id);
                           }}
-                          disabled={unbanLoadingUserId === ban.user_id}
+                          disabled={ban.isUnbanning(b.user_id)}
                           className="text-success flex w-full items-center gap-3 px-3 py-2 text-sm"
                         >
                           <Ban size={20} className="md:hidden" />
                           <Ban size={16} className="hidden md:inline" />
-                          {unbanLoadingUserId === ban.user_id ? "Unbanning..." : "Unban user"}
+                          {ban.isUnbanning(b.user_id) ? "Unbanning..." : "Unban user"}
                         </button>
                       </li>
                     </ResponsiveMenu>
@@ -365,16 +292,13 @@ export default function BoardMemberManagement({
       )}
 
       <ConfirmModal
-        isOpen={showKickModal}
-        onClose={() => {
-          setShowKickModal(false);
-          setMemberToKick(null);
-        }}
-        onConfirm={confirmKickMember}
+        isOpen={kick.showKickModal}
+        onClose={kick.cancelKick}
+        onConfirm={kick.confirmKick}
         title="Kick Member"
         message="Are you sure you want to kick this member from the board?"
         confirmText="Kick"
-        isLoading={kickLoadingUserId !== null}
+        isLoading={kick.kickLoadingUserId !== null}
         variant="warning"
       />
     </div>
