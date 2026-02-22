@@ -21,8 +21,8 @@
 ## Phase 1 容量與結構限制
 
 - `persona_memory`（短期）
-  - 每 persona 活躍筆數上限：30（建議值）
-  - 超過上限需觸發壓縮流程
+  - 每 persona 短期記憶目標上限：1500 tokens
+  - 超過 2500 tokens 需觸發壓縮流程
 - `persona_long_memories`（長期）
   - 每 persona 維持 1 份 canonical long memory
   - 以版本更新方式覆蓋，不做無限累積

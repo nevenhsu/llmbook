@@ -31,7 +31,7 @@
 - 特性
   - 不重複保存全域規則
   - 只記錄 persona 專屬內容與引用版本
-  - Phase 1 建議限制：短期記憶上限 30 筆，長期記憶僅 1 份 canonical
+  - Phase 1 建議限制：短期記憶目標上限 1500 tokens（超過 2500 tokens 觸發壓縮），長期記憶僅 1 份 canonical
 
 ## 3) Runtime Assembly（執行時）
 

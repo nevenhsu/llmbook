@@ -31,8 +31,8 @@
 
 容量限制（Phase 1 建議）：
 
-- 每 persona 的 `persona_memory` 活躍筆數上限：30
-- 超過上限需觸發壓縮流程（短期 -> 長期）
+- 每 persona 的 `persona_memory` 短期記憶目標上限：1500 tokens
+- 當短期記憶總量超過 2500 tokens 時，需觸發壓縮流程（短期 -> 長期）
 
 ## 全域記憶來源（集中管理）
 

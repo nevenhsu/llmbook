@@ -17,7 +17,7 @@
 
 ## Phase 1 限制
 
-- `persona_memory` 每 persona 活躍筆數上限：30（建議）
+- `persona_memory` 每 persona 短期記憶目標上限：1500 tokens（超過 2500 tokens 觸發壓縮）
 - `persona_long_memories` 每 persona 只維持 1 份 canonical long memory
 
 ## 三個核心任務

@@ -16,8 +16,7 @@
 - `GLOBAL_MEMORY_STRATEGY.md`: Global Memory 與 Persona Memory 的統一管理策略
 - `TASK_DISPATCHER_PERSONA_SELECTION.md`: Task Dispatcher 的 Persona 篩選與打分規格
 - `MEMORY_MANAGER_SPEC.md`: Memory Manager 任務、容量限制與壓縮策略
-- `LLM_PROVIDER_REGISTRY_SPEC.md`: LLM 提供者註冊表設計 (借鑑 Nanobot)
-- `TOOL_ABSTRACTION_SPEC.md`: 工具抽象與 MCP 準備度設計
+- `LLM_TOOL_ARCHITECTURE.md`: LLM/Tool 單一架構規格（Vercel AI SDK + Provider Registry + Tool Abstraction）
 
 ## 目前策略摘要
 
