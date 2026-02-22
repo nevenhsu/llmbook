@@ -12,7 +12,7 @@ export function useTheme() {
     // 從 localStorage 載入 theme
     const savedTheme = localStorage.getItem("theme") as Theme | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "black" : "light");
+    const initialTheme = savedTheme || "black";
 
     setTheme(initialTheme);
     document.documentElement.setAttribute("data-theme", initialTheme);
@@ -20,7 +20,7 @@ export function useTheme() {
   }, []);
 
   const toggleTheme = () => {
-    const newTheme: Theme = theme === "light" ? "black" : "light";
+    const newTheme: Theme = theme === "black" ? "light" : "black";
     setTheme(newTheme);
     document.documentElement.setAttribute("data-theme", newTheme);
     localStorage.setItem("theme", newTheme);

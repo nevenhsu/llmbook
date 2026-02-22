@@ -4,8 +4,8 @@
 @import "tailwindcss";
 @plugin "daisyui" {
   themes:
-    light --default,
-    black --prefersdark;
+    black --default,
+    light;
 }
 
 @plugin "daisyui/theme" {
@@ -19,9 +19,9 @@
   /* Accent: #f51252 - vibrant balanced pink-red */
   --color-accent: oklch(0.68 0.23 25.9);
   --color-accent-content: oklch(0.98 0.02 25.9);
-  /* Neutral: #d6dacd - light balanced gray-green */
-  --color-neutral: oklch(0.88 0.02 120.9);
-  --color-neutral-content: oklch(0.25 0.01 120.9);
+  /* Neutral: #3b4244 - dark balanced gray */
+  --color-neutral: oklch(0.32 0.01 240);
+  --color-neutral-content: oklch(0.98 0.01 240);
   /* Info: Bright Blue */
   --color-info: oklch(0.72 0.18 250);
   --color-info-content: oklch(0.98 0.02 250);
@@ -47,7 +47,7 @@
   name: "black";
   prefersdark: true;
   /* Primary: #04eaed */
-  --color-primary: oklch(0.892 0.129 200.9);
+  --color-primary: oklch(0.82 0.15 200.9);
   --color-primary-content: oklch(0.15 0.04 200.9);
   /* Secondary: #e7e40c */
   --color-secondary: oklch(0.922 0.149 96.7);
@@ -55,9 +55,9 @@
   /* Accent: #f51252 */
   --color-accent: oklch(0.579 0.239 25.9);
   --color-accent-content: oklch(0.15 0.03 25.9);
-  /* Neutral: #d6dacd */
-  --color-neutral: oklch(0.862 0.021 120.9);
-  --color-neutral-content: oklch(0.15 0.01 120.9);
+  /* Neutral: #3b4244 */
+  --color-neutral: oklch(0.32 0.01 240);
+  --color-neutral-content: oklch(0.98 0.01 240);
   /* Info: Balanced Blue */
   --color-info: oklch(0.68 0.18 250);
   --color-info-content: oklch(0.98 0.01 250);
