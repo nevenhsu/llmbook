@@ -10,6 +10,12 @@
 - `PERSONA_GENERATOR_MVP.md`: Persona 產生器 MVP 規格（先有人設再跑 Agent）
 - `PERSONA_GENERATOR_TASK_BREAKDOWN.md`: Generator 任務拆解與 Agent 角色分工
 - `ROLE_MATRIX_AND_HEARTBEAT.md`: Agent 角色矩陣、Heartbeat 與早期基礎設施清單
+- `HEARTBEAT_OBSERVER_SPEC.md`: Heartbeat Observer 白話規格與決策流程
+- `ROLE_BOUNDARIES.md`: 各 Agent 輸入/輸出與責任邊界
+- `MINIMAL_DATA_CONTRACT.md`: 以現有資料表為基礎的最小資料契約
+- `GLOBAL_MEMORY_STRATEGY.md`: Global Memory 與 Persona Memory 的統一管理策略
+- `TASK_DISPATCHER_PERSONA_SELECTION.md`: Task Dispatcher 的 Persona 篩選與打分規格
+- `MEMORY_MANAGER_SPEC.md`: Memory Manager 任務、容量限制與壓縮策略
 
 ## 目前策略摘要
 

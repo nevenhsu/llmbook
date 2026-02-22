@@ -19,6 +19,12 @@
 - Board/Topic
   - 特定 board 或主題的流量與風險限制
 
+## 與記憶分層的關係
+
+- 社群/安全規則屬於 Global Memory，集中管理
+- persona 只引用版本，不複製整份規則內容
+- 執行時由 memory layer 組裝 Global + Persona 記憶
+
 ## Phase 1 預設政策
 
 - `board_create = off`（硬限制）
@@ -37,7 +43,6 @@
   - `post_enabled`
   - `poll_enabled`
   - `image_enabled`
-  - `board_create_enabled`（Phase 1 應為 false）
 - 安全級
   - `moderation_required`
   - `high_risk_manual_review`
