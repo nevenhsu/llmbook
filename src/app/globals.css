@@ -10,65 +10,73 @@
 
 @plugin "daisyui/theme" {
   name: "light";
-  /* Light theme aligned to black-theme hues, rebalanced for white surfaces */
-  --color-primary: oklch(0.8416 0.1986 86.29);
-  --color-primary-content: oklch(0.16 0.03 96);
-  --color-secondary: oklch(0.7 0.16 240);
-  --color-secondary-content: oklch(0.16 0.03 240);
-  --color-accent: oklch(0.76 0.15 170);
-  --color-accent-content: oklch(0.16 0.03 170);
-  --color-neutral: oklch(0.62 0.03 250);
-  --color-neutral-content: oklch(0.14 0.02 250);
-  --color-info: oklch(0.6 0.16 250);
-  --color-info-content: oklch(0.16 0.03 250);
-  --color-success: oklch(0.68 0.14 145);
-  --color-success-content: oklch(0.16 0.03 145);
-  --color-warning: oklch(0.8198 0.155 90.62);
-  --color-warning-content: oklch(0.15 0.02 85);
-  --color-error: oklch(0.62 0.16 25);
-  --color-error-content: oklch(0.16 0.03 25);
-  --color-blue: oklch(0.6 0.16 250);
-  --color-green: oklch(0.68 0.14 145);
-  --color-red: oklch(0.62 0.16 25);
-  --color-yellow: oklch(0.8198 0.155 90.62);
-  --color-purple: oklch(0.62 0.15 300);
-  --color-orange: oklch(0.7 0.15 50);
+  /* Primary: #04eaed - vibrant balanced teal */
+  --color-primary: oklch(0.82 0.15 200.9);
+  --color-primary-content: oklch(0.15 0.04 200.9);
+  /* Secondary: #e7e40c - vibrant balanced yellow */
+  --color-secondary: oklch(0.85 0.16 96.7);
+  --color-secondary-content: oklch(0.15 0.02 96.7);
+  /* Accent: #f51252 - vibrant balanced pink-red */
+  --color-accent: oklch(0.68 0.23 25.9);
+  --color-accent-content: oklch(0.98 0.02 25.9);
+  /* Neutral: #d6dacd - light balanced gray-green */
+  --color-neutral: oklch(0.88 0.02 120.9);
+  --color-neutral-content: oklch(0.25 0.01 120.9);
+  /* Info: Bright Blue */
+  --color-info: oklch(0.72 0.18 250);
+  --color-info-content: oklch(0.98 0.02 250);
+  /* Success: Bright Green */
+  --color-success: oklch(0.75 0.16 145);
+  --color-success-content: oklch(0.98 0.02 145);
+  /* Warning: Bright Yellow */
+  --color-warning: oklch(0.85 0.18 90);
+  --color-warning-content: oklch(0.2 0.04 90);
+  /* Error: Bright Red */
+  --color-error: oklch(0.68 0.18 25);
+  --color-error-content: oklch(0.98 0.02 25);
+  /* General Colors (Synced with Info/Success/Warning/Error) */
+  --color-blue: oklch(0.72 0.18 250);
+  --color-green: oklch(0.75 0.16 145);
+  --color-red: oklch(0.68 0.18 25);
+  --color-yellow: oklch(0.85 0.18 90);
+  --color-purple: oklch(0.65 0.18 300);
+  --color-orange: oklch(0.75 0.18 50);
 }
 
 @plugin "daisyui/theme" {
   name: "black";
   prefersdark: true;
-  /* Primary: Cyber Gold+ - Increased saturation for more vibrancy */
-  --color-primary: oklch(0.86 0.18 95);
-  --color-primary-content: oklch(0.2 0.04 95);
-  /* Secondary: Vibrant Slate - Richer blue-gray, maintaining legibility */
-  --color-secondary: oklch(0.65 0.1 240);
-  --color-secondary-content: oklch(0.98 0.02 240);
-  /* Accent: Silver Teal+ - More vibrant teal-sage for harmony */
-  --color-accent: oklch(0.82 0.12 170);
-  --color-accent-content: oklch(0.15 0.03 170);
-  /* Neutral: Polished Steel - Visible medium-gray for text and borders */
-  --color-neutral: oklch(0.55 0.01 0);
-  --color-neutral-content: oklch(0.1 0.01 0);
-  /* Info: Muted Blue */
-  --color-info: oklch(0.63 0.16 250);
+  /* Primary: #04eaed */
+  --color-primary: oklch(0.892 0.129 200.9);
+  --color-primary-content: oklch(0.15 0.04 200.9);
+  /* Secondary: #e7e40c */
+  --color-secondary: oklch(0.922 0.149 96.7);
+  --color-secondary-content: oklch(0.15 0.02 96.7);
+  /* Accent: #f51252 */
+  --color-accent: oklch(0.579 0.239 25.9);
+  --color-accent-content: oklch(0.15 0.03 25.9);
+  /* Neutral: #d6dacd */
+  --color-neutral: oklch(0.862 0.021 120.9);
+  --color-neutral-content: oklch(0.15 0.01 120.9);
+  /* Info: Balanced Blue */
+  --color-info: oklch(0.68 0.18 250);
   --color-info-content: oklch(0.98 0.01 250);
-  /* Success: Muted Green */
-  --color-success: oklch(0.72 0.12 145);
+  /* Success: Balanced Green */
+  --color-success: oklch(0.72 0.16 145);
   --color-success-content: oklch(0.15 0.02 145);
-  /* Warning: Muted Yellow */
-  --color-warning: oklch(0.75 0.12 85);
+  /* Warning: Balanced Yellow */
+  --color-warning: oklch(0.78 0.16 85);
   --color-warning-content: oklch(0.15 0.02 85);
-  /* Error: Muted Red */
-  --color-error: oklch(0.62 0.14 25);
+  /* Error: Balanced Red */
+  --color-error: oklch(0.64 0.19 25);
   --color-error-content: oklch(0.98 0.01 25);
-  /* General Colors (Muted for dark backgrounds) */
-  --color-blue: oklch(0.63 0.16 250);
-  --color-green: oklch(0.65 0.14 145);
-  --color-red: oklch(0.62 0.16 25);
-  --color-yellow: oklch(0.7 0.14 80);
-  --color-purple: oklch(0.62 0.14 300);
-  --color-orange: oklch(0.66 0.14 50);
+  /* General Colors (Balanced for black theme) */
+  --color-blue: oklch(0.68 0.18 250);
+  --color-green: oklch(0.72 0.16 145);
+  --color-red: oklch(0.64 0.19 25);
+  --color-yellow: oklch(0.78 0.16 85);
+  --color-purple: oklch(0.68 0.17 300);
+  --color-orange: oklch(0.72 0.17 50);
 }
 
 @theme {
