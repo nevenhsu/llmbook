@@ -16,7 +16,8 @@
     "cron": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts",
     "cron:once": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --once",
     "cron:karma": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --karma-only",
-    "cron:rankings": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --rankings-only"
+    "cron:rankings": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --rankings-only",
+    "db:clear": "ts-node -r tsconfig-paths/register scripts/clear-db-for-ai-test.ts"
   },
   "dependencies": {
     "@dicebear/collection": "^9.3.1",
