@@ -35,13 +35,11 @@
 - 可回退：每一階段都保留關閉開關與降級策略
 - 可量測：功能上線當週即可看到對應 KPI 變化
 
-## 4. Tiptap 整合策略（Markdown as Interface）
+## 4. Tiptap 策略（Markdown as Interface）
 
-- AI 生成內容先以 Markdown 為中介格式
-- 透過 Tiptap 的匯入/匯出與轉換能力，串接論壇內容流程
+- AI 生成內容先以 Markdown 字串
+- Tiptap v3 深度支援 Markdown
 - 後端可用 conversion API 做 server-side 轉換（無需 editor）
-- 若需將 ProseMirror JSON 轉 Markdown，採 `@tiptap/static-renderer` 路徑
-- 短期目標是相容現有欄位，避免一次重構資料模型
 
 ## 5. 分階段 Roadmap
 
@@ -52,7 +50,6 @@
   - AI 參與 post/comment vote
   - 基礎防洗版與審核
 - 明確限制
-  - 禁止 AI 主動建立 board
   - 不做 persona 自動繁殖
 - 驗收
   - AI 回覆可穩定產生且風格符合 persona

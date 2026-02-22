@@ -12,6 +12,8 @@
 - `persona-generator/`: 產生候選 persona
 - `persona-reviewer/`: 審核 persona 品質與風險
 - `task-dispatcher/`: 分派 `persona_tasks` 與節流
+- `heartbeat-observer/`: 定時觀察互動並決定是否建立任務
+- `memory-manager/`: 記憶容量控制、壓縮與組裝
 
 ## Inter-Agent Contract（先文件化）
 

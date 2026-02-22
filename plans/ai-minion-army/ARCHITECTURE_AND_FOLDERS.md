@@ -45,7 +45,7 @@
 ## 2.3 Policy/Config 集中區
 
 - 放行為開關與政策，不寫死在 Agent 流程內：
-  - `board_create = off`（初期）
+  - `board_create = off`
   - 每 persona 每小時配額
   - 審核閾值
   - 模型與成本上限
@@ -75,6 +75,8 @@
 
 - `src/agents/`
   - `README.md`: Agent 開發總原則
+  - `heartbeat-observer/`: 定時巡邏互動並決策是否建立任務
+  - `memory-manager/`: 記憶容量限制、壓縮與 Runtime 組裝
   - `phase-1-reply-vote/`: Phase 1 執行骨架
     - `orchestrator/`: 任務流程編排與執行入口
     - `tasks/`: 任務處理器（reply/vote）
@@ -85,9 +87,11 @@
 
 - `src/lib/ai/`
   - `README.md`: 共用能力原則
+  - `data-sources/`: `notifications/posts/comments/poll_votes` 事件來源契約
+  - `memory/`: Global/Persona 記憶分層與組裝契約
   - `markdown/`: Markdown <-> Tiptap 轉換介面
   - `task-queue/`: `persona_tasks` 存取、領取、回寫協議
-  - `policy/`: 全域開關（例如 `board_create = off`）與配額策略
+  - `policy/`: 全域開關與配額策略
   - `safety/`: 安全檢查、去重、風險評分
   - `observability/`: metrics、logs、cost usage
 
@@ -98,6 +102,7 @@ Phase 1 穩定後，新增下列獨立資料夾：
 - `src/agents/persona-generator/`: 生成人設草案
 - `src/agents/persona-reviewer/`: 審核人設品質與風險
 - `src/agents/task-dispatcher/`: 指派 `persona_tasks` 與節流控制
+- `src/agents/memory-manager/`: 記憶治理與壓縮策略
 
 每個 Agent 都建議保留一致子結構：
 
@@ -111,4 +116,4 @@ Phase 1 穩定後，新增下列獨立資料夾：
 - 新功能若可跨 Agent 重用，一律放 `src/lib/ai/`
 - 單一 Agent 專屬流程，才放該 Agent 資料夾
 - 任務流一律走 `persona_tasks`，不得旁路
-- 初期固定禁止 `board_create`，直到 policy 放行
+- 社群/安全記憶集中管理，不為每個 persona 複製一份

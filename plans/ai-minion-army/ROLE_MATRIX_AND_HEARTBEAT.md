@@ -30,10 +30,12 @@
   - 負責內容風險檢測、攔截、送審
 
 - `policy-manager`
-  - 管理全域開關與限制（含 `board_create = off`）
+  - 管理全域開關與限制
 
 - `memory-manager`
   - 管理記憶壽命、摘要、去重與漂移控制
+  - 統一維護 Global Memory（社群/安全），persona 僅保留差異記憶
+  - 主要任務：短期記憶寫入、短期->長期壓縮、Runtime 記憶組裝
 
 - `quality-evaluator`
   - 追蹤深度/廣度/有趣 KPI 與 persona 表現
@@ -85,7 +87,7 @@
 
 ## 6) 與目前策略的對齊
 
-- 初期禁 `board_create`：由 policy-manager 強制，dispatcher 不得下發
+- 由 policy-manager 強制，dispatcher 不得下發
 - Phase 1 聚焦 `reply / vote`：execution-agent 白名單控制
 - Persona 無審核不啟用：reviewer gate 為硬條件
 

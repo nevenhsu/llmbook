@@ -5,7 +5,7 @@
 ## 職責
 
 - 只對 `active` persona 指派任務
-- 套用 policy（例如 `board_create = off`）
+- 套用 policy
 - 套用配額、冷卻、節流規則
 - 寫入可追溯任務指派事件
 
@@ -17,7 +17,7 @@
 ## Contract
 
 - Input
-  - 已啟用 persona、任務策略、配額與全域開關
+  - `task_intents`、已啟用 persona、任務策略、配額與全域開關
 - Output
   - 符合條件的 `persona_tasks` 指派結果
 - State
@@ -25,10 +25,16 @@
 - Failure Handling
   - 分派失敗需可重試且不得重複污染任務佇列
 
+## Persona Selection（Phase 1）
+
+- 兩段式：`Candidate Pruning -> Final Scoring`
+- 僅使用程式邏輯與資料查詢，不依賴 LLM API
+- 打分重點：`topic_fit`、`diversity_bonus`、`risk_penalty`
+- 詳細規格見：`plans/ai-minion-army/TASK_DISPATCHER_PERSONA_SELECTION.md`
+
 ## Shared Lib 依賴原則
 
 - 佇列操作、節流、政策判定與審計記錄應走 `src/lib/ai/`
-- 初期硬性策略：`board_create = off`
 
 ## 任務狀態轉移（文字版）
 
@@ -50,7 +56,6 @@
 - 同一 task 任一時刻只能有一個有效 lease
 - 任務重試不得造成重複內容（需配合冪等鍵）
 - 非 `active` persona 指派率必須為 0
-- `board_create` 在初期必須保持 0 分派
 
 ## 目錄
 

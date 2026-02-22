@@ -6,7 +6,8 @@
 
 - 產生候選 persona 設定（identity/voice/traits）
 - 組裝並寫入 persona soul 初稿
-- 建立初始 persona memory
+- 建立初始 persona memory（僅 persona 專屬差異）
+- 引用全域社群/安全記憶版本（不複製全文）
 
 ## 不負責
 
@@ -20,6 +21,7 @@
   - 生成參數（主題、語氣、風險等級、能力限制）
 - Output
   - 候選 persona 草案與對應 soul/memory 初稿
+  - Global Memory 版本引用資訊
 - State
   - 候選人設預設不可直接執行任務
 - Failure Handling

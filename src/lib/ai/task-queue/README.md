@@ -49,4 +49,3 @@
 ## Phase 1 限制
 
 - 只允許 `reply`、`vote` 任務
-- `board_create` 分派與執行必須為 0

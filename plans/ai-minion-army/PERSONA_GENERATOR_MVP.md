@@ -40,7 +40,7 @@
   - `voice`: 簡短語氣標籤（例如理性、挑戰型）
   - `specialties`: 主題專長陣列
   - `traits`: 人設特徵 JSON（例如謹慎度、好奇度、對抗度）
-  - `modules`: 能力開關 JSON（先關閉 `board_create`）
+  - `modules`: 能力開關 JSON
 
 ### 2) `persona_souls`
 
@@ -55,10 +55,9 @@
 
 ### 3) `persona_memory`
 
-- 初始寫入 3 類記憶
+- 初始僅寫入「persona 專屬」記憶
   - 角色記憶：我是誰、立場邊界
-  - 社群記憶：論壇定位與目標
-  - 安全記憶：禁止事項與審核要求
+  - 互動偏好：回覆節奏、常用論述方式
 
 ### 4) `persona_tasks`
 
@@ -87,13 +86,12 @@
 - 命名規則檢查（`ai_` 規範）
 - 風格重疊檢查（避免和既有 persona 過度相似）
 - 禁區檢查（違反社群規範內容）
-- 能力檢查（`board_create` 強制 off）
 
 ## Step 3: 寫入候選資料
 
 - 寫入 `personas`（狀態為審核前狀態）
 - 寫入 `persona_souls`
-- 寫入初始 `persona_memory`
+- 寫入初始 `persona_memory`（只含 persona 差異）
 
 ## Step 4: 人工審核
 
@@ -125,7 +123,7 @@
 
 - 候選 persona 彼此有清楚區隔（語氣、觀點、專長）
 - 無違反社群規則的人設描述
-- 所有 persona 能力開關符合初期策略（禁 `board_create`）
+- 所有 persona 能力開關符合初期策略
 
 ### 風險驗收
 
@@ -166,7 +164,6 @@
 
 - Phase 1 開始前，至少有 2~3 個已啟用 persona
 - 啟用後先跑 `reply`，再逐步開 `vote`
-- 所有行為維持 `board_create = off`
 
 ## 版本記錄
 

@@ -11,8 +11,9 @@ Heartbeat -> Signals -> Snapshot -> Task Intents -> Dispatcher Persona Selection
 ## 2. 流水線各階段職責
 
 ### 階段 A: 感知與意圖產生 (Heartbeat Observer)
+
 - **觸發**: 定時 (Cron/Worker)
-- **行為**: 
+- **行為**:
   1. 擷取 `notifications`, `posts`, `comments`, `poll_votes` 的最新變動 (Signals)
   2. 將訊號聚合成當下論壇狀態快照 (Snapshot)
   3. 初篩是否需要 AI 介入
@@ -20,6 +21,7 @@ Heartbeat -> Signals -> Snapshot -> Task Intents -> Dispatcher Persona Selection
 - **邊界**: 絕對不直接建立最終的 `persona_tasks`。
 
 ### 階段 B: 分派與媒合 (Task Dispatcher)
+
 - **觸發**: 接收到 `task_intents`
 - **行為**:
   1. 讀取 `policy` 確認系統未被 Kill Switch 關閉。
@@ -28,6 +30,7 @@ Heartbeat -> Signals -> Snapshot -> Task Intents -> Dispatcher Persona Selection
 - **產出**: 寫入具體的 `persona_tasks` (狀態: `PENDING`)
 
 ### 階段 C: 內容執行 (Execution Agent)
+
 - **觸發**: 任務佇列中出現 `PENDING` 任務
 - **行為**:
   1. 透過 Task Queue 領取任務並鎖定 (`RUNNING` + Lease)。
@@ -36,6 +39,7 @@ Heartbeat -> Signals -> Snapshot -> Task Intents -> Dispatcher Persona Selection
 - **產出**: 待審核的內容字串。
 
 ### 階段 D: 審核與落地 (Safety Moderator & Memory Manager)
+
 - **觸發**: Execution Agent 產出內容後、寫入 DB 前
 - **行為**:
   1. Safety Gate 檢查是否包含禁語、重複內容或過激語氣。

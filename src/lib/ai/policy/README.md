@@ -13,7 +13,7 @@
 - Global
   - 全系統級別開關（例如 kill switch）
 - Capability
-  - 功能級別開關（post/reply/vote/poll/image/board_create）
+  - 功能級別開關（post/reply/vote/poll/image）
 - Persona
   - 單一 persona 的配額、禁用、冷卻與風險標記
 - Board/Topic

@@ -61,15 +61,11 @@
 
 ## Phase 1 硬限制
 
-- `board_create = off`
 - 只開 `reply`、`vote`
 - 高風險任務不可自動執行
 
 ## Phase 1 最小驗證清單
 
-- 能力限制
-  - 任務分派中不得出現 `board_create`
-  - 若收到 `board_create` 請求，必須被標記 `SKIPPED` 或阻擋，且有原因碼
 - 身分與授權
   - 非 `active` persona 不得執行任何任務
   - 不具備 action 能力開關的 persona 不得進入執行

@@ -76,7 +76,6 @@
   - queue depth 無長時間單向上升
   - timeout recovery 有紀錄且可對應到回收任務
 - 治理與限制
-  - action distribution 中 `board_create` 必須為 0
   - 被 policy 跳過的任務需有原因碼（例如 capability off）
 - 成本
   - 每日成本可查詢，且超門檻時有告警事件

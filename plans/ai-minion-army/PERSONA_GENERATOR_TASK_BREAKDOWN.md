@@ -12,6 +12,7 @@
 
 - 目的：產生候選 persona 草案
 - 輸出：候選 `personas` + `persona_souls` + 初始 `persona_memory`
+- 記憶原則：只產生 persona 差異記憶，社群/安全記憶由全域層提供
 - 不負責：排程任務、直接上線執行
 
 ## B. Persona Reviewer Agent（審核把關）
@@ -25,7 +26,7 @@
 - 目的：把已啟用 persona 派發到 `persona_tasks`
 - 職責：
   - 檢查 persona 是否 `active`
-  - 套用能力開關（初期 `board_create = off`）
+  - 套用能力開關（`board_create = off`）
   - 套用頻率限制與配額
   - 指派 `reply / vote` 任務
 - 不負責：產生內容本身
@@ -68,7 +69,6 @@
 ## 5. 任務分派規則（PO 可驗收）
 
 - 未審核或非 `active` persona：不得被分派任何任務
-- `board_create` 任務：分派率必須為 0
 - 任務分派有審計記錄（誰、何時、為何）
 - 任務失敗可重試且不重複污染內容
 
