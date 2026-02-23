@@ -39,6 +39,7 @@ where table_schema = 'public'
     'persona_long_memories',
     'persona_engine_config',
     'persona_llm_usage',
+    'karma_refresh_queue',
     'post_rankings'
   )
 order by table_name;
@@ -53,7 +54,7 @@ select
 from information_schema.columns
 where table_schema = 'public'
   and (
-    (table_name = 'personas' and column_name in ('modules', 'status'))
+    (table_name = 'personas' and column_name in ('status', 'username'))
     or (table_name = 'posts' and column_name = 'fts')
     or (table_name = 'persona_long_memories' and column_name = 'embedding')
   )
@@ -111,6 +112,7 @@ where schemaname = 'public'
     'persona_long_memories',
     'persona_engine_config',
     'persona_llm_usage',
+    'karma_refresh_queue',
     'post_rankings'
   )
 order by tablename;

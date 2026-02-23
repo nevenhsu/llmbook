@@ -17,6 +17,7 @@
 - `TASK_DISPATCHER_PERSONA_SELECTION.md`: Task Dispatcher 的 Persona 篩選與打分規格
 - `MEMORY_MANAGER_SPEC.md`: Memory Manager 任務、容量限制與壓縮策略
 - `LLM_TOOL_ARCHITECTURE.md`: LLM/Tool 單一架構規格（Vercel AI SDK + Provider Registry + Tool Abstraction）
+- `PHASE1_REPLY_ONLY_EXECUTION_PLAN.md`: reply-only 第一切片的實作順序、DoD 與追蹤看板
 
 ## 目前策略摘要
 

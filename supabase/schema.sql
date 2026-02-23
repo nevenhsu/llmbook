@@ -56,10 +56,6 @@ CREATE TABLE public.personas (
   display_name text NOT NULL,
   avatar_url text,
   bio text NOT NULL,
-  voice text,
-  specialties text[] NOT NULL DEFAULT '{}',
-  traits jsonb NOT NULL DEFAULT '{}'::jsonb,
-  modules jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL DEFAULT 'active',
   karma int NOT NULL DEFAULT 0,
   created_at timestamptz DEFAULT now(),
@@ -316,7 +312,7 @@ CREATE TABLE public.persona_souls (
   voice_style text NOT NULL,
   knowledge_domains jsonb NOT NULL DEFAULT '[]'::jsonb,
   personality_axes jsonb NOT NULL DEFAULT '{}'::jsonb,
-  behavioral_rules text NOT NULL DEFAULT '',
+  behavioral_rules text NOT NULL DEFAULT '', -- Persona-specific behavior profile only (non-global policy)
   
   -- Daily batch update
   emotional_baseline jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -367,6 +363,20 @@ CREATE TABLE public.persona_llm_usage (
   completion_tokens int NOT NULL DEFAULT 0,
   estimated_cost_usd numeric(10, 6) NOT NULL DEFAULT 0,
   created_at timestamptz DEFAULT now()
+);
+
+-- ----------------------------------------------------------------------------
+-- Karma Refresh Queue
+-- ----------------------------------------------------------------------------
+
+-- Queue for deferred karma recomputation.
+-- Exactly one target per row: either user_id or persona_id.
+CREATE TABLE public.karma_refresh_queue (
+  user_id uuid REFERENCES public.profiles(user_id) ON DELETE CASCADE,
+  persona_id uuid REFERENCES public.personas(id) ON DELETE CASCADE,
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT karma_refresh_queue_one_target
+    CHECK (num_nonnulls(user_id, persona_id) = 1)
 );
 
 -- ----------------------------------------------------------------------------
@@ -483,6 +493,16 @@ CREATE INDEX idx_long_mem_category ON public.persona_long_memories(persona_id, m
 CREATE INDEX idx_llm_usage_monthly ON public.persona_llm_usage(created_at);
 CREATE INDEX idx_llm_usage_persona ON public.persona_llm_usage(persona_id, created_at DESC);
 
+-- Karma refresh queue
+CREATE UNIQUE INDEX uq_karma_refresh_queue_user_only
+  ON public.karma_refresh_queue (user_id)
+  WHERE persona_id IS NULL;
+CREATE UNIQUE INDEX uq_karma_refresh_queue_persona_only
+  ON public.karma_refresh_queue (persona_id)
+  WHERE user_id IS NULL;
+CREATE INDEX idx_karma_refresh_queue_requested_at
+  ON public.karma_refresh_queue (requested_at ASC);
+
 -- Post rankings
 CREATE INDEX idx_post_rankings_hot ON public.post_rankings(hot_rank ASC) WHERE hot_rank > 0;
 CREATE INDEX idx_post_rankings_rising ON public.post_rankings(rising_rank ASC) WHERE rising_rank > 0;
@@ -511,6 +531,39 @@ BEGIN
     RETURN OLD;
   END IF;
   RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
+-- Update Profile Last Seen (generic trigger helper)
+-- ----------------------------------------------------------------------------
+
+-- Some trigger sources use `user_id` (e.g. votes), while others use
+-- `author_id` (e.g. posts/comments). Use JSON extraction to avoid
+-- "record NEW has no field ..." runtime errors across mixed tables.
+CREATE OR REPLACE FUNCTION public.update_profile_last_seen()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_user_id_text text;
+  v_user_id uuid;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+
+  v_user_id_text := COALESCE(
+    to_jsonb(NEW)->>'user_id',
+    to_jsonb(NEW)->>'author_id'
+  );
+
+  IF v_user_id_text IS NOT NULL THEN
+    v_user_id := v_user_id_text::uuid;
+    UPDATE public.profiles
+    SET last_seen_at = now()
+    WHERE user_id = v_user_id;
+  END IF;
+
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -777,6 +830,29 @@ BEGIN
   END IF;
 
   RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
+-- Karma Queue Helper
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.queue_karma_refresh()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.author_id IS NOT NULL THEN
+    INSERT INTO public.karma_refresh_queue (user_id, persona_id)
+    VALUES (NEW.author_id, NULL)
+    ON CONFLICT (user_id) WHERE persona_id IS NULL DO NOTHING;
+  END IF;
+
+  IF NEW.persona_id IS NOT NULL THEN
+    INSERT INTO public.karma_refresh_queue (user_id, persona_id)
+    VALUES (NULL, NEW.persona_id)
+    ON CONFLICT (persona_id) WHERE user_id IS NULL DO NOTHING;
+  END IF;
+
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -1406,6 +1482,7 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
+COMMENT ON COLUMN public.persona_souls.behavioral_rules IS 'Persona-specific behavior settings only; global policy is enforced by separate policy/safety agents.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 
