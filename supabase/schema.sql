@@ -265,29 +265,105 @@ CREATE TABLE public.notifications (
 -- Persona System Tables
 -- ----------------------------------------------------------------------------
 
+-- Heartbeat checkpoints (per source watermark)
+CREATE TABLE public.heartbeat_checkpoints (
+  source_name text PRIMARY KEY,  -- notifications | posts | comments | votes | poll_votes
+  last_captured_at timestamptz NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+  safety_overlap_seconds int NOT NULL DEFAULT 10,
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT heartbeat_checkpoints_overlap_non_negative CHECK (safety_overlap_seconds >= 0)
+);
+
+-- Heartbeat intents emitted before dispatcher creates persona_tasks
+CREATE TABLE public.task_intents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  intent_type text NOT NULL,  -- reply | vote
+  source_table text NOT NULL, -- notifications | posts | comments | votes | poll_votes
+  source_id uuid NOT NULL,
+  source_created_at timestamptz NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status text NOT NULL DEFAULT 'NEW', -- NEW | DISPATCHED | SKIPPED
+  decision_reason_codes text[] NOT NULL DEFAULT '{}',
+  selected_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT task_intents_type_check CHECK (intent_type IN ('reply', 'vote')),
+  CONSTRAINT task_intents_source_table_check CHECK (
+    source_table IN ('notifications', 'posts', 'comments', 'votes', 'poll_votes')
+  ),
+  CONSTRAINT task_intents_status_check CHECK (status IN ('NEW', 'DISPATCHED', 'SKIPPED')),
+  CONSTRAINT task_intents_source_unique UNIQUE (intent_type, source_table, source_id)
+);
+
 -- Persona task queue
 CREATE TABLE public.persona_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
+  source_intent_id uuid REFERENCES public.task_intents(id) ON DELETE SET NULL,
   task_type text NOT NULL,  -- 'comment' | 'post' | 'reply' | 'vote' | 'image_post' | 'poll_post'
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  idempotency_key text,
   
   -- Status and scheduling
   status text NOT NULL DEFAULT 'PENDING',  -- PENDING → RUNNING → DONE | FAILED | SKIPPED
   scheduled_at timestamptz NOT NULL DEFAULT now(),
   started_at timestamptz,
   completed_at timestamptz,
+  lease_owner text,
+  lease_until timestamptz,
+  last_heartbeat_at timestamptz,
   
   -- Retry logic
-  retry_count int DEFAULT 0,
-  max_retries int DEFAULT 3,
+  retry_count int NOT NULL DEFAULT 0,
+  max_retries int NOT NULL DEFAULT 3,
   
   -- Result tracking
   result_id uuid,        -- ID of created post/comment/vote
   result_type text,      -- 'post' | 'comment' | 'vote'
   error_message text,
   
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT persona_tasks_status_check CHECK (status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')),
+  CONSTRAINT persona_tasks_retry_non_negative CHECK (retry_count >= 0 AND max_retries >= 0),
+  CONSTRAINT persona_tasks_type_check CHECK (
+    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post')
+  )
+);
+
+-- Durable idempotency map for task outputs
+CREATE TABLE public.task_idempotency_keys (
+  task_type text NOT NULL, -- reply | vote | post | comment
+  idempotency_key text NOT NULL,
+  result_id uuid NOT NULL,
+  result_type text NOT NULL, -- post | comment | vote
+  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  PRIMARY KEY (task_type, idempotency_key),
+  CONSTRAINT task_idempotency_type_check CHECK (task_type IN ('reply', 'vote', 'post', 'comment')),
+  CONSTRAINT task_idempotency_result_type_check CHECK (result_type IN ('post', 'comment', 'vote'))
+);
+
+-- Task state transition audit log
+CREATE TABLE public.task_transition_events (
+  id bigserial PRIMARY KEY,
+  task_id uuid NOT NULL REFERENCES public.persona_tasks(id) ON DELETE CASCADE,
+  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
+  task_type text NOT NULL,
+  from_status text NOT NULL,
+  to_status text NOT NULL,
+  reason_code text,
+  worker_id text,
+  retry_count int NOT NULL DEFAULT 0,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT task_transition_task_type_check CHECK (
+    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post')
+  ),
+  CONSTRAINT task_transition_status_check CHECK (
+    from_status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')
+    AND to_status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')
+  )
 );
 
 -- Persona memory (short-term memory / deduplication)
@@ -470,9 +546,30 @@ CREATE INDEX idx_board_moderators_user ON public.board_moderators(user_id);
 CREATE INDEX idx_board_members_board ON public.board_members(board_id);
 CREATE INDEX idx_board_members_user ON public.board_members(user_id);
 
+-- Heartbeat checkpoints
+CREATE INDEX idx_heartbeat_checkpoints_updated_at ON public.heartbeat_checkpoints(updated_at DESC);
+
+-- Task intents
+CREATE INDEX idx_task_intents_status_created ON public.task_intents(status, created_at DESC);
+CREATE INDEX idx_task_intents_source_created ON public.task_intents(source_table, source_created_at DESC);
+CREATE INDEX idx_task_intents_selected_persona ON public.task_intents(selected_persona_id);
+
 -- Persona tasks
 CREATE INDEX idx_persona_tasks_scheduled ON public.persona_tasks(scheduled_at) WHERE status = 'PENDING';
 CREATE INDEX idx_persona_tasks_persona ON public.persona_tasks(persona_id);
+CREATE INDEX idx_persona_tasks_running_lease ON public.persona_tasks(lease_until) WHERE status = 'RUNNING';
+CREATE INDEX idx_persona_tasks_source_intent ON public.persona_tasks(source_intent_id);
+CREATE UNIQUE INDEX uq_persona_tasks_idempotency_key ON public.persona_tasks(task_type, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+-- Task idempotency keys
+CREATE INDEX idx_task_idempotency_task_id ON public.task_idempotency_keys(task_id);
+CREATE INDEX idx_task_idempotency_created_at ON public.task_idempotency_keys(created_at DESC);
+
+-- Task transition events
+CREATE INDEX idx_task_transition_events_task_created ON public.task_transition_events(task_id, created_at DESC);
+CREATE INDEX idx_task_transition_events_persona_created ON public.task_transition_events(persona_id, created_at DESC);
+CREATE INDEX idx_task_transition_events_reason_code ON public.task_transition_events(reason_code);
 
 -- Persona memory
 CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
@@ -1085,7 +1182,11 @@ ALTER TABLE public.board_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.board_moderators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.heartbeat_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_intents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_idempotency_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_transition_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
@@ -1472,7 +1573,11 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- Persona Tables (No public policies - service role only)
 -- ----------------------------------------------------------------------------
 
+-- heartbeat_checkpoints: No policies (service role only)
+-- task_intents: No policies (service role only)
 -- persona_tasks: No policies (service role only)
+-- task_idempotency_keys: No policies (service role only)
+-- task_transition_events: No policies (service role only)
 -- persona_memory: No policies (service role only)
 
 -- ============================================================================
@@ -1483,6 +1588,10 @@ COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
 COMMENT ON COLUMN public.persona_souls.behavioral_rules IS 'Persona-specific behavior settings only; global policy is enforced by separate policy/safety agents.';
+COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
+COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
+COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';
+COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks state transitions for replay and observability.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 

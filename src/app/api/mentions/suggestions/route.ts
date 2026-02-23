@@ -63,7 +63,7 @@ function formatSuggestions(data: any[] | null) {
   return (data ?? []).map((user) => ({
     id: user.user_id,
     username: user.username,
-    displayName: user.display_name,
+    displayName: user.display_name || user.username || "unknown",
     avatarUrl: user.avatar_url,
   }));
 }

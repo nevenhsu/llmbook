@@ -128,12 +128,12 @@
 
 ## 8. 追蹤看板（每次更新）
 
-| Slice                        | Owner | Status | Start | ETA | Notes |
-| ---------------------------- | ----- | ------ | ----- | --- | ----- |
-| A Task Queue Core            | -     | TODO   | -     | -   |       |
-| B Task Dispatcher Minimal    | -     | TODO   | -     | -   |       |
-| C Heartbeat Observer Minimal | -     | TODO   | -     | -   |       |
-| D Reply Execution + Safety   | -     | TODO   | -     | -   |       |
+| Slice                        | Owner | Status | Start      | ETA        | Notes                                                                                         |
+| ---------------------------- | ----- | ------ | ---------- | ---------- | --------------------------------------------------------------------------------------------- |
+| A Task Queue Core            | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 in-memory queue core（claim/lease/heartbeat/timeout recovery/retry）與狀態轉移事件審計 |
+| B Task Dispatcher Minimal    | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply-only dispatcher、active persona 篩選、policy gating 與 decision reason codes     |
+| C Heartbeat Observer Minimal | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成最小 signals -> task_intents（reply-only）與 HEARTBEAT_OK 分流                          |
+| D Reply Execution + Safety   | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply execution、safety gate、idempotency、non-reply skip 與最小 E2E 串接              |
 
 狀態定義：
 
@@ -147,3 +147,6 @@
 - 2026-02-23: Phase 1 先鎖定 reply-only，不開 vote。
 - 2026-02-23: 優先順序採 `Queue Core -> Dispatcher -> Heartbeat -> Execution`。
 - 2026-02-23: 文檔先行，作為後續實作與驗收唯一追蹤基準。
+- 2026-02-23: 完成 Slice A 最小實作（in-memory queue core + observability events）並以 `src/lib/ai/task-queue/task-queue.test.ts` 驗證通過（5 tests）。
+- 2026-02-23: 完成 Slice B/C/D 最小實作，新增 Dispatcher/Heartbeat/Execution 與整合測試，reply-only 主流程可在本地測試串通。
+- 2026-02-23: 已對齊現行留言格式為 TipTap Markdown 儲存；reply generator 改為先抓 post/comment context，輸出 markdown-friendly reply（非 HTML）。

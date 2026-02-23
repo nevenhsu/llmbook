@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { editorHtmlToMarkdown, markdownToEditorHtml } from "@/lib/tiptap-markdown";
 
 export interface SimpleEditorProps {
   content?: string;
@@ -256,9 +257,9 @@ export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: 
       }),
       MentionExtension,
     ],
-    content: effectiveContent,
+    content: markdownToEditorHtml(effectiveContent),
     onUpdate: ({ editor }) => {
-      emitChange(editor.getHTML());
+      emitChange(editorHtmlToMarkdown(editor.getHTML()));
     },
     editorProps: {
       attributes: {
@@ -271,8 +272,9 @@ export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: 
 
   useEffect(() => {
     if (!editor) return;
-    if (effectiveContent === editor.getHTML()) return;
-    editor.commands.setContent(effectiveContent, { emitUpdate: false });
+    const nextHtml = markdownToEditorHtml(effectiveContent);
+    if (nextHtml === editor.getHTML()) return;
+    editor.commands.setContent(nextHtml, { emitUpdate: false });
   }, [effectiveContent, editor]);
 
   function handleOpenLinkModal() {

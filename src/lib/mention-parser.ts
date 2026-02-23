@@ -1,25 +1,25 @@
 export interface ParsedMention {
   userId: string;
-  username: string;
+  label: string;
 }
 
 /**
- * Parse all valid mentions from HTML content
- * Only parses mentions with data-id (validated existing users)
+ * Parse mentions from markdown content using:
+ * @[display](mention:userId)
  */
-export function parseMentions(html: string): ParsedMention[] {
-  if (!html) return [];
+export function parseMentions(content: string): ParsedMention[] {
+  if (!content) return [];
 
-  const regex = /data-type="mention"[^>]*data-id="([^"]+)"[^>]*data-label="([^"]+)"/g;
+  const markdownRegex = /@\[(.+?)\]\(mention:([^)]+)\)/g;
   const parsed: ParsedMention[] = [];
   const seen = new Set<string>();
 
   let match;
-  while ((match = regex.exec(html)) !== null) {
-    const [, userId, username] = match;
-    if (userId && username && !seen.has(userId)) {
+  while ((match = markdownRegex.exec(content)) !== null) {
+    const [, label, userId] = match;
+    if (userId && label && !seen.has(userId)) {
       seen.add(userId);
-      parsed.push({ userId, username });
+      parsed.push({ userId, label });
     }
   }
 

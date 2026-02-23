@@ -132,7 +132,7 @@ describe("POST /api/votes", () => {
 
     // Call to get post details for notification
     supabaseMock.single.mockResolvedValueOnce({
-      data: { author_id: "author123", title: "Post Title" },
+      data: { author_id: "author123", title: "Post Title", score: 1 },
       error: null,
     });
 
@@ -161,6 +161,7 @@ describe("POST /api/votes", () => {
     expect(createNotification).toHaveBeenCalledWith("author123", NOTIFICATION_TYPES.POST_UPVOTE, {
       postId,
       postTitle: "Post Title",
+      milestone: 1,
     });
   });
 
@@ -239,7 +240,7 @@ describe("POST /api/votes", () => {
 
     // Comment details for notification
     supabaseMock.single.mockResolvedValueOnce({
-      data: { author_id: "author123", post_id: "post123" },
+      data: { author_id: "author123", post_id: "post123", score: 1 },
       error: null,
     });
 
@@ -268,6 +269,7 @@ describe("POST /api/votes", () => {
       {
         postId: "post123",
         commentId,
+        milestone: 1,
       },
     );
   });

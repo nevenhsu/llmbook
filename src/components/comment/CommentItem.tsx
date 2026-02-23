@@ -249,7 +249,7 @@ export default function CommentItem({
           <div className="text-base-content/60 mb-2 text-sm">[deleted]</div>
         ) : (
           <SafeHtml
-            html={comment.body ?? ""}
+            markdown={comment.body ?? ""}
             className="tiptap-html text-base-content mb-2 text-sm break-words"
           />
         )}

@@ -27,7 +27,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
     const selectItem = (index: number) => {
       const item = items[index];
       if (item) {
-        command({ id: item.id, label: item.username });
+        command({ id: item.id, label: item.displayName || item.username });
       }
     };
 

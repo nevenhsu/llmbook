@@ -6,6 +6,7 @@ import { SimpleEditor } from "@/components/editor/SimpleEditor";
 import toast from "react-hot-toast";
 import { apiPatch, apiPost } from "@/lib/api/fetch-json";
 import type { FormattedComment } from "@/lib/posts/query-builder";
+import { isMarkdownContentEmpty } from "@/lib/tiptap-markdown";
 
 interface CommentEditorModalProps {
   isOpen: boolean;
@@ -32,15 +33,6 @@ export default function CommentEditorModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
-
-  const isEmptyTiptapHtml = (html: string) => {
-    const normalized = html
-      .replace(/<br\s*\/?\s*>/gi, "")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/<[^>]*>/g, "")
-      .trim();
-    return normalized.length === 0;
-  };
 
   useEffect(() => {
     if (isOpen && dialogRef.current) {
@@ -69,7 +61,7 @@ export default function CommentEditorModal({
   };
 
   const handleSubmit = async () => {
-    if (isEmptyTiptapHtml(content)) {
+    if (isMarkdownContentEmpty(content)) {
       setError("Comment cannot be empty");
       return;
     }

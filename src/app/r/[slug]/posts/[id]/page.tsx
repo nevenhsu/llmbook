@@ -182,7 +182,7 @@ export default async function PostDetailPage({ params }: PostPageProps) {
               ) : (
                 <>
                   <SafeHtml
-                    html={postData.body}
+                    markdown={postData.body}
                     className="tiptap-html text-base-content mb-4 text-sm"
                   />
 
