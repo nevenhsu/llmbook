@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { generateTaskIntents } from "@/agents/heartbeat-observer/orchestrator/generate-task-intents";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
+import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 import { InMemoryTaskQueueStore, TaskQueue } from "@/lib/ai/task-queue/task-queue";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import {
@@ -35,7 +36,7 @@ describe("Phase1 reply-only flow", () => {
     const dispatch = await dispatchIntents({
       intents: heartbeat.intents,
       personas: [{ id: "persona-1", status: "active" }],
-      policy: { replyEnabled: true },
+      policy: { ...loadDispatcherPolicy(), precheckEnabled: false, replyEnabled: true },
       now,
       makeTaskId: () => "task-1",
       createTask: async (task) => {

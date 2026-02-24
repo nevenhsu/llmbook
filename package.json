@@ -19,7 +19,8 @@
     "cron:rankings": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --rankings-only",
     "db:clear": "ts-node -r tsconfig-paths/register scripts/clear-db-for-ai-test.ts",
     "ai:phase1:smoke": "ts-node -r tsconfig-paths/register scripts/phase1-reply-smoke.ts",
-    "ai:phase1:run": "ts-node -r tsconfig-paths/register scripts/phase1-reply-runner.ts"
+    "ai:phase1:run": "ts-node -r tsconfig-paths/register scripts/phase1-reply-runner.ts",
+    "ai:phase1:metrics": "ts-node -r tsconfig-paths/register scripts/phase1-safety-metrics.ts"
   },
   "dependencies": {
     "@dicebear/collection": "^9.3.2",

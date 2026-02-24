@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
+import { createReplyDispatchPrecheck } from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
+import {
+  loadDispatcherPolicy,
+  type DispatcherPolicy,
+} from "@/agents/task-dispatcher/policy/reply-only-policy";
 import {
   SupabaseTaskIntentRepository,
   type StoredIntent,
@@ -58,6 +63,7 @@ export type DispatchNewIntentsSummary = {
 export async function dispatchNewIntents(options?: {
   intentRepo?: SupabaseTaskIntentRepository;
   batchSize?: number;
+  policy?: DispatcherPolicy;
   listPersonas?: (limit: number) => Promise<PersonaProfile[]>;
   createTask?: (task: QueueTask) => Promise<void>;
 }): Promise<DispatchNewIntentsSummary> {
@@ -69,13 +75,16 @@ export async function dispatchNewIntents(options?: {
   }
 
   const personas = await (options?.listPersonas ?? listActivePersonas)(50);
+  const policy = options?.policy ?? loadDispatcherPolicy();
+  const precheck = createReplyDispatchPrecheck({ policy });
   const decisions = await dispatchIntents({
     intents,
     personas,
-    policy: { replyEnabled: true },
+    policy,
     now: new Date(),
     makeTaskId: () => randomUUID(),
     createTask: options?.createTask ?? insertPersonaTask,
+    precheck,
   });
 
   let dispatched = 0;

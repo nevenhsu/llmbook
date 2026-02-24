@@ -10,6 +10,7 @@ import {
   type TaskType,
 } from "@/lib/ai/task-queue/task-queue";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
+import { InMemorySafetyEventSink } from "@/lib/ai/observability/safety-events";
 import {
   ExecutionSkipReasonCode,
   GeneratorSkipReasonCode,
@@ -122,6 +123,36 @@ describe("ReplyExecutionAgent", () => {
       text: "hello",
       context: { recentPersonaReplies: ["hello there"] },
     });
+  });
+
+  it("records safety observability event on reason-coded block", async () => {
+    const store = new InMemoryTaskQueueStore([
+      buildTask({ payload: { idempotencyKey: "idem-1", postId: "post-1" } }),
+    ]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const safetyEventSink = new InMemorySafetyEventSink();
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: { generate: vi.fn().mockResolvedValue({ text: "risky" }) },
+      safetyGate: {
+        check: vi.fn().mockResolvedValue({
+          allowed: false,
+          reasonCode: SafetyReasonCode.similarToRecentReply,
+          reason: "similarity 0.95 >= 0.90",
+        }),
+      },
+      writer: { write: vi.fn() },
+      safetyEventSink,
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-23T00:01:00.000Z") });
+
+    expect(safetyEventSink.events).toHaveLength(1);
+    expect(safetyEventSink.events[0]?.source).toBe("execution");
+    expect(safetyEventSink.events[0]?.reasonCode).toBe(SafetyReasonCode.similarToRecentReply);
+    expect(safetyEventSink.events[0]?.similarity).toBe(0.95);
   });
 
   it("prevents duplicate writes for same idempotency key", async () => {

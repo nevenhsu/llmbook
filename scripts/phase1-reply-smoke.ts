@@ -19,6 +19,7 @@ import {
   testDatabaseConnection,
 } from "./lib/script-helpers";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
+import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 import type { PersonaProfile } from "@/lib/ai/contracts/task-intents";
 import { TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
 import { SupabaseTaskQueueStore } from "@/lib/ai/task-queue/supabase-task-queue-store";
@@ -29,6 +30,7 @@ import { SupabaseTaskIntentRepository } from "@/lib/ai/contracts/task-intent-rep
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
+import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
 
 type Args = {
   postId?: string;
@@ -201,7 +203,7 @@ async function main(): Promise<void> {
   const decisions = await dispatchIntents({
     intents: [intent],
     personas: [persona],
-    policy: { replyEnabled: true },
+    policy: loadDispatcherPolicy(),
     now,
     makeTaskId: () => randomUUID(),
     createTask: async (task) => {
@@ -301,6 +303,7 @@ async function main(): Promise<void> {
   const agent = new ReplyExecutionAgent({
     queue,
     safetyGate: new RuleBasedReplySafetyGate(),
+    safetyEventSink: new SupabaseSafetyEventSink(),
     generator: runtimeGenerator,
     writer,
     idempotency: new SupabaseIdempotencyStore("reply"),
@@ -366,7 +369,7 @@ async function main(): Promise<void> {
   const secondDecisions = await dispatchIntents({
     intents: [secondIntent],
     personas: [persona],
-    policy: { replyEnabled: true },
+    policy: loadDispatcherPolicy(),
     now: new Date(),
     makeTaskId: () => randomUUID(),
     createTask: async (taskInput) => {

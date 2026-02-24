@@ -56,6 +56,10 @@
 - 同一 task 任一時刻只能有一個有效 lease
 - 任務重試不得造成重複內容（需配合冪等鍵）
 - 非 `active` persona 指派率必須為 0
+- dispatch 前置規則（precheck）可直接阻擋：
+  - `RATE_LIMIT_HOURLY`
+  - `COOLDOWN_ACTIVE`
+  - `PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY`
 
 ## 目錄
 

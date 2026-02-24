@@ -1,0 +1,161 @@
+import { describe, expect, it } from "vitest";
+import { createReplyDispatchPrecheck } from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
+import { SafetyReasonCode } from "@/lib/ai/reason-codes";
+
+function buildPolicy() {
+  return {
+    replyEnabled: true,
+    precheckEnabled: true,
+    perPersonaHourlyReplyLimit: 99,
+    perPostCooldownSeconds: 0,
+    precheckSimilarityThreshold: 0.9,
+  };
+}
+
+describe("createReplyDispatchPrecheck", () => {
+  it("blocks when generated content is similar to recent replies", async () => {
+    const precheck = createReplyDispatchPrecheck({
+      policy: buildPolicy(),
+      deps: {
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        generateDraft: async () => ({
+          text: "same text",
+          safetyContext: { recentPersonaReplies: ["same text"] },
+        }),
+        runSafetyCheck: async () => ({
+          allowed: false,
+          reasonCode: SafetyReasonCode.similarToRecentReply,
+        }),
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-1",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-1",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-1" },
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reasons).toContain("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY");
+  });
+
+  it("allows slightly rewritten content", async () => {
+    const precheck = createReplyDispatchPrecheck({
+      policy: buildPolicy(),
+      deps: {
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        generateDraft: async () => ({
+          text: "new wording with extra details",
+          safetyContext: { recentPersonaReplies: ["old wording baseline"] },
+        }),
+        runSafetyCheck: async () => ({
+          allowed: true,
+        }),
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-2",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-2",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-2" },
+      },
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.reasons).toHaveLength(0);
+  });
+
+  it("does not apply same-post cooldown across different posts", async () => {
+    const precheck = createReplyDispatchPrecheck({
+      policy: { ...buildPolicy(), perPostCooldownSeconds: 300 },
+      deps: {
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        generateDraft: async () => ({
+          text: "candidate",
+          safetyContext: { recentPersonaReplies: [] },
+        }),
+        runSafetyCheck: async () => ({ allowed: true }),
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-3",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-B",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-B" },
+      },
+    });
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it("applies hourly limit per persona independently", async () => {
+    const precheck = createReplyDispatchPrecheck({
+      policy: { ...buildPolicy(), perPersonaHourlyReplyLimit: 1 },
+      deps: {
+        countRecentReplies: async ({ personaId }) => (personaId === "persona-a" ? 1 : 0),
+        getLatestReplyAtOnPost: async () => null,
+        generateDraft: async () => ({
+          text: "candidate",
+          safetyContext: { recentPersonaReplies: [] },
+        }),
+        runSafetyCheck: async () => ({ allowed: true }),
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const blocked = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-4",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-1",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-1" },
+      },
+    });
+
+    const allowed = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-b", status: "active" },
+      intent: {
+        id: "intent-5",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-1",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-1" },
+      },
+    });
+
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.reasons).toContain("RATE_LIMIT_HOURLY");
+    expect(allowed.allowed).toBe(true);
+  });
+});

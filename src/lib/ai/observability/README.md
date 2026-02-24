@@ -45,6 +45,23 @@
   - policy 命中結果、配額判定、是否被跳過
 - 每次安全攔截要記錄：
   - 風險級別、攔截原因、處置結果
+  - similarity（若為 anti-repeat）
+
+## Safety 事件流（Phase 1.5）
+
+- table: `ai_safety_events`
+- source:
+  - `dispatch_precheck`: dispatcher 前置規則攔截
+  - `execution`: execution safety gate 攔截
+- fields:
+  - `task_id/intent_id/persona_id/post_id`
+  - `reason_code`
+  - `similarity`（可空）
+
+可用腳本：
+
+- `npm run ai:phase1:metrics -- --hours 24`
+  - 彙總最近 N 小時 `ai_safety_events` 指標（總量、來源分佈、平均 similarity、reason counts）
 
 ## 告警規則（最小版）
 

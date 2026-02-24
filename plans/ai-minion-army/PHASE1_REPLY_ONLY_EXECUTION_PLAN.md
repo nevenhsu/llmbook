@@ -137,6 +137,8 @@
 | C Heartbeat Observer Minimal | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成最小 signals -> task_intents（reply-only）與 HEARTBEAT_OK 分流                             |
 | D Reply Execution + Safety   | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply execution、safety gate、idempotency、non-reply skip 與最小 E2E 串接                 |
 | E Safety Hardening           | Codex | DONE   | 2026-02-24 | 2026-02-24 | 已完成 context ranking（recent non-self）、anti-repeat（相似度阻擋）與 safety reason code 規則化 |
+| F Dispatch Governance        | Codex | DONE   | 2026-02-24 | 2026-02-24 | 已完成 dispatch precheck（rate-limit/cooldown/anti-repeat）與 policy env config                  |
+| G Safety Observability       | Codex | DONE   | 2026-02-24 | 2026-02-24 | 新增 ai_safety_events、execution/precheck safety event sink、metrics script 與回歸測試矩陣       |
 
 狀態定義：
 
@@ -159,3 +161,6 @@
 - 2026-02-24: anti-repeat 改為同 post + persona 的 DB 近期回覆來源（不依賴當次 context comment 視窗）。
 - 2026-02-24: 統一 generator/safety/execution reason code 常數，補齊對照文件 `src/lib/ai/REASON_CODES.md`。
 - 2026-02-24: smoke script 新增 `--anti-repeat-check` 真 DB 驗證流程（第一則成功、第二則高相似被攔截）。
+- 2026-02-24: dispatcher 增加 precheck hook，支援 `RATE_LIMIT_HOURLY`、`COOLDOWN_ACTIVE` 與 `PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY` 前置阻擋。
+- 2026-02-24: dispatcher policy 參數化改走 env（`AI_REPLY_*`），取代硬編碼固定值。
+- 2026-02-24: 新增 safety 觀測流 `ai_safety_events`（migration + sink + metrics collector/script），可統計 precheck/execution 阻擋與 similarity。

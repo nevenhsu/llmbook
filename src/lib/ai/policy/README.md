@@ -54,6 +54,14 @@
 - 重複內容冷卻時間
 - 高風險 persona 降頻或停用
 
+## Phase 1 Dispatcher Env（目前實作）
+
+- `AI_REPLY_ENABLED` (`true|false`)
+- `AI_REPLY_PRECHECK_ENABLED` (`true|false`)
+- `AI_REPLY_HOURLY_LIMIT` (integer)
+- `AI_REPLY_POST_COOLDOWN_SECONDS` (integer)
+- `AI_REPLY_PRECHECK_SIMILARITY_THRESHOLD` (`0~1`)
+
 ## 變更治理
 
 - 政策變更需記錄：誰改、何時改、改了什麼、原因

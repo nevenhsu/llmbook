@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
 import type { TaskIntent, PersonaProfile } from "@/lib/ai/contracts/task-intents";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
+import type { DispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 
 function buildIntent(overrides: Partial<TaskIntent> = {}): TaskIntent {
   return {
@@ -22,6 +23,16 @@ function buildPersona(overrides: Partial<PersonaProfile> = {}): PersonaProfile {
   };
 }
 
+function buildPolicy(overrides: Partial<DispatcherPolicy> = {}): DispatcherPolicy {
+  return {
+    replyEnabled: overrides.replyEnabled ?? true,
+    precheckEnabled: overrides.precheckEnabled ?? false,
+    perPersonaHourlyReplyLimit: overrides.perPersonaHourlyReplyLimit ?? 8,
+    perPostCooldownSeconds: overrides.perPostCooldownSeconds ?? 180,
+    precheckSimilarityThreshold: overrides.precheckSimilarityThreshold ?? 0.9,
+  };
+}
+
 describe("dispatchIntents", () => {
   it("dispatches reply intents only to active personas", async () => {
     const created: QueueTask[] = [];
@@ -32,7 +43,7 @@ describe("dispatchIntents", () => {
         buildPersona({ id: "active-1", status: "active" }),
         buildPersona({ id: "inactive", status: "inactive" }),
       ],
-      policy: { replyEnabled: true },
+      policy: buildPolicy({ replyEnabled: true }),
       now: new Date("2026-02-23T00:00:00.000Z"),
       createTask: async (task) => {
         created.push(task);
@@ -53,7 +64,7 @@ describe("dispatchIntents", () => {
     const decisions = await dispatchIntents({
       intents: [buildIntent()],
       personas: [buildPersona({ id: "active-1" })],
-      policy: { replyEnabled: false },
+      policy: buildPolicy({ replyEnabled: false }),
       now: new Date("2026-02-23T00:00:00.000Z"),
       createTask: async (task) => {
         created.push(task);
@@ -71,7 +82,7 @@ describe("dispatchIntents", () => {
     const decisions = await dispatchIntents({
       intents: [buildIntent({ type: "vote" })],
       personas: [buildPersona({ id: "active-1" })],
-      policy: { replyEnabled: true },
+      policy: buildPolicy({ replyEnabled: true }),
       now: new Date("2026-02-23T00:00:00.000Z"),
       createTask: async (task) => {
         created.push(task);
@@ -81,5 +92,27 @@ describe("dispatchIntents", () => {
     expect(created).toHaveLength(0);
     expect(decisions[0]?.dispatched).toBe(false);
     expect(decisions[0]?.reasons).toEqual(["INTENT_TYPE_BLOCKED"]);
+  });
+
+  it("skips dispatch when precheck blocks", async () => {
+    const created: QueueTask[] = [];
+
+    const decisions = await dispatchIntents({
+      intents: [buildIntent()],
+      personas: [buildPersona({ id: "active-1" })],
+      policy: buildPolicy({ precheckEnabled: true }),
+      now: new Date("2026-02-23T00:00:00.000Z"),
+      createTask: async (task) => {
+        created.push(task);
+      },
+      precheck: async () => ({
+        allowed: false,
+        reasons: ["PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY", "PRECHECK_BLOCKED"],
+      }),
+    });
+
+    expect(created).toHaveLength(0);
+    expect(decisions[0]?.dispatched).toBe(false);
+    expect(decisions[0]?.reasons).toContain("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY");
   });
 });

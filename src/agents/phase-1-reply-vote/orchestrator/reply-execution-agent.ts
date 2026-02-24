@@ -2,6 +2,7 @@ import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { TaskQueue } from "@/lib/ai/task-queue/task-queue";
 import type { ReplySafetyContext, ReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { ExecutionSkipReasonCode } from "@/lib/ai/reason-codes";
+import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
 
 export interface ReplyGenerator {
   generate(task: QueueTask): Promise<{
@@ -43,6 +44,7 @@ type ReplyExecutionAgentOptions = {
   generator: ReplyGenerator;
   writer: ReplyWriter;
   idempotency: IdempotencyStore;
+  safetyEventSink?: SafetyEventSink;
 };
 
 export class ReplyExecutionAgent {
@@ -51,6 +53,7 @@ export class ReplyExecutionAgent {
   private readonly generator: ReplyGenerator;
   private readonly writer: ReplyWriter;
   private readonly idempotency: IdempotencyStore;
+  private readonly safetyEventSink?: SafetyEventSink;
 
   public constructor(options: ReplyExecutionAgentOptions) {
     this.queue = options.queue;
@@ -58,6 +61,7 @@ export class ReplyExecutionAgent {
     this.generator = options.generator;
     this.writer = options.writer;
     this.idempotency = options.idempotency;
+    this.safetyEventSink = options.safetyEventSink;
   }
 
   public async runOnce(input: { workerId: string; now: Date }): Promise<"IDLE" | "DONE"> {
@@ -119,6 +123,24 @@ export class ReplyExecutionAgent {
       const safety = await this.safetyGate.check({ text, context: generated.safetyContext });
 
       if (!safety.allowed) {
+        if (safety.reasonCode) {
+          try {
+            await this.safetyEventSink?.record({
+              taskId: claimed.id,
+              personaId: claimed.personaId,
+              postId:
+                typeof claimed.payload.postId === "string" ? claimed.payload.postId : undefined,
+              source: "execution",
+              reasonCode: safety.reasonCode,
+              similarity: this.parseSimilarity(safety.reason),
+              metadata: { layer: "execution" },
+              occurredAt: input.now.toISOString(),
+            });
+          } catch {
+            // Best-effort observability only.
+          }
+        }
+
         await this.queue.skip({
           taskId: claimed.id,
           workerId: input.workerId,
@@ -165,5 +187,17 @@ export class ReplyExecutionAgent {
       return explicit;
     }
     return `task:${task.id}`;
+  }
+
+  private parseSimilarity(reason?: string): number | undefined {
+    if (!reason) {
+      return undefined;
+    }
+    const match = reason.match(/similarity\s+([0-9.]+)/i);
+    if (!match || !match[1]) {
+      return undefined;
+    }
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 }

@@ -26,6 +26,11 @@ export type DispatchIntentsInput = {
   now: Date;
   createTask: (task: QueueTask) => Promise<void>;
   makeTaskId?: () => string;
+  precheck?: (input: {
+    intent: TaskIntent;
+    persona: PersonaProfile;
+    now: Date;
+  }) => Promise<{ allowed: boolean; reasons: DecisionReasonCode[] }>;
 };
 
 function buildReplyTask(params: {
@@ -85,6 +90,19 @@ export async function dispatchIntents(input: DispatchIntentsInput): Promise<Disp
     }
 
     reasons.push("ACTIVE_OK", "SELECTED_DEFAULT");
+
+    if (input.precheck) {
+      const precheck = await input.precheck({
+        intent,
+        persona: selected,
+        now: input.now,
+      });
+      if (!precheck.allowed) {
+        reasons.push(...precheck.reasons);
+        decisions.push({ intentId: intent.id, dispatched: false, reasons });
+        continue;
+      }
+    }
 
     const taskId = input.makeTaskId ? input.makeTaskId() : randomUUID();
     const task = buildReplyTask({

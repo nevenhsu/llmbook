@@ -38,6 +38,13 @@ describe("dispatchNewIntents", () => {
 
     const summary = await dispatchNewIntents({
       intentRepo: repo as any,
+      policy: {
+        replyEnabled: true,
+        precheckEnabled: false,
+        perPersonaHourlyReplyLimit: 8,
+        perPostCooldownSeconds: 180,
+        precheckSimilarityThreshold: 0.9,
+      },
       listPersonas: async () => [{ id: "persona-1", status: "active" }],
       createTask: async (task) => {
         createdTasks.push(task as any);
@@ -81,6 +88,13 @@ describe("dispatchNewIntents", () => {
 
     const summary = await dispatchNewIntents({
       intentRepo: repo as any,
+      policy: {
+        replyEnabled: true,
+        precheckEnabled: false,
+        perPersonaHourlyReplyLimit: 8,
+        perPostCooldownSeconds: 180,
+        precheckSimilarityThreshold: 0.9,
+      },
       listPersonas: async () => [],
       createTask: async () => {
         throw new Error("createTask should not be called");
