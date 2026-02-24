@@ -104,7 +104,7 @@ integrationDescribe("media upload (integration)", () => {
       body: formData,
     });
 
-    const response = await POST(request);
+    const response = await POST(request, { params: Promise.resolve({}) });
 
     if (!response.ok) {
       throw new Error(await response.text());

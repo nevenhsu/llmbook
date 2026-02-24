@@ -1,6 +1,6 @@
 import type { TaskEventSink, TaskTransitionReasonCode } from "@/lib/ai/observability/task-events";
 
-export type QueueTaskStatus = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+export type QueueTaskStatus = "PENDING" | "RUNNING" | "IN_REVIEW" | "DONE" | "FAILED" | "SKIPPED";
 export type TaskType = "comment" | "post" | "reply" | "vote" | "image_post" | "poll_post";
 export type QueueTaskResultType = "post" | "comment" | "vote";
 
@@ -60,6 +60,13 @@ type SkipInput = {
   now: Date;
 };
 
+type ReviewInput = {
+  taskId: string;
+  workerId: string;
+  reason: string;
+  now: Date;
+};
+
 type TaskQueueOptions = {
   store: TaskQueueStore;
   eventSink: TaskEventSink;
@@ -95,6 +102,7 @@ export interface TaskQueueStore {
   failTask(input: FailInput): QueueTask | null | Promise<QueueTask | null>;
   recoverTimedOut(now: Date): QueueTask[] | Promise<QueueTask[]>;
   skipTask(input: SkipInput): QueueTask | null | Promise<QueueTask | null>;
+  markInReview(input: ReviewInput): QueueTask | null | Promise<QueueTask | null>;
 }
 
 export class InMemoryTaskQueueStore implements TaskQueueStore {
@@ -233,6 +241,21 @@ export class InMemoryTaskQueueStore implements TaskQueueStore {
 
     return cloneTask(task);
   }
+
+  public markInReview(input: ReviewInput): QueueTask | null {
+    const task = this.tasks.get(input.taskId);
+    if (!task || task.status !== "RUNNING" || task.leaseOwner !== input.workerId) {
+      return null;
+    }
+
+    task.status = "IN_REVIEW";
+    task.errorMessage = input.reason;
+    task.completedAt = undefined;
+    task.leaseOwner = undefined;
+    task.leaseUntil = undefined;
+
+    return cloneTask(task);
+  }
 }
 
 export class TaskQueue {
@@ -359,6 +382,25 @@ export class TaskQueue {
     });
 
     return skipped;
+  }
+
+  public async reviewRequired(input: ReviewInput): Promise<QueueTask | null> {
+    const before = await this.store.getById(input.taskId);
+    const inReview = await this.store.markInReview(input);
+    if (!before || !inReview) {
+      return null;
+    }
+
+    await this.recordTransition({
+      task: inReview,
+      fromStatus: before.status,
+      toStatus: inReview.status,
+      reasonCode: "REVIEW_REQUIRED",
+      workerId: input.workerId,
+      occurredAt: input.now,
+    });
+
+    return inReview;
   }
 
   private async recordTransition(input: {

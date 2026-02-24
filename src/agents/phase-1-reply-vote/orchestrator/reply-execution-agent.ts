@@ -1,8 +1,9 @@
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { TaskQueue } from "@/lib/ai/task-queue/task-queue";
 import type { ReplySafetyContext, ReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
-import { ExecutionSkipReasonCode } from "@/lib/ai/reason-codes";
+import { ExecutionSkipReasonCode, ReviewReasonCode } from "@/lib/ai/reason-codes";
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
+import type { ReviewQueue } from "@/lib/ai/review-queue/review-queue";
 
 export interface ReplyGenerator {
   generate(task: QueueTask): Promise<{
@@ -26,6 +27,17 @@ export interface IdempotencyStore {
   set(key: string, resultId: string): Promise<void>;
 }
 
+export interface ReplyAtomicPersistence {
+  writeIdempotentAndComplete(input: {
+    task: QueueTask;
+    workerId: string;
+    now: Date;
+    text: string;
+    parentCommentId?: string;
+    idempotencyKey: string;
+  }): Promise<{ resultId: string } | null>;
+}
+
 export class InMemoryIdempotencyStore implements IdempotencyStore {
   private readonly map = new Map<string, string>();
 
@@ -45,6 +57,8 @@ type ReplyExecutionAgentOptions = {
   writer: ReplyWriter;
   idempotency: IdempotencyStore;
   safetyEventSink?: SafetyEventSink;
+  reviewQueue?: ReviewQueue;
+  atomicPersistence?: ReplyAtomicPersistence;
 };
 
 export class ReplyExecutionAgent {
@@ -54,6 +68,8 @@ export class ReplyExecutionAgent {
   private readonly writer: ReplyWriter;
   private readonly idempotency: IdempotencyStore;
   private readonly safetyEventSink?: SafetyEventSink;
+  private readonly reviewQueue?: ReviewQueue;
+  private readonly atomicPersistence?: ReplyAtomicPersistence;
 
   public constructor(options: ReplyExecutionAgentOptions) {
     this.queue = options.queue;
@@ -62,6 +78,8 @@ export class ReplyExecutionAgent {
     this.writer = options.writer;
     this.idempotency = options.idempotency;
     this.safetyEventSink = options.safetyEventSink;
+    this.reviewQueue = options.reviewQueue;
+    this.atomicPersistence = options.atomicPersistence;
   }
 
   public async runOnce(input: { workerId: string; now: Date }): Promise<"IDLE" | "DONE"> {
@@ -123,6 +141,30 @@ export class ReplyExecutionAgent {
       const safety = await this.safetyGate.check({ text, context: generated.safetyContext });
 
       if (!safety.allowed) {
+        if (safety.reviewRequired && this.reviewQueue) {
+          const inReview = await this.queue.reviewRequired({
+            taskId: claimed.id,
+            workerId: input.workerId,
+            reason: safety.reasonCode ?? ReviewReasonCode.reviewRequired,
+            now: input.now,
+          });
+
+          if (inReview) {
+            await this.reviewQueue.enqueue({
+              taskId: claimed.id,
+              personaId: claimed.personaId,
+              riskLevel: safety.riskLevel ?? "UNKNOWN",
+              enqueueReasonCode: safety.reasonCode ?? ReviewReasonCode.reviewRequired,
+              note: safety.reason,
+              now: input.now,
+              metadata: {
+                source: "execution_safety_gate",
+              },
+            });
+            return "DONE";
+          }
+        }
+
         if (safety.reasonCode) {
           try {
             await this.safetyEventSink?.record({
@@ -150,24 +192,50 @@ export class ReplyExecutionAgent {
         return "DONE";
       }
 
-      const created = await this.writer.write({
-        personaId: claimed.personaId,
-        text,
-        payload: {
-          ...claimed.payload,
-          parentCommentId: generated.parentCommentId ?? claimed.payload.parentCommentId,
-        },
-      });
+      let resultId: string;
 
-      await this.idempotency.set(idempotencyKey, created.resultId);
+      if (this.atomicPersistence) {
+        const atomicResult = await this.atomicPersistence.writeIdempotentAndComplete({
+          task: claimed,
+          workerId: input.workerId,
+          now: input.now,
+          text,
+          parentCommentId:
+            (generated.parentCommentId as string | undefined) ??
+            (claimed.payload.parentCommentId as string | undefined),
+          idempotencyKey,
+        });
 
-      await this.queue.complete({
-        taskId: claimed.id,
-        workerId: input.workerId,
-        resultId: created.resultId,
-        resultType: "comment",
-        now: input.now,
-      });
+        if (!atomicResult) {
+          return "DONE";
+        }
+
+        resultId = atomicResult.resultId;
+      } else {
+        const created = await this.writer.write({
+          personaId: claimed.personaId,
+          text,
+          payload: {
+            ...claimed.payload,
+            parentCommentId: generated.parentCommentId ?? claimed.payload.parentCommentId,
+          },
+        });
+
+        await this.idempotency.set(idempotencyKey, created.resultId);
+
+        await this.queue.complete({
+          taskId: claimed.id,
+          workerId: input.workerId,
+          resultId: created.resultId,
+          resultType: "comment",
+          now: input.now,
+        });
+        resultId = created.resultId;
+      }
+
+      if (!resultId) {
+        throw new Error("reply persistence returned empty resultId");
+      }
       return "DONE";
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown execution error";

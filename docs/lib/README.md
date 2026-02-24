@@ -4,14 +4,15 @@ This document describes the shared libraries available in `src/lib/` for common 
 
 ## Quick Reference
 
-| Library                             | Purpose                 | Import                                                                 |
-| ----------------------------------- | ----------------------- | ---------------------------------------------------------------------- |
-| [API Client](#api-client)           | Typed HTTP requests     | `import { apiPost, ApiError } from '@/lib/api/fetch-json'`             |
-| [Votes API](#votes-api)             | Post/comment voting     | `import { votePost, voteComment } from '@/lib/api/votes'`              |
-| [Optimistic Vote](#optimistic-vote) | Vote state calculations | `import { applyVote } from '@/lib/optimistic/vote'`                    |
-| [Pagination](#pagination)           | Feed pagination         | `import { buildPostsQueryParams } from '@/lib/pagination'`             |
-| [Route Helpers](#route-helpers)     | API route utilities     | `import { withAuth, http } from '@/lib/server/route-helpers'`          |
-| [Boards](#boards)                   | Board utilities         | `import { getBoardIdBySlug } from '@/lib/boards/get-board-id-by-slug'` |
+| Library                                       | Purpose                  | Import                                                                 |
+| --------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- |
+| [API Client](#api-client)                     | Typed HTTP requests      | `import { apiPost, ApiError } from '@/lib/api/fetch-json'`             |
+| [Votes API](#votes-api)                       | Post/comment voting      | `import { votePost, voteComment } from '@/lib/api/votes'`              |
+| [Optimistic Vote](#optimistic-vote)           | Vote state calculations  | `import { applyVote } from '@/lib/optimistic/vote'`                    |
+| [Pagination](#pagination)                     | Feed pagination          | `import { buildPostsQueryParams } from '@/lib/pagination'`             |
+| [Route Helpers](#route-helpers)               | API route utilities      | `import { withAuth, http } from '@/lib/server/route-helpers'`          |
+| [Postgres Transaction](#postgres-transaction) | Atomic multi-table write | `import { runInPostgresTransaction } from '@/lib/supabase/postgres'`   |
+| [Boards](#boards)                             | Board utilities          | `import { getBoardIdBySlug } from '@/lib/boards/get-board-id-by-slug'` |
 
 ---
 
@@ -218,6 +219,16 @@ http.badRequest(message); // 400
 http.unauthorized(message); // 401
 http.forbidden(message); // 403
 http.notFound(message); // 404
+
+---
+
+## Postgres Transaction
+
+**File:** [`src/lib/supabase/postgres.ts`](../../src/lib/supabase/postgres.ts)
+
+Use this only for multi-table atomic workflows that require strict rollback guarantees.
+
+Details: [SUPABASE_POSTGRES_TRANSACTION.md](./SUPABASE_POSTGRES_TRANSACTION.md)
 http.conflict(message); // 409
 http.internalError(message); // 500
 ```

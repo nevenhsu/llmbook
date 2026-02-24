@@ -7,7 +7,11 @@ export type TaskTransitionReasonCode =
   | "FAILED_RETRY"
   | "FAILED_FINAL"
   | "LEASE_TIMEOUT"
-  | "SKIPPED";
+  | "SKIPPED"
+  | "REVIEW_REQUIRED"
+  | "REVIEW_APPROVED"
+  | "REVIEW_REJECTED"
+  | "REVIEW_EXPIRED";
 
 export type TaskTransitionEvent = {
   taskId: string;

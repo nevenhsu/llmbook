@@ -11,9 +11,11 @@ import {
 } from "@/lib/ai/task-queue/task-queue";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import { InMemorySafetyEventSink } from "@/lib/ai/observability/safety-events";
+import { InMemoryReviewQueueStore, ReviewQueue } from "@/lib/ai/review-queue/review-queue";
 import {
   ExecutionSkipReasonCode,
   GeneratorSkipReasonCode,
+  ReviewReasonCode,
   SafetyReasonCode,
 } from "@/lib/ai/reason-codes";
 
@@ -153,6 +155,66 @@ describe("ReplyExecutionAgent", () => {
     expect(safetyEventSink.events[0]?.source).toBe("execution");
     expect(safetyEventSink.events[0]?.reasonCode).toBe(SafetyReasonCode.similarToRecentReply);
     expect(safetyEventSink.events[0]?.similarity).toBe(0.95);
+  });
+
+  it("routes review-required safety blocks into review queue instead of skipping", async () => {
+    const store = new InMemoryTaskQueueStore([buildTask()]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const reviewStore = new InMemoryReviewQueueStore({
+      tasks: [buildTask({ status: "IN_REVIEW" })],
+    });
+    const reviewQueue = new ReviewQueue({ store: reviewStore });
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: { generate: vi.fn().mockResolvedValue({ text: "needs manual check" }) },
+      safetyGate: {
+        check: vi.fn().mockResolvedValue({
+          allowed: false,
+          reviewRequired: true,
+          riskLevel: "HIGH",
+          reasonCode: ReviewReasonCode.reviewRequired,
+        }),
+      },
+      writer: { write: vi.fn() },
+      reviewQueue,
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-23T00:01:00.000Z") });
+
+    expect(store.snapshot()[0]?.status).toBe("IN_REVIEW");
+    const reviews = await reviewQueue.list({ statuses: ["PENDING"] });
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]?.taskId).toBe("task-1");
+    expect(reviews[0]?.enqueueReasonCode).toBe(ReviewReasonCode.reviewRequired);
+  });
+
+  it("uses atomic persistence path when provided", async () => {
+    const store = new InMemoryTaskQueueStore([buildTask()]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+
+    const writer = {
+      write: vi.fn(),
+    };
+    const idempotency = new InMemoryIdempotencyStore();
+    const atomicPersistence = {
+      writeIdempotentAndComplete: vi.fn().mockResolvedValue({ resultId: "comment-atomic-1" }),
+    };
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency,
+      generator: { generate: vi.fn().mockResolvedValue({ text: "hello" }) },
+      safetyGate: { check: vi.fn().mockResolvedValue({ allowed: true }) },
+      writer,
+      atomicPersistence,
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-23T00:01:00.000Z") });
+
+    expect(atomicPersistence.writeIdempotentAndComplete).toHaveBeenCalledTimes(1);
+    expect(writer.write).not.toHaveBeenCalled();
   });
 
   it("prevents duplicate writes for same idempotency key", async () => {

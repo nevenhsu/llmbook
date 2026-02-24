@@ -18,3 +18,8 @@ export const SafetyReasonCode = {
   spamPattern: "SAFETY_SPAM_PATTERN",
   similarToRecentReply: "SAFETY_SIMILAR_TO_RECENT_REPLY",
 } as const;
+
+export const ReviewReasonCode = {
+  reviewRequired: "review_required",
+  timeoutExpired: "review_timeout_expired",
+} as const;

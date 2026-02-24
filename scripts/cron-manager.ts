@@ -19,6 +19,8 @@
  */
 
 import { createAdminClient } from "../src/lib/supabase/admin";
+import { createSupabaseReviewQueue } from "../src/lib/ai/review-queue";
+import { runInPostgresTransaction } from "../src/lib/supabase/postgres";
 import {
   log,
   logSeparator,
@@ -37,6 +39,7 @@ const INTERVALS = {
   KARMA_QUEUE: 5 * 60 * 1000, // 5 minutes
   KARMA_FULL: 60 * 60 * 1000, // 1 hour
   RANKINGS: 24 * 60 * 60 * 1000, // 24 hours
+  REVIEW_EXPIRE: 5 * 60 * 1000, // 5 minutes
 };
 
 // Task state
@@ -67,6 +70,14 @@ const taskStats: Record<string, TaskStats> = {
     lastDuration: 0,
   },
   rankings: {
+    lastRun: null,
+    nextRun: null,
+    runCount: 0,
+    successCount: 0,
+    errorCount: 0,
+    lastDuration: 0,
+  },
+  reviewExpire: {
     lastRun: null,
     nextRun: null,
     runCount: 0,
@@ -107,14 +118,10 @@ async function processKarmaQueue(): Promise<boolean> {
 
     log(`[Karma Queue] Queue size: ${queueSize} items`, "info");
 
-    // Process queue
-    const { error } = await supabase.rpc("process_karma_refresh_queue");
-
-    if (error) {
-      log(`[Karma Queue] Failed: ${error.message}`, "error");
-      stats.errorCount++;
-      return false;
-    }
+    // Process queue in direct SQL transaction
+    await runInPostgresTransaction(async (tx) => {
+      await tx.query("select public.process_karma_refresh_queue()");
+    });
 
     const duration = Date.now() - startTime;
     stats.lastDuration = duration;
@@ -150,14 +157,10 @@ async function refreshAllKarma(): Promise<boolean> {
 
     const supabase = createAdminClient();
 
-    // Refresh all karma
-    const { error } = await supabase.rpc("refresh_all_karma");
-
-    if (error) {
-      log(`[Karma Full] Failed: ${error.message}`, "error");
-      stats.errorCount++;
-      return false;
-    }
+    // Refresh all karma in direct SQL transaction
+    await runInPostgresTransaction(async (tx) => {
+      await tx.query("select public.refresh_all_karma()");
+    });
 
     const duration = Date.now() - startTime;
     stats.lastDuration = duration;
@@ -228,6 +231,36 @@ async function updateRankings(): Promise<boolean> {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log(`[Rankings] Error: ${errorMessage}`, "error");
+    stats.errorCount++;
+    return false;
+  }
+}
+
+async function expireReviewQueue(): Promise<boolean> {
+  const taskName = "reviewExpire";
+  const stats = taskStats[taskName];
+
+  try {
+    stats.lastRun = new Date();
+    stats.runCount++;
+    const startTime = Date.now();
+
+    const queue = createSupabaseReviewQueue();
+    const expired = await queue.expireDue({ now: new Date() });
+
+    stats.lastDuration = Date.now() - startTime;
+    stats.successCount++;
+
+    if (expired.length > 0) {
+      log(`[Review Queue] Expired ${expired.length} item(s)`, "warning");
+    } else {
+      log("[Review Queue] No items expired", "info");
+    }
+
+    return true;
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    log(`[Review Queue] Error: ${errorMessage}`, "error");
     stats.errorCount++;
     return false;
   }
@@ -316,6 +349,7 @@ async function main(): Promise<void> {
     if (!RANKINGS_ONLY) {
       tasks.push(processKarmaQueue());
       tasks.push(refreshAllKarma());
+      tasks.push(expireReviewQueue());
     }
 
     if (!KARMA_ONLY) {
@@ -346,6 +380,12 @@ async function main(): Promise<void> {
     log("Scheduling: Karma Full Refresh (every hour)", "info");
     const fullTimer = scheduleTask("karmaFull", refreshAllKarma, INTERVALS.KARMA_FULL);
     if (fullTimer) timers.push(fullTimer);
+
+    // Review queue expire - every 5 minutes
+    log("Scheduling: Review Queue Expire (every 5 minutes)", "info");
+    await expireReviewQueue(); // Run immediately
+    const expireTimer = scheduleTask("reviewExpire", expireReviewQueue, INTERVALS.REVIEW_EXPIRE);
+    if (expireTimer) timers.push(expireTimer);
   }
 
   if (!KARMA_ONLY) {

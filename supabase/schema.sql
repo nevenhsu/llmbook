@@ -305,7 +305,7 @@ CREATE TABLE public.persona_tasks (
   idempotency_key text,
   
   -- Status and scheduling
-  status text NOT NULL DEFAULT 'PENDING',  -- PENDING → RUNNING → DONE | FAILED | SKIPPED
+  status text NOT NULL DEFAULT 'PENDING',  -- PENDING → RUNNING → IN_REVIEW → DONE | FAILED | SKIPPED
   scheduled_at timestamptz NOT NULL DEFAULT now(),
   started_at timestamptz,
   completed_at timestamptz,
@@ -323,7 +323,9 @@ CREATE TABLE public.persona_tasks (
   error_message text,
   
   created_at timestamptz DEFAULT now(),
-  CONSTRAINT persona_tasks_status_check CHECK (status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')),
+  CONSTRAINT persona_tasks_status_check CHECK (
+    status IN ('PENDING', 'RUNNING', 'IN_REVIEW', 'DONE', 'FAILED', 'SKIPPED')
+  ),
   CONSTRAINT persona_tasks_retry_non_negative CHECK (retry_count >= 0 AND max_retries >= 0),
   CONSTRAINT persona_tasks_type_check CHECK (
     task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post')
@@ -361,8 +363,72 @@ CREATE TABLE public.task_transition_events (
     task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post')
   ),
   CONSTRAINT task_transition_status_check CHECK (
-    from_status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')
-    AND to_status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')
+    from_status IN ('PENDING', 'RUNNING', 'IN_REVIEW', 'DONE', 'FAILED', 'SKIPPED')
+    AND to_status IN ('PENDING', 'RUNNING', 'IN_REVIEW', 'DONE', 'FAILED', 'SKIPPED')
+  )
+);
+
+-- Human review queue for high-risk/gray-zone outputs
+CREATE TABLE public.ai_review_queue (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL UNIQUE REFERENCES public.persona_tasks(id) ON DELETE CASCADE,
+  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
+  risk_level text NOT NULL DEFAULT 'UNKNOWN',
+  status text NOT NULL DEFAULT 'PENDING',
+  enqueue_reason_code text NOT NULL,
+  decision text,
+  decision_reason_code text,
+  reviewer_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  note text,
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '3 days'),
+  claimed_at timestamptz,
+  decided_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT ai_review_queue_risk_level_check CHECK (risk_level IN ('HIGH', 'GRAY', 'UNKNOWN')),
+  CONSTRAINT ai_review_queue_status_check CHECK (
+    status IN ('PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'EXPIRED')
+  ),
+  CONSTRAINT ai_review_queue_decision_check CHECK (
+    decision IS NULL OR decision IN ('APPROVE', 'REJECT')
+  ),
+  CONSTRAINT ai_review_queue_decision_consistency CHECK (
+    (
+      status IN ('APPROVED', 'REJECTED')
+      AND decision IS NOT NULL
+      AND decision_reason_code IS NOT NULL
+      AND reviewer_id IS NOT NULL
+      AND decided_at IS NOT NULL
+    )
+    OR (
+      status = 'EXPIRED'
+      AND decision IS NULL
+      AND decision_reason_code = 'review_timeout_expired'
+      AND decided_at IS NOT NULL
+    )
+    OR (
+      status IN ('PENDING', 'IN_REVIEW')
+      AND decision IS NULL
+      AND decision_reason_code IS NULL
+      AND decided_at IS NULL
+    )
+  )
+);
+
+-- Review queue audit event stream
+CREATE TABLE public.ai_review_events (
+  id bigserial PRIMARY KEY,
+  review_id uuid NOT NULL REFERENCES public.ai_review_queue(id) ON DELETE CASCADE,
+  task_id uuid NOT NULL REFERENCES public.persona_tasks(id) ON DELETE CASCADE,
+  event_type text NOT NULL,
+  reason_code text,
+  reviewer_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  note text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT ai_review_events_event_type_check CHECK (
+    event_type IN ('ENQUEUED', 'CLAIMED', 'APPROVED', 'REJECTED', 'EXPIRED')
   )
 );
 
@@ -570,6 +636,23 @@ CREATE INDEX idx_task_idempotency_created_at ON public.task_idempotency_keys(cre
 CREATE INDEX idx_task_transition_events_task_created ON public.task_transition_events(task_id, created_at DESC);
 CREATE INDEX idx_task_transition_events_persona_created ON public.task_transition_events(persona_id, created_at DESC);
 CREATE INDEX idx_task_transition_events_reason_code ON public.task_transition_events(reason_code);
+
+-- AI review queue
+CREATE INDEX idx_ai_review_queue_status_created
+  ON public.ai_review_queue(status, created_at DESC);
+CREATE INDEX idx_ai_review_queue_expire_scan
+  ON public.ai_review_queue(expires_at ASC)
+  WHERE status IN ('PENDING', 'IN_REVIEW');
+CREATE INDEX idx_ai_review_queue_persona_created
+  ON public.ai_review_queue(persona_id, created_at DESC);
+
+-- AI review events
+CREATE INDEX idx_ai_review_events_review_created
+  ON public.ai_review_events(review_id, created_at DESC);
+CREATE INDEX idx_ai_review_events_task_created
+  ON public.ai_review_events(task_id, created_at DESC);
+CREATE INDEX idx_ai_review_events_event_type_created
+  ON public.ai_review_events(event_type, created_at DESC);
 
 -- Persona memory
 CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
@@ -930,29 +1013,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ----------------------------------------------------------------------------
--- Karma Queue Helper
--- ----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.queue_karma_refresh()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.author_id IS NOT NULL THEN
-    INSERT INTO public.karma_refresh_queue (user_id, persona_id)
-    VALUES (NEW.author_id, NULL)
-    ON CONFLICT (user_id) WHERE persona_id IS NULL DO NOTHING;
-  END IF;
-
-  IF NEW.persona_id IS NOT NULL THEN
-    INSERT INTO public.karma_refresh_queue (user_id, persona_id)
-    VALUES (NULL, NEW.persona_id)
-    ON CONFLICT (persona_id) WHERE user_id IS NULL DO NOTHING;
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -1187,6 +1247,8 @@ ALTER TABLE public.task_intents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_idempotency_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_transition_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_review_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_review_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
@@ -1599,6 +1661,8 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- persona_tasks: No policies (service role only)
 -- task_idempotency_keys: No policies (service role only)
 -- task_transition_events: No policies (service role only)
+-- ai_review_queue: No policies (service role only)
+-- ai_review_events: No policies (service role only)
 -- persona_memory: No policies (service role only)
 
 -- ============================================================================
@@ -1613,6 +1677,8 @@ COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark
 COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
 COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';
 COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks state transitions for replay and observability.';
+COMMENT ON TABLE public.ai_review_queue IS 'Manual review queue for high-risk/gray-zone content. 3 days unhandled items expire automatically.';
+COMMENT ON TABLE public.ai_review_events IS 'Audit stream for review queue lifecycle and reviewer decisions.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 

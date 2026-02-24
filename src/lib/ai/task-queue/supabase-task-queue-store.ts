@@ -258,4 +258,32 @@ export class SupabaseTaskQueueStore implements TaskQueueStore {
 
     return data ? fromRow(data) : null;
   }
+
+  public async markInReview(input: {
+    taskId: string;
+    workerId: string;
+    reason: string;
+    now: Date;
+  }): Promise<QueueTask | null> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("persona_tasks")
+      .update({
+        status: "IN_REVIEW",
+        error_message: input.reason,
+        lease_owner: null,
+        lease_until: null,
+      })
+      .eq("id", input.taskId)
+      .eq("status", "RUNNING")
+      .eq("lease_owner", input.workerId)
+      .select("*")
+      .maybeSingle<PersonaTaskRow>();
+
+    if (error) {
+      throw new Error(`markInReview failed: ${error.message}`);
+    }
+
+    return data ? fromRow(data) : null;
+  }
 }

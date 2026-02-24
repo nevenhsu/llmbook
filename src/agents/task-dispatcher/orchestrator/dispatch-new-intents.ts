@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runInPostgresTransaction } from "@/lib/supabase/postgres";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
 import { createReplyDispatchPrecheck } from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/lib/ai/contracts/task-intent-repository";
 import type { PersonaProfile } from "@/lib/ai/contracts/task-intents";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
+import type { DispatchDecision } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
 
 async function listActivePersonas(limit: number): Promise<PersonaProfile[]> {
   const supabase = createAdminClient();
@@ -54,6 +56,70 @@ async function insertPersonaTask(task: QueueTask): Promise<void> {
   }
 }
 
+async function persistDispatchDecisionAtomic(input: {
+  intent: StoredIntent;
+  decision: DispatchDecision;
+  task?: QueueTask;
+  now: Date;
+}): Promise<"DISPATCHED" | "SKIPPED"> {
+  return runInPostgresTransaction(async (tx) => {
+    if (input.decision.dispatched && input.decision.personaId && input.task) {
+      const sourceIntentId =
+        typeof input.task.payload.sourceIntentId === "string"
+          ? input.task.payload.sourceIntentId
+          : null;
+      const idempotencyKey = sourceIntentId ? `intent:${sourceIntentId}` : `task:${input.task.id}`;
+
+      await tx.query(
+        `insert into public.persona_tasks (
+           id, persona_id, source_intent_id, task_type, payload, idempotency_key, status, scheduled_at, retry_count, max_retries, created_at
+         ) values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11)`,
+        [
+          input.task.id,
+          input.task.personaId,
+          sourceIntentId,
+          input.task.taskType,
+          JSON.stringify(input.task.payload),
+          idempotencyKey,
+          input.task.status,
+          input.task.scheduledAt.toISOString(),
+          input.task.retryCount,
+          input.task.maxRetries,
+          input.task.createdAt.toISOString(),
+        ],
+      );
+
+      await tx.query(
+        `update public.task_intents
+         set status = 'DISPATCHED',
+             selected_persona_id = $2,
+             decision_reason_codes = $3::text[],
+             updated_at = $4
+         where id = $1`,
+        [
+          input.intent.id,
+          input.decision.personaId,
+          input.decision.reasons,
+          input.now.toISOString(),
+        ],
+      );
+
+      return "DISPATCHED";
+    }
+
+    await tx.query(
+      `update public.task_intents
+       set status = 'SKIPPED',
+           decision_reason_codes = $2::text[],
+           updated_at = $3
+       where id = $1`,
+      [input.intent.id, input.decision.reasons, input.now.toISOString()],
+    );
+
+    return "SKIPPED";
+  });
+}
+
 export type DispatchNewIntentsSummary = {
   scanned: number;
   dispatched: number;
@@ -66,8 +132,16 @@ export async function dispatchNewIntents(options?: {
   policy?: DispatcherPolicy;
   listPersonas?: (limit: number) => Promise<PersonaProfile[]>;
   createTask?: (task: QueueTask) => Promise<void>;
+  persistDecisionAtomic?: (input: {
+    intent: StoredIntent;
+    decision: DispatchDecision;
+    task?: QueueTask;
+    now: Date;
+  }) => Promise<"DISPATCHED" | "SKIPPED">;
 }): Promise<DispatchNewIntentsSummary> {
   const intentRepo = options?.intentRepo ?? new SupabaseTaskIntentRepository();
+  const useAtomicPersist =
+    Boolean(options?.persistDecisionAtomic) || (!options?.intentRepo && !options?.createTask);
   const intents = await intentRepo.listNewIntents(options?.batchSize ?? 100);
 
   if (!intents.length) {
@@ -77,13 +151,33 @@ export async function dispatchNewIntents(options?: {
   const personas = await (options?.listPersonas ?? listActivePersonas)(50);
   const policy = options?.policy ?? loadDispatcherPolicy();
   const precheck = createReplyDispatchPrecheck({ policy });
+  const taskByIntentId = new Map<string, QueueTask>();
+  const createTaskForDispatch = async (task: QueueTask): Promise<void> => {
+    if (useAtomicPersist) {
+      const sourceIntentId =
+        typeof task.payload.sourceIntentId === "string" ? task.payload.sourceIntentId : null;
+      if (sourceIntentId) {
+        taskByIntentId.set(sourceIntentId, task);
+      }
+    }
+
+    if (options?.createTask) {
+      await options.createTask(task);
+      return;
+    }
+
+    if (!useAtomicPersist) {
+      await insertPersonaTask(task);
+    }
+  };
+
   const decisions = await dispatchIntents({
     intents,
     personas,
     policy,
     now: new Date(),
     makeTaskId: () => randomUUID(),
-    createTask: options?.createTask ?? insertPersonaTask,
+    createTask: createTaskForDispatch,
     precheck,
   });
 
@@ -94,6 +188,23 @@ export async function dispatchNewIntents(options?: {
     const decision = decisions[i];
     const intent = intents[i] as StoredIntent | undefined;
     if (!decision || !intent) continue;
+
+    if (useAtomicPersist) {
+      const task = taskByIntentId.get(intent.id);
+      const persisted = await (options?.persistDecisionAtomic ?? persistDispatchDecisionAtomic)({
+        intent,
+        decision,
+        task,
+        now: new Date(),
+      });
+
+      if (persisted === "DISPATCHED") {
+        dispatched += 1;
+      } else {
+        skipped += 1;
+      }
+      continue;
+    }
 
     if (decision.dispatched && decision.personaId) {
       await intentRepo.markDispatched({

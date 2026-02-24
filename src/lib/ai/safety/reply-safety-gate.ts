@@ -4,6 +4,8 @@ export type SafetyGateResult = {
   allowed: boolean;
   reasonCode?: string;
   reason?: string;
+  reviewRequired?: boolean;
+  riskLevel?: "HIGH" | "GRAY" | "UNKNOWN";
 };
 
 export type ReplySafetyContext = {

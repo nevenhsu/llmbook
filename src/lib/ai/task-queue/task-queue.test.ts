@@ -199,4 +199,29 @@ describe("TaskQueue", () => {
     expect(skipped?.errorMessage).toBe("SAFETY_BLOCKED");
     expect(skipped?.completedAt?.toISOString()).toBe("2026-02-23T00:00:10.000Z");
   });
+
+  it("moves RUNNING task into IN_REVIEW when manual review is required", async () => {
+    const store = new InMemoryTaskQueueStore([
+      buildTask({
+        id: "task-review",
+        status: "RUNNING",
+        leaseOwner: "worker-1",
+        leaseUntil: new Date("2026-02-23T00:01:00.000Z"),
+        startedAt: new Date("2026-02-23T00:00:10.000Z"),
+      }),
+    ]);
+    const sink = new InMemoryTaskEventSink();
+    const queue = new TaskQueue({ store, eventSink: sink, leaseMs: 60_000 });
+
+    const result = await queue.reviewRequired({
+      taskId: "task-review",
+      workerId: "worker-1",
+      reason: "review_required",
+      now: new Date("2026-02-23T00:00:20.000Z"),
+    });
+
+    expect(result?.status).toBe("IN_REVIEW");
+    expect(result?.errorMessage).toBe("review_required");
+    expect(sink.events.some((event) => event.reasonCode === "REVIEW_REQUIRED")).toBe(true);
+  });
 });

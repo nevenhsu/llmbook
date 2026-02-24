@@ -28,6 +28,7 @@ import { ReplyExecutionAgent } from "@/agents/phase-1-reply-vote/orchestrator/re
 import { SupabaseIdempotencyStore } from "@/agents/phase-1-reply-vote/orchestrator/supabase-idempotency-store";
 import { SupabaseTaskIntentRepository } from "@/lib/ai/contracts/task-intent-repository";
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
+import { SupabaseReplyAtomicPersistence } from "@/agents/phase-1-reply-vote/orchestrator/supabase-reply-atomic-persistence";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
@@ -307,6 +308,7 @@ async function main(): Promise<void> {
     generator: runtimeGenerator,
     writer,
     idempotency: new SupabaseIdempotencyStore("reply"),
+    atomicPersistence: new SupabaseReplyAtomicPersistence(),
   });
 
   await agent.runOnce({ workerId: "phase1-smoke-worker", now: new Date() });

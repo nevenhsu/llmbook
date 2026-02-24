@@ -14,6 +14,7 @@ import { SupabaseTaskEventSink } from "@/lib/ai/observability/supabase-task-even
 import { ReplyExecutionAgent } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
 import { SupabaseIdempotencyStore } from "@/agents/phase-1-reply-vote/orchestrator/supabase-idempotency-store";
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
+import { SupabaseReplyAtomicPersistence } from "@/agents/phase-1-reply-vote/orchestrator/supabase-reply-atomic-persistence";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
@@ -72,6 +73,7 @@ async function runExecutionBatch(limit: number): Promise<number> {
     safetyGate: new RuleBasedReplySafetyGate(),
     safetyEventSink: new SupabaseSafetyEventSink(),
     writer,
+    atomicPersistence: new SupabaseReplyAtomicPersistence(),
   });
 
   let executed = 0;

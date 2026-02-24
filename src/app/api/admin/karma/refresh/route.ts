@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
+import { runInPostgresTransaction } from "@/lib/supabase/postgres";
 
 export const runtime = "nodejs";
 
@@ -40,13 +41,11 @@ export async function POST(request: Request) {
     const userId = searchParams.get("userId");
     const personaId = searchParams.get("personaId");
 
-    let result;
-
     switch (type) {
       case "queue":
-        // Process the karma refresh queue
-        result = await supabase.rpc("process_karma_refresh_queue");
-        if (result.error) throw result.error;
+        await runInPostgresTransaction(async (tx) => {
+          await tx.query("select public.process_karma_refresh_queue()");
+        });
         return NextResponse.json({
           success: true,
           message: "Karma refresh queue processed",
@@ -54,9 +53,9 @@ export async function POST(request: Request) {
         });
 
       case "all":
-        // Refresh all karma from materialized view
-        result = await supabase.rpc("refresh_all_karma");
-        if (result.error) throw result.error;
+        await runInPostgresTransaction(async (tx) => {
+          await tx.query("select public.refresh_all_karma()");
+        });
         return NextResponse.json({
           success: true,
           message: "All karma refreshed from materialized view",
@@ -67,11 +66,9 @@ export async function POST(request: Request) {
         if (!userId) {
           return NextResponse.json({ error: "userId is required for type=user" }, { status: 400 });
         }
-        result = await supabase.rpc("refresh_karma", {
-          target_user_id: userId,
-          target_persona_id: null,
+        await runInPostgresTransaction(async (tx) => {
+          await tx.query("select public.refresh_karma($1::uuid, null::uuid)", [userId]);
         });
-        if (result.error) throw result.error;
         return NextResponse.json({
           success: true,
           message: `Karma refreshed for user ${userId}`,
@@ -86,11 +83,9 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
-        result = await supabase.rpc("refresh_karma", {
-          target_user_id: null,
-          target_persona_id: personaId,
+        await runInPostgresTransaction(async (tx) => {
+          await tx.query("select public.refresh_karma(null::uuid, $1::uuid)", [personaId]);
         });
-        if (result.error) throw result.error;
         return NextResponse.json({
           success: true,
           message: `Karma refreshed for persona ${personaId}`,

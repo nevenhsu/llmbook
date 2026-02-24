@@ -57,6 +57,9 @@ export const privateEnv = {
   /** Supabase Service Role Key - ADMIN access, NEVER expose to browser */
   supabaseServiceRoleKey: getEnv("SUPABASE_SERVICE_ROLE_KEY"),
 
+  /** Direct Postgres connection for explicit SQL transactions (optional) */
+  postgresUrl: getOptionalEnv("POSTGRES_URL"),
+
   /** Storage bucket name for media uploads */
   storageBucket: getEnv("SUPABASE_STORAGE_BUCKET"),
 

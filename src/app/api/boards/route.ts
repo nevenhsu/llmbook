@@ -1,5 +1,5 @@
 import { getSupabaseServerClient, withAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { runInPostgresTransaction } from "@/lib/supabase/postgres";
 
 export const runtime = "nodejs";
 
@@ -80,68 +80,60 @@ export const POST = withAuth(async (request, { user, supabase }) => {
     }
   }
 
-  // Use admin client for creating board and related records
-  // This bypasses RLS and ensures atomic operations
-  const admin = createAdminClient();
+  try {
+    const board = await runInPostgresTransaction(async (tx) => {
+      const boardRes = await tx.query(
+        `insert into public.boards (name, slug, description, banner_url, rules)
+         values ($1, $2, $3, $4, $5::jsonb)
+         returning id, slug, name, description, banner_url, created_at`,
+        [name, slug, description || null, banner_url || null, JSON.stringify(rules || [])],
+      );
 
-  // Create board
-  const { data: board, error: boardError } = await admin
-    .from("boards")
-    .insert({
-      name,
-      slug,
-      description: description || null,
-      banner_url: banner_url || null,
-      rules: rules || [],
-    })
-    .select("id, slug, name, description, banner_url, created_at")
-    .single();
+      const created = boardRes.rows[0] as
+        | {
+            id: string;
+            slug: string;
+            name: string;
+            description: string | null;
+            banner_url: string | null;
+            created_at: string;
+          }
+        | undefined;
 
-  if (boardError) {
-    if (boardError.code === "23505") {
-      // Unique violation
+      if (!created) {
+        throw new Error("Failed to create board");
+      }
+
+      await tx.query(
+        `insert into public.board_moderators (board_id, user_id, role, permissions)
+         values ($1, $2, 'owner', $3::jsonb)`,
+        [
+          created.id,
+          user.id,
+          JSON.stringify({
+            manage_posts: true,
+            manage_users: true,
+            manage_settings: true,
+          }),
+        ],
+      );
+
+      await tx.query(
+        `insert into public.board_members (board_id, user_id)
+         values ($1, $2)`,
+        [created.id, user.id],
+      );
+
+      return created;
+    });
+
+    return http.created({ board });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create board";
+    if (message.toLowerCase().includes("duplicate key") || message.includes("23505")) {
       return http.conflict("Board slug already exists");
     }
-    console.error("Error creating board:", boardError);
-    return http.badRequest(boardError.message);
+    console.error("Error creating board:", error);
+    return http.badRequest(message);
   }
-
-  if (!board) {
-    return http.internalError("Failed to create board");
-  }
-
-  // Add creator as owner in board_moderators
-  const { error: modError } = await admin.from("board_moderators").insert({
-    board_id: board.id,
-    user_id: user.id,
-    role: "owner",
-    permissions: {
-      manage_posts: true,
-      manage_users: true,
-      manage_settings: true,
-    },
-  });
-
-  if (modError) {
-    // Rollback: delete the board using admin client
-    await admin.from("boards").delete().eq("id", board.id);
-    console.error("Error assigning board owner:", modError);
-    return http.internalError("Failed to assign board owner");
-  }
-
-  // Auto-join creator as member
-  const { error: memberError } = await admin.from("board_members").insert({
-    board_id: board.id,
-    user_id: user.id,
-  });
-
-  if (memberError) {
-    // Rollback both board and moderator
-    await admin.from("board_moderators").delete().eq("board_id", board.id);
-    await admin.from("boards").delete().eq("id", board.id);
-    console.error("Failed to auto-join creator:", memberError);
-    return http.internalError("Failed to setup board membership");
-  }
-
-  return http.created({ board });
 });
