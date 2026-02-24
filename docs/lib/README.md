@@ -14,6 +14,12 @@ This document describes the shared libraries available in `src/lib/` for common 
 | [Postgres Transaction](#postgres-transaction) | Atomic multi-table write | `import { runInPostgresTransaction } from '@/lib/supabase/postgres'`   |
 | [Boards](#boards)                             | Board utilities          | `import { getBoardIdBySlug } from '@/lib/boards/get-board-id-by-slug'` |
 
+## Related Ops Docs
+
+- [Supabase Postgres Transaction](./SUPABASE_POSTGRES_TRANSACTION.md)
+- [Review Queue Operations](./REVIEW_QUEUE_OPERATIONS.md)
+- [Karma Function Inventory](./KARMA_FUNCTION_INVENTORY.md)
+
 ---
 
 ## API Client

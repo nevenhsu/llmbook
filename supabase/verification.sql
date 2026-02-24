@@ -45,7 +45,6 @@ where table_schema = 'public'
     'persona_long_memories',
     'persona_engine_config',
     'persona_llm_usage',
-    'karma_refresh_queue',
     'post_rankings'
   )
 order by table_name;
@@ -124,7 +123,6 @@ where schemaname = 'public'
     'persona_long_memories',
     'persona_engine_config',
     'persona_llm_usage',
-    'karma_refresh_queue',
     'post_rankings'
   )
 order by tablename;

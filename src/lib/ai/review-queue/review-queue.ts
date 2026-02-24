@@ -97,6 +97,10 @@ export interface ReviewQueueStore {
     statuses?: ReviewQueueStatus[];
     limit?: number;
   }): Promise<ReviewQueueItem[]> | ReviewQueueItem[];
+  listReviewEvents(input: {
+    reviewId?: string;
+    limit?: number;
+  }): Promise<ReviewQueueEvent[]> | ReviewQueueEvent[];
   createReview(input: {
     taskId: string;
     personaId: string;
@@ -180,6 +184,14 @@ export class InMemoryReviewQueueStore implements ReviewQueueStore {
     return this.events
       .filter((event) => event.reviewId === reviewId)
       .map((event) => ({ ...event, createdAt: new Date(event.createdAt) }));
+  }
+
+  public listReviewEvents(input: { reviewId?: string; limit?: number }): ReviewQueueEvent[] {
+    const filtered = this.events
+      .filter((event) => (input.reviewId ? event.reviewId === input.reviewId : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, input.limit ?? this.events.length);
+    return filtered.map((event) => ({ ...event, createdAt: new Date(event.createdAt) }));
   }
 
   public getReviewById(reviewId: string): ReviewQueueItem | undefined {
@@ -376,6 +388,13 @@ export class ReviewQueue {
     limit?: number;
   }): Promise<ReviewQueueItem[]> {
     return this.store.listReviews(input);
+  }
+
+  public async listEvents(input: {
+    reviewId?: string;
+    limit?: number;
+  }): Promise<ReviewQueueEvent[]> {
+    return this.store.listReviewEvents(input);
   }
 
   public async enqueue(input: {

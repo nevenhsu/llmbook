@@ -44,6 +44,17 @@ type TaskRow = {
   error_message: string | null;
 };
 
+type ReviewEventRow = {
+  review_id: string;
+  task_id: string;
+  event_type: ReviewQueueEvent["eventType"];
+  reason_code: string | null;
+  reviewer_id: string | null;
+  note: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
 function fromReviewRow(row: ReviewRow): ReviewQueueItem {
   return {
     id: row.id,
@@ -79,6 +90,19 @@ function fromTaskRow(row: TaskRow): ReviewQueueTask {
     startedAt: row.started_at ? new Date(row.started_at) : undefined,
     completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
     errorMessage: row.error_message ?? undefined,
+  };
+}
+
+function fromReviewEventRow(row: ReviewEventRow): ReviewQueueEvent {
+  return {
+    reviewId: row.review_id,
+    taskId: row.task_id,
+    eventType: row.event_type,
+    reasonCode: row.reason_code ?? undefined,
+    reviewerId: row.reviewer_id ?? undefined,
+    note: row.note ?? undefined,
+    metadata: row.metadata ?? {},
+    createdAt: new Date(row.created_at),
   };
 }
 
@@ -136,6 +160,31 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
     }
 
     return (data ?? []).map((row) => fromReviewRow(row as ReviewRow));
+  }
+
+  public async listReviewEvents(input: {
+    reviewId?: string;
+    limit?: number;
+  }): Promise<ReviewQueueEvent[]> {
+    const supabase = createAdminClient();
+    let query = supabase
+      .from("ai_review_events")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (input.reviewId) {
+      query = query.eq("review_id", input.reviewId);
+    }
+    if (input.limit && input.limit > 0) {
+      query = query.limit(input.limit);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`listReviewEvents failed: ${error.message}`);
+    }
+
+    return (data ?? []).map((row) => fromReviewEventRow(row as ReviewEventRow));
   }
 
   public async createReview(input: {

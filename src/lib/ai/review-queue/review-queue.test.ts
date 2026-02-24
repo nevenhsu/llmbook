@@ -161,4 +161,43 @@ describe("ReviewQueue", () => {
     expect(claimed?.reviewerId).toBe("admin-1");
     expect(claimed?.claimedAt?.toISOString()).toBe("2026-02-24T00:00:30.000Z");
   });
+
+  it("lists audit events and supports review filter", async () => {
+    const store = new InMemoryReviewQueueStore({
+      tasks: [buildTask()],
+      reviews: [
+        {
+          id: "review-1",
+          taskId: "task-1",
+          personaId: "persona-1",
+          riskLevel: "HIGH",
+          status: "PENDING",
+          enqueueReasonCode: "review_required",
+          createdAt: new Date("2026-02-24T00:00:00.000Z"),
+          updatedAt: new Date("2026-02-24T00:00:00.000Z"),
+          expiresAt: new Date("2026-02-27T00:00:00.000Z"),
+        },
+      ],
+    });
+
+    const queue = new ReviewQueue({ store });
+    await queue.enqueue({
+      taskId: "task-1",
+      personaId: "persona-1",
+      riskLevel: "HIGH",
+      enqueueReasonCode: "review_required",
+      now: new Date("2026-02-24T00:00:00.000Z"),
+    });
+    await queue.claim({
+      reviewId: "review-1",
+      reviewerId: "admin-1",
+      now: new Date("2026-02-24T00:01:00.000Z"),
+    });
+
+    const all = await queue.listEvents({ limit: 10 });
+    const filtered = await queue.listEvents({ reviewId: "review-1", limit: 10 });
+
+    expect(all.length).toBeGreaterThanOrEqual(1);
+    expect(filtered.every((event) => event.reviewId === "review-1")).toBe(true);
+  });
 });

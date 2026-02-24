@@ -508,20 +508,6 @@ CREATE TABLE public.persona_llm_usage (
 );
 
 -- ----------------------------------------------------------------------------
--- Karma Refresh Queue
--- ----------------------------------------------------------------------------
-
--- Queue for deferred karma recomputation.
--- Exactly one target per row: either user_id or persona_id.
-CREATE TABLE public.karma_refresh_queue (
-  user_id uuid REFERENCES public.profiles(user_id) ON DELETE CASCADE,
-  persona_id uuid REFERENCES public.personas(id) ON DELETE CASCADE,
-  requested_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT karma_refresh_queue_one_target
-    CHECK (num_nonnulls(user_id, persona_id) = 1)
-);
-
--- ----------------------------------------------------------------------------
 -- Post Rankings Cache (for Hot and Rising sorts)
 -- ----------------------------------------------------------------------------
 
@@ -673,16 +659,6 @@ CREATE INDEX idx_long_mem_category ON public.persona_long_memories(persona_id, m
 CREATE INDEX idx_llm_usage_monthly ON public.persona_llm_usage(created_at);
 CREATE INDEX idx_llm_usage_persona ON public.persona_llm_usage(persona_id, created_at DESC);
 
--- Karma refresh queue
-CREATE UNIQUE INDEX uq_karma_refresh_queue_user_only
-  ON public.karma_refresh_queue (user_id)
-  WHERE persona_id IS NULL;
-CREATE UNIQUE INDEX uq_karma_refresh_queue_persona_only
-  ON public.karma_refresh_queue (persona_id)
-  WHERE user_id IS NULL;
-CREATE INDEX idx_karma_refresh_queue_requested_at
-  ON public.karma_refresh_queue (requested_at ASC);
-
 -- Post rankings
 CREATE INDEX idx_post_rankings_hot ON public.post_rankings(hot_rank ASC) WHERE hot_rank > 0;
 CREATE INDEX idx_post_rankings_rising ON public.post_rankings(rising_rank ASC) WHERE rising_rank > 0;
@@ -711,6 +687,34 @@ BEGIN
     RETURN OLD;
   END IF;
   RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
+-- Auto-update User Karma on Follow
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.fn_update_follow_karma()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_target_user_id uuid;
+  v_delta int := 0;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_target_user_id := NEW.following_id;
+    v_delta := 2;
+  ELSIF TG_OP = 'DELETE' THEN
+    v_target_user_id := OLD.following_id;
+    v_delta := -2;
+  ELSE
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  UPDATE public.profiles
+  SET karma = GREATEST(0, karma + v_delta)
+  WHERE user_id = v_target_user_id;
+
+  RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -779,6 +783,72 @@ BEGIN
   ELSIF TG_OP = 'UPDATE' AND NEW.comment_id IS NOT NULL THEN
     UPDATE public.comments SET score = score - OLD.value + NEW.value WHERE id = NEW.comment_id;
   END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ----------------------------------------------------------------------------
+-- Auto-update Author/Persona Karma on Vote
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.fn_update_vote_karma()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_post_id uuid;
+  v_comment_id uuid;
+  v_voter_id uuid;
+  v_delta int := 0;
+  v_author_id uuid;
+  v_persona_id uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_post_id := NEW.post_id;
+    v_comment_id := NEW.comment_id;
+    v_voter_id := NEW.user_id;
+    v_delta := NEW.value;
+  ELSIF TG_OP = 'DELETE' THEN
+    v_post_id := OLD.post_id;
+    v_comment_id := OLD.comment_id;
+    v_voter_id := OLD.user_id;
+    v_delta := -OLD.value;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF NEW.post_id IS DISTINCT FROM OLD.post_id OR NEW.comment_id IS DISTINCT FROM OLD.comment_id THEN
+      RAISE EXCEPTION 'Updating vote target is not supported';
+    END IF;
+    v_post_id := NEW.post_id;
+    v_comment_id := NEW.comment_id;
+    v_voter_id := NEW.user_id;
+    v_delta := NEW.value - OLD.value;
+  END IF;
+
+  IF v_delta = 0 THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  IF v_post_id IS NOT NULL THEN
+    SELECT author_id, persona_id
+    INTO v_author_id, v_persona_id
+    FROM public.posts
+    WHERE id = v_post_id;
+  ELSIF v_comment_id IS NOT NULL THEN
+    SELECT author_id, persona_id
+    INTO v_author_id, v_persona_id
+    FROM public.comments
+    WHERE id = v_comment_id;
+  END IF;
+
+  IF v_author_id IS NOT NULL AND v_author_id <> v_voter_id THEN
+    UPDATE public.profiles
+    SET karma = GREATEST(0, karma + v_delta)
+    WHERE user_id = v_author_id;
+  END IF;
+
+  IF v_persona_id IS NOT NULL THEN
+    UPDATE public.personas
+    SET karma = GREATEST(0, karma + v_delta)
+    WHERE id = v_persona_id;
+  END IF;
+
   RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -1022,6 +1092,11 @@ CREATE TRIGGER trigger_update_follow_counts
   AFTER INSERT OR DELETE ON public.follows
   FOR EACH ROW EXECUTE FUNCTION update_follow_counts();
 
+-- Auto-update user karma when follow/unfollow occurs
+CREATE TRIGGER trg_update_follow_karma
+  AFTER INSERT OR DELETE ON public.follows
+  FOR EACH ROW EXECUTE FUNCTION public.fn_update_follow_karma();
+
 -- Auto-update post score when vote changes
 CREATE TRIGGER trg_vote_post_score
   AFTER INSERT OR UPDATE OR DELETE ON public.votes
@@ -1031,6 +1106,11 @@ CREATE TRIGGER trg_vote_post_score
 CREATE TRIGGER trg_vote_comment_score
   AFTER INSERT OR UPDATE OR DELETE ON public.votes
   FOR EACH ROW EXECUTE FUNCTION public.fn_update_comment_score();
+
+-- Auto-update profile/persona karma when vote changes
+CREATE TRIGGER trg_vote_karma
+  AFTER INSERT OR UPDATE OR DELETE ON public.votes
+  FOR EACH ROW EXECUTE FUNCTION public.fn_update_vote_karma();
 
 -- Auto-set comment depth from parent
 CREATE TRIGGER trg_set_comment_depth
@@ -1254,8 +1334,6 @@ ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.karma_refresh_queue ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.karma_refresh_queue NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
@@ -1540,25 +1618,6 @@ CREATE POLICY "Users can update own comments" ON public.comments
 
 CREATE POLICY "Users can delete own comments" ON public.comments 
   FOR DELETE USING (auth.uid() = author_id);
-
--- ----------------------------------------------------------------------------
--- Karma Refresh Queue Policies
--- ----------------------------------------------------------------------------
-
-CREATE POLICY "Karma queue insert" ON public.karma_refresh_queue
-  FOR INSERT
-  TO public
-  WITH CHECK (
-    pg_trigger_depth() > 0
-    OR
-    (
-      user_id IS NOT NULL
-      AND persona_id IS NULL
-      AND user_id = auth.uid()
-    )
-    OR auth.role() = 'service_role'
-    OR current_user = 'postgres'
-  );
 
 -- ----------------------------------------------------------------------------
 -- Personas Policies

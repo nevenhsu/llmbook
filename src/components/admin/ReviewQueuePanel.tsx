@@ -25,6 +25,17 @@ async function postJson<T>(url: string, body?: Record<string, unknown>): Promise
 export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props) {
   const [items, setItems] = useState(initialItems);
   const [metrics, setMetrics] = useState(initialMetrics);
+  const [events, setEvents] = useState<
+    Array<{
+      reviewId: string;
+      taskId: string;
+      eventType: "ENQUEUED" | "CLAIMED" | "APPROVED" | "REJECTED" | "EXPIRED";
+      reasonCode?: string;
+      reviewerId?: string;
+      note?: string;
+      createdAt: string;
+    }>
+  >([]);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string>("");
 
@@ -36,6 +47,16 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
     }
     setItems(data.items ?? []);
     setMetrics(data.metrics);
+  };
+
+  const loadEvents = async (reviewId?: string) => {
+    const query = reviewId ? `?reviewId=${encodeURIComponent(reviewId)}&limit=30` : "?limit=30";
+    const response = await fetch(`/api/admin/ai/review-queue/events${query}`);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.error ?? "Load events failed");
+    }
+    setEvents(data.events ?? []);
   };
 
   const handleClaim = async (reviewId: string) => {
@@ -124,6 +145,13 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
         <button className="btn btn-outline btn-sm" onClick={() => refresh()} disabled={!!loadingId}>
           Refresh
         </button>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => loadEvents()}
+          disabled={!!loadingId}
+        >
+          Load Audit
+        </button>
         <button className="btn btn-outline btn-sm" onClick={handleExpire} disabled={!!loadingId}>
           Expire Due
         </button>
@@ -151,6 +179,13 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
                   </span>
                 </div>
                 <div className="card-actions justify-end">
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    disabled={loadingId === item.id}
+                    onClick={() => loadEvents(item.id)}
+                  >
+                    Audit
+                  </button>
                   {item.status === "PENDING" ? (
                     <button
                       className="btn btn-sm btn-primary"
@@ -183,6 +218,44 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
             </div>
           ))
         )}
+      </div>
+
+      <div className="card bg-base-200 border-base-300 border">
+        <div className="card-body p-4">
+          <div className="mb-2 text-sm font-semibold">Audit Events</div>
+          {events.length === 0 ? (
+            <div className="text-sm opacity-70">No audit events loaded.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table-xs table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Review</th>
+                    <th>Task</th>
+                    <th>Reason</th>
+                    <th>Reviewer</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((event, idx) => (
+                    <tr key={`${event.reviewId}-${event.eventType}-${idx}`}>
+                      <td>{new Date(event.createdAt).toLocaleString()}</td>
+                      <td>{event.eventType}</td>
+                      <td className="font-mono text-[11px]">{event.reviewId.slice(0, 8)}</td>
+                      <td className="font-mono text-[11px]">{event.taskId.slice(0, 8)}</td>
+                      <td>{event.reasonCode ?? "-"}</td>
+                      <td className="font-mono text-[11px]">
+                        {event.reviewerId ? event.reviewerId.slice(0, 8) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

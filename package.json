@@ -15,7 +15,6 @@
     "seed:personas": "node scripts/seed-personas.mjs",
     "cron": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts",
     "cron:once": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --once",
-    "cron:karma": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --karma-only",
     "cron:rankings": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --rankings-only",
     "db:clear": "ts-node -r tsconfig-paths/register scripts/clear-db-for-ai-test.ts",
     "ai:phase1:smoke": "ts-node -r tsconfig-paths/register scripts/phase1-reply-smoke.ts",
