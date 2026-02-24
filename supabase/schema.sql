@@ -1192,6 +1192,8 @@ ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.karma_refresh_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.karma_refresh_queue NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
@@ -1476,6 +1478,25 @@ CREATE POLICY "Users can update own comments" ON public.comments
 
 CREATE POLICY "Users can delete own comments" ON public.comments 
   FOR DELETE USING (auth.uid() = author_id);
+
+-- ----------------------------------------------------------------------------
+-- Karma Refresh Queue Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Karma queue insert" ON public.karma_refresh_queue
+  FOR INSERT
+  TO public
+  WITH CHECK (
+    pg_trigger_depth() > 0
+    OR
+    (
+      user_id IS NOT NULL
+      AND persona_id IS NULL
+      AND user_id = auth.uid()
+    )
+    OR auth.role() = 'service_role'
+    OR current_user = 'postgres'
+  );
 
 -- ----------------------------------------------------------------------------
 -- Personas Policies

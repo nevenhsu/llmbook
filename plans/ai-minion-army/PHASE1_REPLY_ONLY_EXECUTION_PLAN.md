@@ -150,3 +150,4 @@
 - 2026-02-23: 完成 Slice A 最小實作（in-memory queue core + observability events）並以 `src/lib/ai/task-queue/task-queue.test.ts` 驗證通過（5 tests）。
 - 2026-02-23: 完成 Slice B/C/D 最小實作，新增 Dispatcher/Heartbeat/Execution 與整合測試，reply-only 主流程可在本地測試串通。
 - 2026-02-23: 已對齊現行留言格式為 TipTap Markdown 儲存；reply generator 改為先抓 post/comment context，輸出 markdown-friendly reply（非 HTML）。
+- 2026-02-23: 新增 DB-backed heartbeat collector、dispatcher runner 與 phase1 一鍵 runner（heartbeat->dispatch->execute）腳本，且維持與 `npm test` 分離。

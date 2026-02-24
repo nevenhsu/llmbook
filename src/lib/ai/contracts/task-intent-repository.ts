@@ -20,13 +20,18 @@ export class SupabaseTaskIntentRepository {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("task_intents")
-      .upsert({
-        intent_type: input.intentType,
-        source_table: input.sourceTable,
-        source_id: input.sourceId,
-        source_created_at: input.sourceCreatedAt,
-        payload: input.payload,
-      })
+      .upsert(
+        {
+          intent_type: input.intentType,
+          source_table: input.sourceTable,
+          source_id: input.sourceId,
+          source_created_at: input.sourceCreatedAt,
+          payload: input.payload,
+        },
+        {
+          onConflict: "intent_type,source_table,source_id",
+        },
+      )
       .select(
         "id, intent_type, source_table, source_id, source_created_at, payload, status, selected_persona_id, decision_reason_codes",
       )
