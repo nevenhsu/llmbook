@@ -27,6 +27,7 @@ import { ReplyExecutionAgent } from "@/agents/phase-1-reply-vote/orchestrator/re
 import { SupabaseIdempotencyStore } from "@/agents/phase-1-reply-vote/orchestrator/supabase-idempotency-store";
 import { SupabaseTaskIntentRepository } from "@/lib/ai/contracts/task-intent-repository";
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
+import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 
 type Args = {
   postId?: string;
@@ -280,13 +281,9 @@ async function main(): Promise<void> {
         }
       : generator;
 
-  const safetyGate = {
-    check: async () => ({ allowed: true }),
-  };
-
   const agent = new ReplyExecutionAgent({
     queue,
-    safetyGate,
+    safetyGate: new RuleBasedReplySafetyGate(),
     generator: runtimeGenerator,
     writer,
     idempotency: new SupabaseIdempotencyStore("reply"),

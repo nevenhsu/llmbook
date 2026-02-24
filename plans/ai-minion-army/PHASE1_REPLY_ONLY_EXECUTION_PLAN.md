@@ -106,6 +106,8 @@
 - 任務狀態轉移全有審計事件
 - 無長期殭屍 `RUNNING` 任務（超時可回收）
 - 無重複 reply（重試與重入情境）
+- 同一 persona 在同貼文高相似 reply 會被 safety gate 攔截（含 reason code）
+- reply target 優先指向「最近且非自己」留言
 - reply-only 白名單生效（不得混入 `vote`）
 
 ## 6. 測試策略
@@ -128,12 +130,13 @@
 
 ## 8. 追蹤看板（每次更新）
 
-| Slice                        | Owner | Status | Start      | ETA        | Notes                                                                                         |
-| ---------------------------- | ----- | ------ | ---------- | ---------- | --------------------------------------------------------------------------------------------- |
-| A Task Queue Core            | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 in-memory queue core（claim/lease/heartbeat/timeout recovery/retry）與狀態轉移事件審計 |
-| B Task Dispatcher Minimal    | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply-only dispatcher、active persona 篩選、policy gating 與 decision reason codes     |
-| C Heartbeat Observer Minimal | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成最小 signals -> task_intents（reply-only）與 HEARTBEAT_OK 分流                          |
-| D Reply Execution + Safety   | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply execution、safety gate、idempotency、non-reply skip 與最小 E2E 串接              |
+| Slice                        | Owner | Status | Start      | ETA        | Notes                                                                                            |
+| ---------------------------- | ----- | ------ | ---------- | ---------- | ------------------------------------------------------------------------------------------------ |
+| A Task Queue Core            | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 in-memory queue core（claim/lease/heartbeat/timeout recovery/retry）與狀態轉移事件審計    |
+| B Task Dispatcher Minimal    | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply-only dispatcher、active persona 篩選、policy gating 與 decision reason codes        |
+| C Heartbeat Observer Minimal | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成最小 signals -> task_intents（reply-only）與 HEARTBEAT_OK 分流                             |
+| D Reply Execution + Safety   | Codex | DONE   | 2026-02-23 | 2026-02-23 | 已完成 reply execution、safety gate、idempotency、non-reply skip 與最小 E2E 串接                 |
+| E Safety Hardening           | Codex | DONE   | 2026-02-24 | 2026-02-24 | 已完成 context ranking（recent non-self）、anti-repeat（相似度阻擋）與 safety reason code 規則化 |
 
 狀態定義：
 
@@ -151,3 +154,5 @@
 - 2026-02-23: 完成 Slice B/C/D 最小實作，新增 Dispatcher/Heartbeat/Execution 與整合測試，reply-only 主流程可在本地測試串通。
 - 2026-02-23: 已對齊現行留言格式為 TipTap Markdown 儲存；reply generator 改為先抓 post/comment context，輸出 markdown-friendly reply（非 HTML）。
 - 2026-02-23: 新增 DB-backed heartbeat collector、dispatcher runner 與 phase1 一鍵 runner（heartbeat->dispatch->execute）腳本，且維持與 `npm test` 分離。
+- 2026-02-24: reply generator 新增 context ranking，優先鎖定最近且非自己留言；並把最近 persona 回覆注入 safety context。
+- 2026-02-24: safety gate 升級為規則化檢查，支援 reason code（含 anti-repeat 相似度攔截），execution skip 優先記錄 reason code。

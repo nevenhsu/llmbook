@@ -1,12 +1,13 @@
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { TaskQueue } from "@/lib/ai/task-queue/task-queue";
-import type { ReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
+import type { ReplySafetyContext, ReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 
 export interface ReplyGenerator {
   generate(task: QueueTask): Promise<{
     text?: string;
     parentCommentId?: string;
     skipReason?: string;
+    safetyContext?: ReplySafetyContext;
   }>;
 }
 
@@ -114,13 +115,13 @@ export class ReplyExecutionAgent {
         return "DONE";
       }
 
-      const safety = await this.safetyGate.check({ text });
+      const safety = await this.safetyGate.check({ text, context: generated.safetyContext });
 
       if (!safety.allowed) {
         await this.queue.skip({
           taskId: claimed.id,
           workerId: input.workerId,
-          reason: safety.reason ?? "SAFETY_BLOCKED",
+          reason: safety.reasonCode ?? safety.reason ?? "SAFETY_BLOCKED",
           now: input.now,
         });
         return "DONE";

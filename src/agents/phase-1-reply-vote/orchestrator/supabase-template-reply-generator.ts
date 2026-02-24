@@ -21,6 +21,11 @@ type CommentRow = {
   created_at: string;
 };
 
+type RankedComment = CommentRow & {
+  rankPriority: number;
+  rankTime: number;
+};
+
 function normalizeText(input: string): string {
   return input.replace(/\s+/g, " ").trim();
 }
@@ -40,11 +45,38 @@ function actorLabel(row: { author_id: string | null; persona_id: string | null }
   return "unknown";
 }
 
+function toEpoch(value: string): number {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+export function rankFocusCandidates(input: {
+  comments: CommentRow[];
+  personaId: string;
+}): CommentRow[] {
+  const ranked: RankedComment[] = input.comments
+    .map((comment) => {
+      const isSelf = comment.persona_id === input.personaId;
+      return {
+        ...comment,
+        rankPriority: isSelf ? 0 : 1,
+        rankTime: toEpoch(comment.created_at),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.rankPriority - a.rankPriority || b.rankTime - a.rankTime || b.id.localeCompare(a.id),
+    );
+
+  return ranked;
+}
+
 export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
   public async generate(task: QueueTask): Promise<{
     text?: string;
     parentCommentId?: string;
     skipReason?: string;
+    safetyContext?: { recentPersonaReplies: string[] };
   }> {
     const postId = typeof task.payload.postId === "string" ? task.payload.postId : null;
     if (!postId) {
@@ -83,39 +115,28 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     }
 
     const commentRows = (comments ?? []) as CommentRow[];
-    const commentById = new Map(commentRows.map((row) => [row.id, row]));
-
     const isSelfByPersona = (row: { persona_id: string | null }): boolean =>
       row.persona_id === task.personaId;
 
     let focusComment: CommentRow | undefined;
 
-    if (requestedParentCommentId) {
-      const requested = commentById.get(requestedParentCommentId);
-      if (requested && !isSelfByPersona(requested)) {
-        focusComment = requested;
-      } else if (requested && isSelfByPersona(requested)) {
-        let cursor = requested;
-        while (cursor.parent_id) {
-          const parent = commentById.get(cursor.parent_id);
-          if (!parent) break;
-          if (!isSelfByPersona(parent)) {
-            focusComment = parent;
-            break;
-          }
-          cursor = parent;
-        }
-      }
-    }
+    const rankedCandidates = rankFocusCandidates({
+      comments: commentRows,
+      personaId: task.personaId,
+    });
 
-    if (!focusComment) {
-      for (let i = commentRows.length - 1; i >= 0; i -= 1) {
-        const candidate = commentRows[i];
-        if (candidate && !isSelfByPersona(candidate)) {
-          focusComment = candidate;
-          break;
-        }
-      }
+    const requestedNonSelf =
+      requestedParentCommentId != null
+        ? rankedCandidates.find(
+            (candidate) => candidate.id === requestedParentCommentId && !isSelfByPersona(candidate),
+          )
+        : undefined;
+    const newestNonSelf = rankedCandidates.find((candidate) => !isSelfByPersona(candidate));
+
+    if (newestNonSelf) {
+      focusComment = newestNonSelf;
+    } else if (requestedNonSelf) {
+      focusComment = requestedNonSelf;
     }
 
     if (!focusComment && post.persona_id === task.personaId) {
@@ -154,6 +175,13 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     return {
       text,
       parentCommentId: focusComment?.id,
+      safetyContext: {
+        recentPersonaReplies: rankedCandidates
+          .filter((candidate) => isSelfByPersona(candidate))
+          .map((candidate) => normalizeText(candidate.body))
+          .filter((body) => body.length > 0)
+          .slice(0, 5),
+      },
     };
   }
 }

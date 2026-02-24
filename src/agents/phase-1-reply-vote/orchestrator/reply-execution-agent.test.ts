@@ -72,7 +72,13 @@ describe("ReplyExecutionAgent", () => {
       queue,
       idempotency: new InMemoryIdempotencyStore(),
       generator: { generate: vi.fn().mockResolvedValue({ text: "risky" }) },
-      safetyGate: { check: vi.fn().mockResolvedValue({ allowed: false, reason: "TOXIC_CONTENT" }) },
+      safetyGate: {
+        check: vi.fn().mockResolvedValue({
+          allowed: false,
+          reasonCode: "SAFETY_SIMILAR_TO_RECENT_REPLY",
+          reason: "TOXIC_CONTENT",
+        }),
+      },
       writer,
     });
 
@@ -80,7 +86,37 @@ describe("ReplyExecutionAgent", () => {
 
     expect(writer.write).not.toHaveBeenCalled();
     expect(store.snapshot()[0]?.status).toBe("SKIPPED");
-    expect(store.snapshot()[0]?.errorMessage).toBe("TOXIC_CONTENT");
+    expect(store.snapshot()[0]?.errorMessage).toBe("SAFETY_SIMILAR_TO_RECENT_REPLY");
+  });
+
+  it("passes safety context from generator into safety gate", async () => {
+    const store = new InMemoryTaskQueueStore([buildTask()]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+
+    const writer = {
+      write: vi.fn().mockResolvedValue({ resultId: "comment-1" }),
+    };
+    const safetyCheck = vi.fn().mockResolvedValue({ allowed: true });
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: {
+        generate: vi.fn().mockResolvedValue({
+          text: "hello",
+          safetyContext: { recentPersonaReplies: ["hello there"] },
+        }),
+      },
+      safetyGate: { check: safetyCheck },
+      writer,
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-23T00:01:00.000Z") });
+
+    expect(safetyCheck).toHaveBeenCalledWith({
+      text: "hello",
+      context: { recentPersonaReplies: ["hello there"] },
+    });
   });
 
   it("prevents duplicate writes for same idempotency key", async () => {

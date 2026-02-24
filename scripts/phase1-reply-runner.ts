@@ -15,6 +15,7 @@ import { ReplyExecutionAgent } from "@/agents/phase-1-reply-vote/orchestrator/re
 import { SupabaseIdempotencyStore } from "@/agents/phase-1-reply-vote/orchestrator/supabase-idempotency-store";
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 
 const HEARTBEAT_ONLY = process.argv.includes("--heartbeat-only");
 const DISPATCH_ONLY = process.argv.includes("--dispatch-only");
@@ -67,7 +68,7 @@ async function runExecutionBatch(limit: number): Promise<number> {
     queue,
     idempotency: new SupabaseIdempotencyStore("reply"),
     generator: new SupabaseTemplateReplyGenerator(),
-    safetyGate: { check: async () => ({ allowed: true }) },
+    safetyGate: new RuleBasedReplySafetyGate(),
     writer,
   });
 
