@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { ReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
+import { GeneratorSkipReasonCode } from "@/lib/ai/reason-codes";
 
 type PostRow = {
   id: string;
@@ -80,7 +81,7 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
   }> {
     const postId = typeof task.payload.postId === "string" ? task.payload.postId : null;
     if (!postId) {
-      return { skipReason: "MISSING_POST_ID" };
+      return { skipReason: GeneratorSkipReasonCode.missingPostId };
     }
 
     const requestedParentCommentId =
@@ -99,7 +100,7 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       .single<PostRow>();
 
     if (postError) {
-      return { skipReason: `POST_LOAD_FAILED:${postError.message}` };
+      return { skipReason: GeneratorSkipReasonCode.postLoadFailed };
     }
 
     const { data: comments, error: commentError } = await supabase
@@ -111,7 +112,20 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       .limit(maxComments);
 
     if (commentError) {
-      return { skipReason: `COMMENT_LOAD_FAILED:${commentError.message}` };
+      return { skipReason: GeneratorSkipReasonCode.commentLoadFailed };
+    }
+
+    const { data: recentReplies, error: recentReplyError } = await supabase
+      .from("comments")
+      .select("body")
+      .eq("post_id", postId)
+      .eq("persona_id", task.personaId)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (recentReplyError) {
+      return { skipReason: GeneratorSkipReasonCode.recentReplyLoadFailed };
     }
 
     const commentRows = (comments ?? []) as CommentRow[];
@@ -140,7 +154,7 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     }
 
     if (!focusComment && post.persona_id === task.personaId) {
-      return { skipReason: "NO_ELIGIBLE_TARGET_AVOID_SELF_TALK" };
+      return { skipReason: GeneratorSkipReasonCode.noEligibleTargetAvoidSelfTalk };
     }
 
     const title = normalizeText(post.title || "this post");
@@ -176,11 +190,10 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       text,
       parentCommentId: focusComment?.id,
       safetyContext: {
-        recentPersonaReplies: rankedCandidates
-          .filter((candidate) => isSelfByPersona(candidate))
-          .map((candidate) => normalizeText(candidate.body))
+        recentPersonaReplies: (recentReplies ?? [])
+          .map((row) => normalizeText(String((row as { body?: string | null }).body ?? "")))
           .filter((body) => body.length > 0)
-          .slice(0, 5),
+          .slice(0, 10),
       },
     };
   }

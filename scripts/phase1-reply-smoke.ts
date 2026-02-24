@@ -20,7 +20,7 @@ import {
 } from "./lib/script-helpers";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
 import type { PersonaProfile } from "@/lib/ai/contracts/task-intents";
-import { TaskQueue } from "@/lib/ai/task-queue/task-queue";
+import { TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
 import { SupabaseTaskQueueStore } from "@/lib/ai/task-queue/supabase-task-queue-store";
 import { SupabaseTaskEventSink } from "@/lib/ai/observability/supabase-task-event-sink";
 import { ReplyExecutionAgent } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
@@ -28,12 +28,14 @@ import { SupabaseIdempotencyStore } from "@/agents/phase-1-reply-vote/orchestrat
 import { SupabaseTaskIntentRepository } from "@/lib/ai/contracts/task-intent-repository";
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
+import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 
 type Args = {
   postId?: string;
   parentCommentId?: string;
   personaId?: string;
   execute: boolean;
+  antiRepeatCheck: boolean;
   body?: string;
 };
 
@@ -52,6 +54,7 @@ function parseArgs(argv: string[]): Args {
     personaId: read("--persona-id"),
     body: read("--body"),
     execute: argv.includes("--execute"),
+    antiRepeatCheck: argv.includes("--anti-repeat-check"),
   };
 }
 
@@ -139,7 +142,8 @@ async function main(): Promise<void> {
   log(`Persona: ${persona.id}`, "info");
 
   const now = new Date();
-  const idempotencyKey = `phase1-smoke:${targetPostId}:${args.parentCommentId ?? "root"}`;
+  const runToken = randomUUID().slice(0, 8);
+  const idempotencyKeyBase = `phase1-smoke:${targetPostId}:${args.parentCommentId ?? "root"}:${runToken}`;
   const intentRepo = new SupabaseTaskIntentRepository();
   const generator = new SupabaseTemplateReplyGenerator();
 
@@ -152,7 +156,7 @@ async function main(): Promise<void> {
     payload: {
       postId: targetPostId,
       parentCommentId: args.parentCommentId ?? null,
-      idempotencyKey,
+      idempotencyKey: `${idempotencyKeyBase}:1`,
       smokeTest: true,
     },
   };
@@ -173,7 +177,10 @@ async function main(): Promise<void> {
     log("Dry run only: no DB writes will happen.", "warning");
     log(`Would create intent for post ${intent.sourceId}`, "info");
     log(`Would dispatch to persona ${persona.id}`, "info");
-    log(`Would run reply task with idempotency_key=${idempotencyKey}`, "info");
+    log(`Would run reply task with idempotency_key=${idempotencyKeyBase}:1`, "info");
+    if (args.antiRepeatCheck) {
+      log("Would run anti-repeat check (second similar body should be blocked)", "info");
+    }
     if (preview.skipReason) {
       log(`Generator would skip: ${preview.skipReason}`, "warning");
     } else {
@@ -205,7 +212,7 @@ async function main(): Promise<void> {
         source_intent_id: storedIntent.id,
         task_type: task.taskType,
         payload: task.payload,
-        idempotency_key: idempotencyKey,
+        idempotency_key: String(task.payload.idempotencyKey ?? ""),
         status: task.status,
         scheduled_at: task.scheduledAt.toISOString(),
         retry_count: task.retryCount,
@@ -271,13 +278,23 @@ async function main(): Promise<void> {
     },
   };
 
-  const runtimeGenerator =
+  const overrideBody =
     args.body && args.body.trim().length > 0
+      ? args.antiRepeatCheck
+        ? `${args.body.trim()}\n\n[anti-repeat-run:${randomUUID().slice(0, 8)}]`
+        : args.body.trim()
+      : null;
+
+  const runtimeGenerator =
+    overrideBody != null
       ? {
-          generate: async () => ({
-            text: args.body!.trim(),
-            parentCommentId: preview.parentCommentId,
-          }),
+          generate: async (task: QueueTask) => {
+            const generated = await generator.generate(task);
+            return {
+              ...generated,
+              text: overrideBody,
+            };
+          },
         }
       : generator;
 
@@ -315,6 +332,106 @@ async function main(): Promise<void> {
   if (task.error_message) {
     log(`Task error: ${task.error_message}`, "warning");
   }
+
+  if (!args.antiRepeatCheck) {
+    return;
+  }
+
+  if (!args.body || args.body.trim().length === 0) {
+    throw new Error("--anti-repeat-check requires --body to ensure deterministic similarity");
+  }
+
+  if (task.status !== "DONE") {
+    throw new Error(`anti-repeat-check requires first task DONE, got ${task.status}`);
+  }
+
+  const secondIntent = {
+    ...intent,
+    id: randomUUID(),
+    createdAt: new Date().toISOString(),
+    payload: {
+      ...intent.payload,
+      idempotencyKey: `${idempotencyKeyBase}:2`,
+    },
+  };
+
+  const secondStoredIntent = await intentRepo.upsertIntent({
+    intentType: secondIntent.type,
+    sourceTable: secondIntent.sourceTable,
+    sourceId: secondIntent.sourceId,
+    sourceCreatedAt: secondIntent.createdAt,
+    payload: secondIntent.payload,
+  });
+
+  const secondDecisions = await dispatchIntents({
+    intents: [secondIntent],
+    personas: [persona],
+    policy: { replyEnabled: true },
+    now: new Date(),
+    makeTaskId: () => randomUUID(),
+    createTask: async (taskInput) => {
+      const localSupabase = createAdminClient();
+      const { error } = await localSupabase.from("persona_tasks").insert({
+        id: taskInput.id,
+        persona_id: taskInput.personaId,
+        source_intent_id: secondStoredIntent.id,
+        task_type: taskInput.taskType,
+        payload: taskInput.payload,
+        idempotency_key: String(taskInput.payload.idempotencyKey ?? ""),
+        status: taskInput.status,
+        scheduled_at: taskInput.scheduledAt.toISOString(),
+        retry_count: taskInput.retryCount,
+        max_retries: taskInput.maxRetries,
+        created_at: taskInput.createdAt.toISOString(),
+      });
+
+      if (error) {
+        throw new Error(`insert second persona_task failed: ${error.message}`);
+      }
+    },
+  });
+
+  const secondDecision = secondDecisions[0];
+  if (
+    !secondDecision ||
+    !secondDecision.dispatched ||
+    !secondDecision.taskId ||
+    !secondDecision.personaId
+  ) {
+    throw new Error(`second dispatch skipped: ${secondDecision?.reasons.join(",") ?? "unknown"}`);
+  }
+
+  await intentRepo.markDispatched({
+    intentId: secondStoredIntent.id,
+    personaId: secondDecision.personaId,
+    reasons: secondDecision.reasons,
+  });
+
+  await agent.runOnce({ workerId: "phase1-smoke-worker", now: new Date() });
+
+  const { data: secondTask, error: secondTaskError } = await supabase
+    .from("persona_tasks")
+    .select("id, status, error_message")
+    .eq("id", secondDecision.taskId)
+    .single<{ id: string; status: string; error_message: string | null }>();
+
+  if (secondTaskError) {
+    throw new Error(`load second task result failed: ${secondTaskError.message}`);
+  }
+
+  log(`Second task ${secondTask.id} status: ${secondTask.status}`, "info");
+  log(`Second task reason: ${secondTask.error_message ?? "n/a"}`, "info");
+
+  if (
+    secondTask.status !== "SKIPPED" ||
+    secondTask.error_message !== SafetyReasonCode.similarToRecentReply
+  ) {
+    throw new Error(
+      `anti-repeat check failed, expected SKIPPED/${SafetyReasonCode.similarToRecentReply}, got ${secondTask.status}/${secondTask.error_message}`,
+    );
+  }
+
+  log("Anti-repeat check passed: second similar reply was blocked.", "success");
 }
 
 main().catch((err) => {

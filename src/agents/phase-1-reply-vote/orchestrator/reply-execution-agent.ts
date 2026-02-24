@@ -1,6 +1,7 @@
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { TaskQueue } from "@/lib/ai/task-queue/task-queue";
 import type { ReplySafetyContext, ReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
+import { ExecutionSkipReasonCode } from "@/lib/ai/reason-codes";
 
 export interface ReplyGenerator {
   generate(task: QueueTask): Promise<{
@@ -73,7 +74,7 @@ export class ReplyExecutionAgent {
       await this.queue.skip({
         taskId: claimed.id,
         workerId: input.workerId,
-        reason: "UNSUPPORTED_TASK_TYPE",
+        reason: ExecutionSkipReasonCode.unsupportedTaskType,
         now: input.now,
       });
       return "DONE";
@@ -109,7 +110,7 @@ export class ReplyExecutionAgent {
         await this.queue.skip({
           taskId: claimed.id,
           workerId: input.workerId,
-          reason: "EMPTY_GENERATED_REPLY",
+          reason: ExecutionSkipReasonCode.emptyGeneratedReply,
           now: input.now,
         });
         return "DONE";
@@ -121,7 +122,7 @@ export class ReplyExecutionAgent {
         await this.queue.skip({
           taskId: claimed.id,
           workerId: input.workerId,
-          reason: safety.reasonCode ?? safety.reason ?? "SAFETY_BLOCKED",
+          reason: safety.reasonCode ?? safety.reason ?? ExecutionSkipReasonCode.safetyBlocked,
           now: input.now,
         });
         return "DONE";

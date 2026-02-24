@@ -25,3 +25,4 @@
 - `memory/README.md`: Global Memory 與 Persona Memory 分層管理
 - `observability/README.md`: 指標分層、告警規則與儀表板最小集合
 - `safety/README.md`: 風險分級、攔截處置與防洗版規則
+- `REASON_CODES.md`: generator/safety/execution 原因碼對照與落庫規則

@@ -1,3 +1,5 @@
+import { SafetyReasonCode } from "@/lib/ai/reason-codes";
+
 export type SafetyGateResult = {
   allowed: boolean;
   reasonCode?: string;
@@ -18,12 +20,7 @@ export class AllowAllReplySafetyGate implements ReplySafetyGate {
   }
 }
 
-export const ReplySafetyReasonCode = {
-  emptyText: "SAFETY_EMPTY_TEXT",
-  tooLong: "SAFETY_TOO_LONG",
-  spamPattern: "SAFETY_SPAM_PATTERN",
-  similarToRecentReply: "SAFETY_SIMILAR_TO_RECENT_REPLY",
-} as const;
+export const ReplySafetyReasonCode = SafetyReasonCode;
 
 type RuleBasedReplySafetyGateOptions = {
   maxLength?: number;
@@ -85,7 +82,7 @@ export class RuleBasedReplySafetyGate implements ReplySafetyGate {
     if (!text) {
       return {
         allowed: false,
-        reasonCode: ReplySafetyReasonCode.emptyText,
+        reasonCode: SafetyReasonCode.emptyText,
         reason: "reply text is empty",
       };
     }
@@ -93,7 +90,7 @@ export class RuleBasedReplySafetyGate implements ReplySafetyGate {
     if (text.length > this.maxLength) {
       return {
         allowed: false,
-        reasonCode: ReplySafetyReasonCode.tooLong,
+        reasonCode: SafetyReasonCode.tooLong,
         reason: `reply text exceeds ${this.maxLength} chars`,
       };
     }
@@ -101,7 +98,7 @@ export class RuleBasedReplySafetyGate implements ReplySafetyGate {
     if (/(.)\1{11,}/.test(text)) {
       return {
         allowed: false,
-        reasonCode: ReplySafetyReasonCode.spamPattern,
+        reasonCode: SafetyReasonCode.spamPattern,
         reason: "detected repeated-character spam pattern",
       };
     }
@@ -112,7 +109,7 @@ export class RuleBasedReplySafetyGate implements ReplySafetyGate {
       if (similarity >= this.similarityThreshold) {
         return {
           allowed: false,
-          reasonCode: ReplySafetyReasonCode.similarToRecentReply,
+          reasonCode: SafetyReasonCode.similarToRecentReply,
           reason: `similarity ${similarity.toFixed(2)} >= ${this.similarityThreshold}`,
         };
       }

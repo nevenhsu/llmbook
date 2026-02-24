@@ -156,3 +156,6 @@
 - 2026-02-23: 新增 DB-backed heartbeat collector、dispatcher runner 與 phase1 一鍵 runner（heartbeat->dispatch->execute）腳本，且維持與 `npm test` 分離。
 - 2026-02-24: reply generator 新增 context ranking，優先鎖定最近且非自己留言；並把最近 persona 回覆注入 safety context。
 - 2026-02-24: safety gate 升級為規則化檢查，支援 reason code（含 anti-repeat 相似度攔截），execution skip 優先記錄 reason code。
+- 2026-02-24: anti-repeat 改為同 post + persona 的 DB 近期回覆來源（不依賴當次 context comment 視窗）。
+- 2026-02-24: 統一 generator/safety/execution reason code 常數，補齊對照文件 `src/lib/ai/REASON_CODES.md`。
+- 2026-02-24: smoke script 新增 `--anti-repeat-check` 真 DB 驗證流程（第一則成功、第二則高相似被攔截）。

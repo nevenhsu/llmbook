@@ -10,6 +10,11 @@ import {
   type TaskType,
 } from "@/lib/ai/task-queue/task-queue";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
+import {
+  ExecutionSkipReasonCode,
+  GeneratorSkipReasonCode,
+  SafetyReasonCode,
+} from "@/lib/ai/reason-codes";
 
 function buildTask(overrides: Partial<QueueTask> = {}): QueueTask {
   return {
@@ -75,7 +80,7 @@ describe("ReplyExecutionAgent", () => {
       safetyGate: {
         check: vi.fn().mockResolvedValue({
           allowed: false,
-          reasonCode: "SAFETY_SIMILAR_TO_RECENT_REPLY",
+          reasonCode: SafetyReasonCode.similarToRecentReply,
           reason: "TOXIC_CONTENT",
         }),
       },
@@ -86,7 +91,7 @@ describe("ReplyExecutionAgent", () => {
 
     expect(writer.write).not.toHaveBeenCalled();
     expect(store.snapshot()[0]?.status).toBe("SKIPPED");
-    expect(store.snapshot()[0]?.errorMessage).toBe("SAFETY_SIMILAR_TO_RECENT_REPLY");
+    expect(store.snapshot()[0]?.errorMessage).toBe(SafetyReasonCode.similarToRecentReply);
   });
 
   it("passes safety context from generator into safety gate", async () => {
@@ -172,7 +177,7 @@ describe("ReplyExecutionAgent", () => {
 
     expect(writer.write).not.toHaveBeenCalled();
     expect(store.snapshot()[0]?.status).toBe("SKIPPED");
-    expect(store.snapshot()[0]?.errorMessage).toBe("UNSUPPORTED_TASK_TYPE");
+    expect(store.snapshot()[0]?.errorMessage).toBe(ExecutionSkipReasonCode.unsupportedTaskType);
   });
 
   it("skips task when generator returns skip reason", async () => {
@@ -187,7 +192,9 @@ describe("ReplyExecutionAgent", () => {
       queue,
       idempotency: new InMemoryIdempotencyStore(),
       generator: {
-        generate: vi.fn().mockResolvedValue({ skipReason: "NO_ELIGIBLE_TARGET_AVOID_SELF_TALK" }),
+        generate: vi
+          .fn()
+          .mockResolvedValue({ skipReason: GeneratorSkipReasonCode.noEligibleTargetAvoidSelfTalk }),
       },
       safetyGate: { check: vi.fn() },
       writer,
@@ -197,6 +204,8 @@ describe("ReplyExecutionAgent", () => {
 
     expect(writer.write).not.toHaveBeenCalled();
     expect(store.snapshot()[0]?.status).toBe("SKIPPED");
-    expect(store.snapshot()[0]?.errorMessage).toBe("NO_ELIGIBLE_TARGET_AVOID_SELF_TALK");
+    expect(store.snapshot()[0]?.errorMessage).toBe(
+      GeneratorSkipReasonCode.noEligibleTargetAvoidSelfTalk,
+    );
   });
 });
