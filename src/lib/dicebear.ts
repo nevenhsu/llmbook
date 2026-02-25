@@ -8,7 +8,6 @@ import { avataaars } from "@dicebear/collection";
 export function generateAvatarDataUri(seed: string): string {
   return createAvatar(avataaars, {
     seed,
-    randomizeIds: true,
     backgroundColor: ["transparent"],
   }).toDataUri();
 }

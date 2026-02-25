@@ -70,6 +70,7 @@ export class ReplyExecutionAgent {
   private readonly safetyEventSink?: SafetyEventSink;
   private readonly reviewQueue?: ReviewQueue;
   private readonly atomicPersistence?: ReplyAtomicPersistence;
+  private static readonly REVIEW_TEXT_MAX_LENGTH = 2000;
 
   public constructor(options: ReplyExecutionAgentOptions) {
     this.queue = options.queue;
@@ -150,6 +151,7 @@ export class ReplyExecutionAgent {
           });
 
           if (inReview) {
+            const trimmedText = text.slice(0, ReplyExecutionAgent.REVIEW_TEXT_MAX_LENGTH);
             await this.reviewQueue.enqueue({
               taskId: claimed.id,
               personaId: claimed.personaId,
@@ -159,6 +161,11 @@ export class ReplyExecutionAgent {
               now: input.now,
               metadata: {
                 source: "execution_safety_gate",
+                generatedText: trimmedText,
+                generatedTextLength: text.length,
+                safetyReasonCode: safety.reasonCode ?? ReviewReasonCode.reviewRequired,
+                safetyReason: safety.reason,
+                safetyRiskLevel: safety.riskLevel ?? "UNKNOWN",
               },
             });
             return "DONE";

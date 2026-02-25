@@ -27,6 +27,11 @@ type ReviewRow = {
   created_at: string;
   updated_at: string;
   metadata: Record<string, unknown> | null;
+  personas?: {
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
 };
 
 type TaskRow = {
@@ -56,6 +61,19 @@ type ReviewEventRow = {
 };
 
 function fromReviewRow(row: ReviewRow): ReviewQueueItem {
+  const metadata: Record<string, unknown> = { ...(row.metadata ?? {}) };
+  if (row.personas) {
+    if (typeof metadata.personaUsername !== "string" || metadata.personaUsername.length === 0) {
+      metadata.personaUsername = row.personas.username ?? undefined;
+    }
+    if (typeof metadata.personaName !== "string" || metadata.personaName.length === 0) {
+      metadata.personaName = row.personas.display_name ?? undefined;
+    }
+    if (typeof metadata.avatarUrl !== "string" || metadata.avatarUrl.length === 0) {
+      metadata.avatarUrl = row.personas.avatar_url ?? undefined;
+    }
+  }
+
   return {
     id: row.id,
     taskId: row.task_id,
@@ -72,7 +90,7 @@ function fromReviewRow(row: ReviewRow): ReviewQueueItem {
     decidedAt: row.decided_at ? new Date(row.decided_at) : undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
-    metadata: row.metadata ?? {},
+    metadata,
   };
 }
 
@@ -111,7 +129,7 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("ai_review_queue")
-      .select("*")
+      .select("*, personas:persona_id(username, display_name, avatar_url)")
       .eq("id", reviewId)
       .maybeSingle<ReviewRow>();
 
@@ -126,7 +144,7 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("ai_review_queue")
-      .select("*")
+      .select("*, personas:persona_id(username, display_name, avatar_url)")
       .eq("task_id", taskId)
       .maybeSingle<ReviewRow>();
 
@@ -140,15 +158,19 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
   public async listReviews(input: {
     statuses?: ReviewQueueStatus[];
     limit?: number;
+    cursor?: Date;
   }): Promise<ReviewQueueItem[]> {
     const supabase = createAdminClient();
     let query = supabase
       .from("ai_review_queue")
-      .select("*")
+      .select("*, personas:persona_id(username, display_name, avatar_url)")
       .order("created_at", { ascending: false });
 
     if (input.statuses?.length) {
       query = query.in("status", input.statuses);
+    }
+    if (input.cursor) {
+      query = query.lt("created_at", input.cursor.toISOString());
     }
     if (input.limit && input.limit > 0) {
       query = query.limit(input.limit);
@@ -160,6 +182,21 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
     }
 
     return (data ?? []).map((row) => fromReviewRow(row as ReviewRow));
+  }
+
+  public async countReviews(input: { statuses?: ReviewQueueStatus[] }): Promise<number> {
+    const supabase = createAdminClient();
+    let query = supabase.from("ai_review_queue").select("*", { count: "exact", head: true });
+    if (input.statuses?.length) {
+      query = query.in("status", input.statuses);
+    }
+
+    const { count, error } = await query;
+    if (error) {
+      throw new Error(`countReviews failed: ${error.message}`);
+    }
+
+    return count ?? 0;
   }
 
   public async listReviewEvents(input: {
@@ -215,7 +252,7 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
         updated_at: input.now.toISOString(),
         expires_at: new Date(input.now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
       })
-      .select("*")
+      .select("*, personas:persona_id(username, display_name, avatar_url)")
       .single<ReviewRow>();
 
     if (error) {
@@ -242,7 +279,7 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
       })
       .eq("id", input.reviewId)
       .eq("status", "PENDING")
-      .select("*")
+      .select("*, personas:persona_id(username, display_name, avatar_url)")
       .maybeSingle<ReviewRow>();
 
     if (error) {
@@ -329,7 +366,7 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
       })
       .eq("id", input.reviewId)
       .in("status", ["PENDING", "IN_REVIEW"])
-      .select("*")
+      .select("*, personas:persona_id(username, display_name, avatar_url)")
       .maybeSingle<ReviewRow>();
 
     if (error) {
@@ -549,7 +586,7 @@ export class SupabaseReviewQueueStore implements ReviewQueueStore, ReviewQueueAt
       })
       .in("status", ["PENDING", "IN_REVIEW"])
       .lte("expires_at", input.now.toISOString())
-      .select("*");
+      .select("*, personas:persona_id(username, display_name, avatar_url)");
 
     if (error) {
       throw new Error(`expireDue failed: ${error.message}`);

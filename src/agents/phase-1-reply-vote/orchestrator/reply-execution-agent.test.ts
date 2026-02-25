@@ -188,6 +188,19 @@ describe("ReplyExecutionAgent", () => {
     expect(reviews).toHaveLength(1);
     expect(reviews[0]?.taskId).toBe("task-1");
     expect(reviews[0]?.enqueueReasonCode).toBe(ReviewReasonCode.reviewRequired);
+    expect(reviews[0]?.metadata).toMatchObject({
+      source: "execution_safety_gate",
+      generatedText: "needs manual check",
+      safetyReasonCode: ReviewReasonCode.reviewRequired,
+      safetyRiskLevel: "HIGH",
+    });
+
+    const events = await reviewQueue.listEvents({ reviewId: reviews[0]?.id, limit: 5 });
+    expect(events[0]?.eventType).toBe("ENQUEUED");
+    expect(events[0]?.metadata).toMatchObject({
+      generatedText: "needs manual check",
+      safetyReasonCode: ReviewReasonCode.reviewRequired,
+    });
   });
 
   it("uses atomic persistence path when provided", async () => {

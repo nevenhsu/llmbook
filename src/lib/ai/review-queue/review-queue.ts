@@ -122,7 +122,9 @@ export interface ReviewQueueStore {
   listReviews(input: {
     statuses?: ReviewQueueStatus[];
     limit?: number;
+    cursor?: Date;
   }): Promise<ReviewQueueItem[]> | ReviewQueueItem[];
+  countReviews(input: { statuses?: ReviewQueueStatus[] }): Promise<number> | number;
   listReviewEvents(input: {
     reviewId?: string;
     limit?: number;
@@ -234,13 +236,33 @@ export class InMemoryReviewQueueStore implements ReviewQueueStore {
     return undefined;
   }
 
-  public listReviews(input: { statuses?: ReviewQueueStatus[]; limit?: number }): ReviewQueueItem[] {
+  public listReviews(input: {
+    statuses?: ReviewQueueStatus[];
+    limit?: number;
+    cursor?: Date;
+  }): ReviewQueueItem[] {
     const statuses = input.statuses;
+    const cursorTs = input.cursor?.getTime();
     const filtered = [...this.reviews.values()]
-      .filter((review) => !statuses?.length || statuses.includes(review.status))
+      .filter((review) => {
+        if (statuses?.length && !statuses.includes(review.status)) {
+          return false;
+        }
+        if (cursorTs != null && review.createdAt.getTime() >= cursorTs) {
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     return filtered.slice(0, input.limit ?? filtered.length).map(cloneItem);
+  }
+
+  public countReviews(input: { statuses?: ReviewQueueStatus[] }): number {
+    const statuses = input.statuses;
+    return [...this.reviews.values()].filter(
+      (review) => !statuses?.length || statuses.includes(review.status),
+    ).length;
   }
 
   public createReview(input: {
@@ -423,8 +445,13 @@ export class ReviewQueue {
   public async list(input: {
     statuses?: ReviewQueueStatus[];
     limit?: number;
+    cursor?: Date;
   }): Promise<ReviewQueueItem[]> {
     return this.store.listReviews(input);
+  }
+
+  public async count(input: { statuses?: ReviewQueueStatus[] }): Promise<number> {
+    return this.store.countReviews(input);
   }
 
   public async listEvents(input: {

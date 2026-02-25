@@ -59,11 +59,34 @@ BEGIN
     v_now + interval '2 days',
     v_now - interval '45 minutes',
     v_now - interval '45 minutes',
-    jsonb_build_object('seed_tag', v_seed_tag, 'case', 'pending_high')
+    jsonb_build_object(
+      'seed_tag', v_seed_tag,
+      'case', 'pending_high',
+      'source', 'execution_safety_gate',
+      'generatedText', '這段內容涉及高敏感主題，需要人工確認語氣與事實風險。',
+      'generatedTextLength', 31,
+      'safetyReasonCode', 'SAFETY_SIMILAR_TO_RECENT_REPLY',
+      'safetyReason', 'similarity 0.94 >= 0.90',
+      'safetyRiskLevel', 'HIGH'
+    )
   );
 
   INSERT INTO public.ai_review_events (review_id, task_id, event_type, reason_code, created_at, metadata)
-  VALUES (v_review_id, v_task_id, 'ENQUEUED', 'review_required', v_now - interval '45 minutes', jsonb_build_object('seed_tag', v_seed_tag));
+  VALUES (
+    v_review_id,
+    v_task_id,
+    'ENQUEUED',
+    'review_required',
+    v_now - interval '45 minutes',
+    jsonb_build_object(
+      'seed_tag', v_seed_tag,
+      'source', 'execution_safety_gate',
+      'generatedText', '這段內容涉及高敏感主題，需要人工確認語氣與事實風險。',
+      'safetyReasonCode', 'SAFETY_SIMILAR_TO_RECENT_REPLY',
+      'safetyReason', 'similarity 0.94 >= 0.90',
+      'safetyRiskLevel', 'HIGH'
+    )
+  );
 
   -- 2) Pending / GRAY
   v_persona_id := v_persona_ids[1 + (1 % v_persona_count)];
@@ -94,11 +117,34 @@ BEGIN
     v_now + interval '1 day',
     v_now - interval '30 minutes',
     v_now - interval '30 minutes',
-    jsonb_build_object('seed_tag', v_seed_tag, 'case', 'pending_gray')
+    jsonb_build_object(
+      'seed_tag', v_seed_tag,
+      'case', 'pending_gray',
+      'source', 'execution_safety_gate',
+      'generatedText', '我建議可以再觀察幾天，但這句可能被誤解成投資建議。',
+      'generatedTextLength', 29,
+      'safetyReasonCode', 'SAFETY_POLICY_AMBIGUOUS',
+      'safetyReason', 'ambiguous recommendation in finance context',
+      'safetyRiskLevel', 'GRAY'
+    )
   );
 
   INSERT INTO public.ai_review_events (review_id, task_id, event_type, reason_code, created_at, metadata)
-  VALUES (v_review_id, v_task_id, 'ENQUEUED', 'review_required', v_now - interval '30 minutes', jsonb_build_object('seed_tag', v_seed_tag));
+  VALUES (
+    v_review_id,
+    v_task_id,
+    'ENQUEUED',
+    'review_required',
+    v_now - interval '30 minutes',
+    jsonb_build_object(
+      'seed_tag', v_seed_tag,
+      'source', 'execution_safety_gate',
+      'generatedText', '我建議可以再觀察幾天，但這句可能被誤解成投資建議。',
+      'safetyReasonCode', 'SAFETY_POLICY_AMBIGUOUS',
+      'safetyReason', 'ambiguous recommendation in finance context',
+      'safetyRiskLevel', 'GRAY'
+    )
+  );
 
   -- 3) In Review / HIGH
   v_persona_id := v_persona_ids[1 + (2 % v_persona_count)];
@@ -133,12 +179,35 @@ BEGIN
     v_now + interval '2 days',
     v_now - interval '20 minutes',
     v_now - interval '10 minutes',
-    jsonb_build_object('seed_tag', v_seed_tag, 'case', 'in_review_high')
+    jsonb_build_object(
+      'seed_tag', v_seed_tag,
+      'case', 'in_review_high',
+      'source', 'execution_safety_gate',
+      'generatedText', '這是一則待人工確認的高風險回覆，可能引發誤導。',
+      'generatedTextLength', 27,
+      'safetyReasonCode', 'SAFETY_SIMILAR_TO_RECENT_REPLY',
+      'safetyReason', 'similarity 0.91 >= 0.90',
+      'safetyRiskLevel', 'HIGH'
+    )
   );
 
   INSERT INTO public.ai_review_events (review_id, task_id, event_type, reason_code, created_at, metadata)
   VALUES
-    (v_review_id, v_task_id, 'ENQUEUED', 'review_required', v_now - interval '20 minutes', jsonb_build_object('seed_tag', v_seed_tag)),
+    (
+      v_review_id,
+      v_task_id,
+      'ENQUEUED',
+      'review_required',
+      v_now - interval '20 minutes',
+      jsonb_build_object(
+        'seed_tag', v_seed_tag,
+        'source', 'execution_safety_gate',
+        'generatedText', '這是一則待人工確認的高風險回覆，可能引發誤導。',
+        'safetyReasonCode', 'SAFETY_SIMILAR_TO_RECENT_REPLY',
+        'safetyReason', 'similarity 0.91 >= 0.90',
+        'safetyRiskLevel', 'HIGH'
+      )
+    ),
     (v_review_id, v_task_id, 'CLAIMED', null, v_now - interval '10 minutes', jsonb_build_object('seed_tag', v_seed_tag));
 
   -- 4) Expired / HIGH (already timeout)
