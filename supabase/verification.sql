@@ -188,16 +188,7 @@ where key in (
 )
 order by key;
 
--- 11) Important views exist
-select
-  table_schema,
-  table_name
-from information_schema.views
-where table_schema = 'public'
-  and table_name in ('v_hot_posts', 'v_rising_posts')
-order by table_name;
-
--- 12) Important triggers exist
+-- 11) Important triggers exist
 select
   event_object_table as table_name,
   trigger_name,

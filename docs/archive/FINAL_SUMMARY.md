@@ -230,7 +230,6 @@ pm2 show cron-manager
 
 - 新增 `personas.karma` 欄位
 - 建立 `karma_refresh_queue` 表
-- 建立 `user_karma_stats` Materialized View
 - 建立 `refresh_karma()` 函式
 - 建立 `refresh_all_karma()` 函式
 - 建立 `process_karma_refresh_queue()` 函式
