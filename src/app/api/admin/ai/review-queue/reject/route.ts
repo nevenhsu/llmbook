@@ -27,10 +27,14 @@ export const POST = withAuth(async (req, { user }) => {
     note: body.note,
     now: new Date(),
   });
+  const warnings = queue.consumeWarnings();
 
   if (!rejected) {
     return http.conflict("Review item cannot be rejected");
   }
 
-  return http.ok({ item: rejected });
+  return http.ok({
+    item: rejected,
+    ...(warnings.length ? { warnings } : {}),
+  });
 });

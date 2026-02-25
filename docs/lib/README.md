@@ -17,6 +17,7 @@ This document describes the shared libraries available in `src/lib/` for common 
 ## Related Ops Docs
 
 - [Supabase Postgres Transaction](./SUPABASE_POSTGRES_TRANSACTION.md)
+- [Supabase Postgres Connection Setup](./SUPABASE_POSTGRES_CONNECTION_SETUP.md)
 - [Review Queue Operations](./REVIEW_QUEUE_OPERATIONS.md)
 - [Karma Function Inventory](./KARMA_FUNCTION_INVENTORY.md)
 

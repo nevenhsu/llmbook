@@ -63,6 +63,32 @@ type ReviewQueueOptions = {
   taskEventSink?: TaskEventSink;
 };
 
+const ATOMIC_FALLBACK_WARNING =
+  "Postgres direct connection is unavailable. Review queue is running in fallback mode.";
+
+function isAtomicConnectionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as { code?: unknown; message?: unknown };
+  const code = typeof maybeError.code === "string" ? maybeError.code.toUpperCase() : "";
+  if (
+    code === "ENOTFOUND" ||
+    code === "EAI_AGAIN" ||
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "ENETUNREACH" ||
+    code === "EHOSTUNREACH"
+  ) {
+    return true;
+  }
+
+  const message = typeof maybeError.message === "string" ? maybeError.message.toUpperCase() : "";
+  return message.includes("GETADDRINFO ENOTFOUND");
+}
+
 export interface ReviewQueueAtomicStore {
   claimAtomic(input: {
     reviewId: string;
@@ -367,10 +393,21 @@ export class InMemoryReviewQueueStore implements ReviewQueueStore {
 export class ReviewQueue {
   private readonly store: ReviewQueueStore;
   private readonly taskEventSink?: TaskEventSink;
+  private readonly warnings = new Set<string>();
 
   public constructor(options: ReviewQueueOptions) {
     this.store = options.store;
     this.taskEventSink = options.taskEventSink;
+  }
+
+  private recordAtomicFallbackWarning(): void {
+    this.warnings.add(ATOMIC_FALLBACK_WARNING);
+  }
+
+  public consumeWarnings(): string[] {
+    const warnings = [...this.warnings];
+    this.warnings.clear();
+    return warnings;
   }
 
   private getAtomicStore(): (ReviewQueueStore & ReviewQueueAtomicStore) | null {
@@ -426,7 +463,14 @@ export class ReviewQueue {
   }): Promise<ReviewQueueItem | null> {
     const atomicStore = this.getAtomicStore();
     if (atomicStore) {
-      return atomicStore.claimAtomic(input);
+      try {
+        return await atomicStore.claimAtomic(input);
+      } catch (error) {
+        if (!isAtomicConnectionError(error)) {
+          throw error;
+        }
+        this.recordAtomicFallbackWarning();
+      }
     }
 
     const claimed = await this.store.claimReview(input);
@@ -454,7 +498,14 @@ export class ReviewQueue {
   }): Promise<ReviewQueueItem | null> {
     const atomicStore = this.getAtomicStore();
     if (atomicStore) {
-      return atomicStore.approveAtomic(input);
+      try {
+        return await atomicStore.approveAtomic(input);
+      } catch (error) {
+        if (!isAtomicConnectionError(error)) {
+          throw error;
+        }
+        this.recordAtomicFallbackWarning();
+      }
     }
 
     const before = await this.store.getReviewById(input.reviewId);
@@ -515,7 +566,14 @@ export class ReviewQueue {
   }): Promise<ReviewQueueItem | null> {
     const atomicStore = this.getAtomicStore();
     if (atomicStore) {
-      return atomicStore.rejectAtomic(input);
+      try {
+        return await atomicStore.rejectAtomic(input);
+      } catch (error) {
+        if (!isAtomicConnectionError(error)) {
+          throw error;
+        }
+        this.recordAtomicFallbackWarning();
+      }
     }
 
     const before = await this.store.getReviewById(input.reviewId);
@@ -571,14 +629,21 @@ export class ReviewQueue {
   public async expireDue(input: { now: Date }): Promise<ReviewQueueItem[]> {
     const atomicStore = this.getAtomicStore();
     if (atomicStore) {
-      const count = await atomicStore.expireDueAtomic(input);
-      if (count === 0) {
-        return [];
+      try {
+        const count = await atomicStore.expireDueAtomic(input);
+        if (count === 0) {
+          return [];
+        }
+        return this.store.listReviews({
+          statuses: ["EXPIRED"],
+          limit: count,
+        });
+      } catch (error) {
+        if (!isAtomicConnectionError(error)) {
+          throw error;
+        }
+        this.recordAtomicFallbackWarning();
       }
-      return this.store.listReviews({
-        statuses: ["EXPIRED"],
-        limit: count,
-      });
     }
 
     const expired = await this.store.expireDue({

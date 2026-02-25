@@ -2,6 +2,8 @@
 
 **File:** [`src/lib/supabase/postgres.ts`](../../src/lib/supabase/postgres.ts)
 
+Setup guide: [SUPABASE_POSTGRES_CONNECTION_SETUP.md](./SUPABASE_POSTGRES_CONNECTION_SETUP.md)
+
 ## Purpose
 
 Use direct Postgres connection (`pg`) when you need **single-transaction atomicity** across multiple SQL statements (`BEGIN/COMMIT/ROLLBACK`).

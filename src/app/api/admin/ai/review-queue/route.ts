@@ -40,9 +40,11 @@ export const GET = withAuth(async (req, { user }) => {
     queue.list({ statuses: statuses.length ? statuses : ["PENDING", "IN_REVIEW"], limit }),
     collectReviewQueueMetrics(24),
   ]);
+  const warnings = queue.consumeWarnings();
 
   return http.ok({
     items,
     metrics,
+    ...(warnings.length ? { warnings } : {}),
   });
 });

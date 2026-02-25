@@ -27,10 +27,14 @@ export const POST = withAuth(async (req, { user }) => {
     note: body.note,
     now: new Date(),
   });
+  const warnings = queue.consumeWarnings();
 
   if (!approved) {
     return http.conflict("Review item cannot be approved");
   }
 
-  return http.ok({ item: approved });
+  return http.ok({
+    item: approved,
+    ...(warnings.length ? { warnings } : {}),
+  });
 });

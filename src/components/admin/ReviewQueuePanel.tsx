@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import type { ReviewQueueItem } from "@/lib/ai/review-queue/review-queue";
 import type { ReviewQueueMetrics } from "@/lib/ai/observability/review-queue-metrics";
 
 type Props = {
   initialItems: ReviewQueueItem[];
   initialMetrics: ReviewQueueMetrics;
+  initialWarnings?: string[];
 };
 
 async function postJson<T>(url: string, body?: Record<string, unknown>): Promise<T> {
@@ -22,7 +24,7 @@ async function postJson<T>(url: string, body?: Record<string, unknown>): Promise
   return data as T;
 }
 
-export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props) {
+export default function ReviewQueuePanel({ initialItems, initialMetrics, initialWarnings }: Props) {
   const [items, setItems] = useState(initialItems);
   const [metrics, setMetrics] = useState(initialMetrics);
   const [events, setEvents] = useState<
@@ -38,13 +40,37 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
   >([]);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string>("");
+  const shownWarningsRef = useRef(new Set<string>());
+
+  const showWarnings = (warnings?: string[]) => {
+    if (!warnings?.length) {
+      return;
+    }
+    for (const warning of warnings) {
+      if (shownWarningsRef.current.has(warning)) {
+        continue;
+      }
+      shownWarningsRef.current.add(warning);
+      toast(warning, { icon: "⚠️" });
+    }
+  };
+
+  useEffect(() => {
+    showWarnings(initialWarnings);
+  }, [initialWarnings]);
 
   const refresh = async () => {
     const response = await fetch("/api/admin/ai/review-queue?status=PENDING,IN_REVIEW&limit=100");
-    const data = await response.json();
+    const data = (await response.json()) as {
+      items?: ReviewQueueItem[];
+      metrics: ReviewQueueMetrics;
+      warnings?: string[];
+      error?: string;
+    };
     if (!response.ok) {
       throw new Error(data?.error ?? "Load failed");
     }
+    showWarnings(data.warnings);
     setItems(data.items ?? []);
     setMetrics(data.metrics);
   };
@@ -63,7 +89,11 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
     setLoadingId(reviewId);
     setMessage("");
     try {
-      await postJson<{ item: ReviewQueueItem }>("/api/admin/ai/review-queue/claim", { reviewId });
+      const data = await postJson<{ item: ReviewQueueItem; warnings?: string[] }>(
+        "/api/admin/ai/review-queue/claim",
+        { reviewId },
+      );
+      showWarnings(data.warnings);
       await refresh();
       setMessage("Claimed");
     } catch (error) {
@@ -77,10 +107,14 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
     setLoadingId(reviewId);
     setMessage("");
     try {
-      await postJson<{ item: ReviewQueueItem }>("/api/admin/ai/review-queue/approve", {
-        reviewId,
-        reasonCode: "manual_approved",
-      });
+      const data = await postJson<{ item: ReviewQueueItem; warnings?: string[] }>(
+        "/api/admin/ai/review-queue/approve",
+        {
+          reviewId,
+          reasonCode: "manual_approved",
+        },
+      );
+      showWarnings(data.warnings);
       await refresh();
       setMessage("Approved");
     } catch (error) {
@@ -94,10 +128,14 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
     setLoadingId(reviewId);
     setMessage("");
     try {
-      await postJson<{ item: ReviewQueueItem }>("/api/admin/ai/review-queue/reject", {
-        reviewId,
-        reasonCode: "manual_rejected",
-      });
+      const data = await postJson<{ item: ReviewQueueItem; warnings?: string[] }>(
+        "/api/admin/ai/review-queue/reject",
+        {
+          reviewId,
+          reasonCode: "manual_rejected",
+        },
+      );
+      showWarnings(data.warnings);
       await refresh();
       setMessage("Rejected");
     } catch (error) {
@@ -111,7 +149,10 @@ export default function ReviewQueuePanel({ initialItems, initialMetrics }: Props
     setLoadingId("expire");
     setMessage("");
     try {
-      await postJson<{ expiredCount: number }>("/api/admin/ai/review-queue/expire");
+      const data = await postJson<{ expiredCount: number; warnings?: string[] }>(
+        "/api/admin/ai/review-queue/expire",
+      );
+      showWarnings(data.warnings);
       await refresh();
       setMessage("Expired due items processed");
     } catch (error) {

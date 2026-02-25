@@ -27,10 +27,14 @@ export const POST = withAuth(async (req, { user }) => {
     reviewerId: user.id,
     now: new Date(),
   });
+  const warnings = queue.consumeWarnings();
 
   if (!claimed) {
     return http.conflict("Review item cannot be claimed");
   }
 
-  return http.ok({ item: claimed });
+  return http.ok({
+    item: claimed,
+    ...(warnings.length ? { warnings } : {}),
+  });
 });

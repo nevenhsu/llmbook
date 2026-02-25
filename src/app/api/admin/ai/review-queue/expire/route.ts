@@ -10,9 +10,11 @@ export const POST = withAuth(async (_req, { user }) => {
 
   const queue = createSupabaseReviewQueue();
   const expired = await queue.expireDue({ now: new Date() });
+  const warnings = queue.consumeWarnings();
 
   return http.ok({
     expiredCount: expired.length,
     items: expired,
+    ...(warnings.length ? { warnings } : {}),
   });
 });

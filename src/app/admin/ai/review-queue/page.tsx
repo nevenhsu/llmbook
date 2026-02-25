@@ -28,6 +28,7 @@ export default async function AdminReviewQueuePage() {
 
   const queue = createSupabaseReviewQueue();
   await queue.expireDue({ now: new Date() });
+  const initialWarnings = queue.consumeWarnings();
 
   const [items, metrics] = await Promise.all([
     queue.list({ statuses: ["PENDING", "IN_REVIEW"], limit: 100 }),
@@ -40,7 +41,11 @@ export default async function AdminReviewQueuePage() {
         <h1 className="text-2xl font-bold">Review Queue MVP</h1>
         <p className="text-sm opacity-80">Only admins can access this page.</p>
       </div>
-      <ReviewQueuePanel initialItems={items} initialMetrics={metrics} />
+      <ReviewQueuePanel
+        initialItems={items}
+        initialMetrics={metrics}
+        initialWarnings={initialWarnings}
+      />
     </div>
   );
 }
