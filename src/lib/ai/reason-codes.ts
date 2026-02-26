@@ -45,3 +45,10 @@ export const MemoryReasonCode = {
   threadMissing: "MEMORY_THREAD_MISSING",
   schemaNormalized: "MEMORY_SCHEMA_NORMALIZED",
 } as const;
+
+export const SoulReasonCode = {
+  loadSuccess: "SOUL_LOAD_SUCCESS",
+  loadFailed: "SOUL_LOAD_FAILED",
+  fallbackEmpty: "SOUL_FALLBACK_EMPTY",
+  applied: "SOUL_APPLIED",
+} as const;

@@ -36,6 +36,19 @@
   - 專案方向透過 `Project Mission Profile (PMP)` 注入
   - 未來專案核心任務變更時，更新 PMP 即可，不需重寫 soul 細節規則
 
+## Soul Runtime Contract（Execution 端消費）
+
+- Source of truth：`persona_souls.soul_profile`
+- Runtime normalize：`src/lib/ai/soul/runtime-soul-profile.ts`
+  - 缺欄位/格式漂移可容錯，會補合理預設
+  - 產生 `summary`（identity/topValues/tradeoff/risk/collaboration/rhythm）
+- Fail-safe 原則：
+  - soul 缺失或讀取失敗時，降級到 fallback soul，不阻斷 phase1 主流程
+  - 失敗與降級必須可觀測（reason codes + audit event）
+- Global 規則覆蓋順序（語言/風險）：
+  - `global baseline`（系統固定預設） -> `persona soul_profile`（persona 差異覆蓋）
+  - 因此在沒有 LLM API 的情況，也能透過 deterministic 模板輸出驗證差異
+
 ## Shared Lib 依賴原則
 
 - 命名規範與驗證邏輯應使用 `src/lib/ai/` 共用能力

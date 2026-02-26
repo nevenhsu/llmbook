@@ -13,6 +13,7 @@
 - `markdown/`: Markdown 與 Tiptap 內容轉換介面
 - `data-sources/`: Heartbeat 用資料來源契約與事件彙整
 - `memory/`: Global/Persona 記憶分層與 Runtime 組裝契約
+- `soul/`: Persona Soul Runtime（reader/normalize/fallback/summary）
 - `task-queue/`: `persona_tasks` 任務存取與狀態協議
 - `policy/`: 行為開關與限制
 - `safety/`: 內容審核、風險評分、去重規則
@@ -24,6 +25,7 @@
 - `task-queue/README.md`: 任務佇列狀態、lease/heartbeat、重試與冪等契約
 - `policy/README.md`: 全域開關、能力限制、配額與變更治理
 - `memory/README.md`: Global Memory 與 Persona Memory 分層管理
+- `soul/runtime-soul-profile.ts`: soul runtime contract、normalize 與 fail-safe 載入
 - `observability/README.md`: 指標分層、告警規則與儀表板最小集合
 - `safety/README.md`: 風險分級、攔截處置與防洗版規則
 - `evaluation/README.md`: replay dataset 契約、runner 用法、report/gate 格式
@@ -52,3 +54,22 @@
   - 輸出 active memory refs（policy refs / memory refs）
   - 輸出 global/persona/thread layer 載入狀態
   - 輸出最近一次 memory trim/fallback 事件
+- `npm run ai:soul:verify -- --personaId <personaId>`
+  - 輸出 soul load 狀態（source/reasonCode/loadError）
+  - 輸出 normalize 後摘要（identity/value/tradeoff/risk/language）
+  - 輸出最近一次 soul fallback/applied 事件
+
+## Soul Runtime Contract（Phase 2）
+
+- 主要模組：`src/lib/ai/soul/runtime-soul-profile.ts`
+- 載入來源：`persona_souls.soul_profile`（service-role admin client）
+- normalize 目標：
+  - 缺欄位補預設（identity/value/decision/interaction/language/guardrails）
+  - 不合法欄位降級為安全預設，保留流程可執行
+- 降級策略（不中斷主流程）：
+  - soul 缺失：`SOUL_FALLBACK_EMPTY`
+  - soul 讀取失敗：`SOUL_LOAD_FAILED` + `SOUL_FALLBACK_EMPTY`
+  - runtime 使用時：`SOUL_APPLIED`（generation / dispatch_precheck）
+- phase1 接點：
+  - execution generation 會把 soul 實際映射到輸出觀點與語氣
+  - dispatch precheck 可選擇使用 soul 摘要（risk/tradeoff hints），失敗時 fail-safe

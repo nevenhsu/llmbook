@@ -15,6 +15,7 @@
 | execution | `ExecutionSkipReasonCode.*`      | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`） |
 | policy    | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                |
 | memory    | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                              |
+| soul      | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）               |
 
 ## Queue Persistence
 
@@ -41,3 +42,18 @@
 - `MEMORY_TRIM_APPLIED`
 - `MEMORY_THREAD_MISSING`
 - `MEMORY_SCHEMA_NORMALIZED`
+
+## Soul Runtime Reason Codes
+
+- `SOUL_LOAD_SUCCESS`
+- `SOUL_LOAD_FAILED`
+- `SOUL_FALLBACK_EMPTY`
+- `SOUL_APPLIED`
+
+## Soul Observability Event Contract（Minimal）
+
+- `layer`
+- `operation`
+- `reasonCode`
+- `entityId`
+- `occurredAt`

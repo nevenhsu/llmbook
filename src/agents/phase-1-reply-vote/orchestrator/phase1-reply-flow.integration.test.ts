@@ -10,6 +10,8 @@ import {
   ReplyExecutionAgent,
 } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
+import { composeSoulDrivenReply } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
+import { CachedRuntimeSoulProvider } from "@/lib/ai/soul/runtime-soul-profile";
 
 describe("Phase1 reply-only flow", () => {
   it("runs intent -> dispatch -> run -> safety -> write -> done", async () => {
@@ -172,5 +174,97 @@ describe("Phase1 reply-only flow", () => {
     expect(dispatch[0]?.dispatched).toBe(false);
     expect(dispatch[0]?.reasons).toContain("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY");
     expect(store.snapshot()).toHaveLength(0);
+  });
+
+  it("runs phase1 execution with and without soul and produces observable tone difference", async () => {
+    const store = new InMemoryTaskQueueStore([
+      {
+        id: "task-soul",
+        personaId: "persona-soul",
+        taskType: "reply",
+        payload: { postId: "post-1", idempotencyKey: "idem-soul" },
+        status: "PENDING",
+        scheduledAt: new Date("2026-02-26T00:00:00.000Z"),
+        retryCount: 0,
+        maxRetries: 3,
+        createdAt: new Date("2026-02-26T00:00:00.000Z"),
+      },
+      {
+        id: "task-fallback",
+        personaId: "persona-fallback",
+        taskType: "reply",
+        payload: { postId: "post-1", idempotencyKey: "idem-fallback" },
+        status: "PENDING",
+        scheduledAt: new Date("2026-02-26T00:00:01.000Z"),
+        retryCount: 0,
+        maxRetries: 3,
+        createdAt: new Date("2026-02-26T00:00:01.000Z"),
+      },
+    ]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const writtenTexts: string[] = [];
+
+    const soulProvider = new CachedRuntimeSoulProvider({
+      deps: {
+        getSoulProfile: async ({ personaId }) =>
+          personaId === "persona-soul"
+            ? {
+                identityCore: "An assertive analyst",
+                valueHierarchy: [{ value: "decisiveness", priority: 1 }],
+                decisionPolicy: {
+                  tradeoffStyle: "progressive",
+                  uncertaintyHandling: "test quickly and adapt",
+                },
+                interactionDoctrine: {
+                  askVsTellRatio: "tell-first",
+                  collaborationStance: "support",
+                },
+                languageSignature: {
+                  rhythm: "direct",
+                },
+                guardrails: {
+                  hardNo: ["unsafe actions"],
+                  deescalationRules: ["de-risk before scaling"],
+                },
+              }
+            : null,
+      },
+    });
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: {
+        generate: async (task) => {
+          const soul = await soulProvider.getRuntimeSoul({ personaId: task.personaId });
+          return {
+            text: composeSoulDrivenReply({
+              title: "Execution Test",
+              postBodySnippet: "Need a next step",
+              focusActor: "user:test",
+              focusSnippet: "what should we do next?",
+              participantCount: 2,
+              soul,
+            }),
+          };
+        },
+      },
+      safetyGate: { check: vi.fn().mockResolvedValue({ allowed: true }) },
+      writer: {
+        write: async ({ text }) => {
+          writtenTexts.push(text);
+          return { resultId: `comment-${writtenTexts.length}` };
+        },
+      },
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:10.000Z") });
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:11.000Z") });
+
+    expect(writtenTexts).toHaveLength(2);
+    expect(writtenTexts[0]).not.toBe(writtenTexts[1]);
+    expect(writtenTexts.some((text) => text.includes("Directly speaking"))).toBe(true);
+    expect(writtenTexts.some((text) => text.includes("Concisely"))).toBe(true);
+    expect(store.snapshot().every((task) => task.status === "DONE")).toBe(true);
   });
 });

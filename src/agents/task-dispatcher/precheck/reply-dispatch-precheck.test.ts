@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createReplyDispatchPrecheck } from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
-import { SafetyReasonCode } from "@/lib/ai/reason-codes";
+import { SafetyReasonCode, SoulReasonCode } from "@/lib/ai/reason-codes";
 
 function buildPolicy() {
   return {
@@ -65,6 +65,67 @@ describe("createReplyDispatchPrecheck", () => {
 
     expect(result.allowed).toBe(false);
     expect(result.reasons).toContain("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY");
+  });
+
+  it("keeps precheck fail-safe when soul summary load fails", async () => {
+    let capturedContext: { recentPersonaReplies: string[] } | undefined;
+    let soulFallbackRecorded = false;
+
+    const precheck = createReplyDispatchPrecheck({
+      policy: buildPolicy(),
+      deps: {
+        checkEligibility: async () => ({ allowed: true }),
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          policyRefs: { policyVersion: null },
+          memoryRefs: { communityMemoryVersion: null, safetyMemoryVersion: null },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
+        buildRuntimeSoulProfile: async () => {
+          throw new Error("soul read failed");
+        },
+        recordSoulFallback: async ({ reasonCode }) => {
+          if (reasonCode === SoulReasonCode.loadFailed) {
+            soulFallbackRecorded = true;
+          }
+        },
+        generateDraft: async () => ({
+          text: "draft text",
+          safetyContext: { recentPersonaReplies: ["recent text"] },
+        }),
+        runSafetyCheck: async ({ context }) => {
+          capturedContext = context;
+          return { allowed: true };
+        },
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-soul-fail",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-1",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-1" },
+      },
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(soulFallbackRecorded).toBe(true);
+    expect(capturedContext?.recentPersonaReplies).toContain("recent text");
   });
 
   it("allows slightly rewritten content", async () => {

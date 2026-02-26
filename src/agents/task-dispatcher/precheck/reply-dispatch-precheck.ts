@@ -8,10 +8,16 @@ import type { DispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-onl
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import { SupabaseTemplateReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
-import { MemoryReasonCode, SafetyReasonCode } from "@/lib/ai/reason-codes";
+import { MemoryReasonCode, SafetyReasonCode, SoulReasonCode } from "@/lib/ai/reason-codes";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
 import { createReplyInteractionEligibilityChecker } from "@/lib/ai/policy/reply-interaction-eligibility";
+import {
+  buildRuntimeSoulProfile,
+  buildSoulPrecheckHints,
+  recordRuntimeSoulApplied,
+  type RuntimeSoulContext,
+} from "@/lib/ai/soul/runtime-soul-profile";
 import {
   buildRuntimeMemoryContext,
   buildSafetyMemoryHints,
@@ -61,6 +67,24 @@ type ReplyDispatchPrecheckDeps = {
     reasonCode: string;
     metadata?: Record<string, unknown>;
     now: Date;
+  }) => Promise<void>;
+  buildRuntimeSoulProfile: (input: {
+    personaId: string;
+    now: Date;
+    tolerateFailure?: boolean;
+  }) => Promise<RuntimeSoulContext>;
+  recordSoulFallback: (input: {
+    intentId: string;
+    personaId: string;
+    postId?: string;
+    reasonCode: string;
+    metadata?: Record<string, unknown>;
+    now: Date;
+  }) => Promise<void>;
+  recordSoulApplied: (input: {
+    personaId: string;
+    now: Date;
+    metadata?: Record<string, unknown>;
   }) => Promise<void>;
 };
 
@@ -154,6 +178,31 @@ function defaultDeps(policy: DispatcherPolicy): ReplyDispatchPrecheckDeps {
         occurredAt: input.now.toISOString(),
       });
     },
+    buildRuntimeSoulProfile: async (input) =>
+      buildRuntimeSoulProfile({
+        personaId: input.personaId,
+        now: input.now,
+        tolerateFailure: input.tolerateFailure,
+      }),
+    recordSoulFallback: async (input) => {
+      await eventSink.record({
+        intentId: input.intentId,
+        personaId: input.personaId,
+        postId: input.postId,
+        source: "dispatch_precheck",
+        reasonCode: input.reasonCode,
+        metadata: input.metadata,
+        occurredAt: input.now.toISOString(),
+      });
+    },
+    recordSoulApplied: async (input) => {
+      await recordRuntimeSoulApplied({
+        personaId: input.personaId,
+        layer: "dispatch_precheck",
+        now: input.now,
+        metadata: input.metadata,
+      });
+    },
   };
 }
 
@@ -227,6 +276,7 @@ export function createReplyDispatchPrecheck(options: {
         typeof input.intent.payload.threadId === "string" ? input.intent.payload.threadId : null;
 
       let memoryHints: string[] = [];
+      let soulHints: string[] = [];
       try {
         const memoryContext = await deps.buildRuntimeMemoryContext({
           personaId: input.persona.id,
@@ -243,6 +293,44 @@ export function createReplyDispatchPrecheck(options: {
             personaId: input.persona.id,
             postId,
             reasonCode: MemoryReasonCode.readFailed,
+            metadata: {
+              layer: "dispatch_precheck",
+              error: error instanceof Error ? error.message : String(error),
+            },
+            now: input.now,
+          });
+        } catch {
+          // Best-effort observability only.
+        }
+      }
+
+      try {
+        const soul = await deps.buildRuntimeSoulProfile({
+          personaId: input.persona.id,
+          now: input.now,
+          tolerateFailure: true,
+        });
+        soulHints = buildSoulPrecheckHints({
+          summary: soul.summary,
+          existingHints: soulHints,
+        });
+
+        await deps.recordSoulApplied({
+          personaId: input.persona.id,
+          now: input.now,
+          metadata: {
+            layer: "dispatch_precheck",
+            riskPreference: soul.summary.riskPreference,
+            tradeoffStyle: soul.summary.tradeoffStyle,
+          },
+        });
+      } catch (error) {
+        try {
+          await deps.recordSoulFallback({
+            intentId: input.intent.id,
+            personaId: input.persona.id,
+            postId,
+            reasonCode: SoulReasonCode.loadFailed,
             metadata: {
               layer: "dispatch_precheck",
               error: error instanceof Error ? error.message : String(error),
@@ -275,10 +363,9 @@ export function createReplyDispatchPrecheck(options: {
         const safety = await deps.runSafetyCheck({
           text,
           context: {
-            recentPersonaReplies: Array.from(new Set([...memoryHints, ...recentHints])).slice(
-              0,
-              20,
-            ),
+            recentPersonaReplies: Array.from(
+              new Set([...memoryHints, ...soulHints, ...recentHints]),
+            ).slice(0, 20),
           },
         });
         if (!safety.allowed && safety.reasonCode === SafetyReasonCode.similarToRecentReply) {

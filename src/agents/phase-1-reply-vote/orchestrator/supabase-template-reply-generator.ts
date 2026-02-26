@@ -2,6 +2,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { ReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
 import { GeneratorSkipReasonCode } from "@/lib/ai/reason-codes";
+import {
+  buildRuntimeSoulProfile,
+  recordRuntimeSoulApplied,
+  type RuntimeSoulContext,
+} from "@/lib/ai/soul/runtime-soul-profile";
 
 type PostRow = {
   id: string;
@@ -51,6 +56,80 @@ function toEpoch(value: string): number {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function toSentenceCase(value: string): string {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return "";
+  }
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function resolveRhythmLead(rhythm: string): string {
+  const normalized = rhythm.toLowerCase();
+  if (normalized.includes("direct")) {
+    return "Directly speaking,";
+  }
+  if (normalized.includes("calm") || normalized.includes("gentle")) {
+    return "Calmly,";
+  }
+  if (normalized.includes("structured")) {
+    return "In a structured way,";
+  }
+  return "Concisely,";
+}
+
+function resolveStanceLine(input: RuntimeSoulContext): string {
+  const stance = input.summary.collaborationStance.toLowerCase();
+  const topValue = input.summary.topValues[0] ?? "clarity";
+  const tradeoffStyle = toSentenceCase(input.summary.tradeoffStyle.toLowerCase());
+
+  if (stance.includes("challenge")) {
+    return `I will challenge assumptions first and prioritize ${topValue}; trade-offs follow a ${tradeoffStyle} style.`;
+  }
+  if (stance.includes("support")) {
+    return `I will support momentum while protecting ${topValue}; trade-offs follow a ${tradeoffStyle} style.`;
+  }
+  return `I will coach toward a concrete next step with ${topValue} first; trade-offs follow a ${tradeoffStyle} style.`;
+}
+
+function resolveCloseLine(input: RuntimeSoulContext): string {
+  const askVsTell = input.profile.interactionDoctrine.askVsTellRatio.toLowerCase();
+  const uncertaintyHandling = toSentenceCase(input.profile.decisionPolicy.uncertaintyHandling);
+  if (askVsTell.includes("ask")) {
+    return `${uncertaintyHandling}. Which constraint matters most for your next move?`;
+  }
+  return `${uncertaintyHandling}. Start with one measurable next step and validate quickly.`;
+}
+
+export function composeSoulDrivenReply(input: {
+  title: string;
+  postBodySnippet: string;
+  focusActor: string;
+  focusSnippet: string | null;
+  participantCount: number;
+  soul: RuntimeSoulContext;
+}): string {
+  const lines = [
+    `${resolveRhythmLead(input.soul.summary.rhythm)} I read the discussion on **${input.title}** through this lens: ${input.soul.summary.identity}.`,
+    input.focusSnippet
+      ? `${input.focusActor} raised: "${input.focusSnippet}".`
+      : `I want to add to the main post context.`,
+    input.participantCount > 2
+      ? `${resolveStanceLine(input.soul)} There are multiple perspectives here, so I will keep the reply concrete.`
+      : `${resolveStanceLine(input.soul)} I will keep this directly relevant.`,
+    input.postBodySnippet
+      ? `Based on the post context, a practical next step is to clarify assumptions and compare options. ${resolveCloseLine(
+          input.soul,
+        )}`
+      : `A practical next step is to state assumptions before deciding. ${resolveCloseLine(
+          input.soul,
+        )}`,
+  ];
+
+  // Keep output markdown-friendly (no raw HTML), compatible with TipTap markdown storage.
+  return `${lines[0]}\n\n${lines[1]}\n\n${lines[2]} ${lines[3]}`;
+}
+
 export function rankFocusCandidates(input: {
   comments: CommentRow[];
   personaId: string;
@@ -73,6 +152,17 @@ export function rankFocusCandidates(input: {
 }
 
 export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
+  private readonly loadRuntimeSoul: typeof buildRuntimeSoulProfile;
+  private readonly recordSoulApplied: typeof recordRuntimeSoulApplied;
+
+  public constructor(options?: {
+    loadRuntimeSoul?: typeof buildRuntimeSoulProfile;
+    recordSoulApplied?: typeof recordRuntimeSoulApplied;
+  }) {
+    this.loadRuntimeSoul = options?.loadRuntimeSoul ?? buildRuntimeSoulProfile;
+    this.recordSoulApplied = options?.recordSoulApplied ?? recordRuntimeSoulApplied;
+  }
+
   public async generate(task: QueueTask): Promise<{
     text?: string;
     parentCommentId?: string;
@@ -169,22 +259,31 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     const focusSnippet = focusComment ? normalizeText(focusComment.body).slice(0, 120) : null;
     const focusActor = focusComment ? actorLabel(focusComment) : actorLabel(post);
     const participantCount = participants.size;
+    const soul = await this.loadRuntimeSoul({ personaId: task.personaId, tolerateFailure: true });
 
-    const lines = [
-      `I read the discussion on **${title}**.`,
-      focusSnippet
-        ? `${focusActor} raised: "${focusSnippet}".`
-        : `I want to add to the main post context.`,
-      participantCount > 2
-        ? `There are multiple perspectives in this thread, so I will keep this focused and concrete.`
-        : `I will keep this concise and directly relevant.`,
-      postBodySnippet
-        ? `Based on the post context, one practical next step is to clarify assumptions and compare trade-offs.`
-        : `A practical next step is to state assumptions and compare trade-offs before deciding.`,
-    ];
+    try {
+      await this.recordSoulApplied({
+        personaId: task.personaId,
+        layer: "generation",
+        metadata: {
+          source: soul.source,
+          normalized: soul.normalized,
+          riskPreference: soul.summary.riskPreference,
+          tradeoffStyle: soul.summary.tradeoffStyle,
+        },
+      });
+    } catch {
+      // Best-effort observability only.
+    }
 
-    // Keep output markdown-friendly (no raw HTML), compatible with TipTap markdown storage.
-    const text = `${lines[0]}\n\n${lines[1]}\n\n${lines[2]} ${lines[3]}`;
+    const text = composeSoulDrivenReply({
+      title,
+      postBodySnippet,
+      focusActor,
+      focusSnippet,
+      participantCount,
+      soul,
+    });
 
     return {
       text,
