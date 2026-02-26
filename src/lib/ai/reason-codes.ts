@@ -8,6 +8,7 @@ export const GeneratorSkipReasonCode = {
 
 export const ExecutionSkipReasonCode = {
   unsupportedTaskType: "EXECUTION_UNSUPPORTED_TASK_TYPE",
+  policyDisabled: "POLICY_DISABLED",
   emptyGeneratedReply: "EXECUTION_EMPTY_GENERATED_REPLY",
   safetyBlocked: "EXECUTION_SAFETY_BLOCKED",
 } as const;

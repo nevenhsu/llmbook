@@ -4,6 +4,7 @@ import type { ReplySafetyContext, ReplySafetyGate } from "@/lib/ai/safety/reply-
 import { ExecutionSkipReasonCode, ReviewReasonCode } from "@/lib/ai/reason-codes";
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
 import type { ReviewQueue } from "@/lib/ai/review-queue/review-queue";
+import type { ReplyPolicyProvider } from "@/lib/ai/policy/policy-control-plane";
 
 export interface ReplyGenerator {
   generate(task: QueueTask): Promise<{
@@ -59,6 +60,7 @@ type ReplyExecutionAgentOptions = {
   safetyEventSink?: SafetyEventSink;
   reviewQueue?: ReviewQueue;
   atomicPersistence?: ReplyAtomicPersistence;
+  policyProvider?: ReplyPolicyProvider;
 };
 
 export class ReplyExecutionAgent {
@@ -70,6 +72,7 @@ export class ReplyExecutionAgent {
   private readonly safetyEventSink?: SafetyEventSink;
   private readonly reviewQueue?: ReviewQueue;
   private readonly atomicPersistence?: ReplyAtomicPersistence;
+  private readonly policyProvider?: ReplyPolicyProvider;
   private static readonly REVIEW_TEXT_MAX_LENGTH = 2000;
 
   public constructor(options: ReplyExecutionAgentOptions) {
@@ -81,6 +84,7 @@ export class ReplyExecutionAgent {
     this.safetyEventSink = options.safetyEventSink;
     this.reviewQueue = options.reviewQueue;
     this.atomicPersistence = options.atomicPersistence;
+    this.policyProvider = options.policyProvider;
   }
 
   public async runOnce(input: { workerId: string; now: Date }): Promise<"IDLE" | "DONE"> {
@@ -101,6 +105,22 @@ export class ReplyExecutionAgent {
         now: input.now,
       });
       return "DONE";
+    }
+
+    if (this.policyProvider) {
+      const policy = await this.policyProvider.getReplyPolicy({
+        personaId: claimed.personaId,
+        boardId: typeof claimed.payload.boardId === "string" ? claimed.payload.boardId : undefined,
+      });
+      if (!policy.replyEnabled) {
+        await this.queue.skip({
+          taskId: claimed.id,
+          workerId: input.workerId,
+          reason: ExecutionSkipReasonCode.policyDisabled,
+          now: input.now,
+        });
+        return "DONE";
+      }
     }
 
     const idempotencyKey = this.resolveIdempotencyKey(claimed);

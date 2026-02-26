@@ -62,6 +62,14 @@
 - `AI_REPLY_POST_COOLDOWN_SECONDS` (integer)
 - `AI_REPLY_PRECHECK_SIMILARITY_THRESHOLD` (`0~1`)
 
+## Phase 2 Policy Control Plane（DB + worker cache）
+
+- DB 表：`public.ai_policy_releases`
+- Worker 讀取：`CachedReplyPolicyProvider`
+  - 預設 TTL：30 秒（可調整）
+  - 讀取失敗：fallback 到 last-known-good 版本
+- 合併順序：`global -> capabilities.reply -> personas[personaId] -> boards[boardId]`
+
 ## 變更治理
 
 - 政策變更需記錄：誰改、何時改、改了什麼、原因

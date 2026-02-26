@@ -2,9 +2,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPost } from "@/lib/api/fetch-json";
 
-interface BannedUser {
+type BanEntityType = "profile" | "persona";
+
+interface BannedEntity {
   id: string;
-  user_id: string;
+  entity_type: BanEntityType;
+  entity_id: string;
   reason: string | null;
   expires_at: string | null;
   user?: { display_name?: string; avatar_url?: string | null };
@@ -13,9 +16,13 @@ interface BannedUser {
 
 interface UseBanManagementOptions {
   boardSlug: string;
-  onBanned: (ban: BannedUser, bannedUserId: string) => void;
-  onUnbanned: (userId: string) => void;
+  onBanned: (ban: BannedEntity, target: { entityType: BanEntityType; entityId: string }) => void;
+  onUnbanned: (target: { entityType: BanEntityType; entityId: string }) => void;
   onError: (message: string) => void;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function useBanManagement({
@@ -25,22 +32,27 @@ export function useBanManagement({
   onError,
 }: UseBanManagementOptions) {
   const router = useRouter();
-  const [banUserId, setBanUserId] = useState("");
+  const [banTarget, setBanTarget] = useState("");
   const [banReason, setBanReason] = useState("");
   const [banExpiresAt, setBanExpiresAt] = useState("");
   const [banLoading, setBanLoading] = useState(false);
-  const [unbanLoadingUserId, setUnbanLoadingUserId] = useState<string | null>(null);
+  const [unbanLoadingTarget, setUnbanLoadingTarget] = useState<string | null>(null);
 
   const banUser = async () => {
-    if (!banUserId) {
-      onError("Please select a member to ban.");
+    const trimmedTarget = banTarget.trim();
+    if (!trimmedTarget) {
+      onError("Please enter username or select a member to ban.");
       return;
     }
 
     setBanLoading(true);
 
     try {
-      const payload: Record<string, string> = { user_id: banUserId };
+      const normalizedTarget = trimmedTarget.replace(/^@/, "").toLowerCase();
+      const payload: Record<string, string> = isUuid(normalizedTarget)
+        ? { user_id: normalizedTarget }
+        : { username: normalizedTarget };
+
       if (banReason.trim()) payload.reason = banReason.trim();
       if (banExpiresAt) {
         const expiresAt = new Date(banExpiresAt);
@@ -49,9 +61,9 @@ export function useBanManagement({
         }
       }
 
-      const ban = await apiPost<BannedUser>(`/api/boards/${boardSlug}/bans`, payload);
-      onBanned(ban, ban.user_id);
-      setBanUserId("");
+      const ban = await apiPost<BannedEntity>(`/api/boards/${boardSlug}/bans`, payload);
+      onBanned(ban, { entityType: ban.entity_type, entityId: ban.entity_id });
+      setBanTarget("");
       setBanReason("");
       setBanExpiresAt("");
       router.refresh();
@@ -63,29 +75,36 @@ export function useBanManagement({
     }
   };
 
-  const unbanUser = async (userId: string) => {
-    setUnbanLoadingUserId(userId);
+  const unbanUser = async (entityId: string, entityType: BanEntityType = "profile") => {
+    if (!entityId) {
+      onError("Invalid ban target.");
+      return;
+    }
+
+    const targetKey = `${entityType}:${entityId}`;
+    setUnbanLoadingTarget(targetKey);
 
     try {
-      await apiDelete(`/api/boards/${boardSlug}/bans/${userId}`);
-      onUnbanned(userId);
+      await apiDelete(`/api/boards/${boardSlug}/bans/${entityType}/${entityId}`);
+      onUnbanned({ entityType, entityId });
       router.refresh();
     } catch (err) {
       console.error(err);
       onError("Failed to unban user.");
     } finally {
-      setUnbanLoadingUserId(null);
+      setUnbanLoadingTarget(null);
     }
   };
 
-  const isUnbanning = (userId: string) => unbanLoadingUserId === userId;
+  const isUnbanning = (entityId: string, entityType: BanEntityType = "profile") =>
+    unbanLoadingTarget === `${entityType}:${entityId}`;
 
   return {
     banForm: {
-      userId: banUserId,
+      userId: banTarget,
       reason: banReason,
       expiresAt: banExpiresAt,
-      setUserId: setBanUserId,
+      setUserId: setBanTarget,
       setReason: setBanReason,
       setExpiresAt: setBanExpiresAt,
     },

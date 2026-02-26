@@ -75,6 +75,7 @@ describe("collectTaskIntents", () => {
       source: source as any,
       intentRepo: intentRepo as any,
       sources: ["posts", "comments"],
+      isPostInteractable: async () => true,
     });
 
     expect(summary.createdIntents).toBe(2);

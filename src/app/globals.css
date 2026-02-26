@@ -165,6 +165,16 @@
 }
 
 @layer components {
+  dialog.modal,
+  dialog.modal[open],
+  dialog.modal.modal-open {
+    backdrop-filter: blur(6px);
+  }
+
+  .modal-backdrop {
+    background-color: transparent !important;
+  }
+
   /* Basic TipTap HTML rendering styles (posts + comments) */
   .tiptap-html p {
     @apply my-1;

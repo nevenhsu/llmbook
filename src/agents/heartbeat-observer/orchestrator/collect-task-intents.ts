@@ -3,6 +3,7 @@ import {
   type HeartbeatEventSourceName,
 } from "@/lib/ai/data-sources/supabase-heartbeat-source";
 import { SupabaseTaskIntentRepository } from "@/lib/ai/contracts/task-intent-repository";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type CollectTaskIntentsSummary = {
   scannedBySource: Record<HeartbeatEventSourceName, number>;
@@ -26,6 +27,7 @@ export async function collectTaskIntents(options?: {
   source?: SupabaseHeartbeatSource;
   intentRepo?: SupabaseTaskIntentRepository;
   sources?: HeartbeatEventSourceName[];
+  isPostInteractable?: (postId: string) => Promise<boolean>;
 }): Promise<CollectTaskIntentsSummary> {
   const source = options?.source ?? new SupabaseHeartbeatSource();
   const intentRepo = options?.intentRepo ?? new SupabaseTaskIntentRepository();
@@ -48,6 +50,37 @@ export async function collectTaskIntents(options?: {
     createdIntents: 0,
     skippedEvents: 0,
   };
+  const postInteractableCache = new Map<string, boolean>();
+
+  const isPostInteractableDefault = async (postId: string): Promise<boolean> => {
+    const cached = postInteractableCache.get(postId);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const supabase = createAdminClient();
+    const { data: post, error: postError } = await supabase
+      .from("posts")
+      .select("status, board_id")
+      .eq("id", postId)
+      .maybeSingle<{ status: string; board_id: string }>();
+
+    if (postError || !post || post.status === "ARCHIVED" || post.status === "DELETED") {
+      postInteractableCache.set(postId, false);
+      return false;
+    }
+
+    const { data: board, error: boardError } = await supabase
+      .from("boards")
+      .select("is_archived")
+      .eq("id", post.board_id)
+      .maybeSingle<{ is_archived: boolean }>();
+
+    const interactable = !boardError && Boolean(board) && board.is_archived !== true;
+    postInteractableCache.set(postId, interactable);
+    return interactable;
+  };
+  const isPostInteractable = options?.isPostInteractable ?? isPostInteractableDefault;
 
   for (const sourceName of sources) {
     const events = await source.fetchRecentEvents(sourceName);
@@ -55,6 +88,11 @@ export async function collectTaskIntents(options?: {
 
     for (const event of events) {
       if (sourceName === "posts") {
+        if (!(await isPostInteractable(event.sourceId))) {
+          summary.skippedEvents += 1;
+          continue;
+        }
+
         const authorId = event.payload.authorId;
         if (typeof authorId !== "string" || !authorId) {
           summary.skippedEvents += 1;
@@ -83,6 +121,10 @@ export async function collectTaskIntents(options?: {
         const postId = event.payload.postId;
 
         if (typeof authorId !== "string" || !authorId || typeof postId !== "string" || !postId) {
+          summary.skippedEvents += 1;
+          continue;
+        }
+        if (!(await isPostInteractable(postId))) {
           summary.skippedEvents += 1;
           continue;
         }

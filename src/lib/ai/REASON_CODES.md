@@ -8,11 +8,11 @@
 
 ## Mapping
 
-| Layer     | Constant Set                | 實際用途                                                |
-| --------- | --------------------------- | ------------------------------------------------------- |
-| generator | `GeneratorSkipReasonCode.*` | `ReplyGenerator.generate()` 回傳 `skipReason`           |
-| safety    | `SafetyReasonCode.*`        | `ReplySafetyGate.check()` 回傳 `reasonCode`             |
-| execution | `ExecutionSkipReasonCode.*` | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback |
+| Layer     | Constant Set                | 實際用途                                                                        |
+| --------- | --------------------------- | ------------------------------------------------------------------------------- |
+| generator | `GeneratorSkipReasonCode.*` | `ReplyGenerator.generate()` 回傳 `skipReason`                                   |
+| safety    | `SafetyReasonCode.*`        | `ReplySafetyGate.check()` 回傳 `reasonCode`                                     |
+| execution | `ExecutionSkipReasonCode.*` | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`） |
 
 ## Queue Persistence
 

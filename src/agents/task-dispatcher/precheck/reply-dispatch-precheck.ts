@@ -11,8 +11,15 @@ import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
+import { createReplyInteractionEligibilityChecker } from "@/lib/ai/policy/reply-interaction-eligibility";
 
 type ReplyDispatchPrecheckDeps = {
+  checkEligibility: (input: {
+    personaId: string;
+    postId?: string | null;
+    boardId?: string | null;
+    now: Date;
+  }) => Promise<{ allowed: boolean; reasonCode?: DecisionReasonCode }>;
   countRecentReplies: (input: { personaId: string; since: Date }) => Promise<number>;
   getLatestReplyAtOnPost: (input: { personaId: string; postId: string }) => Promise<Date | null>;
   generateDraft: (task: QueueTask) => Promise<{
@@ -57,10 +64,12 @@ function defaultDeps(policy: DispatcherPolicy): ReplyDispatchPrecheckDeps {
   const gate = new RuleBasedReplySafetyGate({
     similarityThreshold: policy.precheckSimilarityThreshold,
   });
+  const eligibilityCheck = createReplyInteractionEligibilityChecker();
 
   const eventSink: SafetyEventSink = new SupabaseSafetyEventSink();
 
   return {
+    checkEligibility: async (input) => eligibilityCheck(input),
     countRecentReplies: async ({ personaId, since }) => {
       const supabase = createAdminClient();
       const { count, error } = await supabase
@@ -132,6 +141,21 @@ export function createReplyDispatchPrecheck(options: {
   return async (input) => {
     const reasons: DecisionReasonCode[] = [];
     const { policy } = options;
+    const postId = resolvePostId(input.intent);
+    const boardId =
+      typeof input.intent.payload.boardId === "string" ? input.intent.payload.boardId : null;
+
+    const eligibility = await deps.checkEligibility({
+      personaId: input.persona.id,
+      postId,
+      boardId,
+      now: input.now,
+    });
+
+    if (!eligibility.allowed) {
+      reasons.push(eligibility.reasonCode ?? "ELIGIBILITY_CHECK_FAILED", "PRECHECK_BLOCKED");
+      return { allowed: false, reasons };
+    }
 
     if (!policy.precheckEnabled) {
       return { allowed: true, reasons };
@@ -148,7 +172,6 @@ export function createReplyDispatchPrecheck(options: {
       }
     }
 
-    const postId = resolvePostId(input.intent);
     if (postId && policy.perPostCooldownSeconds > 0) {
       const latestReplyAt = await deps.getLatestReplyAtOnPost({
         personaId: input.persona.id,

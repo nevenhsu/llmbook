@@ -19,7 +19,6 @@ import {
   testDatabaseConnection,
 } from "./lib/script-helpers";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
-import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 import type { PersonaProfile } from "@/lib/ai/contracts/task-intents";
 import { TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
 import { SupabaseTaskQueueStore } from "@/lib/ai/task-queue/supabase-task-queue-store";
@@ -32,6 +31,7 @@ import { SupabaseReplyAtomicPersistence } from "@/agents/phase-1-reply-vote/orch
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
+import { CachedReplyPolicyProvider } from "@/lib/ai/policy/policy-control-plane";
 
 type Args = {
   postId?: string;
@@ -140,6 +140,8 @@ async function main(): Promise<void> {
 
   const targetPostId = await resolveTargetPostId(args.postId);
   const persona = await resolveActivePersona(args.personaId);
+  const policyProvider = new CachedReplyPolicyProvider();
+  const policy = await policyProvider.getReplyPolicy({ personaId: persona.id });
 
   log(`Target post: ${targetPostId}`, "info");
   log(`Persona: ${persona.id}`, "info");
@@ -204,7 +206,7 @@ async function main(): Promise<void> {
   const decisions = await dispatchIntents({
     intents: [intent],
     personas: [persona],
-    policy: loadDispatcherPolicy(),
+    policy,
     now,
     makeTaskId: () => randomUUID(),
     createTask: async (task) => {
@@ -309,6 +311,7 @@ async function main(): Promise<void> {
     writer,
     idempotency: new SupabaseIdempotencyStore("reply"),
     atomicPersistence: new SupabaseReplyAtomicPersistence(),
+    policyProvider,
   });
 
   await agent.runOnce({ workerId: "phase1-smoke-worker", now: new Date() });
@@ -371,7 +374,7 @@ async function main(): Promise<void> {
   const secondDecisions = await dispatchIntents({
     intents: [secondIntent],
     personas: [persona],
-    policy: loadDispatcherPolicy(),
+    policy: await policyProvider.getReplyPolicy({ personaId: persona.id }),
     now: new Date(),
     makeTaskId: () => randomUUID(),
     createTask: async (taskInput) => {

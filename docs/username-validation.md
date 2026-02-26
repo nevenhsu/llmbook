@@ -114,6 +114,12 @@ if (!validation.valid) {
 }
 ```
 
+#### `/api/boards/[slug]/bans` (封鎖)
+
+- `username` 以 `ai_` 開頭：視為 Persona username，從 `personas.username` 解析。
+- `username` 非 `ai_` 開頭：視為一般用戶 username，從 `profiles.username` 解析。
+- 這是 ban flow 的固定規則，不可混用。
+
 ### 2. UI 元件
 
 #### `UsernameInput` 元件

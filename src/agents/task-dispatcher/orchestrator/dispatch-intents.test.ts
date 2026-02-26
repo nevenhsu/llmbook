@@ -115,4 +115,29 @@ describe("dispatchIntents", () => {
     expect(decisions[0]?.dispatched).toBe(false);
     expect(decisions[0]?.reasons).toContain("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY");
   });
+
+  it("tries next active persona when first persona fails precheck", async () => {
+    const created: QueueTask[] = [];
+
+    const decisions = await dispatchIntents({
+      intents: [buildIntent()],
+      personas: [
+        buildPersona({ id: "persona-blocked", status: "active" }),
+        buildPersona({ id: "persona-allowed", status: "active" }),
+      ],
+      policy: buildPolicy({ precheckEnabled: true }),
+      now: new Date("2026-02-23T00:00:00.000Z"),
+      createTask: async (task) => {
+        created.push(task);
+      },
+      precheck: async ({ persona }) =>
+        persona.id === "persona-blocked"
+          ? { allowed: false, reasons: ["PERSONA_BOARD_BANNED", "PRECHECK_BLOCKED"] }
+          : { allowed: true, reasons: [] },
+    });
+
+    expect(created).toHaveLength(1);
+    expect(created[0]?.personaId).toBe("persona-allowed");
+    expect(decisions[0]?.dispatched).toBe(true);
+  });
 });

@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runInPostgresTransaction } from "@/lib/supabase/postgres";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
-import { createReplyDispatchPrecheck } from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
 import {
-  loadDispatcherPolicy,
-  type DispatcherPolicy,
-} from "@/agents/task-dispatcher/policy/reply-only-policy";
+  createReplyDispatchPrecheck,
+  type ReplyDispatchPrecheck,
+} from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
+import { type DispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 import {
   SupabaseTaskIntentRepository,
   type StoredIntent,
@@ -14,6 +14,12 @@ import {
 import type { PersonaProfile } from "@/lib/ai/contracts/task-intents";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { DispatchDecision } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
+import {
+  CachedReplyPolicyProvider,
+  type ReplyPolicyProvider,
+} from "@/lib/ai/policy/policy-control-plane";
+
+const defaultPolicyProvider = new CachedReplyPolicyProvider();
 
 async function listActivePersonas(limit: number): Promise<PersonaProfile[]> {
   const supabase = createAdminClient();
@@ -130,6 +136,8 @@ export async function dispatchNewIntents(options?: {
   intentRepo?: SupabaseTaskIntentRepository;
   batchSize?: number;
   policy?: DispatcherPolicy;
+  policyProvider?: ReplyPolicyProvider;
+  precheck?: ReplyDispatchPrecheck;
   listPersonas?: (limit: number) => Promise<PersonaProfile[]>;
   createTask?: (task: QueueTask) => Promise<void>;
   persistDecisionAtomic?: (input: {
@@ -149,8 +157,10 @@ export async function dispatchNewIntents(options?: {
   }
 
   const personas = await (options?.listPersonas ?? listActivePersonas)(50);
-  const policy = options?.policy ?? loadDispatcherPolicy();
-  const precheck = createReplyDispatchPrecheck({ policy });
+  const policy = options?.policy
+    ? options.policy
+    : await (options?.policyProvider ?? defaultPolicyProvider).getReplyPolicy();
+  const precheck = options?.precheck ?? createReplyDispatchPrecheck({ policy });
   const taskByIntentId = new Map<string, QueueTask>();
   const createTaskForDispatch = async (task: QueueTask): Promise<void> => {
     if (useAtomicPersist) {

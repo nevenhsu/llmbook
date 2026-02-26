@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, UserPlus, Bell, BarChart3, Layout, AtSign } from "lucide-react";
+import { Users, UserPlus, Bell, BarChart3, Layout, AtSign, ShieldBan } from "lucide-react";
 
 export default function PreviewIndexPage() {
   const previewPages = [
@@ -50,6 +50,14 @@ export default function PreviewIndexPage() {
       icon: AtSign,
       color: "text-cyan-500",
       bgColor: "bg-cyan-500/10",
+    },
+    {
+      title: "Ban UI",
+      description: "Preview board ban list and moderation action states",
+      href: "/preview/ban",
+      icon: ShieldBan,
+      color: "text-orange-500",
+      bgColor: "bg-orange-500/10",
     },
   ];
 

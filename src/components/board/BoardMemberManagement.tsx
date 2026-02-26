@@ -21,7 +21,9 @@ interface BoardMember {
 
 interface BannedUser {
   id: string;
-  user_id: string;
+  entity_type?: "profile" | "persona";
+  entity_id?: string;
+  user_id?: string;
   reason: string | null;
   expires_at: string | null;
   user?: {
@@ -70,15 +72,40 @@ export default function BoardMemberManagement({
 
   const ban = useBanManagement({
     boardSlug,
-    onBanned: (newBan, bannedUserId) => {
-      setBansList((prev) => [newBan, ...prev.filter((b) => b.user_id !== bannedUserId)]);
-      setMembersList((prev) => prev.filter((m) => m.user_id !== bannedUserId));
+    onBanned: (newBan, target) => {
+      setBansList((prev) => [
+        { ...newBan, user_id: newBan.entity_type === "profile" ? newBan.entity_id : undefined },
+        ...prev.filter((b) => {
+          const currentType = b.entity_type || "profile";
+          const currentId = b.entity_id || b.user_id;
+          return !(currentType === target.entityType && currentId === target.entityId);
+        }),
+      ]);
+      if (target.entityType === "profile") {
+        setMembersList((prev) => prev.filter((m) => m.user_id !== target.entityId));
+      }
     },
-    onUnbanned: (userId) => setBansList((prev) => prev.filter((b) => b.user_id !== userId)),
+    onUnbanned: (target) =>
+      setBansList((prev) =>
+        prev.filter((b) => {
+          const currentType = b.entity_type || "profile";
+          const currentId = b.entity_id || b.user_id;
+          return !(currentType === target.entityType && currentId === target.entityId);
+        }),
+      ),
     onError: setError,
   });
 
-  const bannedUserIds = useMemo(() => new Set(bansList.map((b) => b.user_id)), [bansList]);
+  const bannedUserIds = useMemo(
+    () =>
+      new Set(
+        bansList
+          .filter((b) => (b.entity_type || "profile") === "profile")
+          .map((b) => b.entity_id || b.user_id)
+          .filter(Boolean),
+      ),
+    [bansList],
+  );
   const bannableMembers = useMemo(
     () => membersList.filter((m) => !m.is_moderator && !bannedUserIds.has(m.user_id)),
     [membersList, bannedUserIds],
@@ -270,14 +297,25 @@ export default function BoardMemberManagement({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            ban.unbanUser(b.user_id);
+                            ban.unbanUser(
+                              b.entity_id || b.user_id || "",
+                              b.entity_type || "profile",
+                            );
                           }}
-                          disabled={ban.isUnbanning(b.user_id)}
+                          disabled={ban.isUnbanning(
+                            b.entity_id || b.user_id || "",
+                            b.entity_type || "profile",
+                          )}
                           className="text-success flex w-full items-center gap-3 px-3 py-2 text-sm"
                         >
                           <Ban size={20} className="md:hidden" />
                           <Ban size={16} className="hidden md:inline" />
-                          {ban.isUnbanning(b.user_id) ? "Unbanning..." : "Unban user"}
+                          {ban.isUnbanning(
+                            b.entity_id || b.user_id || "",
+                            b.entity_type || "profile",
+                          )
+                            ? "Unbanning..."
+                            : "Unban user"}
                         </button>
                       </li>
                     </ResponsiveMenu>

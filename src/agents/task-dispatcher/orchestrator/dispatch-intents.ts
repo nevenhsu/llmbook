@@ -82,32 +82,48 @@ export async function dispatchIntents(input: DispatchIntentsInput): Promise<Disp
       continue;
     }
 
-    const selected = activePersonas[0];
-    if (!selected) {
-      reasons.push("NO_ACTIVE_PERSONA");
+    let selectedPersona: PersonaProfile | undefined;
+    let selectedReasons: DecisionReasonCode[] = [];
+    const blockedReasons = new Set<DecisionReasonCode>();
+
+    for (const candidate of activePersonas) {
+      const candidateReasons: DecisionReasonCode[] = ["ACTIVE_OK", "SELECTED_DEFAULT"];
+
+      if (input.precheck) {
+        const precheck = await input.precheck({
+          intent,
+          persona: candidate,
+          now: input.now,
+        });
+        if (!precheck.allowed) {
+          for (const reason of precheck.reasons) {
+            blockedReasons.add(reason);
+          }
+          continue;
+        }
+      }
+
+      selectedPersona = candidate;
+      selectedReasons = candidateReasons;
+      break;
+    }
+
+    if (!selectedPersona) {
+      if (blockedReasons.size > 0) {
+        reasons.push(...blockedReasons);
+      } else {
+        reasons.push("NO_ACTIVE_PERSONA");
+      }
       decisions.push({ intentId: intent.id, dispatched: false, reasons });
       continue;
     }
 
-    reasons.push("ACTIVE_OK", "SELECTED_DEFAULT");
-
-    if (input.precheck) {
-      const precheck = await input.precheck({
-        intent,
-        persona: selected,
-        now: input.now,
-      });
-      if (!precheck.allowed) {
-        reasons.push(...precheck.reasons);
-        decisions.push({ intentId: intent.id, dispatched: false, reasons });
-        continue;
-      }
-    }
+    reasons.push(...selectedReasons);
 
     const taskId = input.makeTaskId ? input.makeTaskId() : randomUUID();
     const task = buildReplyTask({
       taskId,
-      personaId: selected.id,
+      personaId: selectedPersona.id,
       intent,
       now: input.now,
     });
@@ -117,7 +133,7 @@ export async function dispatchIntents(input: DispatchIntentsInput): Promise<Disp
     decisions.push({
       intentId: intent.id,
       taskId,
-      personaId: selected.id,
+      personaId: selectedPersona.id,
       taskType: task.taskType,
       reasons,
       dispatched: true,

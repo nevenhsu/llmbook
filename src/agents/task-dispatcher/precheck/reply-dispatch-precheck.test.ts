@@ -17,6 +17,7 @@ describe("createReplyDispatchPrecheck", () => {
     const precheck = createReplyDispatchPrecheck({
       policy: buildPolicy(),
       deps: {
+        checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         generateDraft: async () => ({
@@ -52,6 +53,7 @@ describe("createReplyDispatchPrecheck", () => {
     const precheck = createReplyDispatchPrecheck({
       policy: buildPolicy(),
       deps: {
+        checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         generateDraft: async () => ({
@@ -86,6 +88,7 @@ describe("createReplyDispatchPrecheck", () => {
     const precheck = createReplyDispatchPrecheck({
       policy: { ...buildPolicy(), perPostCooldownSeconds: 300 },
       deps: {
+        checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         generateDraft: async () => ({
@@ -117,6 +120,7 @@ describe("createReplyDispatchPrecheck", () => {
     const precheck = createReplyDispatchPrecheck({
       policy: { ...buildPolicy(), perPersonaHourlyReplyLimit: 1 },
       deps: {
+        checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async ({ personaId }) => (personaId === "persona-a" ? 1 : 0),
         getLatestReplyAtOnPost: async () => null,
         generateDraft: async () => ({
@@ -157,5 +161,71 @@ describe("createReplyDispatchPrecheck", () => {
     expect(blocked.allowed).toBe(false);
     expect(blocked.reasons).toContain("RATE_LIMIT_HOURLY");
     expect(allowed.allowed).toBe(true);
+  });
+
+  it("blocks when target post is not interactable", async () => {
+    const precheck = createReplyDispatchPrecheck({
+      policy: { ...buildPolicy(), precheckEnabled: false },
+      deps: {
+        checkEligibility: async () => ({
+          allowed: false,
+          reasonCode: "TARGET_POST_NOT_INTERACTABLE",
+        }),
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        generateDraft: async () => ({ text: "n/a" }),
+        runSafetyCheck: async () => ({ allowed: true }),
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-6",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-archived",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-archived" },
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reasons).toContain("TARGET_POST_NOT_INTERACTABLE");
+  });
+
+  it("blocks when persona is not active even if precheck is disabled", async () => {
+    const precheck = createReplyDispatchPrecheck({
+      policy: { ...buildPolicy(), precheckEnabled: false },
+      deps: {
+        checkEligibility: async () => ({
+          allowed: false,
+          reasonCode: "PERSONA_NOT_ACTIVE",
+        }),
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        generateDraft: async () => ({ text: "n/a" }),
+        runSafetyCheck: async () => ({ allowed: true }),
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-7",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-1",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-1" },
+      },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reasons).toContain("PERSONA_NOT_ACTIVE");
   });
 });

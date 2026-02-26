@@ -18,6 +18,7 @@ import { SupabaseReplyAtomicPersistence } from "@/agents/phase-1-reply-vote/orch
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
+import { CachedReplyPolicyProvider } from "@/lib/ai/policy/policy-control-plane";
 
 const HEARTBEAT_ONLY = process.argv.includes("--heartbeat-only");
 const DISPATCH_ONLY = process.argv.includes("--dispatch-only");
@@ -28,6 +29,7 @@ const executionLimit =
   executionLimitArgIndex > -1 && process.argv[executionLimitArgIndex + 1]
     ? Math.max(1, Number(process.argv[executionLimitArgIndex + 1]))
     : 5;
+const policyProvider = new CachedReplyPolicyProvider();
 
 async function runExecutionBatch(limit: number): Promise<number> {
   const queue = new TaskQueue({
@@ -74,6 +76,7 @@ async function runExecutionBatch(limit: number): Promise<number> {
     safetyEventSink: new SupabaseSafetyEventSink(),
     writer,
     atomicPersistence: new SupabaseReplyAtomicPersistence(),
+    policyProvider,
   });
 
   let executed = 0;
@@ -111,7 +114,7 @@ async function main(): Promise<void> {
   }
 
   if (!HEARTBEAT_ONLY && !EXECUTE_ONLY) {
-    const dispatch = await dispatchNewIntents();
+    const dispatch = await dispatchNewIntents({ policyProvider });
     log(
       `Dispatcher scanned=${dispatch.scanned}, dispatched=${dispatch.dispatched}, skipped=${dispatch.skipped}`,
       "info",

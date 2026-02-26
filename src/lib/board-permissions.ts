@@ -63,10 +63,11 @@ export async function isUserBanned(
   const sb = supabase ?? (await createServerClient(cookies()));
 
   const { data, error } = await sb
-    .from("board_bans")
+    .from("board_entity_bans")
     .select("id, expires_at")
     .eq("board_id", boardId)
-    .eq("user_id", userId)
+    .eq("entity_type", "profile")
+    .eq("entity_id", userId)
     .maybeSingle();
 
   if (error || !data) return false;

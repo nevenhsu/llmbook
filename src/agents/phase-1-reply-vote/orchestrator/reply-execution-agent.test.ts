@@ -314,4 +314,33 @@ describe("ReplyExecutionAgent", () => {
       GeneratorSkipReasonCode.noEligibleTargetAvoidSelfTalk,
     );
   });
+
+  it("skips task when policy provider disables reply capability", async () => {
+    const store = new InMemoryTaskQueueStore([buildTask()]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const writer = { write: vi.fn() };
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: { generate: vi.fn() },
+      safetyGate: { check: vi.fn() },
+      writer,
+      policyProvider: {
+        getReplyPolicy: vi.fn().mockResolvedValue({
+          replyEnabled: false,
+          precheckEnabled: true,
+          perPersonaHourlyReplyLimit: 8,
+          perPostCooldownSeconds: 180,
+          precheckSimilarityThreshold: 0.9,
+        }),
+      },
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-23T00:01:00.000Z") });
+
+    expect(writer.write).not.toHaveBeenCalled();
+    expect(store.snapshot()[0]?.status).toBe("SKIPPED");
+    expect(store.snapshot()[0]?.errorMessage).toBe(ExecutionSkipReasonCode.policyDisabled);
+  });
 });

@@ -3,17 +3,20 @@ import { isAdmin } from "@/lib/admin";
 import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
 import { http, withAuth } from "@/lib/server/route-helpers";
 
-export const runtime = "nodejs";
+const ALLOWED_ENTITY_TYPES = new Set(["profile", "persona"]);
 
 /**
- * DELETE /api/boards/[slug]/bans/[userId]
- * Unban a user (moderators only)
+ * DELETE /api/boards/[slug]/bans/[entityType]/[entityId]
+ * Unban a profile/persona (moderators only)
  */
-export const DELETE = withAuth<{ slug: string; userId: string }>(
-  async (request, { user, supabase }, context) => {
-    const { slug, userId } = await context.params;
+export const DELETE = withAuth<{ slug: string; entityType: string; entityId: string }>(
+  async (_request, { user, supabase }, context) => {
+    const { slug, entityType, entityId } = await context.params;
 
-    // Get board ID
+    if (!ALLOWED_ENTITY_TYPES.has(entityType)) {
+      return http.badRequest("Invalid entity type");
+    }
+
     const boardIdResult = await getBoardIdBySlug(supabase, slug);
     if ("error" in boardIdResult) {
       if (boardIdResult.error === "not_found") {
@@ -32,17 +35,16 @@ export const DELETE = withAuth<{ slug: string; userId: string }>(
       return http.forbidden("Forbidden: Only admins or moderators can edit bans");
     }
 
-    // Remove ban
     const { error } = await supabase
-      .from("board_bans")
+      .from("board_entity_bans")
       .delete()
       .eq("board_id", boardId)
-      .eq("user_id", userId);
+      .eq("entity_type", entityType)
+      .eq("entity_id", entityId);
 
     if (error) {
-      // Do not leak internal error details; log for auditing
-      console.error("Error unbanning user", { boardId, userId }, error);
-      return http.internalError("Failed to unban user");
+      console.error("Error deleting board entity ban", { boardId, entityType, entityId }, error);
+      return http.internalError("Failed to unban");
     }
 
     return http.ok({ success: true });

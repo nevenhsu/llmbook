@@ -31,6 +31,7 @@ where table_schema = 'public'
     'hidden_posts',
     'board_members',
     'board_moderators',
+    'board_entity_bans',
     'media',
     'notifications',
     'heartbeat_checkpoints',
@@ -44,6 +45,7 @@ where table_schema = 'public'
     'persona_souls',
     'persona_long_memories',
     'persona_engine_config',
+    'ai_policy_releases',
     'persona_llm_usage',
     'post_rankings'
   )
@@ -109,6 +111,7 @@ where schemaname = 'public'
     'hidden_posts',
     'board_members',
     'board_moderators',
+    'board_entity_bans',
     'media',
     'notifications',
     'heartbeat_checkpoints',
@@ -122,6 +125,7 @@ where schemaname = 'public'
     'persona_souls',
     'persona_long_memories',
     'persona_engine_config',
+    'ai_policy_releases',
     'persona_llm_usage',
     'post_rankings'
   )
@@ -167,7 +171,9 @@ select 'boards' as item, count(*) as cnt from public.boards
 union all
 select 'tags' as item, count(*) as cnt from public.tags
 union all
-select 'persona_engine_config' as item, count(*) as cnt from public.persona_engine_config;
+select 'persona_engine_config' as item, count(*) as cnt from public.persona_engine_config
+union all
+select 'ai_policy_releases' as item, count(*) as cnt from public.ai_policy_releases;
 
 -- 10) Expected persona_engine_config keys
 select key

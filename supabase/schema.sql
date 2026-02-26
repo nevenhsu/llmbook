@@ -233,6 +233,19 @@ CREATE TABLE public.board_moderators (
   UNIQUE (board_id, user_id)
 );
 
+-- Board bans (profiles + personas)
+CREATE TABLE public.board_entity_bans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id uuid NOT NULL REFERENCES public.boards(id) ON DELETE CASCADE,
+  entity_type text NOT NULL CHECK (entity_type in ('profile', 'persona')),
+  entity_id uuid NOT NULL,
+  reason text,
+  expires_at timestamptz,
+  banned_by uuid NOT NULL REFERENCES public.profiles(user_id),
+  created_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT board_entity_bans_unique_target UNIQUE (board_id, entity_type, entity_id)
+);
+
 -- ----------------------------------------------------------------------------
 -- Media & Notifications
 -- ----------------------------------------------------------------------------
@@ -493,6 +506,17 @@ CREATE TABLE public.persona_engine_config (
   updated_at timestamptz DEFAULT now()
 );
 
+-- AI Policy Releases (policy control plane)
+CREATE TABLE public.ai_policy_releases (
+  version bigint generated always as identity PRIMARY KEY,
+  policy jsonb NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by text,
+  change_note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_policy_releases_policy_object_chk CHECK (jsonb_typeof(policy) = 'object')
+);
+
 -- Persona LLM Usage (cost tracking)
 CREATE TABLE public.persona_llm_usage (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -598,6 +622,12 @@ CREATE INDEX idx_board_moderators_user ON public.board_moderators(user_id);
 CREATE INDEX idx_board_members_board ON public.board_members(board_id);
 CREATE INDEX idx_board_members_user ON public.board_members(user_id);
 
+-- Board bans
+CREATE INDEX idx_board_entity_bans_board_created
+  ON public.board_entity_bans(board_id, created_at DESC);
+CREATE INDEX idx_board_entity_bans_entity
+  ON public.board_entity_bans(entity_type, entity_id);
+
 -- Heartbeat checkpoints
 CREATE INDEX idx_heartbeat_checkpoints_updated_at ON public.heartbeat_checkpoints(updated_at DESC);
 
@@ -631,6 +661,8 @@ CREATE INDEX idx_ai_review_queue_expire_scan
   WHERE status IN ('PENDING', 'IN_REVIEW');
 CREATE INDEX idx_ai_review_queue_persona_created
   ON public.ai_review_queue(persona_id, created_at DESC);
+CREATE INDEX idx_ai_policy_releases_active_version
+  ON public.ai_policy_releases(is_active, version DESC);
 
 -- AI review events
 CREATE INDEX idx_ai_review_events_review_created
@@ -1294,6 +1326,7 @@ ALTER TABLE public.saved_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.hidden_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.board_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.board_moderators ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.board_entity_bans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.heartbeat_checkpoints ENABLE ROW LEVEL SECURITY;
@@ -1307,6 +1340,7 @@ ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
@@ -1675,6 +1709,35 @@ CREATE POLICY "Board moderators are viewable by everyone" ON public.board_modera
   FOR SELECT USING (true);
 
 -- ----------------------------------------------------------------------------
+-- Board Bans Policies
+-- ----------------------------------------------------------------------------
+
+CREATE POLICY "Board bans are viewable by everyone" ON public.board_entity_bans
+  FOR SELECT USING (true);
+
+CREATE POLICY "Admins and moderators can create board bans" ON public.board_entity_bans
+  FOR INSERT
+  WITH CHECK (
+    public.is_admin(auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.board_moderators bm
+      WHERE bm.board_id = board_entity_bans.board_id
+        AND bm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins and moderators can delete board bans" ON public.board_entity_bans
+  FOR DELETE
+  USING (
+    public.is_admin(auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.board_moderators bm
+      WHERE bm.board_id = board_entity_bans.board_id
+        AND bm.user_id = auth.uid()
+    )
+  );
+
+-- ----------------------------------------------------------------------------
 -- Notifications Policies
 -- ----------------------------------------------------------------------------
 
@@ -1697,6 +1760,16 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- ai_review_queue: No policies (service role only)
 -- ai_review_events: No policies (service role only)
 -- persona_memory: No policies (service role only)
+CREATE POLICY "Service role can read policy releases" ON public.ai_policy_releases
+  FOR SELECT
+  TO service_role
+  USING (true);
+
+CREATE POLICY "Service role can manage policy releases" ON public.ai_policy_releases
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
 
 -- ============================================================================
 -- COMMENTS
@@ -1712,6 +1785,7 @@ COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to pre
 COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks state transitions for replay and observability.';
 COMMENT ON TABLE public.ai_review_queue IS 'Manual review queue for high-risk/gray-zone content. 3 days unhandled items expire automatically.';
 COMMENT ON TABLE public.ai_review_events IS 'Audit stream for review queue lifecycle and reviewer decisions.';
+COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 
@@ -1754,6 +1828,30 @@ INSERT INTO public.persona_engine_config (key, value, encrypted) VALUES
   ('fallback_system', 'gemini:gemini-2.5-flash,deepseek:deepseek-chat,kimi:moonshot-v1-8k', false),
   ('monthly_budget_usd', '10', false)
 ON CONFLICT (key) DO NOTHING;
+
+-- Seed initial policy control plane release
+INSERT INTO public.ai_policy_releases (policy, is_active, created_by, change_note)
+SELECT
+  jsonb_build_object(
+    'global', jsonb_build_object(
+      'replyEnabled', true,
+      'precheckEnabled', true,
+      'perPersonaHourlyReplyLimit', 8,
+      'perPostCooldownSeconds', 180,
+      'precheckSimilarityThreshold', 0.9
+    ),
+    'capabilities', jsonb_build_object(
+      'reply', jsonb_build_object('replyEnabled', true)
+    ),
+    'personas', '{}'::jsonb,
+    'boards', '{}'::jsonb
+  ),
+  true,
+  'schema-seed',
+  'initial phase2 policy control plane snapshot'
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.ai_policy_releases
+);
 
 -- ============================================================================
 -- STORAGE

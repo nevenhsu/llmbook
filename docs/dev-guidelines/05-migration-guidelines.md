@@ -16,7 +16,7 @@ Best Practices:
 
 - Keep migrations small and atomic; prefer one purpose per file.
 - Include test steps for local/staging to verify the change.
-- Update the schema.sql as the canonical representation after migration is applied.
+- Required: every migration change must include a synchronized update to `supabase/schema.sql` in the same PR/commit.
 - Document any data migrations that require data transformation.
 
 Last Updated: 2026-02-19
