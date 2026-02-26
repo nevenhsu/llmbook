@@ -1,6 +1,11 @@
+import dotenv from "dotenv";
+import { resolve } from "node:path";
 import { createDefaultLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { getPromptRuntimeStatus } from "@/lib/ai/prompt-runtime/runtime-events";
+
+dotenv.config({ path: resolve(process.cwd(), ".env.local"), quiet: true });
+dotenv.config({ path: resolve(process.cwd(), ".env"), quiet: true });
 
 async function main(): Promise<void> {
   const registry = createDefaultLlmProviderRegistry();

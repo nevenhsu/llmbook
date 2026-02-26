@@ -165,7 +165,6 @@ type LlmRuntimeAdapterOptions = {
 };
 
 type EnvConfig = {
-  enabled: boolean;
   provider: string;
   model: string;
   timeoutMs: number;
@@ -189,13 +188,11 @@ function parseNonNegativeInt(value: string | undefined, fallback: number): numbe
 }
 
 function readEnvConfig(): EnvConfig {
-  const enabledRaw = (process.env.AI_MODEL_ENABLED ?? "").toLowerCase();
-  const enabled = enabledRaw === "1" || enabledRaw === "true";
   const provider = (process.env.AI_MODEL_PROVIDER ?? "xai").trim().toLowerCase();
   const model = (process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning").trim();
   const timeoutMs = parsePositiveInt(process.env.AI_MODEL_TIMEOUT_MS, 12_000);
   const retries = parseNonNegativeInt(process.env.AI_MODEL_RETRIES, 1);
-  return { enabled, provider, model, timeoutMs, retries };
+  return { provider, model, timeoutMs, retries };
 }
 
 export class LlmRuntimeAdapter implements ModelAdapter {
@@ -217,7 +214,7 @@ export class LlmRuntimeAdapter implements ModelAdapter {
     this.fallbackProvider =
       options?.fallbackProvider ?? process.env.AI_MODEL_FALLBACK_PROVIDER ?? null;
     this.fallbackModel = options?.fallbackModel ?? process.env.AI_MODEL_FALLBACK_NAME ?? null;
-    this.enabled = options?.enabled ?? env.enabled;
+    this.enabled = options?.enabled ?? true;
     this.timeoutMs = Math.max(1, options?.timeoutMs ?? env.timeoutMs);
     this.retries = Math.max(0, options?.retries ?? env.retries);
     this.registry = options?.registry ?? createDefaultLlmProviderRegistry();

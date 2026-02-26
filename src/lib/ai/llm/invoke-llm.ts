@@ -49,6 +49,49 @@ async function recordProviderEvent(input: {
   });
 }
 
+async function recordProviderFailure(input: {
+  recorder: PromptRuntimeEventRecorder;
+  entityId: string;
+  target: { providerId: string; modelId: string };
+  attempts: number;
+  error: string;
+  errorDetails?: LlmErrorDetails;
+  reasonCode?: (typeof ProviderRuntimeReasonCode)[keyof typeof ProviderRuntimeReasonCode];
+}): Promise<void> {
+  await recordProviderEvent({
+    recorder: input.recorder,
+    entityId: input.entityId,
+    reasonCode: input.reasonCode ?? ProviderRuntimeReasonCode.providerCallFailed,
+    operation: "CALL",
+    metadata: {
+      providerId: input.target.providerId,
+      modelId: input.target.modelId,
+      attempts: input.attempts,
+      error: input.error,
+      errorDetails: input.errorDetails,
+    },
+  });
+}
+
+async function recordProviderRetry(input: {
+  recorder: PromptRuntimeEventRecorder;
+  entityId: string;
+  target: { providerId: string; modelId: string };
+  nextAttempt: number;
+}): Promise<void> {
+  await recordProviderEvent({
+    recorder: input.recorder,
+    entityId: input.entityId,
+    reasonCode: ProviderRuntimeReasonCode.providerRetrying,
+    operation: "RETRY",
+    metadata: {
+      providerId: input.target.providerId,
+      modelId: input.target.modelId,
+      nextAttempt: input.nextAttempt,
+    },
+  });
+}
+
 function normalizeError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -157,30 +200,20 @@ async function runOnTarget(input: {
       if (output.error || output.finishReason === "error") {
         lastError = output.error ?? "PROVIDER_ERROR_OUTPUT";
         lastErrorDetails = output.errorDetails;
-        await recordProviderEvent({
+        await recordProviderFailure({
           recorder: input.recorder,
           entityId: input.entityId,
-          reasonCode: ProviderRuntimeReasonCode.providerCallFailed,
-          operation: "CALL",
-          metadata: {
-            providerId: input.target.providerId,
-            modelId: input.target.modelId,
-            attempts,
-            error: lastError,
-            errorDetails: output.errorDetails,
-          },
+          target: input.target,
+          attempts,
+          error: lastError,
+          errorDetails: output.errorDetails,
         });
         if (index < input.retries) {
-          await recordProviderEvent({
+          await recordProviderRetry({
             recorder: input.recorder,
             entityId: input.entityId,
-            reasonCode: ProviderRuntimeReasonCode.providerRetrying,
-            operation: "RETRY",
-            metadata: {
-              providerId: input.target.providerId,
-              modelId: input.target.modelId,
-              nextAttempt: attempts + 1,
-            },
+            target: input.target,
+            nextAttempt: attempts + 1,
           });
         }
         continue;
@@ -208,31 +241,22 @@ async function runOnTarget(input: {
         ? ProviderRuntimeReasonCode.providerTimeout
         : ProviderRuntimeReasonCode.providerCallFailed;
 
-      await recordProviderEvent({
+      await recordProviderFailure({
         recorder: input.recorder,
         entityId: input.entityId,
+        target: input.target,
+        attempts,
+        error: message,
+        errorDetails: lastErrorDetails,
         reasonCode,
-        operation: "CALL",
-        metadata: {
-          providerId: input.target.providerId,
-          modelId: input.target.modelId,
-          attempts,
-          error: message,
-          errorDetails: lastErrorDetails,
-        },
       });
 
       if (index < input.retries) {
-        await recordProviderEvent({
+        await recordProviderRetry({
           recorder: input.recorder,
           entityId: input.entityId,
-          reasonCode: ProviderRuntimeReasonCode.providerRetrying,
-          operation: "RETRY",
-          metadata: {
-            providerId: input.target.providerId,
-            modelId: input.target.modelId,
-            nextAttempt: attempts + 1,
-          },
+          target: input.target,
+          nextAttempt: attempts + 1,
         });
       }
     }
