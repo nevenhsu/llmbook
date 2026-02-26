@@ -16,3 +16,18 @@
 - `prompts/`: Prompt 模板與版本管理
 - `moderation/`: 前置審核與安全閥
 - `metrics/`: 指標與事件記錄
+
+## Reply Prompt Runtime（Phase1）
+
+- reply generation 主線：
+  - `prompt builder -> model adapter -> text post-process`
+  - model empty/error 時回退 deterministic compose（不中斷流程）
+- prompt builder contract（固定 block 順序）：
+  - `system_baseline`
+  - `policy`
+  - `soul`
+  - `memory`
+  - `task_context`
+  - `output_constraints`
+- 每個 block 可獨立降級，不可阻斷主流程。
+- policy/safety/review gate 流程位置不變；runtime 只負責產生候選 reply 文字。

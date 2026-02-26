@@ -12,6 +12,8 @@ import {
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { composeSoulDrivenReply } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { CachedRuntimeSoulProvider } from "@/lib/ai/soul/runtime-soul-profile";
+import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
+import { MockModelAdapter, VercelAiCoreAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 
 describe("Phase1 reply-only flow", () => {
   it("runs intent -> dispatch -> run -> safety -> write -> done", async () => {
@@ -265,6 +267,116 @@ describe("Phase1 reply-only flow", () => {
     expect(writtenTexts[0]).not.toBe(writtenTexts[1]);
     expect(writtenTexts.some((text) => text.includes("Directly speaking"))).toBe(true);
     expect(writtenTexts.some((text) => text.includes("Concisely"))).toBe(true);
+    expect(store.snapshot().every((task) => task.status === "DONE")).toBe(true);
+  });
+
+  it("runs phase1 execution with model on/off and keeps flow pass-through", async () => {
+    const store = new InMemoryTaskQueueStore([
+      {
+        id: "task-model-on",
+        personaId: "persona-1",
+        taskType: "reply",
+        payload: { postId: "post-1", idempotencyKey: "idem-on" },
+        status: "PENDING",
+        scheduledAt: new Date("2026-02-26T00:00:00.000Z"),
+        retryCount: 0,
+        maxRetries: 3,
+        createdAt: new Date("2026-02-26T00:00:00.000Z"),
+      },
+      {
+        id: "task-model-off",
+        personaId: "persona-2",
+        taskType: "reply",
+        payload: { postId: "post-1", idempotencyKey: "idem-off" },
+        status: "PENDING",
+        scheduledAt: new Date("2026-02-26T00:00:01.000Z"),
+        retryCount: 0,
+        maxRetries: 3,
+        createdAt: new Date("2026-02-26T00:00:01.000Z"),
+      },
+    ]);
+
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const outputs: string[] = [];
+
+    const modelOn = new MockModelAdapter({ mode: "success", fixedText: "model-on text" });
+    const modelOff = new VercelAiCoreAdapter({ enabled: false });
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: {
+        generate: async (task) => {
+          const runtime = await generateReplyTextWithPromptRuntime({
+            entityId: task.id,
+            personaId: task.personaId,
+            postId: String(task.payload.postId ?? "post-1"),
+            title: "Prompt Runtime Test",
+            postBodySnippet: "Need next action",
+            focusActor: "user:test",
+            focusSnippet: "what should we do",
+            participantCount: 2,
+            soul: {
+              profile: {
+                identityCore: "A practical teammate",
+                valueHierarchy: [{ value: "clarity", priority: 1 }],
+                decisionPolicy: {
+                  evidenceStandard: "medium",
+                  tradeoffStyle: "balanced",
+                  uncertaintyHandling: "state assumptions",
+                  antiPatterns: ["overclaim"],
+                  riskPreference: "balanced",
+                },
+                interactionDoctrine: {
+                  askVsTellRatio: "balanced",
+                  feedbackPrinciples: ["tradeoff"],
+                  collaborationStance: "support",
+                },
+                languageSignature: {
+                  rhythm: "concise",
+                  preferredStructures: ["context"],
+                  lexicalTaboos: [],
+                },
+                guardrails: {
+                  hardNo: ["unsafe"],
+                  deescalationRules: ["de-risk"],
+                },
+              },
+              summary: {
+                identity: "A practical teammate",
+                topValues: ["clarity"],
+                tradeoffStyle: "balanced",
+                riskPreference: "balanced",
+                collaborationStance: "support",
+                rhythm: "concise",
+                guardrailCount: 2,
+              },
+              normalized: false,
+              source: "db",
+            },
+            memoryContext: null,
+            deterministicFallbackText: "deterministic text",
+            modelAdapter: task.id === "task-model-on" ? modelOn : modelOff,
+          });
+
+          return { text: runtime.text };
+        },
+      },
+      safetyGate: { check: vi.fn().mockResolvedValue({ allowed: true }) },
+      writer: {
+        write: async ({ text }) => {
+          outputs.push(text);
+          return { resultId: `result-${outputs.length}` };
+        },
+      },
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:10.000Z") });
+    await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:11.000Z") });
+
+    expect(outputs).toHaveLength(2);
+    expect(outputs).toContain("model-on text");
+    expect(outputs).toContain("deterministic text");
     expect(store.snapshot().every((task) => task.status === "DONE")).toBe(true);
   });
 });

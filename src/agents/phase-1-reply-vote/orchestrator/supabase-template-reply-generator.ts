@@ -2,11 +2,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { ReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
 import { GeneratorSkipReasonCode } from "@/lib/ai/reason-codes";
+import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
   buildRuntimeSoulProfile,
   recordRuntimeSoulApplied,
   type RuntimeSoulContext,
 } from "@/lib/ai/soul/runtime-soul-profile";
+import { buildRuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
+import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
 
 type PostRow = {
   id: string;
@@ -154,13 +157,19 @@ export function rankFocusCandidates(input: {
 export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
   private readonly loadRuntimeSoul: typeof buildRuntimeSoulProfile;
   private readonly recordSoulApplied: typeof recordRuntimeSoulApplied;
+  private readonly loadRuntimeMemory: typeof buildRuntimeMemoryContext;
+  private readonly modelAdapter?: ModelAdapter;
 
   public constructor(options?: {
     loadRuntimeSoul?: typeof buildRuntimeSoulProfile;
     recordSoulApplied?: typeof recordRuntimeSoulApplied;
+    loadRuntimeMemory?: typeof buildRuntimeMemoryContext;
+    modelAdapter?: ModelAdapter;
   }) {
     this.loadRuntimeSoul = options?.loadRuntimeSoul ?? buildRuntimeSoulProfile;
     this.recordSoulApplied = options?.recordSoulApplied ?? recordRuntimeSoulApplied;
+    this.loadRuntimeMemory = options?.loadRuntimeMemory ?? buildRuntimeMemoryContext;
+    this.modelAdapter = options?.modelAdapter;
   }
 
   public async generate(task: QueueTask): Promise<{
@@ -260,6 +269,31 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     const focusActor = focusComment ? actorLabel(focusComment) : actorLabel(post);
     const participantCount = participants.size;
     const soul = await this.loadRuntimeSoul({ personaId: task.personaId, tolerateFailure: true });
+    const deterministicText = composeSoulDrivenReply({
+      title,
+      postBodySnippet,
+      focusActor,
+      focusSnippet,
+      participantCount,
+      soul,
+    });
+
+    const threadId = typeof task.payload.threadId === "string" ? task.payload.threadId : undefined;
+    const boardId = typeof task.payload.boardId === "string" ? task.payload.boardId : undefined;
+
+    let memoryContext = null;
+    try {
+      memoryContext = await this.loadRuntimeMemory({
+        personaId: task.personaId,
+        threadId,
+        boardId,
+        taskType: "reply",
+        now: new Date(),
+        tolerateFailure: true,
+      });
+    } catch {
+      memoryContext = null;
+    }
 
     try {
       await this.recordSoulApplied({
@@ -276,17 +310,23 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       // Best-effort observability only.
     }
 
-    const text = composeSoulDrivenReply({
+    const runtimeResult = await generateReplyTextWithPromptRuntime({
+      entityId: task.id,
+      personaId: task.personaId,
+      postId,
       title,
       postBodySnippet,
       focusActor,
       focusSnippet,
       participantCount,
       soul,
+      memoryContext,
+      deterministicFallbackText: deterministicText,
+      modelAdapter: this.modelAdapter,
     });
 
     return {
-      text,
+      text: runtimeResult.text,
       parentCommentId: focusComment?.id,
       safetyContext: {
         recentPersonaReplies: (recentReplies ?? [])

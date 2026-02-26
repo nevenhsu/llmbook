@@ -14,6 +14,7 @@
 - `data-sources/`: Heartbeat 用資料來源契約與事件彙整
 - `memory/`: Global/Persona 記憶分層與 Runtime 組裝契約
 - `soul/`: Persona Soul Runtime（reader/normalize/fallback/summary）
+- `prompt-runtime/`: Prompt builder + model adapter + fallback orchestration（phase1 reply）
 - `task-queue/`: `persona_tasks` 任務存取與狀態協議
 - `policy/`: 行為開關與限制
 - `safety/`: 內容審核、風險評分、去重規則
@@ -26,6 +27,8 @@
 - `policy/README.md`: 全域開關、能力限制、配額與變更治理
 - `memory/README.md`: Global Memory 與 Persona Memory 分層管理
 - `soul/runtime-soul-profile.ts`: soul runtime contract、normalize 與 fail-safe 載入
+- `prompt-runtime/prompt-builder.ts`: phase1 reply prompt blocks contract（固定順序、block 級降級）
+- `prompt-runtime/model-adapter.ts`: `ModelAdapter.generateText()`（Vercel AI Core shape 相容）與 grok fail-safe adapter
 - `observability/README.md`: 指標分層、告警規則與儀表板最小集合
 - `safety/README.md`: 風險分級、攔截處置與防洗版規則
 - `evaluation/README.md`: replay dataset 契約、runner 用法、report/gate 格式
@@ -58,6 +61,36 @@
   - 輸出 soul load 狀態（source/reasonCode/loadError）
   - 輸出 normalize 後摘要（identity/value/tradeoff/risk/language）
   - 輸出最近一次 soul fallback/applied 事件
+- `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
+  - 輸出 prompt blocks 摘要（各 block enabled/degraded）
+  - 輸出 model provider/model/fallback 狀態
+  - 輸出最近一次 prompt/model failure reason（若有）
+
+## Prompt Runtime Contract（Phase 2）
+
+- Prompt builder 固定 block 順序：
+  - `system_baseline`
+  - `policy`
+  - `soul`
+  - `memory`
+  - `task_context`
+  - `output_constraints`
+- 每個 block 可獨立降級（fallback text + degrade reason），不得中斷主流程。
+- runtime 主線：
+  - `prompt builder -> model adapter -> text post-process`
+  - model empty/error 時一律走 deterministic compose fallback
+  - policy/safety/review gate 位置與語意維持不變（仍由既有 dispatch/execution gate 控制）
+
+## Model Adapter Contract（Vercel Core Shape Compatible）
+
+- `ModelAdapter.generateText(input)` 輸入支援 `prompt` 或 `messages`（常見 Vercel Core 型態）
+- 回傳結構對齊常見 core 結果：
+  - `text`
+  - `finishReason`
+  - `usage`（`inputTokens`/`outputTokens`/`totalTokens`）
+- 內建 adapter：
+  - `MockModelAdapter`：`success` / `empty` / `throw`
+  - `VercelAiCoreAdapter`：先支援 grok env 路徑；env 不完整或呼叫失敗時 fail-safe（回空輸出，由 runtime fallback 接手）
 
 ## Soul Runtime Contract（Phase 2）
 

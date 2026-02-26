@@ -52,3 +52,10 @@ export const SoulReasonCode = {
   fallbackEmpty: "SOUL_FALLBACK_EMPTY",
   applied: "SOUL_APPLIED",
 } as const;
+
+export const PromptRuntimeReasonCode = {
+  promptBuildSuccess: "PROMPT_BUILD_SUCCESS",
+  promptBuildFailed: "PROMPT_BUILD_FAILED",
+  modelCallFailed: "MODEL_CALL_FAILED",
+  modelFallbackUsed: "MODEL_FALLBACK_USED",
+} as const;

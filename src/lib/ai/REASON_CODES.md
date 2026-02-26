@@ -16,6 +16,7 @@
 | policy    | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                |
 | memory    | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                              |
 | soul      | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）               |
+| prompt    | `PromptRuntimeReasonCode.*`      | prompt builder / model adapter 成功、失敗與 fallback 事件                       |
 
 ## Queue Persistence
 
@@ -50,7 +51,14 @@
 - `SOUL_FALLBACK_EMPTY`
 - `SOUL_APPLIED`
 
-## Soul Observability Event Contract（Minimal）
+## Prompt Runtime Reason Codes
+
+- `PROMPT_BUILD_SUCCESS`
+- `PROMPT_BUILD_FAILED`
+- `MODEL_CALL_FAILED`
+- `MODEL_FALLBACK_USED`
+
+## Prompt/Soul Observability Event Contract（Minimal）
 
 - `layer`
 - `operation`

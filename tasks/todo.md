@@ -50,3 +50,33 @@
   - `npm run ai:soul:verify -- --personaId persona-test`（可輸出 load status / normalized summary / fallback+applied status）
 - [x] Regression/safety/policy gate check
   - policy/safety/review 既有流程測試未退化，precheck 與 execution 在 soul 缺失/失敗時仍可跑通。
+
+---
+
+# LLM Prompt Runtime 正式化（Phase1）Todo
+
+## Plan
+
+- [x] 對齊 `plans/ai-minion-army/*` 與 phase1 flow，確認 prompt/model 接點與不可變 gate（policy/safety/review）
+- [x] 新增 Prompt Builder Contract（reply phase1）與固定 block 順序（system baseline/policy/soul/memory/task context/output constraints）
+- [x] 完成 block 級降級策略與 observability，不可阻斷主流程
+- [x] 定義 `ModelAdapter.generateText()` 契約（Vercel AI SDK Core shape 相容）
+- [x] 實作 `MockModelAdapter` 三模式（success/empty/throw）供測試
+- [x] 實作 `VercelAiCoreAdapter` 最小可用（grok env 路徑 + fail-safe fallback）
+- [x] Runtime Integration：reply generation 改為 prompt builder -> model adapter -> text post-process，保留 deterministic compose fallback
+- [x] 統一 reason code（含 `PROMPT_BUILD_SUCCESS`/`PROMPT_BUILD_FAILED`/`MODEL_CALL_FAILED`/`MODEL_FALLBACK_USED`）並落在 `src/lib/ai/reason-codes.ts`
+- [x] 補單元/整合/回歸測試（prompt 順序、缺失降級、model empty/error fallback、phase1 on/off 跑通）
+- [x] 新增 `npm run ai:prompt:verify -- --personaId <id> --postId <id>` 與摘要輸出
+- [x] 更新文件：`src/lib/ai/README.md`、`src/lib/ai/REASON_CODES.md`、`src/agents/phase-1-reply-vote/README.md`
+- [x] Verification：執行目標測試與 verify 指令並補 Review 結果
+
+## Review
+
+- 實作摘要：新增 `prompt-runtime`（prompt builder/model adapter/runtime events）並將 phase1 reply generation 主線改為 `prompt builder -> model adapter -> post-process`，model empty/error 自動回退 deterministic compose。
+- 契約重點：`ModelAdapter.generateText()` 輸入支援 `prompt/messages`、輸出對齊 `text/finishReason/usage`；`MockModelAdapter` 提供 success/empty/throw；`VercelAiCoreAdapter` 支援 grok env 路徑與 fail-safe。
+- Observability：新增 `PromptRuntimeReasonCode`（`PROMPT_BUILD_SUCCESS`/`PROMPT_BUILD_FAILED`/`MODEL_CALL_FAILED`/`MODEL_FALLBACK_USED`）與最小事件欄位（`layer/operation/reasonCode/entityId/occurredAt`）。
+- 驗證命令：
+  - `npm test -- src/lib/ai/prompt-runtime/prompt-builder.test.ts src/lib/ai/prompt-runtime/model-adapter.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts src/agents/phase-1-reply-vote/orchestrator/phase1-reply-flow.integration.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-execution-agent.test.ts src/lib/ai/safety/reply-safety-gate.test.ts src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/review-queue/review-queue.test.ts`（48 tests passed）
+  - `npm test -- src/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator.test.ts`（2 tests passed）
+  - `npm run ai:prompt:verify -- --personaId persona-test --postId post-test`（在目前環境因 fetch failed 無法連線 Supabase）
+- 回歸結論：policy/review/safety 相關目標測試皆通過，gate 流程位置與語意未變更。
