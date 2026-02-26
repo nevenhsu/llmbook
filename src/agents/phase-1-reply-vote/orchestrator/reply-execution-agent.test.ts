@@ -13,8 +13,13 @@ import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import { InMemorySafetyEventSink } from "@/lib/ai/observability/safety-events";
 import { InMemoryReviewQueueStore, ReviewQueue } from "@/lib/ai/review-queue/review-queue";
 import {
+  CachedReplyPolicyProvider,
+  type PolicyReleaseStore,
+} from "@/lib/ai/policy/policy-control-plane";
+import {
   ExecutionSkipReasonCode,
   GeneratorSkipReasonCode,
+  PolicyControlPlaneReasonCode,
   ReviewReasonCode,
   SafetyReasonCode,
 } from "@/lib/ai/reason-codes";
@@ -342,5 +347,92 @@ describe("ReplyExecutionAgent", () => {
     expect(writer.write).not.toHaveBeenCalled();
     expect(store.snapshot()[0]?.status).toBe("SKIPPED");
     expect(store.snapshot()[0]?.errorMessage).toBe(ExecutionSkipReasonCode.policyDisabled);
+  });
+
+  it("applies hot-updated policy to new tasks and falls back to last-known-good on provider load failure", async () => {
+    const now = { value: new Date("2026-02-26T00:00:00.000Z") };
+    let fetchCount = 0;
+    const store = new InMemoryTaskQueueStore([
+      buildTask({
+        id: "task-1",
+        payload: { idempotencyKey: "idem-1" },
+        scheduledAt: new Date("2026-02-26T00:00:00.000Z"),
+      }),
+      buildTask({
+        id: "task-2",
+        payload: { idempotencyKey: "idem-2" },
+        scheduledAt: new Date("2026-02-26T00:00:01.000Z"),
+      }),
+      buildTask({
+        id: "task-3",
+        payload: { idempotencyKey: "idem-3" },
+        scheduledAt: new Date("2026-02-26T00:00:02.000Z"),
+      }),
+    ]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const writer = {
+      write: vi.fn().mockResolvedValue({ resultId: "comment-1" }),
+    };
+
+    const policyStore: PolicyReleaseStore = {
+      async fetchLatestActive() {
+        fetchCount += 1;
+        if (fetchCount === 1) {
+          return {
+            version: 10,
+            isActive: true,
+            createdAt: "2026-02-26T00:00:00.000Z",
+            policy: { global: { replyEnabled: false } },
+          };
+        }
+        if (fetchCount === 2) {
+          return {
+            version: 11,
+            isActive: true,
+            createdAt: "2026-02-26T00:01:00.000Z",
+            policy: { global: { replyEnabled: true } },
+          };
+        }
+        throw new Error("db unavailable");
+      },
+    };
+
+    const policyProvider = new CachedReplyPolicyProvider({
+      store: policyStore,
+      now: () => now.value,
+      ttlMs: 10_000,
+      fallbackPolicy: {
+        replyEnabled: true,
+        precheckEnabled: true,
+        perPersonaHourlyReplyLimit: 8,
+        perPostCooldownSeconds: 180,
+        precheckSimilarityThreshold: 0.9,
+      },
+    });
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: { generate: vi.fn().mockResolvedValue({ text: "hello" }) },
+      safetyGate: { check: vi.fn().mockResolvedValue({ allowed: true }) },
+      writer,
+      policyProvider,
+    });
+
+    await agent.runOnce({ workerId: "worker-1", now: now.value });
+    now.value = new Date("2026-02-26T00:00:11.000Z");
+    await agent.runOnce({ workerId: "worker-1", now: now.value });
+    now.value = new Date("2026-02-26T00:00:22.000Z");
+    await agent.runOnce({ workerId: "worker-1", now: now.value });
+
+    const tasks = store.snapshot().sort((a, b) => a.id.localeCompare(b.id));
+    expect(tasks[0]?.status).toBe("SKIPPED");
+    expect(tasks[0]?.errorMessage).toBe(ExecutionSkipReasonCode.policyDisabled);
+    expect(tasks[1]?.status).toBe("DONE");
+    expect(tasks[2]?.status).toBe("DONE");
+    expect(writer.write).toHaveBeenCalledTimes(2);
+    expect(policyProvider.getStatus().lastFallbackReasonCode).toBe(
+      PolicyControlPlaneReasonCode.fallbackLastKnownGood,
+    );
   });
 });

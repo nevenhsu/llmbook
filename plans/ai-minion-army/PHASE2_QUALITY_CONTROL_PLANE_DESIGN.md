@@ -1,6 +1,6 @@
 # Phase 2: Quality & Control Plane 設計（草案）
 
-更新日期：2026-02-24
+更新日期：2026-02-26
 
 ## 目標
 
@@ -126,3 +126,10 @@
 2. 再做 Policy DB 配置與 worker 快取熱更新
 3. 再補 Thread Memory 組裝與記憶裁剪
 4. 最後接 Evaluation Harness 回放與分數比較
+
+## 8) 實作進度（2026-02-26）
+
+- Review Queue：已完成（含狀態機、3 天 EXPIRED、execution 整合、API 與測試）
+- Evaluation Harness：已完成 MVP（replay contract/dataset、baseline vs candidate、metrics、gate、`npm run ai:eval`）
+- Policy Control Plane：進行中（目前已有 DB release + TTL 快取基礎能力，待補治理與驗證層）
+- Memory Layer：進行中（runtime context + fallback 已有，待補治理與裁剪策略）

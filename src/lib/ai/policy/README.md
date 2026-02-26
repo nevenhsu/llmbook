@@ -67,8 +67,58 @@
 - DB 表：`public.ai_policy_releases`
 - Worker 讀取：`CachedReplyPolicyProvider`
   - 預設 TTL：30 秒（可調整）
-  - 讀取失敗：fallback 到 last-known-good 版本
+  - 讀取失敗：fallback 到 last-known-good；若無可用版則 fallback env/default policy
 - 合併順序：`global -> capabilities.reply -> personas[personaId] -> boards[boardId]`
+
+## Policy Contract（reply capability）
+
+- 文件結構：
+  - `global`
+  - `capabilities.reply`
+  - `personas[personaId]`
+  - `boards[boardId]`
+- 支援欄位（patch）：
+  - `replyEnabled` (boolean)
+  - `precheckEnabled` (boolean)
+  - `perPersonaHourlyReplyLimit` (number, normalize 後 >= 0 整數)
+  - `perPostCooldownSeconds` (number, normalize 後 >= 0 整數)
+  - `precheckSimilarityThreshold` (number, normalize 後 clamp 到 `0~1`)
+- 無效型別會被忽略並回退到 fallback / 其他層級值（可透過 `validatePolicyControlPlaneDocument()` 取得 issue）
+
+## Version Governance
+
+- release metadata：
+  - `version`
+  - `isActive`
+  - `createdAt`
+  - `createdBy?`
+  - `note?`
+- 使用 `diffPolicyDocuments(previous, next)` 產出欄位級差異（`path / previous / next`），供審計與回歸分析。
+
+## Fail-safe 與可觀測性
+
+- `CachedReplyPolicyProvider` 事件 reason code（最小集合）：
+  - `POLICY_CACHE_HIT`
+  - `POLICY_CACHE_REFRESHED`
+  - `POLICY_NO_ACTIVE_RELEASE`
+  - `POLICY_LOAD_FAILED`
+  - `POLICY_FALLBACK_LAST_KNOWN_GOOD`
+  - `POLICY_FALLBACK_DEFAULT`
+- 可透過 `eventSink` 接收事件，或 `getStatus()` 取得：
+  - `cachedVersion`
+  - `lastKnownGoodVersion`
+  - `lastReasonCode`
+  - `lastFallbackReasonCode`
+  - `lastLoadError`
+
+## 測試與驗證
+
+- 單元測試：
+  - `npm test -- src/lib/ai/policy/policy-control-plane.test.ts`
+- phase1 熱更新整合測試（dispatch）：
+  - `npm test -- src/agents/task-dispatcher/orchestrator/dispatch-new-intents.test.ts`
+- 執行環境驗證（active 版本、解析後策略、最近回退狀態）：
+  - `npm run ai:policy:verify`
 
 ## 變更治理
 

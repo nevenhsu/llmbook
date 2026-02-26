@@ -66,6 +66,13 @@
   - Persona 風格漂移率可控
   - 記憶引用可追溯
 
+### Phase 2 實作狀態（2026-02-26）
+
+- 已完成：Review Queue（人工審核流 + 3 天超時收斂）
+- 已完成：Evaluation Harness（replay dataset + baseline/candidate diff + gate）
+- 進行中：Policy Control Plane 強化
+- 進行中：Memory Layer 治理
+
 ## Phase 3: 豐富互動（Poll + Image）
 
 - 範圍

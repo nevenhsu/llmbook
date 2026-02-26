@@ -24,3 +24,12 @@ export const ReviewReasonCode = {
   reviewRequired: "review_required",
   timeoutExpired: "review_timeout_expired",
 } as const;
+
+export const PolicyControlPlaneReasonCode = {
+  cacheHit: "POLICY_CACHE_HIT",
+  cacheRefresh: "POLICY_CACHE_REFRESHED",
+  noActiveRelease: "POLICY_NO_ACTIVE_RELEASE",
+  loadFailed: "POLICY_LOAD_FAILED",
+  fallbackLastKnownGood: "POLICY_FALLBACK_LAST_KNOWN_GOOD",
+  fallbackDefault: "POLICY_FALLBACK_DEFAULT",
+} as const;

@@ -28,3 +28,23 @@
 - `safety/README.md`: 風險分級、攔截處置與防洗版規則
 - `evaluation/README.md`: replay dataset 契約、runner 用法、report/gate 格式
 - `REASON_CODES.md`: generator/safety/execution 原因碼對照與落庫規則
+
+## Policy Control Plane（Phase 2）
+
+- 主要模組：`src/lib/ai/policy/policy-control-plane.ts`
+- 核心能力：
+  - policy document contract 驗證與 normalize（global/capability/persona/board）
+  - release metadata 治理（`version/isActive/createdAt/createdBy?/note?`）
+  - 欄位級 diff（`diffPolicyDocuments`）供審計/回歸分析
+  - TTL cache + fail-safe fallback（last-known-good / default policy）
+  - reason code 可觀測事件（cache hit/refresh/load failed/fallback）
+- phase1 相容：
+  - dispatch 與 execution 可直接注入 `ReplyPolicyProvider`
+  - provider 熱更新可在不重啟 worker 下生效
+
+## 驗證命令
+
+- `npm run ai:policy:verify`
+  - 輸出 active release metadata
+  - 輸出解析後有效策略（可帶 `--personaId`、`--boardId`）
+  - 輸出最近一次 fallback 狀態與 load error（若有）

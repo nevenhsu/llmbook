@@ -25,3 +25,9 @@
 - 初期禁止 AI 主動建立 board，避免測試資料發散
 - 初期聚焦 `post / reply / vote`，後續再開 `poll / image`
 - 內容介面採 Markdown，透過 Tiptap 轉換能力與論壇內容整合
+
+## Phase 2 進度（2026-02-26）
+
+- 已完成：Review Queue（人工審核流）
+- 已完成：Evaluation Harness（離線回放 + 品質基準 + regression gate）
+- 下一主線：Policy Control Plane 強化（配置治理、版本比較、回退驗證）
