@@ -12,6 +12,11 @@ import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
 import { createReplyInteractionEligibilityChecker } from "@/lib/ai/policy/reply-interaction-eligibility";
+import {
+  buildRuntimeMemoryContext,
+  buildSafetyMemoryHints,
+  type RuntimeMemoryContext,
+} from "@/lib/ai/memory/runtime-memory-context";
 
 type ReplyDispatchPrecheckDeps = {
   checkEligibility: (input: {
@@ -22,6 +27,14 @@ type ReplyDispatchPrecheckDeps = {
   }) => Promise<{ allowed: boolean; reasonCode?: DecisionReasonCode }>;
   countRecentReplies: (input: { personaId: string; since: Date }) => Promise<number>;
   getLatestReplyAtOnPost: (input: { personaId: string; postId: string }) => Promise<Date | null>;
+  buildRuntimeMemoryContext: (input: {
+    personaId: string;
+    threadId?: string;
+    boardId?: string;
+    taskType: "reply";
+    now: Date;
+    threadWindowSeconds?: number;
+  }) => Promise<RuntimeMemoryContext>;
   generateDraft: (task: QueueTask) => Promise<{
     text?: string;
     parentCommentId?: string;
@@ -38,6 +51,14 @@ type ReplyDispatchPrecheckDeps = {
     postId?: string;
     reasonCode: string;
     similarity?: number;
+    metadata?: Record<string, unknown>;
+    now: Date;
+  }) => Promise<void>;
+  recordMemoryFallback: (input: {
+    intentId: string;
+    personaId: string;
+    postId?: string;
+    reasonCode: string;
     metadata?: Record<string, unknown>;
     now: Date;
   }) => Promise<void>;
@@ -103,6 +124,11 @@ function defaultDeps(policy: DispatcherPolicy): ReplyDispatchPrecheckDeps {
 
       return data?.created_at ? new Date(data.created_at) : null;
     },
+    buildRuntimeMemoryContext: async (input) =>
+      buildRuntimeMemoryContext({
+        ...input,
+        tolerateFailure: false,
+      }),
     generateDraft: async (task) => generator.generate(task),
     runSafetyCheck: async (input) => gate.check(input),
     recordSafetyEvent: async (input) => {
@@ -113,6 +139,17 @@ function defaultDeps(policy: DispatcherPolicy): ReplyDispatchPrecheckDeps {
         source: "dispatch_precheck",
         reasonCode: input.reasonCode,
         similarity: input.similarity,
+        metadata: input.metadata,
+        occurredAt: input.now.toISOString(),
+      });
+    },
+    recordMemoryFallback: async (input) => {
+      await eventSink.record({
+        intentId: input.intentId,
+        personaId: input.personaId,
+        postId: input.postId,
+        source: "dispatch_precheck",
+        reasonCode: input.reasonCode,
         metadata: input.metadata,
         occurredAt: input.now.toISOString(),
       });
@@ -186,6 +223,37 @@ export function createReplyDispatchPrecheck(options: {
     }
 
     if (postId) {
+      const threadId =
+        typeof input.intent.payload.threadId === "string" ? input.intent.payload.threadId : null;
+
+      let memoryHints: string[] = [];
+      try {
+        const memoryContext = await deps.buildRuntimeMemoryContext({
+          personaId: input.persona.id,
+          threadId: threadId ?? undefined,
+          boardId: boardId ?? undefined,
+          taskType: "reply",
+          now: input.now,
+        });
+        memoryHints = buildSafetyMemoryHints({ context: memoryContext, maxItems: 20 });
+      } catch (error) {
+        try {
+          await deps.recordMemoryFallback({
+            intentId: input.intent.id,
+            personaId: input.persona.id,
+            postId,
+            reasonCode: "MEMORY_READ_FAILED",
+            metadata: {
+              layer: "dispatch_precheck",
+              error: error instanceof Error ? error.message : String(error),
+            },
+            now: input.now,
+          });
+        } catch {
+          // Best-effort observability only.
+        }
+      }
+
       const syntheticTask: QueueTask = {
         id: `precheck:${input.intent.id}:${input.persona.id}`,
         personaId: input.persona.id,
@@ -203,9 +271,15 @@ export function createReplyDispatchPrecheck(options: {
       const generated = await deps.generateDraft(syntheticTask);
       const text = generated.text?.trim();
       if (text) {
+        const recentHints = generated.safetyContext?.recentPersonaReplies ?? [];
         const safety = await deps.runSafetyCheck({
           text,
-          context: generated.safetyContext,
+          context: {
+            recentPersonaReplies: Array.from(new Set([...memoryHints, ...recentHints])).slice(
+              0,
+              20,
+            ),
+          },
         });
         if (!safety.allowed && safety.reasonCode === SafetyReasonCode.similarToRecentReply) {
           reasons.push("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY", "PRECHECK_BLOCKED");

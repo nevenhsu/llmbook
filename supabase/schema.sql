@@ -457,6 +457,30 @@ CREATE TABLE public.persona_memory (
   UNIQUE (persona_id, key)
 );
 
+-- Thread short-memory (runtime context window, scoped by persona+thread+task)
+CREATE TABLE public.ai_thread_memories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
+  thread_id text NOT NULL,
+  board_id uuid REFERENCES public.boards(id) ON DELETE CASCADE,
+  task_type text NOT NULL DEFAULT 'reply',
+  memory_key text NOT NULL,
+  memory_value text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ttl_seconds int NOT NULL DEFAULT 172800,
+  max_items int NOT NULL DEFAULT 20,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_thread_memories_task_type_check CHECK (
+    task_type IN ('reply', 'vote', 'post', 'comment', 'image_post', 'poll_post')
+  ),
+  CONSTRAINT ai_thread_memories_ttl_positive CHECK (ttl_seconds > 0),
+  CONSTRAINT ai_thread_memories_max_items_positive CHECK (max_items > 0 AND max_items <= 200),
+  CONSTRAINT ai_thread_memories_expiry_check CHECK (expires_at > created_at),
+  CONSTRAINT uq_ai_thread_memories_scope_key UNIQUE (persona_id, thread_id, task_type, memory_key)
+);
+
 -- Persona Souls (complete soul definition for persona engine)
 CREATE TABLE public.persona_souls (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -495,7 +519,9 @@ CREATE TABLE public.persona_long_memories (
   related_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
   related_board_slug text,
   source_action_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
-  created_at timestamptz DEFAULT now()
+  is_canonical boolean NOT NULL DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Persona Engine Config (global key-value settings)
@@ -675,6 +701,15 @@ CREATE INDEX idx_ai_review_events_event_type_created
 -- Persona memory
 CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
 
+-- Thread short-memory
+CREATE INDEX idx_ai_thread_memories_scope_updated
+  ON public.ai_thread_memories(persona_id, thread_id, task_type, updated_at DESC);
+CREATE INDEX idx_ai_thread_memories_expire_scan
+  ON public.ai_thread_memories(expires_at ASC);
+CREATE INDEX idx_ai_thread_memories_board_updated
+  ON public.ai_thread_memories(board_id, updated_at DESC)
+  WHERE board_id IS NOT NULL;
+
 -- Persona souls
 CREATE INDEX idx_persona_souls_persona ON public.persona_souls(persona_id);
 CREATE INDEX idx_persona_souls_domains ON public.persona_souls USING gin (knowledge_domains);
@@ -686,6 +721,12 @@ CREATE INDEX idx_long_mem_embedding ON public.persona_long_memories
 CREATE INDEX idx_long_mem_tsv ON public.persona_long_memories
   USING gin (content_tsv);
 CREATE INDEX idx_long_mem_category ON public.persona_long_memories(persona_id, memory_category);
+CREATE UNIQUE INDEX uq_persona_long_memory_canonical
+  ON public.persona_long_memories(persona_id)
+  WHERE is_canonical = true;
+CREATE INDEX idx_long_mem_persona_canonical_updated
+  ON public.persona_long_memories(persona_id, updated_at DESC)
+  WHERE is_canonical = true;
 
 -- Persona LLM usage
 CREATE INDEX idx_llm_usage_monthly ON public.persona_llm_usage(created_at);
@@ -701,6 +742,34 @@ CREATE INDEX idx_post_rankings_calculated_at ON public.post_rankings(calculated_
 -- ============================================================================
 -- FUNCTIONS
 -- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.cleanup_ai_thread_memories(p_limit int DEFAULT 5000)
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_deleted int := 0;
+BEGIN
+  IF p_limit IS NULL OR p_limit <= 0 THEN
+    RETURN 0;
+  END IF;
+
+  WITH expired AS (
+    SELECT id
+    FROM public.ai_thread_memories
+    WHERE expires_at <= now()
+    ORDER BY expires_at ASC
+    LIMIT p_limit
+  )
+  DELETE FROM public.ai_thread_memories m
+  USING expired
+  WHERE m.id = expired.id;
+
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted;
+END;
+$$;
 
 -- ----------------------------------------------------------------------------
 -- Auto-update Follow Counts
@@ -1337,6 +1406,7 @@ ALTER TABLE public.task_transition_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_review_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_review_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_thread_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
@@ -1760,6 +1830,7 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- ai_review_queue: No policies (service role only)
 -- ai_review_events: No policies (service role only)
 -- persona_memory: No policies (service role only)
+-- ai_thread_memories: No policies (service role only)
 CREATE POLICY "Service role can read policy releases" ON public.ai_policy_releases
   FOR SELECT
   TO service_role
@@ -1786,6 +1857,7 @@ COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks st
 COMMENT ON TABLE public.ai_review_queue IS 'Manual review queue for high-risk/gray-zone content. 3 days unhandled items expire automatically.';
 COMMENT ON TABLE public.ai_review_events IS 'Audit stream for review queue lifecycle and reviewer decisions.';
 COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
+COMMENT ON TABLE public.ai_thread_memories IS 'Short-term per persona-thread memory entries with TTL and configurable per-scope max_items.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 
@@ -1793,6 +1865,7 @@ COMMENT ON TABLE public.post_rankings IS 'Cached post rankings for Hot and Risin
 COMMENT ON COLUMN public.post_rankings.hot_score IS 'Calculated as: (comment_count × 2) + (score × 1) − min(age_days, 30)';
 COMMENT ON COLUMN public.post_rankings.rising_score IS 'Calculated as: score / hours_since_creation (only for posts < 7 days)';
 COMMENT ON FUNCTION public.fn_update_post_rankings() IS 'Recalculates all post rankings. Called by external Node.js script (npm run update-rankings).';
+COMMENT ON FUNCTION public.cleanup_ai_thread_memories(int) IS 'Deletes expired ai_thread_memories in bounded batches. Safe for cron scheduling.';
 
 -- ============================================================================
 -- SEED DATA

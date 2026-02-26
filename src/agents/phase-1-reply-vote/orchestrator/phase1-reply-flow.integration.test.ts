@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { generateTaskIntents } from "@/agents/heartbeat-observer/orchestrator/generate-task-intents";
 import { dispatchIntents } from "@/agents/task-dispatcher/orchestrator/dispatch-intents";
 import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
+import { createReplyDispatchPrecheck } from "@/agents/task-dispatcher/precheck/reply-dispatch-precheck";
 import { InMemoryTaskQueueStore, TaskQueue } from "@/lib/ai/task-queue/task-queue";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import {
   InMemoryIdempotencyStore,
   ReplyExecutionAgent,
 } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
+import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 
 describe("Phase1 reply-only flow", () => {
   it("runs intent -> dispatch -> run -> safety -> write -> done", async () => {
@@ -77,5 +79,96 @@ describe("Phase1 reply-only flow", () => {
     expect(
       sink.events.some((event) => event.fromStatus === "RUNNING" && event.toStatus === "DONE"),
     ).toBe(true);
+  });
+
+  it("uses thread memory context in precheck and blocks similar draft", async () => {
+    const now = new Date("2026-02-23T00:00:00.000Z");
+    const intents = [
+      {
+        id: "intent-2",
+        type: "reply" as const,
+        sourceTable: "comments" as const,
+        sourceId: "comment-2",
+        createdAt: now.toISOString(),
+        payload: {
+          postId: "post-2",
+          threadId: "thread-2",
+          boardId: "board-1",
+        },
+      },
+    ];
+
+    const store = new InMemoryTaskQueueStore();
+
+    const precheck = createReplyDispatchPrecheck({
+      policy: {
+        ...loadDispatcherPolicy(),
+        precheckEnabled: true,
+        precheckSimilarityThreshold: 0.9,
+      },
+      deps: {
+        checkEligibility: async () => ({ allowed: true }),
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: 1,
+            communityMemoryVersion: "c1",
+            safetyMemoryVersion: "s1",
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: "thread-2",
+            boardId: "board-1",
+            taskType: "reply",
+            ttlSeconds: 3600,
+            maxItems: 10,
+            entries: [
+              {
+                id: "m-1",
+                key: "recent",
+                value: "same text",
+                metadata: {},
+                ttlSeconds: 3600,
+                maxItems: 10,
+                expiresAt: "2026-02-23T01:00:00.000Z",
+                updatedAt: "2026-02-23T00:10:00.000Z",
+              },
+            ],
+          },
+        }),
+        generateDraft: async () => ({
+          text: "same text",
+          safetyContext: { recentPersonaReplies: [] },
+        }),
+        runSafetyCheck: async ({ text, context }) => {
+          if (context?.recentPersonaReplies.includes(text)) {
+            return {
+              allowed: false,
+              reasonCode: SafetyReasonCode.similarToRecentReply,
+              reason: "blocked by thread memory",
+            };
+          }
+          return { allowed: true };
+        },
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const dispatch = await dispatchIntents({
+      intents,
+      personas: [{ id: "persona-1", status: "active" }],
+      policy: { ...loadDispatcherPolicy(), precheckEnabled: true, replyEnabled: true },
+      now,
+      precheck,
+      makeTaskId: () => "task-2",
+      createTask: async (task) => {
+        store.upsert(task);
+      },
+    });
+
+    expect(dispatch[0]?.dispatched).toBe(false);
+    expect(dispatch[0]?.reasons).toContain("PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY");
+    expect(store.snapshot()).toHaveLength(0);
   });
 });

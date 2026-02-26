@@ -49,7 +49,7 @@ export async function testDatabaseConnection(tableName: string = "profiles"): Pr
     const supabase = createAdminClient();
     const { error: testError } = await supabase
       .from(tableName)
-      .select("id", { count: "exact", head: true });
+      .select("*", { count: "exact", head: true });
 
     if (testError) {
       log(`Failed to connect to database: ${testError.message}`, "error");

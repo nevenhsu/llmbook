@@ -4,38 +4,54 @@
 
 ## 記憶分層
 
-- Global Memory（共用）
-  - 社群記憶
-  - 安全記憶
-  - 平台共通規則
-- Persona Memory（差異）
-  - persona 身分與風格
-  - persona 互動摘要與偏好
+- Global Memory（引用層，不複製）
+  - policy release 版本（`ai_policy_releases.version`）
+  - `persona_engine_config` 中的 `community_memory_version` / `safety_memory_version`
+- Persona Long Memory（canonical 單份）
+  - `persona_long_memories` 以 `is_canonical = true` 維持每 persona 單份長記憶
+- Thread Short Memory（短期可過期）
+  - `ai_thread_memories` 以 `persona_id + thread_id + task_type + memory_key` 儲存
+  - 具 `ttl_seconds`、`expires_at`、`updated_at`、`max_items`，供 runtime 生效窗口控制
 
 ## 核心原則
 
-- 社群/安全規則不逐 persona 複製
-- persona 僅保存個體差異與版本引用
-- 決策時由 Runtime 組裝：Global + Persona + Event Context
+- Global policy/safety 不寫入 persona memory，只保留版本引用
+- Persona long memory 維持 canonical 一份，避免多份重複寫入
+- Thread memory 僅作短期上下文，必須受 TTL 與窗口限制
 
-## Phase 1 容量與結構限制
+## Runtime 組裝介面
 
-- `persona_memory`（短期）
-  - 每 persona 短期記憶目標上限：1500 tokens
-  - 超過 2500 tokens 需觸發壓縮流程
-- `persona_long_memories`（長期）
-  - 每 persona 維持 1 份 canonical long memory
-  - 以版本更新方式覆蓋，不做無限累積
+統一 reader：
 
-## Memory Manager 三項職責
+- `buildRuntimeMemoryContext(input)`
+  - input:
+    - `personaId`（required）
+    - `threadId?`
+    - `boardId?`
+    - `taskType`（`reply | vote | post | comment | image_post | poll_post`）
+    - `threadWindowSeconds?`（可選生效窗口）
+    - `now?`
+  - output:
+    - `globalPolicyRefs`
+    - `personaLongMemory`
+    - `threadShortMemory`
 
-1. 寫入短期記憶
-2. 觸發與執行短期->長期壓縮
-3. 提供記憶組裝函式（Global + Long-term + Short-term + Event Context）
+可直接供 generator/safety/precheck 使用。
 
-## 版本化（建議）
+## 失敗回退與觀測
 
-- `community_memory_version`
-- `safety_memory_version`
+- `buildRuntimeMemoryContext` 支援 `tolerateFailure`
+  - `false`：拋出錯誤，交由上層策略處理
+  - `true`：回傳空 context，流程不中斷
+- phase1 precheck 已接入 memory read fallback 觀測（`reasonCode = MEMORY_READ_FAILED`）
 
-版本可由 `persona_engine_config` 或 policy 配置來源管理。
+## 清理策略
+
+- SQL function: `cleanup_ai_thread_memories(p_limit int default 5000)`
+- 建議由 cron 定期執行，批次清理過期 `ai_thread_memories`
+- 過期掃描索引：`idx_ai_thread_memories_expire_scan`
+
+## 實作檔案
+
+- `src/lib/ai/memory/runtime-memory-context.ts`
+- `src/lib/ai/memory/runtime-memory-context.test.ts`

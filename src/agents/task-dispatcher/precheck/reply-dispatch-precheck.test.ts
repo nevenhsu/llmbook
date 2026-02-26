@@ -20,6 +20,22 @@ describe("createReplyDispatchPrecheck", () => {
         checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: null,
+            communityMemoryVersion: null,
+            safetyMemoryVersion: null,
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
         generateDraft: async () => ({
           text: "same text",
           safetyContext: { recentPersonaReplies: ["same text"] },
@@ -56,6 +72,22 @@ describe("createReplyDispatchPrecheck", () => {
         checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: null,
+            communityMemoryVersion: null,
+            safetyMemoryVersion: null,
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
         generateDraft: async () => ({
           text: "new wording with extra details",
           safetyContext: { recentPersonaReplies: ["old wording baseline"] },
@@ -91,6 +123,22 @@ describe("createReplyDispatchPrecheck", () => {
         checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: null,
+            communityMemoryVersion: null,
+            safetyMemoryVersion: null,
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
         generateDraft: async () => ({
           text: "candidate",
           safetyContext: { recentPersonaReplies: [] },
@@ -123,6 +171,22 @@ describe("createReplyDispatchPrecheck", () => {
         checkEligibility: async () => ({ allowed: true }),
         countRecentReplies: async ({ personaId }) => (personaId === "persona-a" ? 1 : 0),
         getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: null,
+            communityMemoryVersion: null,
+            safetyMemoryVersion: null,
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
         generateDraft: async () => ({
           text: "candidate",
           safetyContext: { recentPersonaReplies: [] },
@@ -173,6 +237,22 @@ describe("createReplyDispatchPrecheck", () => {
         }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: null,
+            communityMemoryVersion: null,
+            safetyMemoryVersion: null,
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
         generateDraft: async () => ({ text: "n/a" }),
         runSafetyCheck: async () => ({ allowed: true }),
         recordSafetyEvent: async () => {},
@@ -206,6 +286,22 @@ describe("createReplyDispatchPrecheck", () => {
         }),
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => ({
+          globalPolicyRefs: {
+            policyVersion: null,
+            communityMemoryVersion: null,
+            safetyMemoryVersion: null,
+          },
+          personaLongMemory: null,
+          threadShortMemory: {
+            threadId: null,
+            boardId: null,
+            taskType: "reply",
+            ttlSeconds: 0,
+            maxItems: 0,
+            entries: [],
+          },
+        }),
         generateDraft: async () => ({ text: "n/a" }),
         runSafetyCheck: async () => ({ allowed: true }),
         recordSafetyEvent: async () => {},
@@ -227,5 +323,48 @@ describe("createReplyDispatchPrecheck", () => {
 
     expect(result.allowed).toBe(false);
     expect(result.reasons).toContain("PERSONA_NOT_ACTIVE");
+  });
+
+  it("falls back when memory read fails and remains dispatchable", async () => {
+    const memoryFallbackCalls: Array<{ reasonCode: string; metadata?: Record<string, unknown> }> =
+      [];
+
+    const precheck = createReplyDispatchPrecheck({
+      policy: buildPolicy(),
+      deps: {
+        checkEligibility: async () => ({ allowed: true }),
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => {
+          throw new Error("memory read failed");
+        },
+        generateDraft: async () => ({
+          text: "candidate",
+          safetyContext: { recentPersonaReplies: [] },
+        }),
+        runSafetyCheck: async () => ({ allowed: true }),
+        recordSafetyEvent: async () => {},
+        recordMemoryFallback: async (input) => {
+          memoryFallbackCalls.push({ reasonCode: input.reasonCode, metadata: input.metadata });
+        },
+      },
+    });
+
+    const result = await precheck({
+      now: new Date("2026-02-24T00:00:00.000Z"),
+      persona: { id: "persona-a", status: "active" },
+      intent: {
+        id: "intent-8",
+        type: "reply",
+        sourceTable: "posts",
+        sourceId: "post-2",
+        createdAt: "2026-02-24T00:00:00.000Z",
+        payload: { postId: "post-2", threadId: "thread-2" },
+      },
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(memoryFallbackCalls).toHaveLength(1);
+    expect(memoryFallbackCalls[0]?.reasonCode).toBe("MEMORY_READ_FAILED");
   });
 });
