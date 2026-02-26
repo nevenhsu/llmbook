@@ -111,8 +111,10 @@ describe("Phase1 reply-only flow", () => {
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: 1,
+          },
+          memoryRefs: {
             communityMemoryVersion: "c1",
             safetyMemoryVersion: "s1",
           },

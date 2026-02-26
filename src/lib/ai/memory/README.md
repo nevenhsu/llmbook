@@ -21,7 +21,7 @@
 
 ## Runtime 組裝介面
 
-統一 reader：
+統一 provider：
 
 - `buildRuntimeMemoryContext(input)`
   - input:
@@ -31,19 +31,33 @@
     - `taskType`（`reply | vote | post | comment | image_post | poll_post`）
     - `threadWindowSeconds?`（可選生效窗口）
     - `now?`
+    - `tolerateFailure?`
   - output:
-    - `globalPolicyRefs`
+    - `policyRefs`
+    - `memoryRefs`
     - `personaLongMemory`
     - `threadShortMemory`
 
 可直接供 generator/safety/precheck 使用。
 
+## Runtime Contract（組裝順序）
+
+- 安全提示組裝順序固定為：
+  - `thread -> persona -> refs(policy/memory) -> existingHints`
+- `policyRefs` 與 `memoryRefs` 分離：
+  - `policyRefs.policyVersion`：只表示 policy release 引用
+  - `memoryRefs.communityMemoryVersion / safetyMemoryVersion`：只表示 memory 版本引用
+- schema normalize（缺欄位容錯）：
+  - global/persona/thread 任一層遇到缺欄位或型別錯誤，會 normalize 或丟棄無效項，並透過 reason code 可觀測
+
 ## 失敗回退與觀測
 
-- `buildRuntimeMemoryContext` 支援 `tolerateFailure`
-  - `false`：拋出錯誤，交由上層策略處理
-  - `true`：回傳空 context，流程不中斷
-- phase1 precheck 已接入 memory read fallback 觀測（`reasonCode = MEMORY_READ_FAILED`）
+- `CachedRuntimeMemoryProvider` 具 TTL cache（預設 30s）與 layer fallback：
+  - global/persona 讀取失敗：優先 fallback `last-known-good`
+  - thread 讀取失敗：降級為空 entries，不阻斷流程（`MEMORY_THREAD_MISSING`）
+- `tolerateFailure = true` 時，若無可回退資料，回傳空 context；`false` 時保留拋錯給上層處理
+- 可觀測事件欄位（最小集）：
+  - `layer`, `operation`, `reasonCode`, `entityId`, `occurredAt`
 
 ## 清理策略
 
@@ -51,7 +65,22 @@
 - 建議由 cron 定期執行，批次清理過期 `ai_thread_memories`
 - 過期掃描索引：`idx_ai_thread_memories_expire_scan`
 
+## Governance（最小規則）
+
+- thread 記憶 TTL/窗口裁剪（過期或超出窗口即移除）
+- thread dedupe + low-value 移除（可配置 `minValueLength`）
+- thread max items 上限（provider governance cap）
+- persona long memory token budget 裁剪（可配置）
+- 規則命中統一 `reasonCode = MEMORY_TRIM_APPLIED`
+
 ## 實作檔案
 
 - `src/lib/ai/memory/runtime-memory-context.ts`
 - `src/lib/ai/memory/runtime-memory-context.test.ts`
+
+## 驗證命令
+
+- `npm run ai:memory:verify -- --personaId <personaId> [--threadId <threadId>] [--boardId <boardId>] [--taskType reply] [--tolerateFailure]`
+  - 輸出 active memory refs
+  - 輸出各層有效載入狀態
+  - 輸出最近一次 trim/fallback 狀態

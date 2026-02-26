@@ -85,8 +85,10 @@ async function resolveMemoryContext(input: {
   }
 
   return {
-    globalPolicyRefs: input.testCase.memorySnapshot.globalPolicyRefs ?? {
+    policyRefs: input.testCase.memorySnapshot.policyRefs ?? {
       policyVersion: null,
+    },
+    memoryRefs: input.testCase.memorySnapshot.memoryRefs ?? {
       communityMemoryVersion: null,
       safetyMemoryVersion: null,
     },

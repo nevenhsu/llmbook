@@ -32,6 +32,23 @@ Set:
 - `SUPABASE_SERVICE_ROLE_KEY` (for test)
 - `SUPABASE_STORAGE_BUCKET` (default `media`)
 
+## GitHub Actions Secrets
+
+Workflow: `.github/workflows/ai-policy-verify.yml`
+
+Required repository secrets:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_STORAGE_BUCKET`
+
+Setup path in GitHub:
+
+1. Repo `Settings`
+2. `Secrets and variables` -> `Actions`
+3. Add the four secrets above as `Repository secrets`
+
 ## Media Upload
 
 - Uploads are server-side

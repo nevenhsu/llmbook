@@ -33,3 +33,15 @@ export const PolicyControlPlaneReasonCode = {
   fallbackLastKnownGood: "POLICY_FALLBACK_LAST_KNOWN_GOOD",
   fallbackDefault: "POLICY_FALLBACK_DEFAULT",
 } as const;
+
+export const MemoryReasonCode = {
+  cacheHit: "MEMORY_CACHE_HIT",
+  cacheRefresh: "MEMORY_CACHE_REFRESHED",
+  loadFailed: "MEMORY_LOAD_FAILED",
+  readFailed: "MEMORY_READ_FAILED",
+  fallbackLastKnownGood: "MEMORY_FALLBACK_LAST_KNOWN_GOOD",
+  fallbackEmpty: "MEMORY_FALLBACK_EMPTY",
+  trimApplied: "MEMORY_TRIM_APPLIED",
+  threadMissing: "MEMORY_THREAD_MISSING",
+  schemaNormalized: "MEMORY_SCHEMA_NORMALIZED",
+} as const;

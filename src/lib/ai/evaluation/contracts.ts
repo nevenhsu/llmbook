@@ -5,8 +5,9 @@ import type {
   TaskIntent,
 } from "@/lib/ai/contracts/task-intents";
 import type {
-  RuntimeGlobalPolicyRefs,
+  RuntimeMemoryRefs,
   RuntimeMemoryContext,
+  RuntimePolicyRefs,
   RuntimeThreadMemoryEntry,
 } from "@/lib/ai/memory/runtime-memory-context";
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
@@ -27,7 +28,8 @@ export type ReplayExpected = {
 };
 
 export type ReplayMemorySnapshot = {
-  globalPolicyRefs?: RuntimeGlobalPolicyRefs;
+  policyRefs?: RuntimePolicyRefs;
+  memoryRefs?: RuntimeMemoryRefs;
   personaLongMemory?: {
     id?: string;
     content: string;

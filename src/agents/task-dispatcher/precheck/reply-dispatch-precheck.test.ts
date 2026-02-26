@@ -21,8 +21,10 @@ describe("createReplyDispatchPrecheck", () => {
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: null,
+          },
+          memoryRefs: {
             communityMemoryVersion: null,
             safetyMemoryVersion: null,
           },
@@ -73,8 +75,10 @@ describe("createReplyDispatchPrecheck", () => {
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: null,
+          },
+          memoryRefs: {
             communityMemoryVersion: null,
             safetyMemoryVersion: null,
           },
@@ -124,8 +128,10 @@ describe("createReplyDispatchPrecheck", () => {
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: null,
+          },
+          memoryRefs: {
             communityMemoryVersion: null,
             safetyMemoryVersion: null,
           },
@@ -172,8 +178,10 @@ describe("createReplyDispatchPrecheck", () => {
         countRecentReplies: async ({ personaId }) => (personaId === "persona-a" ? 1 : 0),
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: null,
+          },
+          memoryRefs: {
             communityMemoryVersion: null,
             safetyMemoryVersion: null,
           },
@@ -238,8 +246,10 @@ describe("createReplyDispatchPrecheck", () => {
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: null,
+          },
+          memoryRefs: {
             communityMemoryVersion: null,
             safetyMemoryVersion: null,
           },
@@ -287,8 +297,10 @@ describe("createReplyDispatchPrecheck", () => {
         countRecentReplies: async () => 0,
         getLatestReplyAtOnPost: async () => null,
         buildRuntimeMemoryContext: async () => ({
-          globalPolicyRefs: {
+          policyRefs: {
             policyVersion: null,
+          },
+          memoryRefs: {
             communityMemoryVersion: null,
             safetyMemoryVersion: null,
           },
@@ -366,5 +378,74 @@ describe("createReplyDispatchPrecheck", () => {
     expect(result.allowed).toBe(true);
     expect(memoryFallbackCalls).toHaveLength(1);
     expect(memoryFallbackCalls[0]?.reasonCode).toBe("MEMORY_READ_FAILED");
+  });
+
+  it("uses refreshed memory refs across phase1 precheck runs", async () => {
+    const calls: string[][] = [];
+    let cursor = 0;
+    const snapshots = [
+      {
+        policyRefs: { policyVersion: 1 },
+        memoryRefs: { communityMemoryVersion: "c1", safetyMemoryVersion: "s1" },
+      },
+      {
+        policyRefs: { policyVersion: 2 },
+        memoryRefs: { communityMemoryVersion: "c2", safetyMemoryVersion: "s2" },
+      },
+    ];
+
+    const precheck = createReplyDispatchPrecheck({
+      policy: buildPolicy(),
+      deps: {
+        checkEligibility: async () => ({ allowed: true }),
+        countRecentReplies: async () => 0,
+        getLatestReplyAtOnPost: async () => null,
+        buildRuntimeMemoryContext: async () => {
+          const snapshot = snapshots[Math.min(cursor, snapshots.length - 1)];
+          cursor += 1;
+          return {
+            ...snapshot,
+            personaLongMemory: null,
+            threadShortMemory: {
+              threadId: "thread-1",
+              boardId: "board-1",
+              taskType: "reply",
+              ttlSeconds: 3600,
+              maxItems: 20,
+              entries: [],
+            },
+          };
+        },
+        generateDraft: async () => ({
+          text: "candidate",
+          safetyContext: { recentPersonaReplies: [] },
+        }),
+        runSafetyCheck: async ({ context }) => {
+          calls.push(context?.recentPersonaReplies ?? []);
+          return { allowed: true };
+        },
+        recordSafetyEvent: async () => {},
+      },
+    });
+
+    const run = async (id: string) =>
+      precheck({
+        now: new Date("2026-02-24T00:00:00.000Z"),
+        persona: { id: "persona-a", status: "active" },
+        intent: {
+          id,
+          type: "reply",
+          sourceTable: "posts",
+          sourceId: `post-${id}`,
+          createdAt: "2026-02-24T00:00:00.000Z",
+          payload: { postId: `post-${id}`, threadId: "thread-1", boardId: "board-1" },
+        },
+      });
+
+    await run("intent-v1");
+    await run("intent-v2");
+
+    expect(calls[0]?.join(" ")).toContain("policy:v1");
+    expect(calls[1]?.join(" ")).toContain("policy:v2");
   });
 });

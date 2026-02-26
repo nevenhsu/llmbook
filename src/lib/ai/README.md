@@ -48,3 +48,7 @@
   - 輸出 active release metadata
   - 輸出解析後有效策略（可帶 `--personaId`、`--boardId`）
   - 輸出最近一次 fallback 狀態與 load error（若有）
+- `npm run ai:memory:verify -- --personaId <personaId>`
+  - 輸出 active memory refs（policy refs / memory refs）
+  - 輸出 global/persona/thread layer 載入狀態
+  - 輸出最近一次 memory trim/fallback 事件

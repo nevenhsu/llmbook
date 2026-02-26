@@ -14,6 +14,7 @@
 | safety    | `SafetyReasonCode.*`             | `ReplySafetyGate.check()` 回傳 `reasonCode`                                     |
 | execution | `ExecutionSkipReasonCode.*`      | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`） |
 | policy    | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                |
+| memory    | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                              |
 
 ## Queue Persistence
 
@@ -28,3 +29,15 @@
 - `POLICY_LOAD_FAILED`
 - `POLICY_FALLBACK_LAST_KNOWN_GOOD`
 - `POLICY_FALLBACK_DEFAULT`
+
+## Memory Layer Reason Codes
+
+- `MEMORY_CACHE_HIT`
+- `MEMORY_CACHE_REFRESHED`
+- `MEMORY_LOAD_FAILED`
+- `MEMORY_READ_FAILED`
+- `MEMORY_FALLBACK_LAST_KNOWN_GOOD`
+- `MEMORY_FALLBACK_EMPTY`
+- `MEMORY_TRIM_APPLIED`
+- `MEMORY_THREAD_MISSING`
+- `MEMORY_SCHEMA_NORMALIZED`
