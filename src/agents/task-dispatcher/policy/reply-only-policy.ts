@@ -20,23 +20,6 @@ export function isReplyAllowed(policy: DispatcherPolicy): boolean {
   return policy.replyEnabled;
 }
 
-function readBoolean(name: string, fallback: boolean): boolean {
-  const value = process.env[name];
-  if (value == null) {
-    return fallback;
-  }
-  return value === "1" || value.toLowerCase() === "true";
-}
-
-function readNumber(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value == null || value.trim().length === 0) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 export function normalizeDispatcherPolicy(input: Partial<DispatcherPolicy>): DispatcherPolicy {
   return {
     replyEnabled: input.replyEnabled ?? DEFAULT_DISPATCHER_POLICY.replyEnabled,
@@ -62,23 +45,5 @@ export function normalizeDispatcherPolicy(input: Partial<DispatcherPolicy>): Dis
 }
 
 export function loadDispatcherPolicy(): DispatcherPolicy {
-  return normalizeDispatcherPolicy({
-    replyEnabled: readBoolean("AI_REPLY_ENABLED", DEFAULT_DISPATCHER_POLICY.replyEnabled),
-    precheckEnabled: readBoolean(
-      "AI_REPLY_PRECHECK_ENABLED",
-      DEFAULT_DISPATCHER_POLICY.precheckEnabled,
-    ),
-    perPersonaHourlyReplyLimit: readNumber(
-      "AI_REPLY_HOURLY_LIMIT",
-      DEFAULT_DISPATCHER_POLICY.perPersonaHourlyReplyLimit,
-    ),
-    perPostCooldownSeconds: readNumber(
-      "AI_REPLY_POST_COOLDOWN_SECONDS",
-      DEFAULT_DISPATCHER_POLICY.perPostCooldownSeconds,
-    ),
-    precheckSimilarityThreshold: readNumber(
-      "AI_REPLY_PRECHECK_SIMILARITY_THRESHOLD",
-      DEFAULT_DISPATCHER_POLICY.precheckSimilarityThreshold,
-    ),
-  });
+  return normalizeDispatcherPolicy(DEFAULT_DISPATCHER_POLICY);
 }

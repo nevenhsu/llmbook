@@ -63,7 +63,7 @@
 - [x] 定義 `ModelAdapter.generateText()` 契約（Vercel AI SDK Core shape 相容）
 - [x] 實作 `MockModelAdapter` 三模式（success/empty/throw）供測試
 - [x] 實作 `VercelAiCoreAdapter` 最小可用（grok env 路徑 + fail-safe fallback）
-- [x] Runtime Integration：reply generation 改為 prompt builder -> model adapter -> text post-process，保留 deterministic compose fallback
+- [x] Runtime Integration：reply generation 改為 prompt builder -> model adapter -> text post-process，失敗時回空輸出
 - [x] 統一 reason code（含 `PROMPT_BUILD_SUCCESS`/`PROMPT_BUILD_FAILED`/`MODEL_CALL_FAILED`/`MODEL_FALLBACK_USED`）並落在 `src/lib/ai/reason-codes.ts`
 - [x] 補單元/整合/回歸測試（prompt 順序、缺失降級、model empty/error fallback、phase1 on/off 跑通）
 - [x] 新增 `npm run ai:prompt:verify -- --personaId <id> --postId <id>` 與摘要輸出
@@ -90,7 +90,7 @@
 - [x] 實作 reply phase1 最小工具集（`get_thread_context`/`get_persona_memory`/`get_global_policy`/`create_reply`）與 mock provider
 - [x] 在 model adapter 加入 tool call execute loop（含 max iterations、timeout、fail-safe fallback）
 - [x] 統一 tool reason codes 與最小事件欄位（`layer/operation/reasonCode/entityId/occurredAt`）
-- [x] Runtime 整合：reply prompt runtime 接入 tool loop，確保不中斷主流程且保留現有 deterministic fallback
+- [x] Runtime 整合：reply prompt runtime 接入 tool loop，確保不中斷主流程且失敗時回空輸出
 - [x] 測試補齊：單元/整合/回歸（tool success / schema validation fail / handler throw / loop timeout）
 - [x] 新增 verify 指令：`npm run ai:tool:verify`
 - [x] 文件更新：`README.md`、`src/lib/ai/REASON_CODES.md`、`src/agents/phase-1-reply-vote/README.md`
@@ -110,4 +110,39 @@
   - `npm test -- src/lib/ai/prompt-runtime/tool-registry.test.ts src/lib/ai/prompt-runtime/model-adapter.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts`（16 tests passed）
   - `npm test -- src/agents/phase-1-reply-vote/orchestrator/phase1-reply-flow.integration.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-execution-agent.test.ts src/lib/ai/safety/reply-safety-gate.test.ts src/lib/ai/policy/policy-control-plane.test.ts`（28 tests passed）
   - `npm run ai:tool:verify`（輸出 loop iterations/tool call summary/recent tool events）
-- 回歸結論：phase1 policy/safety/review gate 測試仍通過，主流程在 tool loop 異常時仍可 deterministic fallback。
+- 回歸結論：phase1 policy/safety/review gate 測試仍通過，主流程在 tool loop 異常時維持空輸出 fail-safe。
+
+---
+
+# LLM Provider Runtime 正式化（Phase1）Todo
+
+## Plan
+
+- [x] 對齊 `plans/ai-minion-army/*` 與現有 phase1 model/tool runtime，鎖定最小侵入整合點
+- [x] 新增 LLM Provider Contract 與 Registry（`providerId/modelId/capabilities/generateText` + default provider + task routing）
+- [x] 實作最小 provider 集（`mock` + `xai`）與統一輸出 shape（`text/finishReason/usage/error`）
+- [x] 新增 `invokeLLM()` 單一入口（timeout/retry/fallback/fail-safe），含 usage normalize 與最小 cost 摘要
+- [x] 統一 provider runtime reason code 與事件欄位（`layer/operation/reasonCode/entityId/occurredAt`）
+- [x] 在 reply phase1 runtime 接入 `invokeLLM`（保留既有 tool loop 與 policy/safety/review gate 語意）
+- [x] 補測試：unit/integration/regression（primary success、primary fail fallback success、double fail、timeout、usage missing normalize）
+- [x] 新增 verify 指令：`npm run ai:provider:verify`
+- [x] 更新文件：`README.md`、`src/lib/ai/REASON_CODES.md`、`src/agents/phase-1-reply-vote/README.md`、`src/lib/ai/README.md`
+- [x] Verification：執行目標測試與 verify 指令，補上 Review 結果
+
+## Check-in
+
+- 會以新 `llm runtime` 模組增量實作，盡量不改既有 orchestrator/memory/soul/tool registry。
+- phase1 仍維持「prompt builder -> tool loop -> fallback」語意，只把底層模型呼叫收斂到 `invokeLLM`。
+
+## Review
+
+- 實作摘要：
+  - 新增 `src/lib/ai/llm/*`：Provider contract、registry、`mock`/`xai` providers、`invokeLLM`（timeout/retry/fallback/fail-safe）。
+  - `VercelAiCoreAdapter` 改為內部走 `invokeLLM`，phase1 runtime 介面與 tool loop 保持不變。
+  - 新增 provider runtime reason codes 與事件層（`provider_runtime`），統一最小事件欄位。
+  - usage/cost 最小摘要已在 `invokeLLM` 與 verify 指令輸出。
+- 測試與驗證：
+  - `npm test -- src/lib/ai/llm/invoke-llm.test.ts src/lib/ai/prompt-runtime/model-adapter.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts src/agents/phase-1-reply-vote/orchestrator/phase1-reply-flow.integration.test.ts`（25 tests passed）
+  - `npm run ai:provider:verify`（輸出 active provider/model、fallback path、usage/cost summary、recent provider events）
+- 環境限制：
+  - `npm install ai @ai-sdk/xai` 因網路限制（`ENOTFOUND registry.npmjs.org`）無法安裝；目前 `xai-provider` 以「優先嘗試 SDK，未安裝時 fallback HTTP」方式保持可運作。

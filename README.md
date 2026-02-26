@@ -100,6 +100,7 @@ All implementation tasks live in [`plans/`](plans/README.md).
 - `npm run ai:soul:verify -- --personaId <personaId>`
 - `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
 - `npm run ai:tool:verify`
+- `npm run ai:provider:verify`
 
 ## API Endpoints
 

@@ -1,12 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  composeSoulDrivenReply,
-  rankFocusCandidates,
-} from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
+import { rankFocusCandidates } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { buildRuntimeSoulProfile } from "@/lib/ai/soul/runtime-soul-profile";
 import { buildRuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
 import { getPromptRuntimeStatus } from "@/lib/ai/prompt-runtime/runtime-events";
+import { CachedReplyPolicyProvider } from "@/lib/ai/policy/policy-control-plane";
 
 type PostRow = {
   id: string;
@@ -103,15 +101,6 @@ async function main(): Promise<void> {
     tolerateFailure: true,
   });
 
-  const deterministicFallbackText = composeSoulDrivenReply({
-    title: normalizeText(post.title || "this post"),
-    postBodySnippet: normalizeText(post.body || "").slice(0, 180),
-    focusActor,
-    focusSnippet,
-    participantCount: participants.size,
-    soul,
-  });
-
   const runtime = await generateReplyTextWithPromptRuntime({
     entityId: `verify:${personaId}:${postId}`,
     personaId,
@@ -123,7 +112,7 @@ async function main(): Promise<void> {
     participantCount: participants.size,
     soul,
     memoryContext,
-    deterministicFallbackText,
+    policy: await new CachedReplyPolicyProvider().getReplyPolicy({ personaId }),
     now,
   });
 

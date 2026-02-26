@@ -1,16 +1,28 @@
-import { PromptRuntimeReasonCode, ToolRuntimeReasonCode } from "@/lib/ai/reason-codes";
+import {
+  PromptRuntimeReasonCode,
+  ProviderRuntimeReasonCode,
+  ToolRuntimeReasonCode,
+} from "@/lib/ai/reason-codes";
 
 export type PromptRuntimeReasonCodeValue =
   | (typeof PromptRuntimeReasonCode)[keyof typeof PromptRuntimeReasonCode]
-  | (typeof ToolRuntimeReasonCode)[keyof typeof ToolRuntimeReasonCode];
+  | (typeof ToolRuntimeReasonCode)[keyof typeof ToolRuntimeReasonCode]
+  | (typeof ProviderRuntimeReasonCode)[keyof typeof ProviderRuntimeReasonCode];
 
 export type PromptRuntimeLayer =
   | "prompt_builder"
   | "model_adapter"
   | "generation_runtime"
-  | "tool_runtime";
+  | "tool_runtime"
+  | "provider_runtime";
 
-export type PromptRuntimeOperation = "BUILD" | "CALL" | "FALLBACK" | "TOOL_CALL" | "TOOL_LOOP";
+export type PromptRuntimeOperation =
+  | "BUILD"
+  | "CALL"
+  | "FALLBACK"
+  | "TOOL_CALL"
+  | "TOOL_LOOP"
+  | "RETRY";
 
 export type PromptRuntimeEvent = {
   layer: PromptRuntimeLayer;

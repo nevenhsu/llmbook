@@ -1,10 +1,10 @@
-import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
+import type { DispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 import { createReplyPhase1ToolRegistry } from "@/agents/phase-1-reply-vote/orchestrator/reply-phase1-tools";
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { buildPhase1ReplyPrompt, type PromptBlock } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
-  VercelAiCoreAdapter,
+  LlmRuntimeAdapter,
   generateTextWithToolLoop,
   recordModelFallbackUsed,
   type ModelGenerateTextOutput,
@@ -22,7 +22,7 @@ export type ReplyPromptRuntimeInput = {
   participantCount: number;
   soul: RuntimeSoulContext;
   memoryContext: RuntimeMemoryContext | null;
-  deterministicFallbackText: string;
+  policy: DispatcherPolicy;
   modelAdapter?: ModelAdapter;
   now?: Date;
 };
@@ -101,8 +101,7 @@ function formatMemoryBlock(memoryContext: RuntimeMemoryContext | null): string |
   ].join("\n");
 }
 
-function formatPolicyBlock(): string {
-  const policy = loadDispatcherPolicy();
+function formatPolicyBlock(policy: DispatcherPolicy): string {
   return [
     "Phase1 policy:",
     `- replyEnabled: ${String(policy.replyEnabled)}`,
@@ -146,14 +145,14 @@ export async function generateReplyTextWithPromptRuntime(
   input: ReplyPromptRuntimeInput,
 ): Promise<ReplyPromptRuntimeResult> {
   const now = input.now ?? new Date();
-  const modelAdapter = input.modelAdapter ?? new VercelAiCoreAdapter();
+  const modelAdapter = input.modelAdapter ?? new LlmRuntimeAdapter();
 
   const prompt = await buildPhase1ReplyPrompt({
     entityId: input.entityId,
     now,
     systemBaseline:
       "You are a phase1 reply agent. Be accurate, concise, and constructive. Keep language natural.",
-    policyText: formatPolicyBlock(),
+    policyText: formatPolicyBlock(input.policy),
     soulText: formatSoulBlock(input.soul),
     memoryText: formatMemoryBlock(input.memoryContext),
     taskContextText: formatTaskContext(input),
@@ -169,7 +168,7 @@ export async function generateReplyTextWithPromptRuntime(
   try {
     if (!toolEnabled) {
       modelResult = await modelAdapter.generateText({
-        model: process.env.AI_MODEL_NAME ?? "grok-2-latest",
+        model: process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning",
         prompt: prompt.prompt,
         messages: prompt.messages,
         maxOutputTokens: 320,
@@ -178,6 +177,7 @@ export async function generateReplyTextWithPromptRuntime(
           entityId: input.entityId,
           personaId: input.personaId,
           postId: input.postId,
+          taskType: "reply",
           promptBlockOrder: prompt.blocks.map((block) => block.name),
           toolRuntimeEnabled: false,
         },
@@ -193,6 +193,7 @@ export async function generateReplyTextWithPromptRuntime(
           focusSnippet: input.focusSnippet,
           participantCount: input.participantCount,
           memoryContext: input.memoryContext,
+          policy: input.policy,
         },
         allowlist,
       });
@@ -200,7 +201,7 @@ export async function generateReplyTextWithPromptRuntime(
       const toolLoop = await generateTextWithToolLoop({
         adapter: modelAdapter,
         modelInput: {
-          model: process.env.AI_MODEL_NAME ?? "grok-2-latest",
+          model: process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning",
           prompt: prompt.prompt,
           messages: prompt.messages,
           maxOutputTokens: 320,
@@ -209,6 +210,7 @@ export async function generateReplyTextWithPromptRuntime(
             entityId: input.entityId,
             personaId: input.personaId,
             postId: input.postId,
+            taskType: "reply",
             promptBlockOrder: prompt.blocks.map((block) => block.name),
             toolRuntimeEnabled: true,
           },
@@ -227,7 +229,7 @@ export async function generateReplyTextWithPromptRuntime(
       text: "",
       finishReason: "error",
       provider: "unknown",
-      model: process.env.AI_MODEL_NAME ?? "grok-2-latest",
+      model: process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning",
       errorMessage: error instanceof Error ? error.message : String(error),
     };
   }
@@ -260,7 +262,7 @@ export async function generateReplyTextWithPromptRuntime(
   });
 
   return {
-    text: input.deterministicFallbackText,
+    text: "",
     usedFallback: true,
     fallbackReason,
     promptBlocks: prompt.blocks,

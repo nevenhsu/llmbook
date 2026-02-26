@@ -10,6 +10,10 @@ import {
 } from "@/lib/ai/soul/runtime-soul-profile";
 import { buildRuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
+import {
+  CachedReplyPolicyProvider,
+  type ReplyPolicyProvider,
+} from "@/lib/ai/policy/policy-control-plane";
 
 type PostRow = {
   id: string;
@@ -159,17 +163,20 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
   private readonly recordSoulApplied: typeof recordRuntimeSoulApplied;
   private readonly loadRuntimeMemory: typeof buildRuntimeMemoryContext;
   private readonly modelAdapter?: ModelAdapter;
+  private readonly policyProvider: ReplyPolicyProvider;
 
   public constructor(options?: {
     loadRuntimeSoul?: typeof buildRuntimeSoulProfile;
     recordSoulApplied?: typeof recordRuntimeSoulApplied;
     loadRuntimeMemory?: typeof buildRuntimeMemoryContext;
     modelAdapter?: ModelAdapter;
+    policyProvider?: ReplyPolicyProvider;
   }) {
     this.loadRuntimeSoul = options?.loadRuntimeSoul ?? buildRuntimeSoulProfile;
     this.recordSoulApplied = options?.recordSoulApplied ?? recordRuntimeSoulApplied;
     this.loadRuntimeMemory = options?.loadRuntimeMemory ?? buildRuntimeMemoryContext;
     this.modelAdapter = options?.modelAdapter;
+    this.policyProvider = options?.policyProvider ?? new CachedReplyPolicyProvider();
   }
 
   public async generate(task: QueueTask): Promise<{
@@ -269,15 +276,6 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     const focusActor = focusComment ? actorLabel(focusComment) : actorLabel(post);
     const participantCount = participants.size;
     const soul = await this.loadRuntimeSoul({ personaId: task.personaId, tolerateFailure: true });
-    const deterministicText = composeSoulDrivenReply({
-      title,
-      postBodySnippet,
-      focusActor,
-      focusSnippet,
-      participantCount,
-      soul,
-    });
-
     const threadId = typeof task.payload.threadId === "string" ? task.payload.threadId : undefined;
     const boardId = typeof task.payload.boardId === "string" ? task.payload.boardId : undefined;
 
@@ -321,7 +319,10 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       participantCount,
       soul,
       memoryContext,
-      deterministicFallbackText: deterministicText,
+      policy: await this.policyProvider.getReplyPolicy({
+        personaId: task.personaId,
+        boardId,
+      }),
       modelAdapter: this.modelAdapter,
     });
 

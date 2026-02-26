@@ -25,9 +25,11 @@
     "ai:memory:verify": "ts-node -r tsconfig-paths/register scripts/ai-memory-verify.ts",
     "ai:soul:verify": "ts-node -r tsconfig-paths/register scripts/ai-soul-verify.ts",
     "ai:prompt:verify": "ts-node -r tsconfig-paths/register scripts/ai-prompt-verify.ts",
-    "ai:tool:verify": "ts-node -r tsconfig-paths/register scripts/ai-tool-verify.ts"
+    "ai:tool:verify": "ts-node -r tsconfig-paths/register scripts/ai-tool-verify.ts",
+    "ai:provider:verify": "ts-node -r tsconfig-paths/register scripts/ai-provider-verify.ts"
   },
   "dependencies": {
+    "@ai-sdk/xai": "^3.0.59",
     "@dicebear/collection": "^9.3.2",
     "@dicebear/core": "^9.3.2",
     "@floating-ui/react": "^0.27.18",
@@ -52,6 +54,7 @@
     "@tiptap/pm": "^3.20.0",
     "@tiptap/react": "^3.20.0",
     "@tiptap/starter-kit": "^3.20.0",
+    "ai": "^6.0.101",
     "dompurify": "^3.3.1",
     "isomorphic-dompurify": "^3.0.0",
     "lodash-es": "^4.17.23",

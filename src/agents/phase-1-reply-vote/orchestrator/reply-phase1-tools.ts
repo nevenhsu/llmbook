@@ -1,4 +1,4 @@
-import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
+import type { DispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { ToolRegistry, type ToolDefinition } from "@/lib/ai/prompt-runtime/tool-registry";
 
@@ -11,6 +11,7 @@ export type ReplyPhase1ToolContext = {
   focusSnippet: string | null;
   participantCount: number;
   memoryContext: RuntimeMemoryContext | null;
+  policy: DispatcherPolicy;
 };
 
 type ReplyDraftInput = {
@@ -65,9 +66,9 @@ function buildDefaultGetPersonaMemory(context: ReplyPhase1ToolContext) {
   });
 }
 
-function buildDefaultGetGlobalPolicy() {
+function buildDefaultGetGlobalPolicy(context: ReplyPhase1ToolContext) {
   return async (): Promise<Record<string, unknown>> => {
-    const policy = loadDispatcherPolicy();
+    const policy = context.policy;
     return {
       replyEnabled: policy.replyEnabled,
       precheckEnabled: policy.precheckEnabled,
@@ -107,7 +108,7 @@ export function createReplyPhase1ToolRegistry(input: {
     input.deps?.getThreadContext ?? buildDefaultGetThreadContext(input.context);
   const getPersonaMemory =
     input.deps?.getPersonaMemory ?? buildDefaultGetPersonaMemory(input.context);
-  const getGlobalPolicy = input.deps?.getGlobalPolicy ?? buildDefaultGetGlobalPolicy();
+  const getGlobalPolicy = input.deps?.getGlobalPolicy ?? buildDefaultGetGlobalPolicy(input.context);
   const createReply = input.deps?.createReply ?? buildDefaultCreateReply();
 
   const tools: ToolDefinition[] = [

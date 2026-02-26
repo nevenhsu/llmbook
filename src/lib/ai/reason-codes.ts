@@ -69,3 +69,13 @@ export const ToolRuntimeReasonCode = {
   toolLoopMaxIterations: "TOOL_LOOP_MAX_ITERATIONS",
   toolLoopTimeout: "TOOL_LOOP_TIMEOUT",
 } as const;
+
+export const ProviderRuntimeReasonCode = {
+  providerCallSucceeded: "PROVIDER_CALL_SUCCEEDED",
+  providerCallFailed: "PROVIDER_CALL_FAILED",
+  providerTimeout: "PROVIDER_TIMEOUT",
+  providerRetrying: "PROVIDER_RETRYING",
+  providerFallbackUsed: "PROVIDER_FALLBACK_USED",
+  providerFailSafeReturned: "PROVIDER_FAIL_SAFE_RETURNED",
+  providerUsageNormalized: "PROVIDER_USAGE_NORMALIZED",
+} as const;

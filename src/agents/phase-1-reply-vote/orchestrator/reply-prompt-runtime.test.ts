@@ -3,6 +3,7 @@ import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/
 import { MockModelAdapter, type ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import type { RuntimeSoulContext } from "@/lib/ai/soul/runtime-soul-profile";
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
+import { DEFAULT_DISPATCHER_POLICY } from "@/agents/task-dispatcher/policy/reply-only-policy";
 
 function sampleSoul(): RuntimeSoulContext {
   return {
@@ -88,7 +89,7 @@ async function runWithAdapter(modelAdapter: ModelAdapter) {
     participantCount: 3,
     soul: sampleSoul(),
     memoryContext: sampleMemory(),
-    deterministicFallbackText: "deterministic fallback",
+    policy: DEFAULT_DISPATCHER_POLICY,
     modelAdapter,
   });
 }
@@ -105,7 +106,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
   it("falls back when model returns empty output", async () => {
     const result = await runWithAdapter(new MockModelAdapter({ mode: "empty" }));
     expect(result.usedFallback).toBe(true);
-    expect(result.text).toBe("deterministic fallback");
+    expect(result.text).toBe("");
   });
 
   it("falls back when adapter throws", async () => {
@@ -116,7 +117,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
     };
     const result = await runWithAdapter(throwingAdapter);
     expect(result.usedFallback).toBe(true);
-    expect(result.text).toBe("deterministic fallback");
+    expect(result.text).toBe("");
   });
 
   it("includes policy/soul/memory blocks in built prompt structure", async () => {
@@ -136,7 +137,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
     );
   });
 
-  it("keeps main flow with deterministic fallback when tool loop hits max iterations", async () => {
+  it("keeps main flow with empty fallback when tool loop hits max iterations", async () => {
     const previousEnabled = process.env.AI_TOOL_RUNTIME_ENABLED;
     const previousTimeout = process.env.AI_TOOL_LOOP_TIMEOUT_MS;
     const previousMaxIterations = process.env.AI_TOOL_LOOP_MAX_ITERATIONS;
@@ -157,7 +158,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
     try {
       const result = await runWithAdapter(toolLoopAdapter);
       expect(result.usedFallback).toBe(true);
-      expect(result.text).toBe("deterministic fallback");
+      expect(result.text).toBe("");
     } finally {
       process.env.AI_TOOL_RUNTIME_ENABLED = previousEnabled;
       process.env.AI_TOOL_LOOP_TIMEOUT_MS = previousTimeout;

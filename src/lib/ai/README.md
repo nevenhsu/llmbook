@@ -14,6 +14,7 @@
 - `data-sources/`: Heartbeat 用資料來源契約與事件彙整
 - `memory/`: Global/Persona 記憶分層與 Runtime 組裝契約
 - `soul/`: Persona Soul Runtime（reader/normalize/fallback/summary）
+- `llm/`: Provider Registry + invokeLLM（timeout/retry/fallback/fail-safe + usage）
 - `prompt-runtime/`: Prompt builder + model adapter + fallback orchestration（phase1 reply）
 - `prompt-runtime/tool-registry.ts`: Tool contract + allowlist + schema validate + handler execute
 - `task-queue/`: `persona_tasks` 任務存取與狀態協議
@@ -70,6 +71,10 @@
   - 驗證 tool registry allowlist + schema contract 可執行
   - 驗證 tool loop iterations / timeout / fallback 狀態摘要
   - 輸出最近一次 tool runtime failure event（若有）
+- `npm run ai:provider:verify`
+  - 輸出 reply task active provider/model 與 fallback 路徑
+  - 輸出 invokeLLM usage 摘要與 attempts
+  - 輸出最近 provider runtime 事件
 
 ## Prompt Runtime Contract（Phase 2）
 
@@ -83,7 +88,7 @@
 - 每個 block 可獨立降級（fallback text + degrade reason），不得中斷主流程。
 - runtime 主線：
   - `prompt builder -> model adapter -> text post-process`
-  - model empty/error 時一律走 deterministic compose fallback
+  - model empty/error 時回空輸出並交由 execution skip/fuse 控制
   - policy/safety/review gate 位置與語意維持不變（仍由既有 dispatch/execution gate 控制）
 
 ## Model Adapter Contract（Vercel Core Shape Compatible）
@@ -98,10 +103,32 @@
   - 支援 allowlist、schema validate、handler execute、結果回餵
   - loop 上限：`maxIterations`
   - 超時保護：`timeoutMs`
-  - 失敗時回空輸出，由 runtime deterministic fallback 接手
+  - 失敗時回空輸出（由 execution skip + circuit breaker 控制）
 - 內建 adapter：
   - `MockModelAdapter`：`success` / `empty` / `throw`
-  - `VercelAiCoreAdapter`：先支援 grok env 路徑；env 不完整或呼叫失敗時 fail-safe（回空輸出，由 runtime fallback 接手）
+  - `LlmRuntimeAdapter`：內部統一走 `llm/invoke-llm.ts`（provider registry + timeout/retry/fallback/fail-safe）
+
+## LLM Provider Runtime Contract（Phase1）
+
+- Provider contract：
+  - `providerId`
+  - `modelId`
+  - `capabilities`
+  - `generateText(input)`
+- Registry：
+  - default provider/model
+  - task routing（`reply/vote/dispatch/generic`）
+  - per-task primary/secondary fallback route
+- 路由來源：
+  - 主來源：DB `ai_policy_releases.policy.capabilities.reply.llmRuntime`
+  - fallback：`AI_MODEL_*` env
+- invoke runtime：
+  - `invokeLLM()` 為唯一入口
+  - 支援 timeout、有限重試、primary->secondary fallback、fail-safe 空輸出
+  - 回傳統一輸出 shape：`text/finishReason/usage/error`（含 provider/model 與 usage 摘要）
+- xAI provider：
+  - 優先使用 Vercel AI SDK（`generateText` + `@ai-sdk/xai`）
+  - 直接使用 SDK responses 模型路徑
 
 ## Soul Runtime Contract（Phase 2）
 

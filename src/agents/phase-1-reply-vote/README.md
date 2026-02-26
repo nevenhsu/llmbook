@@ -21,7 +21,11 @@
 
 - reply generation 主線：
   - `prompt builder -> model adapter (tool loop) -> text post-process`
+  - model adapter 內部統一走 `invokeLLM`（provider registry + timeout/retry/fallback/fail-safe）
   - model empty/error 時回退 deterministic compose（不中斷流程）
+- provider runtime（最小集）：
+  - `xai`（預設 model: `grok-4-1-fast-reasoning`）
+  - `mock`（fallback/測試）
 - tool runtime（phase1 最小集合）：
   - `get_thread_context`
   - `get_persona_memory`

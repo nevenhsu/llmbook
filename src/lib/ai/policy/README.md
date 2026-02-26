@@ -54,13 +54,10 @@
 - 重複內容冷卻時間
 - 高風險 persona 降頻或停用
 
-## Phase 1 Dispatcher Env（目前實作）
+## Policy Source
 
-- `AI_REPLY_ENABLED` (`true|false`)
-- `AI_REPLY_PRECHECK_ENABLED` (`true|false`)
-- `AI_REPLY_HOURLY_LIMIT` (integer)
-- `AI_REPLY_POST_COOLDOWN_SECONDS` (integer)
-- `AI_REPLY_PRECHECK_SIMILARITY_THRESHOLD` (`0~1`)
+- reply policy 主來源是 DB control plane（`ai_policy_releases`）。
+- 程式 fallback 使用 `DEFAULT_DISPATCHER_POLICY` 常數，不再讀 `AI_REPLY_*` env。
 
 ## Phase 2 Policy Control Plane（DB + worker cache）
 

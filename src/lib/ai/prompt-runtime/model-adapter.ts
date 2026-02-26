@@ -1,4 +1,12 @@
 import { PromptRuntimeReasonCode, ToolRuntimeReasonCode } from "@/lib/ai/reason-codes";
+import { createDefaultLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
+import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
+import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
+import { createMockProvider, type MockProviderMode } from "@/lib/ai/llm/providers/mock-provider";
+import {
+  CachedLlmRuntimeConfigProvider,
+  type LlmRuntimeConfigProvider,
+} from "@/lib/ai/llm/runtime-config-provider";
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { PromptRuntimeEventRecorder } from "@/lib/ai/prompt-runtime/runtime-events";
 import { getPromptRuntimeRecorder } from "@/lib/ai/prompt-runtime/runtime-events";
@@ -95,169 +103,126 @@ async function emitModelEvent(input: {
   });
 }
 
-export type MockModelMode = "success" | "empty" | "throw";
-
 export class MockModelAdapter implements ModelAdapter {
-  private readonly mode: MockModelMode;
-  private readonly fixedText?: string;
-  private readonly scriptedOutputs: ModelGenerateTextOutput[];
+  private provider = createMockProvider({
+    mode: "success",
+    modelId: "mock-success",
+  });
 
   public constructor(options?: {
-    mode?: MockModelMode;
+    mode?: MockProviderMode;
     fixedText?: string;
     scriptedOutputs?: ModelGenerateTextOutput[];
   }) {
-    this.mode = options?.mode ?? "success";
-    this.fixedText = options?.fixedText;
-    this.scriptedOutputs = [...(options?.scriptedOutputs ?? [])];
+    this.provider = createMockProvider({
+      mode: options?.mode ?? "success",
+      fixedText: options?.fixedText,
+      modelId: "mock-success",
+      scriptedOutputs: options?.scriptedOutputs?.map((item) => ({
+        text: item.text,
+        finishReason: item.finishReason,
+        usage: item.usage,
+        toolCalls: item.toolCalls,
+        error: item.errorMessage,
+      })),
+    });
   }
 
   public async generateText(input: ModelGenerateTextInput): Promise<ModelGenerateTextOutput> {
-    if (this.scriptedOutputs.length > 0) {
-      const next = this.scriptedOutputs.shift();
-      if (next) {
-        return {
-          provider: next.provider ?? "mock",
-          model: next.model ?? input.model ?? "mock-scripted",
-          finishReason: next.finishReason ?? "stop",
-          usage: next.usage,
-          text: next.text,
-          errorMessage: next.errorMessage,
-          toolCalls: next.toolCalls,
-        };
-      }
-    }
-
-    if (this.mode === "throw") {
-      throw new Error("MockModelAdapter configured to throw");
-    }
-
-    if (this.mode === "empty") {
-      return {
-        text: "",
-        finishReason: "stop",
-        usage: {
-          inputTokens: 8,
-          outputTokens: 0,
-          totalTokens: 8,
-        },
-        provider: "mock",
-        model: input.model ?? "mock-empty",
-      };
-    }
-
+    const result = await this.provider.generateText({
+      modelId: input.model ?? "mock-success",
+      prompt: input.prompt,
+      messages: input.messages,
+      maxOutputTokens: input.maxOutputTokens,
+      temperature: input.temperature,
+      metadata: input.metadata,
+      tools: input.tools,
+      toolResults: input.toolResults,
+    });
     return {
-      text: this.fixedText ?? "Mock adapter response",
-      finishReason: "stop",
-      usage: {
-        inputTokens: 12,
-        outputTokens: 6,
-        totalTokens: 18,
-      },
+      text: result.text,
+      finishReason: result.finishReason ?? "stop",
+      usage: result.usage,
       provider: "mock",
       model: input.model ?? "mock-success",
+      errorMessage: result.error,
+      toolCalls: result.toolCalls,
     };
   }
 }
 
-type VercelAiCoreAdapterOptions = {
+type LlmRuntimeAdapterOptions = {
   provider?: string;
   model?: string;
+  fallbackProvider?: string;
+  fallbackModel?: string;
   enabled?: boolean;
+  timeoutMs?: number;
+  retries?: number;
+  registry?: LlmProviderRegistry;
+  configProvider?: LlmRuntimeConfigProvider;
   recorder?: PromptRuntimeEventRecorder;
-  generateTextImpl?: (input: ModelGenerateTextInput) => Promise<ModelGenerateTextOutput>;
 };
 
 type EnvConfig = {
   enabled: boolean;
   provider: string;
   model: string;
-  apiKey: string | null;
+  timeoutMs: number;
+  retries: number;
 };
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function parseNonNegativeInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+}
 
 function readEnvConfig(): EnvConfig {
   const enabledRaw = (process.env.AI_MODEL_ENABLED ?? "").toLowerCase();
   const enabled = enabledRaw === "1" || enabledRaw === "true";
-  const provider = (process.env.AI_MODEL_PROVIDER ?? "grok").trim().toLowerCase();
-  const model = (process.env.AI_MODEL_NAME ?? "grok-2-latest").trim();
-  const apiKey = process.env.GROK_API_KEY ?? process.env.XAI_API_KEY ?? null;
-  return { enabled, provider, model, apiKey };
+  const provider = (process.env.AI_MODEL_PROVIDER ?? "xai").trim().toLowerCase();
+  const model = (process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning").trim();
+  const timeoutMs = parsePositiveInt(process.env.AI_MODEL_TIMEOUT_MS, 12_000);
+  const retries = parseNonNegativeInt(process.env.AI_MODEL_RETRIES, 1);
+  return { enabled, provider, model, timeoutMs, retries };
 }
 
-function normalizeTextOutput(text: unknown): string {
-  if (typeof text !== "string") {
-    return "";
-  }
-  return text.replace(/\r\n/g, "\n").trim();
-}
-
-async function callXaiResponsesApi(input: {
-  apiKey: string;
-  model: string;
-  prompt: string;
-  maxOutputTokens?: number;
-  temperature?: number;
-}): Promise<ModelGenerateTextOutput> {
-  const response = await fetch("https://api.x.ai/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${input.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: input.model,
-      input: input.prompt,
-      max_output_tokens: input.maxOutputTokens,
-      temperature: input.temperature,
-    }),
-  });
-
-  if (!response.ok) {
-    const payload = await response.text();
-    throw new Error(`xAI response error (${response.status}): ${payload}`);
-  }
-
-  const payload = (await response.json()) as {
-    output_text?: unknown;
-    usage?: {
-      input_tokens?: number;
-      output_tokens?: number;
-      total_tokens?: number;
-    };
-    status?: string;
-  };
-
-  return {
-    text: normalizeTextOutput(payload.output_text),
-    finishReason: payload.status === "completed" ? "stop" : "error",
-    usage: {
-      inputTokens: payload.usage?.input_tokens,
-      outputTokens: payload.usage?.output_tokens,
-      totalTokens: payload.usage?.total_tokens,
-    },
-    provider: "grok",
-    model: input.model,
-  };
-}
-
-export class VercelAiCoreAdapter implements ModelAdapter {
+export class LlmRuntimeAdapter implements ModelAdapter {
   private readonly provider: string;
   private readonly model: string;
+  private readonly fallbackProvider: string | null;
+  private readonly fallbackModel: string | null;
   private readonly enabled: boolean;
-  private readonly apiKey: string | null;
+  private readonly timeoutMs: number;
+  private readonly retries: number;
+  private readonly registry: LlmProviderRegistry;
+  private readonly configProvider: LlmRuntimeConfigProvider;
   private readonly recorder: PromptRuntimeEventRecorder;
-  private readonly generateTextImpl?: (
-    input: ModelGenerateTextInput,
-  ) => Promise<ModelGenerateTextOutput>;
 
-  public constructor(options?: VercelAiCoreAdapterOptions) {
+  public constructor(options?: LlmRuntimeAdapterOptions) {
     const env = readEnvConfig();
     this.provider = options?.provider ?? env.provider;
     this.model = options?.model ?? env.model;
+    this.fallbackProvider =
+      options?.fallbackProvider ?? process.env.AI_MODEL_FALLBACK_PROVIDER ?? null;
+    this.fallbackModel = options?.fallbackModel ?? process.env.AI_MODEL_FALLBACK_NAME ?? null;
     this.enabled = options?.enabled ?? env.enabled;
-    this.apiKey = env.apiKey;
+    this.timeoutMs = Math.max(1, options?.timeoutMs ?? env.timeoutMs);
+    this.retries = Math.max(0, options?.retries ?? env.retries);
+    this.registry = options?.registry ?? createDefaultLlmProviderRegistry();
+    this.configProvider = options?.configProvider ?? new CachedLlmRuntimeConfigProvider();
     this.recorder = options?.recorder ?? getPromptRuntimeRecorder();
-    this.generateTextImpl = options?.generateTextImpl;
   }
 
   public async generateText(input: ModelGenerateTextInput): Promise<ModelGenerateTextOutput> {
@@ -265,115 +230,80 @@ export class VercelAiCoreAdapter implements ModelAdapter {
     const entityId =
       typeof input.metadata?.entityId === "string" ? String(input.metadata.entityId) : "unknown";
 
-    if (!this.enabled) {
-      await emitModelEvent({
-        recorder: this.recorder,
-        entityId,
-        now,
-        reasonCode: PromptRuntimeReasonCode.modelCallFailed,
-        operation: "CALL",
-        metadata: {
-          reason: "MODEL_DISABLED",
-          provider: this.provider,
-          model: this.model,
-        },
-      });
-      return {
-        text: "",
-        finishReason: "error",
-        provider: this.provider,
-        model: this.model,
-        errorMessage: "MODEL_DISABLED",
+    try {
+      const taskTypeRaw = input.metadata?.taskType;
+      const taskType =
+        taskTypeRaw === "reply" || taskTypeRaw === "vote" || taskTypeRaw === "dispatch"
+          ? taskTypeRaw
+          : "generic";
+      const runtimeConfig = await this.configProvider.getConfig(taskType);
+      const routePrimary = runtimeConfig?.route?.primary ?? {
+        providerId: this.provider,
+        modelId: input.model ?? this.model,
       };
-    }
-
-    if (this.generateTextImpl) {
-      try {
-        return await this.generateTextImpl({
-          ...input,
-          model: input.model ?? this.model,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+      const routeSecondary = runtimeConfig?.route?.secondary ?? {
+        providerId: this.fallbackProvider ?? "",
+        modelId: this.fallbackModel ?? "",
+      };
+      const enabled = runtimeConfig?.enabled ?? this.enabled;
+      if (!enabled) {
         await emitModelEvent({
           recorder: this.recorder,
           entityId,
-          now: new Date(),
+          now,
           reasonCode: PromptRuntimeReasonCode.modelCallFailed,
           operation: "CALL",
           metadata: {
-            reason: "MODEL_EXCEPTION",
-            error: message,
-            provider: this.provider,
-            model: this.model,
+            reason: "MODEL_DISABLED",
+            provider: routePrimary.providerId,
+            model: routePrimary.modelId,
           },
         });
         return {
           text: "",
           finishReason: "error",
-          provider: this.provider,
-          model: input.model ?? this.model,
-          errorMessage: message,
+          provider: routePrimary.providerId,
+          model: routePrimary.modelId,
+          errorMessage: "MODEL_DISABLED",
         };
       }
-    }
 
-    if (this.provider === "grok" && !this.apiKey) {
-      await emitModelEvent({
-        recorder: this.recorder,
+      const result = await invokeLLM({
+        registry: this.registry,
+        taskType,
         entityId,
-        now,
-        reasonCode: PromptRuntimeReasonCode.modelCallFailed,
-        operation: "CALL",
-        metadata: {
-          reason: "MISSING_GROK_API_KEY",
-          provider: this.provider,
-          model: this.model,
+        timeoutMs: Math.max(1, runtimeConfig?.timeoutMs ?? this.timeoutMs),
+        retries: Math.max(0, runtimeConfig?.retries ?? this.retries),
+        recorder: this.recorder,
+        routeOverride: {
+          primary: routePrimary,
+          secondary:
+            routeSecondary.providerId.trim().length > 0 && routeSecondary.modelId.trim().length > 0
+              ? routeSecondary
+              : undefined,
+        },
+        modelInput: {
+          prompt: input.prompt,
+          messages: input.messages,
+          maxOutputTokens: input.maxOutputTokens,
+          temperature: input.temperature,
+          metadata: input.metadata,
+          tools: input.tools,
+          toolResults: input.toolResults,
         },
       });
       return {
-        text: "",
-        finishReason: "error",
-        provider: this.provider,
-        model: this.model,
-        errorMessage: "MISSING_GROK_API_KEY",
-      };
-    }
-
-    try {
-      const prompt =
-        typeof input.prompt === "string" && input.prompt.trim().length > 0
-          ? input.prompt
-          : (input.messages
-              ?.map((message) => `[${message.role}] ${message.content}`)
-              .join("\n\n") ?? "");
-
-      if (!prompt) {
-        return {
-          text: "",
-          finishReason: "error",
-          provider: this.provider,
-          model: input.model ?? this.model,
-          errorMessage: "EMPTY_PROMPT",
-        };
-      }
-
-      if (this.provider === "grok" && this.apiKey) {
-        return await callXaiResponsesApi({
-          apiKey: this.apiKey,
-          model: input.model ?? this.model,
-          prompt,
-          maxOutputTokens: input.maxOutputTokens,
-          temperature: input.temperature,
-        });
-      }
-
-      return {
-        text: "",
-        finishReason: "error",
-        provider: this.provider,
-        model: input.model ?? this.model,
-        errorMessage: "UNSUPPORTED_PROVIDER",
+        text: result.text,
+        finishReason: result.finishReason,
+        usage: {
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+        },
+        provider: result.providerId ?? routePrimary.providerId,
+        model: result.modelId ?? routePrimary.modelId,
+        errorMessage: result.error,
+        toolCalls: result.toolCalls,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

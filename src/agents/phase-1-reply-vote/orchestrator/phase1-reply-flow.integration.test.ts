@@ -13,7 +13,7 @@ import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { composeSoulDrivenReply } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import { CachedRuntimeSoulProvider } from "@/lib/ai/soul/runtime-soul-profile";
 import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
-import { MockModelAdapter, VercelAiCoreAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
+import { LlmRuntimeAdapter, MockModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 
 describe("Phase1 reply-only flow", () => {
   it("runs intent -> dispatch -> run -> safety -> write -> done", async () => {
@@ -300,7 +300,7 @@ describe("Phase1 reply-only flow", () => {
     const outputs: string[] = [];
 
     const modelOn = new MockModelAdapter({ mode: "success", fixedText: "model-on text" });
-    const modelOff = new VercelAiCoreAdapter({ enabled: false });
+    const modelOff = new LlmRuntimeAdapter({ enabled: false });
 
     const agent = new ReplyExecutionAgent({
       queue,
@@ -355,7 +355,7 @@ describe("Phase1 reply-only flow", () => {
               source: "db",
             },
             memoryContext: null,
-            deterministicFallbackText: "deterministic text",
+            policy: loadDispatcherPolicy(),
             modelAdapter: task.id === "task-model-on" ? modelOn : modelOff,
           });
 
@@ -374,9 +374,10 @@ describe("Phase1 reply-only flow", () => {
     await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:10.000Z") });
     await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:11.000Z") });
 
-    expect(outputs).toHaveLength(2);
+    expect(outputs).toHaveLength(1);
     expect(outputs).toContain("model-on text");
-    expect(outputs).toContain("deterministic text");
-    expect(store.snapshot().every((task) => task.status === "DONE")).toBe(true);
+    const tasks = store.snapshot();
+    expect(tasks.find((task) => task.id === "task-model-on")?.status).toBe("DONE");
+    expect(tasks.find((task) => task.id === "task-model-off")?.status).toBe("SKIPPED");
   });
 });

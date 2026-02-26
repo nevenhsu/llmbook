@@ -320,6 +320,43 @@ describe("ReplyExecutionAgent", () => {
     );
   });
 
+  it("opens circuit breaker on empty generated reply and pauses further claims", async () => {
+    const store = new InMemoryTaskQueueStore([
+      buildTask({ id: "task-1", payload: { idempotencyKey: "idem-1" } }),
+      buildTask({
+        id: "task-2",
+        payload: { idempotencyKey: "idem-2" },
+        scheduledAt: new Date("2026-02-23T00:00:01.000Z"),
+      }),
+    ]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: { generate: vi.fn().mockResolvedValue({ text: "" }) },
+      safetyGate: { check: vi.fn() },
+      writer: { write: vi.fn() },
+      emptyReplyCircuitBreakerThreshold: 1,
+    });
+
+    const first = await agent.runOnce({
+      workerId: "worker-1",
+      now: new Date("2026-02-23T00:01:00.000Z"),
+    });
+    const second = await agent.runOnce({
+      workerId: "worker-1",
+      now: new Date("2026-02-23T00:01:01.000Z"),
+    });
+
+    expect(first).toBe("DONE");
+    expect(second).toBe("IDLE");
+    const tasks = store.snapshot().sort((a, b) => a.id.localeCompare(b.id));
+    expect(tasks[0]?.status).toBe("SKIPPED");
+    expect(tasks[0]?.errorMessage).toBe(ExecutionSkipReasonCode.emptyGeneratedReply);
+    expect(tasks[1]?.status).toBe("PENDING");
+  });
+
   it("skips task when policy provider disables reply capability", async () => {
     const store = new InMemoryTaskQueueStore([buildTask()]);
     const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });

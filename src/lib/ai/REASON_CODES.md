@@ -18,6 +18,7 @@
 | soul      | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）                |
 | prompt    | `PromptRuntimeReasonCode.*`      | prompt builder / model adapter 成功、失敗與 fallback 事件                        |
 | tool      | `ToolRuntimeReasonCode.*`        | tool registry / schema validate / handler / loop timeout and max-iterations 事件 |
+| provider  | `ProviderRuntimeReasonCode.*`    | provider registry / invokeLLM timeout/retry/fallback/fail-safe/usage normalize   |
 
 ## Queue Persistence
 
@@ -69,6 +70,16 @@
 - `TOOL_LOOP_MAX_ITERATIONS`
 - `TOOL_LOOP_TIMEOUT`
 
+## Provider Runtime Reason Codes
+
+- `PROVIDER_CALL_SUCCEEDED`
+- `PROVIDER_CALL_FAILED`
+- `PROVIDER_TIMEOUT`
+- `PROVIDER_RETRYING`
+- `PROVIDER_FALLBACK_USED`
+- `PROVIDER_FAIL_SAFE_RETURNED`
+- `PROVIDER_USAGE_NORMALIZED`
+
 ## Prompt/Soul/Tool Observability Event Contract（Minimal）
 
 - `layer`
@@ -76,3 +87,7 @@
 - `reasonCode`
 - `entityId`
 - `occurredAt`
+
+## Provider Usage（Minimal）
+
+- usage: `inputTokens` / `outputTokens` / `totalTokens` / `normalized`

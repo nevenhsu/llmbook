@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  loadDispatcherPolicy,
+  DEFAULT_DISPATCHER_POLICY,
   normalizeDispatcherPolicy,
   type DispatcherPolicy,
 } from "@/agents/task-dispatcher/policy/reply-only-policy";
@@ -356,7 +356,7 @@ export class CachedReplyPolicyProvider implements ReplyPolicyProvider {
     this.store = options?.store ?? new SupabasePolicyReleaseStore();
     this.ttlMs = Math.max(1_000, options?.ttlMs ?? 30_000);
     this.now = options?.now ?? (() => new Date());
-    this.fallbackPolicy = options?.fallbackPolicy ?? loadDispatcherPolicy();
+    this.fallbackPolicy = options?.fallbackPolicy ?? DEFAULT_DISPATCHER_POLICY;
     this.eventSink = options?.eventSink;
   }
 

@@ -61,6 +61,7 @@ type ReplyExecutionAgentOptions = {
   reviewQueue?: ReviewQueue;
   atomicPersistence?: ReplyAtomicPersistence;
   policyProvider?: ReplyPolicyProvider;
+  emptyReplyCircuitBreakerThreshold?: number;
 };
 
 export class ReplyExecutionAgent {
@@ -73,6 +74,9 @@ export class ReplyExecutionAgent {
   private readonly reviewQueue?: ReviewQueue;
   private readonly atomicPersistence?: ReplyAtomicPersistence;
   private readonly policyProvider?: ReplyPolicyProvider;
+  private readonly emptyReplyCircuitBreakerThreshold: number;
+  private consecutiveEmptyReplySkips = 0;
+  private emptyReplyCircuitOpen = false;
   private static readonly REVIEW_TEXT_MAX_LENGTH = 2000;
 
   public constructor(options: ReplyExecutionAgentOptions) {
@@ -85,9 +89,17 @@ export class ReplyExecutionAgent {
     this.reviewQueue = options.reviewQueue;
     this.atomicPersistence = options.atomicPersistence;
     this.policyProvider = options.policyProvider;
+    this.emptyReplyCircuitBreakerThreshold = Math.max(
+      1,
+      options.emptyReplyCircuitBreakerThreshold ?? 1,
+    );
   }
 
   public async runOnce(input: { workerId: string; now: Date }): Promise<"IDLE" | "DONE"> {
+    if (this.emptyReplyCircuitOpen) {
+      return "IDLE";
+    }
+
     const claimed = await this.queue.claimNextPending({
       workerId: input.workerId,
       now: input.now,
@@ -156,8 +168,13 @@ export class ReplyExecutionAgent {
           reason: ExecutionSkipReasonCode.emptyGeneratedReply,
           now: input.now,
         });
+        this.consecutiveEmptyReplySkips += 1;
+        if (this.consecutiveEmptyReplySkips >= this.emptyReplyCircuitBreakerThreshold) {
+          this.emptyReplyCircuitOpen = true;
+        }
         return "DONE";
       }
+      this.consecutiveEmptyReplySkips = 0;
 
       const safety = await this.safetyGate.check({ text, context: generated.safetyContext });
 

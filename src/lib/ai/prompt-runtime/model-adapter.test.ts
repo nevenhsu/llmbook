@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { ToolRuntimeReasonCode } from "@/lib/ai/reason-codes";
 import {
+  LlmRuntimeAdapter,
   MockModelAdapter,
-  VercelAiCoreAdapter,
   generateTextWithToolLoop,
   type ModelGenerateTextInput,
 } from "@/lib/ai/prompt-runtime/model-adapter";
 import { PromptRuntimeEventRecorder } from "@/lib/ai/prompt-runtime/runtime-events";
 import { ToolRegistry } from "@/lib/ai/prompt-runtime/tool-registry";
+import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
+import type { LlmRuntimeConfigProvider } from "@/lib/ai/llm/runtime-config-provider";
 
 const SAMPLE_INPUT: ModelGenerateTextInput = {
   prompt: "hello",
@@ -31,35 +33,191 @@ describe("MockModelAdapter", () => {
   it("throws in throw mode", async () => {
     const adapter = new MockModelAdapter({ mode: "throw" });
     await expect(adapter.generateText(SAMPLE_INPUT)).rejects.toThrow(
-      "MockModelAdapter configured to throw",
+      "Mock provider configured to throw",
     );
   });
 });
 
-describe("VercelAiCoreAdapter", () => {
+describe("LlmRuntimeAdapter", () => {
   it("returns fail-safe empty output when disabled", async () => {
-    const adapter = new VercelAiCoreAdapter({ enabled: false });
+    const adapter = new LlmRuntimeAdapter({ enabled: false });
     const result = await adapter.generateText(SAMPLE_INPUT);
     expect(result.text).toBe("");
     expect(result.errorMessage).toBe("MODEL_DISABLED");
   });
 
-  it("uses injected generateText implementation when provided", async () => {
-    const adapter = new VercelAiCoreAdapter({
+  it("uses primary provider via registry", async () => {
+    const registry = new LlmProviderRegistry({
+      defaultRoute: { providerId: "primary", modelId: "p1" },
+      taskRoutes: {
+        generic: {
+          taskType: "generic",
+          primary: { providerId: "primary", modelId: "p1" },
+        },
+      },
+    });
+    registry.register({
+      providerId: "primary",
+      modelId: "p1",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => ({ text: "from primary", finishReason: "stop" }),
+    });
+
+    const adapter = new LlmRuntimeAdapter({
       enabled: true,
-      provider: "grok",
-      model: "grok-test",
-      generateTextImpl: async () => ({
-        text: "from injected impl",
-        finishReason: "stop",
-        provider: "grok",
-        model: "grok-test",
-      }),
+      provider: "primary",
+      model: "p1",
+      retries: 0,
+      registry,
     });
 
     const result = await adapter.generateText(SAMPLE_INPUT);
-    expect(result.text).toBe("from injected impl");
-    expect(result.provider).toBe("grok");
+    expect(result.text).toBe("from primary");
+    expect(result.provider).toBe("primary");
+  });
+
+  it("falls back to secondary provider when primary fails", async () => {
+    const registry = new LlmProviderRegistry({
+      defaultRoute: { providerId: "primary", modelId: "p1" },
+      taskRoutes: {
+        generic: {
+          taskType: "generic",
+          primary: { providerId: "primary", modelId: "p1" },
+          secondary: { providerId: "secondary", modelId: "s1" },
+        },
+      },
+    });
+    registry.register({
+      providerId: "primary",
+      modelId: "p1",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => {
+        throw new Error("primary failed");
+      },
+    });
+    registry.register({
+      providerId: "secondary",
+      modelId: "s1",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => ({ text: "fallback text", finishReason: "stop" }),
+    });
+
+    const adapter = new LlmRuntimeAdapter({
+      enabled: true,
+      provider: "primary",
+      model: "p1",
+      fallbackProvider: "secondary",
+      fallbackModel: "s1",
+      retries: 0,
+      registry,
+    });
+
+    const result = await adapter.generateText(SAMPLE_INPUT);
+    expect(result.text).toBe("fallback text");
+    expect(result.provider).toBe("secondary");
+  });
+
+  it("returns fail-safe empty output when both providers fail", async () => {
+    const registry = new LlmProviderRegistry({
+      defaultRoute: { providerId: "primary", modelId: "p1" },
+      taskRoutes: {
+        generic: {
+          taskType: "generic",
+          primary: { providerId: "primary", modelId: "p1" },
+          secondary: { providerId: "secondary", modelId: "s1" },
+        },
+      },
+    });
+    registry.register({
+      providerId: "primary",
+      modelId: "p1",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => {
+        throw new Error("primary failed");
+      },
+    });
+    registry.register({
+      providerId: "secondary",
+      modelId: "s1",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => {
+        throw new Error("secondary failed");
+      },
+    });
+
+    const adapter = new LlmRuntimeAdapter({
+      enabled: true,
+      provider: "primary",
+      model: "p1",
+      fallbackProvider: "secondary",
+      fallbackModel: "s1",
+      retries: 0,
+      registry,
+    });
+
+    const result = await adapter.generateText(SAMPLE_INPUT);
+    expect(result.text).toBe("");
+    expect(result.finishReason).toBe("error");
+    expect(result.errorMessage).toContain("secondary failed");
+  });
+
+  it("uses DB runtime config route and treats adapter env as fallback", async () => {
+    const registry = new LlmProviderRegistry({
+      defaultRoute: { providerId: "env-primary", modelId: "env-model" },
+      taskRoutes: {
+        reply: {
+          taskType: "reply",
+          primary: { providerId: "db-primary", modelId: "db-model" },
+          secondary: { providerId: "db-secondary", modelId: "db-fallback" },
+        },
+      },
+    });
+    registry.register({
+      providerId: "env-primary",
+      modelId: "env-model",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => ({ text: "env", finishReason: "stop" }),
+    });
+    registry.register({
+      providerId: "db-primary",
+      modelId: "db-model",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => ({ text: "db", finishReason: "stop" }),
+    });
+    registry.register({
+      providerId: "db-secondary",
+      modelId: "db-fallback",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => ({ text: "fallback", finishReason: "stop" }),
+    });
+
+    const configProvider: LlmRuntimeConfigProvider = {
+      getConfig: async () => ({
+        route: {
+          primary: { providerId: "db-primary", modelId: "db-model" },
+          secondary: { providerId: "db-secondary", modelId: "db-fallback" },
+        },
+      }),
+    };
+
+    const adapter = new LlmRuntimeAdapter({
+      enabled: true,
+      provider: "env-primary",
+      model: "env-model",
+      fallbackProvider: "env-secondary",
+      fallbackModel: "env-fallback",
+      retries: 0,
+      registry,
+      configProvider,
+    });
+
+    const result = await adapter.generateText({
+      ...SAMPLE_INPUT,
+      metadata: { ...SAMPLE_INPUT.metadata, taskType: "reply" },
+    });
+    expect(result.text).toBe("db");
+    expect(result.provider).toBe("db-primary");
+    expect(result.model).toBe("db-model");
   });
 });
 
