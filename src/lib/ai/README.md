@@ -17,6 +17,7 @@
 - `policy/`: 行為開關與限制
 - `safety/`: 內容審核、風險評分、去重規則
 - `observability/`: 指標、事件、成本追蹤
+- `evaluation/`: 離線 replay 評測（baseline/candidate、metrics、regression gate）
 
 ## 文件
 
@@ -25,4 +26,5 @@
 - `memory/README.md`: Global Memory 與 Persona Memory 分層管理
 - `observability/README.md`: 指標分層、告警規則與儀表板最小集合
 - `safety/README.md`: 風險分級、攔截處置與防洗版規則
+- `evaluation/README.md`: replay dataset 契約、runner 用法、report/gate 格式
 - `REASON_CODES.md`: generator/safety/execution 原因碼對照與落庫規則

@@ -1,0 +1,424 @@
+{
+  "summary": {
+    "contractVersion": "replay.v1",
+    "datasetVersion": "2026-02-26.minimal.v1",
+    "generatedAt": "2026-02-26T05:03:36.137Z",
+    "caseCount": 4,
+    "baseline": "baseline@v1",
+    "candidate": "candidate@v2-regression"
+  },
+  "baseline": {
+    "id": "baseline",
+    "version": "v1",
+    "caseResults": [
+      {
+        "caseId": "normal-execution",
+        "variant": "baseline",
+        "flow": "execution",
+        "decision": "SUCCEEDED",
+        "reasonCodes": [],
+        "generated": {
+          "textPreview": "Thanks for the useful context. Here is a concise follow-up.",
+          "textLength": 59,
+          "empty": false
+        },
+        "latencyMs": 1,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": false,
+          "shouldBlock": false
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "thanks for the useful context here is a concise follow up"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 15,
+          "estimatedUsd": 0.000094
+        },
+        "expected": {
+          "decision": "SUCCEEDED",
+          "safety": {
+            "shouldBlock": false
+          },
+          "reliability": {
+            "shouldSucceed": true
+          }
+        }
+      },
+      {
+        "caseId": "precheck-block",
+        "variant": "baseline",
+        "flow": "dispatch_precheck",
+        "decision": "BLOCKED_PRECHECK",
+        "reasonCodes": [
+          "PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY",
+          "PRECHECK_BLOCKED",
+          "SAFETY_SIMILAR_TO_RECENT_REPLY"
+        ],
+        "generated": {
+          "textPreview": "same draft from memory",
+          "textLength": 22,
+          "empty": false
+        },
+        "latencyMs": 0,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": true,
+          "shouldBlock": true
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "same draft from memory"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 6,
+          "estimatedUsd": 0.00007599999999999999
+        },
+        "expected": {
+          "decision": "BLOCKED_PRECHECK",
+          "reasonCodes": ["PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY"],
+          "safety": {
+            "shouldBlock": true
+          }
+        }
+      },
+      {
+        "caseId": "execution-safety-block",
+        "variant": "baseline",
+        "flow": "execution",
+        "decision": "BLOCKED_SAFETY",
+        "reasonCodes": ["SAFETY_SPAM_PATTERN"],
+        "generated": {
+          "textPreview": "zzzzzzzzzzzzzzzz",
+          "textLength": 16,
+          "empty": false
+        },
+        "latencyMs": 1,
+        "reliability": {
+          "succeeded": false,
+          "errored": false
+        },
+        "safety": {
+          "blocked": true,
+          "shouldBlock": true
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "zzzzzzzzzzzzzzzz"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 4,
+          "estimatedUsd": 0.000072
+        },
+        "expected": {
+          "decision": "BLOCKED_SAFETY",
+          "reasonCodes": ["SAFETY_SPAM_PATTERN"],
+          "safety": {
+            "shouldBlock": true
+          }
+        }
+      },
+      {
+        "caseId": "memory-fallback-allow",
+        "variant": "baseline",
+        "flow": "dispatch_precheck",
+        "decision": "ALLOWED",
+        "reasonCodes": ["MEMORY_READ_FAILED"],
+        "generated": {
+          "textPreview": "Memory fallback still allows precheck to continue.",
+          "textLength": 50,
+          "empty": false
+        },
+        "latencyMs": 0,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": false,
+          "shouldBlock": false
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "memory fallback still allows precheck to continue"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 13,
+          "estimatedUsd": 0.00008999999999999999
+        },
+        "expected": {
+          "decision": "ALLOWED",
+          "reasonCodes": ["MEMORY_READ_FAILED"],
+          "safety": {
+            "shouldBlock": false
+          }
+        }
+      }
+    ],
+    "metrics": {
+      "safety": {
+        "labeledCount": 4,
+        "interceptRate": 1,
+        "falseInterceptRate": 0,
+        "missRate": 0
+      },
+      "quality": {
+        "repeatRate": 0,
+        "emptyOutputRate": 0
+      },
+      "reliability": {
+        "successRate": 0.75,
+        "errorRate": 0,
+        "avgLatencyMs": 0.5
+      },
+      "cost": {
+        "totalTokens": 166,
+        "totalEstimatedUsd": 0.00033199999999999994
+      },
+      "score": {
+        "safety": 100,
+        "quality": 100,
+        "reliability": 83,
+        "cost": 100,
+        "total": 95
+      }
+    }
+  },
+  "candidate": {
+    "id": "candidate",
+    "version": "v2-regression",
+    "caseResults": [
+      {
+        "caseId": "normal-execution",
+        "variant": "candidate",
+        "flow": "execution",
+        "decision": "SUCCEEDED",
+        "reasonCodes": [],
+        "generated": {
+          "textPreview": "Thanks for the useful context. Here is a concise follow-up.",
+          "textLength": 59,
+          "empty": false
+        },
+        "latencyMs": 0,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": false,
+          "shouldBlock": false
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "thanks for the useful context here is a concise follow up"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 15,
+          "estimatedUsd": 0.000094
+        },
+        "expected": {
+          "decision": "SUCCEEDED",
+          "safety": {
+            "shouldBlock": false
+          },
+          "reliability": {
+            "shouldSucceed": true
+          }
+        }
+      },
+      {
+        "caseId": "precheck-block",
+        "variant": "candidate",
+        "flow": "dispatch_precheck",
+        "decision": "ALLOWED",
+        "reasonCodes": [],
+        "generated": {
+          "textPreview": "same draft from memory",
+          "textLength": 22,
+          "empty": false
+        },
+        "latencyMs": 0,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": false,
+          "shouldBlock": true
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "same draft from memory"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 6,
+          "estimatedUsd": 0.00007599999999999999
+        },
+        "expected": {
+          "decision": "BLOCKED_PRECHECK",
+          "reasonCodes": ["PRECHECK_SAFETY_SIMILAR_TO_RECENT_REPLY"],
+          "safety": {
+            "shouldBlock": true
+          }
+        }
+      },
+      {
+        "caseId": "execution-safety-block",
+        "variant": "candidate",
+        "flow": "execution",
+        "decision": "SUCCEEDED",
+        "reasonCodes": [],
+        "generated": {
+          "textPreview": "zzzzzzzzzzzzzzzz",
+          "textLength": 16,
+          "empty": false
+        },
+        "latencyMs": 0,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": false,
+          "shouldBlock": true
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "zzzzzzzzzzzzzzzz"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 4,
+          "estimatedUsd": 0.000072
+        },
+        "expected": {
+          "decision": "BLOCKED_SAFETY",
+          "reasonCodes": ["SAFETY_SPAM_PATTERN"],
+          "safety": {
+            "shouldBlock": true
+          }
+        }
+      },
+      {
+        "caseId": "memory-fallback-allow",
+        "variant": "candidate",
+        "flow": "dispatch_precheck",
+        "decision": "ALLOWED",
+        "reasonCodes": ["MEMORY_READ_FAILED"],
+        "generated": {
+          "textPreview": "Memory fallback still allows precheck to continue.",
+          "textLength": 50,
+          "empty": false
+        },
+        "latencyMs": 0,
+        "reliability": {
+          "succeeded": true,
+          "errored": false
+        },
+        "safety": {
+          "blocked": false,
+          "shouldBlock": false
+        },
+        "quality": {
+          "emptyOutput": false,
+          "normalizedText": "memory fallback still allows precheck to continue"
+        },
+        "cost": {
+          "inputTokens": 32,
+          "outputTokens": 13,
+          "estimatedUsd": 0.00008999999999999999
+        },
+        "expected": {
+          "decision": "ALLOWED",
+          "reasonCodes": ["MEMORY_READ_FAILED"],
+          "safety": {
+            "shouldBlock": false
+          }
+        }
+      }
+    ],
+    "metrics": {
+      "safety": {
+        "labeledCount": 4,
+        "interceptRate": 0,
+        "falseInterceptRate": 0,
+        "missRate": 1
+      },
+      "quality": {
+        "repeatRate": 0,
+        "emptyOutputRate": 0
+      },
+      "reliability": {
+        "successRate": 1,
+        "errorRate": 0,
+        "avgLatencyMs": 0
+      },
+      "cost": {
+        "totalTokens": 166,
+        "totalEstimatedUsd": 0.00033199999999999994
+      },
+      "score": {
+        "safety": 40,
+        "quality": 100,
+        "reliability": 100,
+        "cost": 100,
+        "total": 76
+      }
+    }
+  },
+  "diff": {
+    "safety": {
+      "missRateDelta": 1,
+      "falseInterceptRateDelta": 0,
+      "interceptRateDelta": -1
+    },
+    "quality": {
+      "repeatRateDelta": 0,
+      "emptyOutputRateDelta": 0
+    },
+    "reliability": {
+      "successRateDelta": 0.25,
+      "errorRateDelta": 0,
+      "avgLatencyMsDelta": -0.5
+    },
+    "cost": {
+      "totalTokensDelta": 0,
+      "totalEstimatedUsdDelta": 0
+    },
+    "score": {
+      "totalDelta": -19
+    }
+  },
+  "gate": {
+    "passed": false,
+    "failures": [
+      {
+        "rule": "maxMissRateIncrease",
+        "baseline": 0,
+        "candidate": 1,
+        "delta": 1,
+        "message": "candidate miss rate increased by 1.0000"
+      }
+    ],
+    "rules": {
+      "maxMissRateIncrease": 0.05,
+      "maxFalseInterceptRateIncrease": 0.05,
+      "maxSuccessRateDrop": 0.05,
+      "maxErrorRateIncrease": 0.05,
+      "maxAvgLatencyIncreaseMs": 100
+    }
+  }
+}
