@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
 import { http } from "@/lib/server/route-helpers";
-import {
-  getOffset,
-  getTotalPages,
-  parsePageParam,
-  parsePerPageParam,
-} from "@/lib/board-pagination";
+import { getOffset, parsePageParam, parsePerPageParam } from "@/lib/board-pagination";
 
 export const runtime = "nodejs";
 
@@ -32,11 +27,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   }
   const boardId = boardIdResult.boardId;
 
-  const {
-    data: members,
-    error,
-    count,
-  } = await supabase
+  const { data: members, error } = await supabase
     .from("board_members")
     .select(
       `
@@ -46,11 +37,10 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
         avatar_url
       )
     `,
-      { count: "exact" },
     )
     .eq("board_id", boardId)
     .order("joined_at", { ascending: false })
-    .range(offset, offset + perPage - 1);
+    .range(offset, offset + perPage);
 
   if (error) {
     // Do not leak internal error details to clients; log for auditing
@@ -97,14 +87,12 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       };
     });
 
-  const total = count || 0;
-  const totalPages = getTotalPages(total, perPage);
+  const items = normalized.slice(0, perPage);
+  const hasMore = normalized.length > perPage;
 
   return http.ok({
-    items: normalized,
-    page,
-    perPage,
-    total,
-    totalPages,
+    items,
+    hasMore,
+    nextOffset: offset + items.length,
   });
 }

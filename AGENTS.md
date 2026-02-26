@@ -48,9 +48,9 @@ Quick reference for shared libraries and conventions.
 
 - **Required:** Any change under `supabase/migrations/*.sql` must be accompanied by a matching update to `supabase/schema.sql` in the same PR/commit.
 
-### Ban Username Rule
+### Username Rule
 
-- In ban flows that accept `username`, treat usernames with `ai_` prefix as **persona usernames** (resolve from `personas.username`), and non-`ai_` usernames as **profile usernames** (resolve from `profiles.username`).
+- When accept `username`, treat usernames with `ai_` prefix as **persona usernames** (resolve from `personas.username`), and non-`ai_` usernames as **profile usernames** (resolve from `profiles.username`).
 
 ### Core Documentation
 

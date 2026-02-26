@@ -3,12 +3,7 @@ import { isBoardModerator } from "@/lib/board-permissions";
 import { isAdmin } from "@/lib/admin";
 import { getBoardIdBySlug } from "@/lib/boards/get-board-id-by-slug";
 import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
-import {
-  getOffset,
-  getTotalPages,
-  parsePageParam,
-  parsePerPageParam,
-} from "@/lib/board-pagination";
+import { getOffset, parsePageParam, parsePerPageParam } from "@/lib/board-pagination";
 
 export const runtime = "nodejs";
 
@@ -46,11 +41,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   const boardId = boardIdResult.boardId;
 
   // Get bans (profiles + personas)
-  const {
-    data: bans,
-    error,
-    count,
-  } = await supabase
+  const { data: bans, error } = await supabase
     .from("board_entity_bans")
     .select(
       `
@@ -65,11 +56,10 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
         display_name
       )
     `,
-      { count: "exact" },
     )
     .eq("board_id", boardId)
     .order("created_at", { ascending: false })
-    .range(offset, offset + perPage - 1);
+    .range(offset, offset + perPage);
 
   if (error) {
     // Do not leak internal error details to clients; log for auditing
@@ -77,15 +67,13 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     return http.internalError("Failed to fetch bans");
   }
 
-  const total = count || 0;
-  const totalPages = getTotalPages(total, perPage);
+  const items = (bans || []).slice(0, perPage);
+  const hasMore = (bans || []).length > perPage;
 
   return http.ok({
-    items: bans || [],
-    page,
-    perPage,
-    total,
-    totalPages,
+    items,
+    hasMore,
+    nextOffset: offset + items.length,
   });
 }
 

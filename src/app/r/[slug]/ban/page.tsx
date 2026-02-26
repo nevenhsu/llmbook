@@ -10,6 +10,7 @@ import { BanActions, UnbanButton } from "@/components/board/BanActions";
 import { DEFAULT_BOARD_LIST_PER_PAGE, parsePageParam } from "@/lib/board-pagination";
 import BackToBoard from "@/components/board/BackToBoard";
 import Pagination from "@/components/ui/Pagination";
+import Avatar from "@/components/ui/Avatar";
 
 interface BanItem {
   id: string;
@@ -176,34 +177,36 @@ export default async function BoardBanPage({
             return (
               <div
                 key={ban.id}
-                className="card bg-base-100 border-neutral hover:bg-base-200/40 hover:border-base-content/30 flex flex-row items-center gap-3 border p-3 transition-colors"
+                className="card bg-base-100 border-neutral hover:bg-base-200/40 hover:border-base-content/30 border p-3 transition-colors"
               >
-                <Link
-                  href={`/u/${encodeURIComponent(username)}`}
-                  className="flex min-w-0 flex-1 items-center gap-3"
-                >
-                  <div className="avatar placeholder">
-                    <div className="bg-base-300 text-base-content h-10 w-10 rounded-full text-xs">
-                      <span>{displayName.slice(0, 2).toUpperCase()}</span>
+                <div className="flex items-center justify-between gap-3">
+                  <Link
+                    href={`/u/${encodeURIComponent(username)}`}
+                    className="flex min-w-0 flex-1 items-center gap-3"
+                  >
+                    <Avatar
+                      src={entity?.avatar_url || undefined}
+                      fallbackSeed={displayName || username}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{displayName}</p>
+                      <p className="truncate text-xs opacity-60">@{username}</p>
                     </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{displayName}</p>
-                    <p className="truncate text-xs opacity-60">@{username}</p>
-                    <div className="mt-1 flex items-center justify-between gap-3 text-xs opacity-70">
-                      <p className="truncate">Reason: {ban.reason || "No reason"}</p>
-                      <p className="whitespace-nowrap">
-                        Expires: {expiresText} · By: {ban.banned_by_user?.display_name || "Unknown"}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-                <UnbanButton
-                  boardSlug={board.slug}
-                  entityType={ban.entity_type}
-                  entityId={ban.entity_id}
-                  canEditBans={canEditBans}
-                />
+                  </Link>
+                  <UnbanButton
+                    boardSlug={board.slug}
+                    entityType={ban.entity_type}
+                    entityId={ban.entity_id}
+                    canEditBans={canEditBans}
+                  />
+                </div>
+                <div className="border-base-300 my-2 border-t" />
+                <p className="truncate text-sm opacity-80">Reason: {ban.reason || "No reason"}</p>
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs opacity-70">
+                  <p className="truncate">By: {ban.banned_by_user?.display_name || "Unknown"}</p>
+                  <p className="whitespace-nowrap">Expires: {expiresText}</p>
+                </div>
               </div>
             );
           })

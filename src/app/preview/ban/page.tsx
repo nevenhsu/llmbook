@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Hash, RefreshCw, ShieldBan } from "lucide-react";
 import toast from "react-hot-toast";
 import EntityUsernameInput from "@/components/ui/EntityUsernameInput";
+import Avatar from "@/components/ui/Avatar";
+import Pagination from "@/components/ui/Pagination";
 
 type EntityType = "profile" | "persona";
 type ViewerRole = "viewer" | "moderator";
@@ -65,6 +67,7 @@ const COMMON_BAN_REASONS = [
   "Scam or phishing",
   "Off-topic disruption",
 ];
+const PREVIEW_PER_PAGE = 2;
 
 function inferEntityTypeFromUsername(rawUsername: string): EntityType {
   return rawUsername.toLowerCase().startsWith("ai_") ? "persona" : "profile";
@@ -72,6 +75,7 @@ function inferEntityTypeFromUsername(rawUsername: string): EntityType {
 
 export default function BanPreviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const modalRef = useRef<HTMLDialogElement>(null);
   const [viewerRole, setViewerRole] = useState<ViewerRole>("moderator");
   const [showEmpty, setShowEmpty] = useState(false);
@@ -85,6 +89,11 @@ export default function BanPreviewPage() {
   const canEditBans = viewerRole === "moderator";
   const rows = showEmpty ? [] : previewRows;
   const totalBans = rows.length;
+  const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+  const safePage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const totalPages = Math.max(1, Math.ceil(totalBans / PREVIEW_PER_PAGE));
+  const page = Math.min(safePage, totalPages);
+  const pageRows = rows.slice((page - 1) * PREVIEW_PER_PAGE, page * PREVIEW_PER_PAGE);
 
   const groupedStats = useMemo(() => {
     return {
@@ -101,6 +110,7 @@ export default function BanPreviewPage() {
     setBanDays("7");
     setReason("");
     setInlineError("");
+    router.replace("/preview/ban");
   };
 
   useEffect(() => {
@@ -314,59 +324,64 @@ export default function BanPreviewPage() {
             No bans found on this page.
           </div>
         ) : (
-          rows.map((row) => (
+          pageRows.map((row) => (
             <div
               key={row.id}
-              className="card bg-base-100 border-neutral hover:bg-base-200/40 hover:border-base-content/30 flex cursor-pointer flex-row items-center gap-3 border p-3 transition-colors"
-              onClick={() => router.push(`/u/${encodeURIComponent(row.username)}`)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  router.push(`/u/${encodeURIComponent(row.username)}`);
-                }
-              }}
-              role="button"
-              tabIndex={0}
+              className="card bg-base-100 border-neutral hover:bg-base-200/40 hover:border-base-content/30 border p-3 transition-colors"
             >
-              <div className="avatar placeholder">
-                <div className="bg-base-300 text-base-content h-10 w-10 rounded-full text-xs">
-                  <span>{row.displayName.slice(0, 2).toUpperCase()}</span>
-                </div>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{row.displayName}</p>
-                <p className="truncate text-xs opacity-60">@{row.username}</p>
-                <div className="mt-1 flex items-center justify-between gap-3 text-xs opacity-70">
-                  <p className="truncate">Reason: {row.reason || "No reason"}</p>
-                  <p className="whitespace-nowrap">
-                    Expires:{" "}
-                    {row.expiresAt ? new Date(row.expiresAt).toLocaleString() : "Permanent"} · By:{" "}
-                    {row.bannedBy}
-                  </p>
-                </div>
-              </div>
-              {canEditBans ? (
+              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  className="btn btn-ghost btn-xs"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setPreviewRows((prev) =>
-                      prev.filter(
-                        (item) =>
-                          !(item.entityType === row.entityType && item.entityId === row.entityId),
-                      ),
-                    );
-                    toast.success(`Preview: ${row.entityType} unbanned`);
-                  }}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  onClick={() => router.push(`/u/${encodeURIComponent(row.username)}`)}
                 >
-                  Unban
+                  <Avatar
+                    src={undefined}
+                    fallbackSeed={row.displayName || row.username}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{row.displayName}</p>
+                    <p className="truncate text-xs opacity-60">@{row.username}</p>
+                  </div>
                 </button>
-              ) : null}
+                {canEditBans ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setPreviewRows((prev) =>
+                        prev.filter(
+                          (item) =>
+                            !(item.entityType === row.entityType && item.entityId === row.entityId),
+                        ),
+                      );
+                      toast.success(`Preview: ${row.entityType} unbanned`);
+                    }}
+                  >
+                    Unban
+                  </button>
+                ) : null}
+              </div>
+              <div className="border-base-300 my-2 border-t" />
+              <p className="truncate text-sm opacity-80">Reason: {row.reason || "No reason"}</p>
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs opacity-70">
+                <p className="truncate">By: {row.bannedBy}</p>
+                <p className="truncate">
+                  Expires: {row.expiresAt ? new Date(row.expiresAt).toLocaleString() : "Permanent"}
+                </p>
+              </div>
             </div>
           ))
         )}
       </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        hrefForPage={(p) => `/preview/ban?page=${p}`}
+        className="w-full px-4 sm:w-auto sm:px-0"
+      />
     </div>
   );
 }

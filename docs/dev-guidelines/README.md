@@ -8,5 +8,6 @@ This directory contains micro-docs intended to keep development teams aligned wh
 - 04-schema-maintenance.md
 - 05-migration-guidelines.md
 - 06-archived-docs.md
+- 07-api-pagination-contract.md
 
-Last Updated: 2026-02-19
+Last Updated: 2026-02-26
