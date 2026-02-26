@@ -146,3 +146,40 @@
   - `npm run ai:provider:verify`（輸出 active provider/model、fallback path、usage/cost summary、recent provider events）
 - 環境限制：
   - `npm install ai @ai-sdk/xai` 因網路限制（`ENOTFOUND registry.npmjs.org`）無法安裝；目前 `xai-provider` 以「優先嘗試 SDK，未安裝時 fallback HTTP」方式保持可運作。
+
+---
+
+# Phase1 Runtime Logging + Admin Observability Todo
+
+## Plan
+
+- [x] 對齊 `plans/ai-minion-army/PHASE1_RUNTIME_LOGGING_AND_ADMIN_OBSERVABILITY_PLAN.md` 與現況程式接點（runtime events / execution agent / runner / admin route&ui）
+- [x] 新增 migration：建立 `ai_runtime_events`、`ai_worker_status`（含索引），並同步 `supabase/schema.sql`
+- [x] 實作 best-effort runtime event 落庫 sink，接入 provider/tool/model/execution 事件路徑
+- [x] 在 `ReplyExecutionAgent` + `scripts/phase1-reply-runner.ts` 接入 worker heartbeat 與 circuit breaker 狀態上報
+- [x] 新增 admin API：`/api/admin/ai/runtime/status`、`/api/admin/ai/runtime/events`、`/api/admin/ai/runtime/tasks`
+- [x] 新增 admin 頁面 `/admin/ai/runtime`（health/queue/event stream/recent tasks，10-15 秒自動刷新）
+- [x] 新增「熔斷時 try resume」操作（不改變現有 policy/safety/review gate 語意）
+- [x] 補齊單元/整合/回歸測試，重點驗證「runtime 落庫失敗不影響 execution」
+- [x] 將 runtime observability 驗證納入既有 `npm run test`（不新增獨立 verify script）
+- [x] 更新文件：`README.md`、`src/lib/ai/REASON_CODES.md`、`src/agents/phase-1-reply-vote/README.md`
+- [x] 執行目標測試與 verify 指令，補上 Review（命令 + 結果 + 風險）
+
+## Check-in
+
+- 以「最小侵入」方式在既有 runtime recorder 與 phase1 runner 增量擴充，不重寫 queue / gate 流程。
+- runtime 與 worker 狀態上報一律 best-effort；任何 DB 失敗不得中斷主 execution path。
+
+## Review
+
+- 實作摘要：
+  - 新增 runtime observability DB schema（`ai_runtime_events`、`ai_worker_status`）與索引。
+  - 新增 `runtime-event-sink`、`runtime-observability-store`，provider/tool/model/execution 事件可 best-effort 落庫。
+  - `ReplyExecutionAgent` 新增 execution runtime events、circuit snapshot、`tryResumeCircuit()`；runner 新增 heartbeat/circuit status 上報。
+  - 新增 admin APIs：`status/events/tasks` 與 `resume`，並新增 `/admin/ai/runtime` 頁面（12 秒輪詢 + try resume）。
+  - runtime observability 驗證改走既有 `npm run test`。
+- 驗證命令：
+  - `npm test -- src/lib/ai/observability/runtime-event-sink.test.ts src/lib/ai/prompt-runtime/runtime-events.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-execution-agent.test.ts src/app/api/admin/ai/runtime/status/route.test.ts src/app/api/admin/ai/runtime/events/route.test.ts src/app/api/admin/ai/runtime/tasks/route.test.ts src/app/api/admin/ai/runtime/resume/route.test.ts`（24 tests passed）
+- 回歸結論：
+  - 落庫失敗不影響 execution（新增回歸測試覆蓋 `runtimeEventSink.record` throw）。
+  - policy/safety/review gate 行為保持原語意，僅增加 observability side-channel。

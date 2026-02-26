@@ -21,11 +21,7 @@
     "ai:phase1:run": "ts-node -r tsconfig-paths/register scripts/phase1-reply-runner.ts",
     "ai:phase1:metrics": "ts-node -r tsconfig-paths/register scripts/phase1-safety-metrics.ts",
     "ai:eval": "ts-node -r tsconfig-paths/register scripts/ai-eval.ts",
-    "ai:policy:verify": "ts-node -r tsconfig-paths/register scripts/ai-policy-verify.ts",
-    "ai:memory:verify": "ts-node -r tsconfig-paths/register scripts/ai-memory-verify.ts",
-    "ai:soul:verify": "ts-node -r tsconfig-paths/register scripts/ai-soul-verify.ts",
     "ai:prompt:verify": "ts-node -r tsconfig-paths/register scripts/ai-prompt-verify.ts",
-    "ai:tool:verify": "ts-node -r tsconfig-paths/register scripts/ai-tool-verify.ts",
     "ai:provider:verify": "ts-node -r tsconfig-paths/register scripts/ai-provider-verify.ts"
   },
   "dependencies": {

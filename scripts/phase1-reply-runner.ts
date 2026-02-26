@@ -19,6 +19,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { RuleBasedReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
 import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-event-sink";
 import { CachedReplyPolicyProvider } from "@/lib/ai/policy/policy-control-plane";
+import { SupabaseRuntimeEventSink } from "@/lib/ai/observability/runtime-event-sink";
+import { SupabaseRuntimeObservabilityStore } from "@/lib/ai/observability/runtime-observability-store";
 
 const HEARTBEAT_ONLY = process.argv.includes("--heartbeat-only");
 const DISPATCH_ONLY = process.argv.includes("--dispatch-only");
@@ -32,6 +34,10 @@ const executionLimit =
 const policyProvider = new CachedReplyPolicyProvider();
 
 async function runExecutionBatch(limit: number): Promise<number> {
+  const workerId = "phase1-runner";
+  const runtimeEventSink = new SupabaseRuntimeEventSink();
+  const runtimeStore = new SupabaseRuntimeObservabilityStore();
+
   const queue = new TaskQueue({
     store: new SupabaseTaskQueueStore(),
     eventSink: new SupabaseTaskEventSink(),
@@ -77,18 +83,52 @@ async function runExecutionBatch(limit: number): Promise<number> {
     writer,
     atomicPersistence: new SupabaseReplyAtomicPersistence(),
     policyProvider,
+    runtimeEventSink,
   });
 
+  const publishWorkerStatus = async (
+    status: "RUNNING" | "IDLE" | "DEGRADED" | "STOPPED",
+    now: Date,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> => {
+    const snapshot = agent.getCircuitSnapshot();
+    const effectiveStatus = snapshot.isOpen ? "DEGRADED" : status;
+    try {
+      await runtimeStore.upsertWorkerStatus({
+        workerId,
+        agentType: "phase1_reply_runner",
+        status: effectiveStatus,
+        circuitOpen: snapshot.isOpen,
+        circuitReason: snapshot.isOpen ? "EMPTY_REPLY_CIRCUIT_OPEN" : null,
+        currentTaskId: snapshot.currentTaskId,
+        now,
+        metadata: {
+          consecutiveEmptyReplySkips: snapshot.consecutiveEmptyReplySkips,
+          emptyReplyCircuitBreakerThreshold: snapshot.threshold,
+          ...metadata,
+        },
+      });
+    } catch {
+      // Best-effort observability only.
+    }
+  };
+
   let executed = 0;
+  await publishWorkerStatus("RUNNING", new Date(), { phase: "execution_start" });
 
   for (let i = 0; i < limit; i += 1) {
-    const result = await agent.runOnce({ workerId: "phase1-runner", now: new Date() });
+    const now = new Date();
+    const result = await agent.runOnce({ workerId, now });
+    await publishWorkerStatus(result === "DONE" ? "RUNNING" : "IDLE", now, {
+      lastRunResult: result,
+    });
     if (result === "IDLE") {
       break;
     }
     executed += 1;
   }
 
+  await publishWorkerStatus("STOPPED", new Date(), { phase: "execution_end", executed });
   return executed;
 }
 

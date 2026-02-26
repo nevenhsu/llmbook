@@ -1,10 +1,15 @@
 import type { QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { TaskQueue } from "@/lib/ai/task-queue/task-queue";
 import type { ReplySafetyContext, ReplySafetyGate } from "@/lib/ai/safety/reply-safety-gate";
-import { ExecutionSkipReasonCode, ReviewReasonCode } from "@/lib/ai/reason-codes";
+import {
+  ExecutionRuntimeReasonCode,
+  ExecutionSkipReasonCode,
+  ReviewReasonCode,
+} from "@/lib/ai/reason-codes";
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
 import type { ReviewQueue } from "@/lib/ai/review-queue/review-queue";
 import type { ReplyPolicyProvider } from "@/lib/ai/policy/policy-control-plane";
+import type { RuntimeEventSink } from "@/lib/ai/observability/runtime-event-sink";
 
 export interface ReplyGenerator {
   generate(task: QueueTask): Promise<{
@@ -62,6 +67,14 @@ type ReplyExecutionAgentOptions = {
   atomicPersistence?: ReplyAtomicPersistence;
   policyProvider?: ReplyPolicyProvider;
   emptyReplyCircuitBreakerThreshold?: number;
+  runtimeEventSink?: RuntimeEventSink;
+};
+
+export type ReplyExecutionCircuitSnapshot = {
+  isOpen: boolean;
+  consecutiveEmptyReplySkips: number;
+  threshold: number;
+  currentTaskId: string | null;
 };
 
 export class ReplyExecutionAgent {
@@ -74,9 +87,11 @@ export class ReplyExecutionAgent {
   private readonly reviewQueue?: ReviewQueue;
   private readonly atomicPersistence?: ReplyAtomicPersistence;
   private readonly policyProvider?: ReplyPolicyProvider;
+  private readonly runtimeEventSink?: RuntimeEventSink;
   private readonly emptyReplyCircuitBreakerThreshold: number;
   private consecutiveEmptyReplySkips = 0;
   private emptyReplyCircuitOpen = false;
+  private currentTaskId: string | null = null;
   private static readonly REVIEW_TEXT_MAX_LENGTH = 2000;
 
   public constructor(options: ReplyExecutionAgentOptions) {
@@ -89,6 +104,7 @@ export class ReplyExecutionAgent {
     this.reviewQueue = options.reviewQueue;
     this.atomicPersistence = options.atomicPersistence;
     this.policyProvider = options.policyProvider;
+    this.runtimeEventSink = options.runtimeEventSink;
     this.emptyReplyCircuitBreakerThreshold = Math.max(
       1,
       options.emptyReplyCircuitBreakerThreshold ?? 1,
@@ -97,6 +113,12 @@ export class ReplyExecutionAgent {
 
   public async runOnce(input: { workerId: string; now: Date }): Promise<"IDLE" | "DONE"> {
     if (this.emptyReplyCircuitOpen) {
+      await this.recordExecutionEvent({
+        now: input.now,
+        workerId: input.workerId,
+        reasonCode: ExecutionRuntimeReasonCode.circuitOpen,
+        operation: "BREAKER",
+      });
       return "IDLE";
     }
 
@@ -109,46 +131,82 @@ export class ReplyExecutionAgent {
       return "IDLE";
     }
 
-    if (claimed.taskType !== "reply") {
-      await this.queue.skip({
-        taskId: claimed.id,
-        workerId: input.workerId,
-        reason: ExecutionSkipReasonCode.unsupportedTaskType,
-        now: input.now,
-      });
-      return "DONE";
-    }
+    this.currentTaskId = claimed.id;
+    await this.recordExecutionEvent({
+      now: input.now,
+      workerId: input.workerId,
+      taskId: claimed.id,
+      personaId: claimed.personaId,
+      reasonCode: ExecutionRuntimeReasonCode.taskClaimed,
+      operation: "TASK",
+    });
 
-    if (this.policyProvider) {
-      const policy = await this.policyProvider.getReplyPolicy({
-        personaId: claimed.personaId,
-        boardId: typeof claimed.payload.boardId === "string" ? claimed.payload.boardId : undefined,
-      });
-      if (!policy.replyEnabled) {
+    try {
+      if (claimed.taskType !== "reply") {
         await this.queue.skip({
           taskId: claimed.id,
           workerId: input.workerId,
-          reason: ExecutionSkipReasonCode.policyDisabled,
+          reason: ExecutionSkipReasonCode.unsupportedTaskType,
           now: input.now,
+        });
+        await this.recordExecutionEvent({
+          now: input.now,
+          workerId: input.workerId,
+          taskId: claimed.id,
+          personaId: claimed.personaId,
+          reasonCode: ExecutionSkipReasonCode.unsupportedTaskType,
+          operation: "TASK",
         });
         return "DONE";
       }
-    }
 
-    const idempotencyKey = this.resolveIdempotencyKey(claimed);
-    const existing = await this.idempotency.get(idempotencyKey);
-    if (existing) {
-      await this.queue.complete({
-        taskId: claimed.id,
-        workerId: input.workerId,
-        resultId: existing,
-        resultType: "comment",
-        now: input.now,
-      });
-      return "DONE";
-    }
+      if (this.policyProvider) {
+        const policy = await this.policyProvider.getReplyPolicy({
+          personaId: claimed.personaId,
+          boardId:
+            typeof claimed.payload.boardId === "string" ? claimed.payload.boardId : undefined,
+        });
+        if (!policy.replyEnabled) {
+          await this.queue.skip({
+            taskId: claimed.id,
+            workerId: input.workerId,
+            reason: ExecutionSkipReasonCode.policyDisabled,
+            now: input.now,
+          });
+          await this.recordExecutionEvent({
+            now: input.now,
+            workerId: input.workerId,
+            taskId: claimed.id,
+            personaId: claimed.personaId,
+            reasonCode: ExecutionSkipReasonCode.policyDisabled,
+            operation: "TASK",
+          });
+          return "DONE";
+        }
+      }
 
-    try {
+      const idempotencyKey = this.resolveIdempotencyKey(claimed);
+      const existing = await this.idempotency.get(idempotencyKey);
+      if (existing) {
+        await this.queue.complete({
+          taskId: claimed.id,
+          workerId: input.workerId,
+          resultId: existing,
+          resultType: "comment",
+          now: input.now,
+        });
+        await this.recordExecutionEvent({
+          now: input.now,
+          workerId: input.workerId,
+          taskId: claimed.id,
+          personaId: claimed.personaId,
+          reasonCode: ExecutionRuntimeReasonCode.taskCompleted,
+          operation: "TASK",
+          metadata: { idempotentReuse: true },
+        });
+        return "DONE";
+      }
+
       const generated = await this.generator.generate(claimed);
       if (generated.skipReason) {
         await this.queue.skip({
@@ -156,6 +214,15 @@ export class ReplyExecutionAgent {
           workerId: input.workerId,
           reason: generated.skipReason,
           now: input.now,
+        });
+        await this.recordExecutionEvent({
+          now: input.now,
+          workerId: input.workerId,
+          taskId: claimed.id,
+          personaId: claimed.personaId,
+          reasonCode: generated.skipReason,
+          operation: "TASK",
+          metadata: { skippedByGenerator: true },
         });
         return "DONE";
       }
@@ -171,7 +238,27 @@ export class ReplyExecutionAgent {
         this.consecutiveEmptyReplySkips += 1;
         if (this.consecutiveEmptyReplySkips >= this.emptyReplyCircuitBreakerThreshold) {
           this.emptyReplyCircuitOpen = true;
+          await this.recordExecutionEvent({
+            now: input.now,
+            workerId: input.workerId,
+            taskId: claimed.id,
+            personaId: claimed.personaId,
+            reasonCode: ExecutionRuntimeReasonCode.circuitOpened,
+            operation: "BREAKER",
+            metadata: {
+              consecutiveEmptyReplySkips: this.consecutiveEmptyReplySkips,
+              threshold: this.emptyReplyCircuitBreakerThreshold,
+            },
+          });
         }
+        await this.recordExecutionEvent({
+          now: input.now,
+          workerId: input.workerId,
+          taskId: claimed.id,
+          personaId: claimed.personaId,
+          reasonCode: ExecutionSkipReasonCode.emptyGeneratedReply,
+          operation: "TASK",
+        });
         return "DONE";
       }
       this.consecutiveEmptyReplySkips = 0;
@@ -205,6 +292,15 @@ export class ReplyExecutionAgent {
                 safetyRiskLevel: safety.riskLevel ?? "UNKNOWN",
               },
             });
+            await this.recordExecutionEvent({
+              now: input.now,
+              workerId: input.workerId,
+              taskId: claimed.id,
+              personaId: claimed.personaId,
+              reasonCode: safety.reasonCode ?? ReviewReasonCode.reviewRequired,
+              operation: "TASK",
+              metadata: { movedToReview: true },
+            });
             return "DONE";
           }
         }
@@ -232,6 +328,14 @@ export class ReplyExecutionAgent {
           workerId: input.workerId,
           reason: safety.reasonCode ?? safety.reason ?? ExecutionSkipReasonCode.safetyBlocked,
           now: input.now,
+        });
+        await this.recordExecutionEvent({
+          now: input.now,
+          workerId: input.workerId,
+          taskId: claimed.id,
+          personaId: claimed.personaId,
+          reasonCode: safety.reasonCode ?? ExecutionSkipReasonCode.safetyBlocked,
+          operation: "TASK",
         });
         return "DONE";
       }
@@ -280,6 +384,15 @@ export class ReplyExecutionAgent {
       if (!resultId) {
         throw new Error("reply persistence returned empty resultId");
       }
+      await this.recordExecutionEvent({
+        now: input.now,
+        workerId: input.workerId,
+        taskId: claimed.id,
+        personaId: claimed.personaId,
+        reasonCode: ExecutionRuntimeReasonCode.taskCompleted,
+        operation: "TASK",
+        metadata: { resultId },
+      });
       return "DONE";
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown execution error";
@@ -289,8 +402,43 @@ export class ReplyExecutionAgent {
         errorMessage: message,
         now: input.now,
       });
+      await this.recordExecutionEvent({
+        now: input.now,
+        workerId: input.workerId,
+        taskId: claimed.id,
+        personaId: claimed.personaId,
+        reasonCode: ExecutionRuntimeReasonCode.taskFailed,
+        operation: "TASK",
+        metadata: { error: message },
+      });
       return "DONE";
+    } finally {
+      this.currentTaskId = null;
     }
+  }
+
+  public getCircuitSnapshot(): ReplyExecutionCircuitSnapshot {
+    return {
+      isOpen: this.emptyReplyCircuitOpen,
+      consecutiveEmptyReplySkips: this.consecutiveEmptyReplySkips,
+      threshold: this.emptyReplyCircuitBreakerThreshold,
+      currentTaskId: this.currentTaskId,
+    };
+  }
+
+  public async tryResumeCircuit(input: { workerId: string; now: Date }): Promise<boolean> {
+    if (!this.emptyReplyCircuitOpen) {
+      return false;
+    }
+    this.emptyReplyCircuitOpen = false;
+    this.consecutiveEmptyReplySkips = 0;
+    await this.recordExecutionEvent({
+      now: input.now,
+      workerId: input.workerId,
+      reasonCode: ExecutionRuntimeReasonCode.circuitResumed,
+      operation: "BREAKER",
+    });
+    return true;
   }
 
   private resolveIdempotencyKey(task: QueueTask): string {
@@ -311,5 +459,31 @@ export class ReplyExecutionAgent {
     }
     const parsed = Number(match[1]);
     return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private async recordExecutionEvent(input: {
+    now: Date;
+    workerId: string;
+    reasonCode: string;
+    operation: "TASK" | "BREAKER";
+    taskId?: string;
+    personaId?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      await this.runtimeEventSink?.record({
+        layer: "execution",
+        operation: input.operation,
+        reasonCode: input.reasonCode,
+        entityId: input.taskId ?? `worker:${input.workerId}`,
+        taskId: input.taskId ?? null,
+        personaId: input.personaId ?? null,
+        workerId: input.workerId,
+        occurredAt: input.now.toISOString(),
+        metadata: input.metadata ?? {},
+      });
+    } catch {
+      // Best-effort observability only.
+    }
   }
 }

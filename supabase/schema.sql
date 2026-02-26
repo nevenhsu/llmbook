@@ -445,6 +445,34 @@ CREATE TABLE public.ai_review_events (
   )
 );
 
+-- AI runtime event stream (provider/tool/model/execution/worker)
+CREATE TABLE public.ai_runtime_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  layer text NOT NULL,
+  operation text NOT NULL,
+  reason_code text NOT NULL,
+  entity_id text NOT NULL,
+  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
+  persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
+  worker_id text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  occurred_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Per-worker runtime heartbeat + circuit state
+CREATE TABLE public.ai_worker_status (
+  worker_id text PRIMARY KEY,
+  agent_type text NOT NULL,
+  status text NOT NULL,
+  circuit_open boolean NOT NULL DEFAULT false,
+  circuit_reason text,
+  last_heartbeat timestamptz NOT NULL,
+  current_task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- Persona memory (short-term memory / deduplication)
 CREATE TABLE public.persona_memory (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -687,6 +715,22 @@ CREATE INDEX idx_ai_review_events_task_created
   ON public.ai_review_events(task_id, created_at DESC);
 CREATE INDEX idx_ai_review_events_event_type_created
   ON public.ai_review_events(event_type, created_at DESC);
+
+-- AI runtime events
+CREATE INDEX idx_ai_runtime_events_occurred_at
+  ON public.ai_runtime_events(occurred_at DESC);
+CREATE INDEX idx_ai_runtime_events_layer_occurred_at
+  ON public.ai_runtime_events(layer, occurred_at DESC);
+CREATE INDEX idx_ai_runtime_events_reason_code_occurred_at
+  ON public.ai_runtime_events(reason_code, occurred_at DESC);
+CREATE INDEX idx_ai_runtime_events_entity_id_occurred_at
+  ON public.ai_runtime_events(entity_id, occurred_at DESC);
+
+-- AI worker status
+CREATE INDEX idx_ai_worker_status_status_updated_at
+  ON public.ai_worker_status(status, updated_at DESC);
+CREATE INDEX idx_ai_worker_status_circuit_open_updated_at
+  ON public.ai_worker_status(circuit_open, updated_at DESC);
 
 -- Persona memory
 CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
@@ -1394,6 +1438,8 @@ ALTER TABLE public.task_idempotency_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_transition_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_review_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_review_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_runtime_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_worker_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_thread_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
@@ -1818,6 +1864,8 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- task_transition_events: No policies (service role only)
 -- ai_review_queue: No policies (service role only)
 -- ai_review_events: No policies (service role only)
+-- ai_runtime_events: No policies (service role only)
+-- ai_worker_status: No policies (service role only)
 -- persona_memory: No policies (service role only)
 -- ai_thread_memories: No policies (service role only)
 CREATE POLICY "Service role can read policy releases" ON public.ai_policy_releases
@@ -1845,6 +1893,8 @@ COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to pre
 COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks state transitions for replay and observability.';
 COMMENT ON TABLE public.ai_review_queue IS 'Manual review queue for high-risk/gray-zone content. 3 days unhandled items expire automatically.';
 COMMENT ON TABLE public.ai_review_events IS 'Audit stream for review queue lifecycle and reviewer decisions.';
+COMMENT ON TABLE public.ai_runtime_events IS 'Best-effort runtime event stream for provider/tool/model/execution/worker observability.';
+COMMENT ON TABLE public.ai_worker_status IS 'Latest heartbeat and circuit breaker status per AI worker.';
 COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
 COMMENT ON TABLE public.ai_thread_memories IS 'Short-term per persona-thread memory entries with TTL and configurable per-scope max_items.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';

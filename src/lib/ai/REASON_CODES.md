@@ -8,17 +8,18 @@
 
 ## Mapping
 
-| Layer     | Constant Set                     | 實際用途                                                                         |
-| --------- | -------------------------------- | -------------------------------------------------------------------------------- |
-| generator | `GeneratorSkipReasonCode.*`      | `ReplyGenerator.generate()` 回傳 `skipReason`                                    |
-| safety    | `SafetyReasonCode.*`             | `ReplySafetyGate.check()` 回傳 `reasonCode`                                      |
-| execution | `ExecutionSkipReasonCode.*`      | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`）  |
-| policy    | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                 |
-| memory    | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                               |
-| soul      | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）                |
-| prompt    | `PromptRuntimeReasonCode.*`      | prompt builder / model adapter 成功、失敗與 fallback 事件                        |
-| tool      | `ToolRuntimeReasonCode.*`        | tool registry / schema validate / handler / loop timeout and max-iterations 事件 |
-| provider  | `ProviderRuntimeReasonCode.*`    | provider registry / invokeLLM timeout/retry/fallback/fail-safe/usage normalize   |
+| Layer             | Constant Set                     | 實際用途                                                                         |
+| ----------------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| generator         | `GeneratorSkipReasonCode.*`      | `ReplyGenerator.generate()` 回傳 `skipReason`                                    |
+| safety            | `SafetyReasonCode.*`             | `ReplySafetyGate.check()` 回傳 `reasonCode`                                      |
+| execution         | `ExecutionSkipReasonCode.*`      | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`）  |
+| policy            | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                 |
+| memory            | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                               |
+| soul              | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）                |
+| prompt            | `PromptRuntimeReasonCode.*`      | prompt builder / model adapter 成功、失敗與 fallback 事件                        |
+| tool              | `ToolRuntimeReasonCode.*`        | tool registry / schema validate / handler / loop timeout and max-iterations 事件 |
+| provider          | `ProviderRuntimeReasonCode.*`    | provider registry / invokeLLM timeout/retry/fallback/fail-safe/usage normalize   |
+| execution runtime | `ExecutionRuntimeReasonCode.*`   | execution worker task claim/complete/fail 與 circuit breaker open/resume 事件    |
 
 ## Queue Persistence
 
@@ -80,13 +81,28 @@
 - `PROVIDER_FAIL_SAFE_RETURNED`
 - `PROVIDER_USAGE_NORMALIZED`
 
-## Prompt/Soul/Tool Observability Event Contract（Minimal）
+## Execution Runtime Reason Codes
+
+- `EXECUTION_TASK_CLAIMED`
+- `EXECUTION_TASK_COMPLETED`
+- `EXECUTION_TASK_FAILED`
+- `EXECUTION_TASK_SKIPPED`
+- `EXECUTION_CIRCUIT_OPENED`
+- `EXECUTION_CIRCUIT_OPEN`
+- `EXECUTION_CIRCUIT_RESUMED`
+
+## Prompt/Soul/Tool/Execution Observability Event Contract（Minimal）
 
 - `layer`
 - `operation`
 - `reasonCode`
 - `entityId`
 - `occurredAt`
+
+Runtime persistence tables:
+
+- `public.ai_runtime_events`
+- `public.ai_worker_status`
 
 ## Provider Usage（Minimal）
 

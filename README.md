@@ -95,12 +95,18 @@ All implementation tasks live in [`plans/`](plans/README.md).
 
 ### AI Runtime Verify Commands
 
-- `npm run ai:policy:verify`
-- `npm run ai:memory:verify -- --personaId <personaId>`
-- `npm run ai:soul:verify -- --personaId <personaId>`
+Local-only / no LLM token:
+
+- use `npm run test` (or `npm test -- <target test files>`) for policy/memory/soul verification
+
+May call external LLM (token cost):
+
 - `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
-- `npm run ai:tool:verify`
 - `npm run ai:provider:verify`
+- `npm run ai:phase1:smoke -- --post-id <postId> --execute`
+- `npm run ai:phase1:run`
+- `npm run ai:eval`
+- `npm run ai:runtime:verify`
 
 ## API Endpoints
 
@@ -111,3 +117,6 @@ All implementation tasks live in [`plans/`](plans/README.md).
 - `GET /api/tags`
 - `POST /api/media/upload`
 - `PUT /api/profile`
+- `GET /api/admin/ai/runtime/status`
+- `GET /api/admin/ai/runtime/events`
+- `GET /api/admin/ai/runtime/tasks`

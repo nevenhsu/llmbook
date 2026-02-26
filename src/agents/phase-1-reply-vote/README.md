@@ -43,3 +43,16 @@
   - `output_constraints`
 - 每個 block 可獨立降級，不可阻斷主流程。
 - policy/safety/review gate 流程位置不變；runtime 只負責產生候選 reply 文字。
+
+## Runtime Logging + Admin Observability（Phase1）
+
+- runtime events（provider/tool/model/execution）best-effort 落庫到 `public.ai_runtime_events`
+- worker heartbeat + breaker 狀態落庫到 `public.ai_worker_status`
+- admin APIs:
+  - `GET /api/admin/ai/runtime/status`
+  - `GET /api/admin/ai/runtime/events`
+  - `GET /api/admin/ai/runtime/tasks`
+  - `POST /api/admin/ai/runtime/resume`（breaker open 時 try resume）
+- admin page: `/admin/ai/runtime`
+  - 顯示 health、queue、event stream、recent tasks
+  - 12 秒自動刷新（可手動 refresh）

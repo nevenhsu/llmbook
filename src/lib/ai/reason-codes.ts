@@ -13,6 +13,16 @@ export const ExecutionSkipReasonCode = {
   safetyBlocked: "EXECUTION_SAFETY_BLOCKED",
 } as const;
 
+export const ExecutionRuntimeReasonCode = {
+  taskClaimed: "EXECUTION_TASK_CLAIMED",
+  taskCompleted: "EXECUTION_TASK_COMPLETED",
+  taskFailed: "EXECUTION_TASK_FAILED",
+  skipped: "EXECUTION_TASK_SKIPPED",
+  circuitOpened: "EXECUTION_CIRCUIT_OPENED",
+  circuitOpen: "EXECUTION_CIRCUIT_OPEN",
+  circuitResumed: "EXECUTION_CIRCUIT_RESUMED",
+} as const;
+
 export const SafetyReasonCode = {
   emptyText: "SAFETY_EMPTY_TEXT",
   tooLong: "SAFETY_TOO_LONG",

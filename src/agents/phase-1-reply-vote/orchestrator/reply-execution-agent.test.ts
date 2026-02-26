@@ -357,6 +357,37 @@ describe("ReplyExecutionAgent", () => {
     expect(tasks[1]?.status).toBe("PENDING");
   });
 
+  it("keeps execution successful when runtime event persistence fails", async () => {
+    const store = new InMemoryTaskQueueStore([buildTask()]);
+    const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
+    const writer = {
+      write: vi.fn().mockResolvedValue({ resultId: "comment-1" }),
+    };
+
+    const runtimeEventSink = {
+      record: vi.fn().mockRejectedValue(new Error("runtime event insert failed")),
+    };
+
+    const agent = new ReplyExecutionAgent({
+      queue,
+      idempotency: new InMemoryIdempotencyStore(),
+      generator: { generate: vi.fn().mockResolvedValue({ text: "hello" }) },
+      safetyGate: { check: vi.fn().mockResolvedValue({ allowed: true }) },
+      writer,
+      runtimeEventSink,
+    });
+
+    const result = await agent.runOnce({
+      workerId: "worker-1",
+      now: new Date("2026-02-23T00:01:00.000Z"),
+    });
+
+    expect(result).toBe("DONE");
+    expect(writer.write).toHaveBeenCalledTimes(1);
+    expect(store.snapshot()[0]?.status).toBe("DONE");
+    expect(runtimeEventSink.record).toHaveBeenCalled();
+  });
+
   it("skips task when policy provider disables reply capability", async () => {
     const store = new InMemoryTaskQueueStore([buildTask()]);
     const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });

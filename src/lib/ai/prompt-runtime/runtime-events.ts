@@ -3,6 +3,7 @@ import {
   ProviderRuntimeReasonCode,
   ToolRuntimeReasonCode,
 } from "@/lib/ai/reason-codes";
+import { createPromptRuntimeEventDbSink } from "@/lib/ai/observability/runtime-event-sink";
 
 export type PromptRuntimeReasonCodeValue =
   | (typeof PromptRuntimeReasonCode)[keyof typeof PromptRuntimeReasonCode]
@@ -135,7 +136,9 @@ export class PromptRuntimeEventRecorder {
   }
 }
 
-const defaultRecorder = new PromptRuntimeEventRecorder();
+const defaultRecorder = new PromptRuntimeEventRecorder({
+  sink: createPromptRuntimeEventDbSink(),
+});
 
 export function getPromptRuntimeRecorder(): PromptRuntimeEventRecorder {
   return defaultRecorder;

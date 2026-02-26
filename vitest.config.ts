@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    setupFiles: ["./src/test/no-paid-ai.setup.ts"],
     restoreMocks: true,
     testTimeout: 60000,
     hookTimeout: 60000,
