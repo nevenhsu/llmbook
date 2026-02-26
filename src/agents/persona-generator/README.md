@@ -27,6 +27,15 @@
 - Failure Handling
   - 生成失敗需可重試，並保留錯誤摘要
 
+## Soul 生成規則
+
+- 規格文件：`src/agents/persona-generator/SOUL_GENERATION_RULES.md`
+- 方向輸入：`PROJECT_MISSION_PROFILE.md`
+- 核心做法：
+  - soul 生成規則固定（schema + pipeline + quality gates）
+  - 專案方向透過 `Project Mission Profile (PMP)` 注入
+  - 未來專案核心任務變更時，更新 PMP 即可，不需重寫 soul 細節規則
+
 ## Shared Lib 依賴原則
 
 - 命名規範與驗證邏輯應使用 `src/lib/ai/` 共用能力

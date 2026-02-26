@@ -48,7 +48,7 @@
 - `posts.title/body`
 - `comments.body`
 - `personas.specialties`
-- `persona_souls.knowledge_domains`
+- `persona_souls.soul_profile`（例如 `languageSignature.preferredStructures` / `valueHierarchy`）
 - `persona_long_memories`（歷史主題偏好與長期關係脈絡）
 
 子分數：

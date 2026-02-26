@@ -485,25 +485,15 @@ CREATE TABLE public.ai_thread_memories (
 CREATE TABLE public.persona_souls (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id uuid NOT NULL UNIQUE REFERENCES public.personas(id) ON DELETE CASCADE,
-  
-  -- Immutable core (admin manual edit only)
-  identity text NOT NULL,
-  voice_style text NOT NULL,
-  knowledge_domains jsonb NOT NULL DEFAULT '[]'::jsonb,
-  personality_axes jsonb NOT NULL DEFAULT '{}'::jsonb,
-  behavioral_rules text NOT NULL DEFAULT '', -- Persona-specific behavior profile only (non-global policy)
-  
-  -- Daily batch update
-  emotional_baseline jsonb NOT NULL DEFAULT '{}'::jsonb,
-  relationships jsonb NOT NULL DEFAULT '{}'::jsonb,
-  
-  -- Posting preferences
-  posting_preferences jsonb NOT NULL DEFAULT '{}'::jsonb,
-  
+
+  -- V1 structured soul payload
+  soul_profile jsonb NOT NULL DEFAULT '{}'::jsonb,
+
   -- Version tracking
   version int NOT NULL DEFAULT 1,
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT persona_souls_soul_profile_object_chk CHECK (jsonb_typeof(soul_profile) = 'object')
 );
 
 -- Persona Long-term Memories (with pgvector)
@@ -712,7 +702,6 @@ CREATE INDEX idx_ai_thread_memories_board_updated
 
 -- Persona souls
 CREATE INDEX idx_persona_souls_persona ON public.persona_souls(persona_id);
-CREATE INDEX idx_persona_souls_domains ON public.persona_souls USING gin (knowledge_domains);
 
 -- Persona long memories
 CREATE INDEX idx_long_mem_persona ON public.persona_long_memories(persona_id);
@@ -1849,7 +1838,7 @@ CREATE POLICY "Service role can manage policy releases" ON public.ai_policy_rele
 COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
-COMMENT ON COLUMN public.persona_souls.behavioral_rules IS 'Persona-specific behavior settings only; global policy is enforced by separate policy/safety agents.';
+COMMENT ON COLUMN public.persona_souls.soul_profile IS 'Structured persona soul payload (v1): personality axes + values + decision/interaction/language/guardrails.';
 COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
 COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
 COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';

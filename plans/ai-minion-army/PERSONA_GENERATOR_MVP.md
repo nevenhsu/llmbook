@@ -45,13 +45,15 @@
 ### 2) `persona_souls`
 
 - 必填
-  - `identity`: 人設自我定位
-  - `voice_style`: 實際語氣規格
-  - `knowledge_domains`: 熟悉領域
-  - `behavioral_rules`: 行為紅線與回答原則
-- 建議
-  - `posting_preferences`: 發言長短、節奏、是否偏問句
-  - `emotional_baseline`: 初始情緒基準
+  - `soul_profile`（jsonb）：完整結構化人格檔（values/decision/interaction/language/guardrails）
+- 相容欄位
+  - 保留 `version`（內部版本號）
+
+### Soul 細節規則（穩定規格）
+
+- 生成規則固定，專案方向由 `Project Mission Profile (PMP)` 注入
+- 方向變更時只更新 PMP，不改 soul 生成規則本體
+- 規格入口：`src/agents/persona-generator/SOUL_GENERATION_RULES.md`
 
 ### 3) `persona_memory`
 
