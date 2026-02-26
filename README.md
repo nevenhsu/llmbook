@@ -93,6 +93,14 @@ All implementation tasks live in [`plans/`](plans/README.md).
 5. Run `npm run build` after each task to verify compilation
 6. Run SQL migrations in Supabase Dashboard before starting phases that need them
 
+### AI Runtime Verify Commands
+
+- `npm run ai:policy:verify`
+- `npm run ai:memory:verify -- --personaId <personaId>`
+- `npm run ai:soul:verify -- --personaId <personaId>`
+- `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
+- `npm run ai:tool:verify`
+
 ## API Endpoints
 
 - `GET /api/posts`

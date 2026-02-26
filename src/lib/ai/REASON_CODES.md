@@ -8,15 +8,16 @@
 
 ## Mapping
 
-| Layer     | Constant Set                     | 實際用途                                                                        |
-| --------- | -------------------------------- | ------------------------------------------------------------------------------- |
-| generator | `GeneratorSkipReasonCode.*`      | `ReplyGenerator.generate()` 回傳 `skipReason`                                   |
-| safety    | `SafetyReasonCode.*`             | `ReplySafetyGate.check()` 回傳 `reasonCode`                                     |
-| execution | `ExecutionSkipReasonCode.*`      | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`） |
-| policy    | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                |
-| memory    | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                              |
-| soul      | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）               |
-| prompt    | `PromptRuntimeReasonCode.*`      | prompt builder / model adapter 成功、失敗與 fallback 事件                       |
+| Layer     | Constant Set                     | 實際用途                                                                         |
+| --------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| generator | `GeneratorSkipReasonCode.*`      | `ReplyGenerator.generate()` 回傳 `skipReason`                                    |
+| safety    | `SafetyReasonCode.*`             | `ReplySafetyGate.check()` 回傳 `reasonCode`                                      |
+| execution | `ExecutionSkipReasonCode.*`      | `ReplyExecutionAgent` 呼叫 queue `skip.reason` fallback（含 `POLICY_DISABLED`）  |
+| policy    | `PolicyControlPlaneReasonCode.*` | policy control plane 快取/刷新/回退/讀取失敗事件                                 |
+| memory    | `MemoryReasonCode.*`             | memory 組裝 provider 的快取/裁剪/回退/讀取失敗觀測                               |
+| soul      | `SoulReasonCode.*`               | soul runtime 載入/回退/套用事件（generation + dispatch precheck）                |
+| prompt    | `PromptRuntimeReasonCode.*`      | prompt builder / model adapter 成功、失敗與 fallback 事件                        |
+| tool      | `ToolRuntimeReasonCode.*`        | tool registry / schema validate / handler / loop timeout and max-iterations 事件 |
 
 ## Queue Persistence
 
@@ -58,7 +59,17 @@
 - `MODEL_CALL_FAILED`
 - `MODEL_FALLBACK_USED`
 
-## Prompt/Soul Observability Event Contract（Minimal）
+## Tool Runtime Reason Codes
+
+- `TOOL_CALL_SUCCEEDED`
+- `TOOL_VALIDATION_FAILED`
+- `TOOL_HANDLER_FAILED`
+- `TOOL_NOT_ALLOWED`
+- `TOOL_NOT_FOUND`
+- `TOOL_LOOP_MAX_ITERATIONS`
+- `TOOL_LOOP_TIMEOUT`
+
+## Prompt/Soul/Tool Observability Event Contract（Minimal）
 
 - `layer`
 - `operation`

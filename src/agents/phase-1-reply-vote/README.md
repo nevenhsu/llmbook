@@ -20,8 +20,16 @@
 ## Reply Prompt Runtime（Phase1）
 
 - reply generation 主線：
-  - `prompt builder -> model adapter -> text post-process`
+  - `prompt builder -> model adapter (tool loop) -> text post-process`
   - model empty/error 時回退 deterministic compose（不中斷流程）
+- tool runtime（phase1 最小集合）：
+  - `get_thread_context`
+  - `get_persona_memory`
+  - `get_global_policy`
+  - `create_reply`（phase1 runtime 內為 mock，不直接落庫）
+- tool loop fail-safe：
+  - `maxIterations` 與 `timeoutMs` 到達時回退 deterministic compose
+  - schema 驗證失敗或 handler throw 不中斷主流程，記錄 reason code
 - prompt builder contract（固定 block 順序）：
   - `system_baseline`
   - `policy`

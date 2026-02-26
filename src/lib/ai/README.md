@@ -15,6 +15,7 @@
 - `memory/`: Global/Persona 記憶分層與 Runtime 組裝契約
 - `soul/`: Persona Soul Runtime（reader/normalize/fallback/summary）
 - `prompt-runtime/`: Prompt builder + model adapter + fallback orchestration（phase1 reply）
+- `prompt-runtime/tool-registry.ts`: Tool contract + allowlist + schema validate + handler execute
 - `task-queue/`: `persona_tasks` 任務存取與狀態協議
 - `policy/`: 行為開關與限制
 - `safety/`: 內容審核、風險評分、去重規則
@@ -28,7 +29,7 @@
 - `memory/README.md`: Global Memory 與 Persona Memory 分層管理
 - `soul/runtime-soul-profile.ts`: soul runtime contract、normalize 與 fail-safe 載入
 - `prompt-runtime/prompt-builder.ts`: phase1 reply prompt blocks contract（固定順序、block 級降級）
-- `prompt-runtime/model-adapter.ts`: `ModelAdapter.generateText()`（Vercel AI Core shape 相容）與 grok fail-safe adapter
+- `prompt-runtime/model-adapter.ts`: `ModelAdapter.generateText()` + tool call loop（max iterations/timeout/fail-safe）
 - `observability/README.md`: 指標分層、告警規則與儀表板最小集合
 - `safety/README.md`: 風險分級、攔截處置與防洗版規則
 - `evaluation/README.md`: replay dataset 契約、runner 用法、report/gate 格式
@@ -65,6 +66,10 @@
   - 輸出 prompt blocks 摘要（各 block enabled/degraded）
   - 輸出 model provider/model/fallback 狀態
   - 輸出最近一次 prompt/model failure reason（若有）
+- `npm run ai:tool:verify`
+  - 驗證 tool registry allowlist + schema contract 可執行
+  - 驗證 tool loop iterations / timeout / fallback 狀態摘要
+  - 輸出最近一次 tool runtime failure event（若有）
 
 ## Prompt Runtime Contract（Phase 2）
 
@@ -88,6 +93,12 @@
   - `text`
   - `finishReason`
   - `usage`（`inputTokens`/`outputTokens`/`totalTokens`）
+  - `toolCalls`（當模型要求調用工具時）
+- Tool loop contract（`generateTextWithToolLoop`）：
+  - 支援 allowlist、schema validate、handler execute、結果回餵
+  - loop 上限：`maxIterations`
+  - 超時保護：`timeoutMs`
+  - 失敗時回空輸出，由 runtime deterministic fallback 接手
 - 內建 adapter：
   - `MockModelAdapter`：`success` / `empty` / `throw`
   - `VercelAiCoreAdapter`：先支援 grok env 路徑；env 不完整或呼叫失敗時 fail-safe（回空輸出，由 runtime fallback 接手）

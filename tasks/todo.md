@@ -80,3 +80,34 @@
   - `npm test -- src/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator.test.ts`（2 tests passed）
   - `npm run ai:prompt:verify -- --personaId persona-test --postId post-test`（在目前環境因 fetch failed 無法連線 Supabase）
 - 回歸結論：policy/review/safety 相關目標測試皆通過，gate 流程位置與語意未變更。
+
+# LLM Tool Runtime 正式化（Phase1）Todo
+
+## Plan
+
+- [x] 對齊 `plans/ai-minion-army/*` 與 phase1 flow，確認 tool loop 注入點與既有 gate 邊界（policy/safety/review 不變）
+- [x] 定義 Tool Contract 與 Registry（`name/description/schema/handler` + allowlist）
+- [x] 實作 reply phase1 最小工具集（`get_thread_context`/`get_persona_memory`/`get_global_policy`/`create_reply`）與 mock provider
+- [x] 在 model adapter 加入 tool call execute loop（含 max iterations、timeout、fail-safe fallback）
+- [x] 統一 tool reason codes 與最小事件欄位（`layer/operation/reasonCode/entityId/occurredAt`）
+- [x] Runtime 整合：reply prompt runtime 接入 tool loop，確保不中斷主流程且保留現有 deterministic fallback
+- [x] 測試補齊：單元/整合/回歸（tool success / schema validation fail / handler throw / loop timeout）
+- [x] 新增 verify 指令：`npm run ai:tool:verify`
+- [x] 文件更新：`README.md`、`src/lib/ai/REASON_CODES.md`、`src/agents/phase-1-reply-vote/README.md`
+- [x] Verification：執行目標測試與 verify 指令，補上 Review 結果
+
+## Check-in
+
+- 會優先重用既有 `orchestrator/memory/soul/runtime`，工具層僅作最小侵入式增量。
+- 預計先完成 contract+loop+tests，再接 verify 與文件，最後統一驗證。
+
+## Review
+
+- 實作摘要：新增 `tool-registry`（contract/schema validate/allowlist/handler execute），並在 `model-adapter` 加入 `generateTextWithToolLoop`（tool call 回餵、max iterations、timeout、fail-safe）。
+- phase1 整合：`reply-prompt-runtime` 以最小侵入方式接入 tool loop，預設工具集為 `get_thread_context/get_persona_memory/get_global_policy/create_reply`（`create_reply` 在 runtime 內 mock，不直接寫入 DB）。
+- observability：新增 `ToolRuntimeReasonCode`（success/validation fail/handler fail/not allowed/not found/max iterations/timeout），沿用最小事件欄位 `layer/operation/reasonCode/entityId/occurredAt`。
+- 驗證命令：
+  - `npm test -- src/lib/ai/prompt-runtime/tool-registry.test.ts src/lib/ai/prompt-runtime/model-adapter.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts`（16 tests passed）
+  - `npm test -- src/agents/phase-1-reply-vote/orchestrator/phase1-reply-flow.integration.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-execution-agent.test.ts src/lib/ai/safety/reply-safety-gate.test.ts src/lib/ai/policy/policy-control-plane.test.ts`（28 tests passed）
+  - `npm run ai:tool:verify`（輸出 loop iterations/tool call summary/recent tool events）
+- 回歸結論：phase1 policy/safety/review gate 測試仍通過，主流程在 tool loop 異常時仍可 deterministic fallback。

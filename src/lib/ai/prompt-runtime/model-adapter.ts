@@ -1,7 +1,8 @@
-import { PromptRuntimeReasonCode } from "@/lib/ai/reason-codes";
+import { PromptRuntimeReasonCode, ToolRuntimeReasonCode } from "@/lib/ai/reason-codes";
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { PromptRuntimeEventRecorder } from "@/lib/ai/prompt-runtime/runtime-events";
 import { getPromptRuntimeRecorder } from "@/lib/ai/prompt-runtime/runtime-events";
+import type { ToolRegistry } from "@/lib/ai/prompt-runtime/tool-registry";
 
 export type ModelFinishReason = "stop" | "length" | "content-filter" | "tool-calls" | "error";
 
@@ -11,6 +12,40 @@ export type ModelUsage = {
   totalTokens?: number;
 };
 
+export type ModelToolSchema = {
+  name: string;
+  description: string;
+  schema: {
+    type: "object";
+    properties: Record<
+      string,
+      {
+        type: "string" | "number" | "boolean";
+        description?: string;
+        enum?: string[];
+      }
+    >;
+    required?: string[];
+    additionalProperties?: boolean;
+  };
+};
+
+export type ModelToolCall = {
+  id?: string;
+  name: string;
+  arguments: unknown;
+};
+
+export type ModelToolResult = {
+  id?: string;
+  name: string;
+  ok: boolean;
+  arguments: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  validationError?: string;
+};
+
 export type ModelGenerateTextInput = {
   model?: string;
   prompt?: string;
@@ -18,6 +53,8 @@ export type ModelGenerateTextInput = {
   maxOutputTokens?: number;
   temperature?: number;
   metadata?: Record<string, unknown>;
+  tools?: ModelToolSchema[];
+  toolResults?: ModelToolResult[];
 };
 
 export type ModelGenerateTextOutput = {
@@ -27,6 +64,7 @@ export type ModelGenerateTextOutput = {
   provider?: string;
   model?: string;
   errorMessage?: string;
+  toolCalls?: ModelToolCall[];
 };
 
 export interface ModelAdapter {
@@ -39,12 +77,16 @@ async function emitModelEvent(input: {
   now: Date;
   reasonCode:
     | typeof PromptRuntimeReasonCode.modelCallFailed
-    | typeof PromptRuntimeReasonCode.modelFallbackUsed;
-  operation: "CALL" | "FALLBACK";
+    | typeof PromptRuntimeReasonCode.modelFallbackUsed
+    | (typeof ToolRuntimeReasonCode)[keyof typeof ToolRuntimeReasonCode];
+  operation: "CALL" | "FALLBACK" | "TOOL_CALL" | "TOOL_LOOP";
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   await input.recorder.record({
-    layer: "model_adapter",
+    layer:
+      input.operation === "TOOL_CALL" || input.operation === "TOOL_LOOP"
+        ? "tool_runtime"
+        : "model_adapter",
     operation: input.operation,
     reasonCode: input.reasonCode,
     entityId: input.entityId,
@@ -58,13 +100,34 @@ export type MockModelMode = "success" | "empty" | "throw";
 export class MockModelAdapter implements ModelAdapter {
   private readonly mode: MockModelMode;
   private readonly fixedText?: string;
+  private readonly scriptedOutputs: ModelGenerateTextOutput[];
 
-  public constructor(options?: { mode?: MockModelMode; fixedText?: string }) {
+  public constructor(options?: {
+    mode?: MockModelMode;
+    fixedText?: string;
+    scriptedOutputs?: ModelGenerateTextOutput[];
+  }) {
     this.mode = options?.mode ?? "success";
     this.fixedText = options?.fixedText;
+    this.scriptedOutputs = [...(options?.scriptedOutputs ?? [])];
   }
 
   public async generateText(input: ModelGenerateTextInput): Promise<ModelGenerateTextOutput> {
+    if (this.scriptedOutputs.length > 0) {
+      const next = this.scriptedOutputs.shift();
+      if (next) {
+        return {
+          provider: next.provider ?? "mock",
+          model: next.model ?? input.model ?? "mock-scripted",
+          finishReason: next.finishReason ?? "stop",
+          usage: next.usage,
+          text: next.text,
+          errorMessage: next.errorMessage,
+          toolCalls: next.toolCalls,
+        };
+      }
+    }
+
     if (this.mode === "throw") {
       throw new Error("MockModelAdapter configured to throw");
     }
@@ -335,6 +398,223 @@ export class VercelAiCoreAdapter implements ModelAdapter {
         errorMessage: message,
       };
     }
+  }
+}
+
+export type ToolLoopResult = {
+  output: ModelGenerateTextOutput;
+  iterations: number;
+  timedOut: boolean;
+  hitMaxIterations: boolean;
+  toolResults: ModelToolResult[];
+};
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`tool loop timeout after ${String(timeoutMs)}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+function inferToolFailureReason(
+  toolResult: ModelToolResult,
+): (typeof ToolRuntimeReasonCode)[keyof typeof ToolRuntimeReasonCode] | null {
+  if (toolResult.validationError) {
+    return ToolRuntimeReasonCode.toolValidationFailed;
+  }
+  if (toolResult.error?.startsWith("tool not allowed")) {
+    return ToolRuntimeReasonCode.toolNotAllowed;
+  }
+  if (toolResult.error?.startsWith("tool not found")) {
+    return ToolRuntimeReasonCode.toolNotFound;
+  }
+  if (toolResult.error) {
+    return ToolRuntimeReasonCode.toolHandlerFailed;
+  }
+  return null;
+}
+
+async function emitToolEvent(input: {
+  recorder: PromptRuntimeEventRecorder;
+  entityId: string;
+  reasonCode: (typeof ToolRuntimeReasonCode)[keyof typeof ToolRuntimeReasonCode];
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await emitModelEvent({
+    recorder: input.recorder,
+    entityId: input.entityId,
+    now: new Date(),
+    reasonCode: input.reasonCode,
+    operation:
+      input.reasonCode === ToolRuntimeReasonCode.toolLoopMaxIterations ||
+      input.reasonCode === ToolRuntimeReasonCode.toolLoopTimeout
+        ? "TOOL_LOOP"
+        : "TOOL_CALL",
+    metadata: input.metadata,
+  });
+}
+
+export async function generateTextWithToolLoop(input: {
+  adapter: ModelAdapter;
+  modelInput: ModelGenerateTextInput;
+  registry: ToolRegistry;
+  entityId: string;
+  allowlist?: string[];
+  maxIterations?: number;
+  timeoutMs?: number;
+  recorder?: PromptRuntimeEventRecorder;
+}): Promise<ToolLoopResult> {
+  const recorder = input.recorder ?? getPromptRuntimeRecorder();
+  const maxIterations = Math.max(1, input.maxIterations ?? 3);
+  const timeoutMs = Math.max(1, input.timeoutMs ?? 2_500);
+  const start = Date.now();
+
+  const availableTools = input.registry.listForModel(input.allowlist);
+  const toolResults: ModelToolResult[] = [];
+
+  const loop = async (): Promise<ToolLoopResult> => {
+    let iterations = 0;
+
+    while (iterations < maxIterations) {
+      iterations += 1;
+      const output = await input.adapter.generateText({
+        ...input.modelInput,
+        tools: availableTools,
+        toolResults,
+        metadata: {
+          ...(input.modelInput.metadata ?? {}),
+          entityId: input.entityId,
+          toolLoopIteration: iterations,
+        },
+      });
+
+      const toolCalls = output.toolCalls ?? [];
+      if (toolCalls.length === 0) {
+        return {
+          output,
+          iterations,
+          timedOut: false,
+          hitMaxIterations: false,
+          toolResults,
+        };
+      }
+
+      for (const toolCall of toolCalls) {
+        const exec = await input.registry.execute({
+          name: toolCall.name,
+          args: toolCall.arguments,
+          context: {
+            entityId: input.entityId,
+            occurredAt: new Date().toISOString(),
+            metadata: {
+              iteration: iterations,
+              toolCallId: toolCall.id,
+            },
+          },
+          allowlist: input.allowlist,
+        });
+
+        const toolResult: ModelToolResult = {
+          id: toolCall.id,
+          name: exec.name,
+          ok: exec.ok,
+          arguments: exec.args,
+          result: exec.result,
+          error: exec.error,
+          validationError: exec.validationError,
+        };
+        toolResults.push(toolResult);
+
+        if (toolResult.ok) {
+          await emitToolEvent({
+            recorder,
+            entityId: input.entityId,
+            reasonCode: ToolRuntimeReasonCode.toolCallSucceeded,
+            metadata: {
+              toolName: toolResult.name,
+              iteration: iterations,
+              durationMs: Date.now() - start,
+            },
+          });
+        } else {
+          const reasonCode = inferToolFailureReason(toolResult);
+          if (reasonCode) {
+            await emitToolEvent({
+              recorder,
+              entityId: input.entityId,
+              reasonCode,
+              metadata: {
+                toolName: toolResult.name,
+                iteration: iterations,
+                error: toolResult.validationError ?? toolResult.error,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    await emitToolEvent({
+      recorder,
+      entityId: input.entityId,
+      reasonCode: ToolRuntimeReasonCode.toolLoopMaxIterations,
+      metadata: {
+        iterations: maxIterations,
+        timeoutMs,
+      },
+    });
+
+    return {
+      output: {
+        text: "",
+        finishReason: "error",
+        provider: undefined,
+        model: input.modelInput.model,
+        errorMessage: ToolRuntimeReasonCode.toolLoopMaxIterations,
+      },
+      iterations: maxIterations,
+      timedOut: false,
+      hitMaxIterations: true,
+      toolResults,
+    };
+  };
+
+  try {
+    return await withTimeout(loop(), timeoutMs);
+  } catch {
+    await emitToolEvent({
+      recorder,
+      entityId: input.entityId,
+      reasonCode: ToolRuntimeReasonCode.toolLoopTimeout,
+      metadata: {
+        timeoutMs,
+        iterations: maxIterations,
+      },
+    });
+    return {
+      output: {
+        text: "",
+        finishReason: "error",
+        provider: undefined,
+        model: input.modelInput.model,
+        errorMessage: ToolRuntimeReasonCode.toolLoopTimeout,
+      },
+      iterations: maxIterations,
+      timedOut: true,
+      hitMaxIterations: false,
+      toolResults,
+    };
   }
 }
 

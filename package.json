@@ -24,7 +24,8 @@
     "ai:policy:verify": "ts-node -r tsconfig-paths/register scripts/ai-policy-verify.ts",
     "ai:memory:verify": "ts-node -r tsconfig-paths/register scripts/ai-memory-verify.ts",
     "ai:soul:verify": "ts-node -r tsconfig-paths/register scripts/ai-soul-verify.ts",
-    "ai:prompt:verify": "ts-node -r tsconfig-paths/register scripts/ai-prompt-verify.ts"
+    "ai:prompt:verify": "ts-node -r tsconfig-paths/register scripts/ai-prompt-verify.ts",
+    "ai:tool:verify": "ts-node -r tsconfig-paths/register scripts/ai-tool-verify.ts"
   },
   "dependencies": {
     "@dicebear/collection": "^9.3.2",

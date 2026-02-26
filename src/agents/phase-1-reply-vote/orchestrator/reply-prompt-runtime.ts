@@ -1,9 +1,11 @@
 import { loadDispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-only-policy";
+import { createReplyPhase1ToolRegistry } from "@/agents/phase-1-reply-vote/orchestrator/reply-phase1-tools";
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { buildPhase1ReplyPrompt, type PromptBlock } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
   VercelAiCoreAdapter,
+  generateTextWithToolLoop,
   recordModelFallbackUsed,
   type ModelGenerateTextOutput,
 } from "@/lib/ai/prompt-runtime/model-adapter";
@@ -37,6 +39,33 @@ export type ReplyPromptRuntimeResult = {
     usage: ModelGenerateTextOutput["usage"] | undefined;
   };
 };
+
+function readToolEnabled(): boolean {
+  const raw = (process.env.AI_TOOL_RUNTIME_ENABLED ?? "true").trim().toLowerCase();
+  return raw !== "0" && raw !== "false";
+}
+
+function readPositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function readAllowlist(): string[] {
+  const raw = (process.env.AI_TOOL_ALLOWLIST ?? "").trim();
+  if (!raw) {
+    return ["get_thread_context", "get_persona_memory", "get_global_policy", "create_reply"];
+  }
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
 
 function formatSoulBlock(soul: RuntimeSoulContext): string {
   return [
@@ -131,21 +160,68 @@ export async function generateReplyTextWithPromptRuntime(
     outputConstraintsText: formatOutputConstraints(),
   });
 
+  const toolEnabled = readToolEnabled();
+  const allowlist = readAllowlist();
+  const maxIterations = readPositiveInt(process.env.AI_TOOL_LOOP_MAX_ITERATIONS, 3);
+  const timeoutMs = readPositiveInt(process.env.AI_TOOL_LOOP_TIMEOUT_MS, 2_500);
+
   let modelResult: ModelGenerateTextOutput;
   try {
-    modelResult = await modelAdapter.generateText({
-      model: process.env.AI_MODEL_NAME ?? "grok-2-latest",
-      prompt: prompt.prompt,
-      messages: prompt.messages,
-      maxOutputTokens: 320,
-      temperature: 0.4,
-      metadata: {
+    if (!toolEnabled) {
+      modelResult = await modelAdapter.generateText({
+        model: process.env.AI_MODEL_NAME ?? "grok-2-latest",
+        prompt: prompt.prompt,
+        messages: prompt.messages,
+        maxOutputTokens: 320,
+        temperature: 0.4,
+        metadata: {
+          entityId: input.entityId,
+          personaId: input.personaId,
+          postId: input.postId,
+          promptBlockOrder: prompt.blocks.map((block) => block.name),
+          toolRuntimeEnabled: false,
+        },
+      });
+    } else {
+      const toolRegistry = createReplyPhase1ToolRegistry({
+        context: {
+          postId: input.postId,
+          personaId: input.personaId,
+          title: input.title,
+          postBodySnippet: input.postBodySnippet,
+          focusActor: input.focusActor,
+          focusSnippet: input.focusSnippet,
+          participantCount: input.participantCount,
+          memoryContext: input.memoryContext,
+        },
+        allowlist,
+      });
+
+      const toolLoop = await generateTextWithToolLoop({
+        adapter: modelAdapter,
+        modelInput: {
+          model: process.env.AI_MODEL_NAME ?? "grok-2-latest",
+          prompt: prompt.prompt,
+          messages: prompt.messages,
+          maxOutputTokens: 320,
+          temperature: 0.4,
+          metadata: {
+            entityId: input.entityId,
+            personaId: input.personaId,
+            postId: input.postId,
+            promptBlockOrder: prompt.blocks.map((block) => block.name),
+            toolRuntimeEnabled: true,
+          },
+        },
+        registry: toolRegistry,
         entityId: input.entityId,
-        personaId: input.personaId,
-        postId: input.postId,
-        promptBlockOrder: prompt.blocks.map((block) => block.name),
-      },
-    });
+        allowlist,
+        maxIterations,
+        timeoutMs,
+      });
+
+      modelResult = toolLoop.output;
+    }
   } catch (error) {
     modelResult = {
       text: "",

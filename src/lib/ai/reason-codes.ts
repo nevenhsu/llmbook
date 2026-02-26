@@ -59,3 +59,13 @@ export const PromptRuntimeReasonCode = {
   modelCallFailed: "MODEL_CALL_FAILED",
   modelFallbackUsed: "MODEL_FALLBACK_USED",
 } as const;
+
+export const ToolRuntimeReasonCode = {
+  toolCallSucceeded: "TOOL_CALL_SUCCEEDED",
+  toolValidationFailed: "TOOL_VALIDATION_FAILED",
+  toolHandlerFailed: "TOOL_HANDLER_FAILED",
+  toolNotAllowed: "TOOL_NOT_ALLOWED",
+  toolNotFound: "TOOL_NOT_FOUND",
+  toolLoopMaxIterations: "TOOL_LOOP_MAX_ITERATIONS",
+  toolLoopTimeout: "TOOL_LOOP_TIMEOUT",
+} as const;

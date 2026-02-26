@@ -1,11 +1,16 @@
-import { PromptRuntimeReasonCode } from "@/lib/ai/reason-codes";
+import { PromptRuntimeReasonCode, ToolRuntimeReasonCode } from "@/lib/ai/reason-codes";
 
 export type PromptRuntimeReasonCodeValue =
-  (typeof PromptRuntimeReasonCode)[keyof typeof PromptRuntimeReasonCode];
+  | (typeof PromptRuntimeReasonCode)[keyof typeof PromptRuntimeReasonCode]
+  | (typeof ToolRuntimeReasonCode)[keyof typeof ToolRuntimeReasonCode];
 
-export type PromptRuntimeLayer = "prompt_builder" | "model_adapter" | "generation_runtime";
+export type PromptRuntimeLayer =
+  | "prompt_builder"
+  | "model_adapter"
+  | "generation_runtime"
+  | "tool_runtime";
 
-export type PromptRuntimeOperation = "BUILD" | "CALL" | "FALLBACK";
+export type PromptRuntimeOperation = "BUILD" | "CALL" | "FALLBACK" | "TOOL_CALL" | "TOOL_LOOP";
 
 export type PromptRuntimeEvent = {
   layer: PromptRuntimeLayer;
@@ -33,6 +38,12 @@ export type PromptRuntimeStatus = {
   lastPromptFailure: PromptRuntimeEvent | null;
   lastModelFailure: PromptRuntimeEvent | null;
   lastFallback: PromptRuntimeEvent | null;
+  lastToolValidationFailure: PromptRuntimeEvent | null;
+  lastToolHandlerFailure: PromptRuntimeEvent | null;
+  lastToolNotAllowed: PromptRuntimeEvent | null;
+  lastToolNotFound: PromptRuntimeEvent | null;
+  lastToolTimeout: PromptRuntimeEvent | null;
+  lastToolMaxIterations: PromptRuntimeEvent | null;
 };
 
 export class PromptRuntimeEventRecorder {
@@ -43,6 +54,12 @@ export class PromptRuntimeEventRecorder {
   private lastPromptFailure: PromptRuntimeEvent | null = null;
   private lastModelFailure: PromptRuntimeEvent | null = null;
   private lastFallback: PromptRuntimeEvent | null = null;
+  private lastToolValidationFailure: PromptRuntimeEvent | null = null;
+  private lastToolHandlerFailure: PromptRuntimeEvent | null = null;
+  private lastToolNotAllowed: PromptRuntimeEvent | null = null;
+  private lastToolNotFound: PromptRuntimeEvent | null = null;
+  private lastToolTimeout: PromptRuntimeEvent | null = null;
+  private lastToolMaxIterations: PromptRuntimeEvent | null = null;
 
   public constructor(options?: { sink?: PromptRuntimeEventSink; maxEvents?: number }) {
     this.sink = options?.sink;
@@ -64,6 +81,24 @@ export class PromptRuntimeEventRecorder {
     if (event.reasonCode === PromptRuntimeReasonCode.modelFallbackUsed) {
       this.lastFallback = event;
     }
+    if (event.reasonCode === ToolRuntimeReasonCode.toolValidationFailed) {
+      this.lastToolValidationFailure = event;
+    }
+    if (event.reasonCode === ToolRuntimeReasonCode.toolHandlerFailed) {
+      this.lastToolHandlerFailure = event;
+    }
+    if (event.reasonCode === ToolRuntimeReasonCode.toolNotAllowed) {
+      this.lastToolNotAllowed = event;
+    }
+    if (event.reasonCode === ToolRuntimeReasonCode.toolNotFound) {
+      this.lastToolNotFound = event;
+    }
+    if (event.reasonCode === ToolRuntimeReasonCode.toolLoopTimeout) {
+      this.lastToolTimeout = event;
+    }
+    if (event.reasonCode === ToolRuntimeReasonCode.toolLoopMaxIterations) {
+      this.lastToolMaxIterations = event;
+    }
 
     try {
       await this.sink?.record(event);
@@ -78,6 +113,12 @@ export class PromptRuntimeEventRecorder {
       lastPromptFailure: this.lastPromptFailure,
       lastModelFailure: this.lastModelFailure,
       lastFallback: this.lastFallback,
+      lastToolValidationFailure: this.lastToolValidationFailure,
+      lastToolHandlerFailure: this.lastToolHandlerFailure,
+      lastToolNotAllowed: this.lastToolNotAllowed,
+      lastToolNotFound: this.lastToolNotFound,
+      lastToolTimeout: this.lastToolTimeout,
+      lastToolMaxIterations: this.lastToolMaxIterations,
     };
   }
 }

@@ -135,4 +135,33 @@ describe("generateReplyTextWithPromptRuntime", () => {
       "Memory refs",
     );
   });
+
+  it("keeps main flow with deterministic fallback when tool loop hits max iterations", async () => {
+    const previousEnabled = process.env.AI_TOOL_RUNTIME_ENABLED;
+    const previousTimeout = process.env.AI_TOOL_LOOP_TIMEOUT_MS;
+    const previousMaxIterations = process.env.AI_TOOL_LOOP_MAX_ITERATIONS;
+    process.env.AI_TOOL_RUNTIME_ENABLED = "true";
+    process.env.AI_TOOL_LOOP_TIMEOUT_MS = "2000";
+    process.env.AI_TOOL_LOOP_MAX_ITERATIONS = "1";
+
+    const toolLoopAdapter = new MockModelAdapter({
+      scriptedOutputs: [
+        {
+          text: "",
+          finishReason: "tool-calls",
+          toolCalls: [{ name: "create_reply", arguments: {} }],
+        },
+      ],
+    });
+
+    try {
+      const result = await runWithAdapter(toolLoopAdapter);
+      expect(result.usedFallback).toBe(true);
+      expect(result.text).toBe("deterministic fallback");
+    } finally {
+      process.env.AI_TOOL_RUNTIME_ENABLED = previousEnabled;
+      process.env.AI_TOOL_LOOP_TIMEOUT_MS = previousTimeout;
+      process.env.AI_TOOL_LOOP_MAX_ITERATIONS = previousMaxIterations;
+    }
+  });
 });
