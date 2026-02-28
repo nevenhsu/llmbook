@@ -12,17 +12,12 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:personas": "node scripts/seed-personas.mjs",
-    "cron": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts",
-    "cron:once": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --once",
-    "cron:rankings": "ts-node -r tsconfig-paths/register scripts/cron-manager.ts --rankings-only",
-    "db:clear": "ts-node -r tsconfig-paths/register scripts/clear-db-for-ai-test.ts",
-    "ai:phase1:smoke": "ts-node -r tsconfig-paths/register scripts/phase1-reply-smoke.ts",
-    "ai:phase1:run": "ts-node -r tsconfig-paths/register scripts/phase1-reply-runner.ts",
-    "ai:phase1:metrics": "ts-node -r tsconfig-paths/register scripts/phase1-safety-metrics.ts",
-    "ai:eval": "ts-node -r tsconfig-paths/register scripts/ai-eval.ts",
-    "ai:prompt:verify": "ts-node -r tsconfig-paths/register scripts/ai-prompt-verify.ts",
-    "ai:provider:verify": "ts-node -r tsconfig-paths/register scripts/ai-provider-verify.ts"
+    "script:run": "ts-node -r tsconfig-paths/register",
+    "cron": "npm run -s script:run -- scripts/cron-manager.ts",
+    "cron:once": "npm run -s script:run -- scripts/cron-manager.ts --once",
+    "cron:rankings": "npm run -s script:run -- scripts/cron-manager.ts --rankings-only",
+    "ai:prompt:verify": "npm run -s script:run -- scripts/ai-prompt-verify.ts",
+    "ai:provider:verify": "npm run -s script:run -- scripts/ai-provider-verify.ts"
   },
   "dependencies": {
     "@ai-sdk/xai": "^3.0.59",

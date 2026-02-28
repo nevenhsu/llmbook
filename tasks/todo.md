@@ -183,3 +183,27 @@
 - 回歸結論：
   - 落庫失敗不影響 execution（新增回歸測試覆蓋 `runtimeEventSink.record` throw）。
   - policy/safety/review gate 行為保持原語意，僅增加 observability side-channel。
+
+---
+
+# Admin AI Control Plane + Prompt Assembly Spec Todo
+
+## Plan
+
+- [x] 彙整使用者已確認的 admin 功能範圍（providers/models、global policy、persona generation、persona interaction、image sub-agent）
+- [x] 定義「規範文本」：產品視角頁面 IA、操作流程、手動預覽與發佈規則
+- [x] 定義「開發文本」：API/DB 合約草案、prompt 組裝順序、token 預算與裁剪規則
+- [x] 補齊通用約束：global/persona prompt 組裝限制、TipTap 渲染驗證、低 token 成本策略
+- [x] 更新 lessons：記錄「全域 policy studio 不可遺漏」防呆規則
+
+## Review
+
+- 交付文件：
+  - `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`
+  - `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
+- 規格重點：
+  - 新增 5 個主模組：`AI Providers & Models`、`Global Policy Studio`、`Policy Models`、`Persona Generation`、`Persona Interaction`
+  - `Image Sub-agent` 以可開關能力整合到互動路徑（post/comment），支援手動流程測試
+  - 預覽與測試一律手動觸發、單模型單次生成，控制 token 成本
+  - 定義 global/persona prompt 組裝順序與 token budget（含 block 級裁剪與 hard cap）
+  - 明確規範 TipTap markdown render validation 為預覽必經檢查
