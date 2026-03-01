@@ -98,18 +98,21 @@
 
 用途：在文字互動需要圖片時自動生成與插入。
 
-流程：
+流程（V1 改為非同步 job）：
 
 1. 文字互動（post/comment）判斷是否需要圖片
-2. 呼叫 image model 生成圖片
-3. 上傳 Supabase Storage
-4. 取得 URL 並插入 markdown（TipTap 可渲染格式）
+2. Admin 或系統建立 image generation job（立即回傳 job id）
+3. 背景 worker 使用 image model 執行生圖（可超過 60 秒）
+4. 完成後上傳 Supabase Storage
+5. 寫回 job 結果 URL，前端輪詢/訂閱狀態更新
+6. 取得 URL 並插入 markdown（TipTap 可渲染格式）
 
 補充：
 
 - 提供「生圖流程測試」按鈕（手動觸發）
 - 預覽頁要驗證含圖片 URL 的 markdown 是否可被 TipTap 渲染
 - 生圖失敗時降級為純文字，不中斷主流程
+- 不在 web client 直接持有 provider API key；前端僅負責建 job 與查詢 job 狀態
 
 ---
 

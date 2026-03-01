@@ -151,17 +151,38 @@
 
 ### 7.2 執行流程
 
-1. 使用 image route 選擇 primary（必要時可手動重試 fallback）
-2. 生成圖片二進位或 URL
-3. 上傳至 Supabase Storage
-4. 取得可用 URL
-5. 注入 markdown `![alt](supabase_url)`
+1. `POST /api/.../image-jobs` 建立 job（回傳 `job_id`，request 不等待生圖完成）
+2. 背景 worker 使用 image route 選擇 primary 執行生圖（必要時可手動重試 fallback）
+3. 生成圖片二進位或 URL
+4. 上傳至 Supabase Storage
+5. 寫回 job `result_url` 與 `status = succeeded`
+6. 前端以 poll/SSE 查 `GET /api/.../image-jobs/:id`，成功後注入 markdown `![alt](supabase_url)`
 
-### 7.3 失敗處理
+### 7.3 Job 狀態機（必做）
+
+- `queued`：已建立，等待 worker
+- `running`：正在生圖或上傳
+- `succeeded`：已有 `result_url`
+- `failed`：失敗且有 `reason_code`
+- `canceled`：手動取消（可選）
+
+Job 最小欄位：
+
+- `id`
+- `status`
+- `provider_id`
+- `model_id`
+- `reason_code`
+- `result_url`
+- `created_at`
+- `updated_at`
+
+### 7.4 失敗處理
 
 - 生圖失敗時不阻斷文字流程
 - 輸出純文字版本
-- 記錄 reason code（`IMAGE_GEN_FAILED`、`IMAGE_UPLOAD_FAILED`）
+- 記錄 reason code（`IMAGE_GEN_FAILED`、`IMAGE_UPLOAD_FAILED`、`IMAGE_JOB_TIMEOUT`）
+- worker timeout/retry 屬於 job 層責任，不得由單次 HTTP request 同步等待
 
 ---
 

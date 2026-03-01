@@ -207,3 +207,75 @@
   - 預覽與測試一律手動觸發、單模型單次生成，控制 token 成本
   - 定義 global/persona prompt 組裝順序與 token budget（含 block 級裁剪與 hard cap）
   - 明確規範 TipTap markdown render validation 為預覽必經檢查
+
+---
+
+# Admin AI Control Plane Implementation（Phase1）Todo
+
+## Plan
+
+- [x] 讀取規格文件與 lessons，盤點現有 schema / API / admin 頁面可重用點
+- [x] 建立本階段實作計畫（沿用既有 schema，`ai_policy_releases` 承載 global policy 與 control plane 設定）
+- [x] 實作 control-plane server 模組（providers/models/routes/policy release/persona mapping/preview contract）
+- [x] 完成 API 骨架：
+  - `providers`、`providers/:id/test`
+  - `models`
+  - `model-routes`
+  - `policy-releases` + `:id/preview|publish|rollback`
+  - `persona-generation/preview`
+  - `personas` + `personas/:id`
+  - `persona-interaction/preview`
+- [x] 完成 admin UI 骨架：
+  - Providers & Models
+  - Global Policy Studio
+  - Policy Models
+  - Persona Generation
+  - Persona Interaction
+- [x] 串接預覽流程（單模型、手動觸發）與 TipTap render validation
+- [x] 串接 token 超限策略的 control-plane 入口（由 AI agents plan 執行 `persona_memory -> persona_long_memory` 壓縮；admin UI 僅顯示超限與精簡 global rules 提示）
+- [x] 補齊測試（重點 API + prompt assembly/token strategy）並執行驗證
+- [x] 更新本區塊 Review（變更摘要、驗證命令、結果、風險）
+
+## Check-in
+
+- 目前決策：第一階段不新增資料表；`persona_engine_config` 不納入新控制平面讀路徑，改以 `ai_policy_releases.policy.controlPlane` 承載 provider/model/route 與 global policy studio 的草稿/發布資料。
+- Persona profile 依規格映射既有 `personas/persona_souls/persona_memory/persona_long_memories`，API/preview 都以這四表取值。
+- 修正決策：token 超限的實際裁剪由既有 AI agents plan 負責，Admin API/UI 只接收並展示 runtime 回傳的壓縮階段與超限提示。
+- 修正決策：persona generation preview 改為真實 LLM invocation；禁止以固定模板偽造 `info/soul/long_memory`。
+- 變更摘要（step 1）：新增 `src/lib/ai/admin/control-plane-store.ts`，統一封裝 `ai_policy_releases.policy.controlPlane` 的 provider/model/route/policy draft 讀寫、persona 映射、preview prompt assembly、TipTap render validation。
+- 變更摘要（step 2）：新增第一批 Admin AI API（providers/models/model-routes/policy-releases/persona-generation/personas/persona-interaction），全部走 `withAuth + isAdmin`。
+- 變更摘要（step 3）：新增 `/admin/ai/control-plane` 與 `AiControlPlanePanel`，完成五個模組骨架與手動操作。
+- 變更摘要（step 4）：preview 回傳 `assembledPrompt + renderOk/renderError + tokenBudget`，UI 顯示單模型手動觸發、TipTap render 結果與 token 超限提示。
+- 變更摘要（step 5）：新增 route tests（policy preview、persona interaction preview）驗證權限與核心回應形狀。
+- 變更摘要（step 6）：`previewPersonaGeneration` 改為走 `invokeLLM`，以選定 provider/model 生成 JSON 並解析為 `info/soul/long_memory`，再進行 TipTap render validation。
+- 變更摘要（step 7）：Persona Generation UI 流程明確化為「選模型 + 輸入額外 prompt -> Generate Preview -> Regenerate 或 Save To DB」，並加入 loading / run-count 狀態。
+- 變更摘要（step 8）：Persona username 改為可由 display name 導出與調整，前後端統一正規化並強制 `ai_` 前綴（create + patch + generation save form）。
+- 變更摘要（step 9）：Persona generation 輸出契約改為 schema-aligned JSON：`personas` / `persona_souls` / `persona_memory` / `persona_long_memories`，儲存時直接映射到對應資料表欄位。
+- 變更摘要（step 10）：Persona generation model 選單改為只顯示「provider 有 API key 且啟用」的 text models；後端 `previewPersonaGeneration` 同步加上 eligibility 檢查。
+- 變更摘要（step 11）：新增可重用 `PersonaSelect`（預設 50 筆 + 搜尋 username/display_name）；`/api/admin/ai/personas` 新增 `q`，Persona Interaction 已改用共用元件。
+- 變更摘要（step 12）：`GET /api/admin/ai/personas` 移除 admin gate（僅需登入），讓 persona 搜尋可在非 admin 場景重用；`POST` 仍維持 admin 限制，並新增 route 測試覆蓋。
+- 變更摘要（step 13）：新增 `/admin` 入口頁，集中導向 `AI Control Plane`、`AI Runtime`、`AI Review Queue`，並套用 admin 權限檢查。
+- 變更摘要（step 14）：規格文件更新 image generation 為通用 async job workflow（create job + worker execute + storage upload + poll status），避免單次 request 卡住 Vercel plan duration limit。
+
+## Next (Image Job Workflow)
+
+- [ ] 設計並實作 image generation job API（create / status / optional cancel）
+- [ ] 串接 worker 背景執行 image route（primary/fallback）與 retry/timeout
+- [ ] 將 job 結果上傳 Supabase Storage 並回填 result URL
+- [ ] 在 `/admin/ai/control-plane` 加入 image preview job 狀態 UI（queued/running/succeeded/failed）
+- [ ] 補 reason code 與 observability（IMAGE_GEN_FAILED / IMAGE_UPLOAD_FAILED / IMAGE_JOB_TIMEOUT）
+
+## Review
+
+- 實作結果：
+  - 第一階段 Admin AI Control Plane API/UI 骨架已可用，且沿用既有 schema，未新增資料表。
+  - `persona_engine_config` 未納入新控制平面邏輯，provider/model/route 改由 `ai_policy_releases.policy.controlPlane` 管理。
+  - persona profile 讀寫明確映射到 `personas/persona_souls/persona_memory/persona_long_memories`。
+  - token 超限只做 control-plane 訊號展示：先顯示 `persona_memory -> persona_long_memory` 壓縮階段，仍超限時提示 Admin 精簡 global rules；實際 runtime 裁剪責任在 agents plan。
+- 驗證命令：
+  - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`（4 tests passed）
+  - `npm run lint -- ...`（失敗：既有 eslint 環境錯誤 `react/display-name` rule loader crash）
+  - `npx tsc --noEmit`（失敗：專案既有型別錯誤，非本次變更獨有）
+- 風險與後續：
+  - policy/persona interaction preview 目前仍為 skeleton 文字輸出；persona generation preview 已改為真實 model invocation。
+  - `ai_policy_releases` 目前以 `is_active` 模式承載 draft/publish；若後續要完整治理（例如 preview pass gate 強制）可補欄位或審計策略。

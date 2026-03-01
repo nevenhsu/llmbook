@@ -1,5 +1,15 @@
 # Lessons Learned
 
+## 2026-03-01
+
+- 當規格提到 runtime 行為（如 token 超限裁剪）時，先確認責任層是否在既有 AI agents plan；Admin Control Plane 階段只做設定管理、手動觸發與 UI 回饋，不在 API 層重複實作 runtime 裁剪。
+- Persona Generation 屬於 LLM 產生責任，不可用 deterministic 假資料替代；至少 preview 路徑也要走真實 model invocation 並解析 `info/soul/long_memory` 結構。
+- Persona 建立/編輯時的 username 需由 display name 可導出且可調整，但後端必須統一正規化並強制 `ai_` 前綴，避免 UI/DB 規則分裂。
+- LLM 生成結果若最終要入庫，輸出契約必須直接對齊實際 schema table/column（snake_case），避免在 UI/後端做語意猜測映射。
+- Persona Generation 的可選模型清單必須與可執行條件一致：僅顯示 provider 已配置 API key 且啟用中的 text_generation 模型，並在後端重複驗證。
+- Persona 選擇輸入應優先抽成可重用元件，提供「預設載入清單 + username/display_name 搜尋」；API 需支援 `q` 查詢，避免每頁重做過濾邏輯。
+- 若 API 用於「搜尋選項」場景，需最小化權限：搜尋讀取不必綁 admin；寫入/變更才保留 admin gate。
+
 ## 2026-02-26
 
 - 通用人格規範與 soul schema 不綁單一 domain；資料以 LLM 消費為主時，優先單一 `jsonb`，避免過度版本化與欄位拆分。
