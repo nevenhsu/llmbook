@@ -279,3 +279,41 @@
 - 風險與後續：
   - policy/persona interaction preview 目前仍為 skeleton 文字輸出；persona generation preview 已改為真實 model invocation。
   - `ai_policy_releases` 目前以 `is_active` 模式承載 draft/publish；若後續要完整治理（例如 preview pass gate 強制）可補欄位或審計策略。
+
+---
+
+# Admin AI Control Plane UX/Flow Refinement（Tomorrow）Todo
+
+## Plan
+
+- [x] 盤點 `/admin/ai/control-plane` 現況與 spec 缺口（UI 資訊架構、preview 可讀性、流程文案、模組交互）
+- [x] 重整頁面 IA：改成分段導覽（避免單頁過載），保留既有 API 與 schema
+- [x] Persona Generation 流程文案與狀態優化（Generate / Regenerate / Save）
+- [x] Preview 區塊強化：prompt assembly / markdown / tiptap render / token budget 分區顯示
+- [x] 釐清 Policy Releases / Policy Models / Persona Interaction 的交互路徑（有效路由提示、手動套用）
+- [x] 驗證（至少 route tests；若 lint/tsc 失敗需區分既有問題與本次改動）
+- [x] 更新本區塊 Review（命令、結果、風險、是否新增錯誤）
+
+## Check-in
+
+- 變更摘要（step 1）：盤點缺口為「單頁過載、preview 區塊層次不足、Policy Models 使用 `defaultValue` 導致交互不直觀、Persona Interaction 與 route 模型關聯不清楚」。
+- 變更摘要（step 2）：`AiControlPlanePanel` 改為分段導覽（5 個 section），一次聚焦單一模組，降低操作負擔。
+- 變更摘要（step 3）：Persona Generation 增加三步狀態（Configure/Generated/Saved）、按鈕語意切換（Generate/Regenerate）、保存時間回饋。
+- 變更摘要（step 4）：新增統一 `PreviewPanel`，固定顯示四區塊：Prompt Assembly、Markdown、TipTap Render、Token Budget Blocks。
+- 變更摘要（step 5）：Policy Models 改為受控 route drafts + per-scope save；Persona Interaction 新增「Use Route Primary」與有效路由提示，並支援 soul/long_memory override 輸入。
+- 變更摘要（step 6）：完成驗證並確認 lint/tsc 失敗為既有專案問題，本次未新增對應錯誤訊號。
+
+## Review
+
+- 實作結果：
+  - `/admin/ai/control-plane` UI 由長頁面改為分段導覽，保留既有 API 與 schema，不新增資料表。
+  - Persona Generation 流程改為明確三段操作與狀態回饋，符合 Generate / Regenerate / Save。
+  - Preview 可讀性提升為固定四分區，完整呈現 prompt assembly、markdown、tiptap render、token budget。
+  - Policy Releases / Policy Models / Persona Interaction 的關聯路徑更清楚：可直接在 Interaction 套用 route primary model。
+- 驗證命令：
+  - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`（4 tests passed）
+  - `npx tsc --noEmit`（失敗：既有型別錯誤，含 `.next/types/validator.ts`、`src/lib/ai/evaluation/*`、`src/agents/*` 等）
+  - `npm run lint -- src/components/admin/AiControlPlanePanel.tsx`（失敗：既有 eslint 環境錯誤 `react/display-name` rule loader crash）
+- 風險與判定：
+  - 本次以 UI/互動流程重構為主，未更動 schema 與 control-plane runtime 責任邊界。
+  - 目前未觀察到由本次檔案新增的 tsc/lint 新錯誤訊號；全域 lint/tsc 仍受既有問題阻擋。

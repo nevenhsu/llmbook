@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import SafeHtml from "@/components/ui/SafeHtml";
 import PersonaSelect from "@/components/ui/PersonaSelect";
@@ -38,6 +38,54 @@ type DraftState = {
   note: string;
 };
 
+type ControlPlaneSection =
+  | "providers_models"
+  | "policy_studio"
+  | "policy_models"
+  | "persona_generation"
+  | "persona_interaction";
+
+type RouteDraftState = Record<
+  AiModelRoute["scope"],
+  { primaryModelId: string; fallbackModelId: string }
+>;
+
+const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; helper: string }> = [
+  {
+    id: "providers_models",
+    label: "Providers & Models",
+    helper: "Manage provider keys and model inventory",
+  },
+  {
+    id: "policy_studio",
+    label: "Global Policy Studio",
+    helper: "Draft, preview, publish, rollback",
+  },
+  {
+    id: "policy_models",
+    label: "Policy Models",
+    helper: "Set primary/fallback routes per task",
+  },
+  {
+    id: "persona_generation",
+    label: "Persona Generation",
+    helper: "Generate, regenerate, save to DB",
+  },
+  {
+    id: "persona_interaction",
+    label: "Persona Interaction",
+    helper: "Preview post/comment with selected persona",
+  },
+];
+
+const ROUTE_SCOPE_ORDER: Array<AiModelRoute["scope"]> = [
+  "global_default",
+  "post",
+  "comment",
+  "image",
+  "persona_generation",
+];
+
 function optionLabelForModel(model: AiModelConfig, providers: AiProviderConfig[]): string {
   const provider = providers.find((item) => item.id === model.providerId);
   return `${model.displayName} (${provider?.displayName ?? "Unknown Provider"})`;
@@ -68,6 +116,95 @@ function renderBadge(renderOk: boolean, renderError: string | null): ReactNode {
   );
 }
 
+function buildInitialRouteDrafts(routes: AiModelRoute[]): RouteDraftState {
+  return ROUTE_SCOPE_ORDER.reduce<RouteDraftState>((acc, scope) => {
+    const route = routes.find((item) => item.scope === scope);
+    acc[scope] = {
+      primaryModelId: route?.primaryModelId ?? "",
+      fallbackModelId: route?.fallbackModelId ?? "",
+    };
+    return acc;
+  }, {} as RouteDraftState);
+}
+
+function PreviewPanel({
+  preview,
+  emptyLabel,
+}: {
+  preview: PreviewResult | null;
+  emptyLabel: string;
+}) {
+  if (!preview) {
+    return <div className="rounded border border-dashed p-3 text-sm opacity-70">{emptyLabel}</div>;
+  }
+
+  const budget = preview.tokenBudget;
+  return (
+    <div className="space-y-3 rounded border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {renderBadge(preview.renderOk, preview.renderError)}
+        <span className="badge">
+          Input {budget.estimatedInputTokens}/{budget.maxInputTokens}
+        </span>
+        <span className="badge">Output Max {budget.maxOutputTokens}</span>
+        {budget.compressedStages.length > 0 ? (
+          <span className="badge badge-warning">
+            Compressed: {budget.compressedStages.join(" -> ")}
+          </span>
+        ) : null}
+      </div>
+
+      {budget.exceeded ? (
+        <div className="alert alert-warning py-2 text-sm">
+          {budget.message ?? "Token budget exceeded. Please simplify global rules."}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <div className="rounded border p-2">
+          <div className="mb-2 text-sm font-semibold">Prompt Assembly</div>
+          <pre className="bg-base-200 max-h-64 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
+            {preview.assembledPrompt}
+          </pre>
+        </div>
+        <div className="rounded border p-2">
+          <div className="mb-2 text-sm font-semibold">Markdown</div>
+          <pre className="bg-base-200 max-h-64 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
+            {preview.markdown}
+          </pre>
+        </div>
+        <div className="rounded border p-2">
+          <div className="mb-2 text-sm font-semibold">TipTap Render Result</div>
+          <div className="rounded border p-2">
+            <SafeHtml markdown={preview.markdown} className="tiptap-html" />
+          </div>
+        </div>
+        <div className="rounded border p-2">
+          <div className="mb-2 text-sm font-semibold">Token Budget Blocks</div>
+          <div className="overflow-x-auto">
+            <table className="table-xs table">
+              <thead>
+                <tr>
+                  <th>Block</th>
+                  <th className="text-right">Tokens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {budget.blockStats.map((block) => (
+                  <tr key={block.name}>
+                    <td>{block.name}</td>
+                    <td className="text-right">{block.tokens}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AiControlPlanePanel({
   initialProviders,
   initialModels,
@@ -75,11 +212,15 @@ export default function AiControlPlanePanel({
   initialReleases,
   initialPersonas,
 }: Props) {
+  const [activeSection, setActiveSection] = useState<ControlPlaneSection>("policy_studio");
   const [providers, setProviders] = useState(initialProviders);
   const [models, setModels] = useState(initialModels);
   const [routes, setRoutes] = useState(initialRoutes);
   const [releases, setReleases] = useState(initialReleases);
   const [personas, setPersonas] = useState(initialPersonas);
+  const [routeDrafts, setRouteDrafts] = useState<RouteDraftState>(
+    buildInitialRouteDrafts(initialRoutes),
+  );
 
   const [providerForm, setProviderForm] = useState({
     providerKey: "xai",
@@ -95,6 +236,7 @@ export default function AiControlPlanePanel({
   });
 
   const latestRelease = releases[0] ?? null;
+  const activeRelease = releases.find((item) => item.isActive) ?? null;
   const [draft, setDraft] = useState<DraftState>({
     coreGoal: latestRelease?.globalPolicyDraft.coreGoal ?? "",
     globalPolicy: latestRelease?.globalPolicyDraft.globalPolicy ?? "",
@@ -105,7 +247,7 @@ export default function AiControlPlanePanel({
 
   const [policyPreviewInput, setPolicyPreviewInput] = useState({
     releaseId: latestRelease?.version ? String(latestRelease.version) : "",
-    modelId: initialModels[0]?.id ?? "",
+    modelId: initialModels.find((model) => model.capability === "text_generation")?.id ?? "",
     taskContext: "Draft a forum comment preview.",
   });
   const [policyPreview, setPolicyPreview] = useState<PreviewResult | null>(null);
@@ -135,14 +277,21 @@ export default function AiControlPlanePanel({
   const [personaGenerationPreview, setPersonaGenerationPreview] = useState<
     (PreviewResult & { structured: PersonaGenerationStructured }) | null
   >(null);
+  const [personaLastSavedAt, setPersonaLastSavedAt] = useState<string | null>(null);
 
   const [interactionInput, setInteractionInput] = useState({
     personaId: initialPersonas[0]?.id ?? "",
     modelId: initialModels.find((item) => item.capability === "text_generation")?.id ?? "",
     taskType: "comment" as "post" | "comment",
     taskContext: "Reply to a user asking for critique on their concept art draft.",
+    soulOverrideJson: "",
+    longMemoryOverride: "",
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
+
+  useEffect(() => {
+    setRouteDrafts(buildInitialRouteDrafts(routes));
+  }, [routes]);
 
   const routeByScope = useMemo(() => {
     const map = new Map<string, AiModelRoute>();
@@ -151,6 +300,11 @@ export default function AiControlPlanePanel({
     }
     return map;
   }, [routes]);
+
+  const textModels = useMemo(
+    () => models.filter((item) => item.capability === "text_generation"),
+    [models],
+  );
 
   const personaGenerationModels = useMemo(
     () =>
@@ -164,6 +318,11 @@ export default function AiControlPlanePanel({
         );
       }),
     [models, providers],
+  );
+
+  const selectedPersona = useMemo(
+    () => personas.find((item) => item.id === interactionInput.personaId) ?? null,
+    [personas, interactionInput.personaId],
   );
 
   const refreshAll = async () => {
@@ -342,6 +501,7 @@ export default function AiControlPlanePanel({
         })),
       });
       toast.success("Persona saved to DB");
+      setPersonaLastSavedAt(new Date().toISOString());
       await refreshAll();
     } finally {
       setPersonaSaveLoading(false);
@@ -353,617 +513,712 @@ export default function AiControlPlanePanel({
       toast.error("persona/model are required");
       return;
     }
+
+    let soulOverride: Record<string, unknown> | undefined;
+    if (interactionInput.soulOverrideJson.trim()) {
+      try {
+        const parsed = JSON.parse(interactionInput.soulOverrideJson);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          toast.error("Soul override must be a JSON object");
+          return;
+        }
+        soulOverride = parsed as Record<string, unknown>;
+      } catch {
+        toast.error("Soul override JSON is invalid");
+        return;
+      }
+    }
+
     const res = await apiPost<{ preview: PreviewResult }>(
       "/api/admin/ai/persona-interaction/preview",
-      interactionInput,
+      {
+        personaId: interactionInput.personaId,
+        modelId: interactionInput.modelId,
+        taskType: interactionInput.taskType,
+        taskContext: interactionInput.taskContext,
+        soulOverride,
+        longMemoryOverride: interactionInput.longMemoryOverride.trim() || undefined,
+      },
     );
     setInteractionPreview(res.preview);
   };
 
+  const modelForScope = (scope: AiModelRoute["scope"]) =>
+    models.filter((model) =>
+      scope === "image"
+        ? model.capability === "image_generation"
+        : model.capability === "text_generation",
+    );
+
+  const resolveRoutePrimaryModelId = (scope: "post" | "comment") => {
+    const taskPrimary = routeByScope.get(scope)?.primaryModelId;
+    if (taskPrimary) {
+      return taskPrimary;
+    }
+    return routeByScope.get("global_default")?.primaryModelId ?? "";
+  };
+
+  const applyRoutePrimaryModel = () => {
+    const modelId = resolveRoutePrimaryModelId(interactionInput.taskType);
+    if (!modelId) {
+      toast.error("No primary route model found for selected task type");
+      return;
+    }
+    setInteractionInput((prev) => ({ ...prev, modelId }));
+    toast.success("Applied route primary model");
+  };
+
+  const routePrimaryModelLabel = () => {
+    const modelId = resolveRoutePrimaryModelId(interactionInput.taskType);
+    if (!modelId) {
+      return "Not configured";
+    }
+    const model = models.find((item) => item.id === modelId);
+    return model ? optionLabelForModel(model, providers) : "Unknown model";
+  };
+
+  const personaStepStatus = {
+    generated: personaPreviewRunCount > 0,
+    saved: Boolean(personaLastSavedAt),
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Admin AI Control Plane</h1>
           <p className="text-sm opacity-70">
-            Phase 1 skeleton: manual trigger, single-model preview, TipTap validation.
+            Manual trigger only. Single-model preview. TipTap render validation required.
           </p>
         </div>
-        <button className="btn btn-outline btn-sm" onClick={() => void refreshAll()}>
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {activeRelease ? (
+            <span className="badge badge-success">Active Release v{activeRelease.version}</span>
+          ) : (
+            <span className="badge">No active release</span>
+          )}
+          <button className="btn btn-outline btn-sm" onClick={() => void refreshAll()}>
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <section className="card border-base-300 bg-base-100 border">
-        <div className="card-body gap-4">
-          <h2 className="card-title">Providers & Models</h2>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <h3 className="font-semibold">Add Provider</h3>
-              <input
-                className="input input-bordered input-sm"
-                placeholder="providerKey"
-                value={providerForm.providerKey}
-                onChange={(e) => setProviderForm((p) => ({ ...p, providerKey: e.target.value }))}
-              />
-              <input
-                className="input input-bordered input-sm"
-                placeholder="displayName"
-                value={providerForm.displayName}
-                onChange={(e) => setProviderForm((p) => ({ ...p, displayName: e.target.value }))}
-              />
-              <input
-                className="input input-bordered input-sm"
-                placeholder="sdkPackage"
-                value={providerForm.sdkPackage}
-                onChange={(e) => setProviderForm((p) => ({ ...p, sdkPackage: e.target.value }))}
-              />
-              <input
-                className="input input-bordered input-sm"
-                placeholder="apiKey (update only)"
-                value={providerForm.apiKey}
-                onChange={(e) => setProviderForm((p) => ({ ...p, apiKey: e.target.value }))}
-              />
-              <button className="btn btn-primary btn-sm" onClick={() => void createProvider()}>
-                Save Provider
-              </button>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-semibold">Add Model</h3>
-              <select
-                className="select select-bordered select-sm"
-                value={modelForm.providerId}
-                onChange={(e) => setModelForm((p) => ({ ...p, providerId: e.target.value }))}
-              >
-                <option value="">Select provider</option>
-                {providers.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.displayName}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="input input-bordered input-sm"
-                placeholder="modelKey"
-                value={modelForm.modelKey}
-                onChange={(e) => setModelForm((p) => ({ ...p, modelKey: e.target.value }))}
-              />
-              <input
-                className="input input-bordered input-sm"
-                placeholder="displayName"
-                value={modelForm.displayName}
-                onChange={(e) => setModelForm((p) => ({ ...p, displayName: e.target.value }))}
-              />
-              <select
-                className="select select-bordered select-sm"
-                value={modelForm.capability}
-                onChange={(e) =>
-                  setModelForm((p) => ({
-                    ...p,
-                    capability: e.target.value as "text_generation" | "image_generation",
-                  }))
-                }
-              >
-                <option value="text_generation">text_generation</option>
-                <option value="image_generation">image_generation</option>
-              </select>
-              <button className="btn btn-primary btn-sm" onClick={() => void createModel()}>
-                Save Model
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div>
-              <h3 className="mb-2 font-semibold">Providers</h3>
-              <div className="overflow-x-auto">
-                <table className="table-xs table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Status</th>
-                      <th>Test</th>
-                      <th>Key</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {providers.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.displayName}</td>
-                        <td>{item.status}</td>
-                        <td>{item.testStatus}</td>
-                        <td>{item.hasKey ? `****${item.keyLast4 ?? ""}` : "missing"}</td>
-                        <td className="space-x-1">
-                          <button
-                            className="btn btn-xs"
-                            onClick={() => void runProviderTest(item.id)}
-                          >
-                            Test
-                          </button>
-                          <button
-                            className="btn btn-xs btn-error"
-                            onClick={() => void removeProvider(item.id)}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-2 font-semibold">Models</h3>
-              <div className="overflow-x-auto">
-                <table className="table-xs table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Capability</th>
-                      <th>Provider</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {models.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.displayName}</td>
-                        <td>{item.capability}</td>
-                        <td>
-                          {providers.find((provider) => provider.id === item.providerId)
-                            ?.displayName ?? "-"}
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn-xs btn-error"
-                            onClick={() => void removeModel(item.id)}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+      <section className="rounded border p-3">
+        <div className="mb-2 text-sm font-semibold">Control Plane Sections</div>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {SECTION_ITEMS.map((section) => (
+            <button
+              key={section.id}
+              className={`rounded border p-2 text-left ${
+                activeSection === section.id ? "border-primary bg-base-200" : "border-base-300"
+              }`}
+              onClick={() => setActiveSection(section.id)}
+            >
+              <div className="text-sm font-semibold">{section.label}</div>
+              <div className="text-xs opacity-70">{section.helper}</div>
+            </button>
+          ))}
         </div>
       </section>
 
-      <section className="card border-base-300 bg-base-100 border">
-        <div className="card-body gap-4">
-          <h2 className="card-title">Global Policy Studio</h2>
-          <div className="grid gap-2">
-            <textarea
-              className="textarea textarea-bordered h-20"
-              placeholder="core_goal"
-              value={draft.coreGoal}
-              onChange={(e) => setDraft((prev) => ({ ...prev, coreGoal: e.target.value }))}
-            />
-            <textarea
-              className="textarea textarea-bordered h-28"
-              placeholder="global_policy"
-              value={draft.globalPolicy}
-              onChange={(e) => setDraft((prev) => ({ ...prev, globalPolicy: e.target.value }))}
-            />
-            <textarea
-              className="textarea textarea-bordered h-20"
-              placeholder="style_guide"
-              value={draft.styleGuide}
-              onChange={(e) => setDraft((prev) => ({ ...prev, styleGuide: e.target.value }))}
-            />
-            <textarea
-              className="textarea textarea-bordered h-20"
-              placeholder="forbidden_rules"
-              value={draft.forbiddenRules}
-              onChange={(e) => setDraft((prev) => ({ ...prev, forbiddenRules: e.target.value }))}
-            />
-            <input
-              className="input input-bordered"
-              placeholder="release note"
-              value={draft.note}
-              onChange={(e) => setDraft((prev) => ({ ...prev, note: e.target.value }))}
-            />
-            <div className="flex flex-wrap gap-2">
-              <button className="btn btn-primary btn-sm" onClick={() => void createDraft()}>
-                Create Draft
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
-            <div>
-              <h3 className="mb-2 font-semibold">Releases</h3>
-              <div className="overflow-x-auto">
-                <table className="table-xs table">
-                  <thead>
-                    <tr>
-                      <th>Version</th>
-                      <th>Status</th>
-                      <th>Created</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {releases.map((item) => (
-                      <tr key={item.version}>
-                        <td>v{item.version}</td>
-                        <td>
-                          {item.isActive ? (
-                            <span className="badge badge-success">published</span>
-                          ) : (
-                            <span className="badge">draft</span>
-                          )}
-                        </td>
-                        <td>{new Date(item.createdAt).toLocaleString()}</td>
-                        <td className="space-x-1">
-                          {!item.isActive ? (
-                            <button
-                              className="btn btn-xs btn-primary"
-                              onClick={() => void publishRelease(item.version)}
-                            >
-                              Publish
-                            </button>
-                          ) : null}
-                          <button
-                            className="btn btn-xs"
-                            onClick={() => void rollbackRelease(item.version)}
-                          >
-                            Rollback
-                          </button>
-                          <button
-                            className="btn btn-xs"
-                            onClick={() =>
-                              setPolicyPreviewInput((prev) => ({
-                                ...prev,
-                                releaseId: String(item.version),
-                              }))
-                            }
-                          >
-                            Use
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      {activeSection === "providers_models" ? (
+        <section className="card border-base-300 bg-base-100 border">
+          <div className="card-body gap-4">
+            <h2 className="card-title">Providers & Models</h2>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <h3 className="font-semibold">Add Provider</h3>
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="providerKey"
+                  value={providerForm.providerKey}
+                  onChange={(e) => setProviderForm((p) => ({ ...p, providerKey: e.target.value }))}
+                />
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="displayName"
+                  value={providerForm.displayName}
+                  onChange={(e) => setProviderForm((p) => ({ ...p, displayName: e.target.value }))}
+                />
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="sdkPackage"
+                  value={providerForm.sdkPackage}
+                  onChange={(e) => setProviderForm((p) => ({ ...p, sdkPackage: e.target.value }))}
+                />
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="apiKey (update only)"
+                  value={providerForm.apiKey}
+                  onChange={(e) => setProviderForm((p) => ({ ...p, apiKey: e.target.value }))}
+                />
+                <button className="btn btn-primary btn-sm" onClick={() => void createProvider()}>
+                  Save Provider
+                </button>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-semibold">Add Model</h3>
+                <select
+                  className="select select-bordered select-sm"
+                  value={modelForm.providerId}
+                  onChange={(e) => setModelForm((p) => ({ ...p, providerId: e.target.value }))}
+                >
+                  <option value="">Select provider</option>
+                  {providers.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.displayName}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="modelKey"
+                  value={modelForm.modelKey}
+                  onChange={(e) => setModelForm((p) => ({ ...p, modelKey: e.target.value }))}
+                />
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="displayName"
+                  value={modelForm.displayName}
+                  onChange={(e) => setModelForm((p) => ({ ...p, displayName: e.target.value }))}
+                />
+                <select
+                  className="select select-bordered select-sm"
+                  value={modelForm.capability}
+                  onChange={(e) =>
+                    setModelForm((p) => ({
+                      ...p,
+                      capability: e.target.value as "text_generation" | "image_generation",
+                    }))
+                  }
+                >
+                  <option value="text_generation">text_generation</option>
+                  <option value="image_generation">image_generation</option>
+                </select>
+                <button className="btn btn-primary btn-sm" onClick={() => void createModel()}>
+                  Save Model
+                </button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="font-semibold">Manual Preview</h3>
-              <input
-                className="input input-bordered input-sm"
-                placeholder="release id"
-                value={policyPreviewInput.releaseId}
-                onChange={(e) =>
-                  setPolicyPreviewInput((prev) => ({ ...prev, releaseId: e.target.value }))
-                }
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div>
+                <h3 className="mb-2 font-semibold">Providers</h3>
+                <div className="overflow-x-auto">
+                  <table className="table-xs table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Test</th>
+                        <th>Key</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {providers.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.displayName}</td>
+                          <td>{item.status}</td>
+                          <td>{item.testStatus}</td>
+                          <td>{item.hasKey ? `****${item.keyLast4 ?? ""}` : "missing"}</td>
+                          <td className="space-x-1">
+                            <button
+                              className="btn btn-xs"
+                              onClick={() => void runProviderTest(item.id)}
+                            >
+                              Test
+                            </button>
+                            <button
+                              className="btn btn-xs btn-error"
+                              onClick={() => void removeProvider(item.id)}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-2 font-semibold">Models</h3>
+                <div className="overflow-x-auto">
+                  <table className="table-xs table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Capability</th>
+                        <th>Provider</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {models.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.displayName}</td>
+                          <td>{item.capability}</td>
+                          <td>
+                            {providers.find((provider) => provider.id === item.providerId)
+                              ?.displayName ?? "-"}
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-xs btn-error"
+                              onClick={() => void removeModel(item.id)}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {activeSection === "policy_studio" ? (
+        <section className="card border-base-300 bg-base-100 border">
+          <div className="card-body gap-4">
+            <h2 className="card-title">Global Policy Studio</h2>
+            <div className="grid gap-2">
+              <textarea
+                className="textarea textarea-bordered h-20"
+                placeholder="core_goal"
+                value={draft.coreGoal}
+                onChange={(e) => setDraft((prev) => ({ ...prev, coreGoal: e.target.value }))}
               />
-              <select
-                className="select select-bordered select-sm"
-                value={policyPreviewInput.modelId}
-                onChange={(e) =>
-                  setPolicyPreviewInput((prev) => ({ ...prev, modelId: e.target.value }))
-                }
-              >
-                <option value="">Select model</option>
-                {models
-                  .filter((item) => item.capability === "text_generation")
-                  .map((model) => (
+              <textarea
+                className="textarea textarea-bordered h-28"
+                placeholder="global_policy"
+                value={draft.globalPolicy}
+                onChange={(e) => setDraft((prev) => ({ ...prev, globalPolicy: e.target.value }))}
+              />
+              <textarea
+                className="textarea textarea-bordered h-20"
+                placeholder="style_guide"
+                value={draft.styleGuide}
+                onChange={(e) => setDraft((prev) => ({ ...prev, styleGuide: e.target.value }))}
+              />
+              <textarea
+                className="textarea textarea-bordered h-20"
+                placeholder="forbidden_rules"
+                value={draft.forbiddenRules}
+                onChange={(e) => setDraft((prev) => ({ ...prev, forbiddenRules: e.target.value }))}
+              />
+              <input
+                className="input input-bordered"
+                placeholder="release note"
+                value={draft.note}
+                onChange={(e) => setDraft((prev) => ({ ...prev, note: e.target.value }))}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button className="btn btn-primary btn-sm" onClick={() => void createDraft()}>
+                  Create Draft
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr]">
+              <div>
+                <h3 className="mb-2 font-semibold">Policy Releases</h3>
+                <div className="overflow-x-auto">
+                  <table className="table-xs table">
+                    <thead>
+                      <tr>
+                        <th>Version</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {releases.map((item) => (
+                        <tr key={item.version}>
+                          <td>v{item.version}</td>
+                          <td>
+                            {item.isActive ? (
+                              <span className="badge badge-success">published</span>
+                            ) : (
+                              <span className="badge">draft</span>
+                            )}
+                          </td>
+                          <td>{new Date(item.createdAt).toLocaleString()}</td>
+                          <td className="space-x-1">
+                            {!item.isActive ? (
+                              <button
+                                className="btn btn-xs btn-primary"
+                                onClick={() => void publishRelease(item.version)}
+                              >
+                                Publish
+                              </button>
+                            ) : null}
+                            <button
+                              className="btn btn-xs"
+                              onClick={() => void rollbackRelease(item.version)}
+                            >
+                              Rollback
+                            </button>
+                            <button
+                              className="btn btn-xs"
+                              onClick={() =>
+                                setPolicyPreviewInput((prev) => ({
+                                  ...prev,
+                                  releaseId: String(item.version),
+                                }))
+                              }
+                            >
+                              Use In Preview
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-semibold">Manual Preview (single-model)</h3>
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="release id"
+                  value={policyPreviewInput.releaseId}
+                  onChange={(e) =>
+                    setPolicyPreviewInput((prev) => ({ ...prev, releaseId: e.target.value }))
+                  }
+                />
+                <select
+                  className="select select-bordered select-sm"
+                  value={policyPreviewInput.modelId}
+                  onChange={(e) =>
+                    setPolicyPreviewInput((prev) => ({ ...prev, modelId: e.target.value }))
+                  }
+                >
+                  <option value="">Select model</option>
+                  {textModels.map((model) => (
                     <option key={model.id} value={model.id}>
                       {optionLabelForModel(model, providers)}
                     </option>
                   ))}
-              </select>
-              <textarea
-                className="textarea textarea-bordered h-20"
-                placeholder="task context"
-                value={policyPreviewInput.taskContext}
-                onChange={(e) =>
-                  setPolicyPreviewInput((prev) => ({ ...prev, taskContext: e.target.value }))
-                }
-              />
-              <button className="btn btn-sm btn-primary" onClick={() => void runPolicyPreview()}>
-                Run Single-Model Preview
-              </button>
-              {policyPreview ? (
-                <div className="space-y-2 rounded border p-3">
-                  <div>{renderBadge(policyPreview.renderOk, policyPreview.renderError)}</div>
-                  <div className="text-xs opacity-80">
-                    input tokens {policyPreview.tokenBudget.estimatedInputTokens}/
-                    {policyPreview.tokenBudget.maxInputTokens}
-                    {policyPreview.tokenBudget.compressedStages.length > 0
-                      ? `, compressed: ${policyPreview.tokenBudget.compressedStages.join(" -> ")}`
-                      : ""}
-                  </div>
-                  {policyPreview.tokenBudget.exceeded ? (
-                    <div className="alert alert-warning py-2 text-sm">
-                      {policyPreview.tokenBudget.message ?? "Token budget exceeded"}
-                    </div>
-                  ) : null}
-                  <details>
-                    <summary className="cursor-pointer text-sm font-semibold">
-                      Prompt Assembly
-                    </summary>
-                    <pre className="bg-base-200 mt-2 max-h-60 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
-                      {policyPreview.assembledPrompt}
-                    </pre>
-                  </details>
-                  <details>
-                    <summary className="cursor-pointer text-sm font-semibold">Markdown</summary>
-                    <pre className="bg-base-200 mt-2 max-h-60 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
-                      {policyPreview.markdown}
-                    </pre>
-                  </details>
-                  <div className="rounded border p-2">
-                    <SafeHtml markdown={policyPreview.markdown} className="tiptap-html" />
-                  </div>
-                </div>
-              ) : null}
+                </select>
+                <textarea
+                  className="textarea textarea-bordered h-20"
+                  placeholder="task context"
+                  value={policyPreviewInput.taskContext}
+                  onChange={(e) =>
+                    setPolicyPreviewInput((prev) => ({ ...prev, taskContext: e.target.value }))
+                  }
+                />
+                <button className="btn btn-sm btn-primary" onClick={() => void runPolicyPreview()}>
+                  Run Preview
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <section className="card border-base-300 bg-base-100 border">
-        <div className="card-body gap-3">
-          <h2 className="card-title">Policy Models</h2>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {(["global_default", "post", "comment", "image", "persona_generation"] as const).map(
-              (scope) => {
-                const route = routeByScope.get(scope);
+            <PreviewPanel
+              preview={policyPreview}
+              emptyLabel="Run manual preview to inspect prompt assembly, markdown render, and token budget."
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {activeSection === "policy_models" ? (
+        <section className="card border-base-300 bg-base-100 border">
+          <div className="card-body gap-4">
+            <h2 className="card-title">Policy Models</h2>
+            <p className="text-sm opacity-70">
+              Configure primary/fallback per route. Persona Interaction can apply these route models
+              directly for preview.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ROUTE_SCOPE_ORDER.map((scope) => {
+                const draftRoute = routeDrafts[scope] ?? {
+                  primaryModelId: "",
+                  fallbackModelId: "",
+                };
                 return (
                   <div key={scope} className="rounded border p-3">
                     <div className="mb-2 font-semibold">{scope}</div>
                     <select
                       className="select select-bordered select-sm mb-2 w-full"
-                      defaultValue={route?.primaryModelId ?? ""}
-                      onChange={(e) => {
-                        void saveRoute(scope, e.target.value, route?.fallbackModelId ?? "");
-                      }}
+                      value={draftRoute.primaryModelId}
+                      onChange={(e) =>
+                        setRouteDrafts((prev) => ({
+                          ...prev,
+                          [scope]: { ...prev[scope], primaryModelId: e.target.value },
+                        }))
+                      }
                     >
                       <option value="">Primary model</option>
-                      {models
-                        .filter((model) =>
-                          scope === "image"
-                            ? model.capability === "image_generation"
-                            : model.capability === "text_generation",
-                        )
-                        .map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {optionLabelForModel(model, providers)}
-                          </option>
-                        ))}
+                      {modelForScope(scope).map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {optionLabelForModel(model, providers)}
+                        </option>
+                      ))}
                     </select>
                     <select
-                      className="select select-bordered select-sm w-full"
-                      defaultValue={route?.fallbackModelId ?? ""}
-                      onChange={(e) => {
-                        void saveRoute(scope, route?.primaryModelId ?? "", e.target.value);
-                      }}
+                      className="select select-bordered select-sm mb-2 w-full"
+                      value={draftRoute.fallbackModelId}
+                      onChange={(e) =>
+                        setRouteDrafts((prev) => ({
+                          ...prev,
+                          [scope]: { ...prev[scope], fallbackModelId: e.target.value },
+                        }))
+                      }
                     >
                       <option value="">Fallback model (nullable)</option>
-                      {models
-                        .filter((model) =>
-                          scope === "image"
-                            ? model.capability === "image_generation"
-                            : model.capability === "text_generation",
-                        )
-                        .map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {optionLabelForModel(model, providers)}
-                          </option>
-                        ))}
+                      {modelForScope(scope).map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {optionLabelForModel(model, providers)}
+                        </option>
+                      ))}
                     </select>
+                    <button
+                      className="btn btn-primary btn-xs"
+                      onClick={() =>
+                        void saveRoute(
+                          scope,
+                          routeDrafts[scope]?.primaryModelId ?? "",
+                          routeDrafts[scope]?.fallbackModelId ?? "",
+                        )
+                      }
+                    >
+                      Save {scope}
+                    </button>
                   </div>
                 );
-              },
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="card border-base-300 bg-base-100 border">
-        <div className="card-body gap-3">
-          <h2 className="card-title">Persona Generation</h2>
-          <p className="text-sm opacity-70">
-            1) Select model and extra persona prompt 2) Generate preview 3) Decide regenerate or
-            save to DB.
-          </p>
-          <div className="grid gap-2 md:grid-cols-[220px_1fr_auto]">
-            <select
-              className="select select-bordered select-sm"
-              value={personaGeneration.modelId}
-              onChange={(e) =>
-                setPersonaGeneration((prev) => ({ ...prev, modelId: e.target.value }))
-              }
-            >
-              <option value="">Select model (API key configured)</option>
-              {personaGenerationModels.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {optionLabelForModel(model, providers)}
-                </option>
-              ))}
-            </select>
-            <input
-              className="input input-bordered input-sm"
-              value={personaGeneration.extraPrompt}
-              onChange={(e) =>
-                setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
-              }
-              placeholder="extra prompt"
-            />
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={personaGenerationLoading}
-              onClick={() => void runPersonaGenerationPreview()}
-            >
-              {personaGenerationLoading ? "Generating..." : "Generate Preview"}
-            </button>
-          </div>
-          {personaGenerationModels.length === 0 ? (
-            <div className="alert alert-warning py-2 text-sm">
-              No eligible model. Add API key to provider and enable at least one text_generation
-              model.
+              })}
             </div>
-          ) : null}
-          {personaGenerationPreview ? (
-            <div className="space-y-2 rounded border p-3">
-              <div className="text-xs opacity-70">Preview runs: {personaPreviewRunCount}</div>
-              <div>
-                {renderBadge(
-                  personaGenerationPreview.renderOk,
-                  personaGenerationPreview.renderError,
-                )}
-              </div>
-              <div className="text-xs opacity-80">
-                input tokens {personaGenerationPreview.tokenBudget.estimatedInputTokens}/
-                {personaGenerationPreview.tokenBudget.maxInputTokens}
-              </div>
-              <pre className="bg-base-200 max-h-56 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
-                {personaGenerationPreview.markdown}
-              </pre>
-              <div className="rounded border p-2">
-                <SafeHtml markdown={personaGenerationPreview.markdown} className="tiptap-html" />
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <label className="form-control">
-                  <span className="label-text text-xs opacity-70">Display Name</span>
-                  <input
-                    className="input input-bordered input-sm"
-                    value={personaSaveForm.displayName}
-                    onChange={(e) => {
-                      const displayName = e.target.value;
-                      setPersonaSaveForm({
-                        displayName,
-                        username: derivePersonaUsername(displayName),
-                      });
-                    }}
-                  />
-                </label>
-                <label className="form-control">
-                  <span className="label-text text-xs opacity-70">Username (auto ai_ prefix)</span>
-                  <input
-                    className="input input-bordered input-sm"
-                    value={personaSaveForm.username}
-                    onChange={(e) =>
-                      setPersonaSaveForm((prev) => ({
-                        ...prev,
-                        username: derivePersonaUsername(e.target.value),
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="btn btn-sm btn-outline"
-                  disabled={personaGenerationLoading}
-                  onClick={() => void runPersonaGenerationPreview()}
-                >
-                  {personaGenerationLoading ? "Generating..." : "Regenerate"}
-                </button>
-                <button
-                  className="btn btn-sm btn-primary"
-                  disabled={personaSaveLoading}
-                  onClick={() => void savePersonaFromGeneration()}
-                >
-                  {personaSaveLoading ? "Saving..." : "Save To DB"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : null}
 
-      <section className="card border-base-300 bg-base-100 border">
-        <div className="card-body gap-3">
-          <h2 className="card-title">Persona Interaction</h2>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            <PersonaSelect
-              value={interactionInput.personaId}
-              initialOptions={personas}
-              onChange={(personaId) => setInteractionInput((prev) => ({ ...prev, personaId }))}
-            />
-            <select
-              className="select select-bordered select-sm"
-              value={interactionInput.modelId}
-              onChange={(e) =>
-                setInteractionInput((prev) => ({ ...prev, modelId: e.target.value }))
-              }
-            >
-              <option value="">Select model</option>
-              {models
-                .filter((item) => item.capability === "text_generation")
-                .map((model) => (
+      {activeSection === "persona_generation" ? (
+        <section className="card border-base-300 bg-base-100 border">
+          <div className="card-body gap-3">
+            <h2 className="card-title">Persona Generation</h2>
+            <p className="text-sm opacity-70">
+              Step 1: choose model and prompt. Step 2: generate or regenerate preview. Step 3:
+              review and save to DB.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="badge badge-outline">1. Configure Input</span>
+              <span
+                className={`badge ${personaStepStatus.generated ? "badge-success" : "badge-outline"}`}
+              >
+                2. {personaStepStatus.generated ? "Generated" : "Not Generated"}
+              </span>
+              <span
+                className={`badge ${personaStepStatus.saved ? "badge-success" : "badge-outline"}`}
+              >
+                3. {personaStepStatus.saved ? "Saved" : "Not Saved"}
+              </span>
+            </div>
+            <div className="grid gap-2 md:grid-cols-[220px_1fr_auto]">
+              <select
+                className="select select-bordered select-sm"
+                value={personaGeneration.modelId}
+                onChange={(e) =>
+                  setPersonaGeneration((prev) => ({ ...prev, modelId: e.target.value }))
+                }
+              >
+                <option value="">Select model (API key configured)</option>
+                {personaGenerationModels.map((model) => (
                   <option key={model.id} value={model.id}>
                     {optionLabelForModel(model, providers)}
                   </option>
                 ))}
-            </select>
-            <select
-              className="select select-bordered select-sm"
-              value={interactionInput.taskType}
-              onChange={(e) =>
-                setInteractionInput((prev) => ({
-                  ...prev,
-                  taskType: e.target.value as "post" | "comment",
-                }))
-              }
-            >
-              <option value="post">post</option>
-              <option value="comment">comment</option>
-            </select>
-            <button className="btn btn-primary btn-sm" onClick={() => void runInteractionPreview()}>
-              Run Preview
-            </button>
-          </div>
-          <textarea
-            className="textarea textarea-bordered h-20"
-            value={interactionInput.taskContext}
-            onChange={(e) =>
-              setInteractionInput((prev) => ({ ...prev, taskContext: e.target.value }))
-            }
-            placeholder="task context"
-          />
-
-          {interactionPreview ? (
-            <div className="space-y-2 rounded border p-3">
-              <div>{renderBadge(interactionPreview.renderOk, interactionPreview.renderError)}</div>
-              <div className="text-xs opacity-80">
-                input tokens {interactionPreview.tokenBudget.estimatedInputTokens}/
-                {interactionPreview.tokenBudget.maxInputTokens}
-                {interactionPreview.tokenBudget.compressedStages.length > 0
-                  ? `, compressed signal: ${interactionPreview.tokenBudget.compressedStages.join(" -> ")}`
-                  : ""}
-              </div>
-              {interactionPreview.tokenBudget.exceeded ? (
-                <div className="alert alert-warning py-2 text-sm">
-                  {interactionPreview.tokenBudget.message ??
-                    "Token budget exceeded. Please simplify global rules."}
-                </div>
-              ) : null}
-              <pre className="bg-base-200 max-h-56 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
-                {interactionPreview.markdown}
-              </pre>
-              <div className="rounded border p-2">
-                <SafeHtml markdown={interactionPreview.markdown} className="tiptap-html" />
-              </div>
-              <details>
-                <summary className="cursor-pointer text-sm font-semibold">Prompt Assembly</summary>
-                <pre className="bg-base-200 mt-2 max-h-56 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
-                  {interactionPreview.assembledPrompt}
-                </pre>
-              </details>
+              </select>
+              <input
+                className="input input-bordered input-sm"
+                value={personaGeneration.extraPrompt}
+                onChange={(e) =>
+                  setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
+                }
+                placeholder="extra prompt"
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={personaGenerationLoading}
+                onClick={() => void runPersonaGenerationPreview()}
+              >
+                {personaGenerationLoading
+                  ? "Generating..."
+                  : personaPreviewRunCount > 0
+                    ? "Regenerate Preview"
+                    : "Generate Preview"}
+              </button>
             </div>
-          ) : null}
-        </div>
-      </section>
+            {personaGenerationModels.length === 0 ? (
+              <div className="alert alert-warning py-2 text-sm">
+                No eligible model. Add API key to provider and enable at least one text_generation
+                model.
+              </div>
+            ) : null}
+
+            {personaGenerationPreview ? (
+              <>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="form-control">
+                    <span className="label-text text-xs opacity-70">Display Name</span>
+                    <input
+                      className="input input-bordered input-sm"
+                      value={personaSaveForm.displayName}
+                      onChange={(e) => {
+                        const displayName = e.target.value;
+                        setPersonaSaveForm({
+                          displayName,
+                          username: derivePersonaUsername(displayName),
+                        });
+                      }}
+                    />
+                  </label>
+                  <label className="form-control">
+                    <span className="label-text text-xs opacity-70">
+                      Username (auto ai_ prefix)
+                    </span>
+                    <input
+                      className="input input-bordered input-sm"
+                      value={personaSaveForm.username}
+                      onChange={(e) =>
+                        setPersonaSaveForm((prev) => ({
+                          ...prev,
+                          username: derivePersonaUsername(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs opacity-70">Preview runs: {personaPreviewRunCount}</span>
+                  {personaLastSavedAt ? (
+                    <span className="text-xs opacity-70">
+                      Last saved: {new Date(personaLastSavedAt).toLocaleString()}
+                    </span>
+                  ) : null}
+                  <button
+                    className="btn btn-sm btn-primary"
+                    disabled={personaSaveLoading}
+                    onClick={() => void savePersonaFromGeneration()}
+                  >
+                    {personaSaveLoading ? "Saving..." : "Save To DB"}
+                  </button>
+                </div>
+
+                <PreviewPanel preview={personaGenerationPreview} emptyLabel="Run preview first" />
+              </>
+            ) : (
+              <PreviewPanel preview={null} emptyLabel="Generate preview to continue." />
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {activeSection === "persona_interaction" ? (
+        <section className="card border-base-300 bg-base-100 border">
+          <div className="card-body gap-3">
+            <h2 className="card-title">Persona Interaction</h2>
+            <div className="rounded border p-2 text-xs opacity-80">
+              Effective route primary for <strong>{interactionInput.taskType}</strong>:{" "}
+              {routePrimaryModelLabel()}
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              <PersonaSelect
+                value={interactionInput.personaId}
+                initialOptions={personas}
+                onChange={(personaId) => setInteractionInput((prev) => ({ ...prev, personaId }))}
+              />
+              <select
+                className="select select-bordered select-sm"
+                value={interactionInput.modelId}
+                onChange={(e) =>
+                  setInteractionInput((prev) => ({ ...prev, modelId: e.target.value }))
+                }
+              >
+                <option value="">Select model</option>
+                {textModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {optionLabelForModel(model, providers)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="select select-bordered select-sm"
+                value={interactionInput.taskType}
+                onChange={(e) =>
+                  setInteractionInput((prev) => ({
+                    ...prev,
+                    taskType: e.target.value as "post" | "comment",
+                  }))
+                }
+              >
+                <option value="post">post</option>
+                <option value="comment">comment</option>
+              </select>
+              <div className="flex gap-2">
+                <button className="btn btn-outline btn-sm" onClick={applyRoutePrimaryModel}>
+                  Use Route Primary
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => void runInteractionPreview()}
+                >
+                  Run Preview
+                </button>
+              </div>
+            </div>
+
+            {selectedPersona ? (
+              <div className="rounded border p-2 text-xs opacity-80">
+                Persona: {selectedPersona.display_name} ({selectedPersona.username})
+              </div>
+            ) : null}
+
+            <textarea
+              className="textarea textarea-bordered h-20"
+              value={interactionInput.taskContext}
+              onChange={(e) =>
+                setInteractionInput((prev) => ({ ...prev, taskContext: e.target.value }))
+              }
+              placeholder="task context"
+            />
+
+            <div className="grid gap-2 xl:grid-cols-2">
+              <textarea
+                className="textarea textarea-bordered h-28"
+                value={interactionInput.soulOverrideJson}
+                onChange={(e) =>
+                  setInteractionInput((prev) => ({ ...prev, soulOverrideJson: e.target.value }))
+                }
+                placeholder="Optional soul override JSON object"
+              />
+              <textarea
+                className="textarea textarea-bordered h-28"
+                value={interactionInput.longMemoryOverride}
+                onChange={(e) =>
+                  setInteractionInput((prev) => ({ ...prev, longMemoryOverride: e.target.value }))
+                }
+                placeholder="Optional long memory override text"
+              />
+            </div>
+
+            <PreviewPanel
+              preview={interactionPreview}
+              emptyLabel="Run persona interaction preview to inspect prompt assembly and render output."
+            />
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
