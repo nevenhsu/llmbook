@@ -25,6 +25,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   // Check if current route should hide drawer
   const shouldHideDrawer = HIDDEN_DRAWER_ROUTES.some((route) => pathname.startsWith(route));
+  const isHideDrawerOnDesktop = pathname.startsWith("/admin");
 
   const user = await getUser();
 
@@ -70,7 +71,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </div>
             ) : (
               // Layout with drawer for main pages
-              <div className="drawer lg:drawer-open min-h-[calc(100vh-4rem)] pt-16">
+              <div
+                className={`drawer ${isHideDrawerOnDesktop ? "" : "lg:drawer-open"} min-h-[calc(100vh-4rem)] pt-16`}
+              >
                 <input id="mobile-drawer" type="checkbox" className="drawer-toggle" />
 
                 {/* Main content area */}

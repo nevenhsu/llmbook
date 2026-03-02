@@ -247,107 +247,120 @@ export default function AiRuntimePanel({ initialStatus, initialEvents, initialTa
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="card border-base-300 bg-base-100 border">
-          <div className="card-body p-4">
-            <div className="mb-3 flex flex-wrap gap-2">
-              <input
-                className="input input-bordered input-sm"
-                placeholder="layer"
-                value={filters.layer}
-                onChange={(event) => setFilters((prev) => ({ ...prev, layer: event.target.value }))}
-              />
-              <input
-                className="input input-bordered input-sm"
-                placeholder="reasonCode"
-                value={filters.reasonCode}
-                onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, reasonCode: event.target.value }))
-                }
-              />
-              <input
-                className="input input-bordered input-sm"
-                placeholder="entityId"
-                value={filters.entityId}
-                onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, entityId: event.target.value }))
-                }
-              />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="table-xs table">
-                <thead>
+      {/* daisyUI tabs-border for Events / Tasks */}
+      <div className="tabs tabs-border tabs-lg w-full">
+        {/* Tab: Runtime Events */}
+        <input
+          type="radio"
+          name="runtime_tab"
+          role="tab"
+          className="tab"
+          aria-label="Runtime Events"
+          defaultChecked
+        />
+        <div className="tab-content border-base-300 bg-base-100 rounded-box border p-4">
+          <div className="mb-3 flex flex-wrap gap-2">
+            <input
+              className="input input-bordered input-sm"
+              placeholder="layer"
+              value={filters.layer}
+              onChange={(event) => setFilters((prev) => ({ ...prev, layer: event.target.value }))}
+            />
+            <input
+              className="input input-bordered input-sm"
+              placeholder="reasonCode"
+              value={filters.reasonCode}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, reasonCode: event.target.value }))
+              }
+            />
+            <input
+              className="input input-bordered input-sm"
+              placeholder="entityId"
+              value={filters.entityId}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, entityId: event.target.value }))
+              }
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="table-xs table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Layer</th>
+                  <th>Op</th>
+                  <th>Reason</th>
+                  <th>Entity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.items.length === 0 ? (
                   <tr>
-                    <th>Time</th>
-                    <th>Layer</th>
-                    <th>Op</th>
-                    <th>Reason</th>
-                    <th>Entity</th>
+                    <td colSpan={5} className="text-center opacity-70">
+                      No events
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {events.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center opacity-70">
-                        No events
-                      </td>
+                ) : (
+                  events.items.map((event) => (
+                    <tr key={event.id}>
+                      <td className="text-xs">{formatTime(event.occurredAt)}</td>
+                      <td>{event.layer}</td>
+                      <td>{event.operation}</td>
+                      <td className="font-mono text-xs">{event.reasonCode}</td>
+                      <td className="font-mono text-xs">{event.entityId}</td>
                     </tr>
-                  ) : (
-                    events.items.map((event) => (
-                      <tr key={event.id}>
-                        <td className="text-xs">{formatTime(event.occurredAt)}</td>
-                        <td>{event.layer}</td>
-                        <td>{event.operation}</td>
-                        <td className="font-mono text-xs">{event.reasonCode}</td>
-                        <td className="font-mono text-xs">{event.entityId}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <div className="card border-base-300 bg-base-100 border">
-          <div className="card-body p-4">
-            <h2 className="mb-2 text-sm font-semibold">Recent Tasks</h2>
-            <div className="overflow-x-auto">
-              <table className="table-xs table">
-                <thead>
+        {/* Tab: Recent Tasks */}
+        <input
+          type="radio"
+          name="runtime_tab"
+          role="tab"
+          className="tab"
+          aria-label="Recent Tasks"
+        />
+        <div className="tab-content border-base-300 bg-base-100 rounded-box border p-4">
+          <div className="overflow-x-auto">
+            <table className="table-xs table">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Status</th>
+                  <th>Reason</th>
+                  <th>Lease Owner</th>
+                  <th>Runtime</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.items.length === 0 ? (
                   <tr>
-                    <th>Task</th>
-                    <th>Status</th>
-                    <th>Reason</th>
-                    <th>Lease Owner</th>
-                    <th>Runtime</th>
+                    <td colSpan={5} className="text-center opacity-70">
+                      No tasks
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {tasks.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center opacity-70">
-                        No tasks
+                ) : (
+                  tasks.items.map((task) => (
+                    <tr key={task.id}>
+                      <td className="font-mono text-xs">{task.id.slice(0, 8)}</td>
+                      <td>{task.status}</td>
+                      <td className="font-mono text-xs">
+                        {task.skipOrFailReason ?? task.latestTransitionReason ?? "-"}
+                      </td>
+                      <td className="font-mono text-xs">{task.leaseOwner ?? "-"}</td>
+                      <td className="font-mono text-xs">
+                        {task.latestRuntimeEvent?.reasonCode ?? "-"}
                       </td>
                     </tr>
-                  ) : (
-                    tasks.items.map((task) => (
-                      <tr key={task.id}>
-                        <td className="font-mono text-xs">{task.id.slice(0, 8)}</td>
-                        <td>{task.status}</td>
-                        <td className="font-mono text-xs">
-                          {task.skipOrFailReason ?? task.latestTransitionReason ?? "-"}
-                        </td>
-                        <td className="font-mono text-xs">{task.leaseOwner ?? "-"}</td>
-                        <td className="font-mono text-xs">
-                          {task.latestRuntimeEvent?.reasonCode ?? "-"}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

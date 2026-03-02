@@ -71,3 +71,9 @@ Quick reference for shared libraries and conventions.
 這個版本更加精煉，專注於日常開發需要快速定位的入口。
 
 你也可以在 Plans/ 或 Docs/ 下維護自己的一致性規範。
+
+---
+
+## Agent Behavior (Antigravity)
+
+- **Always skip Chrome preview**: DO NOT use browser tools (`open_browser_url`, `read_browser_page`, etc.) for UI verification or previews unless explicitly requested by the user. Assume UI changes are correct based on code implementation.
