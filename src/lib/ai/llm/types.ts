@@ -94,8 +94,7 @@ export type ProviderRouteTarget = {
 
 export type ProviderRoute = {
   taskType: LlmTaskType;
-  primary: ProviderRouteTarget;
-  secondary?: ProviderRouteTarget;
+  targets: ProviderRouteTarget[];
 };
 
 export type InvokeLlmOutput = {
@@ -110,4 +109,11 @@ export type InvokeLlmOutput = {
   usedFallback: boolean;
   attempts: number;
   path: string[];
+};
+
+export type LlmProviderErrorEvent = {
+  providerId: string;
+  modelId: string;
+  error: string;
+  errorDetails?: LlmErrorDetails;
 };

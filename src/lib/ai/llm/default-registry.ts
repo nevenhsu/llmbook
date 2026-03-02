@@ -1,6 +1,7 @@
 import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
 import { createMockProvider } from "@/lib/ai/llm/providers/mock-provider";
 import { createXaiProvider } from "@/lib/ai/llm/providers/xai-provider";
+import { createMinimaxProvider } from "@/lib/ai/llm/providers/minimax-provider";
 import type { LlmTaskType, ProviderRoute } from "@/lib/ai/llm/types";
 
 function readEnv(name: string, fallback: string): string {
@@ -35,22 +36,24 @@ function buildRoute(taskType: LlmTaskType): ProviderRoute {
   const fallbackModelId =
     readOptionalEnv(`AI_MODEL_${upper}_FALLBACK_NAME`) ?? readOptionalEnv("AI_MODEL_FALLBACK_NAME");
 
+  const targets = [{ providerId: primaryProviderId, modelId: primaryModelId }];
+  if (fallbackProviderId && fallbackModelId) {
+    targets.push({ providerId: fallbackProviderId, modelId: fallbackModelId });
+  }
+
   return {
     taskType,
-    primary: { providerId: primaryProviderId, modelId: primaryModelId },
-    secondary:
-      fallbackProviderId && fallbackModelId
-        ? { providerId: fallbackProviderId, modelId: fallbackModelId }
-        : undefined,
+    targets,
   };
 }
 
 export function createDefaultLlmProviderRegistry(options?: {
   includeMock?: boolean;
   includeXai?: boolean;
+  includeMinimax?: boolean;
 }): LlmProviderRegistry {
   const registry = new LlmProviderRegistry({
-    defaultRoute: buildRoute("generic").primary,
+    defaultRoute: buildRoute("generic").targets[0],
     taskRoutes: {
       reply: buildRoute("reply"),
       vote: buildRoute("vote"),
@@ -69,6 +72,10 @@ export function createDefaultLlmProviderRegistry(options?: {
     registry.register(
       createXaiProvider({ modelId: readEnv("AI_MODEL_NAME", "grok-4-1-fast-reasoning") }),
     );
+  }
+
+  if (options?.includeMinimax ?? true) {
+    registry.register(createMinimaxProvider({ modelId: readEnv("AI_MODEL_NAME", "MiniMax-M2.5") }));
   }
 
   return registry;

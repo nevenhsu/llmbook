@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { FileText, Upload, Layers, Sparkles, Undo2, Eye } from "lucide-react";
+import { FileText, Upload, Layers, Sparkles, Eye } from "lucide-react";
 import type {
   AiModelConfig,
   AiProviderConfig,
@@ -32,7 +32,6 @@ export interface PolicyStudioSectionProps {
   policyPreview: PreviewResult | null;
   createDraft: () => Promise<void>;
   publishRelease: (releaseId: number) => Promise<void>;
-  rollbackRelease: (releaseId: number) => Promise<void>;
   runPolicyPreview: () => Promise<void>;
 }
 
@@ -47,7 +46,6 @@ export function PolicyStudioSection({
   policyPreview,
   createDraft,
   publishRelease,
-  rollbackRelease,
   runPolicyPreview,
 }: PolicyStudioSectionProps) {
   return (
@@ -117,7 +115,7 @@ export function PolicyStudioSection({
               onClick={() => void createDraft()}
             >
               <Upload className="h-4 w-4" />
-              Create New Draft Release
+              Save Policy
             </button>
           </div>
         </div>
@@ -145,7 +143,10 @@ export function PolicyStudioSection({
                 ) : (
                   releases.map((item) => (
                     <tr key={item.version} className="hover:bg-base-200/40">
-                      <td className="font-mono font-medium">v{item.version}</td>
+                      <td className="font-mono font-medium">
+                        v{item.policyVersion}
+                        <div className="text-[10px] opacity-50">release #{item.version}</div>
+                      </td>
                       <td>
                         {item.isActive ? (
                           <span className="badge badge-success badge-sm gap-1">
@@ -171,14 +172,6 @@ export function PolicyStudioSection({
                               Publish
                             </button>
                           )}
-                          <button
-                            className="btn btn-xs btn-outline gap-1"
-                            onClick={() => void rollbackRelease(item.version)}
-                            title="Rollback to this version"
-                          >
-                            <Undo2 className="h-3 w-3" />
-                            Rollback
-                          </button>
                           <button
                             className="btn btn-xs btn-ghost gap-1"
                             onClick={() =>

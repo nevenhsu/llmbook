@@ -2,6 +2,8 @@
 
 此目錄放 AI Agent 共用能力（跨 Agent 可重用）。
 
+> 開發階段聲明（重要）：目前不做舊設定相容。舊 `primary/secondary`、舊 `taskRoutes/default`、舊 route scope 設定需直接遷移到新結構（capability-first + ordered targets）。
+
 ## 原則
 
 - 只放共用能力，不放單一 Agent 的流程編排
@@ -14,8 +16,8 @@
 - `data-sources/`: Heartbeat 用資料來源契約與事件彙整
 - `memory/`: Global/Persona 記憶分層與 Runtime 組裝契約
 - `soul/`: Persona Soul Runtime（reader/normalize/fallback/summary）
-- `llm/`: Provider Registry + invokeLLM（timeout/retry/fallback/fail-safe + usage）
-- `prompt-runtime/`: Prompt builder + model adapter + fallback orchestration（phase1 reply）
+- `llm/`: Provider Registry + invokeLLM（timeout/retry/ordered failover/fail-safe + usage）
+- `prompt-runtime/`: Prompt builder + model adapter + ordered failover orchestration（phase1 reply）
 - `prompt-runtime/tool-registry.ts`: Tool contract + allowlist + schema validate + handler execute
 - `task-queue/`: `persona_tasks` 任務存取與狀態協議
 - `policy/`: 行為開關與限制
@@ -65,14 +67,14 @@
   - 輸出最近一次 soul fallback/applied 事件
 - `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
   - 輸出 prompt blocks 摘要（各 block enabled/degraded）
-  - 輸出 model provider/model/fallback 狀態
+  - 輸出 model provider/model/ordered targets 狀態
   - 輸出最近一次 prompt/model failure reason（若有）
 - `npm run ai:tool:verify`
   - 驗證 tool registry allowlist + schema contract 可執行
-  - 驗證 tool loop iterations / timeout / fallback 狀態摘要
+  - 驗證 tool loop iterations / timeout / ordered failover 狀態摘要
   - 輸出最近一次 tool runtime failure event（若有）
 - `npm run ai:provider:verify`
-  - 輸出 reply task active provider/model 與 fallback 路徑
+  - 輸出 reply task active provider/model 與 ordered targets 路徑
   - 輸出 invokeLLM usage 摘要與 attempts
   - 輸出最近 provider runtime 事件
 
@@ -106,7 +108,7 @@
   - 失敗時回空輸出（由 execution skip + circuit breaker 控制）
 - 內建 adapter：
   - `MockModelAdapter`：`success` / `empty` / `throw`
-  - `LlmRuntimeAdapter`：內部統一走 `llm/invoke-llm.ts`（provider registry + timeout/retry/fallback/fail-safe）
+  - `LlmRuntimeAdapter`：內部統一走 `llm/invoke-llm.ts`（provider registry + timeout/retry/ordered failover/fail-safe）
 
 ## LLM Provider Runtime Contract（Phase1）
 
@@ -118,17 +120,23 @@
 - Registry：
   - default provider/model
   - task routing（`reply/vote/dispatch/generic`）
-  - per-task primary/secondary fallback route
+  - per-task ordered targets route
 - 路由來源：
-  - 主來源：DB `ai_policy_releases.policy.capabilities.reply.llmRuntime`
-  - fallback：`AI_MODEL_*` env
+  - 主來源：DB `ai_policy_releases.policy.capabilities.reply.llmRuntime.capabilityRoutes`
+  - 不保留舊 `taskRoutes/default` 相容路徑
 - invoke runtime：
   - `invokeLLM()` 為唯一入口
-  - 支援 timeout、有限重試、primary->secondary fallback、fail-safe 空輸出
+  - 支援 timeout、有限重試、依 ordered targets 逐一嘗試、fail-safe 空輸出
   - 回傳統一輸出 shape：`text/finishReason/usage/error`（含 provider/model 與 usage 摘要）
 - xAI provider：
   - 優先使用 Vercel AI SDK（`generateText` + `@ai-sdk/xai`）
-  - 直接使用 SDK responses 模型路徑
+  - 支援模型：
+    - `grok-4-1-fast-reasoning`: Input (text, image), Output (text)
+    - `grok-imagine-image`: Input (text, image), Output (image)
+- Minimax provider：
+  - 使用 `vercel-minimax-ai-provider`
+  - 支援模型：
+    - `MiniMax-M2.5`: Input (text), Output (text)
 
 ## Soul Runtime Contract（Phase 2）
 

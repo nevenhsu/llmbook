@@ -46,8 +46,7 @@ export function buildInitialRouteDrafts(routes: AiModelRoute[]): RouteDraftState
   return ROUTE_SCOPE_ORDER.reduce<RouteDraftState>((acc, scope) => {
     const route = routes.find((item) => item.scope === scope);
     acc[scope] = {
-      primaryModelId: route?.primaryModelId ?? "",
-      fallbackModelId: route?.fallbackModelId ?? "",
+      orderedModelIds: route?.orderedModelIds ?? [],
     };
     return acc;
   }, {} as RouteDraftState);

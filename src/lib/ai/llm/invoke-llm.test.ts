@@ -3,25 +3,22 @@ import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
 import type { LlmProvider } from "@/lib/ai/llm/types";
 
-function registryWith(input: {
-  primary: LlmProvider;
-  secondary?: LlmProvider;
-}): LlmProviderRegistry {
+function registryWith(input: { ordered: LlmProvider[] }): LlmProviderRegistry {
+  const primary = input.ordered[0];
   const registry = new LlmProviderRegistry({
-    defaultRoute: { providerId: input.primary.providerId, modelId: input.primary.modelId },
+    defaultRoute: { providerId: primary.providerId, modelId: primary.modelId },
     taskRoutes: {
       reply: {
         taskType: "reply",
-        primary: { providerId: input.primary.providerId, modelId: input.primary.modelId },
-        secondary: input.secondary
-          ? { providerId: input.secondary.providerId, modelId: input.secondary.modelId }
-          : undefined,
+        targets: input.ordered.map((provider) => ({
+          providerId: provider.providerId,
+          modelId: provider.modelId,
+        })),
       },
     },
   });
-  registry.register(input.primary);
-  if (input.secondary) {
-    registry.register(input.secondary);
+  for (const provider of input.ordered) {
+    registry.register(provider);
   }
   return registry;
 }
@@ -40,7 +37,7 @@ describe("invokeLLM", () => {
     };
 
     const result = await invokeLLM({
-      registry: registryWith({ primary }),
+      registry: registryWith({ ordered: [primary] }),
       taskType: "reply",
       entityId: "task-1",
       modelInput: { prompt: "hello" },
@@ -73,7 +70,7 @@ describe("invokeLLM", () => {
     };
 
     const result = await invokeLLM({
-      registry: registryWith({ primary, secondary }),
+      registry: registryWith({ ordered: [primary, secondary] }),
       taskType: "reply",
       entityId: "task-2",
       modelInput: { prompt: "hello" },
@@ -104,7 +101,7 @@ describe("invokeLLM", () => {
     };
 
     const result = await invokeLLM({
-      registry: registryWith({ primary, secondary }),
+      registry: registryWith({ ordered: [primary, secondary] }),
       taskType: "reply",
       entityId: "task-3",
       modelInput: { prompt: "hello" },
@@ -138,7 +135,7 @@ describe("invokeLLM", () => {
     };
 
     const result = await invokeLLM({
-      registry: registryWith({ primary, secondary }),
+      registry: registryWith({ ordered: [primary, secondary] }),
       taskType: "reply",
       entityId: "task-4",
       modelInput: { prompt: "hello" },
@@ -162,7 +159,7 @@ describe("invokeLLM", () => {
     };
 
     const result = await invokeLLM({
-      registry: registryWith({ primary }),
+      registry: registryWith({ ordered: [primary] }),
       taskType: "reply",
       entityId: "task-5",
       modelInput: { prompt: "hello" },
@@ -192,7 +189,7 @@ describe("invokeLLM", () => {
     };
 
     const result = await invokeLLM({
-      registry: registryWith({ primary }),
+      registry: registryWith({ ordered: [primary] }),
       taskType: "reply",
       entityId: "task-6",
       modelInput: { prompt: "hello" },

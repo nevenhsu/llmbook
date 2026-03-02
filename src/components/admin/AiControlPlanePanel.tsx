@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Cpu, ChevronRight, Sparkles } from "lucide-react";
 import { useAiControlPlane } from "@/hooks/admin/useAiControlPlane";
 import { type PersonaItem, SECTION_ICONS, SECTION_ITEMS } from "@/lib/ai/admin/control-plane-types";
@@ -25,6 +26,9 @@ type Props = {
 };
 
 export default function AiControlPlanePanel(props: Props) {
+  const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
+  const [rollbackVersion, setRollbackVersion] = useState<number | null>(null);
+
   const {
     activeSection,
     setActiveSection,
@@ -35,10 +39,6 @@ export default function AiControlPlanePanel(props: Props) {
     personas,
     routeDrafts,
     setRouteDrafts,
-    providerForm,
-    setProviderForm,
-    modelForm,
-    setModelForm,
     draft,
     setDraft,
     policyPreviewInput,
@@ -62,11 +62,10 @@ export default function AiControlPlanePanel(props: Props) {
     personaGenerationModels,
     selectedPersona,
     refreshAll,
-    createProvider,
-    runProviderTest,
-    removeProvider,
-    createModel,
-    removeModel,
+    createSupportedProvider,
+    runModelTest,
+    setModelActive,
+    reorderModels,
     saveRoute,
     createDraft,
     runPolicyPreview,
@@ -79,6 +78,27 @@ export default function AiControlPlanePanel(props: Props) {
     routePrimaryModelLabel,
     personaStepStatus,
   } = useAiControlPlane(props);
+
+  const currentPolicyVersion = activeRelease?.policyVersion ?? 1;
+  const allowedPolicyVersions = useMemo(
+    () => [currentPolicyVersion, currentPolicyVersion + 1],
+    [currentPolicyVersion],
+  );
+  const selectedRollbackRelease =
+    rollbackVersion == null
+      ? null
+      : (releases.find((item) => item.version === rollbackVersion) ?? null);
+  const hasRollbackCandidate = releases.some((item) => !item.isActive);
+
+  useEffect(() => {
+    if (allowedPolicyVersions.includes(draft.policyVersion)) {
+      return;
+    }
+    setDraft((prev) => ({
+      ...prev,
+      policyVersion: currentPolicyVersion,
+    }));
+  }, [allowedPolicyVersions, currentPolicyVersion, draft.policyVersion, setDraft]);
 
   return (
     <div className="space-y-6">
@@ -94,14 +114,47 @@ export default function AiControlPlanePanel(props: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="form-control">
+            <select
+              className="select select-bordered select-xs w-40"
+              value={
+                allowedPolicyVersions.includes(draft.policyVersion)
+                  ? draft.policyVersion
+                  : currentPolicyVersion
+              }
+              onChange={(event) => {
+                const nextVersion = Number(event.target.value);
+                setDraft((prev) => ({
+                  ...prev,
+                  policyVersion: Number.isFinite(nextVersion) ? nextVersion : currentPolicyVersion,
+                }));
+              }}
+            >
+              {allowedPolicyVersions.map((version) => (
+                <option key={version} value={version}>
+                  v{version}
+                  {version === currentPolicyVersion ? " (current)" : " (next)"}
+                </option>
+              ))}
+            </select>
+          </div>
           {activeRelease ? (
             <span className="badge badge-success gap-1">
               <Sparkles className="h-3 w-3" />
-              Active v{activeRelease.version}
+              Active release #{activeRelease.version}
             </span>
-          ) : (
-            <span className="badge badge-ghost">No active release</span>
-          )}
+          ) : null}
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={!hasRollbackCandidate}
+            onClick={() => {
+              const fallback = releases.find((item) => !item.isActive) ?? releases[0] ?? null;
+              setRollbackVersion(fallback?.version ?? null);
+              setRollbackModalOpen(true);
+            }}
+          >
+            Rollback
+          </button>
           <button className="btn btn-outline btn-sm gap-1" onClick={() => void refreshAll()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -181,15 +234,11 @@ export default function AiControlPlanePanel(props: Props) {
             <ProvidersModelsSection
               providers={providers}
               models={models}
-              providerForm={providerForm}
-              setProviderForm={setProviderForm}
-              modelForm={modelForm}
-              setModelForm={setModelForm}
-              createProvider={createProvider}
-              runProviderTest={runProviderTest}
-              removeProvider={removeProvider}
-              createModel={createModel}
-              removeModel={removeModel}
+              routes={routes}
+              createSupportedProvider={createSupportedProvider}
+              runModelTest={runModelTest}
+              setModelActive={setModelActive}
+              reorderModels={reorderModels}
             />
           )}
 
@@ -205,7 +254,6 @@ export default function AiControlPlanePanel(props: Props) {
               policyPreview={policyPreview}
               createDraft={createDraft}
               publishRelease={publishRelease}
-              rollbackRelease={rollbackRelease}
               runPolicyPreview={runPolicyPreview}
             />
           )}
@@ -255,6 +303,104 @@ export default function AiControlPlanePanel(props: Props) {
           )}
         </main>
       </div>
+
+      {rollbackModalOpen ? (
+        <dialog className="modal modal-open" open>
+          <div className="modal-box max-w-2xl space-y-4">
+            <h3 className="text-lg font-semibold">Rollback Policy Release</h3>
+            <div className="form-control w-full">
+              <label className="label py-0.5">
+                <span className="label-text text-xs font-semibold opacity-70">Target Release</span>
+              </label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={rollbackVersion ?? ""}
+                onChange={(event) => setRollbackVersion(Number(event.target.value) || null)}
+              >
+                <option value="">Select release</option>
+                {releases.map((item) => (
+                  <option key={item.version} value={item.version} disabled={item.isActive}>
+                    v{item.policyVersion} (release #{item.version})
+                    {item.isActive ? " - active" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedRollbackRelease ? (
+              <div className="border-base-300 bg-base-200/30 space-y-2 rounded-lg border p-3">
+                <div className="text-xs opacity-70">
+                  Preview: v{selectedRollbackRelease.policyVersion} / release #
+                  {selectedRollbackRelease.version}
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div>
+                    <div className="text-[11px] font-semibold opacity-70">Core Goal</div>
+                    <p className="text-xs whitespace-pre-wrap">
+                      {selectedRollbackRelease.globalPolicyDraft.coreGoal || "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold opacity-70">Style Guide</div>
+                    <p className="text-xs whitespace-pre-wrap">
+                      {selectedRollbackRelease.globalPolicyDraft.styleGuide || "-"}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold opacity-70">Global Policy</div>
+                  <p className="text-xs whitespace-pre-wrap">
+                    {selectedRollbackRelease.globalPolicyDraft.globalPolicy || "-"}
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold opacity-70">Forbidden Rules</div>
+                  <p className="text-xs whitespace-pre-wrap">
+                    {selectedRollbackRelease.globalPolicyDraft.forbiddenRules || "-"}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setRollbackModalOpen(false);
+                  setRollbackVersion(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-warning btn-sm"
+                disabled={!selectedRollbackRelease}
+                onClick={() => {
+                  if (!selectedRollbackRelease) {
+                    return;
+                  }
+                  void rollbackRelease(selectedRollbackRelease.version).then(() => {
+                    setRollbackModalOpen(false);
+                    setRollbackVersion(null);
+                  });
+                }}
+              >
+                Confirm Rollback
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button
+              onClick={() => {
+                setRollbackModalOpen(false);
+                setRollbackVersion(null);
+              }}
+            >
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </div>
   );
 }

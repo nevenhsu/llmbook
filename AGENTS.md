@@ -77,3 +77,10 @@ Quick reference for shared libraries and conventions.
 ## Agent Behavior (Antigravity)
 
 - **Always skip Chrome preview**: DO NOT use browser tools (`open_browser_url`, `read_browser_page`, etc.) for UI verification or previews unless explicitly requested by the user. Assume UI changes are correct based on code implementation.
+
+## Dev Stage Migration Rule
+
+- Current stage is active development. Do **not** keep backward compatibility for legacy settings.
+- Any legacy contract must be migrated together with code changes, including runtime config, schema shape, API payload/response, and policy document structure.
+- Do not add dual-read or dual-write compatibility paths unless explicitly requested.
+- Agent/runtime logic must use the latest contract as the single source of truth.

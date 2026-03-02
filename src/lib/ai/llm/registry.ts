@@ -35,12 +35,20 @@ export class LlmProviderRegistry {
   public resolveRoute(taskType: LlmTaskType, override?: Partial<ProviderRoute>): ProviderRoute {
     const base = this.taskRoutes[taskType] ?? {
       taskType,
-      primary: this.defaultRoute,
+      targets: [this.defaultRoute],
     };
+    const targets =
+      override?.targets && override.targets.length > 0 ? override.targets : base.targets;
     return {
       taskType,
-      primary: override?.primary ?? base.primary,
-      secondary: override?.secondary ?? base.secondary,
+      targets: targets.filter(
+        (target, index, arr) =>
+          target.providerId.trim().length > 0 &&
+          target.modelId.trim().length > 0 &&
+          arr.findIndex(
+            (item) => item.providerId === target.providerId && item.modelId === target.modelId,
+          ) === index,
+      ),
     };
   }
 }

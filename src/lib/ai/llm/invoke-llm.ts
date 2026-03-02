@@ -5,6 +5,7 @@ import type {
   LlmErrorDetails,
   LlmGenerateTextInput,
   LlmGenerateTextOutput,
+  LlmProviderErrorEvent,
   LlmTaskType,
   LlmUsage,
   ProviderRoute,
@@ -167,6 +168,7 @@ async function runOnTarget(input: {
   entityId: string;
   recorder: PromptRuntimeEventRecorder;
   path: string[];
+  onProviderError?: (event: LlmProviderErrorEvent) => Promise<void> | void;
 }): Promise<{
   output: LlmGenerateTextOutput | null;
   error: string | null;
@@ -216,6 +218,12 @@ async function runOnTarget(input: {
             nextAttempt: attempts + 1,
           });
         }
+        await input.onProviderError?.({
+          providerId: input.target.providerId,
+          modelId: input.target.modelId,
+          error: lastError,
+          errorDetails: output.errorDetails,
+        });
         continue;
       }
 
@@ -259,6 +267,12 @@ async function runOnTarget(input: {
           nextAttempt: attempts + 1,
         });
       }
+      await input.onProviderError?.({
+        providerId: input.target.providerId,
+        modelId: input.target.modelId,
+        error: message,
+        errorDetails: lastErrorDetails,
+      });
     }
   }
 
@@ -280,6 +294,7 @@ export async function invokeLLM(input: {
   timeoutMs?: number;
   retries?: number;
   recorder?: PromptRuntimeEventRecorder;
+  onProviderError?: (event: LlmProviderErrorEvent) => Promise<void> | void;
 }): Promise<InvokeLlmOutput> {
   const recorder = input.recorder ?? getPromptRuntimeRecorder();
   const taskType = input.taskType ?? "generic";
@@ -287,75 +302,61 @@ export async function invokeLLM(input: {
   const retries = Math.max(0, input.retries ?? 1);
   const route = input.registry.resolveRoute(taskType, input.routeOverride);
   const path: string[] = [];
-
-  const primary = await runOnTarget({
-    registry: input.registry,
-    target: route.primary,
-    modelInput: input.modelInput,
-    timeoutMs,
-    retries,
-    entityId: input.entityId,
-    recorder,
-    path,
-  });
-
-  if (primary.output) {
-    const usage = normalizeUsage(primary.output.usage);
-    if (usage.normalized) {
-      await recordProviderEvent({
-        recorder,
-        entityId: input.entityId,
-        reasonCode: ProviderRuntimeReasonCode.providerUsageNormalized,
-        operation: "CALL",
-        metadata: {
-          providerId: route.primary.providerId,
-          modelId: route.primary.modelId,
-        },
-      });
-    }
+  const targets = route.targets;
+  if (targets.length === 0) {
     return {
-      text: primary.output.text,
-      finishReason: primary.output.finishReason ?? "stop",
-      providerId: route.primary.providerId,
-      modelId: route.primary.modelId,
-      usage,
-      error: primary.output.error,
-      errorDetails: primary.output.errorDetails,
-      toolCalls: primary.output.toolCalls,
+      text: "",
+      finishReason: "error",
+      providerId: null,
+      modelId: null,
+      usage: normalizeUsage(undefined),
+      error: "PROVIDER_ROUTE_EMPTY",
       usedFallback: false,
-      attempts: primary.attempts,
+      attempts: 0,
       path,
     };
   }
 
-  if (route.secondary) {
-    await recordProviderEvent({
-      recorder,
-      entityId: input.entityId,
-      reasonCode: ProviderRuntimeReasonCode.providerFallbackUsed,
-      operation: "FALLBACK",
-      metadata: {
-        taskType,
-        from: route.primary,
-        to: route.secondary,
-        primaryError: primary.error,
-        primaryErrorDetails: primary.errorDetails,
-      },
-    });
+  let totalAttempts = 0;
+  let lastError = "PROVIDER_CALL_FAILED";
+  let lastErrorDetails: LlmErrorDetails | undefined;
+  let lastTarget = targets[0];
 
-    const secondary = await runOnTarget({
+  for (let index = 0; index < targets.length; index += 1) {
+    const target = targets[index];
+    lastTarget = target;
+
+    if (index > 0) {
+      await recordProviderEvent({
+        recorder,
+        entityId: input.entityId,
+        reasonCode: ProviderRuntimeReasonCode.providerFallbackUsed,
+        operation: "FALLBACK",
+        metadata: {
+          taskType,
+          from: targets[index - 1],
+          to: target,
+          previousError: lastError,
+          previousErrorDetails: lastErrorDetails,
+        },
+      });
+    }
+
+    const attempt = await runOnTarget({
       registry: input.registry,
-      target: route.secondary,
+      target,
       modelInput: input.modelInput,
       timeoutMs,
       retries,
       entityId: input.entityId,
       recorder,
       path,
+      onProviderError: input.onProviderError,
     });
+    totalAttempts += attempt.attempts;
 
-    if (secondary.output) {
-      const usage = normalizeUsage(secondary.output.usage);
+    if (attempt.output) {
+      const usage = normalizeUsage(attempt.output.usage);
       if (usage.normalized) {
         await recordProviderEvent({
           recorder,
@@ -363,64 +364,38 @@ export async function invokeLLM(input: {
           reasonCode: ProviderRuntimeReasonCode.providerUsageNormalized,
           operation: "CALL",
           metadata: {
-            providerId: route.secondary.providerId,
-            modelId: route.secondary.modelId,
+            providerId: target.providerId,
+            modelId: target.modelId,
           },
         });
       }
       return {
-        text: secondary.output.text,
-        finishReason: secondary.output.finishReason ?? "stop",
-        providerId: route.secondary.providerId,
-        modelId: route.secondary.modelId,
+        text: attempt.output.text,
+        finishReason: attempt.output.finishReason ?? "stop",
+        providerId: target.providerId,
+        modelId: target.modelId,
         usage,
-        error: secondary.output.error,
-        errorDetails: secondary.output.errorDetails,
-        toolCalls: secondary.output.toolCalls,
-        usedFallback: true,
-        attempts: primary.attempts + secondary.attempts,
+        error: attempt.output.error,
+        errorDetails: attempt.output.errorDetails,
+        toolCalls: attempt.output.toolCalls,
+        usedFallback: index > 0,
+        attempts: totalAttempts,
         path,
       };
     }
 
-    const fallbackError = secondary.error ?? primary.error ?? "PROVIDER_FALLBACK_FAILED";
-    const fallbackErrorDetails = secondary.errorDetails ?? primary.errorDetails;
-    await recordProviderEvent({
-      recorder,
-      entityId: input.entityId,
-      reasonCode: ProviderRuntimeReasonCode.providerFailSafeReturned,
-      operation: "FALLBACK",
-      metadata: {
-        error: fallbackError,
-        errorDetails: fallbackErrorDetails,
-        taskType,
-      },
-    });
-
-    return {
-      text: "",
-      finishReason: "error",
-      providerId: route.secondary.providerId,
-      modelId: route.secondary.modelId,
-      usage: normalizeUsage(undefined),
-      error: fallbackError,
-      errorDetails: fallbackErrorDetails,
-      usedFallback: true,
-      attempts: primary.attempts + secondary.attempts,
-      path,
-    };
+    lastError = attempt.error ?? "PROVIDER_CALL_FAILED";
+    lastErrorDetails = attempt.errorDetails;
   }
 
-  const error = primary.error ?? "PROVIDER_CALL_FAILED";
-  const errorDetails = primary.errorDetails;
   await recordProviderEvent({
     recorder,
     entityId: input.entityId,
     reasonCode: ProviderRuntimeReasonCode.providerFailSafeReturned,
     operation: "FALLBACK",
     metadata: {
-      error,
-      errorDetails,
+      error: lastError,
+      errorDetails: lastErrorDetails,
       taskType,
     },
   });
@@ -428,13 +403,13 @@ export async function invokeLLM(input: {
   return {
     text: "",
     finishReason: "error",
-    providerId: route.primary.providerId,
-    modelId: route.primary.modelId,
+    providerId: lastTarget.providerId,
+    modelId: lastTarget.modelId,
     usage: normalizeUsage(undefined),
-    error,
-    errorDetails,
-    usedFallback: false,
-    attempts: primary.attempts,
+    error: lastError,
+    errorDetails: lastErrorDetails,
+    usedFallback: targets.length > 1,
+    attempts: totalAttempts,
     path,
   };
 }

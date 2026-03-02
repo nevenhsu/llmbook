@@ -1,5 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LlmTaskType } from "@/lib/ai/llm/types";
+import {
+  getRouteTargetsFromActiveOrder,
+  type PromptModality,
+} from "@/lib/ai/admin/active-model-order";
 
 type RouteTarget = {
   providerId: string;
@@ -7,9 +11,9 @@ type RouteTarget = {
 };
 
 type TaskRoute = {
-  primary?: RouteTarget;
-  secondary?: RouteTarget;
+  targets: RouteTarget[];
 };
+type LlmModelCapability = "text_generation" | "image_generation";
 
 export type LlmRuntimeRouteConfig = {
   enabled?: boolean;
@@ -22,12 +26,15 @@ type LlmRuntimeDocument = {
   enabled?: boolean;
   timeoutMs?: number;
   retries?: number;
-  default?: TaskRoute;
-  taskRoutes?: Partial<Record<LlmTaskType, TaskRoute>>;
+  capabilityRoutes?: Partial<Record<LlmModelCapability, TaskRoute>>;
 };
 
 export interface LlmRuntimeConfigProvider {
-  getConfig(taskType: LlmTaskType): Promise<LlmRuntimeRouteConfig | null>;
+  getConfig(
+    taskType: LlmTaskType,
+    capability?: LlmModelCapability,
+    promptModality?: PromptModality,
+  ): Promise<LlmRuntimeRouteConfig | null>;
 }
 
 type ReleaseRow = {
@@ -76,12 +83,15 @@ function readTaskRoute(input: unknown): TaskRoute | undefined {
   if (!record) {
     return undefined;
   }
-  const primary = readRouteTarget(record.primary);
-  const secondary = readRouteTarget(record.secondary);
-  if (!primary && !secondary) {
+  const targets = Array.isArray(record.targets)
+    ? record.targets
+        .map((item) => readRouteTarget(item))
+        .filter((item): item is RouteTarget => item !== undefined)
+    : [];
+  if (targets.length === 0) {
     return undefined;
   }
-  return { primary, secondary };
+  return { targets };
 }
 
 function readLlmRuntimeDocument(policy: unknown): LlmRuntimeDocument | null {
@@ -97,14 +107,16 @@ function readLlmRuntimeDocument(policy: unknown): LlmRuntimeDocument | null {
     return null;
   }
 
-  const taskRoutesInput = asRecord(llmRuntime.taskRoutes);
-  const taskRoutes: Partial<Record<LlmTaskType, TaskRoute>> = {};
-  if (taskRoutesInput) {
-    for (const taskType of ["reply", "vote", "dispatch", "generic"] as const) {
-      const route = readTaskRoute(taskRoutesInput[taskType]);
-      if (route) {
-        taskRoutes[taskType] = route;
-      }
+  const capabilityRoutesInput = asRecord(llmRuntime.capabilityRoutes);
+  const capabilityRoutes: Partial<Record<LlmModelCapability, TaskRoute>> = {};
+  if (capabilityRoutesInput) {
+    const textRoute = readTaskRoute(capabilityRoutesInput.text_generation);
+    const imageRoute = readTaskRoute(capabilityRoutesInput.image_generation);
+    if (textRoute) {
+      capabilityRoutes.text_generation = textRoute;
+    }
+    if (imageRoute) {
+      capabilityRoutes.image_generation = imageRoute;
     }
   }
 
@@ -112,8 +124,76 @@ function readLlmRuntimeDocument(policy: unknown): LlmRuntimeDocument | null {
     enabled: asBoolean(llmRuntime.enabled),
     timeoutMs: asNumber(llmRuntime.timeoutMs),
     retries: asNumber(llmRuntime.retries),
-    default: readTaskRoute(llmRuntime.default),
-    taskRoutes,
+    capabilityRoutes,
+  };
+}
+
+function readControlPlaneFallbackRoute(
+  policy: unknown,
+  capability: LlmModelCapability,
+  promptModality: PromptModality,
+): TaskRoute | undefined {
+  const root = asRecord(policy);
+  const controlPlane = root ? asRecord(root.controlPlane) : null;
+  if (!controlPlane) {
+    return undefined;
+  }
+
+  const providersRaw = Array.isArray(controlPlane.providers) ? controlPlane.providers : [];
+  const modelsRaw = Array.isArray(controlPlane.models) ? controlPlane.models : [];
+  const providers = providersRaw
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((item) => ({
+      id: asString(item.id) ?? "",
+      providerKey: asString(item.providerKey) ?? "",
+      status: asString(item.status) === "disabled" ? ("disabled" as const) : ("active" as const),
+      hasKey: item.hasKey === true,
+    }))
+    .filter((item) => item.id.length > 0 && item.providerKey.length > 0);
+
+  const models = modelsRaw
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((item) => ({
+      id: asString(item.id) ?? "",
+      providerId: asString(item.providerId) ?? "",
+      modelKey: asString(item.modelKey) ?? "",
+      capability:
+        asString(item.capability) === "image_generation"
+          ? ("image_generation" as const)
+          : ("text_generation" as const),
+      status: asString(item.status) === "disabled" ? ("disabled" as const) : ("active" as const),
+      testStatus:
+        asString(item.testStatus) === "success" || asString(item.testStatus) === "failed"
+          ? (asString(item.testStatus) as "success" | "failed")
+          : ("untested" as const),
+      lifecycleStatus:
+        asString(item.lifecycleStatus) === "retired" ? ("retired" as const) : ("active" as const),
+      displayOrder: asNumber(item.displayOrder) ?? 999,
+      supportsImageInputPrompt:
+        item.supportsImageInputPrompt === true ||
+        (Array.isArray(item.metadata)
+          ? false
+          : (() => {
+              const metadata = asRecord(item.metadata);
+              const input = metadata && Array.isArray(metadata.input) ? metadata.input : [];
+              return input.some((mode) => asString(mode) === "image");
+            })()),
+    }))
+    .filter((item) => item.id.length > 0 && item.providerId.length > 0 && item.modelKey.length > 0);
+
+  const ordered = getRouteTargetsFromActiveOrder({
+    providers,
+    models,
+    capability,
+    promptModality,
+  });
+  if (ordered.length === 0) {
+    return undefined;
+  }
+  return {
+    targets: ordered,
   };
 }
 
@@ -155,10 +235,14 @@ export class CachedLlmRuntimeConfigProvider implements LlmRuntimeConfigProvider 
       });
   }
 
-  public async getConfig(taskType: LlmTaskType): Promise<LlmRuntimeRouteConfig | null> {
+  public async getConfig(
+    taskType: LlmTaskType,
+    capability: LlmModelCapability = "text_generation",
+    promptModality: PromptModality = "text_only",
+  ): Promise<LlmRuntimeRouteConfig | null> {
     const nowMs = this.now().getTime();
     if (this.cachedDoc && nowMs < this.cacheExpiresAtMs) {
-      return this.resolve(taskType, this.cachedDoc);
+      return this.resolve(taskType, capability, this.cachedDoc);
     }
 
     try {
@@ -175,13 +259,33 @@ export class CachedLlmRuntimeConfigProvider implements LlmRuntimeConfigProvider 
     }
 
     if (!this.cachedDoc) {
-      return null;
+      const release = await this.fetchLatestActive().catch(() => null);
+      const fallbackRoute = readControlPlaneFallbackRoute(
+        release?.policy,
+        capability,
+        promptModality,
+      );
+      return fallbackRoute ? { route: fallbackRoute } : null;
     }
-    return this.resolve(taskType, this.cachedDoc);
+    const resolved = this.resolve(taskType, capability, this.cachedDoc);
+    if (resolved.route) {
+      return resolved;
+    }
+    const release = await this.fetchLatestActive().catch(() => null);
+    const fallbackRoute = readControlPlaneFallbackRoute(
+      release?.policy,
+      capability,
+      promptModality,
+    );
+    return fallbackRoute ? { ...resolved, route: fallbackRoute } : resolved;
   }
 
-  private resolve(taskType: LlmTaskType, doc: LlmRuntimeDocument): LlmRuntimeRouteConfig {
-    const route = doc.taskRoutes?.[taskType] ?? doc.default;
+  private resolve(
+    _taskType: LlmTaskType,
+    capability: LlmModelCapability,
+    doc: LlmRuntimeDocument,
+  ): LlmRuntimeRouteConfig {
+    const route = doc.capabilityRoutes?.[capability];
     return {
       enabled: doc.enabled,
       timeoutMs: doc.timeoutMs,

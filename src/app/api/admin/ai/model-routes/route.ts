@@ -1,13 +1,24 @@
 import { withAuth, http } from "@/lib/server/route-helpers";
 import { isAdmin } from "@/lib/admin";
 import { AdminAiControlPlaneStore, type ModelRouteScope } from "@/lib/ai/admin/control-plane-store";
+import { getRouteModelIdsFromActiveOrder } from "@/lib/ai/admin/active-model-order";
 
-const ALLOWED_SCOPES: ModelRouteScope[] = [
-  "global_default",
-  "post",
-  "comment",
-  "image",
-  "persona_generation",
+const ALLOWED_SCOPES: ModelRouteScope[] = ["global_default", "image"];
+const CAPABILITY_SCOPES: Array<{
+  scope: ModelRouteScope;
+  outputType: "text" | "image";
+  usedByTasks: string[];
+}> = [
+  {
+    scope: "global_default",
+    outputType: "text",
+    usedByTasks: ["post", "comment", "poll", "vote", "persona_generation"],
+  },
+  {
+    scope: "image",
+    outputType: "image",
+    usedByTasks: ["post", "comment"],
+  },
 ];
 
 export const GET = withAuth(async (_req, { user }) => {
@@ -17,9 +28,69 @@ export const GET = withAuth(async (_req, { user }) => {
 
   const store = new AdminAiControlPlaneStore();
   const state = await store.getActiveControlPlane();
+  const textModelIds = getRouteModelIdsFromActiveOrder({
+    providers: state.document.providers.map((provider) => ({
+      id: provider.id,
+      providerKey: provider.providerKey,
+      status: provider.status,
+      hasKey: provider.hasKey,
+    })),
+    models: state.document.models.map((model) => ({
+      id: model.id,
+      providerId: model.providerId,
+      modelKey: model.modelKey,
+      capability: model.capability,
+      status: model.status,
+      testStatus: model.testStatus,
+      lifecycleStatus: model.lifecycleStatus,
+      displayOrder: model.displayOrder,
+    })),
+    capability: "text_generation",
+  });
+  const imageModelIds = getRouteModelIdsFromActiveOrder({
+    providers: state.document.providers.map((provider) => ({
+      id: provider.id,
+      providerKey: provider.providerKey,
+      status: provider.status,
+      hasKey: provider.hasKey,
+    })),
+    models: state.document.models.map((model) => ({
+      id: model.id,
+      providerId: model.providerId,
+      modelKey: model.modelKey,
+      capability: model.capability,
+      status: model.status,
+      testStatus: model.testStatus,
+      lifecycleStatus: model.lifecycleStatus,
+      displayOrder: model.displayOrder,
+    })),
+    capability: "image_generation",
+  });
+  const now = new Date().toISOString();
+  const routeByScope = new Map(state.document.routes.map((route) => [route.scope, route]));
+  const derivedItems = CAPABILITY_SCOPES.map((capabilityRoute) => {
+    const { scope } = capabilityRoute;
+    const existing = routeByScope.get(scope);
+    const source = scope === "image" ? imageModelIds : textModelIds;
+    return {
+      scope,
+      outputType: capabilityRoute.outputType,
+      usedByTasks: capabilityRoute.usedByTasks,
+      orderedModelIds: source,
+      updatedAt: existing?.updatedAt ?? now,
+    };
+  });
+
   return http.ok({
-    items: state.document.routes,
-    defaults: state.document.routes.find((item) => item.scope === "global_default") ?? null,
+    items: derivedItems,
+    defaults: derivedItems.find((item) => item.outputType === "text") ?? null,
+    taskCapabilityMap: {
+      post: ["text", "image"],
+      comment: ["text", "image"],
+      poll: ["text"],
+      vote: ["text"],
+      persona_generation: ["text"],
+    },
     release: state.release,
   });
 });
@@ -32,8 +103,7 @@ export const PUT = withAuth(async (req, { user }) => {
   const body = (await req.json()) as {
     routes?: Array<{
       scope: ModelRouteScope;
-      primaryModelId?: string | null;
-      fallbackModelId?: string | null;
+      orderedModelIds?: string[];
     }>;
   };
 
@@ -51,8 +121,7 @@ export const PUT = withAuth(async (req, { user }) => {
   const items = await store.updateRoutes(
     body.routes.map((route) => ({
       scope: route.scope,
-      primaryModelId: route.primaryModelId ?? null,
-      fallbackModelId: route.fallbackModelId ?? null,
+      orderedModelIds: Array.isArray(route.orderedModelIds) ? route.orderedModelIds : [],
     })),
     user.id,
   );

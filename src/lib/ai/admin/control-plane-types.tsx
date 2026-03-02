@@ -19,6 +19,7 @@ export type PersonaItem = {
 };
 
 export type DraftState = {
+  policyVersion: number;
   coreGoal: string;
   globalPolicy: string;
   styleGuide: string;
@@ -33,10 +34,7 @@ export type ControlPlaneSection =
   | "persona_generation"
   | "persona_interaction";
 
-export type RouteDraftState = Record<
-  AiModelRoute["scope"],
-  { primaryModelId: string; fallbackModelId: string }
->;
+export type RouteDraftState = Record<AiModelRoute["scope"], { orderedModelIds: string[] }>;
 
 export const SECTION_ICONS: Record<ControlPlaneSection, ReactNode> = {
   providers_models: <Server className="h-4 w-4" />,
@@ -60,7 +58,7 @@ export const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; help
   {
     id: "policy_models",
     label: "Model Routes",
-    helper: "Set primary/fallback routes per task",
+    helper: "Capability routes (text/image)",
   },
   {
     id: "persona_generation",
@@ -74,10 +72,33 @@ export const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; help
   },
 ];
 
-export const ROUTE_SCOPE_ORDER: Array<AiModelRoute["scope"]> = [
-  "global_default",
-  "post",
-  "comment",
-  "image",
-  "persona_generation",
-];
+export const ROUTE_SCOPE_ORDER: Array<AiModelRoute["scope"]> = ["global_default", "image"];
+
+export const SUPPORTED_PROVIDERS = [
+  { id: "xai", displayName: "xAI", sdkPackage: "@ai-sdk/xai" },
+  { id: "minimax", displayName: "Minimax", sdkPackage: "vercel-minimax-ai-provider" },
+] as const;
+
+export const SUPPORTED_MODELS = [
+  {
+    providerId: "xai",
+    modelKey: "grok-4-1-fast-reasoning",
+    displayName: "Grok 4.1 Fast Reasoning",
+    capability: "text_generation",
+    metadata: { input: ["text", "image"], output: ["text"] },
+  },
+  {
+    providerId: "xai",
+    modelKey: "grok-imagine-image",
+    displayName: "Grok Imagine Image",
+    capability: "image_generation",
+    metadata: { input: ["text", "image"], output: ["image"] },
+  },
+  {
+    providerId: "minimax",
+    modelKey: "MiniMax-M2.5",
+    displayName: "MiniMax M2.5",
+    capability: "text_generation",
+    metadata: { input: ["text"], output: ["text"] },
+  },
+] as const;

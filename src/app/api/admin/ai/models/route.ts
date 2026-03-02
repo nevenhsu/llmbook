@@ -28,10 +28,18 @@ export const POST = withAuth(async (req, { user }) => {
     capability?: ModelCapability;
     status?: "active" | "disabled";
     supportsInput?: boolean;
+    supportsImageInputPrompt?: boolean;
     supportsOutput?: boolean;
     contextWindow?: number;
     maxOutputTokens?: number;
     metadata?: Record<string, unknown>;
+    testStatus?: "untested" | "success" | "failed";
+    lifecycleStatus?: "active" | "retired";
+    displayOrder?: number;
+    lastErrorKind?: "provider_api" | "model_retired" | "other" | null;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+    lastErrorAt?: string | null;
   };
 
   if (!body.providerId?.trim() || !body.modelKey?.trim() || !body.displayName?.trim()) {
@@ -50,10 +58,18 @@ export const POST = withAuth(async (req, { user }) => {
       capability: body.capability,
       status: body.status,
       supportsInput: body.supportsInput,
+      supportsImageInputPrompt: body.supportsImageInputPrompt,
       supportsOutput: body.supportsOutput,
       contextWindow: body.contextWindow,
       maxOutputTokens: body.maxOutputTokens,
       metadata: body.metadata,
+      testStatus: body.testStatus,
+      lifecycleStatus: body.lifecycleStatus,
+      displayOrder: body.displayOrder,
+      lastErrorKind: body.lastErrorKind ?? undefined,
+      lastErrorCode: body.lastErrorCode ?? undefined,
+      lastErrorMessage: body.lastErrorMessage ?? undefined,
+      lastErrorAt: body.lastErrorAt ?? undefined,
     },
     user.id,
   );
@@ -74,10 +90,18 @@ export const PATCH = withAuth(async (req, { user }) => {
     capability?: ModelCapability;
     status?: "active" | "disabled";
     supportsInput?: boolean;
+    supportsImageInputPrompt?: boolean;
     supportsOutput?: boolean;
     contextWindow?: number;
     maxOutputTokens?: number;
     metadata?: Record<string, unknown>;
+    testStatus?: "untested" | "success" | "failed";
+    lifecycleStatus?: "active" | "retired";
+    displayOrder?: number;
+    lastErrorKind?: "provider_api" | "model_retired" | "other" | null;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+    lastErrorAt?: string | null;
   };
 
   if (!body.id?.trim()) {
@@ -100,10 +124,18 @@ export const PATCH = withAuth(async (req, { user }) => {
       capability: body.capability,
       status: body.status,
       supportsInput: body.supportsInput,
+      supportsImageInputPrompt: body.supportsImageInputPrompt,
       supportsOutput: body.supportsOutput,
       contextWindow: body.contextWindow,
       maxOutputTokens: body.maxOutputTokens,
       metadata: body.metadata,
+      testStatus: body.testStatus,
+      lifecycleStatus: body.lifecycleStatus,
+      displayOrder: body.displayOrder,
+      lastErrorKind: body.lastErrorKind ?? undefined,
+      lastErrorCode: body.lastErrorCode ?? undefined,
+      lastErrorMessage: body.lastErrorMessage ?? undefined,
+      lastErrorAt: body.lastErrorAt ?? undefined,
     },
     user.id,
   );
@@ -125,4 +157,31 @@ export const DELETE = withAuth(async (req, { user }) => {
   const store = new AdminAiControlPlaneStore();
   await store.deleteModel(id, user.id);
   return http.ok({ success: true });
+});
+
+export const PUT = withAuth(async (req, { user }) => {
+  if (!(await isAdmin(user.id))) {
+    return http.forbidden("Forbidden - Admin access required");
+  }
+
+  const body = (await req.json()) as {
+    capability?: ModelCapability;
+    orderedModelKeys?: string[];
+  };
+
+  if (body.capability !== "text_generation" && body.capability !== "image_generation") {
+    return bad("capability must be text_generation or image_generation");
+  }
+  if (!Array.isArray(body.orderedModelKeys)) {
+    return bad("orderedModelKeys is required");
+  }
+
+  const store = new AdminAiControlPlaneStore();
+  const result = await store.reorderModels({
+    capability: body.capability,
+    orderedModelKeys: body.orderedModelKeys.map((key) => String(key).trim()).filter(Boolean),
+    actorId: user.id,
+  });
+
+  return http.ok({ items: result.models, routes: result.routes });
 });

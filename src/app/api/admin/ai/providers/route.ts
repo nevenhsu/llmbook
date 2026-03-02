@@ -1,9 +1,30 @@
 import { withAuth, http } from "@/lib/server/route-helpers";
 import { isAdmin } from "@/lib/admin";
-import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
+import {
+  AdminAiControlPlaneStore,
+  type AiProviderConfig,
+} from "@/lib/ai/admin/control-plane-store";
 
 function bad(message: string) {
   return http.badRequest(message);
+}
+
+function sanitizeProvider(provider: AiProviderConfig) {
+  return {
+    id: provider.id,
+    providerKey: provider.providerKey,
+    displayName: provider.displayName,
+    sdkPackage: provider.sdkPackage,
+    status: provider.status,
+    testStatus: provider.testStatus,
+    keyLast4: provider.keyLast4,
+    hasKey: provider.hasKey,
+    lastApiErrorCode: provider.lastApiErrorCode,
+    lastApiErrorMessage: provider.lastApiErrorMessage,
+    lastApiErrorAt: provider.lastApiErrorAt,
+    createdAt: provider.createdAt,
+    updatedAt: provider.updatedAt,
+  };
 }
 
 export const GET = withAuth(async (_req, { user }) => {
@@ -13,7 +34,7 @@ export const GET = withAuth(async (_req, { user }) => {
 
   const store = new AdminAiControlPlaneStore();
   const state = await store.getActiveControlPlane();
-  return http.ok({ items: state.document.providers, release: state.release });
+  return http.ok({ items: state.document.providers.map(sanitizeProvider), release: state.release });
 });
 
 export const POST = withAuth(async (req, { user }) => {
@@ -45,7 +66,7 @@ export const POST = withAuth(async (req, { user }) => {
     user.id,
   );
 
-  return http.created({ item });
+  return http.created({ item: sanitizeProvider(item) });
 });
 
 export const PATCH = withAuth(async (req, { user }) => {
@@ -86,7 +107,7 @@ export const PATCH = withAuth(async (req, { user }) => {
     user.id,
   );
 
-  return http.ok({ item });
+  return http.ok({ item: sanitizeProvider(item) });
 });
 
 export const DELETE = withAuth(async (req, { user }) => {

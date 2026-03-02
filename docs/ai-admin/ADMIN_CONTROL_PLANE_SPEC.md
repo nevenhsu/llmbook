@@ -1,5 +1,7 @@
 # Admin AI Control Plane 規範文本（Product Spec）
 
+> 開發階段聲明（重要）：目前不做舊設定相容。若存在舊 `primary/fallback`、`taskRoutes`、舊 scope 路由設定，必須在開發時一併更新為新結構（`orderedModelIds` + capability-first 路由）。
+
 ## 1. 目標
 
 建立一組可由 Admin 手動控制的 AI 後台能力，讓論壇在「資料冷啟動」與「LLM 回覆不如預期」時，可透過全域規範與 persona 微調，持續把輸出對齊論壇目標與品味。
@@ -24,10 +26,29 @@
 - 僅支援已安裝 provider package：
   - `@ai-sdk/xai`
   - `vercel-minimax-ai-provider`
+- Provider list 僅顯示 API key 設定狀態（configured/missing）
+- 由 Provider list 點擊 API key 動作開啟 modal 設定，不提供獨立 Add Provider 按鈕
 - API Key 僅可更新，不可明文顯示
 - 手動「連線測試」按鈕（不自動重測）
 - 狀態標記：`untested` / `success` / `failed` / `disabled` / `key_missing`
-- 設定 `Global default primary + fallback`
+- 設定 capability-first 路由（Text / Image）並維護 active model order
+
+支援模型（V1）：
+
+- xAI
+  - `grok-4-1-fast-reasoning`（input: text/image, output: text）
+  - `grok-imagine-image`（input: text/image, output: image）
+- MiniMax
+  - `MiniMax-M2.5`（input: text, output: text）
+
+Model List / Selection（V1）：
+
+- Model list 明確區分 `text` 與 `image` 能力
+- 可在 list 啟用/停用模型並拖拉排序；排序不與 active 綁定
+- Model 提供 `active` on/off（新建立模型預設 off）
+- 只有在「provider 已設定 API key」且「model test = success」時，才允許切換成 active（供 AI agent 調用）
+- LLM 實際使用模型以「active model order」決定（text/image 分開），runtime 會依順序逐一嘗試直到成功
+- 模型需標記 prompt modality 能力（是否支援 `text+image` 輸入）；多模態請求只可使用支援多模態輸入的模型
 
 ### 2.2 Global Policy Studio
 
@@ -42,8 +63,9 @@
 
 流程：
 
-- `draft -> preview -> manual publish`
+- `save(覆蓋 active release) -> preview -> manual publish`
 - 可 rollback 到歷史版本
+- Policy 版標使用整數（`1,2,3...`）並可在 admin 手動調整；`ai_policy_releases.version` 僅作 release row id
 
 預覽：
 
@@ -54,21 +76,20 @@
   - TipTap 渲染結果
   - prompt 組裝檢視（global 區塊如何注入）
 
-### 2.3 Policy Models（全域路由）
+### 2.3 Policy Models（全域路由，能力導向）
 
-用途：設定不同任務類型使用哪個模型。
+用途：設定能力路由（text/image）使用的有序模型清單。
 
 路由類型：
 
-- `post`
-- `comment`
-- `image`
+- `global_default`（text capability）
+- `image`（image capability）
 
 規則：
 
-- 每類型可設定 `primary + fallback`
-- `fallback` 可為 `null`
-- 未設定時回退至 `Global default`
+- 每類型維護 `orderedModelIds`
+- runtime 依序嘗試（#1 失敗就試 #2、#3...）
+- 不再使用 `primary/fallback` 作為真相來源
 
 ### 2.4 Persona Generation
 
@@ -121,7 +142,7 @@
 - 不做自動輪詢預覽/測試
 - 預覽一律「單模型、單次生成」
 - 只在 Admin 按鈕觸發時才呼叫模型
-- fallback 僅用於正式路由，不在預覽時自動連續試跑
+- 預覽維持單模型，不自動連續嘗試整個 ordered list
 
 ---
 
@@ -139,7 +160,7 @@
 
 - Admin 可在 UI 完成 provider/model 管理與手動連線測試
 - Admin 可編輯全域規範，並完成 preview -> publish
-- `post/comment/image` 可設定全域 primary/fallback（fallback 可 null）
+- 可維護 text/image 兩條 capability 路由的 active model order，並由 runtime 依序重試
 - 可完成 persona 生成、手改、保存
 - 可完成 persona 互動預覽，且可看到 TipTap 渲染結果
 - 可手動測試 image sub-agent，成功時 markdown 含 Supabase URL 並可渲染

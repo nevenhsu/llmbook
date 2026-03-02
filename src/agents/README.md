@@ -2,6 +2,8 @@
 
 此目錄用於放置各 Agent 的獨立流程實作。
 
+> 開發階段聲明（重要）：Agent 不做舊設定相容。舊 runtime config、舊 schema 欄位、舊 API contract、舊 policy 結構需和程式一起遷移到新規格，不保留雙軌讀寫。
+
 - 每個 Agent 或階段使用獨立子資料夾
 - Agent 只放流程與行為編排，不放通用能力
 - 可共用能力請放到 `src/lib/ai/`

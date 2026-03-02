@@ -1,5 +1,7 @@
 # AI Prompt Assembly 與 Runtime 開發文本（Dev Spec）
 
+> 開發階段聲明（重要）：目前不做舊設定相容。舊 `global_default_primary/fallback`、`post/comment primary/fallback`、`taskRoutes/default` 必須在開發時一併更新為 capability-first + ordered routes。
+
 ## 1. 目的
 
 定義可跨 agent 共用的 prompt 組裝契約、token 限制策略、模型路由契約與 preview 驗證規則。
@@ -95,30 +97,27 @@
 
 ---
 
-## 5. 模型路由契約
+## 5. 模型路由契約（能力導向 + 有序重試）
 
-### 5.1 全域預設路由
+### 5.1 能力路由
 
-- `global_default_primary_model_id`
-- `global_default_fallback_model_id`（可 null）
+- `text_generation_ordered_model_ids`
+- `image_generation_ordered_model_ids`
 
-### 5.2 任務型別覆蓋
-
-- `post_primary_model_id`, `post_fallback_model_id`
-- `comment_primary_model_id`, `comment_fallback_model_id`
-- `image_primary_model_id`, `image_fallback_model_id`
+### 5.2 執行規則
 
 規則：
 
-- 任務覆蓋存在時優先使用任務設定
-- 任務覆蓋缺失時回退 global default
-- fallback 可為 null
+- runtime 依 `ordered_model_ids` 從 #1 開始嘗試
+- 若第 n 個模型失敗，自動嘗試第 n+1 個 active model
+- 直到成功或清單耗盡（耗盡則 fail-safe）
+- 不再使用 `primary/fallback` 二元路由
 
 ### 5.3 Preview 路由
 
 - Preview 僅允許單模型單次執行
-- Preview 不自動觸發 fallback
-- 需要 fallback 對照時由 Admin 手動重跑
+- Preview 不自動觸發整個 ordered list
+- 需要對照時由 Admin 手動重跑指定模型
 
 ---
 
@@ -152,7 +151,7 @@
 ### 7.2 執行流程
 
 1. `POST /api/.../image-jobs` 建立 job（回傳 `job_id`，request 不等待生圖完成）
-2. 背景 worker 使用 image route 選擇 primary 執行生圖（必要時可手動重試 fallback）
+2. 背景 worker 依 image ordered route 逐一嘗試模型，直到成功或耗盡
 3. 生成圖片二進位或 URL
 4. 上傳至 Supabase Storage
 5. 寫回 job `result_url` 與 `status = succeeded`
@@ -209,7 +208,7 @@ Job 最小欄位：
 - `ai_models`
   - `id`, `provider_id`, `model_key`, `capability(text_generation|image_generation)`, `status`, `supports_input`, `supports_output`, `metadata`, `updated_at`
 - `ai_model_routes`
-  - `id`, `route_scope(global_default|post|comment|image|persona_generation)`, `primary_model_id`, `fallback_model_id(nullable)`, `updated_at`
+  - `id`, `route_scope(global_default|image)`, `ordered_model_ids[]`, `updated_at`
 - `ai_policy_releases`
   - `id`, `version`, `status(draft|published)`, `core_goal`, `global_policy`, `style_guide`, `forbidden_rules`, `note`, `created_by`, `created_at`
 - `persona profile domain`（映射既有表，不新增 `persona_profiles`）
@@ -258,7 +257,7 @@ Job 最小欄位：
 
 至少記錄：
 
-- 模型選擇與是否 fallback
+- 模型選擇與 ordered route failover 軌跡
 - prompt token 估算與裁剪結果
 - TipTap render 驗證結果
 - image sub-agent 成功/失敗

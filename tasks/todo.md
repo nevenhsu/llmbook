@@ -1,48 +1,108 @@
-# Admin AI Control Plane UI Polish (Today) Todo
+# AI Providers & Models Control Plane Update Todo
 
 ## Plan
 
-- [x] 導入 lucide-react icons 強化 Control Plane 導覽列與各區塊視覺
-- [x] 將 Persona Generation 流程重構為具有明確視覺引導的 Stepper (Generate -> Output -> Save)
-- [x] 優化 PreviewPanel 的版面可讀性（增加區塊 icon、獨立背景區隔 prompt / markdown / tiptap）
-- [x] 改善 Policy Models 與 Persona Interaction 之間的路由聯動顯示（清晰標示當前使用的路由模型）
-- [x] 執行既有 route tests (control-plane)，確認重構沒有破壞邏輯
-- [x] 填寫本區段 Review 摘要
+- [x] 盤點 `/admin/ai/control-plane` Providers/Models 現有互動與 API 能力，確認可行變更點
+- [x] 調整 Providers/Models 為「列表即控制台」：Provider 顯示 key 狀態、Model 分 text/image
+- [x] 移除 Add Provider 按鈕，改為從 Provider List 點 API Key 動作開 modal 設定
+- [x] Model list 支援勾選開關與順序調整（#1 primary / #2 fallback）
+- [x] 新增 model test + active gating：provider key + model test success 才可 active
+- [x] 更新相關文檔（AI Admin spec）反映最新 Providers/Models 操作規則
+- [x] 執行測試/驗證並填寫 Review
+
+## Check-in
+
+- [x] Step 1：重新定義資料流：Provider 用 `SUPPORTED_PROVIDERS` 固定列出；Model 以 `SUPPORTED_MODELS + routes` 推導勾選與順序。
+- [x] Step 2：Provider list 改成只呈現 configured/missing，並從 row action 打開 API key modal。
+- [x] Step 3：Model list 拆成 Text/Image 兩組，提供勾選、上下調整順序、test 與 active toggle。
+- [x] Step 4：新增 hook `runModelTest`（寫入 metadata.modelTestStatus）與 `setModelActive`（啟用前強制檢查）。
+- [x] Step 5：`configureSupportedModels` 改為新建 model 預設 `disabled`，並以選取順序更新 route。
+- [x] Step 6：更新 `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md` 對應新 UI/規則。
+- [x] Step 7：執行 tests / lint / tsc 驗證並記錄結果。
 
 ## Review
 
 - 實作摘要：
-  - 導入 `lucide-react` icons。
-  - 將 `/admin/ai/control-plane` 佈局從雙欄側邊導航重構為**水平 Tabs** 的設計，釋放最大的下方操作空間。
-  - 將 Persona Generation 表單轉換成具有明確狀態指示（Configure -> Generated -> Saved）的 Step 流程。
-  - 強化 `PreviewPanel`：為不同類型的程式碼片段加上特定語意背景、明確標題與相關 icon，讓 prompt / render 結果 / token budget 在視覺上更具區隔性。
-  - 在 Persona Interaction 的 UI 中，清楚標示當下的互動型別將映射到哪個「有效路由模型（Effective Route）」，並設計「Sync Route」讓測試與全域邏輯無縫接軌。
-- 驗證命令：`npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts' 'src/app/api/admin/ai/personas/route.test.ts'`
-- 測試結果：6 tests passed (3 test suites 全綠)。
-- 風險與後續：
-  - lint 因既有 `eslint-plugin-react` (react/display-name) 的相容問題噴錯（exit code 2），此為全域專案既有錯誤，本次未新增其他 lint 問題。
-  - UI 佈局轉換為 Tailwind `menu` 後，可能需要確認在極小手機版螢幕上的行為，目前是以 `lg:` 做斷點區隔，保有一定彈性。
-
-## Check-in
-
-- 變更摘要（step 1）：盤點缺口為「單頁過載、preview 區塊層次不足、Policy Models 使用 `defaultValue` 導致交互不直觀、Persona Interaction 與 route 模型關聯不清楚」。
-- 變更摘要（step 2）：`AiControlPlanePanel` 改為分段導覽（5 個 section），一次聚焦單一模組，降低操作負擔。
-- 變更摘要（step 3）：Persona Generation 增加三步狀態（Configure/Generated/Saved）、按鈕語意切換（Generate/Regenerate）、保存時間回饋。
-- 變更摘要（step 4）：新增統一 `PreviewPanel`，固定顯示四區塊：Prompt Assembly、Markdown、TipTap Render、Token Budget Blocks。
-- 變更摘要（step 5）：Policy Models 改為受控 route drafts + per-scope save；Persona Interaction 新增「Use Route Primary」與有效路由提示，並支援 soul/long_memory override 輸入。
-- 變更摘要（step 6）：完成驗證並確認 lint/tsc 失敗為既有專案問題，本次未新增對應錯誤訊號。
-
-## Review
-
-- 實作結果：
-  - `/admin/ai/control-plane` UI 由長頁面改為分段導覽，保留既有 API 與 schema，不新增資料表。
-  - Persona Generation 流程改為明確三段操作與狀態回饋，符合 Generate / Regenerate / Save。
-  - Preview 可讀性提升為固定四分區，完整呈現 prompt assembly、markdown、tiptap render、token budget。
-  - Policy Releases / Policy Models / Persona Interaction 的關聯路徑更清楚：可直接在 Interaction 套用 route primary model。
+  - Provider list 現在只顯示 API key configured/missing，透過 row 的 `API Key` 按鈕開 modal 設定。
+  - Model list 分 Text Models / Image Models，支援勾選啟用、順序調整、model test、active on/off。
+  - Active 開啟前必須符合：provider hasKey + modelTestStatus=success。
+  - 勾選順序直接同步到 route（primary/fallback），並限制每種能力最多 2 個。
 - 驗證命令：
-  - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`（4 tests passed）
-  - `npx tsc --noEmit`（失敗：既有型別錯誤，含 `.next/types/validator.ts`、`src/lib/ai/evaluation/*`、`src/agents/*` 等）
-  - `npm run lint -- src/components/admin/AiControlPlanePanel.tsx`（失敗：既有 eslint 環境錯誤 `react/display-name` rule loader crash）
-- 風險與判定：
-  - 本次以 UI/互動流程重構為主，未更動 schema 與 control-plane runtime 責任邊界。
-  - 目前未觀察到由本次檔案新增的 tsc/lint 新錯誤訊號；全域 lint/tsc 仍受既有問題阻擋。
+  - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts' 'src/app/api/admin/ai/personas/route.test.ts'`
+  - `npm run lint -- src/components/admin/control-plane/sections/ProvidersModelsSection.tsx src/components/admin/AiControlPlanePanel.tsx src/hooks/admin/useAiControlPlane.ts`
+  - `npx tsc --noEmit --pretty false`
+- 測試結果：
+  - vitest：3 suites / 6 tests passed。
+  - lint：失敗（既有環境問題：`react/display-name` rule loader crash）。
+  - tsc：失敗（既有專案錯誤，主要在 `.next/types`、`src/agents/*`、`src/lib/ai/evaluation/*`、`src/lib/ai/memory/*`）。
+- 風險與後續：
+  - `model test` 目前為 control-plane 層級 gate（依 provider key + provider test），若要升級為真實 provider/model 探測，可新增獨立後端 test endpoint 做實際 invocation。
+
+## 2026-03-02 Capability-First Routing Plan
+
+- [x] 將 admin 控制台的 route 顯示與同步改為 capability 導向（`text_generation` / `image_generation`），不再以互動類型分類
+- [x] 更新 `useAiControlPlane` 路由衍生與寫回邏輯，僅同步 text/image 兩條 route
+- [x] 更新 `/api/admin/ai/model-routes` GET 回傳為 capability-first 視圖（相容舊資料）
+- [x] 調整 Model Routing UI 文案與 scope 列表，避免誤導為 post/comment 綁定模型
+- [x] 驗證重排後不再觸發多餘 GET，並補上 review/結果
+
+## Check-in (Capability-First)
+
+- [x] Step 1：先保留底層舊 scope 型別相容，僅改 admin 讀寫/顯示來源為 capability-first
+- [x] Step 2：hook `buildDerivedRoutesFromActiveOrder` 與 `syncRoutesFromActiveModelOrder` 只產生 text/image 對應 scope
+- [x] Step 3：`model-routes` GET 回傳能力導向 route 集合，UI 僅顯示這兩條
+- [x] Step 4：跑 targeted tests 並人工檢查請求數量/行為
+
+## Review (Capability-First)
+
+- 實作摘要：
+  - Model routes 改為 capability-first：Text (`global_default`) + Image (`image`)。
+  - Admin UI 的 Model Routing 文案改為能力導向，不再暗示 post/comment/persona 各自綁模型。
+  - `/api/admin/ai/model-routes` GET 改為輸出兩條衍生 route，避免舊資料造成錯誤認知。
+  - `useAiControlPlane` 寫回 routes 時只同步兩條 route，減少不必要 payload 與心智負擔。
+- 驗證命令：
+  - `npm test -- 'src/lib/ai/llm/runtime-config-provider.test.ts' 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`
+- 測試結果：
+  - vitest：3 suites / 6 tests passed。
+
+## 2026-03-02 Policy Version Integer Label + Save Overwrite Plan
+
+- [x] 調整 policy studio 版標為整數（`1,2,3...`），並與 release row id 分離
+- [x] 後端改為預設 save 覆蓋 active release（不新增 draft row）
+- [x] API `POST /api/admin/ai/policy-releases` 改為 save 行為並接受 `policyVersion`
+- [x] UI 改為 `Save Policy`，新增整數版標輸入並顯示 `v{policyVersion}` 與 `release #id`
+- [x] 執行 targeted 測試與記錄驗證結果
+
+## Review (Policy Version Integer Label + Save Overwrite)
+
+- 實作摘要：
+  - `ai_policy_releases.version` 保留作 release row id（preview/publish/rollback 路由 id）。
+  - Policy 版標改為 `controlPlane.globalPolicyVersion`（整數），由 admin 手動輸入。
+  - Save Policy 預設更新 active release 的 `policy/change_note/created_by`，若無 active 才建立第一筆 active release。
+  - Releases 表格與 header badge 顯示 `policyVersion`，並附 `release #id` 避免混淆。
+- 驗證命令：
+  - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`
+  - `npm run lint -- src/components/admin/control-plane/sections/PolicyStudioSection.tsx src/hooks/admin/useAiControlPlane.ts src/lib/ai/admin/control-plane-store.ts src/app/api/admin/ai/policy-releases/route.ts src/components/admin/AiControlPlanePanel.tsx`
+- 測試結果：
+  - vitest：2 suites / 4 tests passed。
+  - lint：失敗（既有環境問題：`react/display-name` rule loader crash）。
+
+## 2026-03-02 Control Plane UX/API Bugfix Plan
+
+- [x] Policy Studio 版標改為 selector，預設 latest，提供 latest+1 選項
+- [x] Model reorder 改為單一 API，移除前端逐筆 patch 與額外 model-routes put
+- [x] 後端 bulk reorder 同次更新 model `displayOrder` 與 capability routes
+- [x] bulk reorder 改為更新 active release row policy，避免拖拉一次產生多筆 release rows
+- [x] 執行 targeted tests 並記錄結果
+
+## Review (Control Plane UX/API Bugfix)
+
+- 實作摘要：
+  - Policy Studio 增加 version selector，預設選最新版標，並提供下一版（latest+1）。
+  - `PUT /api/admin/ai/models` 新增 bulk reorder，payload: `{ capability, orderedModelIds }`。
+  - 前端 drag&drop 後僅發出一個 reorder API，回填 models/routes，不再額外呼叫 `/api/admin/ai/model-routes`。
+  - 後端 reorder 會在同一次操作中更新 `displayOrder` + 衍生 routes，並直接覆蓋 active release row 的 `policy`。
+- 驗證命令：
+  - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`
+- 測試結果：
+  - vitest：2 suites / 4 tests passed。

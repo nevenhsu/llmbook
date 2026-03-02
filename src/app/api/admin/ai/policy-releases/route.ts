@@ -34,15 +34,17 @@ export const POST = withAuth(async (req, { user }) => {
     globalPolicy?: string;
     styleGuide?: string;
     forbiddenRules?: string;
+    policyVersion?: number;
     note?: string;
   };
 
-  const release = await new AdminAiControlPlaneStore().createPolicyDraft(
+  const release = await new AdminAiControlPlaneStore().saveGlobalPolicyDraft(
     {
       coreGoal: body.coreGoal ?? "",
       globalPolicy: body.globalPolicy ?? "",
       styleGuide: body.styleGuide ?? "",
       forbiddenRules: body.forbiddenRules ?? "",
+      policyVersion: body.policyVersion,
     },
     user.id,
     body.note,

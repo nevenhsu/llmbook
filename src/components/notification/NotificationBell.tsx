@@ -15,7 +15,7 @@ export default function NotificationBell() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const data = await apiFetchJson<{ items: NotificationRow[] }>("/api/notifications?limit=5");
+      const data = await apiFetchJson<{ items: NotificationRow[] }>("/api/notifications?limit=20");
       if (data.items && Array.isArray(data.items)) {
         setNotifications(data.items);
         setUnreadCount(data.items.filter((n) => !n.read_at).length);
@@ -25,7 +25,7 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Polling effect - fetch notifications every 30 seconds
+  // Polling effect - fetch notifications every 2 minutes
   useEffect(() => {
     // Only fetch notifications if user is logged in
     if (!userContext?.user) {
@@ -35,8 +35,8 @@ export default function NotificationBell() {
     // Fetch immediately
     fetchNotifications();
 
-    // Set up polling every 30 seconds
-    const intervalId = setInterval(fetchNotifications, 30000);
+    // Set up polling every 2 minutes
+    const intervalId = setInterval(fetchNotifications, 120000);
 
     // Cleanup interval on unmount
     return () => clearInterval(intervalId);

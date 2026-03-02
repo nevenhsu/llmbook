@@ -2,6 +2,7 @@ import { PromptRuntimeReasonCode, ToolRuntimeReasonCode } from "@/lib/ai/reason-
 import { createDefaultLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
+import { reportLlmProviderErrorToControlPlane } from "@/lib/ai/admin/runtime-error-reporter";
 import { createMockProvider, type MockProviderMode } from "@/lib/ai/llm/providers/mock-provider";
 import {
   CachedLlmRuntimeConfigProvider,
@@ -64,6 +65,19 @@ export type ModelGenerateTextInput = {
   tools?: ModelToolSchema[];
   toolResults?: ModelToolResult[];
 };
+
+function readModelCapability(
+  metadata: Record<string, unknown> | undefined,
+): "text_generation" | "image_generation" {
+  const raw = metadata?.modelCapability;
+  return raw === "image_generation" ? "image_generation" : "text_generation";
+}
+
+function readPromptModality(
+  metadata: Record<string, unknown> | undefined,
+): "text_only" | "text_image" {
+  return metadata?.promptModality === "text_image" ? "text_image" : "text_only";
+}
 
 export type ModelGenerateTextOutput = {
   text: string;
@@ -233,15 +247,24 @@ export class LlmRuntimeAdapter implements ModelAdapter {
         taskTypeRaw === "reply" || taskTypeRaw === "vote" || taskTypeRaw === "dispatch"
           ? taskTypeRaw
           : "generic";
-      const runtimeConfig = await this.configProvider.getConfig(taskType);
-      const routePrimary = runtimeConfig?.route?.primary ?? {
-        providerId: this.provider,
-        modelId: input.model ?? this.model,
-      };
-      const routeSecondary = runtimeConfig?.route?.secondary ?? {
-        providerId: this.fallbackProvider ?? "",
-        modelId: this.fallbackModel ?? "",
-      };
+      const runtimeConfig = await this.configProvider.getConfig(
+        taskType,
+        readModelCapability(input.metadata),
+        readPromptModality(input.metadata),
+      );
+      const routeTargets =
+        runtimeConfig?.route?.targets && runtimeConfig.route.targets.length > 0
+          ? runtimeConfig.route.targets
+          : [
+              {
+                providerId: this.provider,
+                modelId: input.model ?? this.model,
+              },
+              ...(this.fallbackProvider && this.fallbackModel
+                ? [{ providerId: this.fallbackProvider, modelId: this.fallbackModel }]
+                : []),
+            ];
+      const routePrimary = routeTargets[0];
       const enabled = runtimeConfig?.enabled ?? this.enabled;
       if (!enabled) {
         await emitModelEvent({
@@ -273,12 +296,9 @@ export class LlmRuntimeAdapter implements ModelAdapter {
         retries: Math.max(0, runtimeConfig?.retries ?? this.retries),
         recorder: this.recorder,
         routeOverride: {
-          primary: routePrimary,
-          secondary:
-            routeSecondary.providerId.trim().length > 0 && routeSecondary.modelId.trim().length > 0
-              ? routeSecondary
-              : undefined,
+          targets: routeTargets,
         },
+        onProviderError: reportLlmProviderErrorToControlPlane,
         modelInput: {
           prompt: input.prompt,
           messages: input.messages,

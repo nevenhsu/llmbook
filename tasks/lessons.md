@@ -10,6 +10,14 @@
 - Persona 選擇輸入應優先抽成可重用元件，提供「預設載入清單 + username/display_name 搜尋」；API 需支援 `q` 查詢，避免每頁重做過濾邏輯。
 - 若 API 用於「搜尋選項」場景，需最小化權限：搜尋讀取不必綁 admin；寫入/變更才保留 admin gate。
 
+## 2026-03-02
+
+- 當使用者明確要求「列表優先 + 列表內直接操作」時，不要保留多餘的 Add 按鈕流程；應把主要操作收斂到 list row actions（例如 provider API key 設定）。
+- 對於 model 啟用條件，若規格要求「測試通過後才能 active」，必須在 UI 與 hook 同時做 gating（前端提示 + 提交前檢查），避免僅靠顯示狀態。
+- 涉及金鑰欄位（如 `apiKey`）時，API response 必須做白名單序列化，防止未來型別變更時意外把敏感欄位回傳前端；只可回 `hasKey` / `keyLast4` 等遮罩資訊。
+- 針對可重排清單的管理介面，原生 HTML5 DnD 穩定性不足時應優先採用 `@dnd-kit/sortable`，避免拖拉 drop 命中與排序同步不一致的 bug。
+- 當模型選擇邏輯已改為「active + order」，`primary/fallback` 必須改為衍生資料而非手動真實來源，避免雙重真相造成 agent 選模不一致。
+
 ## 2026-02-26
 
 - 通用人格規範與 soul schema 不綁單一 domain；資料以 LLM 消費為主時，優先單一 `jsonb`，避免過度版本化與欄位拆分。
@@ -23,3 +31,21 @@
 - Token 超限處理優先壓縮 `persona_memory -> persona_long_memory`；若仍超限，必須回傳 UI 提示讓 Admin 精簡 global rules，不可在後端默默削弱全域規範。
 - 資料表清單在規格文件中預設視為「邏輯責任模型」；實作時先映射既有 schema，非必要不新增實體表。
 - Persona profile 相關資料優先沿用既有 `personas/persona_souls/persona_memory/persona_long_memories`；`persona_engine_config` 視為舊配置來源並由 provider/model 路由表取代。
+- 使用 `@dnd-kit` 時，`DndContext` 不能放在 `<table>` 結構內（`thead/tbody` 之間或其子層），因其會渲染 `<div>` 無障礙節點；必須放在表格外層，避免 HTML invalid nesting 與 hydration mismatch。
+- 在表格結構中，`<table>` 的直屬子節點只能是 `caption/colgroup/thead/tbody/tfoot/tr`；任何 React context 組件若可能注入 `<div>`（例如 dnd accessibility node）都必須包在 table 外層。
+- 當資料模型已升級為顯式欄位（如 `model.displayOrder`）時，UI 排序讀取必須以新欄位為單一真相；舊 `metadata.*` 只能做 fallback，否則拖拉排序會出現「寫入成功但顯示未更新」的假失敗。
+- 管理頁若已改為「active model order 為真相」，不要在同一刷新流程再打 `/api/admin/ai/model-routes` 當來源；應由 providers+models 即時計算 routes，否則會出現路由顯示錯誤與不必要的 GET 噪音。
+- Model 排序屬於配置管理，不應依賴 provider 是否已填 API key；應先確保 supported providers/models 都有持久化記錄（disabled/untested 也可），將「可排序」與「可調用」完全解耦。
+- 路由分類與模型分類不可混用：Model 管理必須以 capability（text/image）為主，互動類型（post/comment/persona）只決定是否調用哪種 capability，不應再建立互動型專屬 model route。
+- 使用者明確要求淘汰舊路由語意時，不要保留 `taskRoutes/default` 相容分支；應直接切到新單一真相（capability routes），避免 agent 路由行為仍受舊配置影響。
+- 若選模規則定為「active model order」，執行層不可再保留 `primary/fallback` 二元路由；應改為有序 targets 串列，失敗時按序切到下一個 active model。
+- 模型 capability 不能只分 text/image 輸出能力，還要額外標記 prompt modality（是否支援 text+image 輸入）；選模時需按請求 modality 過濾，避免把 text-only 模型派到多模態任務。
+- 使用者明確要求開發階段不相容舊設定時，文檔必須同步移除 legacy 相容敘述，並明確要求舊 `primary/fallback`、舊 `taskRoutes/default` 直接遷移到新結構。
+- 當需求要求「開發階段不相容舊設定」時，除了產品/技術 spec，Agent 入口文件（`AGENTS.md`、`src/agents/README.md`）也必須同步聲明，避免執行層仍保留 legacy 路徑。
+- 使用者要求規則「通用化」時，文件不應綁單一子題（例如只寫 routes）；需提升為跨層級規則（runtime config、schema、API contract、policy 結構）並明確禁止雙軌相容。
+- 若使用者指出 API 分類邏輯不一致，需從型別層（union/allowed scopes）一併收斂，而不只改 GET 回傳，否則舊 scope 仍可能經由寫入流程殘留。
+- 使用者若明確指定 policy 版標格式（例如只要整數 `1,2,3`），UI/API/文件需同步統一；不可沿用語意版號格式避免治理規則分裂。
+- 拖拉排序屬於單一使用者動作時，前端不得拆成多次 PATCH + 額外 route PUT；應改為單一 bulk API，後端同次更新排序與衍生 routes，避免請求風暴與多次版本寫入。
+- 開發模式（React Strict Mode）會放大初始化副作用；若頁面 on-mount 會自動寫入 DB，後端必須做 idempotent upsert（以 business key 去重）且避免每次小變更新增 release row。
+- 當需求指定「舊版本不可更新、只能 rollback」時，前端 selector 必須限制為 current/next，後端也要強制驗證版本範圍，不能只靠 UI 約束。
+- 若使用者要求「單一步驟完成 upsert + reorder」，應在同一個後端 API 內做 materialize（補 provider/model）後再排序，避免前端先補資料再排序造成額外請求與競態。

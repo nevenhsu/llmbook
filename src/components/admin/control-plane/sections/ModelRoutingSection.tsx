@@ -14,20 +14,19 @@ export interface ModelRoutingSectionProps {
   setRouteDrafts: Dispatch<SetStateAction<RouteDraftState>>;
   providers: AiProviderConfig[];
   models: AiModelConfig[];
-  saveRoute: (
-    scope: AiModelRoute["scope"],
-    primaryModelId: string,
-    fallbackModelId: string,
-  ) => Promise<void>;
+  saveRoute: (scope: AiModelRoute["scope"]) => Promise<void>;
 }
 
 export function ModelRoutingSection({
   routeDrafts,
-  setRouteDrafts,
+  setRouteDrafts: _setRouteDrafts,
   providers,
   models,
   saveRoute,
 }: ModelRoutingSectionProps) {
+  const scopeLabel = (scope: AiModelRoute["scope"]) =>
+    scope === "image" ? "Image Capability" : "Text Capability";
+
   const modelForScope = (scope: AiModelRoute["scope"]) =>
     models.filter((model) =>
       scope === "image"
@@ -39,15 +38,14 @@ export function ModelRoutingSection({
     <SectionCard title="Route Configuration" icon={<Route className="h-4 w-4" />}>
       <div className="space-y-6">
         <p className="max-w-2xl text-sm leading-relaxed opacity-60">
-          Configure primary and fallback model routing per scope. These routes determine which model
-          is used for specific tasks like post generation or image creation.
+          Routes are capability-first and ordered. Runtime always tries models by order from #1
+          downward until one succeeds.
         </p>
 
         <div className="space-y-6">
           {ROUTE_SCOPE_ORDER.map((scope) => {
             const draftRoute = routeDrafts[scope] ?? {
-              primaryModelId: "",
-              fallbackModelId: "",
+              orderedModelIds: [],
             };
             return (
               <div
@@ -56,76 +54,36 @@ export function ModelRoutingSection({
               >
                 <div className="border-base-300/50 mb-4 flex items-center justify-between border-b pb-3">
                   <span className="badge badge-primary badge-outline font-mono text-[10px] font-bold tracking-wider uppercase">
-                    {scope}
+                    {scopeLabel(scope)}
                   </span>
                   <div className="bg-primary/40 h-1.5 w-1.5 rounded-full"></div>
                 </div>
 
                 <div className="flex-1 space-y-4">
-                  <div className="form-control w-full">
-                    <label className="label py-1">
-                      <span className="label-text text-xs font-semibold opacity-70">
-                        Primary Model
-                      </span>
-                    </label>
-                    <select
-                      className="select select-bordered select-sm bg-base-100 focus:select-primary w-full"
-                      value={draftRoute.primaryModelId}
-                      onChange={(e) =>
-                        setRouteDrafts((prev) => ({
-                          ...prev,
-                          [scope]: { ...prev[scope], primaryModelId: e.target.value },
-                        }))
-                      }
-                    >
-                      <option value="">(Select model)</option>
-                      {modelForScope(scope).map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {optionLabelForModel(model, providers)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-control w-full">
-                    <label className="label py-1">
-                      <span className="label-text text-xs font-semibold opacity-70">
-                        Fallback Model
-                      </span>
-                    </label>
-                    <select
-                      className="select select-bordered select-sm bg-base-100 focus:select-primary w-full"
-                      value={draftRoute.fallbackModelId}
-                      onChange={(e) =>
-                        setRouteDrafts((prev) => ({
-                          ...prev,
-                          [scope]: { ...prev[scope], fallbackModelId: e.target.value },
-                        }))
-                      }
-                    >
-                      <option value="">(None)</option>
-                      {modelForScope(scope).map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {optionLabelForModel(model, providers)}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-2">
+                    {draftRoute.orderedModelIds.length === 0 ? (
+                      <div className="text-sm opacity-60">No active model in this capability.</div>
+                    ) : (
+                      draftRoute.orderedModelIds.map((modelId, index) => {
+                        const model = modelForScope(scope).find((item) => item.id === modelId);
+                        return (
+                          <div key={modelId} className="badge badge-outline gap-2">
+                            #{index + 1}
+                            <span>{model ? optionLabelForModel(model, providers) : modelId}</span>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
                 <div className="border-base-300/50 mt-6 flex justify-end border-t pt-4">
                   <button
                     className="btn btn-primary btn-sm gap-2 shadow-sm"
-                    onClick={() =>
-                      void saveRoute(
-                        scope,
-                        routeDrafts[scope]?.primaryModelId ?? "",
-                        routeDrafts[scope]?.fallbackModelId ?? "",
-                      )
-                    }
+                    onClick={() => void saveRoute(scope)}
                   >
                     <Save className="h-3.5 w-3.5" />
-                    Save Configuration
+                    Sync From Active Order
                   </button>
                 </div>
               </div>

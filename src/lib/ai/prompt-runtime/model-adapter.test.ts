@@ -52,7 +52,7 @@ describe("LlmRuntimeAdapter", () => {
       taskRoutes: {
         generic: {
           taskType: "generic",
-          primary: { providerId: "primary", modelId: "p1" },
+          targets: [{ providerId: "primary", modelId: "p1" }],
         },
       },
     });
@@ -82,8 +82,10 @@ describe("LlmRuntimeAdapter", () => {
       taskRoutes: {
         generic: {
           taskType: "generic",
-          primary: { providerId: "primary", modelId: "p1" },
-          secondary: { providerId: "secondary", modelId: "s1" },
+          targets: [
+            { providerId: "primary", modelId: "p1" },
+            { providerId: "secondary", modelId: "s1" },
+          ],
         },
       },
     });
@@ -123,8 +125,10 @@ describe("LlmRuntimeAdapter", () => {
       taskRoutes: {
         generic: {
           taskType: "generic",
-          primary: { providerId: "primary", modelId: "p1" },
-          secondary: { providerId: "secondary", modelId: "s1" },
+          targets: [
+            { providerId: "primary", modelId: "p1" },
+            { providerId: "secondary", modelId: "s1" },
+          ],
         },
       },
     });
@@ -167,8 +171,10 @@ describe("LlmRuntimeAdapter", () => {
       taskRoutes: {
         reply: {
           taskType: "reply",
-          primary: { providerId: "db-primary", modelId: "db-model" },
-          secondary: { providerId: "db-secondary", modelId: "db-fallback" },
+          targets: [
+            { providerId: "db-primary", modelId: "db-model" },
+            { providerId: "db-secondary", modelId: "db-fallback" },
+          ],
         },
       },
     });
@@ -191,13 +197,21 @@ describe("LlmRuntimeAdapter", () => {
       generateText: async () => ({ text: "fallback", finishReason: "stop" }),
     });
 
+    let capturedCapability: "text_generation" | "image_generation" | null = null;
+    let capturedPromptModality: "text_only" | "text_image" | null = null;
     const configProvider: LlmRuntimeConfigProvider = {
-      getConfig: async () => ({
-        route: {
-          primary: { providerId: "db-primary", modelId: "db-model" },
-          secondary: { providerId: "db-secondary", modelId: "db-fallback" },
-        },
-      }),
+      getConfig: async (_taskType, capability, promptModality) => {
+        capturedCapability = capability ?? "text_generation";
+        capturedPromptModality = promptModality ?? "text_only";
+        return {
+          route: {
+            targets: [
+              { providerId: "db-primary", modelId: "db-model" },
+              { providerId: "db-secondary", modelId: "db-fallback" },
+            ],
+          },
+        };
+      },
     };
 
     const adapter = new LlmRuntimeAdapter({
@@ -218,6 +232,58 @@ describe("LlmRuntimeAdapter", () => {
     expect(result.text).toBe("db");
     expect(result.provider).toBe("db-primary");
     expect(result.model).toBe("db-model");
+    expect(capturedCapability).toBe("text_generation");
+    expect(capturedPromptModality).toBe("text_only");
+  });
+
+  it("routes with image capability when metadata requests image_generation", async () => {
+    const registry = new LlmProviderRegistry({
+      defaultRoute: { providerId: "env-primary", modelId: "env-model" },
+    });
+    registry.register({
+      providerId: "db-image",
+      modelId: "grok-imagine-image",
+      capabilities: { supportsToolCalls: false },
+      generateText: async () => ({ text: "image ok", finishReason: "stop" }),
+    });
+
+    let capturedCapability: "text_generation" | "image_generation" | null = null;
+    let capturedPromptModality: "text_only" | "text_image" | null = null;
+    const configProvider: LlmRuntimeConfigProvider = {
+      getConfig: async (_taskType, capability, promptModality) => {
+        capturedCapability = capability ?? "text_generation";
+        capturedPromptModality = promptModality ?? "text_only";
+        return {
+          route: {
+            targets: [{ providerId: "db-image", modelId: "grok-imagine-image" }],
+          },
+        };
+      },
+    };
+
+    const adapter = new LlmRuntimeAdapter({
+      enabled: true,
+      provider: "env-primary",
+      model: "env-model",
+      retries: 0,
+      registry,
+      configProvider,
+    });
+
+    const result = await adapter.generateText({
+      ...SAMPLE_INPUT,
+      metadata: {
+        ...SAMPLE_INPUT.metadata,
+        modelCapability: "image_generation",
+        promptModality: "text_image",
+      },
+    });
+
+    expect(result.text).toBe("image ok");
+    expect(result.provider).toBe("db-image");
+    expect(result.model).toBe("grok-imagine-image");
+    expect(capturedCapability).toBe("image_generation");
+    expect(capturedPromptModality).toBe("text_image");
   });
 });
 
