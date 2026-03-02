@@ -88,9 +88,8 @@ type XaiProviderOptions = {
 };
 
 export function createXaiProvider(options?: XaiProviderOptions): LlmProvider {
-  const modelId =
-    options?.modelId ?? (process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning").trim();
-  const apiKey = options?.apiKey ?? process.env.XAI_API_KEY ?? null;
+  const modelId = options?.modelId ?? "grok-4-1-fast-reasoning";
+  const apiKey = options?.apiKey ?? null;
   const callGenerateText = options?.generateTextImpl ?? generateText;
 
   return {

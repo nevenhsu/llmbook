@@ -550,6 +550,17 @@ CREATE TABLE public.persona_engine_config (
   updated_at timestamptz DEFAULT now()
 );
 
+-- Encrypted AI provider secrets (service role only)
+CREATE TABLE public.ai_provider_secrets (
+  provider_key text PRIMARY KEY,
+  encrypted_api_key text NOT NULL,
+  iv text NOT NULL,
+  auth_tag text NOT NULL,
+  key_last4 text,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_provider_secrets_key_last4_chk CHECK (key_last4 IS NULL OR char_length(key_last4) <= 4)
+);
+
 -- AI Policy Releases (policy control plane)
 CREATE TABLE public.ai_policy_releases (
   version bigint generated always as identity PRIMARY KEY,
@@ -1446,6 +1457,7 @@ ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_provider_secrets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
@@ -1879,6 +1891,17 @@ CREATE POLICY "Service role can manage policy releases" ON public.ai_policy_rele
   USING (true)
   WITH CHECK (true);
 
+CREATE POLICY "Service role can read provider secrets" ON public.ai_provider_secrets
+  FOR SELECT
+  TO service_role
+  USING (true);
+
+CREATE POLICY "Service role can manage provider secrets" ON public.ai_provider_secrets
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
 -- ============================================================================
 -- COMMENTS
 -- ============================================================================
@@ -1896,6 +1919,7 @@ COMMENT ON TABLE public.ai_review_events IS 'Audit stream for review queue lifec
 COMMENT ON TABLE public.ai_runtime_events IS 'Best-effort runtime event stream for provider/tool/model/execution/worker observability.';
 COMMENT ON TABLE public.ai_worker_status IS 'Latest heartbeat and circuit breaker status per AI worker.';
 COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
+COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (AES-GCM payload fields). Service role only.';
 COMMENT ON TABLE public.ai_thread_memories IS 'Short-term per persona-thread memory entries with TTL and configurable per-scope max_items.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';

@@ -1,8 +1,15 @@
+import { generateImage } from "ai";
+import { createXai } from "@ai-sdk/xai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
-import { createDefaultLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
+import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { getRouteModelIdsFromActiveOrder } from "@/lib/ai/admin/active-model-order";
+import {
+  listProviderSecretStatuses,
+  loadDecryptedProviderSecrets,
+  upsertProviderSecret,
+} from "@/lib/ai/llm/provider-secrets";
 
 export type ProviderTestStatus = "untested" | "success" | "failed" | "disabled" | "key_missing";
 export type ProviderStatus = "active" | "disabled";
@@ -82,6 +89,14 @@ export type PolicyReleaseListItem = {
   changeNote: string | null;
   createdAt: string;
   globalPolicyDraft: GlobalPolicyStudioDraft;
+};
+
+export type ModelTestResult = {
+  model: AiModelConfig;
+  provider: AiProviderConfig;
+  artifact?: {
+    imageDataUrl?: string;
+  };
 };
 
 export type PromptBlockStat = {
@@ -224,8 +239,8 @@ const SUPPORTED_MODEL_CATALOG: Array<{
   },
   {
     providerKey: "minimax",
-    modelKey: "MiniMax-M2.5",
-    displayName: "MiniMax M2.5",
+    modelKey: "MiniMax-M2.1",
+    displayName: "MiniMax M2.1",
     capability: "text_generation",
     metadata: { input: ["text"], output: ["text"] },
     supportsImageInputPrompt: false,
@@ -298,6 +313,82 @@ function readModelErrorKind(input: unknown): ModelErrorKind | null {
   return null;
 }
 
+function readErrorDetails(input: unknown): { code: string | null; message: string } {
+  const candidate = input as {
+    message?: unknown;
+    code?: unknown;
+    statusCode?: unknown;
+    cause?: unknown;
+  };
+  const cause = (candidate?.cause ?? null) as {
+    message?: unknown;
+    code?: unknown;
+    statusCode?: unknown;
+  } | null;
+  const rawMessage =
+    typeof candidate?.message === "string"
+      ? candidate.message
+      : typeof cause?.message === "string"
+        ? cause.message
+        : String(input);
+  const codeSource = candidate?.code ?? cause?.code ?? candidate?.statusCode ?? cause?.statusCode;
+  const code =
+    typeof codeSource === "string"
+      ? codeSource.trim() || null
+      : typeof codeSource === "number"
+        ? String(codeSource)
+        : null;
+  return {
+    code,
+    message: rawMessage.slice(0, 500),
+  };
+}
+
+function readNonEmptyMessage(...candidates: Array<unknown>): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+    const message = candidate.trim();
+    if (message.length > 0) {
+      return message;
+    }
+  }
+  return null;
+}
+
+function buildLlmErrorDetailsSuffix(details: unknown): string {
+  if (!details || typeof details !== "object") {
+    return "";
+  }
+  const candidate = details as {
+    statusCode?: unknown;
+    code?: unknown;
+    type?: unknown;
+  };
+  const parts: string[] = [];
+  if (typeof candidate.statusCode === "number" && Number.isFinite(candidate.statusCode)) {
+    parts.push(`status=${String(candidate.statusCode)}`);
+  }
+  if (typeof candidate.code === "string" && candidate.code.trim().length > 0) {
+    parts.push(`code=${candidate.code.trim()}`);
+  }
+  if (typeof candidate.type === "string" && candidate.type.trim().length > 0) {
+    parts.push(`type=${candidate.type.trim()}`);
+  }
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
+function isGenericModelTestError(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return (
+    normalized === "model test failed" ||
+    normalized === "provider_error_output" ||
+    normalized === "provider call failed" ||
+    normalized === "provider_call_failed"
+  );
+}
+
 function toPersonaUsername(input: string): string {
   const normalized = input
     .toLowerCase()
@@ -326,7 +417,7 @@ function asControlPlaneDocument(policy: unknown): AiControlPlaneDocument {
   const root = asRecord(policy) ?? {};
   const controlPlane = asRecord(root.controlPlane) ?? {};
 
-  const providers = Array.isArray(controlPlane.providers)
+  const parsedProviders = Array.isArray(controlPlane.providers)
     ? controlPlane.providers
         .map((item): AiProviderConfig | null => {
           const row = asRecord(item);
@@ -362,7 +453,31 @@ function asControlPlaneDocument(policy: unknown): AiControlPlaneDocument {
         .filter((item): item is AiProviderConfig => item !== null)
     : [];
 
-  const models = Array.isArray(controlPlane.models)
+  const providersByKey = new Map<string, AiProviderConfig>();
+  for (const provider of parsedProviders) {
+    const key = provider.providerKey.trim();
+    if (!key) {
+      continue;
+    }
+    const existing = providersByKey.get(key);
+    if (!existing) {
+      providersByKey.set(key, provider);
+      continue;
+    }
+    const keep =
+      provider.hasKey && !existing.hasKey
+        ? provider
+        : !provider.hasKey && existing.hasKey
+          ? existing
+          : provider.updatedAt > existing.updatedAt
+            ? provider
+            : existing;
+    providersByKey.set(key, keep);
+  }
+  const providers = Array.from(providersByKey.values());
+  const providerIdSet = new Set(providers.map((item) => item.id));
+
+  const parsedModels = Array.isArray(controlPlane.models)
     ? controlPlane.models
         .map((item, index): AiModelConfig | null => {
           const row = asRecord(item);
@@ -410,6 +525,21 @@ function asControlPlaneDocument(policy: unknown): AiControlPlaneDocument {
         })
         .filter((item): item is AiModelConfig => item !== null)
     : [];
+  const modelsByProviderAndKey = new Map<string, AiModelConfig>();
+  for (const model of parsedModels) {
+    if (!providerIdSet.has(model.providerId)) {
+      continue;
+    }
+    const uniqueKey = `${model.providerId}:${model.modelKey}`;
+    const existing = modelsByProviderAndKey.get(uniqueKey);
+    if (!existing) {
+      modelsByProviderAndKey.set(uniqueKey, model);
+      continue;
+    }
+    const keep = model.updatedAt > existing.updatedAt ? model : existing;
+    modelsByProviderAndKey.set(uniqueKey, keep);
+  }
+  const models = Array.from(modelsByProviderAndKey.values());
 
   const routesRecord = asRecord(controlPlane.routes) ?? {};
   const routes: AiModelRoute[] = ROUTE_SCOPES.map((scope) => {
@@ -696,7 +826,7 @@ function buildTokenBudgetSignal(input: {
     compressedStages,
     exceeded,
     message: exceeded
-      ? "Token budget exceeded after persona memory + long memory compression signal. Please simplify global rules in Global Policy Studio."
+      ? "Token budget exceeded after persona memory + long memory compression signal. Please simplify global rules in Policy."
       : null,
   };
 }
@@ -717,6 +847,7 @@ export class AdminAiControlPlaneStore {
     }
 
     const document = asControlPlaneDocument(active.policy);
+    await this.applyProviderSecretStatuses(document);
     return {
       release: {
         version: active.version,
@@ -769,9 +900,10 @@ export class AdminAiControlPlaneStore {
     const now = nowIso();
     const apiKey = input.apiKey?.trim() ?? "";
     const keyLast4 = apiKey ? apiKey.slice(-4) : null;
-    const existingProvider = input.id
-      ? (document.providers.find((item) => item.id === input.id) ?? null)
-      : (document.providers.find((item) => item.providerKey === input.providerKey) ?? null);
+    const existingProvider =
+      (input.id ? (document.providers.find((item) => item.id === input.id) ?? null) : null) ??
+      document.providers.find((item) => item.providerKey === input.providerKey) ??
+      null;
 
     const nextProvider: AiProviderConfig = {
       id: existingProvider?.id ?? input.id ?? crypto.randomUUID(),
@@ -801,6 +933,31 @@ export class AdminAiControlPlaneStore {
       createdAt: input.createdAt ?? now,
       updatedAt: now,
     };
+
+    if (apiKey.length > 0) {
+      const secret = await upsertProviderSecret({
+        providerKey: nextProvider.providerKey,
+        apiKey,
+      });
+      nextProvider.hasKey = true;
+      nextProvider.keyLast4 = secret.keyLast4;
+      nextProvider.testStatus = nextProvider.status === "disabled" ? "disabled" : "untested";
+      nextProvider.lastApiErrorCode = null;
+      nextProvider.lastApiErrorMessage = null;
+      nextProvider.lastApiErrorAt = null;
+
+      for (const model of document.models) {
+        if (model.providerId !== nextProvider.id) {
+          continue;
+        }
+        model.testStatus = "untested";
+        model.lastErrorKind = null;
+        model.lastErrorCode = null;
+        model.lastErrorMessage = null;
+        model.lastErrorAt = null;
+        model.updatedAt = now;
+      }
+    }
 
     const index = document.providers.findIndex((item) => item.id === nextProvider.id);
     if (index >= 0) {
@@ -998,6 +1155,202 @@ export class AdminAiControlPlaneStore {
     );
 
     return nextModel;
+  }
+
+  public async testModelWithMinimalTokens(
+    modelId: string,
+    actorId: string,
+  ): Promise<ModelTestResult> {
+    const { active, document, basePolicy } = await this.loadActiveForMutation();
+    const model = document.models.find((item) => item.id === modelId);
+    if (!model) {
+      throw new Error("model not found");
+    }
+    const provider = document.providers.find((item) => item.id === model.providerId);
+    if (!provider) {
+      throw new Error("provider not found");
+    }
+
+    if (!provider.hasKey) {
+      const now = nowIso();
+      model.testStatus = "failed";
+      model.lastErrorKind = "provider_api";
+      model.lastErrorCode = "api_key_missing";
+      model.lastErrorMessage = "Provider API key is missing";
+      model.lastErrorAt = now;
+      model.updatedAt = now;
+      await this.persistControlPlaneOnActiveRelease(
+        active,
+        applyControlPlaneDocument(basePolicy, document),
+        actorId,
+        `control-plane: model test ${model.modelKey} failed (key missing)`,
+      );
+      return { model, provider };
+    }
+
+    let artifact: ModelTestResult["artifact"] | undefined;
+
+    if (model.capability === "image_generation") {
+      try {
+        if (provider.providerKey !== "xai") {
+          throw new Error(`Image test is unsupported for provider: ${provider.providerKey}`);
+        }
+        const secretMap = await loadDecryptedProviderSecrets([provider.providerKey]);
+        const apiKey = secretMap.get(provider.providerKey)?.apiKey?.trim() ?? "";
+        if (!apiKey) {
+          throw new Error("MISSING_XAI_API_KEY");
+        }
+        const client = createXai({ apiKey });
+        const imageResult = await generateImage({
+          model: client.image(model.modelKey),
+          prompt: "test",
+          n: 1,
+          maxRetries: 0,
+        });
+        const first = imageResult.images[0];
+        const base64 = first?.base64 ?? "";
+        const mediaType = first?.mediaType ?? "image/png";
+        if (!base64) {
+          throw new Error("IMAGE_TEST_EMPTY_OUTPUT");
+        }
+
+        artifact = {
+          imageDataUrl: `data:${mediaType};base64,${base64}`,
+        };
+
+        model.testStatus = "success";
+        model.lastErrorKind = null;
+        model.lastErrorCode = null;
+        model.lastErrorMessage = null;
+        model.lastErrorAt = null;
+        model.updatedAt = nowIso();
+        provider.testStatus = provider.status === "disabled" ? "disabled" : "success";
+        provider.lastApiErrorCode = null;
+        provider.lastApiErrorMessage = null;
+        provider.lastApiErrorAt = null;
+        provider.updatedAt = nowIso();
+      } catch (error) {
+        const details = readErrorDetails(error);
+        const now = nowIso();
+        model.testStatus = "failed";
+        model.lastErrorKind = "provider_api";
+        model.lastErrorCode = details.code;
+        model.lastErrorMessage = details.message;
+        model.lastErrorAt = now;
+        model.updatedAt = now;
+        provider.lastApiErrorCode = details.code;
+        provider.lastApiErrorMessage = details.message;
+        provider.lastApiErrorAt = now;
+        provider.updatedAt = now;
+      }
+    } else {
+      const testTimeoutMs = provider.providerKey === "minimax" ? 20_000 : 8_000;
+      const testPrompt =
+        provider.providerKey === "minimax" ? "Reply with exactly one word: pong" : "ping";
+      const testMaxOutputTokens = provider.providerKey === "minimax" ? 128 : 1;
+      try {
+        const registry = await createDbBackedLlmProviderRegistry({
+          includeMock: false,
+          includeXai: true,
+          includeMinimax: true,
+        });
+        const llmResult = await invokeLLM({
+          registry,
+          taskType: "generic",
+          routeOverride: {
+            taskType: "generic",
+            targets: [
+              {
+                providerId: provider.providerKey,
+                modelId: model.modelKey,
+              },
+            ],
+          },
+          modelInput: {
+            prompt: testPrompt,
+            maxOutputTokens: testMaxOutputTokens,
+            temperature: 0,
+          },
+          entityId: `model-test:${model.id}`,
+          timeoutMs: testTimeoutMs,
+          retries: 0,
+          onProviderError: async (event) => {
+            const now = nowIso();
+            const baseProviderErrorMessage =
+              readNonEmptyMessage(event.error) ?? "Provider API request failed";
+            const providerErrorMessage = `${baseProviderErrorMessage}${buildLlmErrorDetailsSuffix(
+              event.errorDetails,
+            )}`;
+            model.testStatus = "failed";
+            model.lastErrorKind = "provider_api";
+            model.lastErrorCode = event.errorDetails?.code ?? null;
+            model.lastErrorMessage = providerErrorMessage.slice(0, 500);
+            model.lastErrorAt = now;
+            model.updatedAt = now;
+            provider.lastApiErrorCode = event.errorDetails?.code ?? null;
+            provider.lastApiErrorMessage = providerErrorMessage.slice(0, 500);
+            provider.lastApiErrorAt = now;
+            provider.updatedAt = now;
+          },
+        });
+
+        const isModelTestSuccess =
+          !llmResult.error && llmResult.finishReason !== "error" && llmResult.finishReason !== null;
+        if (isModelTestSuccess) {
+          const now = nowIso();
+          model.testStatus = "success";
+          model.lastErrorKind = null;
+          model.lastErrorCode = null;
+          model.lastErrorMessage = null;
+          model.lastErrorAt = null;
+          model.updatedAt = now;
+          provider.testStatus = provider.status === "disabled" ? "disabled" : "success";
+          provider.lastApiErrorCode = null;
+          provider.lastApiErrorMessage = null;
+          provider.lastApiErrorAt = null;
+          provider.updatedAt = now;
+        } else {
+          const now = nowIso();
+          const rawErrorCandidate =
+            readNonEmptyMessage(llmResult.error, model.lastErrorMessage) ??
+            `Model returned empty output (finishReason=${String(llmResult.finishReason ?? "unknown")})`;
+          const rawError = isGenericModelTestError(rawErrorCandidate)
+            ? `Provider API request failed${buildLlmErrorDetailsSuffix(llmResult.errorDetails)}`
+            : `${rawErrorCandidate}${buildLlmErrorDetailsSuffix(llmResult.errorDetails)}`;
+          model.testStatus = "failed";
+          model.lastErrorKind = model.lastErrorKind ?? "other";
+          model.lastErrorCode = llmResult.errorDetails?.code ?? model.lastErrorCode ?? null;
+          model.lastErrorMessage = rawError.startsWith("LLM_TIMEOUT_")
+            ? `Model test timeout (${provider.providerKey}, ${String(testTimeoutMs)}ms)`
+            : rawError.slice(0, 500);
+          model.lastErrorAt = now;
+          model.updatedAt = now;
+          provider.updatedAt = now;
+        }
+      } catch (error) {
+        const details = readErrorDetails(error);
+        const now = nowIso();
+        model.testStatus = "failed";
+        model.lastErrorKind = "provider_api";
+        model.lastErrorCode = details.code;
+        model.lastErrorMessage = details.message;
+        model.lastErrorAt = now;
+        model.updatedAt = now;
+        provider.lastApiErrorCode = details.code;
+        provider.lastApiErrorMessage = details.message;
+        provider.lastApiErrorAt = now;
+        provider.updatedAt = now;
+      }
+    }
+
+    await this.persistControlPlaneOnActiveRelease(
+      active,
+      applyControlPlaneDocument(basePolicy, document),
+      actorId,
+      `control-plane: model test ${model.modelKey} ${model.testStatus}`,
+    );
+
+    return { model, provider, artifact };
   }
 
   public async reorderModels(input: {
@@ -1795,8 +2148,13 @@ export class AdminAiControlPlaneStore {
     });
 
     const assembledPrompt = formatPrompt(blocks);
+    const registry = await createDbBackedLlmProviderRegistry({
+      includeMock: true,
+      includeXai: true,
+      includeMinimax: true,
+    });
     const llmResult = await invokeLLM({
-      registry: createDefaultLlmProviderRegistry({ includeMock: true, includeXai: true }),
+      registry,
       taskType: "generic",
       routeOverride: {
         taskType: "generic",
@@ -1832,7 +2190,7 @@ export class AdminAiControlPlaneStore {
     const structured = parsed.structured;
 
     const markdown = [
-      `## Persona Generation Preview (${model.displayName})`,
+      `## Persona Preview (${model.displayName})`,
       "",
       `### personas`,
       `- display_name: ${structured.personas.display_name}`,
@@ -1914,7 +2272,7 @@ export class AdminAiControlPlaneStore {
     });
 
     const markdown = [
-      `## Persona Interaction Preview (${model.displayName})`,
+      `## Preview (${model.displayName})`,
       "",
       `Persona: ${profile.persona.display_name} (${profile.persona.username})`,
       `Task: ${input.taskType}`,
@@ -1949,11 +2307,40 @@ export class AdminAiControlPlaneStore {
   }> {
     const active = await this.fetchActiveRelease();
     const basePolicy = asRecord(active?.policy) ?? {};
+    const document = asControlPlaneDocument(basePolicy);
+    await this.applyProviderSecretStatuses(document);
     return {
       active,
       basePolicy,
-      document: asControlPlaneDocument(basePolicy),
+      document,
     };
+  }
+
+  private async applyProviderSecretStatuses(document: AiControlPlaneDocument): Promise<void> {
+    const keys = document.providers
+      .map((item) => item.providerKey.trim())
+      .filter((item) => item.length > 0);
+    if (keys.length === 0) {
+      return;
+    }
+
+    const statusMap = await listProviderSecretStatuses(keys);
+    for (const provider of document.providers) {
+      const status = statusMap.get(provider.providerKey);
+      if (!status) {
+        provider.hasKey = false;
+        provider.keyLast4 = null;
+        if (provider.status !== "disabled") {
+          provider.testStatus = "key_missing";
+        }
+        continue;
+      }
+      provider.hasKey = status.hasKey;
+      provider.keyLast4 = status.keyLast4;
+      if (provider.status !== "disabled" && provider.testStatus === "key_missing") {
+        provider.testStatus = "untested";
+      }
+    }
   }
 
   private async fetchActiveRelease(): Promise<PolicyReleaseRow | null> {

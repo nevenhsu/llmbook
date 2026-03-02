@@ -49,3 +49,11 @@
 - 開發模式（React Strict Mode）會放大初始化副作用；若頁面 on-mount 會自動寫入 DB，後端必須做 idempotent upsert（以 business key 去重）且避免每次小變更新增 release row。
 - 當需求指定「舊版本不可更新、只能 rollback」時，前端 selector 必須限制為 current/next，後端也要強制驗證版本範圍，不能只靠 UI 約束。
 - 若使用者要求「單一步驟完成 upsert + reorder」，應在同一個後端 API 內做 materialize（補 provider/model）後再排序，避免前端先補資料再排序造成額外請求與競態。
+- `Test` 按鈕的禁用條件只能依賴「provider 是否有 API key」，不能依賴 model row 是否已存在；對 supported model 應在測試動作內自動 materialize 後再執行 test，避免 image model 在未建檔狀態永遠不可測。
+- Control plane 的 providers/models 讀取與 UI 映射必須做 business-key 去重（providerKey、providerId+modelKey），並在衝突時優先保留 `hasKey=true` 與較新 `updatedAt`，避免重複資料把 key 狀態覆蓋成 missing。
+- Provider API key 若由 Admin UI 管理，LLM runtime 與 model test 不可再讀 `.env` 當主來源；需使用共用 server lib 從加密 secrets table 解密注入 provider，確保 control-plane 設定與 agent 執行一致。
+- Provider API key 更新後，對應 provider 底下 model 的測試結果不可沿用；必須重置 `testStatus` 與錯誤欄位，避免 UI 顯示舊 key 的 success 並誤導可用性。
+- Model test 失敗時若已有 `onProviderError` 的具體錯誤，後續彙總分支不得再覆蓋成泛用訊息（如 `Model test failed`）；需保留原錯誤並更新 `updatedAt`，確保 UI 顯示最新可診斷資訊。
+- 錯誤訊息合併時要把空字串視為無效值；若 `event.error` 或 `llmResult.error` 為 `\"\"`，必須改用可診斷 fallback，否則 UI 會退回顯示泛用錯誤造成誤判。
+- 供應商回傳的泛用錯誤字串（如 `Model test failed`）不可原樣顯示；要在 server 端嘗試拼接 `status/code/type` 細節，確保 admin 能直接診斷是 key、endpoint 或 model 問題。
+- 最小 token 的 provider 健康檢查不應強依賴「文字輸出非空」；只要 provider 回傳無 `error` 且 `finishReason != error` 即視為可用，避免像 MiniMax 這類 `finishReason=length` 但 text 空字串被誤判失敗。

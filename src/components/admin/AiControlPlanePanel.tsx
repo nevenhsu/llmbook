@@ -56,6 +56,7 @@ export default function AiControlPlanePanel(props: Props) {
     interactionInput,
     setInteractionInput,
     interactionPreview,
+    modelTestImageLinks,
     latestRelease,
     activeRelease,
     textModels,
@@ -138,12 +139,7 @@ export default function AiControlPlanePanel(props: Props) {
               ))}
             </select>
           </div>
-          {activeRelease ? (
-            <span className="badge badge-success gap-1">
-              <Sparkles className="h-3 w-3" />
-              Active release #{activeRelease.version}
-            </span>
-          ) : null}
+
           <button
             className="btn btn-outline btn-sm"
             disabled={!hasRollbackCandidate}
@@ -230,11 +226,12 @@ export default function AiControlPlanePanel(props: Props) {
 
         {/* ── Main content ── */}
         <main className="min-w-0 flex-1 space-y-4">
-          {activeSection === "providers_models" && (
+          {activeSection === "providers" && (
             <ProvidersModelsSection
               providers={providers}
               models={models}
               routes={routes}
+              modelTestImageLinks={modelTestImageLinks}
               createSupportedProvider={createSupportedProvider}
               runModelTest={runModelTest}
               setModelActive={setModelActive}
@@ -242,7 +239,7 @@ export default function AiControlPlanePanel(props: Props) {
             />
           )}
 
-          {activeSection === "policy_studio" && (
+          {activeSection === "policy" && (
             <PolicyStudioSection
               draft={draft}
               setDraft={setDraft}
@@ -258,7 +255,7 @@ export default function AiControlPlanePanel(props: Props) {
             />
           )}
 
-          {activeSection === "policy_models" && (
+          {activeSection === "routes" && (
             <ModelRoutingSection
               routeDrafts={routeDrafts}
               setRouteDrafts={setRouteDrafts}
@@ -268,7 +265,7 @@ export default function AiControlPlanePanel(props: Props) {
             />
           )}
 
-          {activeSection === "persona_generation" && (
+          {activeSection === "persona" && (
             <PersonaGenerationSection
               personaGeneration={personaGeneration}
               setPersonaGeneration={setPersonaGeneration}
@@ -287,7 +284,7 @@ export default function AiControlPlanePanel(props: Props) {
             />
           )}
 
-          {activeSection === "persona_interaction" && (
+          {activeSection === "preview" && (
             <PersonaInteractionSection
               interactionInput={interactionInput}
               setInteractionInput={setInteractionInput}

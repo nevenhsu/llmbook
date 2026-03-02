@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { resolve } from "node:path";
-import { createDefaultLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
+import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { getPromptRuntimeStatus } from "@/lib/ai/prompt-runtime/runtime-events";
 
@@ -8,7 +8,11 @@ dotenv.config({ path: resolve(process.cwd(), ".env.local"), quiet: true });
 dotenv.config({ path: resolve(process.cwd(), ".env"), quiet: true });
 
 async function main(): Promise<void> {
-  const registry = createDefaultLlmProviderRegistry();
+  const registry = await createDbBackedLlmProviderRegistry({
+    includeMock: false,
+    includeXai: true,
+    includeMinimax: true,
+  });
   const route = registry.resolveRoute("reply");
 
   const result = await invokeLLM({
@@ -36,8 +40,7 @@ async function main(): Promise<void> {
       {
         active: {
           taskType: "reply",
-          primary: route.primary,
-          secondary: route.secondary ?? null,
+          targets: route.targets,
           selected: {
             providerId: result.providerId,
             modelId: result.modelId,

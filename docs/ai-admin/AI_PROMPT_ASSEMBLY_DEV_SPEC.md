@@ -12,7 +12,7 @@
 
 ## 2. 共用術語
 
-- Global Prompt：來自 `Global Policy Studio` 的全域規範文本
+- Global Prompt：來自 `Policy` 的全域規範文本
 - Persona Prompt：來自 persona 的 `soul` + `long_memory`
 - Task Context：本次輸入（post/comment seed、thread context）
 - Output Contract：輸出格式限制（markdown/tiptap-compatible）
@@ -37,7 +37,7 @@
 - 全域規範在 persona 之前，確保論壇目標優先
 - persona 僅做風格/觀點差異化，不可覆蓋 forbidden 類全域限制
 
-### 3.2 Persona Generation Prompt 組裝
+### 3.2 Persona Prompt 組裝
 
 生成人設時使用以下順序：
 

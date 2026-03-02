@@ -1,5 +1,5 @@
 import { PromptRuntimeReasonCode, ToolRuntimeReasonCode } from "@/lib/ai/reason-codes";
-import { createDefaultLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
+import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { reportLlmProviderErrorToControlPlane } from "@/lib/ai/admin/runtime-error-reporter";
@@ -179,11 +179,12 @@ type LlmRuntimeAdapterOptions = {
 };
 
 type EnvConfig = {
-  provider: string;
-  model: string;
   timeoutMs: number;
   retries: number;
 };
+
+const DEFAULT_PROVIDER_ID = "xai";
+const DEFAULT_MODEL_ID = "grok-4-1-fast-reasoning";
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -202,11 +203,9 @@ function parseNonNegativeInt(value: string | undefined, fallback: number): numbe
 }
 
 function readEnvConfig(): EnvConfig {
-  const provider = (process.env.AI_MODEL_PROVIDER ?? "xai").trim().toLowerCase();
-  const model = (process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning").trim();
   const timeoutMs = parsePositiveInt(process.env.AI_MODEL_TIMEOUT_MS, 12_000);
   const retries = parseNonNegativeInt(process.env.AI_MODEL_RETRIES, 1);
-  return { provider, model, timeoutMs, retries };
+  return { timeoutMs, retries };
 }
 
 export class LlmRuntimeAdapter implements ModelAdapter {
@@ -217,21 +216,20 @@ export class LlmRuntimeAdapter implements ModelAdapter {
   private readonly enabled: boolean;
   private readonly timeoutMs: number;
   private readonly retries: number;
-  private readonly registry: LlmProviderRegistry;
+  private readonly registry: LlmProviderRegistry | null;
   private readonly configProvider: LlmRuntimeConfigProvider;
   private readonly recorder: PromptRuntimeEventRecorder;
 
   public constructor(options?: LlmRuntimeAdapterOptions) {
     const env = readEnvConfig();
-    this.provider = options?.provider ?? env.provider;
-    this.model = options?.model ?? env.model;
-    this.fallbackProvider =
-      options?.fallbackProvider ?? process.env.AI_MODEL_FALLBACK_PROVIDER ?? null;
-    this.fallbackModel = options?.fallbackModel ?? process.env.AI_MODEL_FALLBACK_NAME ?? null;
+    this.provider = options?.provider ?? DEFAULT_PROVIDER_ID;
+    this.model = options?.model ?? DEFAULT_MODEL_ID;
+    this.fallbackProvider = options?.fallbackProvider ?? null;
+    this.fallbackModel = options?.fallbackModel ?? null;
     this.enabled = options?.enabled ?? true;
     this.timeoutMs = Math.max(1, options?.timeoutMs ?? env.timeoutMs);
     this.retries = Math.max(0, options?.retries ?? env.retries);
-    this.registry = options?.registry ?? createDefaultLlmProviderRegistry();
+    this.registry = options?.registry ?? null;
     this.configProvider = options?.configProvider ?? new CachedLlmRuntimeConfigProvider();
     this.recorder = options?.recorder ?? getPromptRuntimeRecorder();
   }
@@ -289,7 +287,13 @@ export class LlmRuntimeAdapter implements ModelAdapter {
       }
 
       const result = await invokeLLM({
-        registry: this.registry,
+        registry:
+          this.registry ??
+          (await createDbBackedLlmProviderRegistry({
+            includeMock: false,
+            includeXai: true,
+            includeMinimax: true,
+          })),
         taskType,
         entityId,
         timeoutMs: Math.max(1, runtimeConfig?.timeoutMs ?? this.timeoutMs),

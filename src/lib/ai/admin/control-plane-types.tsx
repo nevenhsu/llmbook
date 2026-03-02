@@ -27,47 +27,42 @@ export type DraftState = {
   note: string;
 };
 
-export type ControlPlaneSection =
-  | "providers_models"
-  | "policy_studio"
-  | "policy_models"
-  | "persona_generation"
-  | "persona_interaction";
+export type ControlPlaneSection = "providers" | "policy" | "routes" | "persona" | "preview";
 
 export type RouteDraftState = Record<AiModelRoute["scope"], { orderedModelIds: string[] }>;
 
 export const SECTION_ICONS: Record<ControlPlaneSection, ReactNode> = {
-  providers_models: <Server className="h-4 w-4" />,
-  policy_studio: <FileText className="h-4 w-4" />,
-  policy_models: <Route className="h-4 w-4" />,
-  persona_generation: <UserPlus className="h-4 w-4" />,
-  persona_interaction: <MessageSquare className="h-4 w-4" />,
+  providers: <Server className="h-4 w-4" />,
+  policy: <FileText className="h-4 w-4" />,
+  routes: <Route className="h-4 w-4" />,
+  persona: <UserPlus className="h-4 w-4" />,
+  preview: <MessageSquare className="h-4 w-4" />,
 };
 
 export const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; helper: string }> = [
   {
-    id: "providers_models",
-    label: "Providers & Models",
+    id: "providers",
+    label: "Providers",
     helper: "Manage provider keys and model inventory",
   },
   {
-    id: "policy_studio",
-    label: "Policy Studio",
+    id: "policy",
+    label: "Policy",
     helper: "Draft, preview, publish, rollback",
   },
   {
-    id: "policy_models",
-    label: "Model Routes",
+    id: "routes",
+    label: "Routes",
     helper: "Capability routes (text/image)",
   },
   {
-    id: "persona_generation",
-    label: "Persona Gen",
+    id: "persona",
+    label: "Persona",
     helper: "Generate, regenerate, save to DB",
   },
   {
-    id: "persona_interaction",
-    label: "Interaction",
+    id: "preview",
+    label: "Preview",
     helper: "Preview post/comment with persona",
   },
 ];
@@ -96,8 +91,8 @@ export const SUPPORTED_MODELS = [
   },
   {
     providerId: "minimax",
-    modelKey: "MiniMax-M2.5",
-    displayName: "MiniMax M2.5",
+    modelKey: "MiniMax-M2.1",
+    displayName: "MiniMax M2.1",
     capability: "text_generation",
     metadata: { input: ["text"], output: ["text"] },
   },

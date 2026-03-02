@@ -30,12 +30,13 @@ export interface ProvidersModelsSectionProps {
   providers: AiProviderConfig[];
   models: AiModelConfig[];
   routes: AiModelRoute[];
+  modelTestImageLinks: Record<string, string>;
   createSupportedProvider: (
     providerKey: (typeof SUPPORTED_PROVIDERS)[number]["id"],
     apiKey: string,
   ) => Promise<void>;
   reorderModels: (capability: Capability, orderedModelKeys: string[]) => Promise<void>;
-  runModelTest: (modelId: string) => Promise<void>;
+  runModelTest: (input: { capability: Capability; modelKey: string }) => Promise<void>;
   setModelActive: (modelId: string, nextActive: boolean) => Promise<void>;
 }
 
@@ -52,6 +53,17 @@ type ModelRow = {
   lastErrorMessage: string | null;
   supportsImageInputPrompt: boolean;
 };
+
+function getRowErrorText(row: ModelRow): string | null {
+  const message = row.lastErrorMessage?.trim();
+  if (message) {
+    return message;
+  }
+  if (row.modelTestStatus === "failed") {
+    return "Model test failed";
+  }
+  return null;
+}
 
 function readModelTestStatus(model: AiModelConfig | null): "untested" | "success" | "failed" {
   if (!model) {
@@ -73,7 +85,7 @@ function SortableModelRow({
 }: {
   row: ModelRow;
   rowIndex: number;
-  onRunModelTest: (modelId: string) => void;
+  onRunModelTest: (input: { capability: Capability; modelKey: string }) => void;
   onSetModelActive: (modelId: string, nextActive: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -113,7 +125,6 @@ function SortableModelRow({
         </div>
       </td>
       <td className="font-medium">{row.displayName}</td>
-      <td className="text-xs opacity-70">{row.providerDisplayName}</td>
       <td className="text-xs">
         <span className="badge badge-ghost badge-sm">
           {row.supportsImageInputPrompt ? "text+image" : "text"}
@@ -135,21 +146,7 @@ function SortableModelRow({
           >
             {row.modelTestStatus}
           </span>
-          <button
-            className="btn btn-ghost btn-xs"
-            disabled={!row.model}
-            onClick={() => row.model && onRunModelTest(row.model.id)}
-          >
-            Test
-          </button>
         </div>
-      </td>
-      <td className="text-xs">
-        {row.lastErrorMessage ? (
-          <span className="text-error">{row.lastErrorMessage}</span>
-        ) : (
-          <span className="opacity-50">-</span>
-        )}
       </td>
       <td>
         <label className="label cursor-pointer justify-start gap-2">
@@ -157,7 +154,7 @@ function SortableModelRow({
             type="checkbox"
             className="toggle toggle-sm"
             checked={row.model?.status === "active"}
-            disabled={!row.model}
+            disabled={!row.model || !row.providerHasKey}
             onChange={(event) => {
               if (!row.model) {
                 return;
@@ -172,6 +169,15 @@ function SortableModelRow({
           {row.model?.status === "active" ? <Check className="text-success h-3.5 w-3.5" /> : null}
         </label>
       </td>
+      <td>
+        <button
+          className="btn btn-ghost btn-xs"
+          disabled={!row.providerHasKey}
+          onClick={() => onRunModelTest({ capability: row.capability, modelKey: row.modelKey })}
+        >
+          Test
+        </button>
+      </td>
     </tr>
   );
 }
@@ -180,6 +186,7 @@ export function ProvidersModelsSection({
   providers,
   models,
   routes,
+  modelTestImageLinks,
   createSupportedProvider,
   reorderModels,
   runModelTest,
@@ -205,7 +212,20 @@ export function ProvidersModelsSection({
   const providerByKey = useMemo(() => {
     const map = new Map<string, AiProviderConfig>();
     for (const provider of providers) {
-      map.set(provider.providerKey, provider);
+      const existing = map.get(provider.providerKey);
+      if (!existing) {
+        map.set(provider.providerKey, provider);
+        continue;
+      }
+      const keep =
+        provider.hasKey && !existing.hasKey
+          ? provider
+          : !provider.hasKey && existing.hasKey
+            ? existing
+            : provider.updatedAt > existing.updatedAt
+              ? provider
+              : existing;
+      map.set(provider.providerKey, keep);
     }
     return map;
   }, [providers]);
@@ -387,15 +407,44 @@ export function ProvidersModelsSection({
         </div>
       </SectionCard>
 
-      <SectionCard title="Model Selection & Order" icon={<Bot className="h-4 w-4" />}>
-        <p className="mb-4 text-sm opacity-70">
-          可隨時拖拉排序。LLM 會依 active model order 由上到下嘗試，排序與 active 啟用狀態解耦。
-        </p>
-
+      <SectionCard title="Models" icon={<Bot className="h-4 w-4" />}>
         <div className="space-y-6">
           {["text_generation", "image_generation"].map((capability) => {
             const cap = capability as Capability;
             const rows = orderedRowsByCapability[cap];
+            const imageTestLinks =
+              cap === "image_generation"
+                ? rows
+                    .map((row) => {
+                      const modelId = row.model?.id ?? null;
+                      if (!modelId) {
+                        return null;
+                      }
+                      const imageUrl = modelTestImageLinks[modelId];
+                      if (!imageUrl) {
+                        return null;
+                      }
+                      return {
+                        modelKey: row.modelKey,
+                        displayName: row.displayName,
+                        imageUrl,
+                      };
+                    })
+                    .filter(
+                      (item): item is { modelKey: string; displayName: string; imageUrl: string } =>
+                        Boolean(item),
+                    )
+                : [];
+            const modelErrors = rows
+              .map((row) => ({
+                modelKey: row.modelKey,
+                displayName: row.displayName,
+                errorText: getRowErrorText(row),
+              }))
+              .filter(
+                (item): item is { modelKey: string; displayName: string; errorText: string } =>
+                  Boolean(item.errorText),
+              );
             return (
               <div key={capability} className="space-y-3">
                 <h3 className="text-sm font-semibold">
@@ -417,11 +466,10 @@ export function ProvidersModelsSection({
                           <tr>
                             <th>Order</th>
                             <th>Model</th>
-                            <th>Provider</th>
                             <th>Prompt Input</th>
-                            <th>Test</th>
-                            <th>Error</th>
+                            <th>Status</th>
                             <th>Active</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-base-200 divide-y">
@@ -430,7 +478,7 @@ export function ProvidersModelsSection({
                               key={row.modelKey}
                               row={row}
                               rowIndex={rowIndex}
-                              onRunModelTest={(modelId) => void runModelTest(modelId)}
+                              onRunModelTest={(input) => void runModelTest(input)}
                               onSetModelActive={(modelId, nextActive) =>
                                 void setModelActive(modelId, nextActive)
                               }
@@ -439,6 +487,36 @@ export function ProvidersModelsSection({
                         </tbody>
                       </table>
                     </div>
+                    {modelErrors.length > 0 ? (
+                      <div className="border-base-300 bg-base-200/30 mt-2 rounded-md border p-2">
+                        <div className="text-xs font-semibold opacity-70">Model Errors</div>
+                        <div className="mt-1 space-y-1">
+                          {modelErrors.map((item) => (
+                            <p key={`error-${item.modelKey}`} className="text-error text-xs">
+                              {item.displayName}: {item.errorText}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {imageTestLinks.length > 0 ? (
+                      <div className="border-base-300 bg-base-200/30 mt-2 rounded-md border p-2">
+                        <div className="text-xs font-semibold opacity-70">Test Image URLs</div>
+                        <div className="mt-1 space-y-1">
+                          {imageTestLinks.map((item) => (
+                            <a
+                              key={`image-test-${item.modelKey}`}
+                              className="link link-primary block text-xs break-all"
+                              href={item.imageUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {item.displayName}: open test image
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </SortableContext>
                 </DndContext>
               </div>

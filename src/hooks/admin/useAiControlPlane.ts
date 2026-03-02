@@ -41,7 +41,7 @@ export function useAiControlPlane({
   initialReleases,
   initialPersonas,
 }: UseAiControlPlaneProps) {
-  const [activeSection, setActiveSection] = useState<ControlPlaneSection>("providers_models");
+  const [activeSection, setActiveSection] = useState<ControlPlaneSection>("providers");
   const [providers, setProviders] = useState(initialProviders);
   const [models, setModels] = useState(initialModels);
   const [routes, setRoutes] = useState(initialRoutes);
@@ -124,6 +124,7 @@ export function useAiControlPlane({
     longMemoryOverride: "",
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
+  const [modelTestImageLinks, setModelTestImageLinks] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setRouteDrafts(buildInitialRouteDrafts(routes));
@@ -233,6 +234,31 @@ export function useAiControlPlane({
     }
   };
 
+  const upsertProviderInList = (source: AiProviderConfig[], item: AiProviderConfig) => {
+    const index = source.findIndex((provider) => provider.id === item.id);
+    return index >= 0
+      ? source.map((provider) => (provider.id === item.id ? item : provider))
+      : [...source, item];
+  };
+
+  const applyProviderItem = (item: AiProviderConfig) => {
+    setProviders((prev) => {
+      const nextProviders = upsertProviderInList(prev, item);
+      setRoutes((currentRoutes) =>
+        buildDerivedRoutesFromActiveOrder(nextProviders, models, currentRoutes),
+      );
+      return nextProviders;
+    });
+  };
+
+  const refreshModelsOnly = async (nextProviders?: AiProviderConfig[]) => {
+    const modelsRes = await apiFetchJson<{ items: AiModelConfig[] }>("/api/admin/ai/models");
+    setModels(modelsRes.items);
+    setRoutes((prev) =>
+      buildDerivedRoutesFromActiveOrder(nextProviders ?? providers, modelsRes.items, prev),
+    );
+  };
+
   const createProvider = async () => {
     if (
       !providerForm.providerKey.trim() ||
@@ -243,9 +269,13 @@ export function useAiControlPlane({
       return;
     }
     try {
-      await apiPost("/api/admin/ai/providers", providerForm);
+      const res = await apiPost<{ item: AiProviderConfig }>(
+        "/api/admin/ai/providers",
+        providerForm,
+      );
+      applyProviderItem(res.item);
+      await refreshModelsOnly(upsertProviderInList(providers, res.item));
       toast.success("Provider saved");
-      await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create provider");
     }
@@ -264,7 +294,7 @@ export function useAiControlPlane({
     try {
       const existing = providers.find((item) => item.providerKey === providerKey);
       if (existing) {
-        await apiPatch("/api/admin/ai/providers", {
+        const res = await apiPatch<{ item: AiProviderConfig }>("/api/admin/ai/providers", {
           id: existing.id,
           providerKey: existing.providerKey,
           displayName: supported.displayName,
@@ -272,18 +302,21 @@ export function useAiControlPlane({
           status: "active",
           apiKey: apiKey.trim() || undefined,
         });
+        applyProviderItem(res.item);
+        await refreshModelsOnly(upsertProviderInList(providers, res.item));
         toast.success("Provider updated");
       } else {
-        await apiPost("/api/admin/ai/providers", {
+        const res = await apiPost<{ item: AiProviderConfig }>("/api/admin/ai/providers", {
           providerKey,
           displayName: supported.displayName,
           sdkPackage: supported.sdkPackage,
           status: "active",
           apiKey: apiKey.trim() || undefined,
         });
+        applyProviderItem(res.item);
+        await refreshModelsOnly(upsertProviderInList(providers, res.item));
         toast.success("Provider created");
       }
-      await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save provider");
     }
@@ -343,41 +376,77 @@ export function useAiControlPlane({
     });
   };
 
-  const runModelTest = async (modelId: string) => {
-    const model = models.find((item) => item.id === modelId);
-    if (!model) {
-      toast.error("Model not found");
-      return;
-    }
-    const provider = providers.find((item) => item.id === model.providerId);
-    if (!provider) {
-      toast.error("Provider not found");
+  const runModelTest = async (input: {
+    capability: "text_generation" | "image_generation";
+    modelKey: string;
+  }) => {
+    const supported = SUPPORTED_MODELS.find(
+      (item) => item.capability === input.capability && item.modelKey === input.modelKey,
+    );
+    if (!supported) {
+      toast.error("Unsupported model");
       return;
     }
 
-    const nextStatus = provider.hasKey && provider.testStatus === "success" ? "success" : "failed";
+    const providerCandidates = providers.filter(
+      (item) => item.providerKey === supported.providerId,
+    );
+    const provider =
+      providerCandidates.find((item) => item.hasKey) ??
+      providerCandidates.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ??
+      null;
+    if (!provider) {
+      toast.error(`Provider ${supported.providerId} not found`);
+      return;
+    }
+    if (!provider.hasKey) {
+      toast.error("Provider API key is required before test");
+      return;
+    }
+
     try {
-      await apiPatch("/api/admin/ai/models", {
-        id: model.id,
-        providerId: model.providerId,
-        modelKey: model.modelKey,
-        displayName: model.displayName,
-        capability: model.capability,
-        status: model.status,
-        testStatus: nextStatus,
-        lifecycleStatus: nextStatus === "success" ? "active" : model.lifecycleStatus,
-        displayOrder: model.displayOrder,
-        lastErrorKind: nextStatus === "success" ? null : model.lastErrorKind,
-        lastErrorCode: nextStatus === "success" ? null : model.lastErrorCode,
-        lastErrorMessage: nextStatus === "success" ? null : model.lastErrorMessage,
-        lastErrorAt: nextStatus === "success" ? null : model.lastErrorAt,
-        metadata: {
-          ...model.metadata,
-          modelTestedAt: new Date().toISOString(),
-        },
+      let resolvedModel =
+        models.find(
+          (item) => item.providerId === provider.id && item.modelKey === supported.modelKey,
+        ) ?? null;
+
+      if (!resolvedModel) {
+        const createRes = await apiPost<{ item: AiModelConfig }>("/api/admin/ai/models", {
+          providerId: provider.id,
+          modelKey: supported.modelKey,
+          displayName: supported.displayName,
+          capability: supported.capability,
+          status: "disabled",
+          testStatus: "untested",
+          lifecycleStatus: "active",
+          supportsImageInputPrompt: Array.isArray(supported.metadata.input)
+            ? supported.metadata.input.includes("image")
+            : false,
+          metadata: supported.metadata,
+        });
+        resolvedModel = createRes.item;
+        setModels((prev) => [...prev, createRes.item]);
+      }
+
+      const res = await apiPost<{
+        item: AiModelConfig;
+        provider: AiProviderConfig;
+        artifact?: { imageDataUrl?: string } | null;
+      }>(`/api/admin/ai/models/${resolvedModel.id}/test`, {});
+      setModels((prev) => prev.map((item) => (item.id === res.item.id ? res.item : item)));
+      setProviders((prev) =>
+        prev.map((item) => (item.id === res.provider.id ? res.provider : item)),
+      );
+      setModelTestImageLinks((prev) => {
+        const next = { ...prev };
+        if (res.artifact?.imageDataUrl) {
+          next[res.item.id] = res.artifact.imageDataUrl;
+        } else {
+          delete next[res.item.id];
+        }
+        return next;
       });
-      toast.success(`Model test ${nextStatus}`);
-      await refreshAll();
+      toast.success(`Model test ${res.item.testStatus}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to test model");
     }
@@ -436,9 +505,12 @@ export function useAiControlPlane({
 
   const runProviderTest = async (providerId: string) => {
     try {
-      await apiPost(`/api/admin/ai/providers/${providerId}/test`, {});
+      const res = await apiPost<{ item: AiProviderConfig }>(
+        `/api/admin/ai/providers/${providerId}/test`,
+        {},
+      );
+      applyProviderItem(res.item);
       toast.success("Provider test triggered");
-      await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to test provider");
     }
@@ -838,6 +910,7 @@ export function useAiControlPlane({
     interactionInput,
     setInteractionInput,
     interactionPreview,
+    modelTestImageLinks,
     latestRelease,
     activeRelease,
     textModels,

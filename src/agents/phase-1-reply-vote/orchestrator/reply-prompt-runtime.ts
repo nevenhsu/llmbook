@@ -168,7 +168,6 @@ export async function generateReplyTextWithPromptRuntime(
   try {
     if (!toolEnabled) {
       modelResult = await modelAdapter.generateText({
-        model: process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning",
         prompt: prompt.prompt,
         messages: prompt.messages,
         maxOutputTokens: 320,
@@ -201,7 +200,6 @@ export async function generateReplyTextWithPromptRuntime(
       const toolLoop = await generateTextWithToolLoop({
         adapter: modelAdapter,
         modelInput: {
-          model: process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning",
           prompt: prompt.prompt,
           messages: prompt.messages,
           maxOutputTokens: 320,
@@ -229,7 +227,7 @@ export async function generateReplyTextWithPromptRuntime(
       text: "",
       finishReason: "error",
       provider: "unknown",
-      model: process.env.AI_MODEL_NAME ?? "grok-4-1-fast-reasoning",
+      model: "unknown",
       errorMessage: error instanceof Error ? error.message : String(error),
     };
   }

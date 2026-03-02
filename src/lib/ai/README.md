@@ -136,7 +136,7 @@
 - Minimax provider：
   - 使用 `vercel-minimax-ai-provider`
   - 支援模型：
-    - `MiniMax-M2.5`: Input (text), Output (text)
+    - `MiniMax-M2.1`: Input (text), Output (text)
 
 ## Soul Runtime Contract（Phase 2）
 

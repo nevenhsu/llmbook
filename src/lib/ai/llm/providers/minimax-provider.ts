@@ -88,9 +88,14 @@ type MinimaxProviderOptions = {
 };
 
 export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProvider {
-  const modelId = options?.modelId ?? (process.env.AI_MODEL_NAME ?? "MiniMax-M2.5").trim();
-  const apiKey = options?.apiKey ?? process.env.MINIMAX_API_KEY ?? null;
+  const modelId = options?.modelId ?? "MiniMax-M2.1";
+  const apiKey = options?.apiKey ?? null;
   const callGenerateText = options?.generateTextImpl ?? generateText;
+  const apiMode = "anthropic";
+  const anthropicBaseUrls = [
+    "https://api.minimaxi.com/anthropic/v1",
+    "https://api.minimaxi.com/anthropic",
+  ];
 
   return {
     providerId: "minimax",
@@ -122,17 +127,20 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
         };
       }
 
-      const providerClient = createMinimax({ apiKey });
-      const model = providerClient(input.modelId || modelId);
-      if (!model) {
-        return {
-          text: "",
-          finishReason: "error",
-          error: "MINIMAX_MODEL_UNAVAILABLE",
-        };
-      }
+      const callWithProvider = async (
+        providerFactory: typeof createMinimax,
+        baseURL: string,
+      ): Promise<LlmGenerateTextOutput> => {
+        const providerClient = providerFactory({ apiKey, baseURL });
+        const model = providerClient(input.modelId || modelId);
+        if (!model) {
+          return {
+            text: "",
+            finishReason: "error",
+            error: "MINIMAX_MODEL_UNAVAILABLE",
+          };
+        }
 
-      try {
         const payload = await callGenerateText({
           model,
           prompt,
@@ -147,29 +155,66 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
             }
           | undefined;
 
+        const text = normalizeTextOutput(payload.text);
+        const finishReason = (payload.finishReason ?? "stop") as
+          | "stop"
+          | "length"
+          | "content-filter"
+          | "tool-calls"
+          | "error";
+
+        // Some SDK responses can return finishReason=error without a thrown exception.
+        if (finishReason === "error" && text.length === 0) {
+          return {
+            text: "",
+            finishReason: "error",
+            error: `MINIMAX_ERROR_OUTPUT_WITHOUT_DETAILS [mode=${apiMode}, baseURL=${baseURL}]`,
+            usage: {
+              inputTokens: usage?.inputTokens,
+              outputTokens: usage?.outputTokens,
+              totalTokens: usage?.totalTokens,
+            },
+          };
+        }
+
         return {
-          text: normalizeTextOutput(payload.text),
-          finishReason: (payload.finishReason ?? "stop") as
-            | "stop"
-            | "length"
-            | "content-filter"
-            | "tool-calls"
-            | "error",
+          text,
+          finishReason,
           usage: {
             inputTokens: usage?.inputTokens,
             outputTokens: usage?.outputTokens,
             totalTokens: usage?.totalTokens,
           },
         };
-      } catch (error) {
-        const errorDetails = extractErrorDetails(error);
-        return {
-          text: "",
-          finishReason: "error",
-          error: buildErrorMessage(error, errorDetails),
-          errorDetails,
-        };
+      };
+
+      const attempts: Array<{ mode: "anthropic" | "openai"; baseURL: string }> =
+        apiMode === "anthropic"
+          ? anthropicBaseUrls.map((baseURL) => ({ mode: "anthropic" as const, baseURL }))
+          : [];
+      let lastError: unknown = null;
+      let lastAttempt: { mode: "anthropic" | "openai"; baseURL: string } | null = null;
+
+      for (const attempt of attempts) {
+        try {
+          lastAttempt = attempt;
+          if (attempt.mode === "anthropic") {
+            return await callWithProvider(createMinimax, attempt.baseURL);
+          }
+        } catch (error) {
+          lastError = error;
+        }
       }
+
+      const details = extractErrorDetails(lastError);
+      return {
+        text: "",
+        finishReason: "error",
+        error: `${buildErrorMessage(lastError, details)}${
+          lastAttempt ? ` [mode=${lastAttempt.mode}, baseURL=${lastAttempt.baseURL}]` : ""
+        }`,
+        errorDetails: details,
+      };
     },
   };
 }

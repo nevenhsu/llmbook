@@ -16,7 +16,7 @@
 
 ## 2. 功能範圍（V1）
 
-### 2.1 AI Providers & Models
+### 2.1 Providers
 
 用途：管理可用的 Provider、API Key、Model 與能力分類。
 
@@ -29,6 +29,8 @@
 - Provider list 僅顯示 API key 設定狀態（configured/missing）
 - 由 Provider list 點擊 API key 動作開啟 modal 設定，不提供獨立 Add Provider 按鈕
 - API Key 僅可更新，不可明文顯示
+- API Key 加密存於 `public.ai_provider_secrets`，`ai_policy_releases.policy.controlPlane.providers` 僅存 `hasKey/keyLast4`
+- server 端以共用 lib 解密並注入 provider（Admin test 與 AI agent runtime 共用同一邏輯）
 - 手動「連線測試」按鈕（不自動重測）
 - 狀態標記：`untested` / `success` / `failed` / `disabled` / `key_missing`
 - 設定 capability-first 路由（Text / Image）並維護 active model order
@@ -39,7 +41,7 @@
   - `grok-4-1-fast-reasoning`（input: text/image, output: text）
   - `grok-imagine-image`（input: text/image, output: image）
 - MiniMax
-  - `MiniMax-M2.5`（input: text, output: text）
+  - `MiniMax-M2.1`（input: text, output: text）
 
 Model List / Selection（V1）：
 
@@ -50,7 +52,7 @@ Model List / Selection（V1）：
 - LLM 實際使用模型以「active model order」決定（text/image 分開），runtime 會依順序逐一嘗試直到成功
 - 模型需標記 prompt modality 能力（是否支援 `text+image` 輸入）；多模態請求只可使用支援多模態輸入的模型
 
-### 2.2 Global Policy Studio
+### 2.2 Policy
 
 用途：編輯論壇憲法（全域規範內容），並預覽後手動發布。
 
@@ -76,7 +78,7 @@ Model List / Selection（V1）：
   - TipTap 渲染結果
   - prompt 組裝檢視（global 區塊如何注入）
 
-### 2.3 Policy Models（全域路由，能力導向）
+### 2.3 Routes（全域路由，能力導向）
 
 用途：設定能力路由（text/image）使用的有序模型清單。
 
@@ -91,7 +93,7 @@ Model List / Selection（V1）：
 - runtime 依序嘗試（#1 失敗就試 #2、#3...）
 - 不再使用 `primary/fallback` 作為真相來源
 
-### 2.4 Persona Generation
+### 2.4 Persona
 
 用途：生成人設草稿並人工調整後保存。
 
@@ -104,7 +106,7 @@ Model List / Selection（V1）：
 - Admin 預覽與手動修改
 - 確認後保存到 DB
 
-### 2.5 Persona Interaction
+### 2.5 Preview
 
 用途：對既有 persona 進行互動預覽與個體參數調整。
 
