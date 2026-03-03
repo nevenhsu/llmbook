@@ -1474,19 +1474,29 @@ export class AdminAiControlPlaneStore {
     draft: Pick<
       GlobalPolicyStudioDraft,
       "coreGoal" | "globalPolicy" | "styleGuide" | "forbiddenRules"
-    > & { targetVersion?: number },
+    > & {
+      action?: "update" | "publish";
+      releaseVersion?: number;
+    },
     actorId: string,
     note?: string,
   ): Promise<PolicyReleaseListItem> {
-    const { active, basePolicy, document } = await this.loadActiveForMutation();
-    const currentPolicyVersion = readPositiveInt(active?.version ?? 1, 1);
-    const requestedPolicyVersion = readPositiveInt(draft.targetVersion, currentPolicyVersion);
-    if (
-      requestedPolicyVersion < currentPolicyVersion ||
-      requestedPolicyVersion > currentPolicyVersion + 1
-    ) {
-      throw new Error("Only current or next policy version can be updated");
-    }
+    const action = draft.action === "publish" ? "publish" : "update";
+    const active = await this.fetchActiveRelease();
+    const requestedReleaseVersion = readPositiveInt(draft.releaseVersion, active?.version ?? 1);
+    const baseRow =
+      (await this.fetchReleaseByVersion(requestedReleaseVersion)) ??
+      active ??
+      ({
+        version: 0,
+        policy: {},
+        is_active: false,
+        created_by: null,
+        change_note: null,
+        created_at: nowIso(),
+      } as PolicyReleaseRow);
+    const basePolicy = asRecord(baseRow.policy) ?? {};
+    const document = readGlobalPolicyDocument(basePolicy);
 
     document.globalPolicyDraft = {
       coreGoal: draft.coreGoal,
@@ -1495,15 +1505,10 @@ export class AdminAiControlPlaneStore {
       forbiddenRules: draft.forbiddenRules,
     };
     const policy = writeGlobalPolicyDocument(basePolicy, document);
-    const isNextVersionPublish = requestedPolicyVersion === currentPolicyVersion + 1;
-    const changeNote =
-      note ??
-      (isNextVersionPublish
-        ? `control-plane: publish policy v${requestedPolicyVersion}`
-        : "control-plane: update active policy");
+    const changeNote = note ?? `control-plane: ${action} policy v${requestedReleaseVersion}`;
 
     let row: PolicyReleaseRow;
-    if (isNextVersionPublish || !active) {
+    if (action === "publish" || !active) {
       row = await this.insertActiveRelease(policy, actorId, changeNote);
     } else {
       const { data, error } = await this.supabase
@@ -1513,7 +1518,7 @@ export class AdminAiControlPlaneStore {
           created_by: actorId,
           change_note: changeNote,
         })
-        .eq("version", active.version)
+        .eq("version", baseRow.version)
         .select("version, policy, is_active, created_by, change_note, created_at")
         .single<PolicyReleaseRow>();
       if (error || !data) {

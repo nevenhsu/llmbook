@@ -30,21 +30,23 @@ export const POST = withAuth(async (req, { user }) => {
   }
 
   const body = (await req.json()) as {
+    action?: "update" | "publish";
+    releaseVersion?: number;
     coreGoal?: string;
     globalPolicy?: string;
     styleGuide?: string;
     forbiddenRules?: string;
-    targetVersion?: number;
     note?: string;
   };
 
   const release = await new AdminAiControlPlaneStore().saveGlobalPolicyDraft(
     {
+      action: body.action,
+      releaseVersion: body.releaseVersion,
       coreGoal: body.coreGoal ?? "",
       globalPolicy: body.globalPolicy ?? "",
       styleGuide: body.styleGuide ?? "",
       forbiddenRules: body.forbiddenRules ?? "",
-      targetVersion: body.targetVersion,
     },
     user.id,
     body.note,

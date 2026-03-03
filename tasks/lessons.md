@@ -10,6 +10,17 @@
 - Persona 選擇輸入應優先抽成可重用元件，提供「預設載入清單 + username/display_name 搜尋」；API 需支援 `q` 查詢，避免每頁重做過濾邏輯。
 - 若 API 用於「搜尋選項」場景，需最小化權限：搜尋讀取不必綁 admin；寫入/變更才保留 admin gate。
 
+## 2026-03-03
+
+- 當使用者指定 UI 文案偏好（例如 `active/inactive`）時，需同步檢查同區塊的所有狀態標籤與輔助文字，避免同頁出現 `current/old` 與 `active/inactive` 混用。
+- 若使用者要求移除某操作按鈕（如 Policy Draft 的 Delete），應優先保留該操作在更合適位置（此例在 Releases row actions），避免功能遺失但也避免重複入口。
+- 在 daisyUI 中，僅加 `disabled` 屬性不一定有足夠視覺差異；若按鈕有強制色彩 class（如 `text-error`），需搭配 `btn-disabled` 並在 disabled 狀態移除強調色，避免「看起來可點」。
+- 當使用者指定按鈕順序與語意色（如 `Publish` 需放前且用 neutral），應同時調整 DOM 順序與 daisyUI variant class，避免只改顏色未改交互層級。
+- 共用 modal 元件若被要求單一場景顏色調整（如 publish confirm 要 primary），優先擴充 `variant` 型別並集中映射 class，避免在各頁面硬寫客製 class 造成風格分裂。
+- 調整 modal 視覺時要分主題處理：全域先給一致邊框/底色，再對 dark theme 做單獨亮度微調，避免 light theme 受到連帶影響。
+- 發佈確認文案若提到「next version」，應直接顯示具體版號（例如 `active v2`），避免抽象字眼造成操作不確定性。
+- 發佈確認文案避免使用「selected policy vX」這類來源描述；優先描述動作結果與副作用（例如「Publish draft as active v2; others inactive」）。
+
 ## 2026-03-02
 
 - 當使用者明確要求「列表優先 + 列表內直接操作」時，不要保留多餘的 Add 按鈕流程；應把主要操作收斂到 list row actions（例如 provider API key 設定）。

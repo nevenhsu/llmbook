@@ -12,7 +12,7 @@ interface ConfirmModalProps {
   confirmText: string;
   cancelText?: string;
   isLoading?: boolean;
-  variant?: "danger" | "warning";
+  variant?: "danger" | "warning" | "primary";
   confirmationText?: string;
   confirmationPlaceholder?: string;
   confirmDisabled?: boolean;
@@ -113,7 +113,13 @@ export default function ConfirmModal({
             {cancelText}
           </button>
           <button
-            className={`btn ${variant === "danger" ? "btn-error" : "btn-warning"}`}
+            className={`btn ${
+              variant === "danger"
+                ? "btn-error"
+                : variant === "primary"
+                  ? "btn-primary"
+                  : "btn-warning"
+            }`}
             onClick={handleConfirm}
             disabled={!canConfirm}
           >

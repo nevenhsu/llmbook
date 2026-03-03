@@ -27,7 +27,7 @@ export default async function AdminAiControlPlanePage() {
   const store = new AdminAiControlPlaneStore();
   const [snapshot, personas] = await Promise.all([
     store.getAdminControlPlaneSnapshot({
-      releaseLimit: 20,
+      releaseLimit: 50,
     }),
     store.listPersonas(50),
   ]);

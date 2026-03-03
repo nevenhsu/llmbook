@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiDelete, apiFetchJson, apiPatch, apiPost, apiPut } from "@/lib/api/fetch-json";
 import { getRouteModelIdsFromActiveOrder } from "@/lib/ai/admin/active-model-order";
@@ -49,10 +49,9 @@ export function useAiControlPlane({
     (max, item) => (item.version > max ? item.version : max),
     1,
   );
-  const currentPolicyVersion = activeRelease?.version ?? latestPolicyVersion;
 
   const [draft, setDraft] = useState<DraftState>({
-    selectedVersion: latestPolicyVersion,
+    selectedVersion: activeRelease?.version ?? latestPolicyVersion,
     coreGoal: latestRelease?.globalPolicyDraft.coreGoal ?? "",
     globalPolicy: latestRelease?.globalPolicyDraft.globalPolicy ?? "",
     styleGuide: latestRelease?.globalPolicyDraft.styleGuide ?? "",
@@ -132,7 +131,7 @@ export function useAiControlPlane({
   const refreshAll = async () => {
     try {
       const snapshot = await apiFetchJson<AdminControlPlaneSnapshot>(
-        "/api/admin/ai/control-plane?releaseLimit=20",
+        "/api/admin/ai/control-plane?releaseLimit=50",
       );
       setProviders(snapshot.providers);
       setModels(snapshot.models);
@@ -364,22 +363,17 @@ export function useAiControlPlane({
   };
 
   const createDraft = async () => {
-    if (draft.selectedVersion !== currentPolicyVersion) {
-      toast.error(
-        "Only latest active version can be updated. Use rollback for historical version.",
-      );
-      return;
-    }
     try {
       const res = await apiPost<{ item: PolicyReleaseListItem }>("/api/admin/ai/policy-releases", {
-        targetVersion: draft.selectedVersion,
+        action: "update",
+        releaseVersion: draft.selectedVersion,
         coreGoal: draft.coreGoal,
         globalPolicy: draft.globalPolicy,
         styleGuide: draft.styleGuide,
         forbiddenRules: draft.forbiddenRules,
         note: draft.note,
       });
-      toast.success(`Policy saved (v${res.item.version})`);
+      toast.success(`Policy updated (v${res.item.version})`);
       setPolicyPreviewInput((prev) => ({ ...prev, releaseId: String(res.item.version) }));
       await refreshAll();
     } catch (error) {
@@ -388,14 +382,10 @@ export function useAiControlPlane({
   };
 
   const publishNextVersion = async () => {
-    const nextPolicyVersion = currentPolicyVersion + 1;
-    if (draft.selectedVersion !== nextPolicyVersion) {
-      toast.error("Select next version first before publish.");
-      return;
-    }
     try {
       const res = await apiPost<{ item: PolicyReleaseListItem }>("/api/admin/ai/policy-releases", {
-        targetVersion: draft.selectedVersion,
+        action: "publish",
+        releaseVersion: draft.selectedVersion,
         coreGoal: draft.coreGoal,
         globalPolicy: draft.globalPolicy,
         styleGuide: draft.styleGuide,
@@ -450,6 +440,32 @@ export function useAiControlPlane({
       toast.error(error instanceof Error ? error.message : "Failed to delete release");
     }
   };
+
+  const viewPolicyRelease = (releaseId: number) => {
+    const selected = releases.find((item) => item.version === releaseId);
+    if (!selected) {
+      toast.error("Release not found");
+      return;
+    }
+    setDraft((prev) => ({
+      ...prev,
+      selectedVersion: selected.version,
+      coreGoal: selected.globalPolicyDraft.coreGoal ?? "",
+      globalPolicy: selected.globalPolicyDraft.globalPolicy ?? "",
+      styleGuide: selected.globalPolicyDraft.styleGuide ?? "",
+      forbiddenRules: selected.globalPolicyDraft.forbiddenRules ?? "",
+    }));
+    setPolicyPreviewInput((prev) => ({ ...prev, releaseId: String(selected.version) }));
+  };
+
+  useEffect(() => {
+    if (!releases.some((item) => item.version === draft.selectedVersion)) {
+      const fallback = activeRelease ?? releases[0] ?? null;
+      if (fallback) {
+        viewPolicyRelease(fallback.version);
+      }
+    }
+  }, [releases, activeRelease, draft.selectedVersion]);
 
   const runPersonaGenerationPreview = async () => {
     if (!personaGeneration.modelId) {
@@ -650,6 +666,7 @@ export function useAiControlPlane({
     runPolicyPreview,
     rollbackRelease,
     deletePolicyRelease,
+    viewPolicyRelease,
     runPersonaGenerationPreview,
     savePersonaFromGeneration,
     runInteractionPreview,

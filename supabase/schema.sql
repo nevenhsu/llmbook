@@ -612,14 +612,6 @@ CREATE TABLE public.ai_models (
   CONSTRAINT ai_models_metadata_object_chk CHECK (jsonb_typeof(metadata) = 'object')
 );
 
--- AI model routes by scope
-CREATE TABLE public.ai_model_routes (
-  scope text PRIMARY KEY,
-  ordered_model_ids text[] NOT NULL DEFAULT '{}',
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT ai_model_routes_scope_chk CHECK (scope IN ('global_default', 'image'))
-);
-
 -- AI Policy Releases (policy control plane)
 CREATE TABLE public.ai_policy_releases (
   version bigint generated always as identity PRIMARY KEY,
@@ -1523,7 +1515,6 @@ ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_provider_secrets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_model_routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
@@ -1990,17 +1981,6 @@ CREATE POLICY "Service role can manage ai models" ON public.ai_models
   USING (true)
   WITH CHECK (true);
 
-CREATE POLICY "Service role can read ai model routes" ON public.ai_model_routes
-  FOR SELECT
-  TO service_role
-  USING (true);
-
-CREATE POLICY "Service role can manage ai model routes" ON public.ai_model_routes
-  FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
 -- ============================================================================
 -- COMMENTS
 -- ============================================================================
@@ -2021,7 +2001,6 @@ COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane re
 COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (AES-GCM payload fields). Service role only.';
 COMMENT ON TABLE public.ai_providers IS 'AI provider metadata/status for control plane.';
 COMMENT ON TABLE public.ai_models IS 'AI model metadata/status/order for control plane.';
-COMMENT ON TABLE public.ai_model_routes IS 'Route scopes mapped to ordered model ids for control plane.';
 COMMENT ON TABLE public.ai_thread_memories IS 'Short-term per persona-thread memory entries with TTL and configurable per-scope max_items.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
@@ -2090,12 +2069,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.ai_policy_releases
 );
-
-INSERT INTO public.ai_model_routes (scope, ordered_model_ids, updated_at)
-VALUES
-  ('global_default', '{}', now()),
-  ('image', '{}', now())
-ON CONFLICT (scope) DO NOTHING;
 
 -- ============================================================================
 -- STORAGE

@@ -1,3 +1,43 @@
+## 2026-03-03 Admin Control Plane Policy UI Refactor Plan
+
+### Plan
+
+- [x] 移除 Header 的 version selector / Update / Rollback / Publish（保留 refresh）
+- [x] 調整 Policy 模組排列為 `Releases -> Policy Draft`，移除 `Manual Preview` card
+- [x] Releases 清單改為 version DESC，並加入每頁 5 筆 pagination UI
+- [x] Releases actions 改為 `View / Rollback / Delete`，依 current/old 狀態控制可用性
+- [x] Policy card 右上加入 `Update / Delete / Publish`，並加上 delete/publish confirm modal
+- [x] 更新前端 hook 與 API：`Update` 可更新 current/old，`Publish` 以 insert next version 並使其他版本 inactive
+- [x] 執行 targeted 驗證（typecheck + policy release 相關測試）並填寫 Review
+
+### Check-in
+
+- [x] Step 1：重構 `AiControlPlanePanel` header，移除版本操作並把 modal 管理收斂到 Policy 區塊
+- [x] Step 2：重構 `PolicyStudioSection` 版面與卡片順序，新增 releases pagination + actions 行為
+- [x] Step 3：擴充 `useAiControlPlane` 的 policy 操作 API（view/update/publish/delete/rollback）與 enable/disable 判斷
+- [x] Step 4：調整 `policy-releases` route/store 邏輯，允許更新指定 release 與顯式 publish
+- [x] Step 5：跑驗證並回填 Review 結果與風險
+
+### Review
+
+- 實作摘要：
+  - `AiControlPlanePanel` header 已移除 version selector / Update / Rollback / Publish，只保留 refresh。
+  - Policy 區塊重排為 `Releases -> Policy Draft`，並移除 `Manual Preview` card。
+  - Releases 改為 version DESC，新增每頁 5 筆 pagination（Prev/Next + page indicator）。
+  - Releases actions 套用狀態矩陣：current 只能 View；old 可 View/Rollback/Delete。
+  - Policy Draft 右上新增 `Update / Delete / Publish`；Delete（old only）與 Publish 均有 confirm modal。
+  - 後端 `POST /api/admin/ai/policy-releases` 新增 `action` 與 `releaseVersion`：
+    - `action=update` 可更新指定 release（current 或 old）。
+    - `action=publish` 會 insert 新 active release，並將其他 release 設為 inactive。
+- 驗證命令：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "AiControlPlanePanel|PolicyStudioSection|useAiControlPlane|policy-releases/route|control-plane-store|admin/ai/control-plane/page" -n || true`
+  - `npx vitest run 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts'`
+  - `npm run lint -- src/components/admin/AiControlPlanePanel.tsx src/components/admin/control-plane/sections/PolicyStudioSection.tsx src/hooks/admin/useAiControlPlane.ts src/app/api/admin/ai/policy-releases/route.ts src/lib/ai/admin/control-plane-store.ts src/app/admin/ai/control-plane/page.tsx`
+- 驗證結果：
+  - tsc（針對本次變更檔案過濾）：無錯誤。
+  - vitest：1 file / 2 tests passed。
+  - lint：失敗（既有環境問題：`react/display-name` rule loader crash）。
+
 # AI Control Plane Update Todo (Providers/Policy/Routes/Persona/Preview)
 
 ## Plan

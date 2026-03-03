@@ -171,6 +171,10 @@
     backdrop-filter: blur(6px);
   }
 
+  .modal-box {
+    @apply border-neutral/80 border;
+  }
+
   .modal-backdrop {
     background-color: transparent !important;
   }
