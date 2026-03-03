@@ -561,6 +561,65 @@ CREATE TABLE public.ai_provider_secrets (
   CONSTRAINT ai_provider_secrets_key_last4_chk CHECK (key_last4 IS NULL OR char_length(key_last4) <= 4)
 );
 
+-- AI providers metadata/status (control plane inventory)
+CREATE TABLE public.ai_providers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_key text NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  sdk_package text NOT NULL,
+  status text NOT NULL DEFAULT 'active',
+  test_status text NOT NULL DEFAULT 'untested',
+  last_api_error_code text,
+  last_api_error_message text,
+  last_api_error_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_providers_status_chk CHECK (status IN ('active', 'disabled')),
+  CONSTRAINT ai_providers_test_status_chk
+    CHECK (test_status IN ('untested', 'success', 'failed', 'disabled', 'key_missing'))
+);
+
+-- AI models metadata/status/order (control plane inventory)
+CREATE TABLE public.ai_models (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_id uuid NOT NULL REFERENCES public.ai_providers(id) ON DELETE CASCADE,
+  model_key text NOT NULL,
+  display_name text NOT NULL,
+  capability text NOT NULL,
+  status text NOT NULL DEFAULT 'disabled',
+  test_status text NOT NULL DEFAULT 'untested',
+  lifecycle_status text NOT NULL DEFAULT 'active',
+  display_order int NOT NULL DEFAULT 0,
+  last_error_kind text,
+  last_error_code text,
+  last_error_message text,
+  last_error_at timestamptz,
+  supports_input boolean NOT NULL DEFAULT true,
+  supports_image_input_prompt boolean NOT NULL DEFAULT false,
+  supports_output boolean NOT NULL DEFAULT true,
+  context_window int,
+  max_output_tokens int,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_models_provider_model_unique UNIQUE (provider_id, model_key),
+  CONSTRAINT ai_models_capability_chk CHECK (capability IN ('text_generation', 'image_generation')),
+  CONSTRAINT ai_models_status_chk CHECK (status IN ('active', 'disabled')),
+  CONSTRAINT ai_models_test_status_chk CHECK (test_status IN ('untested', 'success', 'failed')),
+  CONSTRAINT ai_models_lifecycle_status_chk CHECK (lifecycle_status IN ('active', 'retired')),
+  CONSTRAINT ai_models_last_error_kind_chk
+    CHECK (last_error_kind IS NULL OR last_error_kind IN ('provider_api', 'model_retired', 'other')),
+  CONSTRAINT ai_models_metadata_object_chk CHECK (jsonb_typeof(metadata) = 'object')
+);
+
+-- AI model routes by scope
+CREATE TABLE public.ai_model_routes (
+  scope text PRIMARY KEY,
+  ordered_model_ids text[] NOT NULL DEFAULT '{}',
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_model_routes_scope_chk CHECK (scope IN ('global_default', 'image'))
+);
+
 -- AI Policy Releases (policy control plane)
 CREATE TABLE public.ai_policy_releases (
   version bigint generated always as identity PRIMARY KEY,
@@ -718,6 +777,10 @@ CREATE INDEX idx_ai_review_queue_persona_created
   ON public.ai_review_queue(persona_id, created_at DESC);
 CREATE INDEX idx_ai_policy_releases_active_version
   ON public.ai_policy_releases(is_active, version DESC);
+CREATE INDEX idx_ai_models_capability_order
+  ON public.ai_models(capability, display_order ASC, created_at ASC);
+CREATE INDEX idx_ai_models_provider_id
+  ON public.ai_models(provider_id);
 
 -- AI review events
 CREATE INDEX idx_ai_review_events_review_created
@@ -1458,6 +1521,9 @@ ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_provider_secrets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_providers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_model_routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
@@ -1902,6 +1968,39 @@ CREATE POLICY "Service role can manage provider secrets" ON public.ai_provider_s
   USING (true)
   WITH CHECK (true);
 
+CREATE POLICY "Service role can read ai providers" ON public.ai_providers
+  FOR SELECT
+  TO service_role
+  USING (true);
+
+CREATE POLICY "Service role can manage ai providers" ON public.ai_providers
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Service role can read ai models" ON public.ai_models
+  FOR SELECT
+  TO service_role
+  USING (true);
+
+CREATE POLICY "Service role can manage ai models" ON public.ai_models
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Service role can read ai model routes" ON public.ai_model_routes
+  FOR SELECT
+  TO service_role
+  USING (true);
+
+CREATE POLICY "Service role can manage ai model routes" ON public.ai_model_routes
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
 -- ============================================================================
 -- COMMENTS
 -- ============================================================================
@@ -1920,6 +2019,9 @@ COMMENT ON TABLE public.ai_runtime_events IS 'Best-effort runtime event stream f
 COMMENT ON TABLE public.ai_worker_status IS 'Latest heartbeat and circuit breaker status per AI worker.';
 COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
 COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (AES-GCM payload fields). Service role only.';
+COMMENT ON TABLE public.ai_providers IS 'AI provider metadata/status for control plane.';
+COMMENT ON TABLE public.ai_models IS 'AI model metadata/status/order for control plane.';
+COMMENT ON TABLE public.ai_model_routes IS 'Route scopes mapped to ordered model ids for control plane.';
 COMMENT ON TABLE public.ai_thread_memories IS 'Short-term per persona-thread memory entries with TTL and configurable per-scope max_items.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
@@ -1988,6 +2090,12 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.ai_policy_releases
 );
+
+INSERT INTO public.ai_model_routes (scope, ordered_model_ids, updated_at)
+VALUES
+  ('global_default', '{}', now()),
+  ('image', '{}', now())
+ON CONFLICT (scope) DO NOTHING;
 
 -- ============================================================================
 -- STORAGE

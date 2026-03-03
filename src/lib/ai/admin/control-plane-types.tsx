@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { Server, FileText, Route, UserPlus, MessageSquare } from "lucide-react";
+import { Server, FileText, UserPlus, MessageSquare } from "lucide-react";
 import type {
   AiModelConfig,
-  AiModelRoute,
   AiProviderConfig,
   PolicyReleaseListItem,
   PreviewResult,
@@ -19,7 +18,7 @@ export type PersonaItem = {
 };
 
 export type DraftState = {
-  policyVersion: number;
+  selectedVersion: number;
   coreGoal: string;
   globalPolicy: string;
   styleGuide: string;
@@ -27,14 +26,11 @@ export type DraftState = {
   note: string;
 };
 
-export type ControlPlaneSection = "providers" | "policy" | "routes" | "persona" | "preview";
-
-export type RouteDraftState = Record<AiModelRoute["scope"], { orderedModelIds: string[] }>;
+export type ControlPlaneSection = "providers" | "policy" | "persona" | "preview";
 
 export const SECTION_ICONS: Record<ControlPlaneSection, ReactNode> = {
   providers: <Server className="h-4 w-4" />,
   policy: <FileText className="h-4 w-4" />,
-  routes: <Route className="h-4 w-4" />,
   persona: <UserPlus className="h-4 w-4" />,
   preview: <MessageSquare className="h-4 w-4" />,
 };
@@ -51,11 +47,6 @@ export const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; help
     helper: "Draft, preview, publish, rollback",
   },
   {
-    id: "routes",
-    label: "Routes",
-    helper: "Capability routes (text/image)",
-  },
-  {
     id: "persona",
     label: "Persona",
     helper: "Generate, regenerate, save to DB",
@@ -66,8 +57,6 @@ export const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; help
     helper: "Preview post/comment with persona",
   },
 ];
-
-export const ROUTE_SCOPE_ORDER: Array<AiModelRoute["scope"]> = ["global_default", "image"];
 
 export const SUPPORTED_PROVIDERS = [
   { id: "xai", displayName: "xAI", sdkPackage: "@ai-sdk/xai" },

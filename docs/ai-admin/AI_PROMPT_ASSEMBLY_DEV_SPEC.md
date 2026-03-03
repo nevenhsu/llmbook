@@ -1,6 +1,6 @@
 # AI Prompt Assembly 與 Runtime 開發文本（Dev Spec）
 
-> 開發階段聲明（重要）：目前不做舊設定相容。舊 `global_default_primary/fallback`、`post/comment primary/fallback`、`taskRoutes/default` 必須在開發時一併更新為 capability-first + ordered routes。
+> 狀態聲明（重要）：舊 `global_default_primary/fallback`、`post/comment primary/fallback`、`taskRoutes/default` 已移除。現行統一採 capability-first + ordered routes。
 
 ## 1. 目的
 
@@ -207,7 +207,6 @@ Job 最小欄位：
   - `id`, `provider_id`, `key_ciphertext`, `key_last4`, `rotated_at`, `updated_at`
 - `ai_models`
   - `id`, `provider_id`, `model_key`, `capability(text_generation|image_generation)`, `status`, `supports_input`, `supports_output`, `metadata`, `updated_at`
-- `ai_model_routes`
   - `id`, `route_scope(global_default|image)`, `ordered_model_ids[]`, `updated_at`
 - `ai_policy_releases`
   - `id`, `version`, `status(draft|published)`, `core_goal`, `global_policy`, `style_guide`, `forbidden_rules`, `note`, `created_by`, `created_at`
@@ -221,20 +220,17 @@ Job 最小欄位：
 
 - 若既有 table 與上述責任重疊，V1 應優先整併到既有 schema，不另開新表。
 - 若論壇尚未上線且舊表已無用，可直接 drop 冗餘舊表後統一格式。
-- `persona_engine_config` 視為舊配置來源，V1 退場；provider/model 路由改由 `ai_providers` / `ai_models` / `ai_model_routes` 承接。
+- `persona_engine_config` 視為舊配置來源，V1 退場；provider/model 能力配置改由 `ai_providers` / `ai_models` 承接（`ai_model_routes` 已移除）。
 - 所有 schema 變更需同步更新 migration 與 `supabase/schema.sql`（同 PR）。
 
 ---
 
 ## 9. API 建議（最小集合）
 
-- `GET/POST/PATCH/DELETE /api/admin/ai/providers`
-- `POST /api/admin/ai/providers/:id/test`
-- `GET/POST/PATCH/DELETE /api/admin/ai/models`
-- `GET/PUT /api/admin/ai/model-routes`
-- `GET/POST /api/admin/ai/policy-releases`
+- `GET/POST/PATCH /api/admin/ai/providers`
+- `GET/POST/PATCH/PUT /api/admin/ai/models`
+- `GET/POST/DELETE /api/admin/ai/policy-releases`
 - `POST /api/admin/ai/policy-releases/:id/preview`
-- `POST /api/admin/ai/policy-releases/:id/publish`
 - `POST /api/admin/ai/policy-releases/:id/rollback`
 - `POST /api/admin/ai/persona-generation/preview`
 - `POST /api/admin/ai/personas`

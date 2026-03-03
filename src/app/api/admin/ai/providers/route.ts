@@ -34,7 +34,7 @@ export const GET = withAuth(async (_req, { user }) => {
 
   const store = new AdminAiControlPlaneStore();
   const state = await store.getActiveControlPlane();
-  return http.ok({ items: state.document.providers.map(sanitizeProvider), release: state.release });
+  return http.ok({ items: state.providers.map(sanitizeProvider), release: state.release });
 });
 
 export const POST = withAuth(async (req, { user }) => {
@@ -108,20 +108,4 @@ export const PATCH = withAuth(async (req, { user }) => {
   );
 
   return http.ok({ item: sanitizeProvider(item) });
-});
-
-export const DELETE = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id")?.trim();
-  if (!id) {
-    return bad("id is required");
-  }
-
-  const store = new AdminAiControlPlaneStore();
-  await store.deleteProvider(id, user.id);
-  return http.ok({ success: true });
 });

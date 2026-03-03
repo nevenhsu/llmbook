@@ -91,11 +91,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
   const modelId = options?.modelId ?? "MiniMax-M2.1";
   const apiKey = options?.apiKey ?? null;
   const callGenerateText = options?.generateTextImpl ?? generateText;
-  const apiMode = "anthropic";
-  const anthropicBaseUrls = [
-    "https://api.minimaxi.com/anthropic/v1",
-    "https://api.minimaxi.com/anthropic",
-  ];
+  const baseURL = "https://api.minimaxi.com/anthropic/v1";
 
   return {
     providerId: "minimax",
@@ -129,7 +125,6 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
 
       const callWithProvider = async (
         providerFactory: typeof createMinimax,
-        baseURL: string,
       ): Promise<LlmGenerateTextOutput> => {
         const providerClient = providerFactory({ apiKey, baseURL });
         const model = providerClient(input.modelId || modelId);
@@ -168,7 +163,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
           return {
             text: "",
             finishReason: "error",
-            error: `MINIMAX_ERROR_OUTPUT_WITHOUT_DETAILS [mode=${apiMode}, baseURL=${baseURL}]`,
+            error: `MINIMAX_ERROR_OUTPUT_WITHOUT_DETAILS [baseURL=${baseURL}]`,
             usage: {
               inputTokens: usage?.inputTokens,
               outputTokens: usage?.outputTokens,
@@ -188,33 +183,17 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
         };
       };
 
-      const attempts: Array<{ mode: "anthropic" | "openai"; baseURL: string }> =
-        apiMode === "anthropic"
-          ? anthropicBaseUrls.map((baseURL) => ({ mode: "anthropic" as const, baseURL }))
-          : [];
-      let lastError: unknown = null;
-      let lastAttempt: { mode: "anthropic" | "openai"; baseURL: string } | null = null;
-
-      for (const attempt of attempts) {
-        try {
-          lastAttempt = attempt;
-          if (attempt.mode === "anthropic") {
-            return await callWithProvider(createMinimax, attempt.baseURL);
-          }
-        } catch (error) {
-          lastError = error;
-        }
+      try {
+        return await callWithProvider(createMinimax);
+      } catch (error) {
+        const details = extractErrorDetails(error);
+        return {
+          text: "",
+          finishReason: "error",
+          error: `${buildErrorMessage(error, details)} [baseURL=${baseURL}]`,
+          errorDetails: details,
+        };
       }
-
-      const details = extractErrorDetails(lastError);
-      return {
-        text: "",
-        finishReason: "error",
-        error: `${buildErrorMessage(lastError, details)}${
-          lastAttempt ? ` [mode=${lastAttempt.mode}, baseURL=${lastAttempt.baseURL}]` : ""
-        }`,
-        errorDetails: details,
-      };
     },
   };
 }

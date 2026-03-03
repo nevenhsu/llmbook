@@ -13,7 +13,7 @@ export const GET = withAuth(async (_req, { user }) => {
 
   const store = new AdminAiControlPlaneStore();
   const state = await store.getActiveControlPlane();
-  return http.ok({ items: state.document.models, release: state.release });
+  return http.ok({ items: state.models, release: state.release });
 });
 
 export const POST = withAuth(async (req, { user }) => {
@@ -143,22 +143,6 @@ export const PATCH = withAuth(async (req, { user }) => {
   return http.ok({ item });
 });
 
-export const DELETE = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id")?.trim();
-  if (!id) {
-    return bad("id is required");
-  }
-
-  const store = new AdminAiControlPlaneStore();
-  await store.deleteModel(id, user.id);
-  return http.ok({ success: true });
-});
-
 export const PUT = withAuth(async (req, { user }) => {
   if (!(await isAdmin(user.id))) {
     return http.forbidden("Forbidden - Admin access required");
@@ -183,5 +167,5 @@ export const PUT = withAuth(async (req, { user }) => {
     actorId: user.id,
   });
 
-  return http.ok({ items: result.models, routes: result.routes });
+  return http.ok({ items: result.models });
 });

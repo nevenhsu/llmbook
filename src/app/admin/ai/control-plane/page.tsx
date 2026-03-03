@@ -25,19 +25,19 @@ export default async function AdminAiControlPlanePage() {
   }
 
   const store = new AdminAiControlPlaneStore();
-  const [state, releases, personas] = await Promise.all([
-    store.getActiveControlPlane(),
-    store.listPolicyReleases(20),
+  const [snapshot, personas] = await Promise.all([
+    store.getAdminControlPlaneSnapshot({
+      releaseLimit: 20,
+    }),
     store.listPersonas(50),
   ]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <AiControlPlanePanel
-        initialProviders={state.document.providers}
-        initialModels={state.document.models}
-        initialRoutes={state.document.routes}
-        initialReleases={releases}
+        initialProviders={snapshot.providers}
+        initialModels={snapshot.models}
+        initialReleases={snapshot.releases}
         initialPersonas={personas}
       />
     </div>

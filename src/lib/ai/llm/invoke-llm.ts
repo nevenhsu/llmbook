@@ -8,7 +8,7 @@ import type {
   LlmProviderErrorEvent,
   LlmTaskType,
   LlmUsage,
-  ProviderRoute,
+  ProviderRouteTarget,
 } from "@/lib/ai/llm/types";
 import {
   getPromptRuntimeRecorder,
@@ -288,7 +288,7 @@ async function runOnTarget(input: {
 export async function invokeLLM(input: {
   registry: LlmProviderRegistry;
   taskType?: LlmTaskType;
-  routeOverride?: Partial<ProviderRoute>;
+  routeOverride?: { targets?: ProviderRouteTarget[] };
   modelInput: Omit<LlmGenerateTextInput, "modelId">;
   entityId: string;
   timeoutMs?: number;
@@ -300,9 +300,8 @@ export async function invokeLLM(input: {
   const taskType = input.taskType ?? "generic";
   const timeoutMs = Math.max(1, input.timeoutMs ?? 12_000);
   const retries = Math.max(0, input.retries ?? 1);
-  const route = input.registry.resolveRoute(taskType, input.routeOverride);
+  const targets = input.registry.resolveTargets(input.routeOverride?.targets);
   const path: string[] = [];
-  const targets = route.targets;
   if (targets.length === 0) {
     return {
       text: "",

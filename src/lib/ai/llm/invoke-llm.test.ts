@@ -6,16 +6,10 @@ import type { LlmProvider } from "@/lib/ai/llm/types";
 function registryWith(input: { ordered: LlmProvider[] }): LlmProviderRegistry {
   const primary = input.ordered[0];
   const registry = new LlmProviderRegistry({
-    defaultRoute: { providerId: primary.providerId, modelId: primary.modelId },
-    taskRoutes: {
-      reply: {
-        taskType: "reply",
-        targets: input.ordered.map((provider) => ({
-          providerId: provider.providerId,
-          modelId: provider.modelId,
-        })),
-      },
-    },
+    defaultTargets: input.ordered.map((provider) => ({
+      providerId: provider.providerId,
+      modelId: provider.modelId,
+    })),
   });
   for (const provider of input.ordered) {
     registry.register(provider);

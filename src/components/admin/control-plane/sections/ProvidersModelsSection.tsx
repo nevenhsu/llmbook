@@ -15,12 +15,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Bot, Check, GripVertical, Key, Server } from "lucide-react";
-import type {
-  AiModelConfig,
-  AiModelRoute,
-  AiProviderConfig,
-} from "@/lib/ai/admin/control-plane-store";
+import { Bot, GripVertical, Key, Server, X } from "lucide-react";
+import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-store";
 import { SectionCard } from "../SectionCard";
 import { SUPPORTED_MODELS, SUPPORTED_PROVIDERS } from "@/lib/ai/admin/control-plane-types";
 
@@ -29,7 +25,6 @@ type Capability = "text_generation" | "image_generation";
 export interface ProvidersModelsSectionProps {
   providers: AiProviderConfig[];
   models: AiModelConfig[];
-  routes: AiModelRoute[];
   modelTestImageLinks: Record<string, string>;
   createSupportedProvider: (
     providerKey: (typeof SUPPORTED_PROVIDERS)[number]["id"],
@@ -72,21 +67,18 @@ function readModelTestStatus(model: AiModelConfig | null): "untested" | "success
   return model.testStatus;
 }
 
-function findOrder(modelKey: string, keys: string[]): number | null {
-  const index = keys.indexOf(modelKey);
-  return index >= 0 ? index : null;
-}
-
 function SortableModelRow({
   row,
   rowIndex,
   onRunModelTest,
   onSetModelActive,
+  isTesting,
 }: {
   row: ModelRow;
   rowIndex: number;
-  onRunModelTest: (input: { capability: Capability; modelKey: string }) => void;
+  onRunModelTest: (input: { capability: Capability; modelKey: string }) => Promise<void>;
   onSetModelActive: (modelId: string, nextActive: boolean) => void;
+  isTesting: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.modelKey,
@@ -166,16 +158,17 @@ function SortableModelRow({
               onSetModelActive(row.model.id, event.target.checked);
             }}
           />
-          {row.model?.status === "active" ? <Check className="text-success h-3.5 w-3.5" /> : null}
         </label>
       </td>
       <td>
         <button
           className="btn btn-ghost btn-xs"
-          disabled={!row.providerHasKey}
-          onClick={() => onRunModelTest({ capability: row.capability, modelKey: row.modelKey })}
+          disabled={!row.providerHasKey || isTesting}
+          onClick={() =>
+            void onRunModelTest({ capability: row.capability, modelKey: row.modelKey })
+          }
         >
-          Test
+          {isTesting ? <span className="loading loading-spinner loading-xs" /> : "Test"}
         </button>
       </td>
     </tr>
@@ -185,7 +178,6 @@ function SortableModelRow({
 export function ProvidersModelsSection({
   providers,
   models,
-  routes,
   modelTestImageLinks,
   createSupportedProvider,
   reorderModels,
@@ -196,10 +188,16 @@ export function ProvidersModelsSection({
   const [providerModalKey, setProviderModalKey] =
     useState<(typeof SUPPORTED_PROVIDERS)[number]["id"]>("xai");
   const [providerModalApiKey, setProviderModalApiKey] = useState("");
+  const [imagePreviewModalOpen, setImagePreviewModalOpen] = useState(false);
+  const [imagePreviewModalItem, setImagePreviewModalItem] = useState<{
+    displayName: string;
+    imageUrl: string;
+  } | null>(null);
   const [manualOrder, setManualOrder] = useState<Record<Capability, string[]>>({
     text_generation: [],
     image_generation: [],
   });
+  const [testingModelId, setTestingModelId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -238,20 +236,6 @@ export function ProvidersModelsSection({
     return map;
   }, [models]);
 
-  const routeTextModelKeys = useMemo(() => {
-    const route = routes.find((item) => item.scope === "global_default");
-    return (route?.orderedModelIds ?? [])
-      .map((id) => models.find((item) => item.id === id)?.modelKey ?? "")
-      .filter((key): key is string => Boolean(key));
-  }, [routes, models]);
-
-  const routeImageModelKeys = useMemo(() => {
-    const route = routes.find((item) => item.scope === "image");
-    return (route?.orderedModelIds ?? [])
-      .map((id) => models.find((item) => item.id === id)?.modelKey ?? "")
-      .filter((key): key is string => Boolean(key));
-  }, [routes, models]);
-
   const rowsByCapability = useMemo(() => {
     const rows: Record<Capability, ModelRow[]> = {
       text_generation: [],
@@ -262,20 +246,11 @@ export function ProvidersModelsSection({
       const provider = providerByKey.get(supported.providerId);
       const model = modelByKey.get(supported.modelKey) ?? null;
 
-      const routeOrder =
-        supported.capability === "text_generation"
-          ? findOrder(supported.modelKey, routeTextModelKeys)
-          : findOrder(supported.modelKey, routeImageModelKeys);
-
       const explicitOrder =
         model && typeof model.displayOrder === "number" && Number.isFinite(model.displayOrder)
           ? model.displayOrder
           : null;
-      const metadataOrder =
-        model && typeof model.metadata?.displayOrder === "number"
-          ? model.metadata.displayOrder
-          : null;
-      const orderIndex = explicitOrder ?? metadataOrder ?? routeOrder ?? 99;
+      const orderIndex = explicitOrder ?? 99;
 
       rows[supported.capability].push({
         capability: supported.capability,
@@ -304,7 +279,7 @@ export function ProvidersModelsSection({
     }
 
     return rows;
-  }, [providerByKey, modelByKey, routeTextModelKeys, routeImageModelKeys]);
+  }, [providerByKey, modelByKey]);
 
   useEffect(() => {
     setManualOrder({
@@ -478,7 +453,21 @@ export function ProvidersModelsSection({
                               key={row.modelKey}
                               row={row}
                               rowIndex={rowIndex}
-                              onRunModelTest={(input) => void runModelTest(input)}
+                              isTesting={testingModelId === `${row.capability}:${row.modelKey}`}
+                              onRunModelTest={async (input) => {
+                                const runningId = `${input.capability}:${input.modelKey}`;
+                                if (testingModelId === runningId) {
+                                  return;
+                                }
+                                setTestingModelId(runningId);
+                                try {
+                                  await runModelTest(input);
+                                } finally {
+                                  setTestingModelId((current) =>
+                                    current === runningId ? null : current,
+                                  );
+                                }
+                              }}
                               onSetModelActive={(modelId, nextActive) =>
                                 void setModelActive(modelId, nextActive)
                               }
@@ -504,15 +493,19 @@ export function ProvidersModelsSection({
                         <div className="text-xs font-semibold opacity-70">Test Image URLs</div>
                         <div className="mt-1 space-y-1">
                           {imageTestLinks.map((item) => (
-                            <a
+                            <button
                               key={`image-test-${item.modelKey}`}
-                              className="link link-primary block text-xs break-all"
-                              href={item.imageUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                              className="btn btn-ghost btn-xs justify-start px-0 text-xs"
+                              onClick={() => {
+                                setImagePreviewModalItem({
+                                  displayName: item.displayName,
+                                  imageUrl: item.imageUrl,
+                                });
+                                setImagePreviewModalOpen(true);
+                              }}
                             >
-                              {item.displayName}: open test image
-                            </a>
+                              {item.displayName}: preview test image
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -571,6 +564,52 @@ export function ProvidersModelsSection({
           </form>
         </dialog>
       )}
+
+      {imagePreviewModalOpen && imagePreviewModalItem ? (
+        <dialog className="modal modal-open" open>
+          <div className="modal-box max-w-3xl space-y-3">
+            <button
+              className="btn btn-circle btn-ghost btn-sm absolute top-2 right-2"
+              aria-label="Close"
+              onClick={() => {
+                setImagePreviewModalOpen(false);
+                setImagePreviewModalItem(null);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <h3 className="text-lg font-semibold">{imagePreviewModalItem.displayName} Preview</h3>
+            <div className="bg-base-200/40 overflow-hidden rounded-lg p-2">
+              <img
+                src={imagePreviewModalItem.imageUrl}
+                alt={`${imagePreviewModalItem.displayName} test output`}
+                className="h-auto max-h-[70vh] w-full rounded object-contain"
+              />
+            </div>
+            <div className="modal-action">
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setImagePreviewModalOpen(false);
+                  setImagePreviewModalItem(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button
+              onClick={() => {
+                setImagePreviewModalOpen(false);
+                setImagePreviewModalItem(null);
+              }}
+            >
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </div>
   );
 }

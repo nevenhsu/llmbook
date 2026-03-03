@@ -4,6 +4,7 @@ import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { reportLlmProviderErrorToControlPlane } from "@/lib/ai/admin/runtime-error-reporter";
 import { createMockProvider, type MockProviderMode } from "@/lib/ai/llm/providers/mock-provider";
+import { resolveDefaultRuntimeTarget } from "@/lib/ai/llm/default-model-config";
 import {
   CachedLlmRuntimeConfigProvider,
   type LlmRuntimeConfigProvider,
@@ -168,8 +169,6 @@ export class MockModelAdapter implements ModelAdapter {
 type LlmRuntimeAdapterOptions = {
   provider?: string;
   model?: string;
-  fallbackProvider?: string;
-  fallbackModel?: string;
   enabled?: boolean;
   timeoutMs?: number;
   retries?: number;
@@ -182,9 +181,6 @@ type EnvConfig = {
   timeoutMs: number;
   retries: number;
 };
-
-const DEFAULT_PROVIDER_ID = "xai";
-const DEFAULT_MODEL_ID = "grok-4-1-fast-reasoning";
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -211,8 +207,6 @@ function readEnvConfig(): EnvConfig {
 export class LlmRuntimeAdapter implements ModelAdapter {
   private readonly provider: string;
   private readonly model: string;
-  private readonly fallbackProvider: string | null;
-  private readonly fallbackModel: string | null;
   private readonly enabled: boolean;
   private readonly timeoutMs: number;
   private readonly retries: number;
@@ -222,10 +216,9 @@ export class LlmRuntimeAdapter implements ModelAdapter {
 
   public constructor(options?: LlmRuntimeAdapterOptions) {
     const env = readEnvConfig();
-    this.provider = options?.provider ?? DEFAULT_PROVIDER_ID;
-    this.model = options?.model ?? DEFAULT_MODEL_ID;
-    this.fallbackProvider = options?.fallbackProvider ?? null;
-    this.fallbackModel = options?.fallbackModel ?? null;
+    const resolvedDefaultTarget = resolveDefaultRuntimeTarget();
+    this.provider = options?.provider ?? resolvedDefaultTarget.providerId;
+    this.model = options?.model ?? resolvedDefaultTarget.modelId;
     this.enabled = options?.enabled ?? true;
     this.timeoutMs = Math.max(1, options?.timeoutMs ?? env.timeoutMs);
     this.retries = Math.max(0, options?.retries ?? env.retries);
@@ -253,16 +246,11 @@ export class LlmRuntimeAdapter implements ModelAdapter {
       const routeTargets =
         runtimeConfig?.route?.targets && runtimeConfig.route.targets.length > 0
           ? runtimeConfig.route.targets
-          : [
-              {
-                providerId: this.provider,
-                modelId: input.model ?? this.model,
-              },
-              ...(this.fallbackProvider && this.fallbackModel
-                ? [{ providerId: this.fallbackProvider, modelId: this.fallbackModel }]
-                : []),
-            ];
-      const routePrimary = routeTargets[0];
+          : null;
+      const routePrimary = routeTargets?.[0] ?? {
+        providerId: this.provider,
+        modelId: input.model ?? this.model,
+      };
       const enabled = runtimeConfig?.enabled ?? this.enabled;
       if (!enabled) {
         await emitModelEvent({
@@ -299,9 +287,7 @@ export class LlmRuntimeAdapter implements ModelAdapter {
         timeoutMs: Math.max(1, runtimeConfig?.timeoutMs ?? this.timeoutMs),
         retries: Math.max(0, runtimeConfig?.retries ?? this.retries),
         recorder: this.recorder,
-        routeOverride: {
-          targets: routeTargets,
-        },
+        routeOverride: routeTargets ? { targets: routeTargets } : undefined,
         onProviderError: reportLlmProviderErrorToControlPlane,
         modelInput: {
           prompt: input.prompt,

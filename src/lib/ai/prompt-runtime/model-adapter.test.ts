@@ -48,13 +48,7 @@ describe("LlmRuntimeAdapter", () => {
 
   it("uses primary provider via registry", async () => {
     const registry = new LlmProviderRegistry({
-      defaultRoute: { providerId: "primary", modelId: "p1" },
-      taskRoutes: {
-        generic: {
-          taskType: "generic",
-          targets: [{ providerId: "primary", modelId: "p1" }],
-        },
-      },
+      defaultTargets: [{ providerId: "primary", modelId: "p1" }],
     });
     registry.register({
       providerId: "primary",
@@ -78,16 +72,10 @@ describe("LlmRuntimeAdapter", () => {
 
   it("falls back to secondary provider when primary fails", async () => {
     const registry = new LlmProviderRegistry({
-      defaultRoute: { providerId: "primary", modelId: "p1" },
-      taskRoutes: {
-        generic: {
-          taskType: "generic",
-          targets: [
-            { providerId: "primary", modelId: "p1" },
-            { providerId: "secondary", modelId: "s1" },
-          ],
-        },
-      },
+      defaultTargets: [
+        { providerId: "primary", modelId: "p1" },
+        { providerId: "secondary", modelId: "s1" },
+      ],
     });
     registry.register({
       providerId: "primary",
@@ -108,8 +96,6 @@ describe("LlmRuntimeAdapter", () => {
       enabled: true,
       provider: "primary",
       model: "p1",
-      fallbackProvider: "secondary",
-      fallbackModel: "s1",
       retries: 0,
       registry,
     });
@@ -121,16 +107,10 @@ describe("LlmRuntimeAdapter", () => {
 
   it("returns fail-safe empty output when both providers fail", async () => {
     const registry = new LlmProviderRegistry({
-      defaultRoute: { providerId: "primary", modelId: "p1" },
-      taskRoutes: {
-        generic: {
-          taskType: "generic",
-          targets: [
-            { providerId: "primary", modelId: "p1" },
-            { providerId: "secondary", modelId: "s1" },
-          ],
-        },
-      },
+      defaultTargets: [
+        { providerId: "primary", modelId: "p1" },
+        { providerId: "secondary", modelId: "s1" },
+      ],
     });
     registry.register({
       providerId: "primary",
@@ -153,8 +133,6 @@ describe("LlmRuntimeAdapter", () => {
       enabled: true,
       provider: "primary",
       model: "p1",
-      fallbackProvider: "secondary",
-      fallbackModel: "s1",
       retries: 0,
       registry,
     });
@@ -165,18 +143,9 @@ describe("LlmRuntimeAdapter", () => {
     expect(result.errorMessage).toContain("secondary failed");
   });
 
-  it("uses DB runtime config route and treats adapter env as fallback", async () => {
+  it("uses DB runtime config route", async () => {
     const registry = new LlmProviderRegistry({
-      defaultRoute: { providerId: "env-primary", modelId: "env-model" },
-      taskRoutes: {
-        reply: {
-          taskType: "reply",
-          targets: [
-            { providerId: "db-primary", modelId: "db-model" },
-            { providerId: "db-secondary", modelId: "db-fallback" },
-          ],
-        },
-      },
+      defaultTargets: [{ providerId: "env-primary", modelId: "env-model" }],
     });
     registry.register({
       providerId: "env-primary",
@@ -218,8 +187,6 @@ describe("LlmRuntimeAdapter", () => {
       enabled: true,
       provider: "env-primary",
       model: "env-model",
-      fallbackProvider: "env-secondary",
-      fallbackModel: "env-fallback",
       retries: 0,
       registry,
       configProvider,
@@ -238,7 +205,7 @@ describe("LlmRuntimeAdapter", () => {
 
   it("routes with image capability when metadata requests image_generation", async () => {
     const registry = new LlmProviderRegistry({
-      defaultRoute: { providerId: "env-primary", modelId: "env-model" },
+      defaultTargets: [{ providerId: "env-primary", modelId: "env-model" }],
     });
     registry.register({
       providerId: "db-image",

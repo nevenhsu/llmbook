@@ -57,3 +57,4 @@
 - 錯誤訊息合併時要把空字串視為無效值；若 `event.error` 或 `llmResult.error` 為 `\"\"`，必須改用可診斷 fallback，否則 UI 會退回顯示泛用錯誤造成誤判。
 - 供應商回傳的泛用錯誤字串（如 `Model test failed`）不可原樣顯示；要在 server 端嘗試拼接 `status/code/type` 細節，確保 admin 能直接診斷是 key、endpoint 或 model 問題。
 - 最小 token 的 provider 健康檢查不應強依賴「文字輸出非空」；只要 provider 回傳無 `error` 且 `finishReason != error` 即視為可用，避免像 MiniMax 這類 `finishReason=length` 但 text 空字串被誤判失敗。
+- MiniMax 端點名稱容易混淆，實作與錯誤訊息必須固定使用 `api.minimaxi.com`（含 `i`）並在診斷訊息帶出實際 baseURL，避免排查時用錯網域。

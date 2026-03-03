@@ -10,12 +10,48 @@ type ProviderSecretRow = {
   updated_at: string;
 };
 
+const ENV_FALLBACK_UPDATED_AT = "1970-01-01T00:00:00.000Z";
+const PROVIDER_KEY_ENV_VAR_MAP = {
+  xai: "XAI_API_KEY",
+  minimax: "MINIMAX_API_KEY",
+} as const;
+
 export type DecryptedProviderSecret = {
   providerKey: string;
   apiKey: string;
   keyLast4: string | null;
   updatedAt: string;
 };
+
+function normalizeApiKey(raw: unknown): string | null {
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const normalized = raw.trim().replace(/^['"]|['"]$/g, "");
+  return normalized.length > 0 ? normalized : null;
+}
+
+function readEnvProviderApiKey(providerKey: string): string | null {
+  const envName =
+    PROVIDER_KEY_ENV_VAR_MAP[providerKey as keyof typeof PROVIDER_KEY_ENV_VAR_MAP] ?? null;
+  if (!envName) {
+    return null;
+  }
+  return normalizeApiKey(process.env[envName]);
+}
+
+function buildEnvProviderSecret(providerKey: string): DecryptedProviderSecret | null {
+  const apiKey = readEnvProviderApiKey(providerKey);
+  if (!apiKey) {
+    return null;
+  }
+  return {
+    providerKey,
+    apiKey,
+    keyLast4: apiKey.slice(-4),
+    updatedAt: ENV_FALLBACK_UPDATED_AT,
+  };
+}
 
 function readEncryptionKey(): Buffer {
   const raw = process.env.AI_PROVIDER_SECRET_ENCRYPTION_KEY ?? "";
@@ -147,13 +183,6 @@ export async function listProviderSecretStatuses(providerKeys: string[]): Promis
     .select("provider_key, key_last4, updated_at")
     .in("provider_key", keys);
 
-  if (error) {
-    if (isMissingSecretsTableError(error)) {
-      return new Map();
-    }
-    throw new Error(`list provider secret statuses failed: ${error.message}`);
-  }
-
   const map = new Map<
     string,
     {
@@ -162,20 +191,80 @@ export async function listProviderSecretStatuses(providerKeys: string[]): Promis
       updatedAt: string;
     }
   >();
-  for (const row of (data ?? []) as Array<{
-    provider_key?: unknown;
-    key_last4?: unknown;
-    updated_at?: unknown;
-  }>) {
-    const providerKey = typeof row.provider_key === "string" ? row.provider_key.trim() : "";
-    if (!providerKey) {
+  if (error) {
+    if (!isMissingSecretsTableError(error)) {
+      throw new Error(`list provider secret statuses failed: ${error.message}`);
+    }
+  } else {
+    for (const row of (data ?? []) as Array<{
+      provider_key?: unknown;
+      key_last4?: unknown;
+      updated_at?: unknown;
+    }>) {
+      const providerKey = typeof row.provider_key === "string" ? row.provider_key.trim() : "";
+      if (!providerKey) {
+        continue;
+      }
+      map.set(providerKey, {
+        hasKey: true,
+        keyLast4: typeof row.key_last4 === "string" ? row.key_last4 : null,
+        updatedAt: typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString(),
+      });
+    }
+  }
+
+  for (const key of keys) {
+    if (map.has(key)) {
       continue;
     }
-    map.set(providerKey, {
+    const envSecret = buildEnvProviderSecret(key);
+    if (!envSecret) {
+      continue;
+    }
+    map.set(key, {
       hasKey: true,
-      keyLast4: typeof row.key_last4 === "string" ? row.key_last4 : null,
-      updatedAt: typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString(),
+      keyLast4: envSecret.keyLast4,
+      updatedAt: envSecret.updatedAt,
     });
+  }
+  return map;
+}
+
+function readSecretsFromCache(providerKeys: string[]): Map<string, DecryptedProviderSecret> | null {
+  const now = Date.now();
+  if (!cache || cache.expiresAt <= now) {
+    return null;
+  }
+
+  const subset = new Map<string, DecryptedProviderSecret>();
+  for (const key of providerKeys) {
+    const fromCache = cache.map.get(key);
+    if (fromCache) {
+      subset.set(key, fromCache);
+      continue;
+    }
+    const fromEnv = buildEnvProviderSecret(key);
+    if (fromEnv) {
+      subset.set(key, fromEnv);
+    }
+  }
+
+  return subset.size === providerKeys.length ? subset : null;
+}
+
+function applyEnvFallbackSecrets(
+  keys: string[],
+  map: Map<string, DecryptedProviderSecret>,
+): Map<string, DecryptedProviderSecret> {
+  for (const key of keys) {
+    if (map.has(key)) {
+      continue;
+    }
+    const envSecret = buildEnvProviderSecret(key);
+    if (!envSecret) {
+      continue;
+    }
+    map.set(key, envSecret);
   }
   return map;
 }
@@ -188,18 +277,9 @@ export async function loadDecryptedProviderSecrets(
     return new Map();
   }
 
-  const now = Date.now();
-  if (cache && cache.expiresAt > now) {
-    const subset = new Map<string, DecryptedProviderSecret>();
-    for (const key of keys) {
-      const item = cache.map.get(key);
-      if (item) {
-        subset.set(key, item);
-      }
-    }
-    if (subset.size === keys.length) {
-      return subset;
-    }
+  const fromCache = readSecretsFromCache(keys);
+  if (fromCache) {
+    return fromCache;
   }
 
   const supabase = createAdminClient();
@@ -210,7 +290,7 @@ export async function loadDecryptedProviderSecrets(
 
   if (error) {
     if (isMissingSecretsTableError(error)) {
-      return new Map();
+      return applyEnvFallbackSecrets(keys, new Map());
     }
     throw new Error(`load provider secrets failed: ${error.message}`);
   }
@@ -221,7 +301,12 @@ export async function loadDecryptedProviderSecrets(
     if (!providerKey) {
       continue;
     }
-    const apiKey = decryptApiKey(row);
+    let apiKey: string;
+    try {
+      apiKey = decryptApiKey(row);
+    } catch {
+      continue;
+    }
     if (!apiKey) {
       continue;
     }
@@ -233,6 +318,9 @@ export async function loadDecryptedProviderSecrets(
     });
   }
 
+  applyEnvFallbackSecrets(keys, result);
+
+  const now = Date.now();
   cache = {
     expiresAt: now + 60_000,
     map: result,

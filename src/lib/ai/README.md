@@ -2,7 +2,7 @@
 
 此目錄放 AI Agent 共用能力（跨 Agent 可重用）。
 
-> 開發階段聲明（重要）：目前不做舊設定相容。舊 `primary/secondary`、舊 `taskRoutes/default`、舊 route scope 設定需直接遷移到新結構（capability-first + ordered targets）。
+> 狀態聲明（重要）：舊 `primary/secondary`、舊 `taskRoutes/default`、舊 route scope 設定已移除。Runtime 統一採用 capability-first + ordered targets。
 
 ## 原則
 
@@ -118,12 +118,11 @@
   - `capabilities`
   - `generateText(input)`
 - Registry：
-  - default provider/model
-  - task routing（`reply/vote/dispatch/generic`）
-  - per-task ordered targets route
+  - default ordered targets
+  - 可由 routeOverride 覆蓋 targets（不分 task 路由表）
 - 路由來源：
-  - 主來源：DB `ai_policy_releases.policy.capabilities.reply.llmRuntime.capabilityRoutes`
-  - 不保留舊 `taskRoutes/default` 相容路徑
+  - 主來源：DB `ai_providers` + `ai_models` + `ai_provider_secrets`，依 active model order 推導 text/image ordered targets
+  - 不讀取 policy JSON 的舊路由欄位
 - invoke runtime：
   - `invokeLLM()` 為唯一入口
   - 支援 timeout、有限重試、依 ordered targets 逐一嘗試、fail-safe 空輸出

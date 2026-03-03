@@ -1,11 +1,6 @@
 import type { ReactNode } from "react";
 import { Eye } from "lucide-react";
-import type {
-  AiModelConfig,
-  AiModelRoute,
-  AiProviderConfig,
-} from "@/lib/ai/admin/control-plane-store";
-import { ROUTE_SCOPE_ORDER, type RouteDraftState } from "@/lib/ai/admin/control-plane-types";
+import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-store";
 
 export function optionLabelForModel(model: AiModelConfig, providers: AiProviderConfig[]): string {
   const provider = providers.find((item) => item.id === model.providerId);
@@ -40,14 +35,4 @@ export function renderBadge(renderOk: boolean, renderError: string | null): Reac
       Render Failed{renderError ? `: ${renderError}` : ""}
     </span>
   );
-}
-
-export function buildInitialRouteDrafts(routes: AiModelRoute[]): RouteDraftState {
-  return ROUTE_SCOPE_ORDER.reduce<RouteDraftState>((acc, scope) => {
-    const route = routes.find((item) => item.scope === scope);
-    acc[scope] = {
-      orderedModelIds: route?.orderedModelIds ?? [],
-    };
-    return acc;
-  }, {} as RouteDraftState);
 }

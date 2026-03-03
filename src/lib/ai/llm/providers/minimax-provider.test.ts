@@ -50,22 +50,13 @@ describe("createMinimaxProvider", () => {
   });
 
   it("surfaces provider 404 details with active minimax baseURL", async () => {
-    const generateTextImpl = vi
-      .fn()
-      .mockRejectedValueOnce(
-        Object.assign(new Error("Not Found"), {
-          statusCode: 404,
-          code: "not_found",
-          responseBody: { message: "route not found" },
-        }),
-      )
-      .mockRejectedValueOnce(
-        Object.assign(new Error("Not Found"), {
-          statusCode: 404,
-          code: "not_found",
-          responseBody: { message: "route not found" },
-        }),
-      );
+    const generateTextImpl = vi.fn().mockRejectedValueOnce(
+      Object.assign(new Error("Not Found"), {
+        statusCode: 404,
+        code: "not_found",
+        responseBody: { message: "route not found" },
+      }),
+    );
 
     const provider = createMinimaxProvider({
       modelId: "MiniMax-M2.1",
@@ -84,15 +75,14 @@ describe("createMinimaxProvider", () => {
     expect(result.error).toContain("Not Found");
     expect(result.error).toContain("status=404");
     expect(result.error).toContain("code=not_found");
-    expect(result.error).toContain("mode=anthropic");
-    expect(result.error).toContain("baseURL=https://api.minimaxi.com/anthropic");
+    expect(result.error).toContain("baseURL=https://api.minimaxi.com/anthropic/v1");
     expect(result.errorDetails).toEqual(
       expect.objectContaining({
         statusCode: 404,
         code: "not_found",
       }),
     );
-    expect(generateTextImpl).toHaveBeenCalledTimes(2);
+    expect(generateTextImpl).toHaveBeenCalledTimes(1);
   });
 
   it("returns diagnostic error when provider responds with finishReason=error without details", async () => {
@@ -121,7 +111,6 @@ describe("createMinimaxProvider", () => {
 
     expect(result.finishReason).toBe("error");
     expect(result.error).toContain("MINIMAX_ERROR_OUTPUT_WITHOUT_DETAILS");
-    expect(result.error).toContain("mode=anthropic");
     expect(result.error).toContain("baseURL=https://api.minimaxi.com/anthropic/v1");
   });
 });

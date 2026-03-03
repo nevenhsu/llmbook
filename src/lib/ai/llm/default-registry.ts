@@ -3,33 +3,26 @@ import { createMockProvider } from "@/lib/ai/llm/providers/mock-provider";
 import { createXaiProvider } from "@/lib/ai/llm/providers/xai-provider";
 import { createMinimaxProvider } from "@/lib/ai/llm/providers/minimax-provider";
 import { loadDecryptedProviderSecrets } from "@/lib/ai/llm/provider-secrets";
-import type { LlmTaskType, ProviderRoute } from "@/lib/ai/llm/types";
+import {
+  getDefaultMinimaxModelId,
+  getDefaultXaiModelId,
+  resolveDefaultRuntimeTarget,
+} from "@/lib/ai/llm/default-model-config";
+import type { ProviderRouteTarget } from "@/lib/ai/llm/types";
 
-const DEFAULT_TEXT_PROVIDER_ID = "xai";
-const DEFAULT_TEXT_MODEL_ID = "grok-4-1-fast-reasoning";
-const DEFAULT_MINIMAX_MODEL_ID = "MiniMax-M2.1";
 const DEFAULT_MOCK_MODEL_ID = "mock-fallback";
-
-function buildRoute(taskType: LlmTaskType): ProviderRoute {
-  return {
-    taskType,
-    targets: [{ providerId: DEFAULT_TEXT_PROVIDER_ID, modelId: DEFAULT_TEXT_MODEL_ID }],
-  };
-}
 
 export function createDefaultLlmProviderRegistry(options?: {
   includeMock?: boolean;
   includeXai?: boolean;
   includeMinimax?: boolean;
 }): LlmProviderRegistry {
+  const resolvedDefaultTarget = resolveDefaultRuntimeTarget();
+  const defaultTargets: ProviderRouteTarget[] = [resolvedDefaultTarget];
+  const defaultXaiModelId = getDefaultXaiModelId();
+  const defaultMinimaxModelId = getDefaultMinimaxModelId();
   const registry = new LlmProviderRegistry({
-    defaultRoute: buildRoute("generic").targets[0],
-    taskRoutes: {
-      reply: buildRoute("reply"),
-      vote: buildRoute("vote"),
-      dispatch: buildRoute("dispatch"),
-      generic: buildRoute("generic"),
-    },
+    defaultTargets,
   });
 
   if (options?.includeMock ?? false) {
@@ -37,11 +30,11 @@ export function createDefaultLlmProviderRegistry(options?: {
   }
 
   if (options?.includeXai ?? true) {
-    registry.register(createXaiProvider({ modelId: DEFAULT_TEXT_MODEL_ID }));
+    registry.register(createXaiProvider({ modelId: defaultXaiModelId }));
   }
 
   if (options?.includeMinimax ?? true) {
-    registry.register(createMinimaxProvider({ modelId: DEFAULT_MINIMAX_MODEL_ID }));
+    registry.register(createMinimaxProvider({ modelId: defaultMinimaxModelId }));
   }
 
   return registry;
@@ -52,14 +45,12 @@ export async function createDbBackedLlmProviderRegistry(options?: {
   includeXai?: boolean;
   includeMinimax?: boolean;
 }): Promise<LlmProviderRegistry> {
+  const resolvedDefaultTarget = resolveDefaultRuntimeTarget();
+  const defaultTargets: ProviderRouteTarget[] = [resolvedDefaultTarget];
+  const defaultXaiModelId = getDefaultXaiModelId();
+  const defaultMinimaxModelId = getDefaultMinimaxModelId();
   const registry = new LlmProviderRegistry({
-    defaultRoute: buildRoute("generic").targets[0],
-    taskRoutes: {
-      reply: buildRoute("reply"),
-      vote: buildRoute("vote"),
-      dispatch: buildRoute("dispatch"),
-      generic: buildRoute("generic"),
-    },
+    defaultTargets,
   });
 
   if (options?.includeMock ?? false) {
@@ -79,7 +70,7 @@ export async function createDbBackedLlmProviderRegistry(options?: {
   if (options?.includeXai ?? true) {
     registry.register(
       createXaiProvider({
-        modelId: DEFAULT_TEXT_MODEL_ID,
+        modelId: defaultXaiModelId,
         apiKey: secretMap.get("xai")?.apiKey,
       }),
     );
@@ -88,7 +79,7 @@ export async function createDbBackedLlmProviderRegistry(options?: {
   if (options?.includeMinimax ?? true) {
     registry.register(
       createMinimaxProvider({
-        modelId: DEFAULT_MINIMAX_MODEL_ID,
+        modelId: defaultMinimaxModelId,
         apiKey: secretMap.get("minimax")?.apiKey,
       }),
     );

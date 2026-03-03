@@ -4,7 +4,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
-import { getRouteModelIdsFromActiveOrder } from "@/lib/ai/admin/active-model-order";
 import {
   listProviderSecretStatuses,
   loadDecryptedProviderSecrets,
@@ -18,7 +17,6 @@ export type ModelStatus = "active" | "disabled";
 export type ModelTestStatus = "untested" | "success" | "failed";
 export type ModelLifecycleStatus = "active" | "retired";
 export type ModelErrorKind = "provider_api" | "model_retired" | "other";
-export type ModelRouteScope = "global_default" | "image";
 
 export type AiProviderConfig = {
   id: string;
@@ -59,36 +57,31 @@ export type AiModelConfig = {
   updatedAt: string;
 };
 
-export type AiModelRoute = {
-  scope: ModelRouteScope;
-  orderedModelIds: string[];
-  updatedAt: string;
-};
-
 export type GlobalPolicyStudioDraft = {
   coreGoal: string;
   globalPolicy: string;
   styleGuide: string;
   forbiddenRules: string;
-  updatedAt: string;
 };
 
 export type AiControlPlaneDocument = {
-  providers: AiProviderConfig[];
-  models: AiModelConfig[];
-  routes: AiModelRoute[];
   globalPolicyDraft: GlobalPolicyStudioDraft;
-  globalPolicyVersion: number;
 };
 
 export type PolicyReleaseListItem = {
   version: number;
-  policyVersion: number;
   isActive: boolean;
   createdBy: string | null;
   changeNote: string | null;
   createdAt: string;
   globalPolicyDraft: GlobalPolicyStudioDraft;
+};
+
+export type AdminControlPlaneSnapshot = {
+  providers: AiProviderConfig[];
+  models: AiModelConfig[];
+  releases: PolicyReleaseListItem[];
+  activeRelease: PolicyReleaseListItem | null;
 };
 
 export type ModelTestResult = {
@@ -155,6 +148,44 @@ type PolicyReleaseRow = {
   created_at: string;
 };
 
+type ProviderRow = {
+  id: string;
+  provider_key: string;
+  display_name: string;
+  sdk_package: string;
+  status: ProviderStatus;
+  test_status: ProviderTestStatus;
+  last_api_error_code: string | null;
+  last_api_error_message: string | null;
+  last_api_error_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ModelRow = {
+  id: string;
+  provider_id: string;
+  model_key: string;
+  display_name: string;
+  capability: ModelCapability;
+  status: ModelStatus;
+  test_status: ModelTestStatus;
+  lifecycle_status: ModelLifecycleStatus;
+  display_order: number;
+  last_error_kind: ModelErrorKind | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  last_error_at: string | null;
+  supports_input: boolean;
+  supports_image_input_prompt: boolean;
+  supports_output: boolean;
+  context_window: number | null;
+  max_output_tokens: number | null;
+  metadata: Record<string, unknown> | null;
+  updated_at: string;
+  created_at: string;
+};
+
 type PersonaSummary = {
   id: string;
   username: string;
@@ -183,8 +214,6 @@ type PersonaLongMemoryRow = {
   memory_category: string;
   updated_at: string;
 };
-
-const ROUTE_SCOPES: ModelRouteScope[] = ["global_default", "image"];
 
 const DEFAULT_POLICY_DRAFT = {
   coreGoal: "",
@@ -413,185 +442,33 @@ function estimateTokens(content: string): number {
   return Math.ceil(normalized.split(/\s+/).length * 1.35);
 }
 
-function asControlPlaneDocument(policy: unknown): AiControlPlaneDocument {
+function readGlobalPolicyDocument(policy: unknown): AiControlPlaneDocument {
   const root = asRecord(policy) ?? {};
-  const controlPlane = asRecord(root.controlPlane) ?? {};
-
-  const parsedProviders = Array.isArray(controlPlane.providers)
-    ? controlPlane.providers
-        .map((item): AiProviderConfig | null => {
-          const row = asRecord(item);
-          if (!row) {
-            return null;
-          }
-          const id = readString(row.id).trim() || crypto.randomUUID();
-          const status = readString(row.status) === "disabled" ? "disabled" : "active";
-          const testStatusRaw = readString(row.testStatus);
-          const testStatus: ProviderTestStatus =
-            testStatusRaw === "success" ||
-            testStatusRaw === "failed" ||
-            testStatusRaw === "disabled" ||
-            testStatusRaw === "key_missing"
-              ? testStatusRaw
-              : "untested";
-          return {
-            id,
-            providerKey: readString(row.providerKey),
-            displayName: readString(row.displayName),
-            sdkPackage: readString(row.sdkPackage),
-            status,
-            testStatus,
-            keyLast4: readNullableString(row.keyLast4),
-            hasKey: readBoolean(row.hasKey),
-            lastApiErrorCode: readNullableString(row.lastApiErrorCode),
-            lastApiErrorMessage: readNullableString(row.lastApiErrorMessage),
-            lastApiErrorAt: readNullableString(row.lastApiErrorAt),
-            createdAt: readString(row.createdAt, nowIso()),
-            updatedAt: readString(row.updatedAt, nowIso()),
-          };
-        })
-        .filter((item): item is AiProviderConfig => item !== null)
-    : [];
-
-  const providersByKey = new Map<string, AiProviderConfig>();
-  for (const provider of parsedProviders) {
-    const key = provider.providerKey.trim();
-    if (!key) {
-      continue;
-    }
-    const existing = providersByKey.get(key);
-    if (!existing) {
-      providersByKey.set(key, provider);
-      continue;
-    }
-    const keep =
-      provider.hasKey && !existing.hasKey
-        ? provider
-        : !provider.hasKey && existing.hasKey
-          ? existing
-          : provider.updatedAt > existing.updatedAt
-            ? provider
-            : existing;
-    providersByKey.set(key, keep);
-  }
-  const providers = Array.from(providersByKey.values());
-  const providerIdSet = new Set(providers.map((item) => item.id));
-
-  const parsedModels = Array.isArray(controlPlane.models)
-    ? controlPlane.models
-        .map((item, index): AiModelConfig | null => {
-          const row = asRecord(item);
-          if (!row) {
-            return null;
-          }
-          const capability =
-            readString(row.capability) === "image_generation"
-              ? "image_generation"
-              : "text_generation";
-          const status = readString(row.status) === "disabled" ? "disabled" : "active";
-          const metadata = asRecord(row.metadata) ?? {};
-          return {
-            id: readString(row.id).trim() || crypto.randomUUID(),
-            providerId: readString(row.providerId),
-            modelKey: readString(row.modelKey),
-            displayName: readString(row.displayName),
-            capability,
-            status,
-            testStatus: readModelTestStatus(row.testStatus ?? metadata.modelTestStatus),
-            lifecycleStatus: readModelLifecycleStatus(
-              row.lifecycleStatus ?? metadata.lifecycleStatus,
-            ),
-            displayOrder:
-              readNumberOrNull(row.displayOrder) ??
-              readNumberOrNull(metadata.displayOrder) ??
-              index,
-            lastErrorKind: readModelErrorKind(row.lastErrorKind ?? metadata.lastErrorKind),
-            lastErrorCode: readNullableString(row.lastErrorCode ?? metadata.lastErrorCode),
-            lastErrorMessage: readNullableString(row.lastErrorMessage ?? metadata.lastErrorMessage),
-            lastErrorAt: readNullableString(row.lastErrorAt ?? metadata.lastErrorAt),
-            supportsInput: readBoolean(row.supportsInput, true),
-            supportsImageInputPrompt:
-              readBoolean(
-                row.supportsImageInputPrompt,
-                Array.isArray(metadata.input) &&
-                  metadata.input.some((item) => readString(item) === "image"),
-              ) ?? false,
-            supportsOutput: readBoolean(row.supportsOutput, true),
-            contextWindow: readNumberOrNull(row.contextWindow),
-            maxOutputTokens: readNumberOrNull(row.maxOutputTokens),
-            metadata,
-            updatedAt: readString(row.updatedAt, nowIso()),
-          };
-        })
-        .filter((item): item is AiModelConfig => item !== null)
-    : [];
-  const modelsByProviderAndKey = new Map<string, AiModelConfig>();
-  for (const model of parsedModels) {
-    if (!providerIdSet.has(model.providerId)) {
-      continue;
-    }
-    const uniqueKey = `${model.providerId}:${model.modelKey}`;
-    const existing = modelsByProviderAndKey.get(uniqueKey);
-    if (!existing) {
-      modelsByProviderAndKey.set(uniqueKey, model);
-      continue;
-    }
-    const keep = model.updatedAt > existing.updatedAt ? model : existing;
-    modelsByProviderAndKey.set(uniqueKey, keep);
-  }
-  const models = Array.from(modelsByProviderAndKey.values());
-
-  const routesRecord = asRecord(controlPlane.routes) ?? {};
-  const routes: AiModelRoute[] = ROUTE_SCOPES.map((scope) => {
-    const source = asRecord(routesRecord[scope]) ?? {};
-    const orderedModelIds = Array.isArray(source.orderedModelIds)
-      ? source.orderedModelIds.map((item) => readString(item)).filter((item) => item.length > 0)
-      : [];
-    return {
-      scope,
-      orderedModelIds,
-      updatedAt: readString(source.updatedAt, nowIso()),
-    };
-  });
-
-  const draftRecord = asRecord(controlPlane.globalPolicyDraft) ?? {};
+  const global = asRecord(root.global) ?? {};
   const globalPolicyDraft: GlobalPolicyStudioDraft = {
-    coreGoal: readString(draftRecord.coreGoal, DEFAULT_POLICY_DRAFT.coreGoal),
-    globalPolicy: readString(draftRecord.globalPolicy, DEFAULT_POLICY_DRAFT.globalPolicy),
-    styleGuide: readString(draftRecord.styleGuide, DEFAULT_POLICY_DRAFT.styleGuide),
-    forbiddenRules: readString(draftRecord.forbiddenRules, DEFAULT_POLICY_DRAFT.forbiddenRules),
-    updatedAt: readString(draftRecord.updatedAt, nowIso()),
+    coreGoal: readString(global.coreGoal, DEFAULT_POLICY_DRAFT.coreGoal),
+    globalPolicy: readString(global.globalPolicy, DEFAULT_POLICY_DRAFT.globalPolicy),
+    styleGuide: readString(global.styleGuide, DEFAULT_POLICY_DRAFT.styleGuide),
+    forbiddenRules: readString(global.forbiddenRules, DEFAULT_POLICY_DRAFT.forbiddenRules),
   };
-  const globalPolicyVersion = readPositiveInt(controlPlane.globalPolicyVersion, 1);
 
   return {
-    providers,
-    models,
-    routes,
     globalPolicyDraft,
-    globalPolicyVersion,
   };
 }
 
-function applyControlPlaneDocument(
+function writeGlobalPolicyDocument(
   policy: unknown,
-  controlPlaneDoc: AiControlPlaneDocument,
+  globalPolicyDoc: AiControlPlaneDocument,
 ): Record<string, unknown> {
   const root = asRecord(policy) ?? {};
   return {
     ...root,
-    controlPlane: {
-      providers: controlPlaneDoc.providers,
-      models: controlPlaneDoc.models,
-      routes: controlPlaneDoc.routes.reduce<Record<string, unknown>>((acc, route) => {
-        acc[route.scope] = {
-          orderedModelIds: route.orderedModelIds,
-          updatedAt: route.updatedAt,
-        };
-        return acc;
-      }, {}),
-      globalPolicyDraft: controlPlaneDoc.globalPolicyDraft,
-      globalPolicyVersion: readPositiveInt(controlPlaneDoc.globalPolicyVersion, 1),
+    global: {
+      coreGoal: globalPolicyDoc.globalPolicyDraft.coreGoal,
+      globalPolicy: globalPolicyDoc.globalPolicyDraft.globalPolicy,
+      styleGuide: globalPolicyDoc.globalPolicyDraft.styleGuide,
+      forbiddenRules: globalPolicyDoc.globalPolicyDraft.forbiddenRules,
     },
   };
 }
@@ -639,11 +516,6 @@ function extractJsonFromText(text: string): string {
 
 function parsePersonaGenerationOutput(rawText: string): {
   structured: PersonaGenerationStructured;
-  legacy: {
-    info: string;
-    soul: Record<string, unknown>;
-    longMemory: string;
-  };
 } {
   const jsonText = extractJsonFromText(rawText);
   if (!jsonText) {
@@ -763,15 +635,6 @@ function parsePersonaGenerationOutput(rawText: string): {
           } => item !== null,
         ),
     },
-    legacy: {
-      info: bio,
-      soul: soulProfile,
-      longMemory:
-        personaLongMemories
-          .map((item) => asRecord(item))
-          .find((item) => !!item && readString(item.content).trim().length > 0)
-          ?.content?.toString() ?? "",
-    },
   };
 }
 
@@ -834,24 +697,170 @@ function buildTokenBudgetSignal(input: {
 export class AdminAiControlPlaneStore {
   private readonly supabase = createAdminClient();
 
+  private toProviderConfig(row: ProviderRow): AiProviderConfig {
+    return {
+      id: row.id,
+      providerKey: row.provider_key,
+      displayName: row.display_name,
+      sdkPackage: row.sdk_package,
+      status: row.status,
+      testStatus: row.test_status,
+      keyLast4: null,
+      hasKey: false,
+      lastApiErrorCode: row.last_api_error_code,
+      lastApiErrorMessage: row.last_api_error_message,
+      lastApiErrorAt: row.last_api_error_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toModelConfig(row: ModelRow): AiModelConfig {
+    return {
+      id: row.id,
+      providerId: row.provider_id,
+      modelKey: row.model_key,
+      displayName: row.display_name,
+      capability: row.capability,
+      status: row.status,
+      testStatus: row.test_status,
+      lifecycleStatus: row.lifecycle_status,
+      displayOrder: row.display_order,
+      lastErrorKind: row.last_error_kind,
+      lastErrorCode: row.last_error_code,
+      lastErrorMessage: row.last_error_message,
+      lastErrorAt: row.last_error_at,
+      supportsInput: row.supports_input,
+      supportsImageInputPrompt: row.supports_image_input_prompt,
+      supportsOutput: row.supports_output,
+      contextWindow: row.context_window,
+      maxOutputTokens: row.max_output_tokens,
+      metadata: row.metadata ?? {},
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private modelToRow(model: AiModelConfig): Omit<ModelRow, "created_at"> {
+    return {
+      id: model.id,
+      provider_id: model.providerId,
+      model_key: model.modelKey,
+      display_name: model.displayName,
+      capability: model.capability,
+      status: model.status,
+      test_status: model.testStatus,
+      lifecycle_status: model.lifecycleStatus,
+      display_order: model.displayOrder,
+      last_error_kind: model.lastErrorKind,
+      last_error_code: model.lastErrorCode,
+      last_error_message: model.lastErrorMessage,
+      last_error_at: model.lastErrorAt,
+      supports_input: model.supportsInput,
+      supports_image_input_prompt: model.supportsImageInputPrompt,
+      supports_output: model.supportsOutput,
+      context_window: model.contextWindow,
+      max_output_tokens: model.maxOutputTokens,
+      metadata: model.metadata,
+      updated_at: model.updatedAt,
+    };
+  }
+
+  private async listProvidersFromDb(): Promise<AiProviderConfig[]> {
+    const { data, error } = await this.supabase
+      .from("ai_providers")
+      .select(
+        "id, provider_key, display_name, sdk_package, status, test_status, last_api_error_code, last_api_error_message, last_api_error_at, created_at, updated_at",
+      )
+      .order("created_at", { ascending: true });
+    if (error) {
+      throw new Error(`list providers failed: ${error.message}`);
+    }
+    return ((data ?? []) as ProviderRow[]).map((row) => this.toProviderConfig(row));
+  }
+
+  private async listModelsFromDb(): Promise<AiModelConfig[]> {
+    const { data, error } = await this.supabase
+      .from("ai_models")
+      .select(
+        "id, provider_id, model_key, display_name, capability, status, test_status, lifecycle_status, display_order, last_error_kind, last_error_code, last_error_message, last_error_at, supports_input, supports_image_input_prompt, supports_output, context_window, max_output_tokens, metadata, updated_at, created_at",
+      )
+      .order("display_order", { ascending: true })
+      .order("display_name", { ascending: true });
+    if (error) {
+      throw new Error(`list models failed: ${error.message}`);
+    }
+    return ((data ?? []) as ModelRow[]).map((row) => this.toModelConfig(row));
+  }
+
+  private async upsertProviderRow(provider: AiProviderConfig): Promise<AiProviderConfig> {
+    const payload = {
+      id: provider.id,
+      provider_key: provider.providerKey,
+      display_name: provider.displayName,
+      sdk_package: provider.sdkPackage,
+      status: provider.status,
+      test_status: provider.testStatus,
+      last_api_error_code: provider.lastApiErrorCode,
+      last_api_error_message: provider.lastApiErrorMessage,
+      last_api_error_at: provider.lastApiErrorAt,
+      updated_at: provider.updatedAt,
+    };
+    const { data, error } = await this.supabase
+      .from("ai_providers")
+      .upsert(payload, { onConflict: "id" })
+      .select(
+        "id, provider_key, display_name, sdk_package, status, test_status, last_api_error_code, last_api_error_message, last_api_error_at, created_at, updated_at",
+      )
+      .single<ProviderRow>();
+    if (error || !data) {
+      throw new Error(`upsert provider failed: ${error?.message ?? "unknown"}`);
+    }
+    const saved = this.toProviderConfig(data);
+    await this.applyProviderSecretStatuses([saved]);
+    return saved;
+  }
+
+  private async upsertModelRow(model: AiModelConfig): Promise<AiModelConfig> {
+    const { data, error } = await this.supabase
+      .from("ai_models")
+      .upsert(this.modelToRow(model), { onConflict: "id" })
+      .select(
+        "id, provider_id, model_key, display_name, capability, status, test_status, lifecycle_status, display_order, last_error_kind, last_error_code, last_error_message, last_error_at, supports_input, supports_image_input_prompt, supports_output, context_window, max_output_tokens, metadata, updated_at, created_at",
+      )
+      .single<ModelRow>();
+    if (error || !data) {
+      throw new Error(`upsert model failed: ${error?.message ?? "unknown"}`);
+    }
+    return this.toModelConfig(data);
+  }
+
   public async getActiveControlPlane(): Promise<{
     release: PolicyReleaseListItem | null;
     document: AiControlPlaneDocument;
+    providers: AiProviderConfig[];
+    models: AiModelConfig[];
   }> {
     const active = await this.fetchActiveRelease();
+    const [providers, models] = await Promise.all([
+      this.listProvidersFromDb(),
+      this.listModelsFromDb(),
+    ]);
     if (!active) {
+      const emptyDoc = readGlobalPolicyDocument({});
+      await this.applyProviderSecretStatuses(providers);
       return {
         release: null,
-        document: asControlPlaneDocument({}),
+        document: emptyDoc,
+        providers,
+        models,
       };
     }
 
-    const document = asControlPlaneDocument(active.policy);
-    await this.applyProviderSecretStatuses(document);
+    const document = readGlobalPolicyDocument(active.policy);
+    await this.applyProviderSecretStatuses(providers);
     return {
       release: {
         version: active.version,
-        policyVersion: document.globalPolicyVersion,
         isActive: active.is_active,
         createdBy: active.created_by,
         changeNote: active.change_note,
@@ -859,6 +868,8 @@ export class AdminAiControlPlaneStore {
         globalPolicyDraft: document.globalPolicyDraft,
       },
       document,
+      providers,
+      models,
     };
   }
 
@@ -874,10 +885,9 @@ export class AdminAiControlPlaneStore {
     }
 
     return (data as PolicyReleaseRow[]).map((row) => {
-      const doc = asControlPlaneDocument(row.policy);
+      const doc = readGlobalPolicyDocument(row.policy);
       return {
         version: row.version,
-        policyVersion: doc.globalPolicyVersion,
         isActive: row.is_active,
         createdBy: row.created_by,
         changeNote: row.change_note,
@@ -885,6 +895,23 @@ export class AdminAiControlPlaneStore {
         globalPolicyDraft: doc.globalPolicyDraft,
       };
     });
+  }
+
+  public async getAdminControlPlaneSnapshot(input?: {
+    releaseLimit?: number;
+  }): Promise<AdminControlPlaneSnapshot> {
+    const releaseLimit = Math.max(1, Math.min(50, input?.releaseLimit ?? 20));
+    const [state, releases] = await Promise.all([
+      this.getActiveControlPlane(),
+      this.listPolicyReleases(releaseLimit),
+    ]);
+
+    return {
+      providers: state.providers,
+      models: state.models,
+      releases,
+      activeRelease: state.release,
+    };
   }
 
   public async upsertProvider(
@@ -896,13 +923,13 @@ export class AdminAiControlPlaneStore {
     },
     actorId: string,
   ): Promise<AiProviderConfig> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
+    const { providers, models } = await this.loadActiveForMutation();
     const now = nowIso();
     const apiKey = input.apiKey?.trim() ?? "";
     const keyLast4 = apiKey ? apiKey.slice(-4) : null;
     const existingProvider =
-      (input.id ? (document.providers.find((item) => item.id === input.id) ?? null) : null) ??
-      document.providers.find((item) => item.providerKey === input.providerKey) ??
+      (input.id ? (providers.find((item) => item.id === input.id) ?? null) : null) ??
+      providers.find((item) => item.providerKey === input.providerKey) ??
       null;
 
     const nextProvider: AiProviderConfig = {
@@ -946,7 +973,7 @@ export class AdminAiControlPlaneStore {
       nextProvider.lastApiErrorMessage = null;
       nextProvider.lastApiErrorAt = null;
 
-      for (const model of document.models) {
+      for (const model of models) {
         if (model.providerId !== nextProvider.id) {
           continue;
         }
@@ -959,73 +986,27 @@ export class AdminAiControlPlaneStore {
       }
     }
 
-    const index = document.providers.findIndex((item) => item.id === nextProvider.id);
-    if (index >= 0) {
-      document.providers[index] = {
-        ...document.providers[index],
-        ...nextProvider,
-        createdAt: document.providers[index].createdAt,
-      };
-    } else {
-      document.providers.push(nextProvider);
+    const savedProvider = await this.upsertProviderRow(nextProvider);
+    if (apiKey.length > 0) {
+      const providerModels = models.filter((item) => item.providerId === savedProvider.id);
+      if (providerModels.length > 0) {
+        await Promise.all(
+          providerModels.map((model) =>
+            this.upsertModelRow({
+              ...model,
+              testStatus: "untested",
+              lastErrorKind: null,
+              lastErrorCode: null,
+              lastErrorMessage: null,
+              lastErrorAt: null,
+              updatedAt: now,
+            }),
+          ),
+        );
+      }
     }
 
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      `control-plane: upsert provider ${nextProvider.providerKey}`,
-    );
-
-    return nextProvider;
-  }
-
-  public async deleteProvider(providerId: string, actorId: string): Promise<void> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    document.providers = document.providers.filter((item) => item.id !== providerId);
-    document.models = document.models.filter((item) => item.providerId !== providerId);
-    document.routes = document.routes.map((route) => ({
-      ...route,
-      orderedModelIds: route.orderedModelIds.filter((modelId) =>
-        document.models.some((model) => model.id === modelId),
-      ),
-      updatedAt: nowIso(),
-    }));
-
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      `control-plane: delete provider ${providerId}`,
-    );
-  }
-
-  public async setProviderTestStatus(
-    providerId: string,
-    actorId: string,
-    requestedStatus?: ProviderTestStatus,
-  ): Promise<AiProviderConfig> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    const provider = document.providers.find((item) => item.id === providerId);
-    if (!provider) {
-      throw new Error("provider not found");
-    }
-
-    const nextStatus: ProviderTestStatus =
-      requestedStatus ??
-      (provider.status === "disabled" ? "disabled" : provider.hasKey ? "success" : "key_missing");
-
-    provider.testStatus = nextStatus;
-    provider.updatedAt = nowIso();
-
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      `control-plane: provider test ${provider.providerKey}`,
-    );
-
-    return provider;
+    return savedProvider;
   }
 
   public async upsertModel(
@@ -1037,14 +1018,14 @@ export class AdminAiControlPlaneStore {
     },
     actorId: string,
   ): Promise<AiModelConfig> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    const providerExists = document.providers.some((item) => item.id === input.providerId);
+    const { providers, models } = await this.loadActiveForMutation();
+    const providerExists = providers.some((item) => item.id === input.providerId);
     if (!providerExists) {
       throw new Error("provider not found");
     }
     const existingModel = input.id
-      ? (document.models.find((item) => item.id === input.id) ?? null)
-      : (document.models.find(
+      ? (models.find((item) => item.id === input.id) ?? null)
+      : (models.find(
           (item) => item.providerId === input.providerId && item.modelKey === input.modelKey,
         ) ?? null);
 
@@ -1062,7 +1043,7 @@ export class AdminAiControlPlaneStore {
       displayOrder:
         readNumberOrNull(input.displayOrder) ??
         readNumberOrNull(existingModel?.displayOrder) ??
-        document.models.length,
+        models.filter((item) => item.capability === input.capability).length,
       lastErrorKind: readModelErrorKind(input.lastErrorKind ?? existingModel?.lastErrorKind),
       lastErrorCode: input.lastErrorCode ?? existingModel?.lastErrorCode ?? null,
       lastErrorMessage: input.lastErrorMessage ?? existingModel?.lastErrorMessage ?? null,
@@ -1077,96 +1058,31 @@ export class AdminAiControlPlaneStore {
       updatedAt: nowIso(),
     };
 
-    const index = document.models.findIndex((item) => item.id === nextModel.id);
+    const index = models.findIndex((item) => item.id === nextModel.id);
     if (index >= 0) {
-      document.models[index] = {
-        ...document.models[index],
+      models[index] = {
+        ...models[index],
         ...nextModel,
       };
     } else {
-      document.models.push(nextModel);
+      models.push(nextModel);
     }
 
-    // Keep capability routes aligned with active model order after model mutation.
-    const now = nowIso();
-    const textOrderedModelIds = getRouteModelIdsFromActiveOrder({
-      providers: document.providers.map((provider) => ({
-        id: provider.id,
-        providerKey: provider.providerKey,
-        status: provider.status,
-        hasKey: provider.hasKey,
-      })),
-      models: document.models.map((model) => ({
-        id: model.id,
-        providerId: model.providerId,
-        modelKey: model.modelKey,
-        capability: model.capability,
-        status: model.status,
-        testStatus: model.testStatus,
-        lifecycleStatus: model.lifecycleStatus,
-        displayOrder: model.displayOrder,
-      })),
-      capability: "text_generation",
-    });
-    const imageOrderedModelIds = getRouteModelIdsFromActiveOrder({
-      providers: document.providers.map((provider) => ({
-        id: provider.id,
-        providerKey: provider.providerKey,
-        status: provider.status,
-        hasKey: provider.hasKey,
-      })),
-      models: document.models.map((model) => ({
-        id: model.id,
-        providerId: model.providerId,
-        modelKey: model.modelKey,
-        capability: model.capability,
-        status: model.status,
-        testStatus: model.testStatus,
-        lifecycleStatus: model.lifecycleStatus,
-        displayOrder: model.displayOrder,
-      })),
-      capability: "image_generation",
-    });
-    const routeMap = new Map(document.routes.map((route) => [route.scope, route]));
-    routeMap.set("global_default", {
-      scope: "global_default",
-      orderedModelIds: textOrderedModelIds,
-      updatedAt: now,
-    });
-    routeMap.set("image", {
-      scope: "image",
-      orderedModelIds: imageOrderedModelIds,
-      updatedAt: now,
-    });
-    document.routes = ROUTE_SCOPES.map(
-      (scope) =>
-        routeMap.get(scope) ?? {
-          scope,
-          orderedModelIds: [],
-          updatedAt: now,
-        },
-    );
-
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      `control-plane: upsert model ${nextModel.modelKey}`,
-    );
-
-    return nextModel;
+    void actorId;
+    const savedModel = await this.upsertModelRow(nextModel);
+    return savedModel;
   }
 
   public async testModelWithMinimalTokens(
     modelId: string,
     actorId: string,
   ): Promise<ModelTestResult> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    const model = document.models.find((item) => item.id === modelId);
+    const { providers, models } = await this.loadActiveForMutation();
+    const model = models.find((item) => item.id === modelId);
     if (!model) {
       throw new Error("model not found");
     }
-    const provider = document.providers.find((item) => item.id === model.providerId);
+    const provider = providers.find((item) => item.id === model.providerId);
     if (!provider) {
       throw new Error("provider not found");
     }
@@ -1179,13 +1095,12 @@ export class AdminAiControlPlaneStore {
       model.lastErrorMessage = "Provider API key is missing";
       model.lastErrorAt = now;
       model.updatedAt = now;
-      await this.persistControlPlaneOnActiveRelease(
-        active,
-        applyControlPlaneDocument(basePolicy, document),
-        actorId,
-        `control-plane: model test ${model.modelKey} failed (key missing)`,
-      );
-      return { model, provider };
+      void actorId;
+      const [savedModel, savedProvider] = await Promise.all([
+        this.upsertModelRow(model),
+        this.upsertProviderRow(provider),
+      ]);
+      return { model: savedModel, provider: savedProvider };
     }
 
     let artifact: ModelTestResult["artifact"] | undefined;
@@ -1203,7 +1118,8 @@ export class AdminAiControlPlaneStore {
         const client = createXai({ apiKey });
         const imageResult = await generateImage({
           model: client.image(model.modelKey),
-          prompt: "test",
+          prompt: "Minion",
+          aspectRatio: "2:3",
           n: 1,
           maxRetries: 0,
         });
@@ -1219,6 +1135,7 @@ export class AdminAiControlPlaneStore {
         };
 
         model.testStatus = "success";
+        model.status = "active";
         model.lastErrorKind = null;
         model.lastErrorCode = null;
         model.lastErrorMessage = null;
@@ -1258,7 +1175,6 @@ export class AdminAiControlPlaneStore {
           registry,
           taskType: "generic",
           routeOverride: {
-            taskType: "generic",
             targets: [
               {
                 providerId: provider.providerKey,
@@ -1294,11 +1210,11 @@ export class AdminAiControlPlaneStore {
           },
         });
 
-        const isModelTestSuccess =
-          !llmResult.error && llmResult.finishReason !== "error" && llmResult.finishReason !== null;
+        const isModelTestSuccess = !llmResult.error && llmResult.finishReason !== "error";
         if (isModelTestSuccess) {
           const now = nowIso();
           model.testStatus = "success";
+          model.status = "active";
           model.lastErrorKind = null;
           model.lastErrorCode = null;
           model.lastErrorMessage = null;
@@ -1343,14 +1259,12 @@ export class AdminAiControlPlaneStore {
       }
     }
 
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      `control-plane: model test ${model.modelKey} ${model.testStatus}`,
-    );
-
-    return { model, provider, artifact };
+    void actorId;
+    const [savedModel, savedProvider] = await Promise.all([
+      this.upsertModelRow(model),
+      this.upsertProviderRow(provider),
+    ]);
+    return { model: savedModel, provider: savedProvider, artifact };
   }
 
   public async reorderModels(input: {
@@ -1359,9 +1273,8 @@ export class AdminAiControlPlaneStore {
     actorId: string;
   }): Promise<{
     models: AiModelConfig[];
-    routes: AiModelRoute[];
   }> {
-    const { active, basePolicy, document } = await this.loadActiveForMutation();
+    const { providers, models } = await this.loadActiveForMutation();
 
     const requestedSupported = input.orderedModelKeys
       .map(
@@ -1382,12 +1295,11 @@ export class AdminAiControlPlaneStore {
       const providerCatalog = SUPPORTED_PROVIDER_CATALOG.find(
         (item) => item.providerKey === supported.providerKey,
       );
-      const provider =
-        document.providers.find((item) => item.providerKey === supported.providerKey) ?? null;
+      const provider = providers.find((item) => item.providerKey === supported.providerKey) ?? null;
       let providerId = provider?.id ?? null;
       if (!providerId && providerCatalog) {
         providerId = crypto.randomUUID();
-        document.providers.push({
+        providers.push({
           id: providerId,
           providerKey: providerCatalog.providerKey,
           displayName: providerCatalog.displayName,
@@ -1407,14 +1319,14 @@ export class AdminAiControlPlaneStore {
         continue;
       }
 
-      const existing = document.models.find(
+      const existing = models.find(
         (item) => item.providerId === providerId && item.modelKey === supported.modelKey,
       );
       if (existing) {
         continue;
       }
 
-      document.models.push({
+      models.push({
         id: crypto.randomUUID(),
         providerId,
         modelKey: supported.modelKey,
@@ -1423,7 +1335,7 @@ export class AdminAiControlPlaneStore {
         status: "disabled",
         testStatus: "untested",
         lifecycleStatus: "active",
-        displayOrder: document.models.filter((item) => item.capability === input.capability).length,
+        displayOrder: models.filter((item) => item.capability === input.capability).length,
         lastErrorKind: null,
         lastErrorCode: null,
         lastErrorMessage: null,
@@ -1438,7 +1350,7 @@ export class AdminAiControlPlaneStore {
       });
     }
 
-    const targetModels = document.models.filter((item) => item.capability === input.capability);
+    const targetModels = models.filter((item) => item.capability === input.capability);
     const keyToId = new Map(targetModels.map((item) => [item.modelKey, item.id] as const));
     const requested = input.orderedModelKeys
       .map((modelKey) => keyToId.get(modelKey) ?? null)
@@ -1459,7 +1371,7 @@ export class AdminAiControlPlaneStore {
     const finalOrder = [...requested, ...remaining];
     const orderMap = new Map(finalOrder.map((id, index) => [id, index]));
 
-    for (const model of document.models) {
+    for (const model of models) {
       if (model.capability !== input.capability) {
         continue;
       }
@@ -1475,93 +1387,20 @@ export class AdminAiControlPlaneStore {
       };
     }
 
-    const textOrderedModelIds = getRouteModelIdsFromActiveOrder({
-      providers: document.providers.map((provider) => ({
-        id: provider.id,
-        providerKey: provider.providerKey,
-        status: provider.status,
-        hasKey: provider.hasKey,
-      })),
-      models: document.models.map((model) => ({
-        id: model.id,
-        providerId: model.providerId,
-        modelKey: model.modelKey,
-        capability: model.capability,
-        status: model.status,
-        testStatus: model.testStatus,
-        lifecycleStatus: model.lifecycleStatus,
-        displayOrder: model.displayOrder,
-      })),
-      capability: "text_generation",
-    });
-    const imageOrderedModelIds = getRouteModelIdsFromActiveOrder({
-      providers: document.providers.map((provider) => ({
-        id: provider.id,
-        providerKey: provider.providerKey,
-        status: provider.status,
-        hasKey: provider.hasKey,
-      })),
-      models: document.models.map((model) => ({
-        id: model.id,
-        providerId: model.providerId,
-        modelKey: model.modelKey,
-        capability: model.capability,
-        status: model.status,
-        testStatus: model.testStatus,
-        lifecycleStatus: model.lifecycleStatus,
-        displayOrder: model.displayOrder,
-      })),
-      capability: "image_generation",
-    });
-    const routeMap = new Map(document.routes.map((route) => [route.scope, route]));
-    routeMap.set("global_default", {
-      scope: "global_default",
-      orderedModelIds: textOrderedModelIds,
-      updatedAt: now,
-    });
-    routeMap.set("image", {
-      scope: "image",
-      orderedModelIds: imageOrderedModelIds,
-      updatedAt: now,
-    });
-    document.routes = ROUTE_SCOPES.map(
-      (scope) =>
-        routeMap.get(scope) ?? {
-          scope,
-          orderedModelIds: [],
-          updatedAt: now,
-        },
-    );
-
-    const policy = applyControlPlaneDocument(basePolicy, document);
-    let row: PolicyReleaseRow;
-    if (active) {
-      const { data, error } = await this.supabase
-        .from("ai_policy_releases")
-        .update({
-          policy,
-          created_by: input.actorId,
-          change_note: `control-plane: reorder ${input.capability} models`,
-        })
-        .eq("version", active.version)
-        .select("version, policy, is_active, created_by, change_note, created_at")
-        .single<PolicyReleaseRow>();
-      if (error || !data) {
-        throw new Error(`reorder models failed: ${error?.message ?? "unknown"}`);
+    void input.actorId;
+    for (const provider of providers) {
+      await this.upsertProviderRow(provider);
+    }
+    const targetModelIds = new Set(targetModels.map((item) => item.id));
+    for (const model of models) {
+      if (targetModelIds.has(model.id)) {
+        await this.upsertModelRow(model);
       }
-      row = data;
-    } else {
-      row = await this.insertActiveRelease(
-        policy,
-        input.actorId,
-        `control-plane: reorder ${input.capability} models`,
-      );
     }
 
-    const savedDoc = asControlPlaneDocument(row.policy);
+    const savedModels = await this.listModelsFromDb();
     return {
-      models: savedDoc.models,
-      routes: savedDoc.routes,
+      models: savedModels,
     };
   }
 
@@ -1576,12 +1415,12 @@ export class AdminAiControlPlaneStore {
       body?: string;
     };
   }): Promise<void> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    const provider = document.providers.find((item) => item.providerKey === input.providerKey);
+    const { providers, models } = await this.loadActiveForMutation();
+    const provider = providers.find((item) => item.providerKey === input.providerKey);
     if (!provider) {
       return;
     }
-    const model = document.models.find(
+    const model = models.find(
       (item) => item.providerId === provider.id && item.modelKey === input.modelKey,
     );
     if (!model) {
@@ -1628,100 +1467,45 @@ export class AdminAiControlPlaneStore {
       provider.updatedAt = now;
     }
 
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      "system",
-      `control-plane: runtime error ${provider.providerKey}/${model.modelKey}`,
-    );
-  }
-
-  public async deleteModel(modelId: string, actorId: string): Promise<void> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    document.models = document.models.filter((item) => item.id !== modelId);
-    document.routes = document.routes.map((route) => ({
-      ...route,
-      orderedModelIds: route.orderedModelIds.filter((id) => id !== modelId),
-      updatedAt: nowIso(),
-    }));
-
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      `control-plane: delete model ${modelId}`,
-    );
-  }
-
-  public async updateRoutes(
-    routes: Array<Pick<AiModelRoute, "scope" | "orderedModelIds">>,
-    actorId: string,
-  ): Promise<AiModelRoute[]> {
-    const { active, document, basePolicy } = await this.loadActiveForMutation();
-    const modelIds = new Set(document.models.map((item) => item.id));
-    for (const route of routes) {
-      for (const modelId of route.orderedModelIds) {
-        if (!modelIds.has(modelId)) {
-          throw new Error(`model not found for route ${route.scope}: ${modelId}`);
-        }
-      }
-    }
-
-    const routeMap = new Map(document.routes.map((route) => [route.scope, route]));
-    for (const patch of routes) {
-      routeMap.set(patch.scope, {
-        scope: patch.scope,
-        orderedModelIds: patch.orderedModelIds,
-        updatedAt: nowIso(),
-      });
-    }
-    document.routes = ROUTE_SCOPES.map(
-      (scope) =>
-        routeMap.get(scope) ?? {
-          scope,
-          orderedModelIds: [],
-          updatedAt: nowIso(),
-        },
-    );
-
-    await this.persistControlPlaneOnActiveRelease(
-      active,
-      applyControlPlaneDocument(basePolicy, document),
-      actorId,
-      "control-plane: update model routes",
-    );
-
-    return document.routes;
+    await Promise.all([this.upsertModelRow(model), this.upsertProviderRow(provider)]);
   }
 
   public async saveGlobalPolicyDraft(
     draft: Pick<
       GlobalPolicyStudioDraft,
       "coreGoal" | "globalPolicy" | "styleGuide" | "forbiddenRules"
-    > & { policyVersion?: number },
+    > & { targetVersion?: number },
     actorId: string,
     note?: string,
   ): Promise<PolicyReleaseListItem> {
     const { active, basePolicy, document } = await this.loadActiveForMutation();
-    const currentPolicyVersion = readPositiveInt(document.globalPolicyVersion, 1);
-    const requestedPolicyVersion = readPositiveInt(draft.policyVersion, currentPolicyVersion);
+    const currentPolicyVersion = readPositiveInt(active?.version ?? 1, 1);
+    const requestedPolicyVersion = readPositiveInt(draft.targetVersion, currentPolicyVersion);
     if (
       requestedPolicyVersion < currentPolicyVersion ||
       requestedPolicyVersion > currentPolicyVersion + 1
     ) {
-      throw new Error("policyVersion must be current or next version");
+      throw new Error("Only current or next policy version can be updated");
     }
 
     document.globalPolicyDraft = {
-      ...draft,
-      updatedAt: nowIso(),
+      coreGoal: draft.coreGoal,
+      globalPolicy: draft.globalPolicy,
+      styleGuide: draft.styleGuide,
+      forbiddenRules: draft.forbiddenRules,
     };
-    document.globalPolicyVersion = requestedPolicyVersion;
-    const policy = applyControlPlaneDocument(basePolicy, document);
-    const changeNote = note ?? "control-plane: save global policy draft";
+    const policy = writeGlobalPolicyDocument(basePolicy, document);
+    const isNextVersionPublish = requestedPolicyVersion === currentPolicyVersion + 1;
+    const changeNote =
+      note ??
+      (isNextVersionPublish
+        ? `control-plane: publish policy v${requestedPolicyVersion}`
+        : "control-plane: update active policy");
 
     let row: PolicyReleaseRow;
-    if (active) {
+    if (isNextVersionPublish || !active) {
+      row = await this.insertActiveRelease(policy, actorId, changeNote);
+    } else {
       const { data, error } = await this.supabase
         .from("ai_policy_releases")
         .update({
@@ -1736,14 +1520,11 @@ export class AdminAiControlPlaneStore {
         throw new Error(`save policy draft failed: ${error?.message ?? "unknown"}`);
       }
       row = data;
-    } else {
-      row = await this.insertActiveRelease(policy, actorId, changeNote);
     }
 
-    const savedDoc = asControlPlaneDocument(row.policy);
+    const savedDoc = readGlobalPolicyDocument(row.policy);
     return {
       version: row.version,
-      policyVersion: savedDoc.globalPolicyVersion,
       isActive: row.is_active,
       createdBy: row.created_by,
       changeNote: row.change_note,
@@ -1752,30 +1533,21 @@ export class AdminAiControlPlaneStore {
     };
   }
 
-  public async publishPolicyRelease(
-    version: number,
-    actorId: string,
-    note?: string,
-  ): Promise<void> {
+  public async deletePolicyRelease(version: number): Promise<void> {
     const row = await this.fetchReleaseByVersion(version);
     if (!row) {
       throw new Error("policy release not found");
     }
-    await this.supabase
-      .from("ai_policy_releases")
-      .update({ is_active: false })
-      .eq("is_active", true);
+    if (row.is_active) {
+      throw new Error("active policy release cannot be deleted");
+    }
+
     const { error } = await this.supabase
       .from("ai_policy_releases")
-      .update({
-        is_active: true,
-        created_by: actorId,
-        change_note: note ?? row.change_note ?? "control-plane: publish draft",
-      })
+      .delete()
       .eq("version", version);
-
     if (error) {
-      throw new Error(`publish release failed: ${error.message}`);
+      throw new Error(`delete policy release failed: ${error.message}`);
     }
   }
 
@@ -1795,10 +1567,9 @@ export class AdminAiControlPlaneStore {
       note ?? `control-plane: rollback to version ${version}`,
     );
 
-    const doc = asControlPlaneDocument(inserted.policy);
+    const doc = readGlobalPolicyDocument(inserted.policy);
     return {
       version: inserted.version,
-      policyVersion: doc.globalPolicyVersion,
       isActive: inserted.is_active,
       createdBy: inserted.created_by,
       changeNote: inserted.change_note,
@@ -1817,8 +1588,13 @@ export class AdminAiControlPlaneStore {
       throw new Error("policy release not found");
     }
 
-    const document = asControlPlaneDocument(row.policy);
-    const model = document.models.find((item) => item.id === modelId);
+    const document = readGlobalPolicyDocument(row.policy);
+    const [providers, models] = await Promise.all([
+      this.listProvidersFromDb(),
+      this.listModelsFromDb(),
+    ]);
+    await this.applyProviderSecretStatuses(providers);
+    const model = models.find((item) => item.id === modelId);
     if (!model) {
       throw new Error("model not found");
     }
@@ -2095,8 +1871,8 @@ export class AdminAiControlPlaneStore {
       structured: PersonaGenerationStructured;
     }
   > {
-    const { document } = await this.getActiveControlPlane();
-    const model = document.models.find((item) => item.id === input.modelId);
+    const { document, providers, models } = await this.getActiveControlPlane();
+    const model = models.find((item) => item.id === input.modelId);
     if (!model) {
       throw new Error("model not found");
     }
@@ -2108,7 +1884,7 @@ export class AdminAiControlPlaneStore {
     ) {
       throw new Error("model is not eligible for persona generation");
     }
-    const provider = document.providers.find((item) => item.id === model.providerId);
+    const provider = providers.find((item) => item.id === model.providerId);
     if (!provider) {
       throw new Error("provider not found for model");
     }
@@ -2157,7 +1933,6 @@ export class AdminAiControlPlaneStore {
       registry,
       taskType: "generic",
       routeOverride: {
-        taskType: "generic",
         targets: [
           {
             providerId: provider.providerKey,
@@ -2243,8 +2018,8 @@ export class AdminAiControlPlaneStore {
     soulOverride?: Record<string, unknown>;
     longMemoryOverride?: string;
   }): Promise<PreviewResult> {
-    const { document } = await this.getActiveControlPlane();
-    const model = document.models.find((item) => item.id === input.modelId);
+    const { document, models } = await this.getActiveControlPlane();
+    const model = models.find((item) => item.id === input.modelId);
     if (!model) {
       throw new Error("model not found");
     }
@@ -2304,28 +2079,34 @@ export class AdminAiControlPlaneStore {
     active: PolicyReleaseRow | null;
     basePolicy: Record<string, unknown>;
     document: AiControlPlaneDocument;
+    providers: AiProviderConfig[];
+    models: AiModelConfig[];
   }> {
     const active = await this.fetchActiveRelease();
     const basePolicy = asRecord(active?.policy) ?? {};
-    const document = asControlPlaneDocument(basePolicy);
-    await this.applyProviderSecretStatuses(document);
+    const document = readGlobalPolicyDocument(basePolicy);
+    const [providers, models] = await Promise.all([
+      this.listProvidersFromDb(),
+      this.listModelsFromDb(),
+    ]);
+    await this.applyProviderSecretStatuses(providers);
     return {
       active,
       basePolicy,
       document,
+      providers,
+      models,
     };
   }
 
-  private async applyProviderSecretStatuses(document: AiControlPlaneDocument): Promise<void> {
-    const keys = document.providers
-      .map((item) => item.providerKey.trim())
-      .filter((item) => item.length > 0);
+  private async applyProviderSecretStatuses(providers: AiProviderConfig[]): Promise<void> {
+    const keys = providers.map((item) => item.providerKey.trim()).filter((item) => item.length > 0);
     if (keys.length === 0) {
       return;
     }
 
     const statusMap = await listProviderSecretStatuses(keys);
-    for (const provider of document.providers) {
+    for (const provider of providers) {
       const status = statusMap.get(provider.providerKey);
       if (!status) {
         provider.hasKey = false;
@@ -2399,34 +2180,6 @@ export class AdminAiControlPlaneStore {
 
     if (error || !data) {
       throw new Error(`insert active release failed: ${error?.message ?? "unknown"}`);
-    }
-
-    return data;
-  }
-
-  private async persistControlPlaneOnActiveRelease(
-    active: PolicyReleaseRow | null,
-    policy: Record<string, unknown>,
-    actorId: string,
-    note: string,
-  ): Promise<PolicyReleaseRow> {
-    if (!active) {
-      return this.insertActiveRelease(policy, actorId, note);
-    }
-
-    const { data, error } = await this.supabase
-      .from("ai_policy_releases")
-      .update({
-        policy,
-        created_by: actorId,
-        change_note: note,
-      })
-      .eq("version", active.version)
-      .select("version, policy, is_active, created_by, change_note, created_at")
-      .single<PolicyReleaseRow>();
-
-    if (error || !data) {
-      throw new Error(`update active release failed: ${error?.message ?? "unknown"}`);
     }
 
     return data;

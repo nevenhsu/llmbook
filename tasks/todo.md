@@ -106,3 +106,79 @@
   - `npm test -- 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts'`
 - 測試結果：
   - vitest：2 suites / 4 tests passed。
+
+## 2026-03-03 Provider Secret Fallback + MiniMax Test Cleanup Plan
+
+- [x] 將 provider secret 讀取邏輯統一為 `DB secret first, .env fallback second`（admin/runtime 共用）
+- [x] 讓 provider list `hasKey/keyLast4` 也吃相同 fallback 規則，避免 UI 與 runtime 狀態不一致
+- [x] 清理 model test 成功條件的冗餘判斷，保留可用性判斷（`error/finishReason`）
+- [x] 新增 `provider-secrets` 測試覆蓋 env fallback、missing table、db 優先、decrypt 失敗回退
+- [x] 更新文件與 `.env.example` 說明 fallback 優先序
+
+## Review (Provider Secret Fallback + MiniMax Test Cleanup)
+
+- 實作摘要：
+  - `src/lib/ai/llm/provider-secrets.ts` 新增 env fallback（`XAI_API_KEY` / `MINIMAX_API_KEY`），DB 優先、env 次之。
+  - `listProviderSecretStatuses` 與 `loadDecryptedProviderSecrets` 現在都套用同一份 fallback 規則，admin control panel 與 runtime 行為一致。
+  - `loadDecryptedProviderSecrets` 遇到 decrypt 失敗時不會整體中斷，會回退 env key（若有）。
+  - `src/lib/ai/admin/control-plane-store.ts` 清理 model test 成功條件冗餘分支。
+  - `.env.example` 與 `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md` 已補上 fallback 說明。
+- 驗證命令：
+  - `npx vitest run src/lib/ai/llm/provider-secrets.test.ts src/lib/ai/llm/providers/minimax-provider.test.ts src/lib/ai/llm/invoke-llm.test.ts`
+- 測試結果：
+  - vitest：3 files / 14 tests passed。
+
+## 2026-03-03 AI Models Table Migration Plan
+
+- [x] 新增 `public.ai_providers` / `public.ai_models` / `public.ai_model_routes` migration（含索引與 service-role RLS policy）
+- [x] 同步更新 `supabase/schema.sql`（與 migration 一致）
+- [x] `AdminAiControlPlaneStore` 改為從 inventory tables 讀寫 provider/model/route（不再以 `policy.controlPlane.providers/models/routes` 為真相）
+- [x] 保留 `ai_policy_releases` 僅管理 policy draft/version，provider/model/route 變更不再寫入 release policy
+- [x] `/api/admin/ai/model-routes` GET 改為讀取 `ai_model_routes`（不再即時計算覆蓋）
+- [x] LLM runtime fallback 改為 DB inventory tables（`ai_providers` + `ai_models`）
+- [x] 執行針對性檢查並記錄 review
+
+## Review (AI Inventory Table Split)
+
+- 實作摘要：
+  - 新增 migration：`supabase/migrations/20260303103000_ai_control_plane_inventory_tables.sql`。
+  - 新增三張表：`ai_providers`、`ai_models`、`ai_model_routes`，含 RLS + service role policies + 索引 + default route rows。
+  - `AdminAiControlPlaneStore` 的 provider/model/route CRUD、model test、reorder、runtime error 記錄，全部改為直接寫新表。
+  - `ai_policy_releases` 現在僅承載 policy draft/version（save/publish/rollback），不再承載 inventory。
+  - `runtime-config-provider` fallback 路由來源改為 `ai_providers` + `ai_models`。
+- 驗證命令：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg "control-plane-store|runtime-config-provider|model-routes/route" -n || true`
+  - `npm run lint`（失敗：專案既有 ESLint/react plugin 相容問題）
+  - `npx tsc --noEmit`（失敗：專案既有型別錯誤，非本次改動）
+
+## 2026-03-03 Route Legacy Final Removal + Capability Order Fix Plan
+
+- [x] 修正 `ai_models.display_order` 預設值為 capability 內排序（text/image 各自從 0 起算）
+- [x] 移除 `ai_model_routes` 於 admin store 的讀寫依賴（不再維護 routes 狀態）
+- [x] 刪除 `/api/admin/ai/model-routes` API 與前端 hook/UI 對應流程
+- [x] 移除 Control Plane 的 Routes 分頁與相關型別/工具函式
+- [x] 同步文件與 schema 描述，將舊路由框架標記為已移除
+- [x] 執行 targeted tests 驗證 runtime + inventory 邏輯
+
+## Check-in (Route Legacy Final Removal + Capability Order Fix)
+
+- [x] Step 1：先改 store `upsertModel` 的 `displayOrder` fallback（capability scoped）
+- [x] Step 2：刪除 store 內 route methods 與 mutation 觸發的 route upsert calls
+- [x] Step 3：刪除 `model-routes` API、hook 的 route state/請求、panel routes section
+- [x] Step 4：同步 docs/schema，確保敘述改為「已移除舊 route framework」
+- [x] Step 5：跑 vitest（runtime-config + model-adapter + invoke + active-order）並回填 review
+
+## Review (Route Legacy Final Removal + Capability Order Fix)
+
+- 實作摘要：
+  - `upsertModel` 的預設 `displayOrder` 改為 capability 內計數，不再使用全域 `models.length`。
+  - `AdminAiControlPlaneStore` 已移除所有 `ai_model_routes` 讀寫、`updateRoutes`、`buildCapabilityRoutes` 與相關 mutation side-effects。
+  - 刪除 `GET/PUT /api/admin/ai/model-routes` 與 `ModelRoutingSection`，`useAiControlPlane` 不再維護 routes state。
+  - `ProvidersModelsSection` 排序來源改為 `ai_models.displayOrder`（capability 分組），不再讀 route/metadata fallback。
+  - 文件改為「舊 route 框架已移除，改用 active model order（by capability）」。
+- 驗證命令：
+  - `npx vitest run src/lib/ai/llm/default-model-config.test.ts src/lib/ai/llm/active-order-inventory.test.ts src/lib/ai/llm/invoke-llm.test.ts src/lib/ai/prompt-runtime/model-adapter.test.ts src/lib/ai/llm/runtime-config-provider.test.ts`
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "control-plane-store|useAiControlPlane|AiControlPlanePanel|ProvidersModelsSection|control-plane-types|control-plane-utils|api/admin/ai/models/route|admin/ai/control-plane/page" -n`
+- 測試結果：
+  - vitest：5 files / 27 tests passed。
+  - tsc filter：本次改動相關檔案無型別錯誤。

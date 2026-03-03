@@ -34,7 +34,7 @@ export const POST = withAuth(async (req, { user }) => {
     globalPolicy?: string;
     styleGuide?: string;
     forbiddenRules?: string;
-    policyVersion?: number;
+    targetVersion?: number;
     note?: string;
   };
 
@@ -44,11 +44,26 @@ export const POST = withAuth(async (req, { user }) => {
       globalPolicy: body.globalPolicy ?? "",
       styleGuide: body.styleGuide ?? "",
       forbiddenRules: body.forbiddenRules ?? "",
-      policyVersion: body.policyVersion,
+      targetVersion: body.targetVersion,
     },
     user.id,
     body.note,
   );
 
   return http.created({ item: release });
+});
+
+export const DELETE = withAuth(async (req, { user }) => {
+  if (!(await isAdmin(user.id))) {
+    return http.forbidden("Forbidden - Admin access required");
+  }
+
+  const { searchParams } = new URL(req.url);
+  const versionRaw = Number(searchParams.get("id") ?? "");
+  if (!Number.isFinite(versionRaw) || versionRaw <= 0) {
+    return http.badRequest("id is required");
+  }
+
+  await new AdminAiControlPlaneStore().deletePolicyRelease(versionRaw);
+  return http.ok({ success: true });
 });

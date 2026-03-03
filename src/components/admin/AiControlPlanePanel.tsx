@@ -1,44 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Cpu, ChevronRight, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCw, Cpu, ChevronRight, Sparkles, Trash2 } from "lucide-react";
 import { useAiControlPlane } from "@/hooks/admin/useAiControlPlane";
 import { type PersonaItem, SECTION_ICONS, SECTION_ITEMS } from "@/lib/ai/admin/control-plane-types";
 import type {
   AiModelConfig,
-  AiModelRoute,
   AiProviderConfig,
   PolicyReleaseListItem,
 } from "@/lib/ai/admin/control-plane-store";
 
 import { ProvidersModelsSection } from "./control-plane/sections/ProvidersModelsSection";
 import { PolicyStudioSection } from "./control-plane/sections/PolicyStudioSection";
-import { ModelRoutingSection } from "./control-plane/sections/ModelRoutingSection";
 import { PersonaGenerationSection } from "./control-plane/sections/PersonaGenerationSection";
 import { PersonaInteractionSection } from "./control-plane/sections/PersonaInteractionSection";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 type Props = {
   initialProviders: AiProviderConfig[];
   initialModels: AiModelConfig[];
-  initialRoutes: AiModelRoute[];
   initialReleases: PolicyReleaseListItem[];
   initialPersonas: PersonaItem[];
 };
 
 export default function AiControlPlanePanel(props: Props) {
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
-  const [rollbackVersion, setRollbackVersion] = useState<number | null>(null);
+  const [rollbackLoading, setRollbackLoading] = useState(false);
+  const [versionDropdownOpen, setVersionDropdownOpen] = useState(false);
+  const [deleteReleaseTarget, setDeleteReleaseTarget] = useState<PolicyReleaseListItem | null>(
+    null,
+  );
+  const [deleteReleaseLoading, setDeleteReleaseLoading] = useState(false);
+  const versionDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const {
     activeSection,
     setActiveSection,
     providers,
     models,
-    routes,
     releases,
     personas,
-    routeDrafts,
-    setRouteDrafts,
     draft,
     setDraft,
     policyPreviewInput,
@@ -67,11 +68,11 @@ export default function AiControlPlanePanel(props: Props) {
     runModelTest,
     setModelActive,
     reorderModels,
-    saveRoute,
     createDraft,
+    publishNextVersion,
     runPolicyPreview,
-    publishRelease,
     rollbackRelease,
+    deletePolicyRelease,
     runPersonaGenerationPreview,
     savePersonaFromGeneration,
     runInteractionPreview,
@@ -80,26 +81,101 @@ export default function AiControlPlanePanel(props: Props) {
     personaStepStatus,
   } = useAiControlPlane(props);
 
-  const currentPolicyVersion = activeRelease?.policyVersion ?? 1;
-  const allowedPolicyVersions = useMemo(
-    () => [currentPolicyVersion, currentPolicyVersion + 1],
-    [currentPolicyVersion],
-  );
-  const selectedRollbackRelease =
-    rollbackVersion == null
-      ? null
-      : (releases.find((item) => item.version === rollbackVersion) ?? null);
-  const hasRollbackCandidate = releases.some((item) => !item.isActive);
+  const currentPolicyVersion = activeRelease?.version ?? 1;
+  const nextPolicyVersion = currentPolicyVersion + 1;
+  const selectablePolicyVersions = useMemo(() => {
+    const versions = new Set<number>([currentPolicyVersion, nextPolicyVersion]);
+    for (const item of releases) {
+      versions.add(item.version);
+    }
+    return Array.from(versions).sort((a, b) => b - a);
+  }, [releases, currentPolicyVersion, nextPolicyVersion]);
+  const versionItems = useMemo(() => {
+    return selectablePolicyVersions.map((version) => {
+      const latestForVersion =
+        releases
+          .filter((item) => item.version === version)
+          .sort((a, b) => b.version - a.version)[0] ?? null;
+      const kind =
+        version === currentPolicyVersion
+          ? "current"
+          : version === nextPolicyVersion
+            ? "next"
+            : "historical";
+      return {
+        version,
+        kind,
+        release: latestForVersion,
+        canDelete: Boolean(latestForVersion && !latestForVersion.isActive),
+      };
+    });
+  }, [selectablePolicyVersions, releases, currentPolicyVersion, nextPolicyVersion]);
+  const isNextSelectedPolicyVersion = draft.selectedVersion === nextPolicyVersion;
+  const isCurrentSelectedPolicyVersion = draft.selectedVersion === currentPolicyVersion;
+  const isHistoricalSelectedPolicyVersion =
+    !isCurrentSelectedPolicyVersion && !isNextSelectedPolicyVersion;
+  const canEditSelectedPolicyVersion =
+    draft.selectedVersion === currentPolicyVersion || isNextSelectedPolicyVersion;
+  const canSaveSelectedPolicyVersion = draft.selectedVersion === currentPolicyVersion;
+  const selectedRollbackRelease = useMemo(() => {
+    const release = releases.find((item) => item.version === draft.selectedVersion);
+    if (!release || release.isActive) {
+      return null;
+    }
+    return release;
+  }, [releases, draft.selectedVersion]);
 
   useEffect(() => {
-    if (allowedPolicyVersions.includes(draft.policyVersion)) {
+    if (selectablePolicyVersions.includes(draft.selectedVersion)) {
       return;
     }
     setDraft((prev) => ({
       ...prev,
-      policyVersion: currentPolicyVersion,
+      selectedVersion: currentPolicyVersion,
     }));
-  }, [allowedPolicyVersions, currentPolicyVersion, draft.policyVersion, setDraft]);
+  }, [selectablePolicyVersions, currentPolicyVersion, draft.selectedVersion, setDraft]);
+
+  useEffect(() => {
+    const sourcePolicyVersion = isNextSelectedPolicyVersion
+      ? currentPolicyVersion
+      : draft.selectedVersion;
+    const selectedRelease = releases.find((item) => item.version === sourcePolicyVersion) ?? null;
+    if (!selectedRelease) {
+      return;
+    }
+    setDraft((prev) => ({
+      ...prev,
+      coreGoal: selectedRelease.globalPolicyDraft.coreGoal ?? "",
+      globalPolicy: selectedRelease.globalPolicyDraft.globalPolicy ?? "",
+      styleGuide: selectedRelease.globalPolicyDraft.styleGuide ?? "",
+      forbiddenRules: selectedRelease.globalPolicyDraft.forbiddenRules ?? "",
+    }));
+    setPolicyPreviewInput((prev) => ({
+      ...prev,
+      releaseId: String(selectedRelease.version),
+    }));
+  }, [
+    draft.selectedVersion,
+    releases,
+    setDraft,
+    setPolicyPreviewInput,
+    currentPolicyVersion,
+    isNextSelectedPolicyVersion,
+  ]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!versionDropdownRef.current) {
+        return;
+      }
+      if (versionDropdownRef.current.contains(event.target as Node)) {
+        return;
+      }
+      setVersionDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -111,49 +187,84 @@ export default function AiControlPlanePanel(props: Props) {
             AI Control Plane
           </h1>
           <p className="mt-1 text-sm opacity-60">
-            Manage providers, policies, model routes, and persona workflows.
+            Manage providers, policies, models, and persona workflows.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="form-control">
-            <select
-              className="select select-bordered select-xs w-40"
-              value={
-                allowedPolicyVersions.includes(draft.policyVersion)
-                  ? draft.policyVersion
-                  : currentPolicyVersion
-              }
-              onChange={(event) => {
-                const nextVersion = Number(event.target.value);
-                setDraft((prev) => ({
-                  ...prev,
-                  policyVersion: Number.isFinite(nextVersion) ? nextVersion : currentPolicyVersion,
-                }));
-              }}
+          <div ref={versionDropdownRef} className="relative">
+            <div
+              tabIndex={0}
+              role="button"
+              className="select select-bordered select-xs w-44 items-center justify-between px-3 text-left"
+              onClick={() => setVersionDropdownOpen((open) => !open)}
             >
-              {allowedPolicyVersions.map((version) => (
-                <option key={version} value={version}>
-                  v{version}
-                  {version === currentPolicyVersion ? " (current)" : " (next)"}
-                </option>
-              ))}
-            </select>
+              <span>
+                v{draft.selectedVersion}
+                {draft.selectedVersion === currentPolicyVersion
+                  ? " (current)"
+                  : draft.selectedVersion === nextPolicyVersion
+                    ? " (next)"
+                    : " (historical)"}
+              </span>
+            </div>
+            {versionDropdownOpen ? (
+              <ul className="menu bg-base-100 border-base-300 rounded-box absolute top-full left-0 z-20 mt-1 w-72 border p-1 shadow">
+                {versionItems.map((item) => (
+                  <li key={`version-item-${item.version}`}>
+                    <div
+                      className="hover:bg-base-200 flex cursor-pointer items-center justify-between gap-2 rounded px-1 py-0.5"
+                      onClick={() => {
+                        setDraft((prev) => ({ ...prev, selectedVersion: item.version }));
+                        setVersionDropdownOpen(false);
+                      }}
+                    >
+                      <div className="flex min-h-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-sm">
+                        v{item.version} ({item.kind})
+                        {item.release ? (
+                          <span className="text-[10px] opacity-60">
+                            release #{item.release.version}
+                          </span>
+                        ) : null}
+                      </div>
+                      {item.canDelete && item.release ? (
+                        <button
+                          className="btn btn-ghost btn-xs text-error"
+                          title="Delete inactive release"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeleteReleaseTarget(item.release);
+                            setVersionDropdownOpen(false);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
-          <button
-            className="btn btn-outline btn-sm"
-            disabled={!hasRollbackCandidate}
-            onClick={() => {
-              const fallback = releases.find((item) => !item.isActive) ?? releases[0] ?? null;
-              setRollbackVersion(fallback?.version ?? null);
-              setRollbackModalOpen(true);
-            }}
-          >
-            Rollback
-          </button>
+          {isNextSelectedPolicyVersion ? (
+            <button className="btn btn-primary btn-sm" onClick={() => void publishNextVersion()}>
+              Publish
+            </button>
+          ) : isCurrentSelectedPolicyVersion ? (
+            <button className="btn btn-primary btn-sm" onClick={() => void createDraft()}>
+              Update
+            </button>
+          ) : (
+            <button
+              className="btn btn-outline btn-sm"
+              disabled={!isHistoricalSelectedPolicyVersion || !selectedRollbackRelease}
+              onClick={() => setRollbackModalOpen(true)}
+            >
+              Rollback
+            </button>
+          )}
           <button className="btn btn-outline btn-sm gap-1" onClick={() => void refreshAll()}>
             <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
           </button>
         </div>
       </div>
@@ -230,7 +341,6 @@ export default function AiControlPlanePanel(props: Props) {
             <ProvidersModelsSection
               providers={providers}
               models={models}
-              routes={routes}
               modelTestImageLinks={modelTestImageLinks}
               createSupportedProvider={createSupportedProvider}
               runModelTest={runModelTest}
@@ -242,6 +352,8 @@ export default function AiControlPlanePanel(props: Props) {
           {activeSection === "policy" && (
             <PolicyStudioSection
               draft={draft}
+              canEditDraft={canEditSelectedPolicyVersion}
+              canSaveDraft={canSaveSelectedPolicyVersion}
               setDraft={setDraft}
               releases={releases}
               policyPreviewInput={policyPreviewInput}
@@ -250,18 +362,7 @@ export default function AiControlPlanePanel(props: Props) {
               providers={providers}
               policyPreview={policyPreview}
               createDraft={createDraft}
-              publishRelease={publishRelease}
               runPolicyPreview={runPolicyPreview}
-            />
-          )}
-
-          {activeSection === "routes" && (
-            <ModelRoutingSection
-              routeDrafts={routeDrafts}
-              setRouteDrafts={setRouteDrafts}
-              providers={providers}
-              models={models}
-              saveRoute={saveRoute}
             />
           )}
 
@@ -301,103 +402,91 @@ export default function AiControlPlanePanel(props: Props) {
         </main>
       </div>
 
-      {rollbackModalOpen ? (
-        <dialog className="modal modal-open" open>
-          <div className="modal-box max-w-2xl space-y-4">
-            <h3 className="text-lg font-semibold">Rollback Policy Release</h3>
-            <div className="form-control w-full">
-              <label className="label py-0.5">
-                <span className="label-text text-xs font-semibold opacity-70">Target Release</span>
-              </label>
-              <select
-                className="select select-bordered select-sm w-full"
-                value={rollbackVersion ?? ""}
-                onChange={(event) => setRollbackVersion(Number(event.target.value) || null)}
-              >
-                <option value="">Select release</option>
-                {releases.map((item) => (
-                  <option key={item.version} value={item.version} disabled={item.isActive}>
-                    v{item.policyVersion} (release #{item.version})
-                    {item.isActive ? " - active" : ""}
-                  </option>
-                ))}
-              </select>
+      <ConfirmModal
+        isOpen={rollbackModalOpen}
+        onClose={() => setRollbackModalOpen(false)}
+        onConfirm={() => {
+          if (!selectedRollbackRelease) {
+            return;
+          }
+          setRollbackLoading(true);
+          void rollbackRelease(selectedRollbackRelease.version)
+            .then(() => setRollbackModalOpen(false))
+            .finally(() => setRollbackLoading(false));
+        }}
+        title="Rollback Policy Release"
+        message={`Rollback active policy to selected version v${draft.selectedVersion}.`}
+        confirmText="Confirm Rollback"
+        variant="warning"
+        isLoading={rollbackLoading}
+        confirmDisabled={!selectedRollbackRelease}
+      >
+        <div className="border-base-300 bg-base-200/30 rounded-lg border p-3 text-xs opacity-80">
+          Target policy version: <span className="font-semibold">v{draft.selectedVersion}</span>
+          {selectedRollbackRelease ? (
+            <span> (release #{selectedRollbackRelease.version})</span>
+          ) : (
+            <span> (no rollback candidate)</span>
+          )}
+        </div>
+
+        {selectedRollbackRelease ? (
+          <div className="border-base-300 bg-base-200/30 space-y-2 rounded-lg border p-3">
+            <div className="text-xs opacity-70">
+              Preview release #{selectedRollbackRelease.version}
             </div>
-
-            {selectedRollbackRelease ? (
-              <div className="border-base-300 bg-base-200/30 space-y-2 rounded-lg border p-3">
-                <div className="text-xs opacity-70">
-                  Preview: v{selectedRollbackRelease.policyVersion} / release #
-                  {selectedRollbackRelease.version}
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div>
-                    <div className="text-[11px] font-semibold opacity-70">Core Goal</div>
-                    <p className="text-xs whitespace-pre-wrap">
-                      {selectedRollbackRelease.globalPolicyDraft.coreGoal || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-semibold opacity-70">Style Guide</div>
-                    <p className="text-xs whitespace-pre-wrap">
-                      {selectedRollbackRelease.globalPolicyDraft.styleGuide || "-"}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold opacity-70">Global Policy</div>
-                  <p className="text-xs whitespace-pre-wrap">
-                    {selectedRollbackRelease.globalPolicyDraft.globalPolicy || "-"}
-                  </p>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold opacity-70">Forbidden Rules</div>
-                  <p className="text-xs whitespace-pre-wrap">
-                    {selectedRollbackRelease.globalPolicyDraft.forbiddenRules || "-"}
-                  </p>
-                </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-semibold opacity-70">Core Goal</div>
+                <p className="text-xs whitespace-pre-wrap">
+                  {selectedRollbackRelease.globalPolicyDraft.coreGoal || "-"}
+                </p>
               </div>
-            ) : null}
-
-            <div className="modal-action">
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  setRollbackModalOpen(false);
-                  setRollbackVersion(null);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-warning btn-sm"
-                disabled={!selectedRollbackRelease}
-                onClick={() => {
-                  if (!selectedRollbackRelease) {
-                    return;
-                  }
-                  void rollbackRelease(selectedRollbackRelease.version).then(() => {
-                    setRollbackModalOpen(false);
-                    setRollbackVersion(null);
-                  });
-                }}
-              >
-                Confirm Rollback
-              </button>
+              <div>
+                <div className="text-[11px] font-semibold opacity-70">Style Guide</div>
+                <p className="text-xs whitespace-pre-wrap">
+                  {selectedRollbackRelease.globalPolicyDraft.styleGuide || "-"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold opacity-70">Global Policy</div>
+              <p className="text-xs whitespace-pre-wrap">
+                {selectedRollbackRelease.globalPolicyDraft.globalPolicy || "-"}
+              </p>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold opacity-70">Forbidden Rules</div>
+              <p className="text-xs whitespace-pre-wrap">
+                {selectedRollbackRelease.globalPolicyDraft.forbiddenRules || "-"}
+              </p>
             </div>
           </div>
-          <form method="dialog" className="modal-backdrop">
-            <button
-              onClick={() => {
-                setRollbackModalOpen(false);
-                setRollbackVersion(null);
-              }}
-            >
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+        ) : null}
+      </ConfirmModal>
+
+      <ConfirmModal
+        isOpen={Boolean(deleteReleaseTarget)}
+        onClose={() => setDeleteReleaseTarget(null)}
+        onConfirm={() => {
+          if (!deleteReleaseTarget) {
+            return;
+          }
+          setDeleteReleaseLoading(true);
+          void deletePolicyRelease(deleteReleaseTarget.version)
+            .then(() => setDeleteReleaseTarget(null))
+            .finally(() => setDeleteReleaseLoading(false));
+        }}
+        title="Delete Policy Release"
+        message={
+          deleteReleaseTarget
+            ? `Delete inactive release #${deleteReleaseTarget.version}?`
+            : "Delete policy release?"
+        }
+        confirmText="Delete"
+        variant="danger"
+        isLoading={deleteReleaseLoading}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ interface ConfirmModalProps {
   variant?: "danger" | "warning";
   confirmationText?: string;
   confirmationPlaceholder?: string;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
 }
 
 export default function ConfirmModal({
@@ -28,6 +31,8 @@ export default function ConfirmModal({
   variant = "danger",
   confirmationText,
   confirmationPlaceholder,
+  confirmDisabled = false,
+  children,
 }: ConfirmModalProps) {
   const [confirmationValue, setConfirmationValue] = useState("");
 
@@ -39,7 +44,9 @@ export default function ConfirmModal({
 
   const needsTextConfirmation = typeof confirmationText === "string" && confirmationText.length > 0;
   const canConfirm =
-    !isLoading && (!needsTextConfirmation || confirmationValue.trim() === confirmationText);
+    !confirmDisabled &&
+    !isLoading &&
+    (!needsTextConfirmation || confirmationValue.trim() === confirmationText);
 
   const handleConfirm = () => {
     if (!canConfirm) {
@@ -96,6 +103,8 @@ export default function ConfirmModal({
                 }}
               />
             )}
+
+            {children ? <div>{children}</div> : null}
           </div>
         </div>
 

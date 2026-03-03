@@ -1,6 +1,6 @@
 # Admin AI Control Plane 規範文本（Product Spec）
 
-> 開發階段聲明（重要）：目前不做舊設定相容。若存在舊 `primary/fallback`、`taskRoutes`、舊 scope 路由設定，必須在開發時一併更新為新結構（`orderedModelIds` + capability-first 路由）。
+> 狀態聲明（重要）：舊 `primary/fallback`、`taskRoutes`、`ai_model_routes` scope 路由框架已移除。現行僅使用 model `status=active` + `displayOrder`（依 capability）。
 
 ## 1. 目標
 
@@ -22,18 +22,22 @@
 
 功能：
 
-- Provider 新增 / 更新 / 刪除 / 啟用 / 停用
+- Provider 新增 / 更新 / 啟用 / 停用
 - 僅支援已安裝 provider package：
   - `@ai-sdk/xai`
   - `vercel-minimax-ai-provider`
 - Provider list 僅顯示 API key 設定狀態（configured/missing）
 - 由 Provider list 點擊 API key 動作開啟 modal 設定，不提供獨立 Add Provider 按鈕
 - API Key 僅可更新，不可明文顯示
-- API Key 加密存於 `public.ai_provider_secrets`，`ai_policy_releases.policy.controlPlane.providers` 僅存 `hasKey/keyLast4`
+- API Key 加密僅存於 `public.ai_provider_secrets`
+- Provider metadata/status 存於 `public.ai_providers`
+- Model metadata/status/order 存於 `public.ai_models`
+- `ai_providers` 不儲存 `hasKey/keyLast4`，這兩者僅由 `ai_provider_secrets`（+ `.env` fallback）在 server 動態組合回傳
 - server 端以共用 lib 解密並注入 provider（Admin test 與 AI agent runtime 共用同一邏輯）
+- key 來源優先序：`ai_provider_secrets`（DB）優先，`.env`（`XAI_API_KEY` / `MINIMAX_API_KEY`）僅作開發 fallback
 - 手動「連線測試」按鈕（不自動重測）
 - 狀態標記：`untested` / `success` / `failed` / `disabled` / `key_missing`
-- 設定 capability-first 路由（Text / Image）並維護 active model order
+- 以 capability-first（Text / Image）維護 active model order（不再有獨立 route table）
 
 支援模型（V1）：
 
@@ -78,20 +82,15 @@ Model List / Selection（V1）：
   - TipTap 渲染結果
   - prompt 組裝檢視（global 區塊如何注入）
 
-### 2.3 Routes（全域路由，能力導向）
+### 2.3 Model Order（能力導向）
 
-用途：設定能力路由（text/image）使用的有序模型清單。
-
-路由類型：
-
-- `global_default`（text capability）
-- `image`（image capability）
+用途：以 `ai_models` 的 `displayOrder`（依 capability）決定 runtime 嘗試順序。
 
 規則：
 
-- 每類型維護 `orderedModelIds`
-- runtime 依序嘗試（#1 失敗就試 #2、#3...）
-- 不再使用 `primary/fallback` 作為真相來源
+- `text_generation` 與 `image_generation` 各自獨立排序（都從 0 起算）
+- runtime 依 active model order 逐一嘗試（#1 失敗就試 #2、#3...）
+- 不再使用 `primary/fallback` 或 `ai_model_routes` 作為真相來源
 
 ### 2.4 Persona
 
@@ -162,7 +161,7 @@ Model List / Selection（V1）：
 
 - Admin 可在 UI 完成 provider/model 管理與手動連線測試
 - Admin 可編輯全域規範，並完成 preview -> publish
-- 可維護 text/image 兩條 capability 路由的 active model order，並由 runtime 依序重試
+- 可維護 text/image 兩類 capability 的 active model order，並由 runtime 依序重試
 - 可完成 persona 生成、手改、保存
 - 可完成 persona 互動預覽，且可看到 TipTap 渲染結果
 - 可手動測試 image sub-agent，成功時 markdown 含 Supabase URL 並可渲染

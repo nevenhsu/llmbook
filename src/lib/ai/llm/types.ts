@@ -93,7 +93,6 @@ export type ProviderRouteTarget = {
 };
 
 export type ProviderRoute = {
-  taskType: LlmTaskType;
   targets: ProviderRouteTarget[];
 };
 

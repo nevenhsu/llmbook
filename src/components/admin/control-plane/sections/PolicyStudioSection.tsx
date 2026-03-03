@@ -13,6 +13,8 @@ import { optionLabelForModel } from "../control-plane-utils";
 
 export interface PolicyStudioSectionProps {
   draft: DraftState;
+  canEditDraft: boolean;
+  canSaveDraft: boolean;
   setDraft: Dispatch<SetStateAction<DraftState>>;
   releases: PolicyReleaseListItem[];
   policyPreviewInput: {
@@ -31,12 +33,13 @@ export interface PolicyStudioSectionProps {
   providers: AiProviderConfig[];
   policyPreview: PreviewResult | null;
   createDraft: () => Promise<void>;
-  publishRelease: (releaseId: number) => Promise<void>;
   runPolicyPreview: () => Promise<void>;
 }
 
 export function PolicyStudioSection({
   draft,
+  canEditDraft,
+  canSaveDraft,
   setDraft,
   releases,
   policyPreviewInput,
@@ -45,7 +48,6 @@ export function PolicyStudioSection({
   providers,
   policyPreview,
   createDraft,
-  publishRelease,
   runPolicyPreview,
 }: PolicyStudioSectionProps) {
   return (
@@ -60,6 +62,7 @@ export function PolicyStudioSection({
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full text-sm leading-relaxed"
                 value={draft.coreGoal}
+                disabled={!canEditDraft}
                 onChange={(e) => setDraft((prev) => ({ ...prev, coreGoal: e.target.value }))}
                 placeholder="Define the primary objective of the AI system…"
               />
@@ -71,6 +74,7 @@ export function PolicyStudioSection({
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full text-sm leading-relaxed"
                 value={draft.styleGuide}
+                disabled={!canEditDraft}
                 onChange={(e) => setDraft((prev) => ({ ...prev, styleGuide: e.target.value }))}
                 placeholder="Tone, voice, formatting conventions…"
               />
@@ -82,6 +86,7 @@ export function PolicyStudioSection({
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-48 w-full text-sm leading-relaxed"
                 value={draft.globalPolicy}
+                disabled={!canEditDraft}
                 onChange={(e) => setDraft((prev) => ({ ...prev, globalPolicy: e.target.value }))}
                 placeholder="Content rules, behavioral guidelines…"
               />
@@ -93,6 +98,7 @@ export function PolicyStudioSection({
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full text-sm leading-relaxed"
                 value={draft.forbiddenRules}
+                disabled={!canEditDraft}
                 onChange={(e) => setDraft((prev) => ({ ...prev, forbiddenRules: e.target.value }))}
                 placeholder="Explicit prohibitions…"
               />
@@ -104,14 +110,27 @@ export function PolicyStudioSection({
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full text-sm leading-relaxed"
                 value={draft.note}
+                disabled={!canEditDraft}
                 onChange={(e) => setDraft((prev) => ({ ...prev, note: e.target.value }))}
                 placeholder="What changed in this draft…"
               />
             </div>
           </div>
+          {!canEditDraft ? (
+            <p className="text-warning text-xs">
+              Selected version is historical. Historical versions are read-only and can only be
+              rolled back.
+            </p>
+          ) : !canSaveDraft ? (
+            <p className="text-info text-xs">
+              Selected version is next. Use the header Publish button to update and publish this
+              version.
+            </p>
+          ) : null}
           <div className="border-base-300 mt-6 flex justify-end border-t pt-5">
             <button
               className="btn btn-primary btn-sm gap-2 shadow-sm"
+              disabled={!canEditDraft || !canSaveDraft}
               onClick={() => void createDraft()}
             >
               <Upload className="h-4 w-4" />
@@ -143,10 +162,7 @@ export function PolicyStudioSection({
                 ) : (
                   releases.map((item) => (
                     <tr key={item.version} className="hover:bg-base-200/40">
-                      <td className="font-mono font-medium">
-                        v{item.policyVersion}
-                        <div className="text-[10px] opacity-50">release #{item.version}</div>
-                      </td>
+                      <td className="font-mono font-medium">v{item.version}</td>
                       <td>
                         {item.isActive ? (
                           <span className="badge badge-success badge-sm gap-1">
@@ -162,16 +178,6 @@ export function PolicyStudioSection({
                       </td>
                       <td className="text-right">
                         <div className="flex justify-end gap-1.5">
-                          {!item.isActive && (
-                            <button
-                              className="btn btn-xs btn-primary gap-1"
-                              onClick={() => void publishRelease(item.version)}
-                              title="Publish this release"
-                            >
-                              <Upload className="h-3 w-3" />
-                              Publish
-                            </button>
-                          )}
                           <button
                             className="btn btn-xs btn-ghost gap-1"
                             onClick={() =>
