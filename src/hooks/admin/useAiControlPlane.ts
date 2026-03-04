@@ -52,7 +52,7 @@ export function useAiControlPlane({
 
   const [draft, setDraft] = useState<DraftState>({
     selectedVersion: activeRelease?.version ?? latestPolicyVersion,
-    coreGoal: latestRelease?.globalPolicyDraft.coreGoal ?? "",
+    systemBaseline: latestRelease?.globalPolicyDraft.systemBaseline ?? "",
     globalPolicy: latestRelease?.globalPolicyDraft.globalPolicy ?? "",
     styleGuide: latestRelease?.globalPolicyDraft.styleGuide ?? "",
     forbiddenRules: latestRelease?.globalPolicyDraft.forbiddenRules ?? "",
@@ -60,8 +60,7 @@ export function useAiControlPlane({
   });
 
   const [policyPreviewInput, setPolicyPreviewInput] = useState({
-    releaseId: latestRelease?.version ? String(latestRelease.version) : "",
-    modelId: initialModels.find((model) => model.capability === "text_generation")?.id ?? "",
+    version: latestRelease?.version ? String(latestRelease.version) : "",
     taskContext: "Draft a forum comment preview.",
   });
   const [policyPreview, setPolicyPreview] = useState<PreviewResult | null>(null);
@@ -366,15 +365,15 @@ export function useAiControlPlane({
     try {
       const res = await apiPost<{ item: PolicyReleaseListItem }>("/api/admin/ai/policy-releases", {
         action: "update",
-        releaseVersion: draft.selectedVersion,
-        coreGoal: draft.coreGoal,
+        version: draft.selectedVersion,
+        systemBaseline: draft.systemBaseline,
         globalPolicy: draft.globalPolicy,
         styleGuide: draft.styleGuide,
         forbiddenRules: draft.forbiddenRules,
         note: draft.note,
       });
       toast.success(`Policy updated (v${res.item.version})`);
-      setPolicyPreviewInput((prev) => ({ ...prev, releaseId: String(res.item.version) }));
+      setPolicyPreviewInput((prev) => ({ ...prev, version: String(res.item.version) }));
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save policy");
@@ -385,15 +384,15 @@ export function useAiControlPlane({
     try {
       const res = await apiPost<{ item: PolicyReleaseListItem }>("/api/admin/ai/policy-releases", {
         action: "publish",
-        releaseVersion: draft.selectedVersion,
-        coreGoal: draft.coreGoal,
+        version: draft.selectedVersion,
+        systemBaseline: draft.systemBaseline,
         globalPolicy: draft.globalPolicy,
         styleGuide: draft.styleGuide,
         forbiddenRules: draft.forbiddenRules,
         note: draft.note,
       });
       toast.success(`Policy published (v${res.item.version})`);
-      setPolicyPreviewInput((prev) => ({ ...prev, releaseId: String(res.item.version) }));
+      setPolicyPreviewInput((prev) => ({ ...prev, version: String(res.item.version) }));
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to publish policy");
@@ -401,15 +400,14 @@ export function useAiControlPlane({
   };
 
   const runPolicyPreview = async () => {
-    if (!policyPreviewInput.releaseId || !policyPreviewInput.modelId) {
-      toast.error("release and model are required");
+    if (!policyPreviewInput.version) {
+      toast.error("version is required");
       return;
     }
     try {
       const res = await apiPost<{ preview: PreviewResult }>(
-        `/api/admin/ai/policy-releases/${policyPreviewInput.releaseId}/preview`,
+        `/api/admin/ai/policy-releases/${policyPreviewInput.version}/preview`,
         {
-          modelId: policyPreviewInput.modelId,
           taskContext: policyPreviewInput.taskContext,
         },
       );
@@ -419,50 +417,74 @@ export function useAiControlPlane({
     }
   };
 
-  const rollbackRelease = async (releaseId: number) => {
+  const previewSelectedPolicyDraft = async () => {
+    const version = String(draft.selectedVersion);
+    const taskContext =
+      policyPreviewInput.taskContext.trim() || "Preview prompt assembled from policy draft.";
+    setPolicyPreviewInput({
+      version,
+      taskContext,
+    });
+
     try {
-      await apiPost(`/api/admin/ai/policy-releases/${releaseId}/rollback`, {
-        note: `rollback to release ${releaseId}`,
+      const res = await apiPost<{ preview: PreviewResult }>(
+        `/api/admin/ai/policy-releases/${version}/preview`,
+        {
+          taskContext,
+        },
+      );
+      setPolicyPreview(res.preview);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to run preview");
+    }
+  };
+
+  const rollbackRelease = async (version: number) => {
+    try {
+      await apiPost(`/api/admin/ai/policy-releases/${version}/rollback`, {
+        note: `rollback to version ${version}`,
       });
-      toast.success(`Rollback to release #${releaseId} complete`);
+      toast.success(`Rollback to version ${version} complete`);
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to rollback release");
     }
   };
 
-  const deletePolicyRelease = async (releaseId: number) => {
+  const deletePolicyRelease = async (version: number) => {
     try {
-      await apiDelete(`/api/admin/ai/policy-releases?id=${encodeURIComponent(String(releaseId))}`);
-      toast.success(`Release #${releaseId} deleted`);
+      await apiDelete(
+        `/api/admin/ai/policy-releases?version=${encodeURIComponent(String(version))}`,
+      );
+      toast.success(`Version ${version} deleted`);
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete release");
     }
   };
 
-  const viewPolicyRelease = (releaseId: number) => {
-    const selected = releases.find((item) => item.version === releaseId);
+  const viewPolicyVersion = (version: number) => {
+    const selected = releases.find((item) => item.version === version);
     if (!selected) {
-      toast.error("Release not found");
+      toast.error("Version not found");
       return;
     }
     setDraft((prev) => ({
       ...prev,
       selectedVersion: selected.version,
-      coreGoal: selected.globalPolicyDraft.coreGoal ?? "",
+      systemBaseline: selected.globalPolicyDraft.systemBaseline ?? "",
       globalPolicy: selected.globalPolicyDraft.globalPolicy ?? "",
       styleGuide: selected.globalPolicyDraft.styleGuide ?? "",
       forbiddenRules: selected.globalPolicyDraft.forbiddenRules ?? "",
     }));
-    setPolicyPreviewInput((prev) => ({ ...prev, releaseId: String(selected.version) }));
+    setPolicyPreviewInput((prev) => ({ ...prev, version: String(selected.version) }));
   };
 
   useEffect(() => {
     if (!releases.some((item) => item.version === draft.selectedVersion)) {
       const fallback = activeRelease ?? releases[0] ?? null;
       if (fallback) {
-        viewPolicyRelease(fallback.version);
+        viewPolicyVersion(fallback.version);
       }
     }
   }, [releases, activeRelease, draft.selectedVersion]);
@@ -664,9 +686,10 @@ export function useAiControlPlane({
     createDraft,
     publishNextVersion,
     runPolicyPreview,
+    previewSelectedPolicyDraft,
     rollbackRelease,
     deletePolicyRelease,
-    viewPolicyRelease,
+    viewPolicyVersion,
     runPersonaGenerationPreview,
     savePersonaFromGeneration,
     runInteractionPreview,

@@ -16,8 +16,9 @@ vi.mock("@/lib/ai/admin/control-plane-store", () => ({
 }));
 
 vi.mock("@/lib/server/route-helpers", () => ({
-  withAuth: (handler: any) => (req: Request, routeContext: { params: Promise<{ id: string }> }) =>
-    handler(req, { user: { id: "admin-1" }, supabase: {} }, routeContext),
+  withAuth:
+    (handler: any) => (req: Request, routeContext: { params: Promise<{ version: string }> }) =>
+      handler(req, { user: { id: "admin-1" }, supabase: {} }, routeContext),
   http: {
     ok: (data: unknown) => Response.json(data, { status: 200 }),
     badRequest: (message = "Bad request") => Response.json({ error: message }, { status: 400 }),
@@ -27,7 +28,7 @@ vi.mock("@/lib/server/route-helpers", () => ({
 
 import { POST } from "./route";
 
-describe("POST /api/admin/ai/policy-releases/:id/preview", () => {
+describe("POST /api/admin/ai/policy-releases/:version/preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isAdmin.mockResolvedValue(true);
@@ -52,25 +53,25 @@ describe("POST /api/admin/ai/policy-releases/:id/preview", () => {
     isAdmin.mockResolvedValue(false);
     const req = new Request("http://localhost/api/admin/ai/policy-releases/10/preview", {
       method: "POST",
-      body: JSON.stringify({ modelId: "m-1", taskContext: "test" }),
+      body: JSON.stringify({ taskContext: "test" }),
     });
 
-    const res = await POST(req as any, { params: Promise.resolve({ id: "10" }) } as any);
+    const res = await POST(req as any, { params: Promise.resolve({ version: "10" }) } as any);
     expect(res.status).toBe(403);
   });
 
   it("returns preview payload", async () => {
     const req = new Request("http://localhost/api/admin/ai/policy-releases/10/preview", {
       method: "POST",
-      body: JSON.stringify({ modelId: "m-1", taskContext: "test" }),
+      body: JSON.stringify({ taskContext: "test" }),
       headers: { "Content-Type": "application/json" },
     });
 
-    const res = await POST(req as any, { params: Promise.resolve({ id: "10" }) } as any);
+    const res = await POST(req as any, { params: Promise.resolve({ version: "10" }) } as any);
     expect(res.status).toBe(200);
 
     const body = await res.json();
     expect(body.preview.renderOk).toBe(true);
-    expect(previewGlobalPolicyRelease).toHaveBeenCalledWith(10, "m-1", "test");
+    expect(previewGlobalPolicyRelease).toHaveBeenCalledWith(10, "test");
   });
 });

@@ -58,7 +58,7 @@ export type AiModelConfig = {
 };
 
 export type GlobalPolicyStudioDraft = {
-  coreGoal: string;
+  systemBaseline: string;
   globalPolicy: string;
   styleGuide: string;
   forbiddenRules: string;
@@ -216,7 +216,7 @@ type PersonaLongMemoryRow = {
 };
 
 const DEFAULT_POLICY_DRAFT = {
-  coreGoal: "",
+  systemBaseline: "",
   globalPolicy: "",
   styleGuide: "",
   forbiddenRules: "",
@@ -446,7 +446,7 @@ function readGlobalPolicyDocument(policy: unknown): AiControlPlaneDocument {
   const root = asRecord(policy) ?? {};
   const global = asRecord(root.global) ?? {};
   const globalPolicyDraft: GlobalPolicyStudioDraft = {
-    coreGoal: readString(global.coreGoal, DEFAULT_POLICY_DRAFT.coreGoal),
+    systemBaseline: readString(global.systemBaseline, DEFAULT_POLICY_DRAFT.systemBaseline),
     globalPolicy: readString(global.globalPolicy, DEFAULT_POLICY_DRAFT.globalPolicy),
     styleGuide: readString(global.styleGuide, DEFAULT_POLICY_DRAFT.styleGuide),
     forbiddenRules: readString(global.forbiddenRules, DEFAULT_POLICY_DRAFT.forbiddenRules),
@@ -465,7 +465,7 @@ function writeGlobalPolicyDocument(
   return {
     ...root,
     global: {
-      coreGoal: globalPolicyDoc.globalPolicyDraft.coreGoal,
+      systemBaseline: globalPolicyDoc.globalPolicyDraft.systemBaseline,
       globalPolicy: globalPolicyDoc.globalPolicyDraft.globalPolicy,
       styleGuide: globalPolicyDoc.globalPolicyDraft.styleGuide,
       forbiddenRules: globalPolicyDoc.globalPolicyDraft.forbiddenRules,
@@ -482,15 +482,15 @@ function buildPromptBlocks(input: {
 }): Array<{ name: string; content: string }> {
   const outputConstraints =
     "Output must be plain markdown compatible with TipTap. No JSON, no XML, no extra labels.";
+  const baseline = input.globalDraft.systemBaseline.trim();
+  const systemBaseline = baseline || "(not set)";
 
   return [
-    { name: "system_baseline", content: "You are an AI assistant for forum content generation." },
+    { name: "system_baseline", content: systemBaseline },
     {
       name: "global_policy",
       content: [
-        `Core goal: ${input.globalDraft.coreGoal}`,
         `Policy: ${input.globalDraft.globalPolicy}`,
-        `Style: ${input.globalDraft.styleGuide}`,
         `Forbidden: ${input.globalDraft.forbiddenRules}`,
       ].join("\n"),
     },
@@ -1473,17 +1473,17 @@ export class AdminAiControlPlaneStore {
   public async saveGlobalPolicyDraft(
     draft: Pick<
       GlobalPolicyStudioDraft,
-      "coreGoal" | "globalPolicy" | "styleGuide" | "forbiddenRules"
+      "systemBaseline" | "globalPolicy" | "styleGuide" | "forbiddenRules"
     > & {
       action?: "update" | "publish";
-      releaseVersion?: number;
+      version?: number;
     },
     actorId: string,
     note?: string,
   ): Promise<PolicyReleaseListItem> {
     const action = draft.action === "publish" ? "publish" : "update";
     const active = await this.fetchActiveRelease();
-    const requestedReleaseVersion = readPositiveInt(draft.releaseVersion, active?.version ?? 1);
+    const requestedReleaseVersion = readPositiveInt(draft.version, active?.version ?? 1);
     const baseRow =
       (await this.fetchReleaseByVersion(requestedReleaseVersion)) ??
       active ??
@@ -1499,7 +1499,7 @@ export class AdminAiControlPlaneStore {
     const document = readGlobalPolicyDocument(basePolicy);
 
     document.globalPolicyDraft = {
-      coreGoal: draft.coreGoal,
+      systemBaseline: draft.systemBaseline,
       globalPolicy: draft.globalPolicy,
       styleGuide: draft.styleGuide,
       forbiddenRules: draft.forbiddenRules,
@@ -1585,7 +1585,6 @@ export class AdminAiControlPlaneStore {
 
   public async previewGlobalPolicyRelease(
     version: number,
-    modelId: string,
     taskContext: string,
   ): Promise<PreviewResult> {
     const row = await this.fetchReleaseByVersion(version);
@@ -1594,16 +1593,6 @@ export class AdminAiControlPlaneStore {
     }
 
     const document = readGlobalPolicyDocument(row.policy);
-    const [providers, models] = await Promise.all([
-      this.listProvidersFromDb(),
-      this.listModelsFromDb(),
-    ]);
-    await this.applyProviderSecretStatuses(providers);
-    const model = models.find((item) => item.id === modelId);
-    if (!model) {
-      throw new Error("model not found");
-    }
-
     const blocks = buildPromptBlocks({
       globalDraft: document.globalPolicyDraft,
       personaSoul: "(global preview mode)",
@@ -1619,11 +1608,11 @@ export class AdminAiControlPlaneStore {
     });
 
     const markdown = [
-      `## Global Policy Preview (${model.displayName})`,
+      "## Global Policy Preview",
       "",
       `Task Context: ${taskContext || "(empty)"}`,
       "",
-      "This is a manual single-model preview response.",
+      "This is a policy-only prompt assembly preview.",
     ].join("\n");
 
     try {
@@ -1901,7 +1890,7 @@ export class AdminAiControlPlaneStore {
       { name: "system_baseline", content: "Generate a coherent forum persona profile." },
       {
         name: "global_policy",
-        content: `${document.globalPolicyDraft.coreGoal}\n${document.globalPolicyDraft.globalPolicy}`,
+        content: `${document.globalPolicyDraft.systemBaseline}\n${document.globalPolicyDraft.globalPolicy}`,
       },
       {
         name: "generator_instruction",

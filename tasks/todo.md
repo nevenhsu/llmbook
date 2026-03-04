@@ -1,3 +1,128 @@
+## 2026-03-04 SystemBaseline Key Migration Plan
+
+### Plan
+
+- [x] 將 policy draft key 從 `coreGoal` 全面改為 `systemBaseline`（前端 state/type + API payload）
+- [x] 更新 `AdminAiControlPlaneStore` 的讀寫與 prompt 組裝欄位映射
+- [x] 新增 migration，將 `ai_policy_releases.policy.global.coreGoal` 轉換為 `systemBaseline`
+- [x] 同步更新 `supabase/schema.sql`
+- [x] 跑 typecheck 與 preview route tests，回填 review
+
+### Review
+
+- 實作摘要：
+  - 前端 `DraftState` 與 Policy Draft 編輯欄位 key 已改為 `systemBaseline`。
+  - `POST /api/admin/ai/policy-releases` payload key 已改為 `systemBaseline`。
+  - `AdminAiControlPlaneStore` 讀寫 `policy.global.systemBaseline`，並移除 `coreGoal` 使用。
+  - prompt 組裝 `system_baseline` block 改讀 `globalDraft.systemBaseline`。
+  - 新增 migration：`20260304182000_policy_core_goal_to_system_baseline.sql`，將既有 JSON key 轉換。
+  - `supabase/schema.sql` 已同步加入相同 contract migration block。
+- 驗證：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "systemBaseline|policy-releases/route|useAiControlPlane|control-plane-store|PolicyStudioSection" -n || true`
+  - `npx vitest run 'src/app/api/admin/ai/policy-releases/[version]/preview/route.test.ts'`
+  - 結果：typecheck 過濾檢查無錯誤；vitest 1 file / 2 tests passed
+
+## 2026-03-04 Policy Release Route Segment Rename Plan
+
+### Plan
+
+- [x] 將 `policy-releases/[id]/preview` 目錄改名為 `policy-releases/[version]/preview`
+- [x] 將 `policy-releases/[id]/rollback` 目錄改名為 `policy-releases/[version]/rollback`
+- [x] 同步更新 route handler params 型別與相關測試引用
+- [x] 執行對應測試驗證路由改名後仍可正常運作
+
+### Review
+
+- 實作摘要：
+  - API 檔名與動態參數段已由 `[id]` 統一為 `[version]`（preview / rollback）。
+  - route handler 泛型與 `params` 解構同步改為 `version`。
+  - preview route test 的 route context 型別與測試描述已改為 `:version`。
+- 驗證：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "policy-releases/\\[version\\]|preview/route|rollback/route|useAiControlPlane|PolicyStudioSection|AiControlPlanePanel" -n || true`
+  - `npx vitest run 'src/app/api/admin/ai/policy-releases/[version]/preview/route.test.ts'`
+  - 結果：typecheck 過濾檢查無錯誤；vitest 1 file / 2 tests passed
+
+## 2026-03-04 ReleaseId -> Version Naming Unification Plan
+
+### Plan
+
+- [x] 前端 policy preview state 與 handler 命名由 `releaseId` 統一為 `version`
+- [x] policy-releases POST payload `releaseVersion` 統一為 `version`
+- [x] policy-releases DELETE query `id` 統一為 `version`
+- [x] Policy section callback 命名由 `viewPolicyRelease` 統一為 `viewPolicyVersion`
+- [x] 驗證型別與 preview route tests
+
+### Review
+
+- 實作摘要：
+  - `policyPreviewInput.releaseId` 已改為 `policyPreviewInput.version`。
+  - `POST /api/admin/ai/policy-releases` body 欄位改為 `version`。
+  - `DELETE /api/admin/ai/policy-releases` query 欄位改為 `version`。
+  - Policy UI props/callback 改為 `viewPolicyVersion(version)`，避免語意混亂。
+  - rollback/preview route 錯誤訊息改為 `invalid version`。
+- 驗證：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "useAiControlPlane|PolicyStudioSection|AiControlPlanePanel|policy-releases/route|control-plane-store|policy-releases/\\[id\\]/(preview|rollback)/route" -n || true`
+  - `npx vitest run 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts'`
+  - 結果：typecheck 過濾檢查無錯誤；vitest 1 file / 2 tests passed
+
+## 2026-03-04 Policy Preview Model-Decoupling Plan
+
+### Plan
+
+- [x] 移除 policy preview API 的 `modelId` 需求
+- [x] `previewGlobalPolicyRelease` 改為純 policy 組裝（不查 model/provider）
+- [x] 前端 preview helper 改為只傳 `releaseId + taskContext`
+- [x] 更新 preview route tests 與驗證結果
+
+### Review
+
+- 實作摘要：
+  - `POST /api/admin/ai/policy-releases/:id/preview` 不再要求 `modelId`。
+  - store `previewGlobalPolicyRelease(version, taskContext)` 改為 policy-only prompt assembly。
+  - `Policy Draft` 的 Preview/Regenerate 走相同新 contract，不依賴 model。
+  - markdown 說明更新為 policy-only preview，避免誤解成 model invocation。
+- 變更檔案：
+  - `src/app/api/admin/ai/policy-releases/[id]/preview/route.ts`
+  - `src/lib/ai/admin/control-plane-store.ts`
+  - `src/hooks/admin/useAiControlPlane.ts`
+  - `src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts`
+- 驗證：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "useAiControlPlane|preview/route|control-plane-store" -n || true`
+  - `npx vitest run 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts'`
+  - 結果：typecheck 過濾檢查無錯誤；vitest 1 file / 2 tests passed
+
+## 2026-03-04 Policy Draft Prompt Preview Modal Plan
+
+### Plan
+
+- [x] 在 Policy Draft 加入 `Preview` 按鈕，點擊後開 modal
+- [x] modal 內顯示 assembled prompt 並提供 copy button
+- [x] 串接既有 policy preview API，改為以當前 selected release 產生 prompt
+- [x] 驗證型別與互動流程，補充 review
+
+### Check-in
+
+- [x] Step 1：在 hook 新增 preview helper，固定以當前 `draft.selectedVersion` 執行 preview
+- [x] Step 2：在 Policy section 新增 preview modal 與 copy interaction
+- [x] Step 3：跑 `tsc` 快速驗證並回填 review
+
+### Review
+
+- 實作摘要：
+  - `Policy Draft` 右上新增 `Preview` 按鈕，點擊後開 modal。
+  - modal 顯示 `assembledPrompt`（readonly textarea），可 `Regenerate` 與 `Copy Prompt`。
+  - Preview 執行來源改為當前 `draft.selectedVersion`，確保看到的是當下選定版本政策組裝後的 prompt。
+- 主要變更檔案：
+  - `src/hooks/admin/useAiControlPlane.ts`：新增 `previewSelectedPolicyDraft()`
+  - `src/components/admin/AiControlPlanePanel.tsx`：傳遞 preview 狀態與 handler 到 Policy section
+  - `src/components/admin/control-plane/sections/PolicyStudioSection.tsx`：新增 Preview modal + Copy
+- 驗證命令：
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "PolicyStudioSection|AiControlPlanePanel|useAiControlPlane" -n || true`
+  - `npx vitest run 'src/app/api/admin/ai/policy-releases/[id]/preview/route.test.ts'`
+- 驗證結果：
+  - tsc 過濾檢查：無錯誤
+  - vitest：1 file / 2 tests passed
+
 ## 2026-03-03 Admin Control Plane Policy UI Refactor Plan
 
 ### Plan

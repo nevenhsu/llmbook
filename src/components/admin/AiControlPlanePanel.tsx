@@ -31,6 +31,7 @@ export default function AiControlPlanePanel(props: Props) {
     personas,
     draft,
     setDraft,
+    policyPreview,
     personaGeneration,
     setPersonaGeneration,
     personaGenerationLoading,
@@ -55,9 +56,10 @@ export default function AiControlPlanePanel(props: Props) {
     reorderModels,
     createDraft,
     publishNextVersion,
+    previewSelectedPolicyDraft,
     rollbackRelease,
     deletePolicyRelease,
-    viewPolicyRelease,
+    viewPolicyVersion,
     runPersonaGenerationPreview,
     savePersonaFromGeneration,
     runInteractionPreview,
@@ -172,9 +174,11 @@ export default function AiControlPlanePanel(props: Props) {
               setDraft={setDraft}
               activeReleaseVersion={activeRelease?.version ?? null}
               releases={releases}
-              viewPolicyRelease={viewPolicyRelease}
+              viewPolicyVersion={viewPolicyVersion}
               updatePolicy={createDraft}
               publishPolicy={publishNextVersion}
+              policyPreview={policyPreview}
+              previewSelectedPolicyDraft={previewSelectedPolicyDraft}
               rollbackRelease={rollbackRelease}
               deletePolicyRelease={deletePolicyRelease}
             />

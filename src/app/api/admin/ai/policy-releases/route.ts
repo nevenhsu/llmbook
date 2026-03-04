@@ -31,8 +31,8 @@ export const POST = withAuth(async (req, { user }) => {
 
   const body = (await req.json()) as {
     action?: "update" | "publish";
-    releaseVersion?: number;
-    coreGoal?: string;
+    version?: number;
+    systemBaseline?: string;
     globalPolicy?: string;
     styleGuide?: string;
     forbiddenRules?: string;
@@ -42,8 +42,8 @@ export const POST = withAuth(async (req, { user }) => {
   const release = await new AdminAiControlPlaneStore().saveGlobalPolicyDraft(
     {
       action: body.action,
-      releaseVersion: body.releaseVersion,
-      coreGoal: body.coreGoal ?? "",
+      version: body.version,
+      systemBaseline: body.systemBaseline ?? "",
       globalPolicy: body.globalPolicy ?? "",
       styleGuide: body.styleGuide ?? "",
       forbiddenRules: body.forbiddenRules ?? "",
@@ -61,9 +61,9 @@ export const DELETE = withAuth(async (req, { user }) => {
   }
 
   const { searchParams } = new URL(req.url);
-  const versionRaw = Number(searchParams.get("id") ?? "");
+  const versionRaw = Number(searchParams.get("version") ?? "");
   if (!Number.isFinite(versionRaw) || versionRaw <= 0) {
-    return http.badRequest("id is required");
+    return http.badRequest("version is required");
   }
 
   await new AdminAiControlPlaneStore().deletePolicyRelease(versionRaw);

@@ -1,6 +1,7 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { FileText, Layers, Eye, RotateCcw, Trash2, Upload } from "lucide-react";
-import type { PolicyReleaseListItem } from "@/lib/ai/admin/control-plane-store";
+import toast from "react-hot-toast";
+import type { PolicyReleaseListItem, PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { DraftState } from "@/lib/ai/admin/control-plane-types";
 import { SectionCard } from "../SectionCard";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -10,11 +11,13 @@ export interface PolicyStudioSectionProps {
   setDraft: Dispatch<SetStateAction<DraftState>>;
   activeReleaseVersion: number | null;
   releases: PolicyReleaseListItem[];
-  viewPolicyRelease: (releaseId: number) => void;
+  viewPolicyVersion: (version: number) => void;
   updatePolicy: () => Promise<void>;
   publishPolicy: () => Promise<void>;
-  rollbackRelease: (releaseId: number) => Promise<void>;
-  deletePolicyRelease: (releaseId: number) => Promise<void>;
+  policyPreview: PreviewResult | null;
+  previewSelectedPolicyDraft: () => Promise<void>;
+  rollbackRelease: (version: number) => Promise<void>;
+  deletePolicyRelease: (version: number) => Promise<void>;
 }
 
 export function PolicyStudioSection({
@@ -22,9 +25,11 @@ export function PolicyStudioSection({
   setDraft,
   activeReleaseVersion,
   releases,
-  viewPolicyRelease,
+  viewPolicyVersion,
   updatePolicy,
   publishPolicy,
+  policyPreview,
+  previewSelectedPolicyDraft,
   rollbackRelease,
   deletePolicyRelease,
 }: PolicyStudioSectionProps) {
@@ -35,6 +40,8 @@ export function PolicyStudioSection({
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [publishLoading, setPublishLoading] = useState(false);
+  const [promptPreviewOpen, setPromptPreviewOpen] = useState(false);
+  const [promptPreviewLoading, setPromptPreviewLoading] = useState(false);
 
   const sortedReleases = useMemo(
     () => [...releases].sort((a, b) => b.version - a.version),
@@ -50,6 +57,26 @@ export function PolicyStudioSection({
     () => releases.find((item) => item.version === draft.selectedVersion) ?? null,
     [releases, draft.selectedVersion],
   );
+
+  const openPromptPreview = () => {
+    setPromptPreviewOpen(true);
+    setPromptPreviewLoading(true);
+    void previewSelectedPolicyDraft().finally(() => setPromptPreviewLoading(false));
+  };
+
+  const copyPrompt = async () => {
+    const prompt = policyPreview?.assembledPrompt ?? "";
+    if (!prompt.trim()) {
+      toast.error("No prompt to copy");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast.success("Prompt copied");
+    } catch {
+      toast.error("Failed to copy prompt");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -92,7 +119,7 @@ export function PolicyStudioSection({
                           <div className="flex justify-end gap-1.5">
                             <button
                               className="btn btn-xs btn-ghost gap-1"
-                              onClick={() => viewPolicyRelease(item.version)}
+                              onClick={() => viewPolicyVersion(item.version)}
                               title="View"
                             >
                               <Eye className="h-3 w-3" />
@@ -170,6 +197,10 @@ export function PolicyStudioSection({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button className="btn btn-outline btn-sm" onClick={openPromptPreview}>
+                <Eye className="h-4 w-4" />
+                Preview
+              </button>
               <button
                 className="btn btn-neutral btn-sm"
                 disabled={!selectedRelease}
@@ -187,24 +218,13 @@ export function PolicyStudioSection({
           <div className="space-y-6">
             <div className="form-control w-full">
               <label className="label py-1">
-                <span className="label-text text-xs font-semibold opacity-70">Core Goal</span>
+                <span className="label-text text-xs font-semibold opacity-70">System Baseline</span>
               </label>
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full text-sm leading-relaxed"
-                value={draft.coreGoal}
-                onChange={(e) => setDraft((prev) => ({ ...prev, coreGoal: e.target.value }))}
+                value={draft.systemBaseline}
+                onChange={(e) => setDraft((prev) => ({ ...prev, systemBaseline: e.target.value }))}
                 placeholder="Define the primary objective of the AI system…"
-              />
-            </div>
-            <div className="form-control w-full">
-              <label className="label py-1">
-                <span className="label-text text-xs font-semibold opacity-70">Style Guide</span>
-              </label>
-              <textarea
-                className="textarea textarea-bordered focus:textarea-primary h-28 w-full text-sm leading-relaxed"
-                value={draft.styleGuide}
-                onChange={(e) => setDraft((prev) => ({ ...prev, styleGuide: e.target.value }))}
-                placeholder="Tone, voice, formatting conventions…"
               />
             </div>
             <div className="form-control w-full">
@@ -302,6 +322,50 @@ export function PolicyStudioSection({
         isLoading={publishLoading}
         confirmDisabled={!selectedRelease}
       />
+
+      {promptPreviewOpen ? (
+        <dialog className="modal modal-open" role="dialog" aria-modal="true">
+          <div className="modal-box w-11/12 max-w-4xl">
+            <h3 className="text-lg font-bold">Policy Prompt Preview</h3>
+            <p className="mt-1 text-sm opacity-70">
+              Preview assembled prompt for policy v{draft.selectedVersion}.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <textarea
+                className="textarea textarea-bordered h-96 w-full font-mono text-xs leading-relaxed"
+                value={policyPreview?.assembledPrompt ?? ""}
+                readOnly
+                placeholder={promptPreviewLoading ? "Generating prompt..." : "No prompt generated."}
+              />
+            </div>
+
+            <div className="modal-action">
+              <button className="btn btn-ghost" onClick={() => setPromptPreviewOpen(false)}>
+                Close
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={() => {
+                  setPromptPreviewLoading(true);
+                  void previewSelectedPolicyDraft().finally(() => setPromptPreviewLoading(false));
+                }}
+                disabled={promptPreviewLoading}
+              >
+                {promptPreviewLoading ? "Generating..." : "Regenerate"}
+              </button>
+              <button className="btn btn-primary" onClick={() => void copyPrompt()}>
+                Copy Prompt
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={() => setPromptPreviewOpen(false)} aria-label="Close">
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </div>
   );
 }

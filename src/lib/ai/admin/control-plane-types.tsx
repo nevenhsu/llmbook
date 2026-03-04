@@ -19,7 +19,7 @@ export type PersonaItem = {
 
 export type DraftState = {
   selectedVersion: number;
-  coreGoal: string;
+  systemBaseline: string;
   globalPolicy: string;
   styleGuide: string;
   forbiddenRules: string;
