@@ -2,6 +2,7 @@ import type { DispatcherPolicy } from "@/agents/task-dispatcher/policy/reply-onl
 import { createReplyPhase1ToolRegistry } from "@/agents/phase-1-reply-vote/orchestrator/reply-phase1-tools";
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { buildPhase1ReplyPrompt, type PromptBlock } from "@/lib/ai/prompt-runtime/prompt-builder";
+import { parseMarkdownActionOutput } from "@/lib/ai/prompt-runtime/action-output";
 import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
   LlmRuntimeAdapter,
@@ -10,6 +11,17 @@ import {
   type ModelGenerateTextOutput,
 } from "@/lib/ai/prompt-runtime/model-adapter";
 import type { RuntimeSoulContext } from "@/lib/ai/soul/runtime-soul-profile";
+
+export type ReplyPromptBoardRule = {
+  title: string;
+  description?: string | null;
+};
+
+export type ReplyPromptBoardContext = {
+  name?: string | null;
+  description?: string | null;
+  rules?: ReplyPromptBoardRule[] | null;
+};
 
 export type ReplyPromptRuntimeInput = {
   entityId: string;
@@ -22,6 +34,7 @@ export type ReplyPromptRuntimeInput = {
   participantCount: number;
   soul: RuntimeSoulContext;
   memoryContext: RuntimeMemoryContext | null;
+  boardContext?: ReplyPromptBoardContext | null;
   policy: DispatcherPolicy;
   modelAdapter?: ModelAdapter;
   now?: Date;
@@ -29,6 +42,11 @@ export type ReplyPromptRuntimeInput = {
 
 export type ReplyPromptRuntimeResult = {
   text: string;
+  imageRequest: {
+    needImage: boolean;
+    imagePrompt: string | null;
+    imageAlt: string | null;
+  };
   usedFallback: boolean;
   fallbackReason: string | null;
   promptBlocks: PromptBlock[];
@@ -113,6 +131,38 @@ function formatPolicyBlock(policy: DispatcherPolicy): string {
   ].join("\n");
 }
 
+function formatBoardContext(
+  boardContext: ReplyPromptBoardContext | null | undefined,
+): string | undefined {
+  const name = boardContext?.name?.trim();
+  const description = boardContext?.description?.trim();
+  const rules = Array.isArray(boardContext?.rules)
+    ? boardContext.rules
+        .map((rule) => {
+          const title = rule.title.trim();
+          const ruleDescription = rule.description?.trim();
+          if (!title && !ruleDescription) {
+            return null;
+          }
+          return title && ruleDescription
+            ? `- ${title}: ${ruleDescription}`
+            : `- ${title || ruleDescription}`;
+        })
+        .filter((rule): rule is string => Boolean(rule))
+    : [];
+
+  if (!name && !description && rules.length === 0) {
+    return undefined;
+  }
+
+  return [
+    `Board: ${name ?? "(empty)"}`,
+    `Description: ${description ?? "(empty)"}`,
+    "Rules:",
+    ...(rules.length > 0 ? rules : ["- (empty)"]),
+  ].join("\n");
+}
+
 function formatTaskContext(input: ReplyPromptRuntimeInput): string {
   return [
     `Task: generate a single markdown reply for post ${input.postId} by persona ${input.personaId}.`,
@@ -125,11 +175,16 @@ function formatTaskContext(input: ReplyPromptRuntimeInput): string {
   ].join("\n");
 }
 
-function formatOutputConstraints(): string {
+function formatTargetContext(input: ReplyPromptRuntimeInput): string | undefined {
+  if (!input.focusSnippet) {
+    return undefined;
+  }
+
   return [
-    "Output only final markdown reply.",
-    "No JSON, no XML, no role tags.",
-    "Keep it practical and bounded in scope.",
+    "target_type: comment",
+    `target_id: ${input.postId}:focus`,
+    `target_author: ${input.focusActor}`,
+    `target_content: ${input.focusSnippet}`,
   ].join("\n");
 }
 
@@ -149,14 +204,16 @@ export async function generateReplyTextWithPromptRuntime(
 
   const prompt = await buildPhase1ReplyPrompt({
     entityId: input.entityId,
+    actionType: "comment",
     now,
     systemBaseline:
       "You are a phase1 reply agent. Be accurate, concise, and constructive. Keep language natural.",
     policyText: formatPolicyBlock(input.policy),
     soulText: formatSoulBlock(input.soul),
     memoryText: formatMemoryBlock(input.memoryContext),
+    boardContextText: formatBoardContext(input.boardContext),
+    targetContextText: formatTargetContext(input),
     taskContextText: formatTaskContext(input),
-    outputConstraintsText: formatOutputConstraints(),
   });
 
   const toolEnabled = readToolEnabled();
@@ -232,10 +289,11 @@ export async function generateReplyTextWithPromptRuntime(
     };
   }
 
-  const normalizedModelText = postProcessModelText(modelResult.text);
-  if (normalizedModelText.length > 0) {
+  const parsedOutput = parseMarkdownActionOutput(modelResult.text);
+  if (parsedOutput.markdown.length > 0) {
     return {
-      text: normalizedModelText,
+      text: parsedOutput.markdown,
+      imageRequest: parsedOutput.imageRequest,
       usedFallback: false,
       fallbackReason: null,
       promptBlocks: prompt.blocks,
@@ -261,6 +319,11 @@ export async function generateReplyTextWithPromptRuntime(
 
   return {
     text: "",
+    imageRequest: {
+      needImage: false,
+      imagePrompt: null,
+      imageAlt: null,
+    },
     usedFallback: true,
     fallbackReason,
     promptBlocks: prompt.blocks,

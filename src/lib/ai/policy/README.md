@@ -114,8 +114,8 @@
   - `npm test -- src/lib/ai/policy/policy-control-plane.test.ts`
 - phase1 熱更新整合測試（dispatch）：
   - `npm test -- src/agents/task-dispatcher/orchestrator/dispatch-new-intents.test.ts`
-- 執行環境驗證（active 版本、解析後策略、最近回退狀態）：
-  - `npm run ai:policy:verify`
+- Policy 單元測試（control-plane merge/fallback/validation）：
+  - `npm test -- src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/policy/reply-interaction-eligibility.test.ts`
 
 ## 變更治理
 

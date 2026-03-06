@@ -9,7 +9,10 @@ import {
   type RuntimeSoulContext,
 } from "@/lib/ai/soul/runtime-soul-profile";
 import { buildRuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
-import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
+import {
+  generateReplyTextWithPromptRuntime,
+  type ReplyPromptBoardContext,
+} from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
 import {
   CachedReplyPolicyProvider,
   type ReplyPolicyProvider,
@@ -37,6 +40,12 @@ type CommentRow = {
 type RankedComment = CommentRow & {
   rankPriority: number;
   rankTime: number;
+};
+
+type BoardRow = {
+  name: string;
+  description: string | null;
+  rules: Array<{ title: string; description?: string | null }> | null;
 };
 
 function normalizeText(input: string): string {
@@ -293,6 +302,22 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       memoryContext = null;
     }
 
+    let boardContext: ReplyPromptBoardContext | null = null;
+    if (boardId) {
+      const { data: board } = await supabase
+        .from("boards")
+        .select("name, description, rules")
+        .eq("id", boardId)
+        .maybeSingle<BoardRow>();
+      if (board) {
+        boardContext = {
+          name: board.name,
+          description: board.description,
+          rules: board.rules ?? [],
+        };
+      }
+    }
+
     try {
       await this.recordSoulApplied({
         personaId: task.personaId,
@@ -319,6 +344,7 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       participantCount,
       soul,
       memoryContext,
+      boardContext,
       policy: await this.policyProvider.getReplyPolicy({
         personaId: task.personaId,
         boardId,

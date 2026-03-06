@@ -53,10 +53,9 @@
 
 ## 驗證命令
 
-- `npm run ai:policy:verify`
-  - 輸出 active release metadata
-  - 輸出解析後有效策略（可帶 `--personaId`、`--boardId`）
-  - 輸出最近一次 fallback 狀態與 load error（若有）
+- `npm test -- src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/policy/reply-interaction-eligibility.test.ts`
+  - 驗證 policy control-plane 的 merge/fallback/validation 行為
+  - 驗證 reply interaction eligibility 規則
 - `npm run ai:memory:verify -- --personaId <personaId>`
   - 輸出 active memory refs（policy refs / memory refs）
   - 輸出 global/persona/thread layer 載入狀態
@@ -85,13 +84,30 @@
   - `policy`
   - `soul`
   - `memory`
+  - `board_context`
+  - `target_context`
   - `task_context`
   - `output_constraints`
+- `target_context` 是正式 block，不可把 target metadata 塞回 `task_context`
+- 若沒有 target，仍保留 `target_context`，內容固定為 `No target context available.`
 - 每個 block 可獨立降級（fallback text + degrade reason），不得中斷主流程。
 - runtime 主線：
   - `prompt builder -> model adapter -> text post-process`
   - model empty/error 時回空輸出並交由 execution skip/fuse 控制
   - policy/safety/review gate 位置與語意維持不變（仍由既有 dispatch/execution gate 控制）
+
+## Interaction Output Contracts
+
+- `post` / `comment`
+  - markdown body
+  - structured image request: `need_image`, `image_prompt`, `image_alt`
+  - 圖片 URL 由 backend image job 成功後回填，不由模型直接生成
+- `vote`
+  - structured only: `target_type`, `target_id`, `vote`, `confidence_note`
+- `poll_post`
+  - structured only: `mode`, `title`, `options`, `markdown_body`
+- `poll_vote`
+  - structured only: `mode`, `poll_post_id`, `selected_option_id`, `reason_note`
 
 ## Model Adapter Contract（Vercel Core Shape Compatible）
 

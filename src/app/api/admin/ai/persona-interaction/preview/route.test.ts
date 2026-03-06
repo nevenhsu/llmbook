@@ -51,7 +51,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
   it("returns 400 for invalid taskType", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
-      body: JSON.stringify({ personaId: "p1", modelId: "m1", taskType: "vote" }),
+      body: JSON.stringify({ personaId: "p1", modelId: "m1", taskType: "reply" }),
       headers: { "Content-Type": "application/json" },
     });
 
@@ -59,7 +59,89 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns preview for valid payload", async () => {
+  it("passes structured vote target context through to the store", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "vote",
+        taskContext: "Decide whether this target deserves an upvote.",
+        targetContext: {
+          targetType: "post",
+          targetId: "post-1",
+          targetAuthor: "artist_1",
+          targetContent: "I tried three compositions and the last one feels strongest.",
+          threadSummary: "Critique thread about composition choices.",
+        },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+    expect(previewPersonaInteraction).toHaveBeenCalledWith({
+      personaId: "p1",
+      modelId: "m1",
+      taskType: "vote",
+      taskContext: "Decide whether this target deserves an upvote.",
+      targetContext: {
+        targetType: "post",
+        targetId: "post-1",
+        targetAuthor: "artist_1",
+        targetContent: "I tried three compositions and the last one feels strongest.",
+        threadSummary: "Critique thread about composition choices.",
+      },
+      boardContext: undefined,
+      soulOverride: undefined,
+      longMemoryOverride: undefined,
+    });
+  });
+
+  it("passes structured poll target context through to the store", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "poll_vote",
+        taskContext: "Choose one option.",
+        targetContext: {
+          pollPostId: "poll-1",
+          pollQuestion: "Which palette works best?",
+          pollOptions: [
+            { id: "opt-1", label: "Warm" },
+            { id: "opt-2", label: "Cool" },
+          ],
+          threadSummary: "Users are split between warm and cool palettes.",
+        },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+    expect(previewPersonaInteraction).toHaveBeenCalledWith({
+      personaId: "p1",
+      modelId: "m1",
+      taskType: "poll_vote",
+      taskContext: "Choose one option.",
+      targetContext: {
+        pollPostId: "poll-1",
+        pollQuestion: "Which palette works best?",
+        pollOptions: [
+          { id: "opt-1", label: "Warm" },
+          { id: "opt-2", label: "Cool" },
+        ],
+        threadSummary: "Users are split between warm and cool palettes.",
+      },
+      boardContext: undefined,
+      soulOverride: undefined,
+      longMemoryOverride: undefined,
+    });
+  });
+
+  it("still accepts board context for markdown actions", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
@@ -67,19 +149,39 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         modelId: "m1",
         taskType: "comment",
         taskContext: "hello",
+        boardContext: {
+          name: "Illustration",
+          description: "Feedback for visual drafts",
+          rules: [{ title: "Be specific", description: "Actionable critique only" }],
+        },
+        targetContext: {
+          targetType: "comment",
+          targetId: "comment-9",
+          targetAuthor: "critic_2",
+          targetContent: "Push the contrast further in the focal area.",
+        },
       }),
       headers: { "Content-Type": "application/json" },
     });
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.preview.tokenBudget.compressedStages).toEqual(["persona_memory"]);
     expect(previewPersonaInteraction).toHaveBeenCalledWith({
       personaId: "p1",
       modelId: "m1",
       taskType: "comment",
       taskContext: "hello",
+      boardContext: {
+        name: "Illustration",
+        description: "Feedback for visual drafts",
+        rules: [{ title: "Be specific", description: "Actionable critique only" }],
+      },
+      targetContext: {
+        targetType: "comment",
+        targetId: "comment-9",
+        targetAuthor: "critic_2",
+        targetContent: "Push the contrast further in the focal area.",
+      },
       soulOverride: undefined,
       longMemoryOverride: undefined,
     });

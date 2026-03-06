@@ -89,18 +89,50 @@ async function runWithAdapter(modelAdapter: ModelAdapter) {
     participantCount: 3,
     soul: sampleSoul(),
     memoryContext: sampleMemory(),
+    boardContext: {
+      name: "Illustration Critique",
+      description: "Share work and get concrete feedback",
+      rules: [{ title: "Be specific", description: "Offer actionable critique" }],
+    },
     policy: DEFAULT_DISPATCHER_POLICY,
     modelAdapter,
   });
 }
 
 describe("generateReplyTextWithPromptRuntime", () => {
-  it("uses model output when model returns text", async () => {
+  it("uses model output when model returns plain markdown text", async () => {
     const result = await runWithAdapter(
       new MockModelAdapter({ mode: "success", fixedText: "llm text" }),
     );
     expect(result.usedFallback).toBe(false);
     expect(result.text).toBe("llm text");
+    expect(result.imageRequest).toEqual({
+      needImage: false,
+      imagePrompt: null,
+      imageAlt: null,
+    });
+  });
+
+  it("parses structured image request from model output", async () => {
+    const result = await runWithAdapter(
+      new MockModelAdapter({
+        mode: "success",
+        fixedText: JSON.stringify({
+          markdown: "A concise reply.",
+          need_image: true,
+          image_prompt: "Editorial illustration of a roadmap with signposts.",
+          image_alt: "Roadmap signposts illustration",
+        }),
+      }),
+    );
+
+    expect(result.usedFallback).toBe(false);
+    expect(result.text).toBe("A concise reply.");
+    expect(result.imageRequest).toEqual({
+      needImage: true,
+      imagePrompt: "Editorial illustration of a roadmap with signposts.",
+      imageAlt: "Roadmap signposts illustration",
+    });
   });
 
   it("falls back when model returns empty output", async () => {
@@ -120,21 +152,46 @@ describe("generateReplyTextWithPromptRuntime", () => {
     expect(result.text).toBe("");
   });
 
-  it("includes policy/soul/memory blocks in built prompt structure", async () => {
+  it("uses comment output contract and populated target_context when focus target exists", async () => {
     const result = await runWithAdapter(new MockModelAdapter({ mode: "success", fixedText: "ok" }));
     const blockNames = result.promptBlocks.map((block) => block.name);
-    expect(blockNames).toContain("policy");
-    expect(blockNames).toContain("soul");
-    expect(blockNames).toContain("memory");
-    expect(result.promptBlocks.find((block) => block.name === "policy")?.content).toContain(
-      "replyEnabled",
-    );
-    expect(result.promptBlocks.find((block) => block.name === "soul")?.content).toContain(
-      "Identity:",
-    );
-    expect(result.promptBlocks.find((block) => block.name === "memory")?.content).toContain(
-      "Memory refs",
-    );
+    const outputConstraints =
+      result.promptBlocks.find((block) => block.name === "output_constraints")?.content ?? "";
+    const targetContext =
+      result.promptBlocks.find((block) => block.name === "target_context")?.content ?? "";
+
+    expect(blockNames).toContain("target_context");
+    expect(outputConstraints).toContain("Return markdown only for the body content.");
+    expect(outputConstraints).toContain("need_image");
+    expect(outputConstraints).toContain("image_prompt");
+    expect(outputConstraints).toContain("image_alt");
+    expect(targetContext).toContain("target_type: comment");
+    expect(targetContext).toContain("target_author: user:abcd1234");
+    expect(targetContext).toContain("target_content: which option is safer?");
+  });
+
+  it("keeps target_context block with explicit empty fallback when no focus target exists", async () => {
+    const result = await generateReplyTextWithPromptRuntime({
+      entityId: "task-2",
+      personaId: "persona-1",
+      postId: "post-1",
+      title: "Roadmap",
+      postBodySnippet: "Need a practical next step.",
+      focusActor: "user:abcd1234",
+      focusSnippet: null,
+      participantCount: 3,
+      soul: sampleSoul(),
+      memoryContext: sampleMemory(),
+      boardContext: null,
+      policy: DEFAULT_DISPATCHER_POLICY,
+      modelAdapter: new MockModelAdapter({ mode: "success", fixedText: "ok" }),
+    });
+
+    const targetContext = result.promptBlocks.find((block) => block.name === "target_context");
+
+    expect(targetContext).toBeDefined();
+    expect(targetContext?.degraded).toBe(true);
+    expect(targetContext?.content).toContain("No target context available.");
   });
 
   it("keeps main flow with empty fallback when tool loop hits max iterations", async () => {

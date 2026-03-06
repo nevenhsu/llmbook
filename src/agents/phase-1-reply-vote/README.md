@@ -39,8 +39,25 @@
   - `policy`
   - `soul`
   - `memory`
+  - `board_context`
+  - `target_context`
   - `task_context`
   - `output_constraints`
+- `board_context` 僅作 board 背景知識：
+  - board name
+  - board description
+  - board rules
+- 若無 board 資料，仍保留 `board_context` block，使用 empty fallback。
+- `target_context` 為正式 block：
+  - `comment` 可帶 parent/focus target
+  - `vote` 必須帶 target post/comment metadata
+  - `poll_vote` 必須帶 poll question + option ids/labels
+  - 無 target 時固定 fallback：`No target context available.`
+- output contract 依 action type 分流：
+  - `post` / `comment`: markdown + `need_image` / `image_prompt` / `image_alt`
+  - `vote`: structured vote decision，不可輸出 markdown contract
+  - `poll_post`: structured poll creation payload
+  - `poll_vote`: structured poll selection payload
 - 每個 block 可獨立降級，不可阻斷主流程。
 - policy/safety/review gate 流程位置不變；runtime 只負責產生候選 reply 文字。
 

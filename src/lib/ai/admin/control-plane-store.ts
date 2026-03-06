@@ -2,6 +2,10 @@ import { generateImage } from "ai";
 import { createXai } from "@ai-sdk/xai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
+import {
+  buildActionOutputConstraints,
+  type PromptActionType,
+} from "@/lib/ai/prompt-runtime/prompt-builder";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import {
@@ -137,6 +141,33 @@ export type PersonaGenerationStructured = {
     is_canonical: boolean;
     related_board_slug: string | null;
   }>;
+};
+
+export type PromptBoardRule = {
+  title: string;
+  description?: string | null;
+};
+
+export type PromptBoardContext = {
+  name?: string | null;
+  description?: string | null;
+  rules?: PromptBoardRule[] | null;
+};
+
+export type PromptTargetOption = {
+  id: string;
+  label: string;
+};
+
+export type PromptTargetContext = {
+  targetType?: "post" | "comment" | null;
+  targetId?: string | null;
+  targetAuthor?: string | null;
+  targetContent?: string | null;
+  threadSummary?: string | null;
+  pollPostId?: string | null;
+  pollQuestion?: string | null;
+  pollOptions?: PromptTargetOption[] | null;
 };
 
 type PolicyReleaseRow = {
@@ -474,14 +505,15 @@ function writeGlobalPolicyDocument(
 }
 
 function buildPromptBlocks(input: {
+  actionType: PromptActionType;
   globalDraft: GlobalPolicyStudioDraft;
   personaSoul: string;
   personaMemory: string;
   personaLongMemory: string;
+  boardContext?: string;
+  targetContext?: string;
   taskContext: string;
 }): Array<{ name: string; content: string }> {
-  const outputConstraints =
-    "Output must be plain markdown compatible with TipTap. No JSON, no XML, no extra labels.";
   const baseline = input.globalDraft.systemBaseline.trim();
   const systemBaseline = baseline || "(not set)";
 
@@ -497,9 +529,99 @@ function buildPromptBlocks(input: {
     { name: "persona_soul", content: input.personaSoul },
     { name: "persona_memory", content: input.personaMemory },
     { name: "persona_long_memory", content: input.personaLongMemory },
+    { name: "board_context", content: input.boardContext?.trim() || "No board context available." },
+    {
+      name: "target_context",
+      content: input.targetContext?.trim() || "No target context available.",
+    },
     { name: "task_context", content: input.taskContext },
-    { name: "output_constraints", content: outputConstraints },
+    { name: "output_constraints", content: buildActionOutputConstraints(input.actionType) },
   ];
+}
+
+function formatBoardContext(input?: PromptBoardContext | null): string {
+  const name = readNullableString(input?.name);
+  const description = readNullableString(input?.description);
+  const rules = Array.isArray(input?.rules)
+    ? input.rules
+        .map((rule) => {
+          const title = readNullableString(rule?.title);
+          const ruleDescription = readNullableString(rule?.description);
+          if (!title && !ruleDescription) {
+            return null;
+          }
+          return title && ruleDescription
+            ? `- ${title}: ${ruleDescription}`
+            : `- ${title ?? ruleDescription}`;
+        })
+        .filter((rule): rule is string => Boolean(rule))
+    : [];
+
+  if (!name && !description && rules.length === 0) {
+    return "";
+  }
+
+  return [
+    `Board: ${name ?? "(empty)"}`,
+    `Description: ${description ?? "(empty)"}`,
+    "Rules:",
+    ...(rules.length > 0 ? rules : ["- (empty)"]),
+  ].join("\n");
+}
+
+function formatTargetContext(input: {
+  taskType: PromptActionType;
+  targetContext?: PromptTargetContext | null;
+}): string {
+  const targetContext = input.targetContext;
+
+  if (input.taskType === "poll_vote") {
+    const pollPostId = readNullableString(targetContext?.pollPostId);
+    const pollQuestion = readNullableString(targetContext?.pollQuestion);
+    const threadSummary = readNullableString(targetContext?.threadSummary);
+    const pollOptions = Array.isArray(targetContext?.pollOptions)
+      ? targetContext.pollOptions
+          .map((option) => {
+            const id = readString(option?.id).trim();
+            const label = readString(option?.label).trim();
+            if (!id || !label) {
+              return null;
+            }
+            return `- ${id}: ${label}`;
+          })
+          .filter((option): option is string => Boolean(option))
+      : [];
+
+    if (!pollPostId && !pollQuestion && !threadSummary && pollOptions.length === 0) {
+      return "";
+    }
+
+    return [
+      `poll_post_id: ${pollPostId ?? "(empty)"}`,
+      `poll_question: ${pollQuestion ?? "(empty)"}`,
+      "poll_options:",
+      ...(pollOptions.length > 0 ? pollOptions : ["- (empty)"]),
+      ...(threadSummary ? [`thread_summary: ${threadSummary}`] : []),
+    ].join("\n");
+  }
+
+  const targetType = readNullableString(targetContext?.targetType);
+  const targetId = readNullableString(targetContext?.targetId);
+  const targetAuthor = readNullableString(targetContext?.targetAuthor);
+  const targetContent = readNullableString(targetContext?.targetContent);
+  const threadSummary = readNullableString(targetContext?.threadSummary);
+
+  if (!targetType && !targetId && !targetAuthor && !targetContent && !threadSummary) {
+    return "";
+  }
+
+  return [
+    ...(targetType ? [`target_type: ${targetType}`] : []),
+    ...(targetId ? [`target_id: ${targetId}`] : []),
+    ...(targetAuthor ? [`target_author: ${targetAuthor}`] : []),
+    ...(targetContent ? [`target_content: ${targetContent}`] : []),
+    ...(threadSummary ? [`thread_summary: ${threadSummary}`] : []),
+  ].join("\n");
 }
 
 function extractJsonFromText(text: string): string {
@@ -1594,10 +1716,13 @@ export class AdminAiControlPlaneStore {
 
     const document = readGlobalPolicyDocument(row.policy);
     const blocks = buildPromptBlocks({
+      actionType: "comment",
       globalDraft: document.globalPolicyDraft,
       personaSoul: "(global preview mode)",
       personaMemory: "",
       personaLongMemory: "",
+      boardContext: "",
+      targetContext: "",
       taskContext,
     });
 
@@ -2007,8 +2132,10 @@ export class AdminAiControlPlaneStore {
   public async previewPersonaInteraction(input: {
     personaId: string;
     modelId: string;
-    taskType: "post" | "comment";
+    taskType: PromptActionType;
     taskContext: string;
+    boardContext?: PromptBoardContext;
+    targetContext?: PromptTargetContext;
     soulOverride?: Record<string, unknown>;
     longMemoryOverride?: string;
   }): Promise<PreviewResult> {
@@ -2027,10 +2154,16 @@ export class AdminAiControlPlaneStore {
     const soulText = JSON.stringify(input.soulOverride ?? profile.soulProfile);
 
     const blocks = buildPromptBlocks({
+      actionType: input.taskType,
       globalDraft: document.globalPolicyDraft,
       personaSoul: soulText,
       personaMemory,
       personaLongMemory: longMemoryText,
+      boardContext: formatBoardContext(input.boardContext),
+      targetContext: formatTargetContext({
+        taskType: input.taskType,
+        targetContext: input.targetContext,
+      }),
       taskContext: input.taskContext,
     });
 

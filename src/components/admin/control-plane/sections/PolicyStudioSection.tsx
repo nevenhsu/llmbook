@@ -344,16 +344,6 @@ export function PolicyStudioSection({
               <button className="btn btn-ghost" onClick={() => setPromptPreviewOpen(false)}>
                 Close
               </button>
-              <button
-                className="btn btn-outline"
-                onClick={() => {
-                  setPromptPreviewLoading(true);
-                  void previewSelectedPolicyDraft().finally(() => setPromptPreviewLoading(false));
-                }}
-                disabled={promptPreviewLoading}
-              >
-                {promptPreviewLoading ? "Generating..." : "Regenerate"}
-              </button>
               <button className="btn btn-primary" onClick={() => void copyPrompt()}>
                 Copy Prompt
               </button>

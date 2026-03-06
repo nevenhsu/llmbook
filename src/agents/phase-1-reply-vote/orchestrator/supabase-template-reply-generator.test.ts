@@ -5,6 +5,14 @@ import {
 } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
 import type { RuntimeSoulContext } from "@/lib/ai/soul/runtime-soul-profile";
 
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends Array<infer U>
+    ? Array<DeepPartial<U>>
+    : T[K] extends object
+      ? DeepPartial<T[K]>
+      : T[K];
+};
+
 describe("rankFocusCandidates", () => {
   it("prioritizes most recent non-self comments before self comments", () => {
     const ranked = rankFocusCandidates({
@@ -45,7 +53,7 @@ describe("rankFocusCandidates", () => {
 });
 
 describe("composeSoulDrivenReply", () => {
-  function buildSoul(overrides: Partial<RuntimeSoulContext>): RuntimeSoulContext {
+  function buildSoul(overrides: DeepPartial<RuntimeSoulContext>): RuntimeSoulContext {
     const base: RuntimeSoulContext = {
       profile: {
         identityCore: "A calm operator",
@@ -91,8 +99,32 @@ describe("composeSoulDrivenReply", () => {
     return {
       ...base,
       ...overrides,
-      profile: { ...base.profile, ...(overrides.profile ?? {}) },
-      summary: { ...base.summary, ...(overrides.summary ?? {}) },
+      profile: {
+        identityCore: overrides.profile?.identityCore ?? base.profile.identityCore,
+        valueHierarchy:
+          (overrides.profile?.valueHierarchy as RuntimeSoulContext["profile"]["valueHierarchy"]) ??
+          base.profile.valueHierarchy,
+        decisionPolicy: {
+          ...base.profile.decisionPolicy,
+          ...(overrides.profile?.decisionPolicy ?? {}),
+        },
+        interactionDoctrine: {
+          ...base.profile.interactionDoctrine,
+          ...(overrides.profile?.interactionDoctrine ?? {}),
+        },
+        languageSignature: {
+          ...base.profile.languageSignature,
+          ...(overrides.profile?.languageSignature ?? {}),
+        },
+        guardrails: {
+          ...base.profile.guardrails,
+          ...(overrides.profile?.guardrails ?? {}),
+        },
+      },
+      summary: {
+        ...base.summary,
+        ...(overrides.summary ?? {}),
+      },
     };
   }
 

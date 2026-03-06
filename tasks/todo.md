@@ -1,3 +1,102 @@
+## 2026-03-06 Action Output Contract Plan
+
+### Plan
+
+- [x] 將互動 prompt contract 從 generic `output_constraints` 改為 action-type specific contract
+- [x] 新增 `target_context` block，供 `vote` / `poll_vote` / 需要 target 的互動任務判斷
+- [x] 定義 `post` / `comment` 的 structured image request contract，由後端回填 markdown 圖片 URL
+- [x] 定義 `vote` / `poll_post` / `poll_vote` 的 structured output contract，不與 markdown 任務共用格式
+- [x] 補 preview/runtime/tests 覆蓋各 action type 與 empty target fallback
+
+### Check-in
+
+- [x] Step 1：先更新 spec 與 shared AI docs，明確寫出各 action type output contract
+- [x] Step 2：擴充 shared prompt builder，加入 `actionType`、`target_context`、action-specific `output_constraints`
+- [x] Step 3：更新 admin interaction preview contract，讓 preview 可帶 target/poll context
+- [x] Step 4：在 markdown 任務 runtime 加入 structured image request parser/boundary
+- [x] Step 5：在 vote / poll runtime 加入 target-specific structured decision contract
+- [x] Step 6：跑 targeted vitest + focused tsc，回填 Review
+
+### Review
+
+- 實作摘要：
+  - `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`、`src/lib/ai/README.md`、`src/agents/phase-1-reply-vote/README.md` 已同步改成 action-specific contract，正式加入 `target_context` block 與 markdown/image request、vote/poll structured contracts。
+  - `src/lib/ai/prompt-runtime/prompt-builder.ts` 現在要求 `actionType`，固定輸出 `target_context`，並對 `post / comment / vote / poll_post / poll_vote` 產生不同 `output_constraints`。
+  - admin preview route/store 已接受 action-specific `targetContext`，可組出 populated/empty `target_context`，並在 preview prompt 反映 vote/poll 的 strict structured contract。
+  - reply runtime 現在以 `comment` contract 組 prompt，並透過 shared parser 萃取 `need_image / image_prompt / image_alt`。
+  - 新增 `src/lib/ai/prompt-runtime/action-output.ts`，集中處理 markdown action parser、vote/poll structured parser、image job enqueue boundary，以及後端 resolved image markdown 插入。
+  - 目前 repo 沒有現成 vote/poll orchestrator 可直接接，因此 decision-action runtime 先落在 shared parser/boundary；後續 orchestrator 可直接復用。
+- 驗證：
+  - `rg -n "target_context|poll_vote|poll_post|need_image|image_prompt|image_alt" docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/lib/ai/README.md src/agents/phase-1-reply-vote/README.md`
+  - `npx vitest run 'src/lib/ai/prompt-runtime/prompt-builder.test.ts'`
+  - `npx vitest run 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts' 'src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts'`
+  - `npx vitest run 'src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts'`
+  - `npx vitest run 'src/lib/ai/prompt-runtime/action-output.test.ts'`
+  - `npx vitest run 'src/lib/ai/prompt-runtime/prompt-builder.test.ts' 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts' 'src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts' 'src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts' 'src/lib/ai/prompt-runtime/action-output.test.ts'`
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "prompt-builder|persona-interaction/preview|reply-prompt-runtime|action-output|control-plane-store|vote|poll|image_prompt|target_context"`
+- 結果：
+  - vitest：5 files / 30 tests passed。
+  - focused tsc：本次 touched areas 無錯誤。
+
+## 2026-03-06 Board Context Prompt Block Plan
+
+### Plan
+
+- [x] 更新 prompt assembly 規格，正式加入 `board_context` block
+- [x] 調整 admin persona interaction preview contract，支援 board `name/description/rules`
+- [x] 調整 shared/runtime prompt builder，將 `board_context` 放在 memory 與 `task_context` 之間
+- [x] 補測試覆蓋「有 board info」與「沒有 board info」兩種 prompt 組裝結果
+- [x] 執行 targeted 驗證並回填 Review
+
+### Check-in
+
+- [x] Step 1：先更新 `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md` 與 `src/agents/phase-1-reply-vote/README.md`
+- [x] Step 2：擴充 preview route/store input，讓 admin interaction preview 可顯式傳入 board context
+- [x] Step 3：修改 `src/lib/ai/prompt-runtime/prompt-builder.ts` 與 reply runtime 組裝 `board_context`
+- [x] Step 4：補 route/runtime tests，確認 populated 與 empty board cases
+- [x] Step 5：跑 vitest + focused tsc，將結果寫回 Review
+
+### Review
+
+- 實作摘要：
+  - 互動 prompt contract 已正式加入獨立 `board_context` block，位置在 memory 與 `task_context` 之間。
+  - admin persona interaction preview route/store 現在可接受 board `name / description / rules`，並在 assembled prompt 中輸出 `board_context`。
+  - shared prompt builder 與 phase1 reply runtime 已加入 `board_context` fallback：缺 board 時固定輸出 `No board context available.`。
+  - `SupabaseTemplateReplyGenerator` 會在有 `boardId` 時額外查詢 `boards` 表，將 board metadata 帶入正式 runtime prompt。
+- 驗證：
+  - `npx vitest run 'src/app/api/admin/ai/persona-interaction/preview/route.test.ts' 'src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts' 'src/lib/ai/prompt-runtime/prompt-builder.test.ts' 'src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts'`
+  - `npx tsc --noEmit --pretty false 2>&1 | rg -n "persona-interaction/preview/route.ts|control-plane-store.preview-persona-interaction.test.ts|prompt-builder|reply-prompt-runtime|supabase-template-reply-generator|board_context"`
+- 結果：
+  - vitest：4 files / 12 tests passed。
+  - focused tsc：本次變更檔案無新增錯誤；仍有既有錯誤在 `src/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator.test.ts`，與這次修改無關。
+
+## 2026-03-05 AI Policy Verify Workflow Refresh Plan
+
+### Plan
+
+- [x] 確認 `AI Policy Verify` workflow 的過時點與現行 policy 驗證入口
+- [x] 更新 `.github/workflows/ai-policy-verify.yml`，改為可用且對 policy 有效的檢查
+- [x] 同步修正文檔中過時的 `ai:policy:verify` 指令
+- [x] 執行 targeted 驗證命令，並回填 Review
+
+### Check-in
+
+- [x] Step 1：先調整 workflow 使 CI 不再呼叫不存在 script
+- [x] Step 2：更新 `src/lib/ai/policy/README.md` 與 `src/lib/ai/README.md` 的驗證命令
+- [x] Step 3：跑 policy 相關測試並確認 workflow 指令本地可執行
+
+### Review
+
+- 實作摘要：
+  - `AI Policy Verify` workflow 移除過時的 secret gate 與 `npm run ai:policy:verify`。
+  - workflow 改為直接執行 policy 單元測試：
+    - `src/lib/ai/policy/policy-control-plane.test.ts`
+    - `src/lib/ai/policy/reply-interaction-eligibility.test.ts`
+  - `src/lib/ai/policy/README.md`、`src/lib/ai/README.md` 已同步移除舊指令並改為新測試命令。
+- 驗證：
+  - `npm test -- src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/policy/reply-interaction-eligibility.test.ts`
+  - 結果：2 files / 15 tests passed。
+
 ## 2026-03-04 SystemBaseline Key Migration Plan
 
 ### Plan

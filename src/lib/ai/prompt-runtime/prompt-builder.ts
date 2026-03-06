@@ -10,11 +10,14 @@ export const PHASE1_REPLY_PROMPT_BLOCK_ORDER = [
   "policy",
   "soul",
   "memory",
+  "board_context",
+  "target_context",
   "task_context",
   "output_constraints",
 ] as const;
 
 export type Phase1ReplyPromptBlockName = (typeof PHASE1_REPLY_PROMPT_BLOCK_ORDER)[number];
+export type PromptActionType = "post" | "comment" | "vote" | "poll_post" | "poll_vote";
 
 export type PromptMessage = {
   role: "system" | "user" | "assistant";
@@ -31,12 +34,14 @@ export type PromptBlock = {
 
 export type Phase1PromptBuilderInput = {
   entityId: string;
+  actionType: PromptActionType;
   systemBaseline?: string;
   policyText?: string;
   soulText?: string;
   memoryText?: string;
+  boardContextText?: string;
+  targetContextText?: string;
   taskContextText: string;
-  outputConstraintsText?: string;
   now?: Date;
 };
 
@@ -87,6 +92,49 @@ function buildTextBlock(input: {
   };
 }
 
+export function buildActionOutputConstraints(actionType: PromptActionType): string {
+  switch (actionType) {
+    case "post":
+    case "comment":
+      return [
+        "Return markdown only for the body content.",
+        "Do not include JSON, XML, code fences, role tags, or extra labels.",
+        "Provide a separate structured image request with these exact fields:",
+        "- need_image: boolean",
+        "- image_prompt: string | null",
+        "- image_alt: string | null",
+        "Never emit a final image URL in markdown or in structured fields.",
+      ].join("\n");
+    case "vote":
+      return [
+        "Return only a structured vote decision.",
+        'target_type: "post" | "comment"',
+        "target_id: string",
+        'vote: "up" | "down"',
+        "confidence_note: string | null",
+        "Do not return markdown, prose, JSON wrappers, or extra commentary.",
+      ].join("\n");
+    case "poll_post":
+      return [
+        "Return only a structured poll creation payload.",
+        'mode: "create_poll"',
+        "title: string",
+        "options: string[]",
+        "markdown_body: string | null",
+        "Do not return markdown as the primary output contract.",
+      ].join("\n");
+    case "poll_vote":
+      return [
+        "Return only a structured poll vote payload.",
+        'mode: "vote_poll"',
+        "poll_post_id: string",
+        "selected_option_id: string",
+        "reason_note: string | null",
+        "Do not return markdown, prose, JSON wrappers, or extra commentary.",
+      ].join("\n");
+  }
+}
+
 const BLOCK_BUILDERS: BlockBuilder[] = [
   {
     name: "system_baseline",
@@ -130,6 +178,26 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
       }),
   },
   {
+    name: "board_context",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "board_context",
+        value: input.boardContextText,
+        fallback: "No board context available.",
+        missingReason: "BOARD_CONTEXT_BLOCK_MISSING",
+      }),
+  },
+  {
+    name: "target_context",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "target_context",
+        value: input.targetContextText,
+        fallback: "No target context available.",
+        missingReason: "TARGET_CONTEXT_BLOCK_MISSING",
+      }),
+  },
+  {
     name: "task_context",
     build: ({ input }) =>
       buildTextBlock({
@@ -144,9 +212,8 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
     build: ({ input }) =>
       buildTextBlock({
         name: "output_constraints",
-        value: input.outputConstraintsText,
-        fallback:
-          "Output constraints: return only final markdown reply text; no JSON, no XML, no extra labels.",
+        value: buildActionOutputConstraints(input.actionType),
+        fallback: buildActionOutputConstraints(input.actionType),
         missingReason: "OUTPUT_CONSTRAINTS_BLOCK_MISSING",
       }),
   },

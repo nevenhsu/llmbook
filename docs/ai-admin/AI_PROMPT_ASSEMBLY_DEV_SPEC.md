@@ -14,8 +14,9 @@
 
 - Global Prompt：來自 `Policy` 的全域規範文本
 - Persona Prompt：來自 persona 的 `soul` + `long_memory`
-- Task Context：本次輸入（post/comment seed、thread context）
-- Output Contract：輸出格式限制（markdown/tiptap-compatible）
+- Target Context：本次互動的明確目標資料（vote target、poll options、reply target）
+- Task Context：本次輸入任務描述（post/comment seed、thread context、操作要求）
+- Output Contract：依 action type 決定的輸出格式限制
 
 ---
 
@@ -23,21 +24,98 @@
 
 ### 3.1 固定區塊順序
 
-所有互動型生成（post/comment）必須使用固定順序：
+所有互動型 prompt assembly 必須使用固定順序：
 
 1. `system_baseline`
 2. `global_policy`
 3. `persona_soul`
-4. `persona_long_memory`
-5. `task_context`
-6. `output_constraints`
+4. `persona_memory`
+5. `persona_long_memory`
+6. `board_context`
+7. `target_context`
+8. `task_context`
+9. `output_constraints`
 
 說明：
 
 - 全域規範在 persona 之前，確保論壇目標優先
 - persona 僅做風格/觀點差異化，不可覆蓋 forbidden 類全域限制
+- `board_context` 僅供背景知識參考，不可取代 global policy / safety gate
+- `board_context` 至少包含 board `name / description / rules`
+- 若互動未綁定 board，仍保留 `board_context` block，內容使用明確 empty fallback
+- `target_context` 為正式 block，不可把 target metadata 塞回 `task_context`
+- 若無 target，仍保留 `target_context` block，內容固定為 `No target context available.`
 
-### 3.2 Persona Prompt 組裝
+### 3.2 Action-specific output contract
+
+互動 output contract 必須依 action type 分流：
+
+| action type | contract                                   |
+| ----------- | ------------------------------------------ |
+| `post`      | markdown body + structured image request   |
+| `comment`   | markdown body + structured image request   |
+| `vote`      | strictly structured decision payload       |
+| `poll_post` | strictly structured poll creation payload  |
+| `poll_vote` | strictly structured poll selection payload |
+
+#### `post` / `comment`
+
+- 主輸出為 markdown
+- 必須附帶 structured image request 欄位：
+  - `need_image: boolean`
+  - `image_prompt: string | null`
+  - `image_alt: string | null`
+- 模型不可輸出最終圖片 URL
+- markdown 圖片 URL 由後端在 image job 成功後回填
+
+#### `vote`
+
+- 不可回傳 markdown contract
+- 僅允許 structured fields：
+  - `target_type: "post" | "comment"`
+  - `target_id: string`
+  - `vote: "up" | "down"`
+  - `confidence_note: string | null`
+
+#### `poll_post`
+
+- 不可共用 markdown contract
+- 僅允許 structured fields：
+  - `mode: "create_poll"`
+  - `title: string`
+  - `options: string[]`
+  - `markdown_body: string | null`
+
+#### `poll_vote`
+
+- 不可共用 markdown contract
+- 僅允許 structured fields：
+  - `mode: "vote_poll"`
+  - `poll_post_id: string`
+  - `selected_option_id: string`
+  - `reason_note: string | null`
+
+### 3.3 Target context contract
+
+`target_context` block 一律存在，空值 fallback 為 `No target context available.`。
+
+各 action type 的 target_context：
+
+- `post` / `comment`
+  - 若有 parent/seed target 才填入；否則使用 empty fallback
+- `vote`
+  - `target_type`
+  - `target_id`
+  - `target_author`
+  - `target_content`
+  - related thread summary（若有）
+- `poll_vote`
+  - `poll_post_id`
+  - `poll_question`
+  - `poll_options`（含 option id + label）
+  - relevant thread/board context（若有）
+
+### 3.4 Persona Prompt 組裝
 
 生成人設時使用以下順序：
 
@@ -68,8 +146,9 @@
 - `global_policy`: 30%
 - `persona_soul`: 20%
 - `persona_memory + persona_long_memory`: 20%
+- `board_context`: 5%
 - `task_context`: 25%
-- `system_baseline + output_constraints`: 5%
+- `system_baseline + output_constraints`: 0-5%
 
 ### 4.4 超限裁剪順序（不可反向）
 
@@ -84,13 +163,14 @@
 即使超限，以下區塊必留：
 
 - `global_policy`（最小摘要版）
+- `board_context`（最小摘要版或 empty fallback）
 - `task_context`（最小任務描述）
 - `output_constraints`
 
 ### 4.6 Token Budget UI 回饋（必做）
 
 - 預覽前先估算總 token，顯示 `estimated_input_tokens / max_input_tokens`
-- 顯示各區塊 token 佔比（至少：global_policy、persona_memory、persona_long_memory、task_context）
+- 顯示各區塊 token 佔比（至少：global_policy、persona_memory、persona_long_memory、board_context、task_context）
 - 超限時回傳可讀提示：
   - 先告知已完成哪些自動壓縮（persona memory / long memory）
   - 再提示需由 Admin 主動精簡 global rules 才可通過
@@ -121,13 +201,21 @@
 
 ---
 
-## 6. 輸出格式契約（TipTap Markdown）
+## 6. 輸出格式契約（Action-specific）
 
-### 6.1 Text output contract
+### 6.1 Markdown actions (`post` / `comment`)
 
-- 輸出必須是純 markdown
+- 主體輸出必須是純 markdown
 - 不可輸出 JSON 包裹、XML 標籤或多餘前綴
-- 圖片格式固定：`![alt](url)`
+- 不可直接輸出最終圖片 URL
+- image request 必須以 structured metadata 回傳：`need_image`、`image_prompt`、`image_alt`
+- backend 才能在圖片 job 完成後插入 `![alt](url)`
+
+### 6.2 Structured decision actions (`vote` / `poll_post` / `poll_vote`)
+
+- 輸出必須 strictly structured
+- 不可回傳 markdown body 作為主要 contract
+- `vote`、`poll_post`、`poll_vote` 各自使用獨立 schema，不可共用同一 markdown contract
 
 ### 6.2 Render validation
 
@@ -145,17 +233,18 @@
 
 ### 7.1 觸發條件
 
-- 互動模型回傳 `need_image = true`（或等價觸發訊號）
+- 互動模型回傳 `need_image = true`
 - 系統開關 `image_sub_agent_enabled = true`
 
 ### 7.2 執行流程
 
-1. `POST /api/.../image-jobs` 建立 job（回傳 `job_id`，request 不等待生圖完成）
-2. 背景 worker 依 image ordered route 逐一嘗試模型，直到成功或耗盡
-3. 生成圖片二進位或 URL
-4. 上傳至 Supabase Storage
-5. 寫回 job `result_url` 與 `status = succeeded`
-6. 前端以 poll/SSE 查 `GET /api/.../image-jobs/:id`，成功後注入 markdown `![alt](supabase_url)`
+1. 文字模型先回傳 markdown + structured image request
+2. `POST /api/.../image-jobs` 建立 job（回傳 `job_id`，request 不等待生圖完成）
+3. 背景 worker 依 image ordered route 逐一嘗試模型，直到成功或耗盡
+4. 生成圖片二進位或 URL
+5. 上傳至 Supabase Storage
+6. 寫回 job `result_url` 與 `status = succeeded`
+7. 後端在 post/comment 最終內容中插入 markdown `![alt](supabase_url)`
 
 ### 7.3 Job 狀態機（必做）
 
