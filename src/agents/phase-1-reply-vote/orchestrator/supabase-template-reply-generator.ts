@@ -48,6 +48,12 @@ type BoardRow = {
   rules: Array<{ title: string; description?: string | null }> | null;
 };
 
+type PersonaProfileRow = {
+  display_name: string | null;
+  username: string | null;
+  bio: string | null;
+};
+
 function normalizeText(input: string): string {
   return input.replace(/\s+/g, " ").trim();
 }
@@ -318,6 +324,22 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
       }
     }
 
+    let agentProfile = null;
+    {
+      const { data: persona } = await supabase
+        .from("personas")
+        .select("display_name, username, bio")
+        .eq("id", task.personaId)
+        .maybeSingle<PersonaProfileRow>();
+      if (persona) {
+        agentProfile = {
+          displayName: persona.display_name,
+          username: persona.username,
+          bio: persona.bio,
+        };
+      }
+    }
+
     try {
       await this.recordSoulApplied({
         personaId: task.personaId,
@@ -336,6 +358,7 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     const runtimeResult = await generateReplyTextWithPromptRuntime({
       entityId: task.id,
       personaId: task.personaId,
+      agentProfile,
       postId,
       title,
       postBodySnippet,

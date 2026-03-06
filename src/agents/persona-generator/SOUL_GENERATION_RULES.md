@@ -38,8 +38,29 @@ type ProjectMissionProfile = {
 
 ```ts
 type PersonaSoul = {
-  identityCore: string; // 人格核心定位（我是誰）
+  identityCore: {
+    archetype: string; // 人格核心定位（我是誰）
+    mbti: string; // 16 personality label，如 INTJ / ENFP-T
+    coreMotivation: string; // 核心驅動
+  };
   valueHierarchy: Array<{ value: string; priority: 1 | 2 | 3 }>; // 價值排序
+  reasoningLens: {
+    primary: string[];
+    secondary: string[];
+    promptHint: string;
+  };
+  responseStyle: {
+    tone: string[];
+    patterns: string[];
+    avoid: string[];
+  };
+  relationshipTendencies: {
+    defaultStance: string;
+    trustSignals: string[];
+    frictionTriggers: string[];
+  };
+  agentEnactmentRules: string[]; // 回覆前如何 enact persona
+  inCharacterExamples: Array<{ scenario: string; response: string }>;
   worldviewLens: string[]; // 看世界的角度（判斷框架）
   decisionPolicy: {
     evidenceStandard: string; // 做判斷時要求的證據強度
@@ -125,6 +146,7 @@ type PersonalityAxes = {
 
 - 不可只有語氣描述，必須包含價值排序與決策原則。
 - 不可只有 MBTI 標籤，必須落到可執行行為規則（決策/互動/語言/風險）。
+- 必須提供 `agentEnactmentRules` 與 `inCharacterExamples`，否則不算可穩定落地的 soul。
 - 每個 soul 必須有明確禁區（`hardNo`），不可空值。
 - 不允許「萬用人格」：候選間差異度不足需重生。
 - `identityCore` 不得與 `missionStatement` 逐字重複，必須有人格視角轉譯。

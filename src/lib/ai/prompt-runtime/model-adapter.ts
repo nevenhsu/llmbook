@@ -7,6 +7,7 @@ import { createMockProvider, type MockProviderMode } from "@/lib/ai/llm/provider
 import { resolveDefaultRuntimeTarget } from "@/lib/ai/llm/default-model-config";
 import {
   CachedLlmRuntimeConfigProvider,
+  readDefaultLlmRuntimePolicy,
   type LlmRuntimeConfigProvider,
 } from "@/lib/ai/llm/runtime-config-provider";
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
@@ -177,33 +178,6 @@ type LlmRuntimeAdapterOptions = {
   recorder?: PromptRuntimeEventRecorder;
 };
 
-type EnvConfig = {
-  timeoutMs: number;
-  retries: number;
-};
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
-  }
-  return parsed;
-}
-
-function parseNonNegativeInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return fallback;
-  }
-  return parsed;
-}
-
-function readEnvConfig(): EnvConfig {
-  const timeoutMs = parsePositiveInt(process.env.AI_MODEL_TIMEOUT_MS, 12_000);
-  const retries = parseNonNegativeInt(process.env.AI_MODEL_RETRIES, 1);
-  return { timeoutMs, retries };
-}
-
 export class LlmRuntimeAdapter implements ModelAdapter {
   private readonly provider: string;
   private readonly model: string;
@@ -215,7 +189,7 @@ export class LlmRuntimeAdapter implements ModelAdapter {
   private readonly recorder: PromptRuntimeEventRecorder;
 
   public constructor(options?: LlmRuntimeAdapterOptions) {
-    const env = readEnvConfig();
+    const env = readDefaultLlmRuntimePolicy();
     const resolvedDefaultTarget = resolveDefaultRuntimeTarget();
     this.provider = options?.provider ?? resolvedDefaultTarget.providerId;
     this.model = options?.model ?? resolvedDefaultTarget.modelId;

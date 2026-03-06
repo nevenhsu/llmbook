@@ -211,8 +211,34 @@ describe("Phase1 reply-only flow", () => {
         getSoulProfile: async ({ personaId }) =>
           personaId === "persona-soul"
             ? {
-                identityCore: "An assertive analyst",
+                identityCore: {
+                  archetype: "An assertive analyst",
+                  mbti: "ENTJ",
+                  coreMotivation: "move discussion toward decisive action",
+                },
                 valueHierarchy: [{ value: "decisiveness", priority: 1 }],
+                reasoningLens: {
+                  primary: ["decisiveness"],
+                  secondary: ["clarity"],
+                  promptHint: "Bias toward decisive action after clarifying the trade-off.",
+                },
+                responseStyle: {
+                  tone: ["direct"],
+                  patterns: ["lead_with_reaction"],
+                  avoid: ["tutorial_lists"],
+                },
+                relationshipTendencies: {
+                  defaultStance: "supportive_but_blunt",
+                  trustSignals: ["specificity"],
+                  frictionTriggers: ["stalling"],
+                },
+                agentEnactmentRules: ["Form a decisive reaction before writing."],
+                inCharacterExamples: [
+                  {
+                    scenario: "A thread is stuck in indecision.",
+                    response: "Pick the lower-regret path and test it now.",
+                  },
+                ],
                 decisionPolicy: {
                   tradeoffStyle: "progressive",
                   uncertaintyHandling: "test quickly and adapt",
@@ -318,8 +344,34 @@ describe("Phase1 reply-only flow", () => {
             participantCount: 2,
             soul: {
               profile: {
-                identityCore: "A practical teammate",
+                identityCore: {
+                  archetype: "A practical teammate",
+                  mbti: "ISTJ",
+                  coreMotivation: "keep discussion grounded and actionable",
+                },
                 valueHierarchy: [{ value: "clarity", priority: 1 }],
+                reasoningLens: {
+                  primary: ["clarity"],
+                  secondary: ["risk"],
+                  promptHint: "Keep the next step concrete and grounded.",
+                },
+                responseStyle: {
+                  tone: ["concise"],
+                  patterns: ["short_paragraphs"],
+                  avoid: ["tutorial_lists"],
+                },
+                relationshipTendencies: {
+                  defaultStance: "supportive_but_blunt",
+                  trustSignals: ["specificity"],
+                  frictionTriggers: ["hype"],
+                },
+                agentEnactmentRules: ["Form a practical reaction before writing."],
+                inCharacterExamples: [
+                  {
+                    scenario: "Someone asks what to do next.",
+                    response: "Pick one measurable next step and validate it quickly.",
+                  },
+                ],
                 decisionPolicy: {
                   evidenceStandard: "medium",
                   tradeoffStyle: "balanced",
@@ -344,11 +396,16 @@ describe("Phase1 reply-only flow", () => {
               },
               summary: {
                 identity: "A practical teammate",
+                mbti: "ISTJ",
                 topValues: ["clarity"],
                 tradeoffStyle: "balanced",
                 riskPreference: "balanced",
                 collaborationStance: "support",
                 rhythm: "concise",
+                defaultRelationshipStance: "supportive_but_blunt",
+                promptHint: "Keep the next step concrete and grounded.",
+                enactmentRuleCount: 1,
+                exampleCount: 1,
                 guardrailCount: 2,
               },
               normalized: false,

@@ -1,6 +1,10 @@
+import { NextResponse } from "next/server";
 import { withAuth, http } from "@/lib/server/route-helpers";
 import { isAdmin } from "@/lib/admin";
-import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
+import {
+  AdminAiControlPlaneStore,
+  PersonaGenerationParseError,
+} from "@/lib/ai/admin/control-plane-store";
 
 export const POST = withAuth(async (req, { user }) => {
   if (!(await isAdmin(user.id))) {
@@ -16,10 +20,24 @@ export const POST = withAuth(async (req, { user }) => {
     return http.badRequest("modelId is required");
   }
 
-  const preview = await new AdminAiControlPlaneStore().previewPersonaGeneration({
-    modelId: body.modelId.trim(),
-    extraPrompt: body.extraPrompt ?? "",
-  });
+  let preview;
+  try {
+    preview = await new AdminAiControlPlaneStore().previewPersonaGeneration({
+      modelId: body.modelId.trim(),
+      extraPrompt: body.extraPrompt ?? "",
+    });
+  } catch (error) {
+    if (error instanceof PersonaGenerationParseError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          rawOutput: error.rawOutput,
+        },
+        { status: 422 },
+      );
+    }
+    throw error;
+  }
 
   return http.ok({ preview });
 });

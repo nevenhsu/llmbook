@@ -56,10 +56,33 @@ describe("composeSoulDrivenReply", () => {
   function buildSoul(overrides: DeepPartial<RuntimeSoulContext>): RuntimeSoulContext {
     const base: RuntimeSoulContext = {
       profile: {
-        identityCore: "A calm operator",
+        identityCore: {
+          archetype: "A calm operator",
+          mbti: "INTJ",
+          coreMotivation: "reduce unnecessary risk",
+        },
         valueHierarchy: [
           { value: "safety", priority: 1 },
           { value: "clarity", priority: 2 },
+        ],
+        reasoningLens: {
+          primary: ["risk", "clarity"],
+          secondary: ["feasibility"],
+          promptHint: "Risk first, then clarity.",
+        },
+        responseStyle: {
+          tone: ["direct"],
+          patterns: ["short_paragraphs"],
+          avoid: ["tutorial_lists"],
+        },
+        relationshipTendencies: {
+          defaultStance: "supportive_but_blunt",
+          trustSignals: ["specificity"],
+          frictionTriggers: ["hype"],
+        },
+        agentEnactmentRules: ["Form a genuine reaction before writing."],
+        inCharacterExamples: [
+          { scenario: "risky idea", response: "Slow down and test the downside first." },
         ],
         decisionPolicy: {
           evidenceStandard: "high",
@@ -85,11 +108,16 @@ describe("composeSoulDrivenReply", () => {
       },
       summary: {
         identity: "A calm operator",
+        mbti: "INTJ",
         topValues: ["safety", "clarity"],
         tradeoffStyle: "conservative",
         riskPreference: "conservative",
         collaborationStance: "challenge",
         rhythm: "direct",
+        defaultRelationshipStance: "supportive_but_blunt",
+        promptHint: "Risk first, then clarity.",
+        enactmentRuleCount: 1,
+        exampleCount: 1,
         guardrailCount: 2,
       },
       normalized: false,
@@ -100,10 +128,32 @@ describe("composeSoulDrivenReply", () => {
       ...base,
       ...overrides,
       profile: {
-        identityCore: overrides.profile?.identityCore ?? base.profile.identityCore,
+        identityCore: {
+          ...base.profile.identityCore,
+          ...(overrides.profile?.identityCore ?? {}),
+        },
         valueHierarchy:
           (overrides.profile?.valueHierarchy as RuntimeSoulContext["profile"]["valueHierarchy"]) ??
           base.profile.valueHierarchy,
+        reasoningLens: {
+          ...base.profile.reasoningLens,
+          ...(overrides.profile?.reasoningLens ?? {}),
+        },
+        responseStyle: {
+          ...base.profile.responseStyle,
+          ...(overrides.profile?.responseStyle ?? {}),
+        },
+        relationshipTendencies: {
+          ...base.profile.relationshipTendencies,
+          ...(overrides.profile?.relationshipTendencies ?? {}),
+        },
+        agentEnactmentRules:
+          (overrides.profile?.agentEnactmentRules as string[] | undefined) ??
+          base.profile.agentEnactmentRules,
+        inCharacterExamples:
+          (overrides.profile?.inCharacterExamples as
+            | RuntimeSoulContext["profile"]["inCharacterExamples"]
+            | undefined) ?? base.profile.inCharacterExamples,
         decisionPolicy: {
           ...base.profile.decisionPolicy,
           ...(overrides.profile?.decisionPolicy ?? {}),

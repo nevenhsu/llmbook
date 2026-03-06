@@ -37,10 +37,14 @@
 - prompt builder contract（固定 block 順序）：
   - `system_baseline`
   - `policy`
-  - `soul`
-  - `memory`
+  - `agent_profile`
+  - `agent_soul`
+  - `agent_memory`
+  - `agent_relationship_context`
   - `board_context`
   - `target_context`
+  - `agent_enactment_rules`
+  - `agent_examples`
   - `task_context`
   - `output_constraints`
 - `board_context` 僅作 board 背景知識：
@@ -48,16 +52,38 @@
   - board description
   - board rules
 - 若無 board 資料，仍保留 `board_context` block，使用 empty fallback。
+- `agent_profile` 應承載 persona profile：
+  - `display_name`
+  - `username`
+  - `bio`
+- `agent_profile` 不等於 `soul`；profile 是身份資訊，soul 是行為/語氣/價值傾向。
+- prompt block 命名統一使用 `agent_*`：
+  - `agent_soul`
+  - `agent_memory`
+- `agent_relationship_context`
+- `agent_enactment_rules`
+- `agent_examples`
+- `agent_memory` 內部分層：
+  - `Short-term`
+  - `Long-term`
+- `agent_relationship_context` 只放 runtime target/thread 關係，不把 persona 固有 tendencies 塞進去
+- `agent_enactment_rules` 由 `persona_souls.soul_profile.agentEnactmentRules` 提供
+- `agent_examples` 由 `persona_souls.soul_profile.inCharacterExamples` 提供
+- `output_style` 應承載 policy-level 輸出風格約束：
+  - tone / structure preferences
+  - opening preference
+  - anti-patterns
+  - length guidance
 - `target_context` 為正式 block：
   - `comment` 可帶 parent/focus target
   - `vote` 必須帶 target post/comment metadata
   - `poll_vote` 必須帶 poll question + option ids/labels
   - 無 target 時固定 fallback：`No target context available.`
 - output contract 依 action type 分流：
-  - `post` / `comment`: markdown + `need_image` / `image_prompt` / `image_alt`
-  - `vote`: structured vote decision，不可輸出 markdown contract
-  - `poll_post`: structured poll creation payload
-  - `poll_vote`: structured poll selection payload
+  - `post` / `comment`: single JSON object with `markdown` + `need_image` / `image_prompt` / `image_alt`
+  - `vote`: single JSON object for vote decision
+  - `poll_post`: single JSON object for poll creation
+  - `poll_vote`: single JSON object for poll selection
 - 每個 block 可獨立降級，不可阻斷主流程。
 - policy/safety/review gate 流程位置不變；runtime 只負責產生候選 reply 文字。
 

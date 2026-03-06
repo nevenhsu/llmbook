@@ -8,8 +8,37 @@ import { DEFAULT_DISPATCHER_POLICY } from "@/agents/task-dispatcher/policy/reply
 function sampleSoul(): RuntimeSoulContext {
   return {
     profile: {
-      identityCore: "A pragmatic operator",
+      identityCore: {
+        archetype: "A pragmatic operator",
+        mbti: "INTJ",
+        coreMotivation: "help people make practical decisions",
+      },
       valueHierarchy: [{ value: "clarity", priority: 1 }],
+      reasoningLens: {
+        primary: ["risk", "clarity"],
+        secondary: ["feasibility"],
+        promptHint: "Assess the safest practical option first.",
+      },
+      responseStyle: {
+        tone: ["direct", "conversational"],
+        patterns: ["short_paragraphs"],
+        avoid: ["tutorial_lists"],
+      },
+      relationshipTendencies: {
+        defaultStance: "supportive_but_blunt",
+        trustSignals: ["specificity"],
+        frictionTriggers: ["hype"],
+      },
+      agentEnactmentRules: [
+        "Form a genuine reaction before writing.",
+        "Do not sound like a generic assistant.",
+      ],
+      inCharacterExamples: [
+        {
+          scenario: "Someone asks which option is safer.",
+          response: "My first reaction is option B. It carries less hidden downside.",
+        },
+      ],
       decisionPolicy: {
         evidenceStandard: "high",
         tradeoffStyle: "balanced",
@@ -34,11 +63,16 @@ function sampleSoul(): RuntimeSoulContext {
     },
     summary: {
       identity: "A pragmatic operator",
+      mbti: "INTJ",
       topValues: ["clarity"],
       tradeoffStyle: "balanced",
       riskPreference: "balanced",
       collaborationStance: "support",
       rhythm: "direct",
+      defaultRelationshipStance: "supportive_but_blunt",
+      promptHint: "Assess the safest practical option first.",
+      enactmentRuleCount: 2,
+      exampleCount: 1,
       guardrailCount: 2,
     },
     normalized: false,
@@ -81,6 +115,11 @@ async function runWithAdapter(modelAdapter: ModelAdapter) {
   return generateReplyTextWithPromptRuntime({
     entityId: "task-1",
     personaId: "persona-1",
+    agentProfile: {
+      displayName: "AI Planner",
+      username: "ai_planner",
+      bio: "Practical and blunt.",
+    },
     postId: "post-1",
     title: "Roadmap",
     postBodySnippet: "Need a practical next step.",
@@ -152,22 +191,41 @@ describe("generateReplyTextWithPromptRuntime", () => {
     expect(result.text).toBe("");
   });
 
-  it("uses comment output contract and populated target_context when focus target exists", async () => {
+  it("uses comment JSON envelope contract and populated target_context when focus target exists", async () => {
     const result = await runWithAdapter(new MockModelAdapter({ mode: "success", fixedText: "ok" }));
     const blockNames = result.promptBlocks.map((block) => block.name);
     const outputConstraints =
       result.promptBlocks.find((block) => block.name === "output_constraints")?.content ?? "";
     const targetContext =
       result.promptBlocks.find((block) => block.name === "target_context")?.content ?? "";
+    const profileBlock =
+      result.promptBlocks.find((block) => block.name === "agent_profile")?.content ?? "";
+    const relationshipBlock =
+      result.promptBlocks.find((block) => block.name === "agent_relationship_context")?.content ??
+      "";
+    const enactmentBlock =
+      result.promptBlocks.find((block) => block.name === "agent_enactment_rules")?.content ?? "";
+    const examplesBlock =
+      result.promptBlocks.find((block) => block.name === "agent_examples")?.content ?? "";
 
     expect(blockNames).toContain("target_context");
-    expect(outputConstraints).toContain("Return markdown only for the body content.");
+    expect(blockNames).toContain("agent_profile");
+    expect(blockNames).toContain("agent_relationship_context");
+    expect(blockNames).toContain("agent_enactment_rules");
+    expect(blockNames).toContain("agent_examples");
+    expect(outputConstraints).toContain("Return exactly one JSON object.");
+    expect(outputConstraints).toContain("markdown: string");
     expect(outputConstraints).toContain("need_image");
     expect(outputConstraints).toContain("image_prompt");
     expect(outputConstraints).toContain("image_alt");
+    expect(outputConstraints).toContain("Do not output any text outside the JSON object.");
     expect(targetContext).toContain("target_type: comment");
     expect(targetContext).toContain("target_author: user:abcd1234");
     expect(targetContext).toContain("target_content: which option is safer?");
+    expect(profileBlock).toContain("display_name: AI Planner");
+    expect(relationshipBlock).toContain("target_author: user:abcd1234");
+    expect(enactmentBlock).toContain("Form a genuine reaction before writing.");
+    expect(examplesBlock).toContain("Scenario: Someone asks which option is safer.");
   });
 
   it("keeps target_context block with explicit empty fallback when no focus target exists", async () => {

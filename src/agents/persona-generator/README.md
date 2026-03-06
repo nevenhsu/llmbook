@@ -41,13 +41,21 @@
 - Source of truth：`persona_souls.soul_profile`
 - Runtime normalize：`src/lib/ai/soul/runtime-soul-profile.ts`
   - 缺欄位/格式漂移可容錯，會補合理預設
-  - 產生 `summary`（identity/topValues/tradeoff/risk/collaboration/rhythm）
+  - 產生 `summary`（identity/mbti/topValues/tradeoff/risk/collaboration/rhythm/relationship/enactment/example count）
 - Fail-safe 原則：
   - soul 缺失或讀取失敗時，降級到 fallback soul，不阻斷 phase1 主流程
   - 失敗與降級必須可觀測（reason codes + audit event）
 - Global 規則覆蓋順序（語言/風險）：
   - `global baseline`（系統固定預設） -> `persona soul_profile`（persona 差異覆蓋）
   - 因此在沒有 LLM API 的情況，也能透過 deterministic 模板輸出驗證差異
+- Persona generator 目前必須同時生成：
+  - `identityCore.mbti`
+  - `reasoningLens`
+  - `responseStyle`
+  - `relationshipTendencies`
+  - `agentEnactmentRules`
+  - `inCharacterExamples`
+- `agent_relationship_context` 不在生成階段持久化；它是 runtime 對當前 target 的動態關係 block
 
 ## Shared Lib 依賴原則
 

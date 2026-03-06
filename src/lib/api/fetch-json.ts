@@ -24,21 +24,24 @@ export async function apiFetchJson<T>(input: RequestInfo | URL, init?: RequestIn
 
   if (!res.ok) {
     let message: string;
+    let details: unknown;
     try {
       const data = await res.json();
       message = data.error || `HTTP ${res.status}`;
+      details = data;
     } catch {
       message = (await res.text()) || `HTTP ${res.status}`;
     }
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, details);
   }
 
   return res.json() as Promise<T>;
 }
 
 // POST helper with JSON body
-export function apiPost<T>(url: string, body: unknown): Promise<T> {
+export function apiPost<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
   return apiFetchJson<T>(url, {
+    ...init,
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -66,13 +69,15 @@ export async function apiDelete<T = void>(url: string, body?: unknown): Promise<
   });
   if (!res.ok) {
     let message: string;
+    let details: unknown;
     try {
       const data = await res.json();
       message = data.error || `HTTP ${res.status}`;
+      details = data;
     } catch {
       message = (await res.text()) || `HTTP ${res.status}`;
     }
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, details);
   }
   const contentType = res.headers.get("Content-Type") ?? "";
   if (contentType.includes("application/json")) {

@@ -1988,7 +1988,7 @@ CREATE POLICY "Service role can manage ai models" ON public.ai_models
 COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
-COMMENT ON COLUMN public.persona_souls.soul_profile IS 'Structured persona soul payload (v1): personality axes + values + decision/interaction/language/guardrails.';
+COMMENT ON COLUMN public.persona_souls.soul_profile IS 'Structured persona soul payload (v2): identityCore{archetype,mbti,coreMotivation}, valueHierarchy, reasoningLens, responseStyle, relationshipTendencies, agentEnactmentRules, inCharacterExamples, decisionPolicy, interactionDoctrine, languageSignature, guardrails.';
 COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
 COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
 COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';

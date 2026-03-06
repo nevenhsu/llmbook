@@ -9,11 +9,25 @@ import {
 describe("normalizeSoulProfile", () => {
   it("fills defaults when fields are missing or invalid", () => {
     const result = normalizeSoulProfile({
-      identityCore: "",
+      identityCore: {
+        archetype: "",
+        mbti: "INTJ",
+      },
       valueHierarchy: [
         { value: "accuracy", priority: 2 },
         { value: 123, priority: "x" },
       ],
+      reasoningLens: {
+        primary: ["clarity", "", "clarity"],
+      },
+      responseStyle: {
+        tone: ["direct"],
+      },
+      relationshipTendencies: {
+        defaultStance: "supportive_but_blunt",
+      },
+      agentEnactmentRules: ["Form a genuine reaction first."],
+      inCharacterExamples: [{ scenario: "vague claim", response: "Show receipts." }],
       decisionPolicy: {
         tradeoffStyle: "safe-first",
         antiPatterns: ["", "overclaiming", "overclaiming"],
@@ -23,8 +37,16 @@ describe("normalizeSoulProfile", () => {
       },
     });
 
-    expect(result.profile.identityCore.length).toBeGreaterThan(0);
+    expect(result.profile.identityCore.archetype.length).toBeGreaterThan(0);
+    expect(result.profile.identityCore.mbti).toBe("INTJ");
     expect(result.profile.valueHierarchy[0]).toEqual({ value: "accuracy", priority: 2 });
+    expect(result.profile.reasoningLens.primary).toEqual(["clarity"]);
+    expect(result.profile.responseStyle.tone).toEqual(["direct"]);
+    expect(result.profile.relationshipTendencies.defaultStance).toBe("supportive_but_blunt");
+    expect(result.profile.agentEnactmentRules).toContain("Form a genuine reaction first.");
+    expect(result.profile.inCharacterExamples).toEqual([
+      { scenario: "vague claim", response: "Show receipts." },
+    ]);
     expect(result.profile.decisionPolicy.evidenceStandard).toBe("medium");
     expect(result.profile.decisionPolicy.riskPreference).toBe("conservative");
     expect(result.profile.languageSignature.rhythm).toBe("direct");
@@ -81,7 +103,18 @@ describe("CachedRuntimeSoulProvider", () => {
     const eventSink = new InMemoryRuntimeSoulEventSink();
     const provider = new CachedRuntimeSoulProvider({
       deps: {
-        getSoulProfile: async () => ({ identityCore: "debug" }),
+        getSoulProfile: async () => ({
+          identityCore: { archetype: "debug", mbti: "INTJ", coreMotivation: "clarify" },
+          reasoningLens: { primary: ["clarity"], secondary: [], promptHint: "clarity first" },
+          responseStyle: { tone: ["direct"], patterns: ["short_paragraphs"], avoid: [] },
+          relationshipTendencies: {
+            defaultStance: "supportive_but_blunt",
+            trustSignals: ["specificity"],
+            frictionTriggers: ["hype"],
+          },
+          agentEnactmentRules: ["Form a genuine reaction first."],
+          inCharacterExamples: [{ scenario: "vague claim", response: "Show receipts." }],
+        }),
         eventSink,
       },
     });

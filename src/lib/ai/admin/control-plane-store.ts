@@ -13,6 +13,8 @@ import {
   loadDecryptedProviderSecrets,
   upsertProviderSecret,
 } from "@/lib/ai/llm/provider-secrets";
+import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
+import type { RuntimeSoulProfile } from "@/lib/ai/soul/runtime-soul-profile";
 
 export type ProviderTestStatus = "untested" | "success" | "failed" | "disabled" | "key_missing";
 export type ProviderStatus = "active" | "disabled";
@@ -119,6 +121,16 @@ export type PreviewResult = {
   tokenBudget: PreviewTokenBudget;
 };
 
+export class PersonaGenerationParseError extends Error {
+  public readonly rawOutput: string;
+
+  public constructor(message: string, rawOutput: string) {
+    super(message);
+    this.name = "PersonaGenerationParseError";
+    this.rawOutput = rawOutput;
+  }
+}
+
 export type PersonaGenerationStructured = {
   personas: {
     display_name: string;
@@ -126,7 +138,7 @@ export type PersonaGenerationStructured = {
     status: "active" | "inactive";
   };
   persona_souls: {
-    soul_profile: Record<string, unknown>;
+    soul_profile: RuntimeSoulProfile;
   };
   persona_memory: Array<{
     key: string;
@@ -507,11 +519,15 @@ function writeGlobalPolicyDocument(
 function buildPromptBlocks(input: {
   actionType: PromptActionType;
   globalDraft: GlobalPolicyStudioDraft;
+  agentProfile?: string;
+  outputStyle?: string;
   personaSoul: string;
-  personaMemory: string;
-  personaLongMemory: string;
+  agentMemory: string;
+  agentRelationshipContext?: string;
   boardContext?: string;
   targetContext?: string;
+  agentEnactmentRules?: string;
+  agentExamples?: string;
   taskContext: string;
 }): Array<{ name: string; content: string }> {
   const baseline = input.globalDraft.systemBaseline.trim();
@@ -522,21 +538,58 @@ function buildPromptBlocks(input: {
     {
       name: "global_policy",
       content: [
-        `Policy: ${input.globalDraft.globalPolicy}`,
-        `Forbidden: ${input.globalDraft.forbiddenRules}`,
+        "Policy:",
+        input.globalDraft.globalPolicy,
+        "Forbidden:",
+        input.globalDraft.forbiddenRules,
       ].join("\n"),
     },
-    { name: "persona_soul", content: input.personaSoul },
-    { name: "persona_memory", content: input.personaMemory },
-    { name: "persona_long_memory", content: input.personaLongMemory },
+    {
+      name: "output_style",
+      content: input.outputStyle?.trim() || "No output style guidance available.",
+    },
+    {
+      name: "agent_profile",
+      content: input.agentProfile?.trim() || "No agent profile available.",
+    },
+    { name: "agent_soul", content: input.personaSoul },
+    { name: "agent_memory", content: input.agentMemory },
+    {
+      name: "agent_relationship_context",
+      content: input.agentRelationshipContext?.trim() || "No relationship context available.",
+    },
     { name: "board_context", content: input.boardContext?.trim() || "No board context available." },
     {
       name: "target_context",
       content: input.targetContext?.trim() || "No target context available.",
     },
+    {
+      name: "agent_enactment_rules",
+      content:
+        input.agentEnactmentRules?.trim() ||
+        [
+          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_soul, agent_memory, target_context, and agent_relationship_context.",
+          "The response must reflect the agent's priorities, biases, tone, and decision style.",
+          "Do not produce a generic assistant-style reply.",
+        ].join("\n"),
+    },
+    {
+      name: "agent_examples",
+      content: input.agentExamples?.trim() || "No in-character examples available.",
+    },
     { name: "task_context", content: input.taskContext },
     { name: "output_constraints", content: buildActionOutputConstraints(input.actionType) },
   ];
+}
+
+function formatAgentMemory(input: { shortTerm: string; longTerm: string }): string {
+  return [
+    "Short-term:",
+    input.shortTerm.trim() || "(empty)",
+    "",
+    "Long-term:",
+    input.longTerm.trim() || "(empty)",
+  ].join("\n");
 }
 
 function formatBoardContext(input?: PromptBoardContext | null): string {
@@ -624,6 +677,199 @@ function formatTargetContext(input: {
   ].join("\n");
 }
 
+function formatAgentProfile(input: { displayName: string; username: string; bio: string }): string {
+  return [
+    `display_name: ${input.displayName}`,
+    `username: ${input.username}`,
+    `bio: ${input.bio || "(empty)"}`,
+  ].join("\n");
+}
+
+function formatAgentRelationshipContext(input: {
+  soulProfile?: RuntimeSoulProfile | Record<string, unknown> | null;
+  targetContext?: PromptTargetContext;
+}): string {
+  const soulProfile = asRecord(input.soulProfile);
+  const tendencies = asRecord(soulProfile?.relationshipTendencies);
+  const defaultStance = readString(tendencies?.defaultStance).trim();
+  const trustSignals = Array.isArray(tendencies?.trustSignals)
+    ? tendencies?.trustSignals.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
+    : [];
+  const frictionTriggers = Array.isArray(tendencies?.frictionTriggers)
+    ? tendencies?.frictionTriggers.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
+    : [];
+  const targetAuthor = readNullableString(input.targetContext?.targetAuthor);
+  const threadSummary = readNullableString(input.targetContext?.threadSummary);
+
+  if (!targetAuthor) {
+    return "";
+  }
+
+  return [
+    ...(targetAuthor ? [`target_author: ${targetAuthor}`] : []),
+    ...(threadSummary ? [`thread_summary: ${threadSummary}`] : []),
+    ...(defaultStance ? [`default_stance: ${defaultStance}`] : []),
+    ...(trustSignals.length > 0 ? [`trust_signals: ${trustSignals.join(", ")}`] : []),
+    ...(frictionTriggers.length > 0 ? [`friction_triggers: ${frictionTriggers.join(", ")}`] : []),
+  ].join("\n");
+}
+
+function formatAgentEnactmentRules(
+  soulProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
+): string {
+  const record = asRecord(soulProfile);
+  const rules = Array.isArray(record?.agentEnactmentRules)
+    ? record.agentEnactmentRules.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
+    : [];
+
+  return rules.join("\n");
+}
+
+function formatAgentExamples(
+  soulProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
+): string {
+  const record = asRecord(soulProfile);
+  const examples = Array.isArray(record?.inCharacterExamples) ? record.inCharacterExamples : [];
+  const lines = examples
+    .map((item) => {
+      const row = asRecord(item);
+      if (!row) {
+        return null;
+      }
+      const scenario = readString(row.scenario).trim();
+      const response = readString(row.response).trim();
+      if (!scenario || !response) {
+        return null;
+      }
+      return [`Scenario: ${scenario}`, `Response: ${response}`].join("\n");
+    })
+    .filter((item): item is string => Boolean(item));
+
+  return lines.join("\n\n");
+}
+
+function requireSoulProfileRecord(value: unknown, fieldPath: string): Record<string, unknown> {
+  const record = asRecord(value);
+  if (!record) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return record;
+}
+
+function requireSoulProfileStringArray(value: unknown, fieldPath: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  const items = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (items.length === 0) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return items;
+}
+
+function parsePersonaSoulProfile(value: unknown): RuntimeSoulProfile {
+  const root = requireSoulProfileRecord(value, "persona_souls.soul_profile");
+  const identityCore = requireSoulProfileRecord(
+    root.identityCore,
+    "persona_souls.soul_profile.identityCore",
+  );
+  if (!readString(identityCore.archetype).trim()) {
+    throw new Error(
+      "persona generation output missing persona_souls.soul_profile.identityCore.archetype",
+    );
+  }
+  if (!readString(identityCore.mbti).trim()) {
+    throw new Error(
+      "persona generation output missing persona_souls.soul_profile.identityCore.mbti",
+    );
+  }
+  if (!readString(identityCore.coreMotivation).trim()) {
+    throw new Error(
+      "persona generation output missing persona_souls.soul_profile.identityCore.coreMotivation",
+    );
+  }
+
+  if (!Array.isArray(root.valueHierarchy) || root.valueHierarchy.length === 0) {
+    throw new Error("persona generation output missing persona_souls.soul_profile.valueHierarchy");
+  }
+  requireSoulProfileRecord(root.decisionPolicy, "persona_souls.soul_profile.decisionPolicy");
+  requireSoulProfileRecord(
+    root.interactionDoctrine,
+    "persona_souls.soul_profile.interactionDoctrine",
+  );
+  requireSoulProfileRecord(root.languageSignature, "persona_souls.soul_profile.languageSignature");
+
+  const guardrails = requireSoulProfileRecord(
+    root.guardrails,
+    "persona_souls.soul_profile.guardrails",
+  );
+  if (
+    !Array.isArray(guardrails.hardNo) ||
+    !Array.isArray(guardrails.deescalationRules) ||
+    guardrails.hardNo.length + guardrails.deescalationRules.length === 0
+  ) {
+    throw new Error("persona generation output missing persona_souls.soul_profile.guardrails");
+  }
+
+  const reasoningLens = requireSoulProfileRecord(
+    root.reasoningLens,
+    "persona_souls.soul_profile.reasoningLens",
+  );
+  requireSoulProfileStringArray(
+    reasoningLens.primary,
+    "persona_souls.soul_profile.reasoningLens.primary",
+  );
+
+  const responseStyle = requireSoulProfileRecord(
+    root.responseStyle,
+    "persona_souls.soul_profile.responseStyle",
+  );
+  requireSoulProfileStringArray(
+    responseStyle.tone,
+    "persona_souls.soul_profile.responseStyle.tone",
+  );
+
+  const relationshipTendencies = requireSoulProfileRecord(
+    root.relationshipTendencies,
+    "persona_souls.soul_profile.relationshipTendencies",
+  );
+  if (!readString(relationshipTendencies.defaultStance).trim()) {
+    throw new Error(
+      "persona generation output missing persona_souls.soul_profile.relationshipTendencies.defaultStance",
+    );
+  }
+
+  requireSoulProfileStringArray(
+    root.agentEnactmentRules,
+    "persona_souls.soul_profile.agentEnactmentRules",
+  );
+
+  if (!Array.isArray(root.inCharacterExamples) || root.inCharacterExamples.length === 0) {
+    throw new Error(
+      "persona generation output missing persona_souls.soul_profile.inCharacterExamples",
+    );
+  }
+  for (const example of root.inCharacterExamples) {
+    const row = requireSoulProfileRecord(example, "persona_souls.soul_profile.inCharacterExamples");
+    if (!readString(row.scenario).trim() || !readString(row.response).trim()) {
+      throw new Error(
+        "persona generation output missing persona_souls.soul_profile.inCharacterExamples",
+      );
+    }
+  }
+
+  return root as RuntimeSoulProfile;
+}
+
 function extractJsonFromText(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -641,14 +887,14 @@ function parsePersonaGenerationOutput(rawText: string): {
 } {
   const jsonText = extractJsonFromText(rawText);
   if (!jsonText) {
-    throw new Error("persona generation output is empty");
+    throw new PersonaGenerationParseError("persona generation output is empty", rawText);
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    throw new Error("persona generation output must be valid JSON");
+    throw new PersonaGenerationParseError("persona generation output must be valid JSON", rawText);
   }
 
   const record = asRecord(parsed);
@@ -672,17 +918,13 @@ function parsePersonaGenerationOutput(rawText: string): {
   const displayName = readString(personas.display_name).trim();
   const bio = readString(personas.bio).trim();
   const status = readString(personas.status) === "inactive" ? "inactive" : "active";
-  const soulProfile = asRecord(personaSouls.soul_profile);
+  const soulProfile = parsePersonaSoulProfile(personaSouls.soul_profile);
   if (!displayName) {
     throw new Error("persona generation output missing personas.display_name");
   }
   if (!bio) {
     throw new Error("persona generation output missing personas.bio");
   }
-  if (!soulProfile) {
-    throw new Error("persona generation output missing persona_souls.soul_profile");
-  }
-
   return {
     structured: {
       personas: {
@@ -1283,11 +1525,19 @@ export class AdminAiControlPlaneStore {
         provider.updatedAt = now;
       }
     } else {
-      const testTimeoutMs = provider.providerKey === "minimax" ? 20_000 : 8_000;
       const testPrompt =
         provider.providerKey === "minimax" ? "Reply with exactly one word: pong" : "ping";
       const testMaxOutputTokens = provider.providerKey === "minimax" ? 128 : 1;
       try {
+        const invocationConfig = await resolveLlmInvocationConfig({
+          taskType: "generic",
+          capability: "text_generation",
+          promptModality: "text_only",
+          targetOverride: {
+            providerId: provider.providerKey,
+            modelId: model.modelKey,
+          },
+        });
         const registry = await createDbBackedLlmProviderRegistry({
           includeMock: false,
           includeXai: true,
@@ -1296,21 +1546,14 @@ export class AdminAiControlPlaneStore {
         const llmResult = await invokeLLM({
           registry,
           taskType: "generic",
-          routeOverride: {
-            targets: [
-              {
-                providerId: provider.providerKey,
-                modelId: model.modelKey,
-              },
-            ],
-          },
+          routeOverride: invocationConfig.route,
           modelInput: {
             prompt: testPrompt,
             maxOutputTokens: testMaxOutputTokens,
             temperature: 0,
           },
           entityId: `model-test:${model.id}`,
-          timeoutMs: testTimeoutMs,
+          timeoutMs: invocationConfig.timeoutMs,
           retries: 0,
           onProviderError: async (event) => {
             const now = nowIso();
@@ -1359,7 +1602,7 @@ export class AdminAiControlPlaneStore {
           model.lastErrorKind = model.lastErrorKind ?? "other";
           model.lastErrorCode = llmResult.errorDetails?.code ?? model.lastErrorCode ?? null;
           model.lastErrorMessage = rawError.startsWith("LLM_TIMEOUT_")
-            ? `Model test timeout (${provider.providerKey}, ${String(testTimeoutMs)}ms)`
+            ? `Model test timeout (${provider.providerKey}, ${String(invocationConfig.timeoutMs ?? 12_000)}ms)`
             : rawError.slice(0, 500);
           model.lastErrorAt = now;
           model.updatedAt = now;
@@ -1555,16 +1798,24 @@ export class AdminAiControlPlaneStore {
       input.errorDetails?.statusCode === 404 ||
       /model.*(not found|retired|deprecated|unsupported|does not exist|unknown)/.test(errorText) ||
       /(model_not_found|unknown_model|invalid_model)/.test(errorText);
-    const isProviderApiError =
+    const isHardProviderFailure =
       !isModelRetired &&
+      ((typeof input.errorDetails?.statusCode === "number" &&
+        (input.errorDetails.statusCode === 402 || input.errorDetails.statusCode === 403)) ||
+        /(insufficient[_\s-]?(balance|credit|quota)|credit.*exhausted|quota.*exceeded|billing|payment required|account suspended|account deactivated)/.test(
+          errorText,
+        ));
+    const isTransientProviderFailure =
+      !isModelRetired &&
+      !isHardProviderFailure &&
       ((typeof input.errorDetails?.statusCode === "number" &&
         (input.errorDetails.statusCode >= 500 ||
           input.errorDetails.statusCode === 401 ||
-          input.errorDetails.statusCode === 403 ||
           input.errorDetails.statusCode === 429)) ||
-        /(api key|unauthorized|forbidden|quota|rate limit|timeout|network|service unavailable)/.test(
+        /(api key|unauthorized|forbidden|rate limit|timeout|network|service unavailable)/.test(
           errorText,
         ));
+    const isProviderApiError = isHardProviderFailure || isTransientProviderFailure;
 
     const now = nowIso();
     model.lastErrorKind = isModelRetired
@@ -1575,11 +1826,16 @@ export class AdminAiControlPlaneStore {
     model.lastErrorCode = input.errorDetails?.code ?? null;
     model.lastErrorMessage = input.error.slice(0, 500);
     model.lastErrorAt = now;
-    model.testStatus = "failed";
 
     if (isModelRetired) {
       model.lifecycleStatus = "retired";
       model.status = "disabled";
+      model.testStatus = "failed";
+    }
+
+    if (isHardProviderFailure) {
+      model.status = "disabled";
+      model.testStatus = "failed";
     }
 
     if (isProviderApiError) {
@@ -1718,11 +1974,17 @@ export class AdminAiControlPlaneStore {
     const blocks = buildPromptBlocks({
       actionType: "comment",
       globalDraft: document.globalPolicyDraft,
+      outputStyle: document.globalPolicyDraft.styleGuide,
       personaSoul: "(global preview mode)",
-      personaMemory: "",
-      personaLongMemory: "",
+      agentMemory: formatAgentMemory({
+        shortTerm: "",
+        longTerm: "",
+      }),
+      agentRelationshipContext: "",
       boardContext: "",
       targetContext: "",
+      agentEnactmentRules: "",
+      agentExamples: "",
       taskContext,
     });
 
@@ -1991,25 +2253,12 @@ export class AdminAiControlPlaneStore {
     }
   > {
     const { document, providers, models } = await this.getActiveControlPlane();
-    const model = models.find((item) => item.id === input.modelId);
-    if (!model) {
-      throw new Error("model not found");
-    }
-    if (
-      model.capability !== "text_generation" ||
-      model.status !== "active" ||
-      model.lifecycleStatus === "retired" ||
-      model.testStatus !== "success"
-    ) {
-      throw new Error("model is not eligible for persona generation");
-    }
-    const provider = providers.find((item) => item.id === model.providerId);
-    if (!provider) {
-      throw new Error("provider not found for model");
-    }
-    if (provider.status !== "active" || !provider.hasKey) {
-      throw new Error("provider for this model is missing API key or disabled");
-    }
+    const { model, provider } = resolvePersonaTextModel({
+      modelId: input.modelId,
+      models,
+      providers,
+      featureLabel: "persona generation",
+    });
 
     const blocks = [
       { name: "system_baseline", content: "Generate a coherent forum persona profile." },
@@ -2022,10 +2271,13 @@ export class AdminAiControlPlaneStore {
         content: [
           "Return one JSON object aligned to DB tables with keys:",
           "personas{display_name,bio,status},",
-          "persona_souls{soul_profile},",
+          "persona_souls{soul_profile{identityCore{archetype,mbti,coreMotivation},valueHierarchy,reasoningLens{primary,secondary,promptHint},responseStyle{tone,patterns,avoid},relationshipTendencies{defaultStance,trustSignals,frictionTriggers},agentEnactmentRules:string[],inCharacterExamples[{scenario,response}],decisionPolicy,interactionDoctrine,languageSignature,guardrails}},",
           "persona_memory[{key,value,context_data,expires_in_hours}],",
           "persona_long_memories[{content,importance,memory_category,is_canonical,related_board_slug}].",
           "Use snake_case keys exactly as provided.",
+          "identityCore.mbti must be a concrete 16-personality style label such as INTJ or ENFP-T.",
+          "agentEnactmentRules must explain how the persona should think and react before writing.",
+          "inCharacterExamples must be concise sample scenarios with in-character responses.",
           "Do not include markdown, explanation, persona_id, id, timestamps, or extra keys.",
         ].join("\n"),
       },
@@ -2043,6 +2295,15 @@ export class AdminAiControlPlaneStore {
     });
 
     const assembledPrompt = formatPrompt(blocks);
+    const invocationConfig = await resolveLlmInvocationConfig({
+      taskType: "generic",
+      capability: "text_generation",
+      promptModality: "text_only",
+      targetOverride: {
+        providerId: provider.providerKey,
+        modelId: model.modelKey,
+      },
+    });
     const registry = await createDbBackedLlmProviderRegistry({
       includeMock: true,
       includeXai: true,
@@ -2051,14 +2312,7 @@ export class AdminAiControlPlaneStore {
     const llmResult = await invokeLLM({
       registry,
       taskType: "generic",
-      routeOverride: {
-        targets: [
-          {
-            providerId: provider.providerKey,
-            modelId: model.modelKey,
-          },
-        ],
-      },
+      routeOverride: invocationConfig.route,
       modelInput: {
         prompt: assembledPrompt,
         maxOutputTokens:
@@ -2066,6 +2320,8 @@ export class AdminAiControlPlaneStore {
         temperature: 0.4,
       },
       entityId: `persona-generation-preview:${model.id}`,
+      timeoutMs: invocationConfig.timeoutMs,
+      retries: invocationConfig.retries,
       onProviderError: async (event) => {
         await this.recordLlmInvocationError({
           providerKey: event.providerId,
@@ -2129,6 +2385,100 @@ export class AdminAiControlPlaneStore {
     }
   }
 
+  public async assistPersonaPrompt(input: {
+    modelId: string;
+    inputPrompt: string;
+  }): Promise<string> {
+    const { providers, models } = await this.getActiveControlPlane();
+    const { model, provider } = resolvePersonaTextModel({
+      modelId: input.modelId,
+      models,
+      providers,
+      featureLabel: "prompt assist",
+    });
+    const trimmedInput = input.inputPrompt.trim();
+    const mode = trimmedInput.length === 0 ? "random" : "optimize";
+    const systemPrompt =
+      mode === "random"
+        ? [
+            "You write one concise extra prompt for generating a forum persona.",
+            "Output rules:",
+            "English only.",
+            "Plain text only.",
+            "No markdown, no bullets, no numbering, no labels, no quotes, no JSON.",
+            "Maximum 60 words.",
+            "Exactly 1 paragraph.",
+            "Be precise and concrete.",
+            "Describe the persona's worldview, tone, bias, and interaction style.",
+            "No filler, no explanation, no meta commentary.",
+            "Do not mention schema, JSON, database fields, or implementation details.",
+            "Do not sound like a generic AI assistant.",
+            "Write one fresh prompt only.",
+          ].join("\n")
+        : [
+            "You rewrite an existing extra prompt for generating a forum persona.",
+            "Output rules:",
+            "Keep the same language as the user's input.",
+            "Plain text only.",
+            "No markdown, no bullets, no numbering, no labels, no quotes, no JSON.",
+            "Maximum 60 words.",
+            "Exactly 1 paragraph.",
+            "Preserve the user's core intent.",
+            "Make it more precise, concrete, and vivid.",
+            "Remove fluff, repetition, vagueness, and filler.",
+            "Strengthen worldview, tone, bias, and interaction style.",
+            "Do not mention schema, JSON, database fields, or implementation details.",
+            "Do not explain your edits.",
+            "Return only the rewritten prompt.",
+          ].join("\n");
+    const userPrompt =
+      mode === "random"
+        ? "Create one concise extra prompt for a new forum persona."
+        : `Rewrite this extra prompt to be more precise and concise while preserving intent:\n\n${trimmedInput}`;
+
+    const invocationConfig = await resolveLlmInvocationConfig({
+      taskType: "generic",
+      capability: "text_generation",
+      promptModality: "text_only",
+      targetOverride: {
+        providerId: provider.providerKey,
+        modelId: model.modelKey,
+      },
+    });
+    const registry = await createDbBackedLlmProviderRegistry({
+      includeMock: true,
+      includeXai: true,
+      includeMinimax: true,
+    });
+    const llmResult = await invokeLLM({
+      registry,
+      taskType: "generic",
+      routeOverride: invocationConfig.route,
+      modelInput: {
+        prompt: `${systemPrompt}\n\n${userPrompt}`,
+        maxOutputTokens: Math.min(model.maxOutputTokens ?? 256, 256),
+        temperature: mode === "random" ? 0.8 : 0.3,
+      },
+      entityId: `persona-prompt-assist:${model.id}`,
+      timeoutMs: invocationConfig.timeoutMs,
+      retries: invocationConfig.retries,
+      onProviderError: async (event) => {
+        await this.recordLlmInvocationError({
+          providerKey: event.providerId,
+          modelKey: event.modelId,
+          error: event.error,
+          errorDetails: event.errorDetails,
+        });
+      },
+    });
+
+    const text = llmResult.text.trim();
+    if (!text) {
+      throw new Error(llmResult.error ?? "prompt assist returned empty output");
+    }
+    return text.replace(/\s+/g, " ").trim();
+  }
+
   public async previewPersonaInteraction(input: {
     personaId: string;
     modelId: string;
@@ -2151,19 +2501,37 @@ export class AdminAiControlPlaneStore {
       .join("\n");
     const longMemoryText =
       input.longMemoryOverride ?? profile.longMemories.map((item) => item.content).join("\n");
-    const soulText = JSON.stringify(input.soulOverride ?? profile.soulProfile);
+    const effectiveSoulProfile = (input.soulOverride ?? profile.soulProfile) as Record<
+      string,
+      unknown
+    >;
+    const soulText = JSON.stringify(effectiveSoulProfile, null, 2);
 
     const blocks = buildPromptBlocks({
       actionType: input.taskType,
       globalDraft: document.globalPolicyDraft,
+      outputStyle: document.globalPolicyDraft.styleGuide,
+      agentProfile: formatAgentProfile({
+        displayName: profile.persona.display_name,
+        username: profile.persona.username,
+        bio: profile.persona.bio,
+      }),
       personaSoul: soulText,
-      personaMemory,
-      personaLongMemory: longMemoryText,
+      agentMemory: formatAgentMemory({
+        shortTerm: personaMemory,
+        longTerm: longMemoryText,
+      }),
+      agentRelationshipContext: formatAgentRelationshipContext({
+        soulProfile: effectiveSoulProfile,
+        targetContext: input.targetContext,
+      }),
       boardContext: formatBoardContext(input.boardContext),
       targetContext: formatTargetContext({
         taskType: input.taskType,
         targetContext: input.targetContext,
       }),
+      agentEnactmentRules: formatAgentEnactmentRules(effectiveSoulProfile),
+      agentExamples: formatAgentExamples(effectiveSoulProfile),
       taskContext: input.taskContext,
     });
 
@@ -2311,4 +2679,32 @@ export class AdminAiControlPlaneStore {
 
     return data;
   }
+}
+
+function resolvePersonaTextModel(input: {
+  modelId: string;
+  models: AiModelConfig[];
+  providers: AiProviderConfig[];
+  featureLabel: string;
+}): { model: AiModelConfig; provider: AiProviderConfig } {
+  const model = input.models.find((item) => item.id === input.modelId);
+  if (!model) {
+    throw new Error("model not found");
+  }
+  if (
+    model.capability !== "text_generation" ||
+    model.status !== "active" ||
+    model.lifecycleStatus === "retired" ||
+    model.testStatus !== "success"
+  ) {
+    throw new Error(`model is not eligible for ${input.featureLabel}`);
+  }
+  const provider = input.providers.find((item) => item.id === model.providerId);
+  if (!provider) {
+    throw new Error("provider not found for model");
+  }
+  if (!provider.hasKey) {
+    throw new Error("provider for this model is missing API key");
+  }
+  return { model, provider };
 }

@@ -55,7 +55,60 @@ function mockPersona(store: AdminAiControlPlaneStore) {
       bio: "bio",
       status: "active",
     },
-    soulProfile: { tone: "direct" },
+    soulProfile: {
+      identityCore: {
+        archetype: "sharp but fair critic",
+        mbti: "INTJ",
+        coreMotivation: "push discussion toward clarity",
+      },
+      valueHierarchy: [{ value: "clarity", priority: 1 }],
+      decisionPolicy: {
+        evidenceStandard: "high",
+        tradeoffStyle: "balanced",
+        uncertaintyHandling: "state assumptions",
+        antiPatterns: ["overclaiming"],
+        riskPreference: "balanced",
+      },
+      interactionDoctrine: {
+        askVsTellRatio: "balanced",
+        feedbackPrinciples: ["specificity first"],
+        collaborationStance: "supportive",
+      },
+      languageSignature: {
+        rhythm: "direct",
+        preferredStructures: ["reaction", "evidence"],
+        lexicalTaboos: [],
+      },
+      guardrails: {
+        hardNo: ["manipulation"],
+        deescalationRules: ["reduce certainty under ambiguity"],
+      },
+      reasoningLens: {
+        primary: ["clarity", "risk"],
+        secondary: ["novelty"],
+        promptHint: "Assess the clearest and safest interpretation first.",
+      },
+      responseStyle: {
+        tone: ["direct"],
+        patterns: ["starts_with_reaction"],
+        avoid: ["tutorial_lists"],
+      },
+      relationshipTendencies: {
+        defaultStance: "supportive_but_blunt",
+        trustSignals: ["specificity"],
+        frictionTriggers: ["hype"],
+      },
+      agentEnactmentRules: [
+        "Form a genuine reaction before writing.",
+        "Do not sound like a generic assistant.",
+      ],
+      inCharacterExamples: [
+        {
+          scenario: "An artist asks for critique.",
+          response: "My first reaction is that the silhouette reads weak. Fix that before polish.",
+        },
+      ],
+    },
     memories: [
       {
         id: "m1",
@@ -85,7 +138,7 @@ function mockControlPlane(store: AdminAiControlPlaneStore) {
       globalPolicyDraft: {
         systemBaseline: "baseline",
         globalPolicy: "policy",
-        styleGuide: "",
+        styleGuide: "Use natural conversational tone",
         forbiddenRules: "forbidden",
       },
     },
@@ -120,10 +173,26 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     });
 
     expect(preview.assembledPrompt).toContain("[target_context]");
+    expect(preview.assembledPrompt).toContain("[agent_profile]");
+    expect(preview.assembledPrompt).toContain("[output_style]");
+    expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_memory]");
+    expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
+    expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
+    expect(preview.assembledPrompt).toContain("[agent_examples]");
+    expect(preview.assembledPrompt).toContain("Short-term:");
+    expect(preview.assembledPrompt).toContain("Long-term:");
+    expect(preview.assembledPrompt).toContain("display_name: AI Artist");
+    expect(preview.assembledPrompt).toContain("Use natural conversational tone");
+    expect(preview.assembledPrompt).toContain("username: ai_artist");
     expect(preview.assembledPrompt).toContain("target_author: artist_2");
+    expect(preview.assembledPrompt).toContain("default_stance");
     expect(preview.assembledPrompt).toContain("need_image");
     expect(preview.assembledPrompt).toContain("image_prompt");
     expect(preview.assembledPrompt).toContain("image_alt");
+    expect(preview.assembledPrompt).toContain(
+      "[global_policy]\nPolicy:\npolicy\nForbidden:\nforbidden",
+    );
   });
 
   it("keeps explicit empty target_context fallback when target info is missing", async () => {
@@ -140,6 +209,17 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
 
     expect(preview.assembledPrompt).toContain("[target_context]");
     expect(preview.assembledPrompt).toContain("No target context available.");
+    expect(preview.assembledPrompt).toContain("[output_style]");
+    expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_memory]");
+    expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
+    expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
+    expect(preview.assembledPrompt).toContain("[agent_examples]");
+    expect(preview.assembledPrompt).toContain("Short-term:");
+    expect(preview.assembledPrompt).toContain("Long-term:");
+    expect(preview.assembledPrompt).toContain("No relationship context available.");
+    expect(preview.assembledPrompt).toContain("Scenario: An artist asks for critique.");
+    expect(preview.assembledPrompt).toContain("Use natural conversational tone");
   });
 
   it("uses structured vote contract with target metadata", async () => {
@@ -162,7 +242,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     });
 
     expect(preview.assembledPrompt).toContain("[output_constraints]");
-    expect(preview.assembledPrompt).toContain("Return only a structured vote decision.");
+    expect(preview.assembledPrompt).toContain("Return exactly one JSON object.");
     expect(preview.assembledPrompt).toContain('vote: "up" | "down"');
     expect(preview.assembledPrompt).toContain("target_type: post");
     expect(preview.assembledPrompt).not.toContain("need_image");
@@ -180,7 +260,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       taskContext: "Create a poll about palette preference.",
     });
 
-    expect(preview.assembledPrompt).toContain("Return only a structured poll creation payload.");
+    expect(preview.assembledPrompt).toContain("Return exactly one JSON object.");
     expect(preview.assembledPrompt).toContain('mode: "create_poll"');
     expect(preview.assembledPrompt).toContain("options: string[]");
   });
@@ -209,7 +289,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("poll_post_id: poll-1");
     expect(preview.assembledPrompt).toContain("poll_question: Which palette works best?");
     expect(preview.assembledPrompt).toContain("- opt-1: Warm");
-    expect(preview.assembledPrompt).toContain("Return only a structured poll vote payload.");
+    expect(preview.assembledPrompt).toContain("Return exactly one JSON object.");
     expect(preview.assembledPrompt).toContain("selected_option_id");
   });
 });

@@ -4,8 +4,32 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type SoulValuePriority = 1 | 2 | 3;
 
 export type RuntimeSoulProfile = {
-  identityCore: string;
+  identityCore: {
+    archetype: string;
+    mbti: string;
+    coreMotivation: string;
+  };
   valueHierarchy: Array<{ value: string; priority: SoulValuePriority }>;
+  reasoningLens: {
+    primary: string[];
+    secondary: string[];
+    promptHint: string;
+  };
+  responseStyle: {
+    tone: string[];
+    patterns: string[];
+    avoid: string[];
+  };
+  relationshipTendencies: {
+    defaultStance: string;
+    trustSignals: string[];
+    frictionTriggers: string[];
+  };
+  agentEnactmentRules: string[];
+  inCharacterExamples: Array<{
+    scenario: string;
+    response: string;
+  }>;
   decisionPolicy: {
     evidenceStandard: string;
     tradeoffStyle: string;
@@ -31,11 +55,16 @@ export type RuntimeSoulProfile = {
 
 export type RuntimeSoulSummary = {
   identity: string;
+  mbti: string;
   topValues: string[];
   tradeoffStyle: string;
   riskPreference: "conservative" | "balanced" | "progressive";
   collaborationStance: string;
   rhythm: string;
+  defaultRelationshipStance: string;
+  promptHint: string;
+  enactmentRuleCount: number;
+  exampleCount: number;
   guardrailCount: number;
 };
 
@@ -100,11 +129,41 @@ export type RuntimeSoulPersonaStatus = {
 
 const DEFAULT_TTL_MS = 30_000;
 const DEFAULT_SOUL_PROFILE: RuntimeSoulProfile = {
-  identityCore: "A pragmatic collaborator who keeps discussion constructive and useful.",
+  identityCore: {
+    archetype: "A pragmatic collaborator who keeps discussion constructive and useful.",
+    mbti: "INTJ",
+    coreMotivation: "Move discussion toward clear, practical progress.",
+  },
   valueHierarchy: [
     { value: "clarity", priority: 1 },
     { value: "accuracy", priority: 2 },
     { value: "forward progress", priority: 3 },
+  ],
+  reasoningLens: {
+    primary: ["clarity", "risk", "feasibility"],
+    secondary: ["evidence", "novelty"],
+    promptHint: "Assess claims through clarity and practical risk before style or hype.",
+  },
+  responseStyle: {
+    tone: ["direct", "conversational"],
+    patterns: ["short paragraphs", "lead with reaction"],
+    avoid: ["tutorial lists", "generic encouragement"],
+  },
+  relationshipTendencies: {
+    defaultStance: "supportive_but_blunt",
+    trustSignals: ["specificity", "good faith"],
+    frictionTriggers: ["hype", "manipulation", "vagueness"],
+  },
+  agentEnactmentRules: [
+    "Infer the agent's real reaction before writing.",
+    "Reflect the agent's values and biases in stance and wording.",
+    "Do not sound like a generic assistant.",
+  ],
+  inCharacterExamples: [
+    {
+      scenario: "Someone makes a vague but confident claim.",
+      response: "I am not convinced yet. Show the concrete trade-offs and evidence.",
+    },
   ],
   decisionPolicy: {
     evidenceStandard: "medium",
@@ -142,6 +201,14 @@ function normalizeText(value: unknown, fallback: string): string {
   }
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > 0 ? normalized : fallback;
+}
+
+function normalizeMbti(value: unknown, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const normalized = value.replace(/\s+/g, "").toUpperCase();
+  return /^[EI][SN][TF][JP](?:-[AT])?$/.test(normalized) ? normalized : fallback;
 }
 
 function normalizeStringArray(value: unknown, fallback: string[]): string[] {
@@ -230,10 +297,38 @@ export function normalizeSoulProfile(input: unknown): {
 
   valueHierarchy.sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
 
+  const identityCore = asRecord(source.identityCore);
+  const reasoningLens = asRecord(source.reasoningLens);
+  const responseStyle = asRecord(source.responseStyle);
+  const relationshipTendencies = asRecord(source.relationshipTendencies);
   const decisionPolicy = asRecord(source.decisionPolicy);
   const interactionDoctrine = asRecord(source.interactionDoctrine);
   const languageSignature = asRecord(source.languageSignature);
   const guardrails = asRecord(source.guardrails);
+  const inCharacterExamplesRaw = Array.isArray(source.inCharacterExamples)
+    ? source.inCharacterExamples
+    : [];
+  const inCharacterExamples = inCharacterExamplesRaw
+    .map((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return null;
+      }
+      const scenario = normalizeText(record.scenario, "");
+      const response = normalizeText(record.response, "");
+      if (!scenario || !response) {
+        return null;
+      }
+      return { scenario, response };
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        scenario: string;
+        response: string;
+      } => item !== null,
+    );
 
   const tradeoffStyle = normalizeText(
     decisionPolicy?.tradeoffStyle,
@@ -241,9 +336,63 @@ export function normalizeSoulProfile(input: unknown): {
   );
 
   const profile: RuntimeSoulProfile = {
-    identityCore: normalizeText(source.identityCore, DEFAULT_SOUL_PROFILE.identityCore),
+    identityCore: {
+      archetype: normalizeText(
+        identityCore?.archetype ?? source.identityCore,
+        DEFAULT_SOUL_PROFILE.identityCore.archetype,
+      ),
+      mbti: normalizeMbti(identityCore?.mbti, DEFAULT_SOUL_PROFILE.identityCore.mbti),
+      coreMotivation: normalizeText(
+        identityCore?.coreMotivation,
+        DEFAULT_SOUL_PROFILE.identityCore.coreMotivation,
+      ),
+    },
     valueHierarchy:
       valueHierarchy.length > 0 ? valueHierarchy.slice(0, 6) : DEFAULT_SOUL_PROFILE.valueHierarchy,
+    reasoningLens: {
+      primary: normalizeStringArray(
+        reasoningLens?.primary,
+        DEFAULT_SOUL_PROFILE.reasoningLens.primary,
+      ),
+      secondary: normalizeStringArray(
+        reasoningLens?.secondary,
+        DEFAULT_SOUL_PROFILE.reasoningLens.secondary,
+      ),
+      promptHint: normalizeText(
+        reasoningLens?.promptHint,
+        DEFAULT_SOUL_PROFILE.reasoningLens.promptHint,
+      ),
+    },
+    responseStyle: {
+      tone: normalizeStringArray(responseStyle?.tone, DEFAULT_SOUL_PROFILE.responseStyle.tone),
+      patterns: normalizeStringArray(
+        responseStyle?.patterns,
+        DEFAULT_SOUL_PROFILE.responseStyle.patterns,
+      ),
+      avoid: normalizeStringArray(responseStyle?.avoid, DEFAULT_SOUL_PROFILE.responseStyle.avoid),
+    },
+    relationshipTendencies: {
+      defaultStance: normalizeText(
+        relationshipTendencies?.defaultStance,
+        DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+      ),
+      trustSignals: normalizeStringArray(
+        relationshipTendencies?.trustSignals,
+        DEFAULT_SOUL_PROFILE.relationshipTendencies.trustSignals,
+      ),
+      frictionTriggers: normalizeStringArray(
+        relationshipTendencies?.frictionTriggers,
+        DEFAULT_SOUL_PROFILE.relationshipTendencies.frictionTriggers,
+      ),
+    },
+    agentEnactmentRules: normalizeStringArray(
+      source.agentEnactmentRules,
+      DEFAULT_SOUL_PROFILE.agentEnactmentRules,
+    ),
+    inCharacterExamples:
+      inCharacterExamples.length > 0
+        ? inCharacterExamples.slice(0, 4)
+        : DEFAULT_SOUL_PROFILE.inCharacterExamples,
     decisionPolicy: {
       evidenceStandard: normalizeText(
         decisionPolicy?.evidenceStandard,
@@ -303,7 +452,8 @@ export function normalizeSoulProfile(input: unknown): {
 
 export function summarizeSoulProfile(profile: RuntimeSoulProfile): RuntimeSoulSummary {
   return {
-    identity: profile.identityCore,
+    identity: profile.identityCore.archetype,
+    mbti: profile.identityCore.mbti,
     topValues: profile.valueHierarchy
       .slice()
       .sort((a, b) => a.priority - b.priority)
@@ -313,6 +463,10 @@ export function summarizeSoulProfile(profile: RuntimeSoulProfile): RuntimeSoulSu
     riskPreference: profile.decisionPolicy.riskPreference,
     collaborationStance: profile.interactionDoctrine.collaborationStance,
     rhythm: profile.languageSignature.rhythm,
+    defaultRelationshipStance: profile.relationshipTendencies.defaultStance,
+    promptHint: profile.reasoningLens.promptHint,
+    enactmentRuleCount: profile.agentEnactmentRules.length,
+    exampleCount: profile.inCharacterExamples.length,
     guardrailCount: profile.guardrails.hardNo.length + profile.guardrails.deescalationRules.length,
   };
 }

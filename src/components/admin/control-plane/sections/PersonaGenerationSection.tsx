@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { UserPlus, Sparkles, Save, Bot } from "lucide-react";
+import { UserPlus, Sparkles, Bot, WandSparkles, Pause } from "lucide-react";
 import type {
   AiModelConfig,
   AiProviderConfig,
@@ -7,8 +7,13 @@ import type {
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
 import { SectionCard } from "../SectionCard";
-import { PreviewPanel } from "../PreviewPanel";
-import { optionLabelForModel, derivePersonaUsername } from "../control-plane-utils";
+import { PersonaGenerationModal } from "../PersonaGenerationModal";
+import { optionLabelForModel } from "../control-plane-utils";
+import {
+  formatPromptAssistStatus,
+  readPromptAssistButtonMode,
+} from "../persona-prompt-assist-utils";
+import type { PersonaGenerationModalPhase } from "../persona-generation-modal-utils";
 
 export interface PersonaGenerationSectionProps {
   personaGeneration: {
@@ -24,6 +29,9 @@ export interface PersonaGenerationSectionProps {
   personaGenerationModels: AiModelConfig[];
   providers: AiProviderConfig[];
   personaGenerationLoading: boolean;
+  personaPromptAssistLoading: boolean;
+  personaPromptAssistError: string | null;
+  personaPromptAssistElapsedSeconds: number;
   personaPreviewRunCount: number;
   personaLastSavedAt: string | null;
   personaSaveForm: {
@@ -38,11 +46,18 @@ export interface PersonaGenerationSectionProps {
   >;
   personaSaveLoading: boolean;
   personaGenerationPreview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
+  personaGenerationModalOpen: boolean;
+  personaGenerationModalPhase: PersonaGenerationModalPhase;
+  personaGenerationModalError: string | null;
+  personaGenerationModalRawOutput: string | null;
+  personaGenerationElapsedSeconds: number;
   personaStepStatus: {
     generated: boolean;
     saved: boolean;
   };
+  assistPersonaPrompt: () => Promise<void>;
   runPersonaGenerationPreview: () => Promise<void>;
+  closePersonaGenerationModal: () => void;
   savePersonaFromGeneration: () => Promise<void>;
 }
 
@@ -52,61 +67,42 @@ export function PersonaGenerationSection({
   personaGenerationModels,
   providers,
   personaGenerationLoading,
+  personaPromptAssistLoading,
+  personaPromptAssistError,
+  personaPromptAssistElapsedSeconds,
   personaPreviewRunCount,
   personaLastSavedAt,
   personaSaveForm,
   setPersonaSaveForm,
   personaSaveLoading,
   personaGenerationPreview,
+  personaGenerationModalOpen,
+  personaGenerationModalPhase,
+  personaGenerationModalError,
+  personaGenerationModalRawOutput,
+  personaGenerationElapsedSeconds,
   personaStepStatus,
+  assistPersonaPrompt,
   runPersonaGenerationPreview,
+  closePersonaGenerationModal,
   savePersonaFromGeneration,
 }: PersonaGenerationSectionProps) {
+  const promptAssistButtonMode = readPromptAssistButtonMode(personaPromptAssistLoading);
+  const promptAssistStatus = formatPromptAssistStatus(
+    personaPromptAssistLoading,
+    personaPromptAssistElapsedSeconds,
+    personaPromptAssistError,
+  );
+
   return (
     <>
       <div className="space-y-6">
         <SectionCard title="Generate Persona" icon={<UserPlus className="h-4 w-4" />}>
           <div className="space-y-6">
             <p className="max-w-2xl text-sm leading-relaxed opacity-60">
-              Automate persona creation in three steps: choose model and prompt context, generate
-              the content preview, then review and save to the database.
+              Choose a model, shape the extra prompt, and generate a structured persona preview in
+              the modal.
             </p>
-
-            {/* Step indicator */}
-            <div className="flex items-center gap-2 py-2">
-              <div className="flex items-center gap-2">
-                <span className="badge badge-primary badge-sm font-bold">1</span>
-                <span className="text-[11px] font-semibold tracking-wider uppercase opacity-60">
-                  Configure
-                </span>
-              </div>
-              <div className="bg-base-300/50 h-[2px] flex-1" />
-              <div className="flex items-center gap-2">
-                <span
-                  className={`badge badge-sm font-bold ${personaStepStatus.generated ? "badge-success" : "badge-ghost"}`}
-                >
-                  2
-                </span>
-                <span
-                  className={`text-[11px] font-semibold tracking-wider uppercase ${personaStepStatus.generated ? "text-success" : "opacity-60"}`}
-                >
-                  {personaStepStatus.generated ? "Generated ✓" : "Generate"}
-                </span>
-              </div>
-              <div className="bg-base-300/50 h-[2px] flex-1" />
-              <div className="flex items-center gap-2">
-                <span
-                  className={`badge badge-sm font-bold ${personaStepStatus.saved ? "badge-success" : "badge-ghost"}`}
-                >
-                  3
-                </span>
-                <span
-                  className={`text-[11px] font-semibold tracking-wider uppercase ${personaStepStatus.saved ? "text-success" : "opacity-60"}`}
-                >
-                  {personaStepStatus.saved ? "Saved ✓" : "Save"}
-                </span>
-              </div>
-            </div>
 
             <div className="space-y-5">
               <div className="form-control w-full">
@@ -122,7 +118,6 @@ export function PersonaGenerationSection({
                     setPersonaGeneration((prev) => ({ ...prev, modelId: e.target.value }))
                   }
                 >
-                  <option value="">Select model (key required)</option>
                   {personaGenerationModels.map((model) => (
                     <option key={model.id} value={model.id}>
                       {optionLabelForModel(model, providers)}
@@ -136,14 +131,37 @@ export function PersonaGenerationSection({
                     Context / Extra Prompt
                   </span>
                 </label>
-                <input
-                  className="input input-bordered input-sm focus:input-primary w-full"
-                  value={personaGeneration.extraPrompt}
-                  onChange={(e) =>
-                    setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
-                  }
-                  placeholder="Specific background context or guidelines for this persona..."
-                />
+                <div className="join w-full">
+                  <input
+                    className="input input-bordered input-sm focus:input-primary join-item w-full"
+                    value={personaGeneration.extraPrompt}
+                    onChange={(e) =>
+                      setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
+                    }
+                    placeholder="Specific background context or guidelines for this persona..."
+                  />
+                  <button
+                    className="bg-base-100 border-base-300 hover:border-primary hover:bg-base-100 btn btn-sm join-item gap-2 border shadow-none"
+                    disabled={!personaGeneration.modelId}
+                    onClick={() => void assistPersonaPrompt()}
+                  >
+                    {promptAssistButtonMode === "cancel" ? (
+                      <>
+                        <Pause className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        <WandSparkles className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div
+                  className={`mt-2 text-xs ${personaPromptAssistError ? "text-error" : "opacity-55"}`}
+                >
+                  {promptAssistStatus ??
+                    "Empty prompt: generate a concise English prompt. Existing prompt: optimize in the same language."}
+                </div>
               </div>
               <div className="flex justify-end pt-1">
                 <button
@@ -174,80 +192,25 @@ export function PersonaGenerationSection({
             )}
           </div>
         </SectionCard>
-
-        {personaGenerationPreview ? (
-          <SectionCard
-            title="Save Persona"
-            icon={<Save className="h-4 w-4" />}
-            actions={
-              <div className="flex items-center gap-3 text-[10px] font-bold tracking-widest uppercase opacity-50">
-                <span>Runs: {personaPreviewRunCount}</span>
-                {personaLastSavedAt && (
-                  <span>Last saved: {new Date(personaLastSavedAt).toLocaleTimeString()}</span>
-                )}
-              </div>
-            }
-          >
-            <div className="space-y-6">
-              <div className="space-y-5">
-                <div className="form-control w-full">
-                  <label className="label py-1">
-                    <span className="label-text text-xs font-semibold opacity-70">
-                      Display Name
-                    </span>
-                  </label>
-                  <input
-                    className="input input-bordered input-sm focus:input-primary w-full"
-                    value={personaSaveForm.displayName}
-                    onChange={(e) => {
-                      const displayName = e.target.value;
-                      setPersonaSaveForm({
-                        displayName,
-                        username: derivePersonaUsername(displayName),
-                      });
-                    }}
-                    placeholder="e.g. Satoshi Nakamoto"
-                  />
-                </div>
-                <div className="form-control w-full">
-                  <label className="label py-1">
-                    <span className="label-text text-xs font-semibold opacity-70">
-                      Username (automatically prefixed with <span className="font-mono">ai_</span>)
-                    </span>
-                  </label>
-                  <input
-                    className="input input-bordered input-sm focus:input-primary w-full"
-                    value={personaSaveForm.username}
-                    onChange={(e) =>
-                      setPersonaSaveForm((prev) => ({
-                        ...prev,
-                        username: derivePersonaUsername(e.target.value),
-                      }))
-                    }
-                    placeholder="e.g. satoshi"
-                  />
-                </div>
-              </div>
-              <div className="border-base-300 flex justify-end border-t pt-5">
-                <button
-                  className="btn btn-primary btn-sm gap-2 shadow-sm"
-                  disabled={personaSaveLoading}
-                  onClick={() => void savePersonaFromGeneration()}
-                >
-                  <Save className="h-4 w-4" />
-                  {personaSaveLoading ? "Saving to Database…" : "Save Final Persona"}
-                </button>
-              </div>
-              <PreviewPanel preview={personaGenerationPreview} emptyLabel="Run preview first" />
-            </div>
-          </SectionCard>
-        ) : (
-          <PreviewPanel
-            preview={null}
-            emptyLabel="Generate content preview to finalize the persona."
-          />
-        )}
       </div>
+
+      <PersonaGenerationModal
+        isOpen={personaGenerationModalOpen}
+        phase={personaGenerationModalPhase}
+        errorMessage={personaGenerationModalError}
+        rawOutput={personaGenerationModalRawOutput}
+        elapsedSeconds={personaGenerationElapsedSeconds}
+        preview={personaGenerationPreview}
+        runCount={personaPreviewRunCount}
+        lastSavedAt={personaLastSavedAt}
+        saveForm={personaSaveForm}
+        setSaveForm={setPersonaSaveForm}
+        isGenerating={personaGenerationLoading}
+        isSaving={personaSaveLoading}
+        onClose={closePersonaGenerationModal}
+        onRegenerate={runPersonaGenerationPreview}
+        onSave={savePersonaFromGeneration}
+      />
     </>
   );
 }

@@ -35,12 +35,20 @@ export default function AiControlPlanePanel(props: Props) {
     personaGeneration,
     setPersonaGeneration,
     personaGenerationLoading,
+    personaPromptAssistLoading,
+    personaPromptAssistError,
+    personaPromptAssistElapsedSeconds,
     personaPreviewRunCount,
     personaLastSavedAt,
     personaSaveLoading,
     personaSaveForm,
     setPersonaSaveForm,
     personaGenerationPreview,
+    personaGenerationModalOpen,
+    personaGenerationModalPhase,
+    personaGenerationModalError,
+    personaGenerationModalRawOutput,
+    personaGenerationElapsedSeconds,
     interactionInput,
     setInteractionInput,
     interactionPreview,
@@ -61,6 +69,8 @@ export default function AiControlPlanePanel(props: Props) {
     deletePolicyRelease,
     viewPolicyVersion,
     runPersonaGenerationPreview,
+    assistPersonaPrompt,
+    closePersonaGenerationModal,
     savePersonaFromGeneration,
     runInteractionPreview,
     applyRoutePrimaryModel,
@@ -191,14 +201,24 @@ export default function AiControlPlanePanel(props: Props) {
               personaGenerationModels={personaGenerationModels}
               providers={providers}
               personaGenerationLoading={personaGenerationLoading}
+              personaPromptAssistLoading={personaPromptAssistLoading}
+              personaPromptAssistError={personaPromptAssistError}
+              personaPromptAssistElapsedSeconds={personaPromptAssistElapsedSeconds}
               personaPreviewRunCount={personaPreviewRunCount}
               personaLastSavedAt={personaLastSavedAt}
               personaSaveForm={personaSaveForm}
               setPersonaSaveForm={setPersonaSaveForm}
               personaSaveLoading={personaSaveLoading}
               personaGenerationPreview={personaGenerationPreview}
+              personaGenerationModalOpen={personaGenerationModalOpen}
+              personaGenerationModalPhase={personaGenerationModalPhase}
+              personaGenerationModalError={personaGenerationModalError}
+              personaGenerationModalRawOutput={personaGenerationModalRawOutput}
+              personaGenerationElapsedSeconds={personaGenerationElapsedSeconds}
               personaStepStatus={personaStepStatus}
+              assistPersonaPrompt={assistPersonaPrompt}
               runPersonaGenerationPreview={runPersonaGenerationPreview}
+              closePersonaGenerationModal={closePersonaGenerationModal}
               savePersonaFromGeneration={savePersonaFromGeneration}
             />
           )}

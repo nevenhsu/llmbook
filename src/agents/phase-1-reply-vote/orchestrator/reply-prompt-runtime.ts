@@ -23,9 +23,16 @@ export type ReplyPromptBoardContext = {
   rules?: ReplyPromptBoardRule[] | null;
 };
 
+export type ReplyPromptAgentProfile = {
+  displayName?: string | null;
+  username?: string | null;
+  bio?: string | null;
+};
+
 export type ReplyPromptRuntimeInput = {
   entityId: string;
   personaId: string;
+  agentProfile?: ReplyPromptAgentProfile | null;
   postId: string;
   title: string;
   postBodySnippet: string;
@@ -88,12 +95,34 @@ function readAllowlist(): string[] {
 function formatSoulBlock(soul: RuntimeSoulContext): string {
   return [
     `Identity: ${soul.summary.identity}`,
+    `MBTI: ${soul.summary.mbti}`,
+    `Core motivation: ${soul.profile.identityCore.coreMotivation}`,
     `Top values: ${soul.summary.topValues.join(", ") || "n/a"}`,
+    `Reasoning lens: ${soul.profile.reasoningLens.primary.join(", ") || "n/a"}`,
+    `Reasoning hint: ${soul.summary.promptHint}`,
+    `Response style: ${soul.profile.responseStyle.tone.join(", ") || "n/a"}`,
+    `Relationship default: ${soul.summary.defaultRelationshipStance}`,
     `Tradeoff style: ${soul.summary.tradeoffStyle}`,
     `Risk preference: ${soul.summary.riskPreference}`,
     `Collaboration stance: ${soul.summary.collaborationStance}`,
     `Language rhythm: ${soul.summary.rhythm}`,
     `Guardrail count: ${String(soul.summary.guardrailCount)}`,
+  ].join("\n");
+}
+
+function formatAgentProfile(
+  profile: ReplyPromptAgentProfile | null | undefined,
+): string | undefined {
+  const displayName = profile?.displayName?.trim();
+  const username = profile?.username?.trim();
+  const bio = profile?.bio?.trim();
+  if (!displayName && !username && !bio) {
+    return undefined;
+  }
+  return [
+    `display_name: ${displayName ?? "(empty)"}`,
+    `username: ${username ?? "(empty)"}`,
+    `bio: ${bio ?? "(empty)"}`,
   ].join("\n");
 }
 
@@ -129,6 +158,37 @@ function formatPolicyBlock(policy: DispatcherPolicy): string {
     `- precheckSimilarityThreshold: ${String(policy.precheckSimilarityThreshold)}`,
     "- respect safety/review gates, no policy bypass",
   ].join("\n");
+}
+
+function formatRelationshipContext(input: ReplyPromptRuntimeInput): string | undefined {
+  if (!input.focusSnippet) {
+    return undefined;
+  }
+
+  return [
+    `target_author: ${input.focusActor}`,
+    "current_interaction: direct reply to target content in the active thread",
+    `participants_in_thread: ${String(input.participantCount)}`,
+    `default_stance: ${input.soul.profile.relationshipTendencies.defaultStance}`,
+    `trust_signals: ${input.soul.profile.relationshipTendencies.trustSignals.join(", ") || "(none)"}`,
+    `friction_triggers: ${input.soul.profile.relationshipTendencies.frictionTriggers.join(", ") || "(none)"}`,
+  ].join("\n");
+}
+
+function formatEnactmentRules(soul: RuntimeSoulContext): string | undefined {
+  if (soul.profile.agentEnactmentRules.length === 0) {
+    return undefined;
+  }
+  return soul.profile.agentEnactmentRules.join("\n");
+}
+
+function formatAgentExamples(soul: RuntimeSoulContext): string | undefined {
+  if (soul.profile.inCharacterExamples.length === 0) {
+    return undefined;
+  }
+  return soul.profile.inCharacterExamples
+    .map((example) => [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"))
+    .join("\n\n");
 }
 
 function formatBoardContext(
@@ -209,10 +269,14 @@ export async function generateReplyTextWithPromptRuntime(
     systemBaseline:
       "You are a phase1 reply agent. Be accurate, concise, and constructive. Keep language natural.",
     policyText: formatPolicyBlock(input.policy),
+    agentProfileText: formatAgentProfile(input.agentProfile),
     soulText: formatSoulBlock(input.soul),
     memoryText: formatMemoryBlock(input.memoryContext),
+    relationshipContextText: formatRelationshipContext(input),
     boardContextText: formatBoardContext(input.boardContext),
     targetContextText: formatTargetContext(input),
+    enactmentRulesText: formatEnactmentRules(input.soul),
+    agentExamplesText: formatAgentExamples(input.soul),
     taskContextText: formatTaskContext(input),
   });
 

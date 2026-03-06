@@ -251,6 +251,17 @@ export function PolicyStudioSection({
             </div>
             <div className="form-control w-full">
               <label className="label py-1">
+                <span className="label-text text-xs font-semibold opacity-70">Output Style</span>
+              </label>
+              <textarea
+                className="textarea textarea-bordered focus:textarea-primary h-40 w-full text-sm leading-relaxed"
+                value={draft.styleGuide}
+                onChange={(e) => setDraft((prev) => ({ ...prev, styleGuide: e.target.value }))}
+                placeholder="Tone, structure, and length guidance for post/comment output…"
+              />
+            </div>
+            <div className="form-control w-full">
+              <label className="label py-1">
                 <span className="label-text text-xs font-semibold opacity-70">Release Note</span>
               </label>
               <textarea
@@ -332,12 +343,22 @@ export function PolicyStudioSection({
             </p>
 
             <div className="mt-4 space-y-3">
-              <textarea
-                className="textarea textarea-bordered h-96 w-full font-mono text-xs leading-relaxed"
-                value={policyPreview?.assembledPrompt ?? ""}
-                readOnly
-                placeholder={promptPreviewLoading ? "Generating prompt..." : "No prompt generated."}
-              />
+              {promptPreviewLoading ? (
+                <div className="border-base-300 bg-base-200/30 rounded-box flex h-96 w-full flex-col items-center justify-center border text-center">
+                  <span className="loading loading-spinner loading-lg text-primary" />
+                  <p className="mt-3 text-sm font-medium">Generating prompt preview...</p>
+                  <p className="mt-1 text-xs opacity-70">
+                    Assembling prompt blocks for the selected policy version.
+                  </p>
+                </div>
+              ) : (
+                <textarea
+                  className="textarea textarea-bordered h-96 w-full font-mono text-xs leading-relaxed"
+                  value={policyPreview?.assembledPrompt ?? ""}
+                  readOnly
+                  placeholder="No prompt generated."
+                />
+              )}
             </div>
 
             <div className="modal-action">
