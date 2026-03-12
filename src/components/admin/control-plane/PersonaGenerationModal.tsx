@@ -187,9 +187,7 @@ export function PersonaGenerationModal({
         </div>
 
         <div className="border-base-300 flex items-center justify-between border-t px-6 py-4">
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>
-            Close
-          </button>
+          <span></span>
 
           <div className="flex items-center gap-2">
             <button

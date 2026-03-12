@@ -55,77 +55,77 @@ function mockPersona(store: AdminAiControlPlaneStore) {
       bio: "bio",
       status: "active",
     },
-    soulProfile: {
-      identityCore: {
+    personaCore: {
+      identity_summary: {
         archetype: "sharp but fair critic",
-        mbti: "INTJ",
-        coreMotivation: "push discussion toward clarity",
+        core_motivation: "push discussion toward clarity",
+        one_sentence_identity: "A precise visual-critique regular.",
       },
-      valueHierarchy: [{ value: "clarity", priority: 1 }],
-      decisionPolicy: {
-        evidenceStandard: "high",
-        tradeoffStyle: "balanced",
-        uncertaintyHandling: "state assumptions",
-        antiPatterns: ["overclaiming"],
-        riskPreference: "balanced",
+      values: {
+        value_hierarchy: [{ value: "clarity", priority: 1 }],
+        worldview: ["Strong critique starts from what is actually on the page."],
+        judgment_style: "direct but fair",
       },
-      interactionDoctrine: {
-        askVsTellRatio: "balanced",
-        feedbackPrinciples: ["specificity first"],
-        collaborationStance: "supportive",
+      aesthetic_profile: {
+        humor_preferences: ["dry wit"],
+        narrative_preferences: ["clear conflict"],
+        creative_preferences: ["specificity"],
+        disliked_patterns: ["generic praise"],
+        taste_boundaries: ["empty encouragement"],
       },
-      languageSignature: {
-        rhythm: "direct",
-        preferredStructures: ["reaction", "evidence"],
-        lexicalTaboos: [],
+      lived_context: {
+        familiar_scenes_of_life: ["critique threads"],
+        personal_experience_flavors: ["visual editing"],
+        cultural_contexts: ["online art communities"],
+        topics_with_confident_grounding: ["critique"],
+        topics_requiring_runtime_retrieval: ["time-sensitive references"],
+      },
+      creator_affinity: {
+        admired_creator_types: ["sharp structural critics"],
+        structural_preferences: ["clear payoff"],
+        detail_selection_habits: ["notice weak assumptions"],
+        creative_biases: ["prefer precision over warmth"],
+      },
+      interaction_defaults: {
+        default_stance: "supportive_but_blunt",
+        discussion_strengths: ["specificity first"],
+        friction_triggers: ["hype"],
+        non_generic_traits: ["cuts to the main weakness quickly"],
       },
       guardrails: {
-        hardNo: ["manipulation"],
-        deescalationRules: ["reduce certainty under ambiguity"],
+        hard_no: ["manipulation"],
+        deescalation_style: ["reduce certainty under ambiguity"],
       },
-      reasoningLens: {
-        primary: ["clarity", "risk"],
-        secondary: ["novelty"],
-        promptHint: "Assess the clearest and safest interpretation first.",
-      },
-      responseStyle: {
-        tone: ["direct"],
-        patterns: ["starts_with_reaction"],
-        avoid: ["tutorial_lists"],
-      },
-      relationshipTendencies: {
-        defaultStance: "supportive_but_blunt",
-        trustSignals: ["specificity"],
-        frictionTriggers: ["hype"],
-      },
-      agentEnactmentRules: [
-        "Form a genuine reaction before writing.",
-        "Do not sound like a generic assistant.",
-      ],
-      inCharacterExamples: [
-        {
-          scenario: "An artist asks for critique.",
-          response: "My first reaction is that the silhouette reads weak. Fix that before polish.",
-        },
-      ],
+      reference_sources: [],
+      reference_derivation: [],
+      originalization_note: "Original persona.",
     },
-    memories: [
+    personaMemories: [
       {
         id: "m1",
-        key: "topic",
-        value: "feedback",
-        context_data: {},
-        expires_at: null,
-        created_at: "2026-03-06T00:00:00.000Z",
+        memoryType: "memory",
+        scope: "persona",
+        memoryKey: "topic",
+        content: "feedback",
+        metadata: {},
+        expiresAt: null,
+        isCanonical: false,
+        importance: null,
+        createdAt: "2026-03-06T00:00:00.000Z",
+        updatedAt: "2026-03-06T00:00:00.000Z",
       },
-    ],
-    longMemories: [
       {
         id: "lm1",
+        memoryType: "long_memory",
+        scope: "persona",
+        memoryKey: null,
         content: "likes concrete critique",
+        metadata: { memoryCategory: "knowledge" },
+        expiresAt: null,
+        isCanonical: true,
         importance: 0.9,
-        memory_category: "knowledge",
-        updated_at: "2026-03-06T00:00:00.000Z",
+        createdAt: "2026-03-06T00:00:00.000Z",
+        updatedAt: "2026-03-06T00:00:00.000Z",
       },
     ],
   });
@@ -218,7 +218,8 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("Short-term:");
     expect(preview.assembledPrompt).toContain("Long-term:");
     expect(preview.assembledPrompt).toContain("No relationship context available.");
-    expect(preview.assembledPrompt).toContain("Scenario: An artist asks for critique.");
+    expect(preview.assembledPrompt).toContain("Scenario:");
+    expect(preview.assembledPrompt).toContain("Response:");
     expect(preview.assembledPrompt).toContain("Use natural conversational tone");
   });
 

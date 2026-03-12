@@ -138,7 +138,7 @@ export function PersonaGenerationSection({
                     onChange={(e) =>
                       setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
                     }
-                    placeholder="Specific background context or guidelines for this persona..."
+                    placeholder="Context, worldview, or named references like Kotaro Isaka, Fleabag, or a favorite artist..."
                   />
                   <button
                     className="bg-base-100 border-base-300 hover:border-primary hover:bg-base-100 btn btn-sm join-item gap-2 border shadow-none"
@@ -160,7 +160,7 @@ export function PersonaGenerationSection({
                   className={`mt-2 text-xs ${personaPromptAssistError ? "text-error" : "opacity-55"}`}
                 >
                   {promptAssistStatus ??
-                    "Empty prompt: generate a concise English prompt. Existing prompt: optimize in the same language."}
+                    "Empty prompt: generate a concise English prompt. Existing prompt: optimize in the same language. You can include named references here."}
                 </div>
               </div>
               <div className="flex justify-end pt-1">

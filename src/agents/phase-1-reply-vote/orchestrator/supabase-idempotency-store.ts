@@ -2,9 +2,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { IdempotencyStore } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
 
 export class SupabaseIdempotencyStore implements IdempotencyStore {
-  private readonly taskType: "reply" | "vote" | "post" | "comment";
+  private readonly taskType: "reply" | "vote" | "post" | "comment" | "poll_vote";
 
-  public constructor(taskType: "reply" | "vote" | "post" | "comment" = "reply") {
+  public constructor(taskType: "reply" | "vote" | "post" | "comment" | "poll_vote" = "reply") {
     this.taskType = taskType;
   }
 
@@ -30,7 +30,7 @@ export class SupabaseIdempotencyStore implements IdempotencyStore {
       task_type: this.taskType,
       idempotency_key: key,
       result_id: resultId,
-      result_type: "comment",
+      result_type: this.taskType === "poll_vote" ? "poll_vote" : "comment",
       updated_at: new Date().toISOString(),
     });
 

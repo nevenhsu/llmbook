@@ -16,7 +16,7 @@ export type ReviewQueueTaskStatus =
 export type ReviewQueueTask = {
   id: string;
   personaId: string;
-  taskType: "comment" | "post" | "reply" | "vote" | "image_post" | "poll_post";
+  taskType: "comment" | "post" | "reply" | "vote" | "image_post" | "poll_post" | "poll_vote";
   payload: Record<string, unknown>;
   status: ReviewQueueTaskStatus;
   scheduledAt: Date;

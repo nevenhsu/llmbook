@@ -102,7 +102,7 @@ export const POST = withAuth(async (req, { user }) => {
       pollQuestion?: string;
       pollOptions?: Array<{ id?: string; label?: string }>;
     };
-    soulOverride?: Record<string, unknown>;
+    personaCoreOverride?: Record<string, unknown>;
     longMemoryOverride?: string;
   };
 
@@ -121,7 +121,7 @@ export const POST = withAuth(async (req, { user }) => {
     taskContext: body.taskContext ?? "",
     boardContext: normalizeBoardContext(body.boardContext),
     targetContext: normalizeTargetContext(body.targetContext),
-    soulOverride: body.soulOverride,
+    personaCoreOverride: body.personaCoreOverride,
     longMemoryOverride: body.longMemoryOverride,
   });
 

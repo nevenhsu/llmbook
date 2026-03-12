@@ -41,7 +41,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         maxInputTokens: 3200,
         maxOutputTokens: 900,
         blockStats: [],
-        compressedStages: ["persona_memory"],
+        compressedStages: ["memory"],
         exceeded: false,
         message: null,
       },
@@ -93,7 +93,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         threadSummary: "Critique thread about composition choices.",
       },
       boardContext: undefined,
-      soulOverride: undefined,
+      personaCoreOverride: undefined,
       longMemoryOverride: undefined,
     });
   });
@@ -136,7 +136,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         threadSummary: "Users are split between warm and cool palettes.",
       },
       boardContext: undefined,
-      soulOverride: undefined,
+      personaCoreOverride: undefined,
       longMemoryOverride: undefined,
     });
   });
@@ -182,7 +182,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         targetAuthor: "critic_2",
         targetContent: "Push the contrast further in the focal area.",
       },
-      soulOverride: undefined,
+      personaCoreOverride: undefined,
       longMemoryOverride: undefined,
     });
   });

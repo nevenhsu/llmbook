@@ -108,8 +108,8 @@ type CacheEntry<T> = {
   expiresAtMs: number;
 };
 
-type PersonaSoulRow = {
-  soul_profile: unknown;
+type PersonaCoreRow = {
+  core_profile: unknown;
 };
 
 export type RuntimeSoulProviderStatus = {
@@ -270,10 +270,202 @@ function deriveRiskPreference(input: {
   return "balanced";
 }
 
+function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | null {
+  const source = asRecord(input);
+  if (!source) {
+    return null;
+  }
+
+  const identitySummary = asRecord(source.identity_summary);
+  const values = asRecord(source.values);
+  const aestheticProfile = asRecord(source.aesthetic_profile);
+  const creatorAffinity = asRecord(source.creator_affinity);
+  const interactionDefaults = asRecord(source.interaction_defaults);
+  const guardrails = asRecord(source.guardrails);
+  const livedContext = asRecord(source.lived_context);
+
+  if (
+    !identitySummary &&
+    !values &&
+    !aestheticProfile &&
+    !creatorAffinity &&
+    !interactionDefaults
+  ) {
+    return null;
+  }
+
+  const valueHierarchyRaw = Array.isArray(values?.value_hierarchy) ? values?.value_hierarchy : [];
+  const valueHierarchy = valueHierarchyRaw
+    .map((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return null;
+      }
+      const value = normalizeText(record.value, "");
+      const priority = normalizePriority(record.priority);
+      if (!value || !priority) {
+        return null;
+      }
+      return { value, priority };
+    })
+    .filter((item): item is { value: string; priority: SoulValuePriority } => item !== null)
+    .sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
+
+  const judgmentStyle = normalizeText(values?.judgment_style, "");
+  const creatorStructuralPreferences = normalizeStringArray(
+    creatorAffinity?.structural_preferences,
+    [],
+  );
+  const creatorBiases = normalizeStringArray(creatorAffinity?.creative_biases, []);
+  const creatorDetails = normalizeStringArray(creatorAffinity?.detail_selection_habits, []);
+  const creativePreferences = normalizeStringArray(aestheticProfile?.creative_preferences, []);
+  const narrativePreferences = normalizeStringArray(aestheticProfile?.narrative_preferences, []);
+  const humorPreferences = normalizeStringArray(aestheticProfile?.humor_preferences, []);
+  const dislikedPatterns = normalizeStringArray(aestheticProfile?.disliked_patterns, []);
+  const tasteBoundaries = normalizeStringArray(aestheticProfile?.taste_boundaries, []);
+  const discussionStrengths = normalizeStringArray(interactionDefaults?.discussion_strengths, []);
+  const frictionTriggers = normalizeStringArray(interactionDefaults?.friction_triggers, []);
+  const nonGenericTraits = normalizeStringArray(interactionDefaults?.non_generic_traits, []);
+  const worldview = normalizeStringArray(values?.worldview, []);
+  const topicsRequiringRetrieval = normalizeStringArray(
+    livedContext?.topics_requiring_runtime_retrieval,
+    [],
+  );
+
+  const tradeoffStyle = judgmentStyle || DEFAULT_SOUL_PROFILE.decisionPolicy.tradeoffStyle;
+  const riskPreference = deriveRiskPreference({
+    tradeoffStyle,
+    riskPreference: values?.risk_preference,
+  });
+
+  return {
+    identityCore: {
+      archetype: normalizeText(
+        identitySummary?.archetype ?? identitySummary?.one_sentence_identity,
+        DEFAULT_SOUL_PROFILE.identityCore.archetype,
+      ),
+      mbti: normalizeMbti(identitySummary?.mbti, DEFAULT_SOUL_PROFILE.identityCore.mbti),
+      coreMotivation: normalizeText(
+        identitySummary?.core_motivation,
+        DEFAULT_SOUL_PROFILE.identityCore.coreMotivation,
+      ),
+    },
+    valueHierarchy:
+      valueHierarchy.length > 0 ? valueHierarchy.slice(0, 6) : DEFAULT_SOUL_PROFILE.valueHierarchy,
+    reasoningLens: {
+      primary:
+        creatorStructuralPreferences.length > 0
+          ? creatorStructuralPreferences.slice(0, 6)
+          : creativePreferences.length > 0
+            ? creativePreferences.slice(0, 6)
+            : DEFAULT_SOUL_PROFILE.reasoningLens.primary,
+      secondary:
+        humorPreferences.length > 0
+          ? humorPreferences.slice(0, 6)
+          : narrativePreferences.length > 0
+            ? narrativePreferences.slice(0, 6)
+            : DEFAULT_SOUL_PROFILE.reasoningLens.secondary,
+      promptHint: normalizeText(
+        nonGenericTraits[0] ??
+          creatorBiases[0] ??
+          worldview[0] ??
+          identitySummary?.one_sentence_identity,
+        DEFAULT_SOUL_PROFILE.reasoningLens.promptHint,
+      ),
+    },
+    responseStyle: {
+      tone:
+        creatorBiases.length > 0
+          ? creatorBiases.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.responseStyle.tone,
+      patterns:
+        creatorDetails.length > 0
+          ? creatorDetails.slice(0, 6)
+          : creativePreferences.length > 0
+            ? creativePreferences.slice(0, 6)
+            : DEFAULT_SOUL_PROFILE.responseStyle.patterns,
+      avoid:
+        dislikedPatterns.length > 0
+          ? dislikedPatterns.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.responseStyle.avoid,
+    },
+    relationshipTendencies: {
+      defaultStance: normalizeText(
+        interactionDefaults?.default_stance,
+        DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+      ),
+      trustSignals:
+        discussionStrengths.length > 0
+          ? discussionStrengths.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.relationshipTendencies.trustSignals,
+      frictionTriggers:
+        frictionTriggers.length > 0
+          ? frictionTriggers.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.relationshipTendencies.frictionTriggers,
+    },
+    agentEnactmentRules:
+      nonGenericTraits.length > 0
+        ? nonGenericTraits.slice(0, 6)
+        : discussionStrengths.length > 0
+          ? discussionStrengths.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.agentEnactmentRules,
+    inCharacterExamples: DEFAULT_SOUL_PROFILE.inCharacterExamples,
+    decisionPolicy: {
+      evidenceStandard: normalizeText(
+        topicsRequiringRetrieval.length > 0
+          ? "use runtime retrieval when context-specific support is weak"
+          : livedContext?.topics_with_confident_grounding,
+        DEFAULT_SOUL_PROFILE.decisionPolicy.evidenceStandard,
+      ),
+      tradeoffStyle,
+      uncertaintyHandling:
+        topicsRequiringRetrieval.length > 0
+          ? `Narrow claims when support is weak; retrieve for: ${topicsRequiringRetrieval.join(", ")}`
+          : DEFAULT_SOUL_PROFILE.decisionPolicy.uncertaintyHandling,
+      antiPatterns:
+        dislikedPatterns.length > 0
+          ? dislikedPatterns.slice(0, 8)
+          : DEFAULT_SOUL_PROFILE.decisionPolicy.antiPatterns,
+      riskPreference,
+    },
+    interactionDoctrine: {
+      askVsTellRatio: DEFAULT_SOUL_PROFILE.interactionDoctrine.askVsTellRatio,
+      feedbackPrinciples:
+        discussionStrengths.length > 0
+          ? discussionStrengths.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.interactionDoctrine.feedbackPrinciples,
+      collaborationStance: normalizeText(
+        interactionDefaults?.default_stance,
+        DEFAULT_SOUL_PROFILE.interactionDoctrine.collaborationStance,
+      ),
+    },
+    languageSignature: {
+      rhythm: DEFAULT_SOUL_PROFILE.languageSignature.rhythm,
+      preferredStructures:
+        narrativePreferences.length > 0
+          ? narrativePreferences.slice(0, 6)
+          : DEFAULT_SOUL_PROFILE.languageSignature.preferredStructures,
+      lexicalTaboos: tasteBoundaries,
+    },
+    guardrails: {
+      hardNo: normalizeStringArray(guardrails?.hard_no, DEFAULT_SOUL_PROFILE.guardrails.hardNo),
+      deescalationRules: normalizeStringArray(
+        guardrails?.deescalation_style,
+        DEFAULT_SOUL_PROFILE.guardrails.deescalationRules,
+      ),
+    },
+  };
+}
+
 export function normalizeSoulProfile(input: unknown): {
   profile: RuntimeSoulProfile;
   normalized: boolean;
 } {
+  const adaptedCore = adaptPersonaCoreToSoulProfile(input);
+  if (adaptedCore) {
+    return { profile: adaptedCore, normalized: true };
+  }
+
   const source = asRecord(input);
   if (!source) {
     return { profile: DEFAULT_SOUL_PROFILE, normalized: true };
@@ -476,17 +668,17 @@ function createSupabaseRuntimeSoulDeps(): RuntimeSoulDeps {
     getSoulProfile: async ({ personaId }) => {
       const supabase = createAdminClient();
       const { data, error } = await supabase
-        .from("persona_souls")
-        .select("soul_profile")
+        .from("persona_cores")
+        .select("core_profile")
         .eq("persona_id", personaId)
         .limit(1)
-        .maybeSingle<PersonaSoulRow>();
+        .maybeSingle<PersonaCoreRow>();
 
       if (error) {
-        throw new Error(`load persona soul failed: ${error.message}`);
+        throw new Error(`load persona core failed: ${error.message}`);
       }
 
-      return data?.soul_profile ?? null;
+      return data?.core_profile ?? null;
     },
   };
 }

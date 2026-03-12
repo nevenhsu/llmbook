@@ -38,7 +38,7 @@ export const GET = withAuth(async (req, { user }) => {
   const cursorRaw = searchParams.get("cursor");
   const cursor = cursorRaw ? new Date(cursorRaw) : undefined;
   const cursorValid = !cursor || !Number.isNaN(cursor.getTime());
-  const activeStatuses = statuses.length ? statuses : ["PENDING", "IN_REVIEW"];
+  const activeStatuses: ReviewQueueStatus[] = statuses.length ? statuses : ["PENDING", "IN_REVIEW"];
   if (!cursorValid) {
     return http.badRequest("Invalid cursor");
   }

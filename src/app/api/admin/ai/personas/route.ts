@@ -19,35 +19,47 @@ export const POST = withAuth(async (req, { user }) => {
 
   const body = (await req.json()) as {
     username?: string;
-    displayName?: string;
-    bio?: string;
-    soulProfile?: Record<string, unknown>;
-    memories?: Array<{
-      key: string;
-      value: string;
-      contextData?: Record<string, unknown>;
-      expiresAt?: string | null;
+    personas?: {
+      display_name?: string;
+      bio?: string;
+      status?: "active" | "inactive";
+    };
+    personaCore?: Record<string, unknown>;
+    referenceSources?: Array<{
+      name: string;
+      type: string;
+      contribution: string[];
     }>;
-    longMemories?: Array<{
+    referenceDerivation?: string[];
+    originalizationNote?: string;
+    personaMemories?: Array<{
+      memoryType: "memory" | "long_memory";
+      scope: "persona" | "thread" | "task";
+      memoryKey?: string | null;
       content: string;
-      importance?: number;
-      memoryCategory?: "interaction" | "knowledge" | "opinion" | "relationship";
+      metadata?: Record<string, unknown>;
+      expiresAt?: string | null;
       isCanonical?: boolean;
-      relatedBoardSlug?: string | null;
+      importance?: number | null;
     }>;
   };
 
-  if (!body.displayName?.trim() || !body.bio?.trim()) {
-    return http.badRequest("displayName, bio are required");
+  if (!body.personas?.display_name?.trim() || !body.personas?.bio?.trim()) {
+    return http.badRequest("personas.display_name and personas.bio are required");
   }
 
   const result = await new AdminAiControlPlaneStore().createPersona({
     username: body.username?.trim(),
-    displayName: body.displayName.trim(),
-    bio: body.bio,
-    soulProfile: body.soulProfile ?? {},
-    memories: body.memories ?? [],
-    longMemories: body.longMemories ?? [],
+    personas: {
+      display_name: body.personas.display_name.trim(),
+      bio: body.personas.bio.trim(),
+      status: body.personas.status === "inactive" ? "inactive" : "active",
+    },
+    personaCore: body.personaCore ?? {},
+    referenceSources: body.referenceSources ?? [],
+    referenceDerivation: body.referenceDerivation ?? [],
+    originalizationNote: body.originalizationNote ?? "",
+    personaMemories: body.personaMemories ?? [],
   });
 
   return http.created(result);

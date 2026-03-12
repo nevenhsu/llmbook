@@ -14,7 +14,7 @@ import {
   upsertProviderSecret,
 } from "@/lib/ai/llm/provider-secrets";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import type { RuntimeSoulProfile } from "@/lib/ai/soul/runtime-soul-profile";
+import { normalizeSoulProfile, type RuntimeSoulProfile } from "@/lib/ai/soul/runtime-soul-profile";
 
 export type ProviderTestStatus = "untested" | "success" | "failed" | "disabled" | "key_missing";
 export type ProviderStatus = "active" | "disabled";
@@ -108,7 +108,7 @@ export type PreviewTokenBudget = {
   maxInputTokens: number;
   maxOutputTokens: number;
   blockStats: PromptBlockStat[];
-  compressedStages: Array<"persona_memory" | "persona_long_memory">;
+  compressedStages: Array<"memory" | "long_memory">;
   exceeded: boolean;
   message: string | null;
 };
@@ -137,21 +137,23 @@ export type PersonaGenerationStructured = {
     bio: string;
     status: "active" | "inactive";
   };
-  persona_souls: {
-    soul_profile: RuntimeSoulProfile;
-  };
-  persona_memory: Array<{
-    key: string;
-    value: string;
-    context_data: Record<string, unknown>;
-    expires_in_hours: number | null;
+  persona_core: Record<string, unknown>;
+  reference_sources: Array<{
+    name: string;
+    type: string;
+    contribution: string[];
   }>;
-  persona_long_memories: Array<{
+  reference_derivation: string[];
+  originalization_note: string;
+  persona_memories: Array<{
+    memory_type: "memory" | "long_memory";
+    scope: "persona" | "thread" | "task";
+    memory_key: string | null;
     content: string;
-    importance: number;
-    memory_category: "interaction" | "knowledge" | "opinion" | "relationship";
+    metadata: Record<string, unknown>;
+    expires_in_hours: number | null;
     is_canonical: boolean;
-    related_board_slug: string | null;
+    importance: number | null;
   }>;
 };
 
@@ -237,8 +239,8 @@ type PersonaSummary = {
   status: string;
 };
 
-type PersonaSoulRow = {
-  soul_profile: unknown;
+type PersonaCoreRow = {
+  core_profile: unknown;
 };
 
 type PersonaMemoryRow = {
@@ -256,6 +258,18 @@ type PersonaLongMemoryRow = {
   importance: number;
   memory_category: string;
   updated_at: string;
+};
+
+type PersonaMemoryStoreRow = {
+  id: string;
+  memory_key: string | null;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  expires_at: string | null;
+  is_canonical: boolean;
+  importance: number | null;
+  updated_at: string;
+  created_at: string;
 };
 
 const DEFAULT_POLICY_DRAFT = {
@@ -686,11 +700,11 @@ function formatAgentProfile(input: { displayName: string; username: string; bio:
 }
 
 function formatAgentRelationshipContext(input: {
-  soulProfile?: RuntimeSoulProfile | Record<string, unknown> | null;
+  runtimePersonaProfile?: RuntimeSoulProfile | Record<string, unknown> | null;
   targetContext?: PromptTargetContext;
 }): string {
-  const soulProfile = asRecord(input.soulProfile);
-  const tendencies = asRecord(soulProfile?.relationshipTendencies);
+  const runtimePersonaProfile = asRecord(input.runtimePersonaProfile);
+  const tendencies = asRecord(runtimePersonaProfile?.relationshipTendencies);
   const defaultStance = readString(tendencies?.defaultStance).trim();
   const trustSignals = Array.isArray(tendencies?.trustSignals)
     ? tendencies?.trustSignals.filter(
@@ -719,9 +733,9 @@ function formatAgentRelationshipContext(input: {
 }
 
 function formatAgentEnactmentRules(
-  soulProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
+  runtimePersonaProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
 ): string {
-  const record = asRecord(soulProfile);
+  const record = asRecord(runtimePersonaProfile);
   const rules = Array.isArray(record?.agentEnactmentRules)
     ? record.agentEnactmentRules.filter(
         (item): item is string => typeof item === "string" && item.trim().length > 0,
@@ -732,9 +746,9 @@ function formatAgentEnactmentRules(
 }
 
 function formatAgentExamples(
-  soulProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
+  runtimePersonaProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
 ): string {
-  const record = asRecord(soulProfile);
+  const record = asRecord(runtimePersonaProfile);
   const examples = Array.isArray(record?.inCharacterExamples) ? record.inCharacterExamples : [];
   const lines = examples
     .map((item) => {
@@ -754,7 +768,7 @@ function formatAgentExamples(
   return lines.join("\n\n");
 }
 
-function requireSoulProfileRecord(value: unknown, fieldPath: string): Record<string, unknown> {
+function requirePersonaRecord(value: unknown, fieldPath: string): Record<string, unknown> {
   const record = asRecord(value);
   if (!record) {
     throw new Error(`persona generation output missing ${fieldPath}`);
@@ -762,7 +776,7 @@ function requireSoulProfileRecord(value: unknown, fieldPath: string): Record<str
   return record;
 }
 
-function requireSoulProfileStringArray(value: unknown, fieldPath: string): string[] {
+function requirePersonaStringArray(value: unknown, fieldPath: string): string[] {
   if (!Array.isArray(value)) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
@@ -776,98 +790,74 @@ function requireSoulProfileStringArray(value: unknown, fieldPath: string): strin
   return items;
 }
 
-function parsePersonaSoulProfile(value: unknown): RuntimeSoulProfile {
-  const root = requireSoulProfileRecord(value, "persona_souls.soul_profile");
-  const identityCore = requireSoulProfileRecord(
-    root.identityCore,
-    "persona_souls.soul_profile.identityCore",
-  );
-  if (!readString(identityCore.archetype).trim()) {
-    throw new Error(
-      "persona generation output missing persona_souls.soul_profile.identityCore.archetype",
-    );
-  }
-  if (!readString(identityCore.mbti).trim()) {
-    throw new Error(
-      "persona generation output missing persona_souls.soul_profile.identityCore.mbti",
-    );
-  }
-  if (!readString(identityCore.coreMotivation).trim()) {
-    throw new Error(
-      "persona generation output missing persona_souls.soul_profile.identityCore.coreMotivation",
-    );
-  }
+function parsePersonaCore(value: unknown): Record<string, unknown> {
+  const root = requirePersonaRecord(value, "persona_core");
+  requirePersonaRecord(root.identity_summary, "persona_core.identity_summary");
+  requirePersonaRecord(root.values, "persona_core.values");
+  requirePersonaRecord(root.aesthetic_profile, "persona_core.aesthetic_profile");
+  requirePersonaRecord(root.lived_context, "persona_core.lived_context");
+  requirePersonaRecord(root.creator_affinity, "persona_core.creator_affinity");
+  requirePersonaRecord(root.interaction_defaults, "persona_core.interaction_defaults");
+  requirePersonaRecord(root.guardrails, "persona_core.guardrails");
+  return root;
+}
 
-  if (!Array.isArray(root.valueHierarchy) || root.valueHierarchy.length === 0) {
-    throw new Error("persona generation output missing persona_souls.soul_profile.valueHierarchy");
+function parseReferenceSources(value: unknown): PersonaGenerationStructured["reference_sources"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("persona generation output missing reference_sources");
   }
-  requireSoulProfileRecord(root.decisionPolicy, "persona_souls.soul_profile.decisionPolicy");
-  requireSoulProfileRecord(
-    root.interactionDoctrine,
-    "persona_souls.soul_profile.interactionDoctrine",
-  );
-  requireSoulProfileRecord(root.languageSignature, "persona_souls.soul_profile.languageSignature");
-
-  const guardrails = requireSoulProfileRecord(
-    root.guardrails,
-    "persona_souls.soul_profile.guardrails",
-  );
-  if (
-    !Array.isArray(guardrails.hardNo) ||
-    !Array.isArray(guardrails.deescalationRules) ||
-    guardrails.hardNo.length + guardrails.deescalationRules.length === 0
-  ) {
-    throw new Error("persona generation output missing persona_souls.soul_profile.guardrails");
-  }
-
-  const reasoningLens = requireSoulProfileRecord(
-    root.reasoningLens,
-    "persona_souls.soul_profile.reasoningLens",
-  );
-  requireSoulProfileStringArray(
-    reasoningLens.primary,
-    "persona_souls.soul_profile.reasoningLens.primary",
-  );
-
-  const responseStyle = requireSoulProfileRecord(
-    root.responseStyle,
-    "persona_souls.soul_profile.responseStyle",
-  );
-  requireSoulProfileStringArray(
-    responseStyle.tone,
-    "persona_souls.soul_profile.responseStyle.tone",
-  );
-
-  const relationshipTendencies = requireSoulProfileRecord(
-    root.relationshipTendencies,
-    "persona_souls.soul_profile.relationshipTendencies",
-  );
-  if (!readString(relationshipTendencies.defaultStance).trim()) {
-    throw new Error(
-      "persona generation output missing persona_souls.soul_profile.relationshipTendencies.defaultStance",
-    );
-  }
-
-  requireSoulProfileStringArray(
-    root.agentEnactmentRules,
-    "persona_souls.soul_profile.agentEnactmentRules",
-  );
-
-  if (!Array.isArray(root.inCharacterExamples) || root.inCharacterExamples.length === 0) {
-    throw new Error(
-      "persona generation output missing persona_souls.soul_profile.inCharacterExamples",
-    );
-  }
-  for (const example of root.inCharacterExamples) {
-    const row = requireSoulProfileRecord(example, "persona_souls.soul_profile.inCharacterExamples");
-    if (!readString(row.scenario).trim() || !readString(row.response).trim()) {
-      throw new Error(
-        "persona generation output missing persona_souls.soul_profile.inCharacterExamples",
+  return value
+    .map((item) => {
+      const row = requirePersonaRecord(item, "reference_sources");
+      const name = readString(row.name).trim();
+      const type = readString(row.type).trim();
+      const contribution = requirePersonaStringArray(
+        row.contribution,
+        "reference_sources.contribution",
       );
-    }
+      if (!name || !type) {
+        throw new Error("persona generation output missing reference_sources");
+      }
+      return { name, type, contribution };
+    })
+    .filter((item) => item.name.length > 0);
+}
+
+function parsePersonaMemories(value: unknown): PersonaGenerationStructured["persona_memories"] {
+  if (!Array.isArray(value)) {
+    return [];
   }
 
-  return root as RuntimeSoulProfile;
+  return value
+    .map((item) => {
+      const row = asRecord(item);
+      if (!row) {
+        return null;
+      }
+      const memoryType =
+        readString(row.memory_type).trim() === "long_memory" ? "long_memory" : "memory";
+      const scopeRaw = readString(row.scope).trim();
+      const scope: "persona" | "thread" | "task" =
+        scopeRaw === "thread" || scopeRaw === "task" ? scopeRaw : "persona";
+      const content = readString(row.content).trim();
+      if (!content) {
+        return null;
+      }
+      const memoryKey = readNullableString(row.memory_key);
+      return {
+        memory_type: memoryType,
+        scope,
+        memory_key: memoryKey,
+        content,
+        metadata: asRecord(row.metadata) ?? {},
+        expires_in_hours: readNumberOrNull(row.expires_in_hours),
+        is_canonical: readBoolean(row.is_canonical, false),
+        importance: readNumberOrNull(row.importance),
+      };
+    })
+    .filter(
+      (item): item is PersonaGenerationStructured["persona_memories"][number] => item !== null,
+    );
 }
 
 function extractJsonFromText(text: string): string {
@@ -880,6 +870,10 @@ function extractJsonFromText(text: string): string {
     return fenced[1].trim();
   }
   return trimmed;
+}
+
+function normalizeSingleLineText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function parsePersonaGenerationOutput(rawText: string): {
@@ -899,107 +893,64 @@ function parsePersonaGenerationOutput(rawText: string): {
 
   const record = asRecord(parsed);
   if (!record) {
-    throw new Error("persona generation output must be a JSON object");
+    throw new PersonaGenerationParseError(
+      "persona generation output must be a JSON object",
+      rawText,
+    );
   }
 
   const personas = asRecord(record.personas);
-  const personaSouls = asRecord(record.persona_souls);
-  const personaMemory = Array.isArray(record.persona_memory) ? record.persona_memory : [];
-  const personaLongMemories = Array.isArray(record.persona_long_memories)
-    ? record.persona_long_memories
-    : [];
+  const personaCore = asRecord(record.persona_core);
 
-  if (!personas) {
-    throw new Error("persona generation output missing personas object");
-  }
-  if (!personaSouls) {
-    throw new Error("persona generation output missing persona_souls object");
-  }
-  const displayName = readString(personas.display_name).trim();
-  const bio = readString(personas.bio).trim();
-  const status = readString(personas.status) === "inactive" ? "inactive" : "active";
-  const soulProfile = parsePersonaSoulProfile(personaSouls.soul_profile);
-  if (!displayName) {
-    throw new Error("persona generation output missing personas.display_name");
-  }
-  if (!bio) {
-    throw new Error("persona generation output missing personas.bio");
-  }
-  return {
-    structured: {
-      personas: {
-        display_name: displayName,
-        bio,
-        status,
+  try {
+    if (!personas) {
+      throw new Error("persona generation output missing personas object");
+    }
+    if (!personaCore) {
+      throw new Error("persona generation output missing persona_core object");
+    }
+    const displayName = readString(personas.display_name).trim();
+    const bio = readString(personas.bio).trim();
+    const status = readString(personas.status) === "inactive" ? "inactive" : "active";
+    const normalizedPersonaCore = parsePersonaCore(personaCore);
+    const referenceSources = parseReferenceSources(record.reference_sources);
+    const referenceDerivation = requirePersonaStringArray(
+      record.reference_derivation,
+      "reference_derivation",
+    );
+    const originalizationNote = readString(record.originalization_note).trim();
+    if (!displayName) {
+      throw new Error("persona generation output missing personas.display_name");
+    }
+    if (!bio) {
+      throw new Error("persona generation output missing personas.bio");
+    }
+    if (!originalizationNote) {
+      throw new Error("persona generation output missing originalization_note");
+    }
+    return {
+      structured: {
+        personas: {
+          display_name: displayName,
+          bio,
+          status,
+        },
+        persona_core: normalizedPersonaCore,
+        reference_sources: referenceSources,
+        reference_derivation: referenceDerivation,
+        originalization_note: originalizationNote,
+        persona_memories: parsePersonaMemories(record.persona_memories),
       },
-      persona_souls: {
-        soul_profile: soulProfile,
-      },
-      persona_memory: personaMemory
-        .map((item) => {
-          const row = asRecord(item);
-          if (!row) {
-            return null;
-          }
-          const key = readString(row.key).trim();
-          if (!key) {
-            return null;
-          }
-          return {
-            key,
-            value: readString(row.value).trim(),
-            context_data: asRecord(row.context_data) ?? {},
-            expires_in_hours: readNumberOrNull(row.expires_in_hours),
-          };
-        })
-        .filter(
-          (
-            item,
-          ): item is {
-            key: string;
-            value: string;
-            context_data: Record<string, unknown>;
-            expires_in_hours: number | null;
-          } => item !== null,
-        ),
-      persona_long_memories: personaLongMemories
-        .map((item) => {
-          const row = asRecord(item);
-          if (!row) {
-            return null;
-          }
-          const content = readString(row.content).trim();
-          if (!content) {
-            return null;
-          }
-          const categoryRaw = readString(row.memory_category).trim();
-          const memory_category: "interaction" | "knowledge" | "opinion" | "relationship" =
-            categoryRaw === "interaction" ||
-            categoryRaw === "opinion" ||
-            categoryRaw === "relationship"
-              ? categoryRaw
-              : "knowledge";
-          return {
-            content,
-            importance: readNumberOrNull(row.importance) ?? 0.7,
-            memory_category,
-            is_canonical: readBoolean(row.is_canonical, false),
-            related_board_slug: readNullableString(row.related_board_slug),
-          };
-        })
-        .filter(
-          (
-            item,
-          ): item is {
-            content: string;
-            importance: number;
-            memory_category: "interaction" | "knowledge" | "opinion" | "relationship";
-            is_canonical: boolean;
-            related_board_slug: string | null;
-          } => item !== null,
-        ),
-    },
-  };
+    };
+  } catch (error) {
+    if (error instanceof PersonaGenerationParseError) {
+      throw error;
+    }
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
 }
 
 function formatPrompt(blocks: Array<{ name: string; content: string }>): string {
@@ -1016,29 +967,38 @@ function buildTokenBudgetSignal(input: {
     tokens: estimateTokens(block.content),
   }));
 
-  const mutableOrder = ["persona_memory", "persona_long_memory"] as const;
+  const mutableOrder = ["memory", "long_memory"] as const;
   const mutableTokensByName = new Map(
     blockStats
-      .filter((item) => mutableOrder.includes(item.name as (typeof mutableOrder)[number]))
+      .filter((item) =>
+        mutableOrder.includes(
+          (item.name === "persona_memory"
+            ? "memory"
+            : item.name === "persona_long_memory"
+              ? "long_memory"
+              : item.name) as (typeof mutableOrder)[number],
+        ),
+      )
       .map((item) => [item.name, item.tokens]),
   );
-  const compressedStages: Array<"persona_memory" | "persona_long_memory"> = [];
+  const compressedStages: Array<"memory" | "long_memory"> = [];
 
   let total = blockStats.reduce((sum, item) => sum + item.tokens, 0);
   for (const stage of mutableOrder) {
     if (total <= input.maxInputTokens) {
       break;
     }
-    const current = mutableTokensByName.get(stage) ?? 0;
+    const sourceBlockName = stage === "memory" ? "persona_memory" : "persona_long_memory";
+    const current = mutableTokensByName.get(sourceBlockName) ?? 0;
     if (current <= 0) {
       continue;
     }
     // Admin preview only exposes the signal. Runtime compression is delegated to AI agents plan.
     const reduced = Math.ceil(current * 0.5);
-    mutableTokensByName.set(stage, reduced);
+    mutableTokensByName.set(sourceBlockName, reduced);
     compressedStages.push(stage);
     total = total - current + reduced;
-    const target = blockStats.find((item) => item.name === stage);
+    const target = blockStats.find((item) => item.name === sourceBlockName);
     if (target) {
       target.tokens = reduced;
     }
@@ -1053,7 +1013,7 @@ function buildTokenBudgetSignal(input: {
     compressedStages,
     exceeded,
     message: exceeded
-      ? "Token budget exceeded after persona memory + long memory compression signal. Please simplify global rules in Policy."
+      ? "Token budget exceeded after memory + long_memory compression signal. Please simplify global rules in Policy."
       : null,
   };
 }
@@ -2046,32 +2006,31 @@ export class AdminAiControlPlaneStore {
 
   public async createPersona(input: {
     username?: string;
-    displayName: string;
-    bio: string;
-    soulProfile: Record<string, unknown>;
-    memories?: Array<{
-      key: string;
-      value: string;
-      contextData?: Record<string, unknown>;
-      expiresAt?: string | null;
-    }>;
-    longMemories?: Array<{
+    personas: PersonaGenerationStructured["personas"];
+    personaCore: Record<string, unknown>;
+    referenceSources: PersonaGenerationStructured["reference_sources"];
+    referenceDerivation: string[];
+    originalizationNote: string;
+    personaMemories?: Array<{
+      memoryType: "memory" | "long_memory";
+      scope: "persona" | "thread" | "task";
+      memoryKey?: string | null;
       content: string;
-      importance?: number;
-      memoryCategory?: "interaction" | "knowledge" | "opinion" | "relationship";
+      metadata?: Record<string, unknown>;
+      expiresAt?: string | null;
       isCanonical?: boolean;
-      relatedBoardSlug?: string | null;
+      importance?: number | null;
     }>;
   }): Promise<{ personaId: string }> {
-    const username = toPersonaUsername(input.username?.trim() || input.displayName);
+    const username = toPersonaUsername(input.username?.trim() || input.personas.display_name);
 
     const { data: persona, error: personaError } = await this.supabase
       .from("personas")
       .insert({
         username,
-        display_name: input.displayName,
-        bio: input.bio,
-        status: "active",
+        display_name: input.personas.display_name,
+        bio: input.personas.bio,
+        status: input.personas.status === "inactive" ? "inactive" : "active",
       })
       .select("id")
       .single<{ id: string }>();
@@ -2082,56 +2041,40 @@ export class AdminAiControlPlaneStore {
 
     const personaId = persona.id;
 
-    const { error: soulError } = await this.supabase.from("persona_souls").upsert({
+    const { error: personaCoreError } = await this.supabase.from("persona_cores").upsert({
       persona_id: personaId,
-      soul_profile: input.soulProfile,
-      version: 1,
+      core_profile: {
+        ...input.personaCore,
+        reference_sources: input.referenceSources,
+        reference_derivation: input.referenceDerivation,
+        originalization_note: input.originalizationNote,
+      },
       updated_at: nowIso(),
     });
-    if (soulError) {
-      throw new Error(`save persona soul failed: ${soulError.message}`);
+    if (personaCoreError) {
+      throw new Error(`save persona core failed: ${personaCoreError.message}`);
     }
 
-    if (input.memories && input.memories.length > 0) {
-      const memoryRows = input.memories
+    if (input.personaMemories && input.personaMemories.length > 0) {
+      const memoryRows = input.personaMemories
         .map((item) => ({
           persona_id: personaId,
-          key: item.key.trim(),
-          value: item.value.trim(),
-          context_data: item.contextData ?? {},
-          expires_at: item.expiresAt ?? null,
-        }))
-        .filter((item) => item.key.length > 0);
-      if (memoryRows.length > 0) {
-        const { error: memoryError } = await this.supabase
-          .from("persona_memory")
-          .upsert(memoryRows, {
-            onConflict: "persona_id,key",
-          });
-        if (memoryError) {
-          throw new Error(`save persona memory failed: ${memoryError.message}`);
-        }
-      }
-    }
-
-    if (input.longMemories && input.longMemories.length > 0) {
-      const longMemoryRows = input.longMemories
-        .map((item) => ({
-          persona_id: personaId,
+          memory_type: item.memoryType,
+          scope: item.scope,
+          memory_key: item.memoryKey?.trim() || null,
           content: item.content.trim(),
-          importance: item.importance ?? 0.7,
-          memory_category: item.memoryCategory ?? "knowledge",
+          metadata: item.metadata ?? {},
+          expires_at: item.expiresAt ?? null,
           is_canonical: item.isCanonical ?? false,
-          related_board_slug: item.relatedBoardSlug ?? null,
+          importance: item.importance ?? null,
         }))
         .filter((item) => item.content.length > 0);
-
-      if (longMemoryRows.length > 0) {
-        const { error: longMemoryError } = await this.supabase
-          .from("persona_long_memories")
-          .insert(longMemoryRows);
-        if (longMemoryError) {
-          throw new Error(`save persona long memory failed: ${longMemoryError.message}`);
+      if (memoryRows.length > 0) {
+        const { error: memoryError } = await this.supabase
+          .from("persona_memories")
+          .insert(memoryRows);
+        if (memoryError) {
+          throw new Error(`save persona memory failed: ${memoryError.message}`);
         }
       }
     }
@@ -2141,9 +2084,20 @@ export class AdminAiControlPlaneStore {
 
   public async getPersonaProfile(personaId: string): Promise<{
     persona: PersonaSummary;
-    soulProfile: Record<string, unknown>;
-    memories: PersonaMemoryRow[];
-    longMemories: PersonaLongMemoryRow[];
+    personaCore: Record<string, unknown>;
+    personaMemories: Array<{
+      id: string;
+      memoryType: "memory" | "long_memory";
+      scope: "persona" | "thread" | "task";
+      memoryKey: string | null;
+      content: string;
+      metadata: Record<string, unknown>;
+      expiresAt: string | null;
+      isCanonical: boolean;
+      importance: number | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
   }> {
     const { data: persona, error: personaError } = await this.supabase
       .from("personas")
@@ -2155,29 +2109,34 @@ export class AdminAiControlPlaneStore {
       throw new Error("persona not found");
     }
 
-    const [soulRes, memoryRes, longMemoryRes] = await Promise.all([
+    const [personaCoreRes, memoryRes, longMemoryRes] = await Promise.all([
       this.supabase
-        .from("persona_souls")
-        .select("soul_profile")
+        .from("persona_cores")
+        .select("core_profile")
         .eq("persona_id", personaId)
-        .maybeSingle<PersonaSoulRow>(),
+        .maybeSingle<PersonaCoreRow>(),
       this.supabase
-        .from("persona_memory")
-        .select("id, key, value, context_data, expires_at, created_at")
+        .from("persona_memories")
+        .select("id, memory_key, content, metadata, expires_at, created_at, updated_at")
         .eq("persona_id", personaId)
-        .order("created_at", { ascending: false })
+        .eq("memory_type", "memory")
+        .eq("scope", "persona")
+        .order("updated_at", { ascending: false })
         .limit(80),
       this.supabase
-        .from("persona_long_memories")
-        .select("id, content, importance, memory_category, updated_at")
+        .from("persona_memories")
+        .select("id, content, importance, is_canonical, metadata, updated_at, created_at")
         .eq("persona_id", personaId)
+        .eq("memory_type", "long_memory")
+        .eq("scope", "persona")
+        .order("is_canonical", { ascending: false })
         .order("importance", { ascending: false })
         .order("updated_at", { ascending: false })
         .limit(50),
     ]);
 
-    if (soulRes.error) {
-      throw new Error(`load persona soul failed: ${soulRes.error.message}`);
+    if (personaCoreRes.error) {
+      throw new Error(`load persona core failed: ${personaCoreRes.error.message}`);
     }
     if (memoryRes.error) {
       throw new Error(`load persona memories failed: ${memoryRes.error.message}`);
@@ -2188,9 +2147,35 @@ export class AdminAiControlPlaneStore {
 
     return {
       persona,
-      soulProfile: (asRecord(soulRes.data?.soul_profile) ?? {}) as Record<string, unknown>,
-      memories: (memoryRes.data ?? []) as PersonaMemoryRow[],
-      longMemories: (longMemoryRes.data ?? []) as PersonaLongMemoryRow[],
+      personaCore: (asRecord(personaCoreRes.data?.core_profile) ?? {}) as Record<string, unknown>,
+      personaMemories: [
+        ...((memoryRes.data ?? []) as PersonaMemoryStoreRow[]).map((row) => ({
+          id: row.id,
+          memoryType: "memory" as const,
+          scope: "persona" as const,
+          memoryKey: row.memory_key,
+          content: row.content,
+          metadata: row.metadata ?? {},
+          expiresAt: row.expires_at,
+          isCanonical: row.is_canonical,
+          importance: row.importance,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        ...((longMemoryRes.data ?? []) as PersonaMemoryStoreRow[]).map((row) => ({
+          id: row.id,
+          memoryType: "long_memory" as const,
+          scope: "persona" as const,
+          memoryKey: row.memory_key,
+          content: row.content,
+          metadata: row.metadata ?? {},
+          expiresAt: row.expires_at,
+          isCanonical: row.is_canonical,
+          importance: row.importance,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+      ],
     };
   }
 
@@ -2198,7 +2183,7 @@ export class AdminAiControlPlaneStore {
     personaId: string;
     username?: string;
     bio?: string;
-    soulProfile?: Record<string, unknown>;
+    personaCore?: Record<string, unknown>;
     longMemory?: string;
   }): Promise<void> {
     const updates: Record<string, unknown> = {};
@@ -2219,26 +2204,28 @@ export class AdminAiControlPlaneStore {
       }
     }
 
-    if (input.soulProfile) {
-      const { error } = await this.supabase.from("persona_souls").upsert({
+    if (input.personaCore) {
+      const { error } = await this.supabase.from("persona_cores").upsert({
         persona_id: input.personaId,
-        soul_profile: input.soulProfile,
+        core_profile: input.personaCore,
         updated_at: nowIso(),
       });
       if (error) {
-        throw new Error(`update soul profile failed: ${error.message}`);
+        throw new Error(`update persona core failed: ${error.message}`);
       }
     }
 
     if (input.longMemory !== undefined) {
       const trimmed = input.longMemory.trim();
       if (trimmed.length > 0) {
-        const { error } = await this.supabase.from("persona_long_memories").insert({
+        const { error } = await this.supabase.from("persona_memories").insert({
           persona_id: input.personaId,
+          memory_type: "long_memory",
+          scope: "persona",
           content: trimmed,
           importance: 0.9,
-          memory_category: "knowledge",
           is_canonical: true,
+          metadata: { memoryCategory: "knowledge" },
         });
         if (error) {
           throw new Error(`append long memory failed: ${error.message}`);
@@ -2271,13 +2258,24 @@ export class AdminAiControlPlaneStore {
         content: [
           "Return one JSON object aligned to DB tables with keys:",
           "personas{display_name,bio,status},",
-          "persona_souls{soul_profile{identityCore{archetype,mbti,coreMotivation},valueHierarchy,reasoningLens{primary,secondary,promptHint},responseStyle{tone,patterns,avoid},relationshipTendencies{defaultStance,trustSignals,frictionTriggers},agentEnactmentRules:string[],inCharacterExamples[{scenario,response}],decisionPolicy,interactionDoctrine,languageSignature,guardrails}},",
-          "persona_memory[{key,value,context_data,expires_in_hours}],",
-          "persona_long_memories[{content,importance,memory_category,is_canonical,related_board_slug}].",
+          "persona_core{identity_summary,values,aesthetic_profile,lived_context,creator_affinity,interaction_defaults,guardrails},",
+          "reference_sources[{name,type,contribution}],",
+          "reference_derivation:string[],",
+          "originalization_note:string,",
+          "persona_memories[{memory_type,scope,memory_key,content,metadata,expires_in_hours,is_canonical,importance}].",
           "Use snake_case keys exactly as provided.",
-          "identityCore.mbti must be a concrete 16-personality style label such as INTJ or ENFP-T.",
-          "agentEnactmentRules must explain how the persona should think and react before writing.",
-          "inCharacterExamples must be concise sample scenarios with in-character responses.",
+          "persona_core.identity_summary must include archetype, core_motivation, and one_sentence_identity.",
+          "persona_core.values must be an object with value_hierarchy, worldview, and judgment_style.",
+          "persona_core.aesthetic_profile must be an object with humor_preferences, narrative_preferences, creative_preferences, disliked_patterns, and taste_boundaries.",
+          "persona_core.lived_context must be an object with familiar_scenes_of_life, personal_experience_flavors, cultural_contexts, topics_with_confident_grounding, and topics_requiring_runtime_retrieval.",
+          "persona_core.creator_affinity must be an object with admired_creator_types, structural_preferences, detail_selection_habits, and creative_biases.",
+          "persona_core.interaction_defaults must be an object with default_stance, discussion_strengths, friction_triggers, and non_generic_traits.",
+          "persona_core.guardrails must be an object with hard_no and deescalation_style.",
+          "reference_sources must explicitly state who or what influenced this persona.",
+          "reference_derivation must be a non-empty string array explaining how the references shaped the persona.",
+          "originalization_note must explain why the persona is original instead of a direct clone.",
+          "persona_memories should be optional and only included when they add clear long_memory or recent memory value.",
+          "persona_memories entries must use memory_type=memory|long_memory and scope=persona|thread|task.",
           "Do not include markdown, explanation, persona_id, id, timestamps, or extra keys.",
         ].join("\n"),
       },
@@ -2309,34 +2307,77 @@ export class AdminAiControlPlaneStore {
       includeXai: true,
       includeMinimax: true,
     });
-    const llmResult = await invokeLLM({
-      registry,
-      taskType: "generic",
-      routeOverride: invocationConfig.route,
-      modelInput: {
-        prompt: assembledPrompt,
-        maxOutputTokens:
-          model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
-        temperature: 0.4,
-      },
-      entityId: `persona-generation-preview:${model.id}`,
-      timeoutMs: invocationConfig.timeoutMs,
-      retries: invocationConfig.retries,
-      onProviderError: async (event) => {
-        await this.recordLlmInvocationError({
-          providerKey: event.providerId,
-          modelKey: event.modelId,
-          error: event.error,
-          errorDetails: event.errorDetails,
-        });
-      },
-    });
+    const maxOutputTokens = Math.min(
+      model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
+      DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
+    );
+    const runPersonaGenerationAttempt = async (prompt: string, attempt: 1 | 2 | 3) =>
+      invokeLLM({
+        registry,
+        taskType: "generic",
+        routeOverride: invocationConfig.route,
+        modelInput: {
+          prompt,
+          maxOutputTokens:
+            attempt === 1
+              ? maxOutputTokens
+              : attempt === 2
+                ? Math.min(600, maxOutputTokens)
+                : Math.min(450, maxOutputTokens),
+          temperature: attempt === 1 ? 0.4 : attempt === 2 ? 0.2 : 0.1,
+        },
+        entityId: `persona-generation-preview:${model.id}:attempt-${attempt}`,
+        timeoutMs: invocationConfig.timeoutMs,
+        retries: invocationConfig.retries,
+        onProviderError: async (event) => {
+          await this.recordLlmInvocationError({
+            providerKey: event.providerId,
+            modelKey: event.modelId,
+            error: event.error,
+            errorDetails: event.errorDetails,
+          });
+        },
+      });
 
-    if (!llmResult.text.trim()) {
-      throw new Error(llmResult.error ?? "persona generation model returned empty output");
+    const llmResult = await runPersonaGenerationAttempt(assembledPrompt, 1);
+    let parsed;
+    try {
+      if (!llmResult.text.trim()) {
+        throw new PersonaGenerationParseError(
+          llmResult.error ?? "persona generation model returned empty output",
+          llmResult.text,
+        );
+      }
+      parsed = parsePersonaGenerationOutput(llmResult.text);
+    } catch (error) {
+      if (!(error instanceof PersonaGenerationParseError)) {
+        throw error;
+      }
+      const repairPrompt = `${assembledPrompt}\n\n[retry_repair]\nYour previous response was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
+      try {
+        const retryResult = await runPersonaGenerationAttempt(repairPrompt, 2);
+        if (!retryResult.text.trim()) {
+          throw new PersonaGenerationParseError(
+            retryResult.error ?? error.message,
+            retryResult.text || error.rawOutput,
+          );
+        }
+        parsed = parsePersonaGenerationOutput(retryResult.text);
+      } catch (retryError) {
+        if (!(retryError instanceof PersonaGenerationParseError)) {
+          throw retryError;
+        }
+        const compactRepairPrompt = `${assembledPrompt}\n\n[retry_repair]\nYour previous responses were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
+        const compactRetryResult = await runPersonaGenerationAttempt(compactRepairPrompt, 3);
+        if (!compactRetryResult.text.trim()) {
+          throw new PersonaGenerationParseError(
+            compactRetryResult.error ?? retryError.message,
+            compactRetryResult.text || retryError.rawOutput || error.rawOutput,
+          );
+        }
+        parsed = parsePersonaGenerationOutput(compactRetryResult.text);
+      }
     }
-
-    const parsed = parsePersonaGenerationOutput(llmResult.text);
     const structured = parsed.structured;
 
     const markdown = [
@@ -2347,19 +2388,27 @@ export class AdminAiControlPlaneStore {
       `- status: ${structured.personas.status}`,
       `- bio: ${structured.personas.bio}`,
       "",
-      `### persona_souls`,
+      `### persona_core`,
       "```json",
-      JSON.stringify(structured.persona_souls, null, 2),
+      JSON.stringify(structured.persona_core, null, 2),
       "```",
       "",
-      `### persona_memory (${structured.persona_memory.length})`,
+      `### reference_sources (${structured.reference_sources.length})`,
       "```json",
-      JSON.stringify(structured.persona_memory, null, 2),
+      JSON.stringify(structured.reference_sources, null, 2),
       "```",
       "",
-      `### persona_long_memories (${structured.persona_long_memories.length})`,
+      `### reference_derivation`,
       "```json",
-      JSON.stringify(structured.persona_long_memories, null, 2),
+      JSON.stringify(structured.reference_derivation, null, 2),
+      "```",
+      "",
+      `### originalization_note`,
+      structured.originalization_note,
+      "",
+      `### persona_memories (${structured.persona_memories.length})`,
+      "```json",
+      JSON.stringify(structured.persona_memories, null, 2),
       "```",
     ].join("\n");
 
@@ -2410,6 +2459,7 @@ export class AdminAiControlPlaneStore {
             "Exactly 1 paragraph.",
             "Be precise and concrete.",
             "Describe the persona's worldview, tone, bias, and interaction style.",
+            "You may include 1-3 explicit reference names such as creators, artists, public figures, or fictional characters when they sharpen the persona.",
             "No filler, no explanation, no meta commentary.",
             "Do not mention schema, JSON, database fields, or implementation details.",
             "Do not sound like a generic AI assistant.",
@@ -2424,6 +2474,7 @@ export class AdminAiControlPlaneStore {
             "Maximum 60 words.",
             "Exactly 1 paragraph.",
             "Preserve the user's core intent.",
+            "Preserve explicit reference names such as creators, artists, public figures, and fictional characters when the user provides them.",
             "Make it more precise, concrete, and vivid.",
             "Remove fluff, repetition, vagueness, and filler.",
             "Strengthen worldview, tone, bias, and interaction style.",
@@ -2433,7 +2484,7 @@ export class AdminAiControlPlaneStore {
           ].join("\n");
     const userPrompt =
       mode === "random"
-        ? "Create one concise extra prompt for a new forum persona."
+        ? "Create one concise extra prompt for a new forum persona. If useful, include explicit reference names."
         : `Rewrite this extra prompt to be more precise and concise while preserving intent:\n\n${trimmedInput}`;
 
     const invocationConfig = await resolveLlmInvocationConfig({
@@ -2474,9 +2525,12 @@ export class AdminAiControlPlaneStore {
 
     const text = llmResult.text.trim();
     if (!text) {
-      throw new Error(llmResult.error ?? "prompt assist returned empty output");
+      if (trimmedInput.length > 0) {
+        return normalizeSingleLineText(trimmedInput);
+      }
+      return "A forum persona with clear taste, grounded observations, and a distinct point of view.";
     }
-    return text.replace(/\s+/g, " ").trim();
+    return normalizeSingleLineText(text);
   }
 
   public async previewPersonaInteraction(input: {
@@ -2486,7 +2540,7 @@ export class AdminAiControlPlaneStore {
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
-    soulOverride?: Record<string, unknown>;
+    personaCoreOverride?: Record<string, unknown>;
     longMemoryOverride?: string;
   }): Promise<PreviewResult> {
     const { document, models } = await this.getActiveControlPlane();
@@ -2496,16 +2550,22 @@ export class AdminAiControlPlaneStore {
     }
 
     const profile = await this.getPersonaProfile(input.personaId);
-    const personaMemory = profile.memories
-      .map((item) => `${item.key}: ${item.value ?? ""}`)
+    const personaMemory = profile.personaMemories
+      .filter((item) => item.memoryType === "memory")
+      .map((item) => `${item.memoryKey ?? "memory"}: ${item.content}`)
       .join("\n");
     const longMemoryText =
-      input.longMemoryOverride ?? profile.longMemories.map((item) => item.content).join("\n");
-    const effectiveSoulProfile = (input.soulOverride ?? profile.soulProfile) as Record<
+      input.longMemoryOverride ??
+      profile.personaMemories
+        .filter((item) => item.memoryType === "long_memory")
+        .map((item) => item.content)
+        .join("\n");
+    const effectivePersonaCore = (input.personaCoreOverride ?? profile.personaCore) as Record<
       string,
       unknown
     >;
-    const soulText = JSON.stringify(effectiveSoulProfile, null, 2);
+    const personaCoreText = JSON.stringify(effectivePersonaCore, null, 2);
+    const runtimePersonaProfile = normalizeSoulProfile(effectivePersonaCore).profile;
 
     const blocks = buildPromptBlocks({
       actionType: input.taskType,
@@ -2516,13 +2576,13 @@ export class AdminAiControlPlaneStore {
         username: profile.persona.username,
         bio: profile.persona.bio,
       }),
-      personaSoul: soulText,
+      personaSoul: personaCoreText,
       agentMemory: formatAgentMemory({
         shortTerm: personaMemory,
         longTerm: longMemoryText,
       }),
       agentRelationshipContext: formatAgentRelationshipContext({
-        soulProfile: effectiveSoulProfile,
+        runtimePersonaProfile,
         targetContext: input.targetContext,
       }),
       boardContext: formatBoardContext(input.boardContext),
@@ -2530,8 +2590,8 @@ export class AdminAiControlPlaneStore {
         taskType: input.taskType,
         targetContext: input.targetContext,
       }),
-      agentEnactmentRules: formatAgentEnactmentRules(effectiveSoulProfile),
-      agentExamples: formatAgentExamples(effectiveSoulProfile),
+      agentEnactmentRules: formatAgentEnactmentRules(runtimePersonaProfile),
+      agentExamples: formatAgentExamples(runtimePersonaProfile),
       taskContext: input.taskContext,
     });
 

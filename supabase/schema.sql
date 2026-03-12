@@ -63,6 +63,16 @@ CREATE TABLE public.personas (
   last_seen_at timestamptz DEFAULT now()
 );
 
+-- Persona cores (minimal reusable creative identity)
+CREATE TABLE public.persona_cores (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id uuid NOT NULL UNIQUE REFERENCES public.personas(id) ON DELETE CASCADE,
+  core_profile jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT persona_cores_core_profile_object_chk CHECK (jsonb_typeof(core_profile) = 'object')
+);
+
 -- ----------------------------------------------------------------------------
 -- Board and Post Tables
 -- ----------------------------------------------------------------------------
@@ -138,12 +148,15 @@ CREATE TABLE public.poll_options (
 -- Poll votes (one vote per user per poll)
 CREATE TABLE public.poll_votes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  persona_id uuid REFERENCES public.personas(id) ON DELETE CASCADE,
   option_id uuid NOT NULL REFERENCES public.poll_options(id) ON DELETE CASCADE,
   post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
-  UNIQUE (user_id, post_id),
-  UNIQUE (user_id, option_id)
+  CONSTRAINT poll_votes_author_check CHECK (
+    (user_id IS NOT NULL AND persona_id IS NULL) OR
+    (user_id IS NULL AND persona_id IS NOT NULL)
+  )
 );
 
 GRANT SELECT, INSERT, DELETE ON public.poll_votes TO authenticated;
@@ -290,7 +303,7 @@ CREATE TABLE public.heartbeat_checkpoints (
 -- Heartbeat intents emitted before dispatcher creates persona_tasks
 CREATE TABLE public.task_intents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  intent_type text NOT NULL,  -- reply | vote
+  intent_type text NOT NULL,  -- reply | vote | poll_vote
   source_table text NOT NULL, -- notifications | posts | comments | votes | poll_votes
   source_id uuid NOT NULL,
   source_created_at timestamptz NOT NULL,
@@ -300,7 +313,7 @@ CREATE TABLE public.task_intents (
   selected_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  CONSTRAINT task_intents_type_check CHECK (intent_type IN ('reply', 'vote')),
+  CONSTRAINT task_intents_type_check CHECK (intent_type IN ('reply', 'vote', 'poll_vote')),
   CONSTRAINT task_intents_source_table_check CHECK (
     source_table IN ('notifications', 'posts', 'comments', 'votes', 'poll_votes')
   ),
@@ -331,8 +344,8 @@ CREATE TABLE public.persona_tasks (
   max_retries int NOT NULL DEFAULT 3,
   
   -- Result tracking
-  result_id uuid,        -- ID of created post/comment/vote
-  result_type text,      -- 'post' | 'comment' | 'vote'
+  result_id uuid,        -- ID of created post/comment/vote/poll_vote
+  result_type text,      -- 'post' | 'comment' | 'vote' | 'poll_vote'
   error_message text,
   
   created_at timestamptz DEFAULT now(),
@@ -341,22 +354,26 @@ CREATE TABLE public.persona_tasks (
   ),
   CONSTRAINT persona_tasks_retry_non_negative CHECK (retry_count >= 0 AND max_retries >= 0),
   CONSTRAINT persona_tasks_type_check CHECK (
-    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post')
+    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post', 'poll_vote')
   )
 );
 
 -- Durable idempotency map for task outputs
 CREATE TABLE public.task_idempotency_keys (
-  task_type text NOT NULL, -- reply | vote | post | comment
+  task_type text NOT NULL, -- reply | vote | post | comment | poll_vote
   idempotency_key text NOT NULL,
   result_id uuid NOT NULL,
-  result_type text NOT NULL, -- post | comment | vote
+  result_type text NOT NULL, -- post | comment | vote | poll_vote
   task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
   PRIMARY KEY (task_type, idempotency_key),
-  CONSTRAINT task_idempotency_type_check CHECK (task_type IN ('reply', 'vote', 'post', 'comment')),
-  CONSTRAINT task_idempotency_result_type_check CHECK (result_type IN ('post', 'comment', 'vote'))
+  CONSTRAINT task_idempotency_type_check CHECK (
+    task_type IN ('reply', 'vote', 'post', 'comment', 'poll_vote')
+  ),
+  CONSTRAINT task_idempotency_result_type_check CHECK (
+    result_type IN ('post', 'comment', 'vote', 'poll_vote')
+  )
 );
 
 -- Task state transition audit log
@@ -373,7 +390,7 @@ CREATE TABLE public.task_transition_events (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now(),
   CONSTRAINT task_transition_task_type_check CHECK (
-    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post')
+    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post', 'poll_vote')
   ),
   CONSTRAINT task_transition_status_check CHECK (
     from_status IN ('PENDING', 'RUNNING', 'IN_REVIEW', 'DONE', 'FAILED', 'SKIPPED')
@@ -473,73 +490,25 @@ CREATE TABLE public.ai_worker_status (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Persona memory (short-term memory / deduplication)
-CREATE TABLE public.persona_memory (
+-- Unified persona memories (minimal model)
+CREATE TABLE public.persona_memories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  key text NOT NULL,           -- e.g. 'recent_action_1', 'commented_on_{post_id}'
-  value text,                  -- Natural language summary of interaction
-  context_data jsonb NOT NULL DEFAULT '{}'::jsonb,  -- Extra data (post_id, board_slug, target persona, etc.)
-  expires_at timestamptz,      -- TTL, e.g. 24-48 hours
-  created_at timestamptz DEFAULT now(),
-  UNIQUE (persona_id, key)
-);
-
--- Thread short-memory (runtime context window, scoped by persona+thread+task)
-CREATE TABLE public.ai_thread_memories (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  thread_id text NOT NULL,
+  memory_type text NOT NULL,
+  scope text NOT NULL,
+  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
+  thread_id text,
   board_id uuid REFERENCES public.boards(id) ON DELETE CASCADE,
-  task_type text NOT NULL DEFAULT 'reply',
-  memory_key text NOT NULL,
-  memory_value text NOT NULL,
+  memory_key text,
+  content text NOT NULL,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  ttl_seconds int NOT NULL DEFAULT 172800,
-  max_items int NOT NULL DEFAULT 20,
-  expires_at timestamptz NOT NULL,
+  expires_at timestamptz,
+  is_canonical boolean NOT NULL DEFAULT false,
+  importance real,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT ai_thread_memories_task_type_check CHECK (
-    task_type IN ('reply', 'vote', 'post', 'comment', 'image_post', 'poll_post')
-  ),
-  CONSTRAINT ai_thread_memories_ttl_positive CHECK (ttl_seconds > 0),
-  CONSTRAINT ai_thread_memories_max_items_positive CHECK (max_items > 0 AND max_items <= 200),
-  CONSTRAINT ai_thread_memories_expiry_check CHECK (expires_at > created_at),
-  CONSTRAINT uq_ai_thread_memories_scope_key UNIQUE (persona_id, thread_id, task_type, memory_key)
-);
-
--- Persona Souls (complete soul definition for persona engine)
-CREATE TABLE public.persona_souls (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  persona_id uuid NOT NULL UNIQUE REFERENCES public.personas(id) ON DELETE CASCADE,
-
-  -- V1 structured soul payload
-  soul_profile jsonb NOT NULL DEFAULT '{}'::jsonb,
-
-  -- Version tracking
-  version int NOT NULL DEFAULT 1,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  CONSTRAINT persona_souls_soul_profile_object_chk CHECK (jsonb_typeof(soul_profile) = 'object')
-);
-
--- Persona Long-term Memories (with pgvector)
--- NOTE: Requires pgvector extension (enabled in migration)
-CREATE TABLE public.persona_long_memories (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  content text NOT NULL,
-  content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED,
-  embedding vector(1536),
-  importance real NOT NULL DEFAULT 0.5,
-  memory_category text NOT NULL,  -- 'interaction' | 'knowledge' | 'opinion' | 'relationship'
-  related_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
-  related_board_slug text,
-  source_action_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
-  is_canonical boolean NOT NULL DEFAULT false,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  CONSTRAINT persona_memories_memory_type_chk CHECK (memory_type IN ('long_memory', 'memory')),
+  CONSTRAINT persona_memories_scope_chk CHECK (scope IN ('persona', 'thread', 'task'))
 );
 
 -- Persona Engine Config (global key-value settings)
@@ -695,6 +664,7 @@ CREATE INDEX idx_admin_users_role ON public.admin_users(role);
 
 -- Personas
 CREATE UNIQUE INDEX personas_username_unique_idx ON public.personas (LOWER(username));
+CREATE INDEX idx_persona_cores_persona ON public.persona_cores(persona_id);
 
 -- Posts
 CREATE INDEX idx_posts_score ON public.posts(score DESC);
@@ -719,6 +689,18 @@ CREATE INDEX idx_poll_options_post ON public.poll_options(post_id);
 CREATE INDEX idx_poll_votes_post ON public.poll_votes(post_id);
 CREATE INDEX idx_poll_votes_option ON public.poll_votes(option_id);
 CREATE INDEX idx_poll_votes_user_post ON public.poll_votes(user_id, post_id);
+CREATE UNIQUE INDEX uq_poll_votes_user_post
+  ON public.poll_votes(user_id, post_id)
+  WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_poll_votes_persona_post
+  ON public.poll_votes(persona_id, post_id)
+  WHERE persona_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_poll_votes_user_option
+  ON public.poll_votes(user_id, option_id)
+  WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_poll_votes_persona_option
+  ON public.poll_votes(persona_id, option_id)
+  WHERE persona_id IS NOT NULL;
 
 -- Board moderators
 CREATE INDEX idx_board_moderators_board ON public.board_moderators(board_id);
@@ -798,34 +780,12 @@ CREATE INDEX idx_ai_worker_status_status_updated_at
 CREATE INDEX idx_ai_worker_status_circuit_open_updated_at
   ON public.ai_worker_status(circuit_open, updated_at DESC);
 
--- Persona memory
-CREATE INDEX idx_persona_memory_persona ON public.persona_memory(persona_id);
-
--- Thread short-memory
-CREATE INDEX idx_ai_thread_memories_scope_updated
-  ON public.ai_thread_memories(persona_id, thread_id, task_type, updated_at DESC);
-CREATE INDEX idx_ai_thread_memories_expire_scan
-  ON public.ai_thread_memories(expires_at ASC);
-CREATE INDEX idx_ai_thread_memories_board_updated
-  ON public.ai_thread_memories(board_id, updated_at DESC)
-  WHERE board_id IS NOT NULL;
-
--- Persona souls
-CREATE INDEX idx_persona_souls_persona ON public.persona_souls(persona_id);
-
--- Persona long memories
-CREATE INDEX idx_long_mem_persona ON public.persona_long_memories(persona_id);
-CREATE INDEX idx_long_mem_embedding ON public.persona_long_memories
-  USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX idx_long_mem_tsv ON public.persona_long_memories
-  USING gin (content_tsv);
-CREATE INDEX idx_long_mem_category ON public.persona_long_memories(persona_id, memory_category);
-CREATE UNIQUE INDEX uq_persona_long_memory_canonical
-  ON public.persona_long_memories(persona_id)
-  WHERE is_canonical = true;
-CREATE INDEX idx_long_mem_persona_canonical_updated
-  ON public.persona_long_memories(persona_id, updated_at DESC)
-  WHERE is_canonical = true;
+CREATE INDEX idx_persona_memories_persona ON public.persona_memories(persona_id);
+CREATE INDEX idx_persona_memories_persona_type ON public.persona_memories(persona_id, memory_type);
+CREATE INDEX idx_persona_memories_thread ON public.persona_memories(persona_id, thread_id)
+  WHERE thread_id IS NOT NULL;
+CREATE INDEX idx_persona_memories_expire ON public.persona_memories(expires_at)
+  WHERE expires_at IS NOT NULL;
 
 -- Persona LLM usage
 CREATE INDEX idx_llm_usage_monthly ON public.persona_llm_usage(created_at);
@@ -841,34 +801,6 @@ CREATE INDEX idx_post_rankings_calculated_at ON public.post_rankings(calculated_
 -- ============================================================================
 -- FUNCTIONS
 -- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.cleanup_ai_thread_memories(p_limit int DEFAULT 5000)
-RETURNS int
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_deleted int := 0;
-BEGIN
-  IF p_limit IS NULL OR p_limit <= 0 THEN
-    RETURN 0;
-  END IF;
-
-  WITH expired AS (
-    SELECT id
-    FROM public.ai_thread_memories
-    WHERE expires_at <= now()
-    ORDER BY expires_at ASC
-    LIMIT p_limit
-  )
-  DELETE FROM public.ai_thread_memories m
-  USING expired
-  WHERE m.id = expired.id;
-
-  GET DIAGNOSTICS v_deleted = ROW_COUNT;
-  RETURN v_deleted;
-END;
-$$;
 
 -- ----------------------------------------------------------------------------
 -- Auto-update Follow Counts
@@ -1482,6 +1414,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.personas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_cores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.boards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
@@ -1506,10 +1439,7 @@ ALTER TABLE public.ai_review_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_review_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_runtime_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_worker_status ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.persona_memory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_thread_memories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.persona_souls ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.persona_long_memories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_provider_secrets ENABLE ROW LEVEL SECURITY;
@@ -1808,14 +1738,14 @@ CREATE POLICY "Users can delete own comments" ON public.comments
 CREATE POLICY "Personas are viewable by everyone" ON public.personas
   FOR SELECT USING (true);
 
+CREATE POLICY "Persona cores are viewable by everyone" ON public.persona_cores
+  FOR SELECT USING (true);
+
 -- ----------------------------------------------------------------------------
 -- Persona Souls Policies
 -- ----------------------------------------------------------------------------
 
-CREATE POLICY "Persona souls are viewable by everyone" ON public.persona_souls
-  FOR SELECT USING (true);
-
--- Note: persona_long_memories, persona_engine_config, persona_llm_usage
+-- Note: persona_engine_config, persona_llm_usage
 -- have RLS enabled but no public policies (service role only)
 
 -- ----------------------------------------------------------------------------
@@ -1935,8 +1865,7 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- ai_review_events: No policies (service role only)
 -- ai_runtime_events: No policies (service role only)
 -- ai_worker_status: No policies (service role only)
--- persona_memory: No policies (service role only)
--- ai_thread_memories: No policies (service role only)
+-- persona_memories: No public policies (service role only)
 CREATE POLICY "Service role can read policy releases" ON public.ai_policy_releases
   FOR SELECT
   TO service_role
@@ -1988,7 +1917,7 @@ CREATE POLICY "Service role can manage ai models" ON public.ai_models
 COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars, letters/numbers/./_, Instagram-style, cannot start with ai_)';
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
-COMMENT ON COLUMN public.persona_souls.soul_profile IS 'Structured persona soul payload (v2): identityCore{archetype,mbti,coreMotivation}, valueHierarchy, reasoningLens, responseStyle, relationshipTendencies, agentEnactmentRules, inCharacterExamples, decisionPolicy, interactionDoctrine, languageSignature, guardrails.';
+COMMENT ON COLUMN public.persona_cores.core_profile IS 'Structured persona core payload: identity_summary, values, aesthetic_profile, lived_context, creator_affinity, interaction_defaults, guardrails, reference_sources, reference_derivation, originalization_note.';
 COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
 COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
 COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';
@@ -2001,7 +1930,8 @@ COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane re
 COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (AES-GCM payload fields). Service role only.';
 COMMENT ON TABLE public.ai_providers IS 'AI provider metadata/status for control plane.';
 COMMENT ON TABLE public.ai_models IS 'AI model metadata/status/order for control plane.';
-COMMENT ON TABLE public.ai_thread_memories IS 'Short-term per persona-thread memory entries with TTL and configurable per-scope max_items.';
+COMMENT ON TABLE public.persona_cores IS 'Reusable structured persona identity replacing legacy persona_souls.';
+COMMENT ON TABLE public.persona_memories IS 'Unified persona memory table covering long_memory and short memory across persona/thread/task scopes.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 
@@ -2009,7 +1939,6 @@ COMMENT ON TABLE public.post_rankings IS 'Cached post rankings for Hot and Risin
 COMMENT ON COLUMN public.post_rankings.hot_score IS 'Calculated as: (comment_count × 2) + (score × 1) − min(age_days, 30)';
 COMMENT ON COLUMN public.post_rankings.rising_score IS 'Calculated as: score / hours_since_creation (only for posts < 7 days)';
 COMMENT ON FUNCTION public.fn_update_post_rankings() IS 'Recalculates all post rankings. Called by external Node.js script (npm run update-rankings).';
-COMMENT ON FUNCTION public.cleanup_ai_thread_memories(int) IS 'Deletes expired ai_thread_memories in bounded batches. Safe for cron scheduling.';
 
 -- ============================================================================
 -- SEED DATA

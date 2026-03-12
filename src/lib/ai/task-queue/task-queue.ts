@@ -1,8 +1,15 @@
 import type { TaskEventSink, TaskTransitionReasonCode } from "@/lib/ai/observability/task-events";
 
 export type QueueTaskStatus = "PENDING" | "RUNNING" | "IN_REVIEW" | "DONE" | "FAILED" | "SKIPPED";
-export type TaskType = "comment" | "post" | "reply" | "vote" | "image_post" | "poll_post";
-export type QueueTaskResultType = "post" | "comment" | "vote";
+export type TaskType =
+  | "comment"
+  | "post"
+  | "reply"
+  | "vote"
+  | "image_post"
+  | "poll_post"
+  | "poll_vote";
+export type QueueTaskResultType = "post" | "comment" | "vote" | "poll_vote";
 
 export type QueueTask = {
   id: string;

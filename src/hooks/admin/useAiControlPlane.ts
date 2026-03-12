@@ -146,7 +146,7 @@ export function useAiControlPlane({
     modelId: initialModels.find((item) => item.capability === "text_generation")?.id ?? "",
     taskType: "comment" as "post" | "comment",
     taskContext: "Reply to a user asking for critique on their concept art draft.",
-    soulOverrideJson: "",
+    personaCoreOverrideJson: "",
     longMemoryOverride: "",
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
@@ -675,24 +675,28 @@ export function useAiControlPlane({
     try {
       await apiPost("/api/admin/ai/personas", {
         username: personaSaveForm.username || username,
-        displayName: personaSaveForm.displayName || "AI Persona Draft",
-        bio: personaGenerationPreview.structured.personas.bio,
-        soulProfile: personaGenerationPreview.structured.persona_souls.soul_profile,
-        memories: personaGenerationPreview.structured.persona_memory.map((item) => ({
-          key: item.key,
-          value: item.value,
-          contextData: item.context_data,
+        personas: {
+          ...personaGenerationPreview.structured.personas,
+          display_name:
+            personaSaveForm.displayName ||
+            personaGenerationPreview.structured.personas.display_name,
+        },
+        personaCore: personaGenerationPreview.structured.persona_core,
+        referenceSources: personaGenerationPreview.structured.reference_sources,
+        referenceDerivation: personaGenerationPreview.structured.reference_derivation,
+        originalizationNote: personaGenerationPreview.structured.originalization_note,
+        personaMemories: personaGenerationPreview.structured.persona_memories.map((item) => ({
+          memoryType: item.memory_type,
+          scope: item.scope,
+          memoryKey: item.memory_key,
+          content: item.content,
+          metadata: item.metadata,
           expiresAt:
             item.expires_in_hours && item.expires_in_hours > 0
               ? new Date(Date.now() + item.expires_in_hours * 3600_000).toISOString()
               : null,
-        })),
-        longMemories: personaGenerationPreview.structured.persona_long_memories.map((item) => ({
-          content: item.content,
-          importance: item.importance,
-          memoryCategory: item.memory_category,
           isCanonical: item.is_canonical,
-          relatedBoardSlug: item.related_board_slug,
+          importance: item.importance,
         })),
       });
       toast.success("Persona saved to DB");
@@ -768,17 +772,17 @@ export function useAiControlPlane({
       return;
     }
 
-    let soulOverride: Record<string, unknown> | undefined;
-    if (interactionInput.soulOverrideJson.trim()) {
+    let personaCoreOverride: Record<string, unknown> | undefined;
+    if (interactionInput.personaCoreOverrideJson.trim()) {
       try {
-        const parsed = JSON.parse(interactionInput.soulOverrideJson);
+        const parsed = JSON.parse(interactionInput.personaCoreOverrideJson);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          toast.error("Soul override must be a JSON object");
+          toast.error("Persona core override must be a JSON object");
           return;
         }
-        soulOverride = parsed as Record<string, unknown>;
+        personaCoreOverride = parsed as Record<string, unknown>;
       } catch {
-        toast.error("Soul override JSON is invalid");
+        toast.error("Persona core override JSON is invalid");
         return;
       }
     }
@@ -791,7 +795,7 @@ export function useAiControlPlane({
           modelId: interactionInput.modelId,
           taskType: interactionInput.taskType,
           taskContext: interactionInput.taskContext,
-          soulOverride,
+          personaCoreOverride,
           longMemoryOverride: interactionInput.longMemoryOverride.trim() || undefined,
         },
       );

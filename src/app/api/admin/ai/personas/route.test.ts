@@ -67,4 +67,80 @@ describe("/api/admin/ai/personas", () => {
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(403);
   });
+
+  it("passes the canonical persona generation payload to createPersona", async () => {
+    isAdmin.mockResolvedValue(true);
+
+    const req = new Request("http://localhost/api/admin/ai/personas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "ai_critic",
+        personas: {
+          display_name: "AI Critic",
+          bio: "Sharp but fair.",
+          status: "active",
+        },
+        personaCore: {
+          identity_summary: { archetype: "critic" },
+        },
+        referenceSources: [
+          {
+            name: "Kotaro Isaka",
+            type: "creator",
+            contribution: ["calm structural payoff"],
+          },
+        ],
+        referenceDerivation: ["Uses the reference for structure, not imitation."],
+        originalizationNote: "Original persona.",
+        personaMemories: [
+          {
+            memoryType: "long_memory",
+            scope: "persona",
+            memoryKey: null,
+            content: "Prefers specific critique.",
+            metadata: { memoryCategory: "knowledge" },
+            expiresAt: null,
+            isCanonical: true,
+            importance: 0.9,
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(201);
+    expect(createPersona).toHaveBeenCalledWith({
+      username: "ai_critic",
+      personas: {
+        display_name: "AI Critic",
+        bio: "Sharp but fair.",
+        status: "active",
+      },
+      personaCore: {
+        identity_summary: { archetype: "critic" },
+      },
+      referenceSources: [
+        {
+          name: "Kotaro Isaka",
+          type: "creator",
+          contribution: ["calm structural payoff"],
+        },
+      ],
+      referenceDerivation: ["Uses the reference for structure, not imitation."],
+      originalizationNote: "Original persona.",
+      personaMemories: [
+        {
+          memoryType: "long_memory",
+          scope: "persona",
+          memoryKey: null,
+          content: "Prefers specific critique.",
+          metadata: { memoryCategory: "knowledge" },
+          expiresAt: null,
+          isCanonical: true,
+          importance: 0.9,
+        },
+      ],
+    });
+  });
 });

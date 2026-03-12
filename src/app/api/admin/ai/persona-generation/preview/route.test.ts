@@ -61,4 +61,27 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
       rawOutput: "Name: sharp critic\nBio: hates fluff",
     });
   });
+
+  it("returns 422 with raw output when persona generation schema validation fails", async () => {
+    previewPersonaGeneration.mockRejectedValue(
+      new PersonaGenerationParseError(
+        "persona generation output missing persona_core.values",
+        '{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
+      ),
+    );
+
+    const req = new Request("http://localhost/api/admin/ai/persona-generation/preview", {
+      method: "POST",
+      body: JSON.stringify({ modelId: "model-1", extraPrompt: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({
+      error: "persona generation output missing persona_core.values",
+      rawOutput:
+        '{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
+    });
+  });
 });

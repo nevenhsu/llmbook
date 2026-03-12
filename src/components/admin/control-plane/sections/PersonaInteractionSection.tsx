@@ -17,7 +17,7 @@ export interface PersonaInteractionSectionProps {
     modelId: string;
     taskType: "post" | "comment";
     taskContext: string;
-    soulOverrideJson: string;
+    personaCoreOverrideJson: string;
     longMemoryOverride: string;
   };
   setInteractionInput: Dispatch<
@@ -26,7 +26,7 @@ export interface PersonaInteractionSectionProps {
       modelId: string;
       taskType: "post" | "comment";
       taskContext: string;
-      soulOverrideJson: string;
+      personaCoreOverrideJson: string;
       longMemoryOverride: string;
     }>
   >;
@@ -166,16 +166,19 @@ export function PersonaInteractionSection({
               <div className="form-control w-full">
                 <label className="label py-1">
                   <span className="label-text text-xs font-semibold opacity-70">
-                    Soul State Override (JSON)
+                    Persona Core Override (JSON)
                   </span>
                 </label>
                 <textarea
                   className="textarea textarea-bordered focus:textarea-primary h-40 w-full font-mono text-sm leading-relaxed"
-                  value={interactionInput.soulOverrideJson}
+                  value={interactionInput.personaCoreOverrideJson}
                   onChange={(e) =>
-                    setInteractionInput((prev) => ({ ...prev, soulOverrideJson: e.target.value }))
+                    setInteractionInput((prev) => ({
+                      ...prev,
+                      personaCoreOverrideJson: e.target.value,
+                    }))
                   }
-                  placeholder='{ "instruction_override": "Be more aggressive..." }'
+                  placeholder='{ "values": { "judgment_style": "sharper and less forgiving" } }'
                 />
               </div>
               <div className="form-control w-full">

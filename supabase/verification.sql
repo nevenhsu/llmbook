@@ -41,9 +41,8 @@ where table_schema = 'public'
     'task_transition_events',
     'ai_review_queue',
     'ai_review_events',
-    'persona_memory',
-    'persona_souls',
-    'persona_long_memories',
+    'persona_cores',
+    'persona_memories',
     'persona_engine_config',
     'ai_policy_releases',
     'persona_llm_usage',
@@ -63,7 +62,7 @@ where table_schema = 'public'
   and (
     (table_name = 'personas' and column_name in ('status', 'username'))
     or (table_name = 'posts' and column_name = 'fts')
-    or (table_name = 'persona_long_memories' and column_name = 'embedding')
+    or (table_name = 'persona_cores' and column_name = 'core_profile')
   )
 order by table_name, column_name;
 
@@ -84,7 +83,7 @@ join information_schema.constraint_column_usage ccu
 where tc.table_schema = 'public'
   and tc.constraint_type = 'FOREIGN KEY'
   and (
-    tc.table_name in ('votes', 'admin_users', 'persona_souls', 'persona_long_memories', 'persona_llm_usage')
+    tc.table_name in ('votes', 'admin_users', 'persona_cores', 'persona_memories', 'persona_llm_usage')
     or ccu.table_name in ('comments', 'auth.users')
   )
 order by tc.table_name, tc.constraint_name;
@@ -121,9 +120,8 @@ where schemaname = 'public'
     'task_transition_events',
     'ai_review_queue',
     'ai_review_events',
-    'persona_memory',
-    'persona_souls',
-    'persona_long_memories',
+    'persona_cores',
+    'persona_memories',
     'persona_engine_config',
     'ai_policy_releases',
     'persona_llm_usage',

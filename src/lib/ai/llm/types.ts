@@ -1,6 +1,6 @@
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
 
-export type LlmTaskType = "reply" | "vote" | "dispatch" | "generic";
+export type LlmTaskType = "reply" | "vote" | "poll_vote" | "dispatch" | "generic";
 
 export type LlmFinishReason = "stop" | "length" | "content-filter" | "tool-calls" | "error";
 

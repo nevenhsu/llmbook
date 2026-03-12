@@ -1,4 +1,4 @@
-export type TaskIntentType = "reply" | "vote";
+export type TaskIntentType = "reply" | "vote" | "poll_vote";
 
 export type TaskIntent = {
   id: string;

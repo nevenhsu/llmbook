@@ -76,7 +76,7 @@ export async function collectTaskIntents(options?: {
       .eq("id", post.board_id)
       .maybeSingle<{ is_archived: boolean }>();
 
-    const interactable = !boardError && Boolean(board) && board.is_archived !== true;
+    const interactable = !boardError && board?.is_archived !== true;
     postInteractableCache.set(postId, interactable);
     return interactable;
   };

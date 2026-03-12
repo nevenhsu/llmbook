@@ -29,7 +29,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
   const body = (await req.json().catch(() => ({}))) as {
     username?: string;
     bio?: string;
-    soulProfile?: Record<string, unknown>;
+    personaCore?: Record<string, unknown>;
     longMemory?: string;
   };
 
@@ -37,7 +37,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
     personaId: id.trim(),
     username: body.username,
     bio: body.bio,
-    soulProfile: body.soulProfile,
+    personaCore: body.personaCore,
     longMemory: body.longMemory,
   });
 

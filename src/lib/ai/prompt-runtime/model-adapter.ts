@@ -209,7 +209,10 @@ export class LlmRuntimeAdapter implements ModelAdapter {
     try {
       const taskTypeRaw = input.metadata?.taskType;
       const taskType =
-        taskTypeRaw === "reply" || taskTypeRaw === "vote" || taskTypeRaw === "dispatch"
+        taskTypeRaw === "reply" ||
+        taskTypeRaw === "vote" ||
+        taskTypeRaw === "poll_vote" ||
+        taskTypeRaw === "dispatch"
           ? taskTypeRaw
           : "generic";
       const runtimeConfig = await this.configProvider.getConfig(

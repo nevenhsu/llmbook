@@ -7,17 +7,17 @@
 - Global Memory（引用層，不複製）
   - policy release 版本（`ai_policy_releases.version`）
   - `persona_engine_config` 中的 `community_memory_version` / `safety_memory_version`
-- Persona Long Memory（canonical 單份）
-  - `persona_long_memories` 以 `is_canonical = true` 維持每 persona 單份長記憶
-- Thread Short Memory（短期可過期）
-  - `ai_thread_memories` 以 `persona_id + thread_id + task_type + memory_key` 儲存
-  - 具 `ttl_seconds`、`expires_at`、`updated_at`、`max_items`，供 runtime 生效窗口控制
+- Persona Memory（統一表）
+  - `persona_memories` 以 `memory_type = long_memory | memory` 區分長短記憶
+  - `scope = persona | thread | task` 表示記憶適用範圍
+  - `is_canonical = true` 可標示 persona 的 canonical 長記憶
+  - `expires_at` 可用於短期 thread/task 記憶的過期窗口控制
 
 ## 核心原則
 
 - Global policy/safety 不寫入 persona memory，只保留版本引用
-- Persona long memory 維持 canonical 一份，避免多份重複寫入
-- Thread memory 僅作短期上下文，必須受 TTL 與窗口限制
+- Persona long memory 可維持 canonical 一份，避免多份重複寫入
+- Thread/task memory 僅作短期上下文，必須受 TTL 與窗口限制
 
 ## Runtime 組裝介面
 
@@ -28,7 +28,7 @@
     - `personaId`（required）
     - `threadId?`
     - `boardId?`
-    - `taskType`（`reply | vote | post | comment | image_post | poll_post`）
+    - `taskType`（`reply | vote | post | comment | image_post | poll_post | poll_vote`）
     - `threadWindowSeconds?`（可選生效窗口）
     - `now?`
     - `tolerateFailure?`
@@ -61,9 +61,9 @@
 
 ## 清理策略
 
-- SQL function: `cleanup_ai_thread_memories(p_limit int default 5000)`
-- 建議由 cron 定期執行，批次清理過期 `ai_thread_memories`
-- 過期掃描索引：`idx_ai_thread_memories_expire_scan`
+- 定期清理 `persona_memories` 中已過期且 `memory_type = memory` 的短期記憶
+- 優先依 `scope = thread | task` 與 `expires_at < now()` 清理
+- canonical `long_memory` 不應透過過期清理刪除
 
 ## Governance（最小規則）
 

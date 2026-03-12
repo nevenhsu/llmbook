@@ -155,6 +155,62 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     );
   });
 
+  it("explicitly preserves named references in optimized prompts", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM).mockResolvedValue({
+      text: "以伊坂幸太郎、Fleabag 和深夜咖啡店觀察為參考，塑造一位擅長把日常細節串成尖銳角色判斷、口氣輕鬆但觀察很準的論壇人格。",
+      error: null,
+    } as never);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
+      release: null,
+      document: {
+        globalPolicyDraft: {
+          systemBaseline: "baseline",
+          globalPolicy: "policy",
+          styleGuide: "style",
+          forbiddenRules: "forbidden",
+        },
+      },
+      providers: [
+        {
+          id: "provider-1",
+          providerKey: "xai",
+          displayName: "xAI",
+          sdkPackage: "@ai-sdk/xai",
+          status: "active",
+          testStatus: "success",
+          keyLast4: "1234",
+          hasKey: true,
+          lastApiErrorCode: null,
+          lastApiErrorMessage: null,
+          lastApiErrorAt: null,
+          createdAt: "2026-03-06T00:00:00.000Z",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+        },
+      ],
+      models: [sampleModel()],
+    });
+
+    const text = await store.assistPersonaPrompt({
+      modelId: "model-1",
+      inputPrompt: "請保留伊坂幸太郎、Fleabag 和深夜咖啡店觀察這些參考對象",
+    });
+
+    expect(text).toContain("伊坂幸太郎");
+    expect(text).toContain("Fleabag");
+    expect(invokeLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Preserve explicit reference names such as creators, artists, public figures, and fictional characters when the user provides them.",
+          ),
+        }),
+      }),
+    );
+  });
+
   it("does not reject prompt assist solely because provider status is disabled", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM).mockResolvedValue({
@@ -202,5 +258,94 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     await expect(
       store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" }),
     ).resolves.toContain("critic");
+  });
+
+  it("falls back to the normalized input prompt when the model returns empty text", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM).mockResolvedValue({
+      text: "   ",
+      error: null,
+    } as never);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
+      release: null,
+      document: {
+        globalPolicyDraft: {
+          systemBaseline: "baseline",
+          globalPolicy: "policy",
+          styleGuide: "style",
+          forbiddenRules: "forbidden",
+        },
+      },
+      providers: [
+        {
+          id: "provider-1",
+          providerKey: "xai",
+          displayName: "xAI",
+          sdkPackage: "@ai-sdk/xai",
+          status: "active",
+          testStatus: "success",
+          keyLast4: "1234",
+          hasKey: true,
+          lastApiErrorCode: null,
+          lastApiErrorMessage: null,
+          lastApiErrorAt: null,
+          createdAt: "2026-03-06T00:00:00.000Z",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+        },
+      ],
+      models: [sampleModel()],
+    });
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "  請保留 伊坂幸太郎 與 Fleabag 的參考，讓角色更有判斷力  ",
+      }),
+    ).resolves.toBe("請保留 伊坂幸太郎 與 Fleabag 的參考，讓角色更有判斷力");
+  });
+
+  it("falls back to a default seed prompt when the model returns empty text for empty input", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM).mockResolvedValue({
+      text: "",
+      error: null,
+    } as never);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
+      release: null,
+      document: {
+        globalPolicyDraft: {
+          systemBaseline: "baseline",
+          globalPolicy: "policy",
+          styleGuide: "style",
+          forbiddenRules: "forbidden",
+        },
+      },
+      providers: [
+        {
+          id: "provider-1",
+          providerKey: "xai",
+          displayName: "xAI",
+          sdkPackage: "@ai-sdk/xai",
+          status: "active",
+          testStatus: "success",
+          keyLast4: "1234",
+          hasKey: true,
+          lastApiErrorCode: null,
+          lastApiErrorMessage: null,
+          lastApiErrorAt: null,
+          createdAt: "2026-03-06T00:00:00.000Z",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+        },
+      ],
+      models: [sampleModel()],
+    });
+
+    await expect(store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" })).resolves.toBe(
+      "A forum persona with clear taste, grounded observations, and a distinct point of view.",
+    );
   });
 });

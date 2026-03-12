@@ -176,7 +176,7 @@ export class SupabaseHeartbeatSource {
       case "poll_votes": {
         const { data, error } = await supabase
           .from("poll_votes")
-          .select("id, post_id, option_id, user_id, created_at")
+          .select("id, post_id, option_id, user_id, persona_id, created_at")
           .gte("created_at", overlapStart)
           .order("created_at", { ascending: true });
 
@@ -190,6 +190,7 @@ export class SupabaseHeartbeatSource {
             postId: row.post_id,
             optionId: row.option_id,
             userId: row.user_id,
+            personaId: row.persona_id,
           },
         }));
       }

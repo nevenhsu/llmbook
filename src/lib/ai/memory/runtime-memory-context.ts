@@ -1,7 +1,14 @@
 import { MemoryReasonCode } from "@/lib/ai/reason-codes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type RuntimeTaskType = "reply" | "vote" | "post" | "comment" | "image_post" | "poll_post";
+export type RuntimeTaskType =
+  | "reply"
+  | "vote"
+  | "post"
+  | "comment"
+  | "image_post"
+  | "poll_post"
+  | "poll_vote";
 
 export type BuildRuntimeMemoryContextInput = {
   personaId: string;
@@ -134,16 +141,15 @@ type RuntimeMemoryDeps = {
 
 type PolicyReleaseRow = { version: number };
 type EngineConfigRow = { key: string; value: string };
-type LongMemoryRow = { id: string; content: string; updated_at: string };
-type ThreadMemoryRow = {
+type PersonaMemoryRow = {
   id: string;
-  memory_key: string;
-  memory_value: string;
+  memory_key: string | null;
+  content: string;
   metadata: Record<string, unknown> | null;
-  ttl_seconds: number;
-  max_items: number;
-  expires_at: string;
+  expires_at: string | null;
   updated_at: string;
+  is_canonical?: boolean | null;
+  importance?: number | null;
 };
 
 type CacheEntry<T> = {
@@ -433,13 +439,15 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
     getPersonaCanonicalLongMemory: async ({ personaId }) => {
       const supabase = createAdminClient();
       const { data, error } = await supabase
-        .from("persona_long_memories")
-        .select("id, content, updated_at")
+        .from("persona_memories")
+        .select("id, content, updated_at, is_canonical")
         .eq("persona_id", personaId)
+        .eq("memory_type", "long_memory")
+        .eq("scope", "persona")
         .eq("is_canonical", true)
         .order("updated_at", { ascending: false })
         .limit(1)
-        .maybeSingle<LongMemoryRow>();
+        .maybeSingle<PersonaMemoryRow>();
 
       if (error) {
         throw new Error(`load persona canonical memory failed: ${error.message}`);
@@ -456,16 +464,21 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
       };
     },
 
-    getThreadShortMemoryEntries: async ({ personaId, threadId, taskType, boardId, now }) => {
+    getThreadShortMemoryEntries: async ({
+      personaId,
+      threadId,
+      taskType: _taskType,
+      boardId,
+      now,
+    }) => {
       const supabase = createAdminClient();
       let query = supabase
-        .from("ai_thread_memories")
-        .select(
-          "id, memory_key, memory_value, metadata, ttl_seconds, max_items, expires_at, updated_at",
-        )
+        .from("persona_memories")
+        .select("id, memory_key, content, metadata, expires_at, updated_at")
         .eq("persona_id", personaId)
+        .eq("memory_type", "memory")
+        .eq("scope", "thread")
         .eq("thread_id", threadId)
-        .eq("task_type", taskType)
         .gt("expires_at", now.toISOString())
         .order("updated_at", { ascending: false })
         .limit(200);
@@ -474,19 +487,25 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
         query = query.eq("board_id", boardId);
       }
 
-      const { data, error } = await query.returns<ThreadMemoryRow[]>();
+      const { data, error } = await query.returns<PersonaMemoryRow[]>();
       if (error) {
         throw new Error(`load thread short memory failed: ${error.message}`);
       }
 
       return (data ?? []).map((row) => ({
         id: row.id,
-        key: row.memory_key,
-        value: row.memory_value,
+        key: row.memory_key ?? "default",
+        value: row.content,
         metadata: row.metadata ?? {},
-        ttlSeconds: row.ttl_seconds,
-        maxItems: row.max_items,
-        expiresAt: row.expires_at,
+        ttlSeconds:
+          typeof row.metadata?.ttlSeconds === "number" && Number.isFinite(row.metadata.ttlSeconds)
+            ? Math.max(1, Math.floor(row.metadata.ttlSeconds))
+            : 172_800,
+        maxItems:
+          typeof row.metadata?.maxItems === "number" && Number.isFinite(row.metadata.maxItems)
+            ? Math.max(1, Math.floor(row.metadata.maxItems))
+            : DEFAULT_THREAD_MAX_ITEMS,
+        expiresAt: row.expires_at ?? now.toISOString(),
         updatedAt: row.updated_at,
       }));
     },
@@ -895,7 +914,7 @@ export class CachedRuntimeMemoryProvider {
       }
 
       const dedupeEnabled = this.governance.dedupe.enabled;
-      const minLength = this.governance.dedupe.minValueLength;
+      const minLength = this.governance.dedupe.minValueLength ?? DEFAULT_DEDUPE_MIN_LENGTH;
       if (dedupeEnabled) {
         const seen = new Set<string>();
         const deduped: RuntimeThreadMemoryEntry[] = [];

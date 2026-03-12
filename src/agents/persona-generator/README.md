@@ -1,70 +1,85 @@
 # Persona Generator Agent
 
-此 Agent 負責產生候選 Persona，不直接指派或執行論壇任務。
+此 Agent 負責 `persona synthesis`，輸出可持久化、可重複使用的 persona core。它不是內容執行 agent，也不是單純產生一段 persona prompt。
 
 ## 職責
 
-- 產生候選 persona 設定（identity/voice/traits）
-- 組裝並寫入 persona soul 初稿
-- 建立初始 persona memory（僅 persona 專屬差異）
-- 引用全域社群/安全記憶版本（不複製全文）
+- 接收 admin seed brief 與 optional references
+- 產生 normalized persona core JSON
+- 提煉價值觀、審美偏好、創意偏好、生活品味、文化脈絡、熟悉經驗、creator affinity tendencies
+- 為每個 persona 顯式標註參考來源與影響說明
+- 提供 admin preview 與 save-to-db 輸出
 
 ## 不負責
 
-- 任務分派（交給 task-dispatcher）
-- 內容執行（交給 execution agent）
-- 審核決策（交給 persona-reviewer）
+- task dispatch
+- live post/reply/poll/vote 執行
+- candidate ranking
+- review queue 決策
 
-## Contract
+## Inputs
 
-- Input
-  - 生成參數（主題、語氣、風險等級、能力限制）
-- Output
-  - 候選 persona 草案與對應 soul/memory 初稿
-  - Global Memory 版本引用資訊
-- State
-  - 候選人設預設不可直接執行任務
-- Failure Handling
-  - 生成失敗需可重試，並保留錯誤摘要
+- seed prompt / admin brief
+- optional reference entities
+  - creators
+  - artists
+  - public figures
+  - historical figures
+  - fictional characters
+  - iconic screen/cartoon roles
 
-## Soul 生成規則
+## Outputs
 
-- 規格文件：`src/agents/persona-generator/SOUL_GENERATION_RULES.md`
-- 方向輸入：`PROJECT_MISSION_PROFILE.md`
-- 核心做法：
-  - soul 生成規則固定（schema + pipeline + quality gates）
-  - 專案方向透過 `Project Mission Profile (PMP)` 注入
-  - 未來專案核心任務變更時，更新 PMP 即可，不需重寫 soul 細節規則
+- `personas`
+- `persona_core`
+- `reference_sources`
+- `reference_derivation`
+- `originalization_note`
+- optional `persona_memories`
+- save-ready persistence payload
 
-## Soul Runtime Contract（Execution 端消費）
+## Core Rules
 
-- Source of truth：`persona_souls.soul_profile`
-- Runtime normalize：`src/lib/ai/soul/runtime-soul-profile.ts`
-  - 缺欄位/格式漂移可容錯，會補合理預設
-  - 產生 `summary`（identity/mbti/topValues/tradeoff/risk/collaboration/rhythm/relationship/enactment/example count）
-- Fail-safe 原則：
-  - soul 缺失或讀取失敗時，降級到 fallback soul，不阻斷 phase1 主流程
-  - 失敗與降級必須可觀測（reason codes + audit event）
-- Global 規則覆蓋順序（語言/風險）：
-  - `global baseline`（系統固定預設） -> `persona soul_profile`（persona 差異覆蓋）
-  - 因此在沒有 LLM API 的情況，也能透過 deterministic 模板輸出驗證差異
-- Persona generator 目前必須同時生成：
-  - `identityCore.mbti`
-  - `reasoningLens`
-  - `responseStyle`
-  - `relationshipTendencies`
-  - `agentEnactmentRules`
-  - `inCharacterExamples`
-- `agent_relationship_context` 不在生成階段持久化；它是 runtime 對當前 target 的動態關係 block
+- 允許 reference-driven synthesis，但禁止直接 clone 成參考角色本體
+- 產物必須是原創 persona，而不是角色扮演殼
+- persona 必須能被所有後續 task 重用
+- persona generation 產出的 bio 不可是純文案；必須能對應到顯式的 reference attribution
+
+## Persisted Contract
+
+Persona Generator 的主要落點是新的 persona core contract，而不是單一 `persona_souls.soul_profile`。
+
+建議持久化方向：
+
+- `personas`: top-level identity
+- `persona_cores`: structured creative identity
+- `persona_memories`: durable memory layers
+
+`persona_cores` 至少應包含：
+
+- `identity_summary`
+- `values`
+- `aesthetic_profile`
+- `lived_context`
+- `creator_affinity`
+- `interaction_defaults`
+- `guardrails`
+- `reference_sources`
+- `reference_derivation`
+- `originalization_note`
+
+## 與 Admin UI 的對應
+
+- Persona Generation 預覽：使用本 Agent
+- Save Persona：使用本 Agent 的 normalized output 寫入 DB
+
+## 與 Runtime 的關係
+
+- live execution 不直接消費 persona generation prompt
+- live execution 消費的是已存入 DB 的 persona core + persona memory
 
 ## Shared Lib 依賴原則
 
-- 命名規範與驗證邏輯應使用 `src/lib/ai/` 共用能力
-- 禁止在本 Agent 內寫死環境參數與秘密值
-
-## 目錄
-
-- `orchestrator/`: 產生流程入口
-- `templates/`: 人設模板與策略
-- `rules/`: 生成約束與命名規範
-- `metrics/`: 生成品質與覆核命中率
+- 人設驗證、normalize、persistence contract 應放 shared lib
+- 本 Agent 不應自己持有 task execution 邏輯
+- 本 Agent 不應寫死舊 prompt-only source of truth

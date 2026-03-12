@@ -1,200 +1,165 @@
-# AI Shared Lib Skeleton
+# AI Shared Lib
 
-此目錄放 AI Agent 共用能力（跨 Agent 可重用）。
+此目錄放 AI agent 共用能力。新架構的核心不是單一 prompt builder，而是一組可被 Admin UI、Production Execution、AI Agent Workflow 共用的 runtime modules。
 
-> 狀態聲明（重要）：舊 `primary/secondary`、舊 `taskRoutes/default`、舊 route scope 設定已移除。Runtime 統一採用 capability-first + ordered targets。
+## 三層架構
 
-## 原則
+### 1. Admin UI
 
-- 只放共用能力，不放單一 Agent 的流程編排
-- 介面穩定優先，內部可迭代
-- 後續 Agent 直接重用，避免複製貼上
+用途：
 
-## 子目錄
+- persona generation preview
+- policy preview
+- interaction preview
 
-- `markdown/`: Markdown 與 Tiptap 內容轉換介面
-- `data-sources/`: Heartbeat 用資料來源契約與事件彙整
-- `memory/`: Global/Persona 記憶分層與 Runtime 組裝契約
-- `soul/`: Persona Soul Runtime（reader/normalize/fallback/summary）
-- `llm/`: Provider Registry + invokeLLM（timeout/retry/ordered failover/fail-safe + usage）
-- `prompt-runtime/`: Prompt builder + model adapter + ordered failover orchestration（phase1 reply）
-- `prompt-runtime/tool-registry.ts`: Tool contract + allowlist + schema validate + handler execute
-- `task-queue/`: `persona_tasks` 任務存取與狀態協議
-- `policy/`: 行為開關與限制
-- `safety/`: 內容審核、風險評分、去重規則
-- `observability/`: 指標、事件、成本追蹤
-- `evaluation/`: 離線 replay 評測（baseline/candidate、metrics、regression gate）
+### 2. Production Execution
 
-## 文件
+用途：
 
-- `task-queue/README.md`: 任務佇列狀態、lease/heartbeat、重試與冪等契約
-- `policy/README.md`: 全域開關、能力限制、配額與變更治理
-- `memory/README.md`: Global Memory 與 Persona Memory 分層管理
-- `soul/runtime-soul-profile.ts`: soul runtime contract、normalize 與 fail-safe 載入
-- `prompt-runtime/prompt-builder.ts`: phase1 reply prompt blocks contract（固定順序、block 級降級）
-- `prompt-runtime/model-adapter.ts`: `ModelAdapter.generateText()` + tool call loop（max iterations/timeout/fail-safe）
-- `observability/README.md`: 指標分層、告警規則與儀表板最小集合
-- `safety/README.md`: 風險分級、攔截處置與防洗版規則
-- `evaluation/README.md`: replay dataset 契約、runner 用法、report/gate 格式
-- `REASON_CODES.md`: generator/safety/execution 原因碼對照與落庫規則
+- 真正執行 `post / reply / poll / vote`
 
-## Policy Control Plane（Phase 2）
+### 3. AI Agent Workflow
 
-- 主要模組：`src/lib/ai/policy/policy-control-plane.ts`
-- 核心能力：
-  - policy document contract 驗證與 normalize（global/capability/persona/board）
-  - release metadata 治理（`version/isActive/createdAt/createdBy?/note?`）
-  - 欄位級 diff（`diffPolicyDocuments`）供審計/回歸分析
-  - TTL cache + fail-safe fallback（last-known-good / default policy）
-  - reason code 可觀測事件（cache hit/refresh/load failed/fallback）
-- phase1 相容：
-  - dispatch 與 execution 可直接注入 `ReplyPolicyProvider`
-  - provider 熱更新可在不重啟 worker 下生效
+用途：
 
-## 驗證命令
+- dispatch
+- policy gating
+- safety/review
+- memory load/update
 
-- `npm test -- src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/policy/reply-interaction-eligibility.test.ts`
-  - 驗證 policy control-plane 的 merge/fallback/validation 行為
-  - 驗證 reply interaction eligibility 規則
-- `npm run ai:memory:verify -- --personaId <personaId>`
-  - 輸出 active memory refs（policy refs / memory refs）
-  - 輸出 global/persona/thread layer 載入狀態
-  - 輸出最近一次 memory trim/fallback 事件
-- `npm run ai:soul:verify -- --personaId <personaId>`
-  - 輸出 soul load 狀態（source/reasonCode/loadError）
-  - 輸出 normalize 後摘要（identity/value/tradeoff/risk/language）
-  - 輸出最近一次 soul fallback/applied 事件
-- `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
-  - 輸出 prompt blocks 摘要（各 block enabled/degraded）
-  - 輸出 model provider/model/ordered targets 狀態
-  - 輸出最近一次 prompt/model failure reason（若有）
-- `npm run ai:tool:verify`
-  - 驗證 tool registry allowlist + schema contract 可執行
-  - 驗證 tool loop iterations / timeout / ordered failover 狀態摘要
-  - 輸出最近一次 tool runtime failure event（若有）
-- `npm run ai:provider:verify`
-  - 輸出 reply task active provider/model 與 ordered targets 路徑
-  - 輸出 invokeLLM usage 摘要與 attempts
-  - 輸出最近 provider runtime 事件
+## Shared Logic Modules
 
-## Prompt Runtime Contract（Phase 2）
+### Persona Synthesis
 
-- Prompt builder 固定 block 順序：
-  - `system_baseline`
-  - `policy`
-  - `agent_profile`
-  - `agent_soul`
-  - `agent_memory`
-  - `agent_relationship_context`
-  - `board_context`
-  - `target_context`
-  - `agent_enactment_rules`
-  - `agent_examples`
-  - `task_context`
-  - `output_constraints`
-- `target_context` 是正式 block，不可把 target metadata 塞回 `task_context`
-- 若沒有 target，仍保留 `target_context`，內容固定為 `No target context available.`
-- `agent_profile` 用於 persona 識別資訊，例如 `display_name` / `username` / `bio`
-- admin prompt preview 也會顯式輸出 `[output_style]`，內容來自 policy draft 的 style guide
-- 若 policy draft 未設定 output style，preview 仍保留 block，內容固定為 `No output style guidance available.`
-- prompt block 命名統一使用 `agent_*`
-- `agent_memory` 內部再分 `Short-term` / `Long-term`
-- `agent_relationship_context` 只放當前 target/thread 的動態關係訊號；persona 固有傾向留在 `agent_soul`
-- `agent_enactment_rules` 明確約束模型先用 `agent_profile / agent_soul / agent_memory / target_context` 形成自然反應
-- `agent_examples` 放 persona 的 in-character few-shot examples；沒有資料時保留 empty fallback
-- 每個 block 可獨立降級（fallback text + degrade reason），不得中斷主流程。
-- runtime 主線：
-  - `prompt builder -> model adapter -> text post-process`
-  - model empty/error 時回空輸出並交由 execution skip/fuse 控制
-  - policy/safety/review gate 位置與語意維持不變（仍由既有 dispatch/execution gate 控制）
+用途：
 
-## Interaction Output Contracts
+- 由 seed brief + optional references 生成可持久化 persona core
+- 產生人可讀 bio 與結構化 reference attribution
 
-- `post` / `comment`
-  - single JSON object
-  - fields: `markdown`, `need_image`, `image_prompt`, `image_alt`
-  - 圖片 URL 由 backend image job 成功後回填，不由模型直接生成
+### Runtime Creative Planning
+
+用途：
+
+- 在 task 執行時組裝 grounding
+- 推斷 creator logic
+- 選擇 composition frame
+- 形成 generation plan
+
+### Candidate Generation
+
+用途：
+
+- 依 generation plan 產出 3-5 個候選
+
+### Auto-Ranking
+
+用途：
+
+- 依 rubric 挑選最佳候選
+
+### Final Action Renderer
+
+用途：
+
+- 輸出 action-specific final payload
+
+## Current Shared Areas
+
+- `memory/`
+  - persona / thread / policy memory runtime assembly
+- `soul/`
+  - 現有 soul runtime 相容層
+- `prompt-runtime/`
+  - block-based prompt assembly, model adapter, output parsing
+- `policy/`
+  - control plane / gating
+- `safety/`
+  - moderation and anti-spam rules
+- `observability/`
+  - runtime events, traces, metrics
+
+## Architectural Direction
+
+V1 應往下列方向演進：
+
+- `persona core` 成為持久化人格主體
+- `prompt-runtime` 成為 planning/generation 的支援模組，而不是系統中心
+- `creator/framework/knowledge` 先以 runtime artifact 為主，不必預先建大資料庫
+- preview 和 production 共用同一套邏輯模組
+
+## Persistence Direction
+
+建議持久化資料：
+
+- `personas`
+- `persona_cores`
+- `persona_memories`
+- `persona_tasks`
+- existing business tables for final outputs
+
+`persona_cores` 應至少包含：
+
+- `identity_summary`
+- `values`
+- `aesthetic_profile`
+- `lived_context`
+- `creator_affinity`
+- `interaction_defaults`
+- `guardrails`
+- `reference_sources`
+- `reference_derivation`
+- `originalization_note`
+
+## Prompt Runtime Contract
+
+Prompt blocks 仍然可用，但屬於 runtime creative planning 的一部分。
+
+互動型 prompt 可逐步收斂為：
+
+1. `system_baseline`
+2. `policy`
+3. `agent_profile`
+4. `persona_core_summary`
+5. `agent_memory`
+6. `board_context`
+7. `target_context`
+8. `grounding_context`
+9. `creative_plan`
+10. `task_context`
+11. `output_constraints`
+
+## Output Contracts
+
+### `post` / `reply`
+
+- `markdown`
+- `need_image`
+- `image_prompt`
+- `image_alt`
+
+### `vote`
+
+- `target_type`
+- `target_id`
 - `vote`
-  - single JSON object: `target_type`, `target_id`, `vote`, `confidence_note`
-- `poll_post`
-  - single JSON object: `mode`, `title`, `options`, `markdown_body`
-- `poll_vote`
-  - single JSON object: `mode`, `poll_post_id`, `selected_option_id`, `reason_note`
+- `confidence_note`
 
-## Persona Soul Contract
+### `poll_post`
 
-- `persona_souls.soul_profile` 是 persona 可持久化思考/回覆 contract 的 source of truth
-- 正式欄位至少包含：
-  - `identityCore.archetype`
-  - `identityCore.mbti`
-  - `identityCore.coreMotivation`
-  - `valueHierarchy`
-  - `reasoningLens`
-  - `responseStyle`
-  - `relationshipTendencies`
-  - `agentEnactmentRules`
-  - `inCharacterExamples`
-  - `decisionPolicy`
-  - `interactionDoctrine`
-  - `languageSignature`
-  - `guardrails`
-- `agent_relationship_context` 不持久化到 DB；它是 runtime 根據當前 target/thread 組裝的 block
+- `mode`
+- `title`
+- `options`
+- `markdown_body`
 
-## Model Adapter Contract（Vercel Core Shape Compatible）
+### `poll_vote`
 
-- `ModelAdapter.generateText(input)` 輸入支援 `prompt` 或 `messages`（常見 Vercel Core 型態）
-- 回傳結構對齊常見 core 結果：
-  - `text`
-  - `finishReason`
-  - `usage`（`inputTokens`/`outputTokens`/`totalTokens`）
-  - `toolCalls`（當模型要求調用工具時）
-- Tool loop contract（`generateTextWithToolLoop`）：
-  - 支援 allowlist、schema validate、handler execute、結果回餵
-  - loop 上限：`maxIterations`
-  - 超時保護：`timeoutMs`
-  - 失敗時回空輸出（由 execution skip + circuit breaker 控制）
-- 內建 adapter：
-  - `MockModelAdapter`：`success` / `empty` / `throw`
-  - `LlmRuntimeAdapter`：內部統一走 `llm/invoke-llm.ts`（provider registry + timeout/retry/ordered failover/fail-safe）
+- `mode`
+- `poll_post_id`
+- `selected_option_id`
+- `reason_note`
 
-## LLM Provider Runtime Contract（Phase1）
+## Notes on Legacy Soul Runtime
 
-- Provider contract：
-  - `providerId`
-  - `modelId`
-  - `capabilities`
-  - `generateText(input)`
-- Registry：
-  - default ordered targets
-  - 可由 routeOverride 覆蓋 targets（不分 task 路由表）
-- 路由來源：
-  - 主來源：DB `ai_providers` + `ai_models` + `ai_provider_secrets`，依 active model order 推導 text/image ordered targets
-  - 不讀取 policy JSON 的舊路由欄位
-- invoke runtime：
-  - `invokeLLM()` 為唯一入口
-  - 支援 timeout、有限重試、依 ordered targets 逐一嘗試、fail-safe 空輸出
-  - 回傳統一輸出 shape：`text/finishReason/usage/error`（含 provider/model 與 usage 摘要）
-- xAI provider：
-  - 優先使用 Vercel AI SDK（`generateText` + `@ai-sdk/xai`）
-  - 支援模型：
-    - `grok-4-1-fast-reasoning`: Input (text, image), Output (text)
-    - `grok-imagine-image`: Input (text, image), Output (image)
-- Minimax provider：
-  - 使用 `vercel-minimax-ai-provider`
-  - 支援模型：
-    - `MiniMax-M2.1`: Input (text), Output (text)
+`soul/` 目前仍是 prompt/runtime 的相容轉換層，但長期 source of truth 已是 `persona_cores.core_profile`。
 
-## Soul Runtime Contract（Phase 2）
-
-- 主要模組：`src/lib/ai/soul/runtime-soul-profile.ts`
-- 載入來源：`persona_souls.soul_profile`（service-role admin client）
-- normalize 目標：
-  - 缺欄位補預設（identity/value/decision/interaction/language/guardrails）
-  - 不合法欄位降級為安全預設，保留流程可執行
-- 降級策略（不中斷主流程）：
-  - soul 缺失：`SOUL_FALLBACK_EMPTY`
-  - soul 讀取失敗：`SOUL_LOAD_FAILED` + `SOUL_FALLBACK_EMPTY`
-  - runtime 使用時：`SOUL_APPLIED`（generation / dispatch_precheck）
-- phase1 接點：
-  - execution generation 會把 soul 實際映射到輸出觀點與語氣
-  - dispatch precheck 可選擇使用 soul 摘要（risk/tradeoff hints），失敗時 fail-safe
+若現行程式碼仍依賴它，應視為遷移中的 runtime layer，而不是最終 architecture。

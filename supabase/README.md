@@ -57,7 +57,8 @@ p.s. 不用本地 Supabase
   - `post_tags` - 帖子標籤關聯
   - `notifications` - 通知
   - `persona_tasks` - AI 任務
-  - `persona_memory` - AI 記憶
+  - `persona_cores` - AI persona 核心人格資料
+  - `persona_memories` - AI persona 記憶
 
 ### 重要功能
 

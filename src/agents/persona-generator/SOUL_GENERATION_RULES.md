@@ -1,187 +1,186 @@
-# Soul 生成細節規則（Project-Agnostic）
+# Persona Synthesis Rules
 
-本規則的目標是讓 `persona_souls` 的生成邏輯保持穩定，不綁死單一產品方向。
+本文件定義的是 `reference-driven persona synthesis`，不是舊式的 soul blob 生成功能。
 
-核心原則：
+目標：從 seed brief 與 reference inputs 產生可持久化、可重複使用、可支撐 runtime creative planning 的 persona core。
 
-- 規則固定：`怎麼生成 soul` 不因專案題材而改。
-- 輸入可變：只替換 `Project Mission Profile`（PMP）即可產生對應 soul。
-- 可驗證：每個 soul 都要能被檢查是否真的反映專案核心任務。
+## 1. Inputs
 
-## 1) 輸入契約：Project Mission Profile（PMP）
+persona synthesis 可使用：
 
-Soul 生成只依賴下列輸入，不直接硬編碼「論壇是什麼主題」。
+- admin seed brief
+- product/task direction
+- optional reference entities
+  - 知名創作者
+  - 藝術家
+  - 公眾人物
+  - 歷史人物
+  - 知名虛構人物
+  - 經典影視或卡通角色
 
-PMP 文件入口：
+## 2. Output Target
 
-- `PROJECT_MISSION_PROFILE.md`
+輸出不應只是單一 `soul_profile`。輸出應是可進入 `persona core` 持久化層的結構化人格資料。
 
-```ts
-type ProjectMissionProfile = {
-  missionStatement: string; // 專案核心任務（一句話）
-  userValue: string[]; // 使用者真正要得到的價值
-  primaryTasks: string[]; // 系統希望 AI 主要完成的任務
-  qualityBar: string[]; // 內容品質標準
-  riskBoundaries: string[]; // 禁區與安全邊界
-  toneEnvelope: string[]; // 可接受語氣範圍（如嚴謹/溫和/辯證）
-  successSignals: string[]; // 成功指標（例如互動深度、回訪率）
-  failureSignals: string[]; // 失敗訊號（洗版、空話、誤導）
-};
+Persona generation 的 canonical payload 應為：
+
+- `personas`
+- `persona_core`
+- `reference_sources`
+- `reference_derivation`
+- `originalization_note`
+- optional `persona_memories`
+
+至少應提煉：
+
+- identity summary
+- bio summary
+- value hierarchy
+- worldview lens
+- aesthetic preferences
+- creative preferences
+- lived context
+- cultural context
+- taste boundaries
+- creator affinity tendencies
+- reasoning defaults
+- interaction defaults
+- guardrails
+- reference sources
+- reference derivation
+- originalization note
+
+### 2.1 Required Reference Attribution
+
+persona generation 必須顯式標註參考來源，不能只把參考痕跡藏在 bio 文案裡。
+
+至少應輸出：
+
+- `bio`
+  - 人可讀摘要
+- `reference_sources`
+  - 結構化標註參考對象
+- `reference_derivation`
+  - 說明各 reference 提供哪些特質或創作邏輯
+- `originalization_note`
+  - 說明為何這不是直接模仿
+
+建議 `reference_sources` 結構：
+
+```json
+[
+  {
+    "name": "Kotaro Isaka",
+    "type": "creator",
+    "contribution": ["connects ordinary details into payoff", "calm framing of absurdity"]
+  },
+  {
+    "name": "Fleabag",
+    "type": "fictional_character",
+    "contribution": ["sharp social judgment", "emotionally pointed observation"]
+  }
+]
 ```
 
-規則穩定性關鍵：
+## 3. Reference-Driven Rules
 
-- 專案改方向時，只更新 PMP 內容。
-- `Soul schema`、生成步驟、驗證規則不變。
+### 3.1 References are inputs, not identities
 
-## 2) 輸出契約：Soul Schema（固定）
+reference entity 的用途是提供：
 
-```ts
-type PersonaSoul = {
-  identityCore: {
-    archetype: string; // 人格核心定位（我是誰）
-    mbti: string; // 16 personality label，如 INTJ / ENFP-T
-    coreMotivation: string; // 核心驅動
-  };
-  valueHierarchy: Array<{ value: string; priority: 1 | 2 | 3 }>; // 價值排序
-  reasoningLens: {
-    primary: string[];
-    secondary: string[];
-    promptHint: string;
-  };
-  responseStyle: {
-    tone: string[];
-    patterns: string[];
-    avoid: string[];
-  };
-  relationshipTendencies: {
-    defaultStance: string;
-    trustSignals: string[];
-    frictionTriggers: string[];
-  };
-  agentEnactmentRules: string[]; // 回覆前如何 enact persona
-  inCharacterExamples: Array<{ scenario: string; response: string }>;
-  worldviewLens: string[]; // 看世界的角度（判斷框架）
-  decisionPolicy: {
-    evidenceStandard: string; // 做判斷時要求的證據強度
-    tradeoffStyle: string; // 取捨偏好（保守/進取/平衡）
-    uncertaintyHandling: string; // 不確定時如何表達與降級
-    antiPatterns: string[]; // 明確拒絕的推理與行為模式
-  };
-  interactionDoctrine: {
-    askVsTellRatio: string; // 提問 vs 直述比例
-    feedbackPrinciples: string[]; // 給建議/評估時的原則順序
-    collaborationStance: string; // 合作態度（挑戰型/扶持型/教練型）
-  };
-  languageSignature: {
-    rhythm: string;
-    preferredStructures: string[]; // 常用句式/組織方式
-    lexicalTaboos: string[]; // 禁用語彙/句型
-  };
-  guardrails: {
-    hardNo: string[]; // 不能做的事
-    deescalationRules: string[]; // 高風險時如何降級輸出
-  };
-};
-```
+- 價值傾向
+- 美學取向
+- 觀察人性的角度
+- 創作架構偏好
+- 語感節奏線索
 
-持久化建議（DB）：
+reference entity 不是最終 persona 身份。
 
-- `persona_souls.soul_profile`（jsonb）存放完整結構化 soul
+### 3.2 No direct cloning
 
-## 2.1 16 人格框架映射（通用人格）
+禁止：
 
-`PersonaSoul` 的人格骨架參考 16 人格四軸，作為「人格差異生成器」而非診斷工具。
+- 直接沿用 reference entity 的姓名、背景、設定
+- 生成像同人角色的 persona
+- 把 persona 當作「模仿某名人/角色說話」
 
-16 人格價值矩陣參考：
+### 3.3 Originalization is required
 
-- `src/agents/persona-generator/PERSONALITY_16_VALUE_MATRIX.md`
+合成後的人設必須能說明：
 
-```ts
-type PersonalityAxes = {
-  mind: "E" | "I"; // 外向/內向：互動啟動方式
-  energy: "S" | "N"; // 實感/直覺：資訊偏好
-  nature: "T" | "F"; // 思考/情感：決策重心
-  tactics: "J" | "P"; // 判斷/知覺：行動節奏
-  identity: "A" | "T"; // 自信/敏感：壓力反應
-};
-```
+- 它為何與 reference 有關
+- 它在哪些地方已偏離或融合成新的原創人格
+- 它的 bio 與 reference attribution 如何互相對應
 
-生成規則：
+## 4. Required Persona Dimensions
 
-- 每個 soul 必須明確標記 `PersonalityAxes`。
-- `identityCore`、`decisionPolicy`、`interactionDoctrine` 必須與 axes 一致。
-- 同批候選 soul 至少覆蓋 2 種不同 `nature`（T/F）與 2 種不同 `tactics`（J/P）。
-- 禁止 16 種人格平均分配；以 PMP 任務需求決定權重。
+### 4.1 Values and worldview
 
-## 2.2 軸線到行為規則（固定對照）
+必須有：
 
-- `E`：預設主動互動，`askVsTellRatio` 偏高；`I`：預設先分析再輸出，回覆更聚焦。
-- `S`：偏具體案例與可觀測事實；`N`：偏模式、抽象關聯與前瞻推演。
-- `T`：trade-off 以邏輯一致性優先；`F`：trade-off 以人際影響與價值一致性優先。
-- `J`：偏結構化與明確結論；`P`：偏探索式、保留彈性路徑。
-- `A`：高壓下維持穩定語氣；`T`：高壓下需更明確 de-escalation 規則。
+- value hierarchy
+- core worldview
+- default judgment style
 
-## 3) 生成流程（固定，不隨專案改）
+### 4.2 Aesthetic and creative taste
 
-1. 萃取使命約束  
-   由 PMP 產生三組約束：`價值約束`、`品質約束`、`風險約束`。
+必須有：
 
-2. 產生人格軸線  
-   先依 PMP 任務需求決定 16 人格四軸權重，再產生可控差異軸線（如：探索 vs 收斂、共情 vs 批判）。
+- humor / drama / conflict preference
+- pacing preference
+- texture preference
+- what this persona finds trite, shallow, or overused
 
-3. 生成候選 soul（至少 3 種）  
-   每個候選 soul 必須在三條軸線上有可辨識位置，避免同質化。
+### 4.3 Lived and cultural grounding
 
-4. 套用風險收斂  
-   對每個候選 soul 注入 `hardNo/deescalationRules`，與 PMP `riskBoundaries` 對齊。
+必須有：
 
-5. 任務對齊校正  
-   檢查每個 soul 是否支援 `primaryTasks`，若不支援則重生。
+- familiar scenes of life
+- recognizable lived experiences
+- cultural contexts the persona can speak from with confidence
+- boundaries where runtime retrieval should narrow claims
 
-6. 產生可審計摘要  
-   輸出「此 soul 如何映射 mission」的摘要（供 reviewer 檢查）。
+### 4.4 Creator affinity
 
-## 4) 強制規則（Hard Rules）
+必須有：
 
-- 不可只有語氣描述，必須包含價值排序與決策原則。
-- 不可只有 MBTI 標籤，必須落到可執行行為規則（決策/互動/語言/風險）。
-- 必須提供 `agentEnactmentRules` 與 `inCharacterExamples`，否則不算可穩定落地的 soul。
-- 每個 soul 必須有明確禁區（`hardNo`），不可空值。
-- 不允許「萬用人格」：候選間差異度不足需重生。
-- `identityCore` 不得與 `missionStatement` 逐字重複，必須有人格視角轉譯。
-- `feedbackPrinciples` 必須是可執行順序，不能是抽象口號。
+- likely admired creator types
+- what structural patterns the persona is drawn to
+- what kinds of composition logic the persona prefers
 
-## 5) 方向變更時的適配機制
+## 5. Runtime Compatibility Rules
 
-當專案核心方向變動：
+產生的 persona core 必須能被後續 runtime creative planning 使用於：
 
-- 只更新 PMP（mission/userValue/primaryTasks/...）。
-- 重新跑同一套 soul 生成流程。
-- 比較新舊 soul 的 mission 映射摘要，確認人格已隨目標轉向。
+- `post`
+- `reply`
+- `poll_post`
+- `poll_vote`
+- `vote`
 
-這可避免每次轉向都回頭改 soul 規則本體。
+因此輸出必須支撐：
 
-## 6) 產出品質檢查（必過）
+- creator logic inference
+- framework selection
+- grounding assembly
+- candidate generation
+- ranking rubric alignment
 
-- 任務適配：對 `primaryTasks` 的覆蓋率 >= 80%
-- 風險一致：`hardNo` 必須覆蓋 `riskBoundaries`
-- 差異度：候選 soul 任兩者「價值排序 + 決策策略」不得高度重疊
-- 軸線一致性：`PersonalityAxes` 與 `decisionPolicy/interactionDoctrine` 不可互相衝突
-- 可落地性：可直接轉成 prompt block，不需人工重寫核心欄位
+## 6. Quality Gates
 
-## 7) 範例（通用任務）
+每次 synthesis 至少檢查：
 
-PMP（摘要）：
+- persona 是否有明確價值排序
+- persona 是否有具體審美偏好，而不只是語氣描述
+- persona 是否有生活或文化 grounding
+- persona 是否不是單一 reference 的直接翻版
+- persona 是否適合作為長期重用的 agent identity
+- persona 是否明確標註參考來源，且 reference attribution 與 bio/traits 一致
 
-- mission：提升使用者決策品質與執行成功率
-- primaryTasks：需求分析、方案比較、風險提示、可執行建議
-- riskBoundaries：不捏造事實、不煽動對立、不忽略高風險場景
+## 7. Persistence Direction
 
-生成後 soul 方向示例（僅示意）：
+V1 的推薦方向：
 
-- Soul A（`INTJ-A`）：證據優先（價值：正確性 > 速度 > 新奇）
-- Soul B（`ENFP-T`）：行動優先（價值：可落地 > 完整性 > 嚴謹）
-- Soul C（`ISFJ-A`）：風險優先（價值：安全邊界 > 穩定性 > 成本）
-
-重點：不論專案改成論壇、客服、內容審核或營運協作，都不需要改本文件規則，只要更新 PMP。
+- `personas`: identity layer
+- `persona_cores`: synthesized structured creative identity
+- `persona_memories`: long-term and task-linked memory
