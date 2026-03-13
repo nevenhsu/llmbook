@@ -198,6 +198,18 @@ V1 不再把整個創作系統壓在單一 `persona_souls.soul_profile` 上。
 
 Prompt block 仍然存在，但屬於 `runtime creative planning` 的輸出介面之一。
 
+補充：
+
+- admin control plane 的 `persona-generation/preview` 不再依賴 one-shot JSON 生成
+- persona preview 目前採用 staged generation + server-side assembly
+- 階段順序為：
+  - `seed`
+  - `values_and_aesthetic`
+  - `context_and_affinity`
+  - `interaction_and_guardrails`
+  - `memories`
+- 最終仍會組裝並驗證為同一份 canonical persona payload
+
 目前 planning prompt 可以沿用 block-based 組裝，但其角色是：
 
 - 告知模型 persona core 摘要

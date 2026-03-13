@@ -2,6 +2,12 @@
 
 ## Active
 
+- [x] Replace the modal-only persona preview page with the full Generate Persona admin flow backed by mock state
+- [x] Reuse the real PersonaGenerationSection/Modal on `/preview/persona-generation` and hide self-referential preview-only affordances
+- [x] Add targeted tests that exercise Prompt AI and Generate Persona using mock data instead of live API calls
+- [x] Move the persona generation mock preview route to `/preview/persona-generation` and remove the admin-only route
+- [x] Wire the reusable persona preview surface into the new preview page and keep the mock fixture loaded from JSON
+- [x] Add targeted UI verification for the mock preview page and capture preview-routing lessons
 - [x] Diagnose why persona forum replies become agreeable but shallow
 - [x] Define prompt constraints that require subjective stance and discussion advancement
 - [x] Deliver revised prompt blocks and evaluation criteria
@@ -21,7 +27,7 @@
 - [x] Cut admin persona generation/preview/save to the canonical `personas + persona_core + reference attribution + persona_memories` contract
 - [x] Write a dedicated implementation plan for the remaining `generate persona` feature flow
 - [x] Let `/admin/ai/control-plane` Prompt AI preserve named reference targets in `Context / Extra Prompt`
-- [ ] Replace one-shot persona generation preview with segmented generation and server-side assembly
+- [x] Replace one-shot persona generation preview with segmented generation and server-side assembly
 - [ ] Implement production dispatch/execution flow for non-reply `vote` / `poll_vote` tasks
 
 ## Review
@@ -54,6 +60,14 @@
 - Persona generation preview now performs a third ultra-compact retry when both the initial response and the first repair response are still truncated JSON, reducing repeated 422s from long persona payloads that stop mid-object.
 - Verification: persona-generation preview and prompt-assist test suites passed after adding third-retry coverage for repeated truncation.
 - New recommended fix direction: stop treating persona generation as a single JSON emission problem and split preview generation into smaller validated stages, while keeping the persisted canonical persona payload unchanged.
+- Persona generation preview now runs in five validated stages (`seed`, `values_and_aesthetic`, `context_and_affinity`, `interaction_and_guardrails`, `memories`) and assembles the canonical payload server-side before returning preview/save data.
+- Verification: staged persona-generation preview store tests passed, and the targeted preview/prompt-assist route suite still passes end-to-end.
+- Persona generation UI now has a dedicated mock review route at `/preview/persona-generation`, backed by a reusable preview surface component and a JSON fixture so layout iteration no longer depends on live preview execution.
+- Verification: `npx vitest run src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts` passed, `git diff --check` passed for the touched preview files, and `rg` confirmed no remaining references to the old admin-only preview route.
+- `/preview/persona-generation` now reuses the real `PersonaGenerationSection` and modal flow, with Prompt AI and Generate Persona backed by local mock state instead of API calls, so the page reflects the actual admin interaction surface rather than a flattened result-only view.
+- Verification: the preview flow test covers Prompt AI mutation, Generate Persona opening the modal, and fixture-backed preview rendering without any live network dependency.
+- Root cause for the missing modal background: the reusable persona modal body no longer carried the expected DaisyUI `modal-box` structure, and this modal also inherited the project-wide transparent `.modal-backdrop` override.
+- Fix: restore `modal-box` on the reusable modal surface and give `PersonaGenerationModal` its own tinted backdrop class so the preview flow keeps a visible overlay without changing other modals globally.
 
 ## Current State
 

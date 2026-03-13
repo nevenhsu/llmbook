@@ -157,6 +157,33 @@ export type PersonaGenerationStructured = {
   }>;
 };
 
+type PersonaGenerationSeedStage = {
+  personas: PersonaGenerationStructured["personas"];
+  identity_summary: Record<string, unknown>;
+  reference_sources: PersonaGenerationStructured["reference_sources"];
+  reference_derivation: string[];
+  originalization_note: string;
+};
+
+type PersonaGenerationValuesStage = {
+  values: Record<string, unknown>;
+  aesthetic_profile: Record<string, unknown>;
+};
+
+type PersonaGenerationContextStage = {
+  lived_context: Record<string, unknown>;
+  creator_affinity: Record<string, unknown>;
+};
+
+type PersonaGenerationInteractionStage = {
+  interaction_defaults: Record<string, unknown>;
+  guardrails: Record<string, unknown>;
+};
+
+type PersonaGenerationMemoriesStage = {
+  persona_memories: PersonaGenerationStructured["persona_memories"];
+};
+
 export type PromptBoardRule = {
   title: string;
   description?: string | null;
@@ -776,51 +803,268 @@ function requirePersonaRecord(value: unknown, fieldPath: string): Record<string,
   return record;
 }
 
-function requirePersonaStringArray(value: unknown, fieldPath: string): string[] {
-  if (!Array.isArray(value)) {
+function requirePersonaText(value: unknown, fieldPath: string): string {
+  const text = readString(value).trim();
+  if (!text) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
-  const items = value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  if (items.length === 0) {
+  return text;
+}
+
+function normalizePersonaStringArray(value: unknown, fieldPath: string): string[] {
+  const items =
+    typeof value === "string"
+      ? [value]
+      : Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === "string")
+        : null;
+  if (!items) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
-  return items;
+  const normalized = items.map((item) => item.trim()).filter((item) => item.length > 0);
+  if (normalized.length === 0) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return normalized;
+}
+
+function normalizePersonaValueHierarchy(
+  value: unknown,
+  fieldPath: string,
+): Array<{ value: string; priority: number }> {
+  const arrayRows = Array.isArray(value)
+    ? value
+        .map((item) => {
+          const row = asRecord(item);
+          if (!row) {
+            return null;
+          }
+          const label = readString(row.value).trim();
+          const priority = readPositiveInt(row.priority, 0);
+          if (!label || priority < 1) {
+            return null;
+          }
+          return { value: label, priority };
+        })
+        .filter((item): item is { value: string; priority: number } => item !== null)
+    : [];
+
+  if (arrayRows.length > 0) {
+    return arrayRows.sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
+  }
+
+  const recordRows = asRecord(value);
+  if (!recordRows) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  const normalized = Object.entries(recordRows)
+    .map(([priorityRaw, labelValue]) => {
+      const label = readString(labelValue).trim();
+      const priority = readPositiveInt(priorityRaw, 0);
+      if (!label || priority < 1) {
+        return null;
+      }
+      return { value: label, priority };
+    })
+    .filter((item): item is { value: string; priority: number } => item !== null)
+    .sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
+
+  if (normalized.length === 0) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return normalized;
+}
+
+function parsePersonaIdentitySummary(
+  value: unknown,
+  fieldPath = "persona_core.identity_summary",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    archetype: requirePersonaText(root.archetype, `${fieldPath}.archetype`),
+    core_motivation: requirePersonaText(root.core_motivation, `${fieldPath}.core_motivation`),
+    one_sentence_identity: requirePersonaText(
+      root.one_sentence_identity,
+      `${fieldPath}.one_sentence_identity`,
+    ),
+  };
+}
+
+function parsePersonaValues(
+  value: unknown,
+  fieldPath = "persona_core.values",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    value_hierarchy: normalizePersonaValueHierarchy(
+      root.value_hierarchy,
+      `${fieldPath}.value_hierarchy`,
+    ),
+    worldview: normalizePersonaStringArray(root.worldview, `${fieldPath}.worldview`),
+    judgment_style: requirePersonaText(root.judgment_style, `${fieldPath}.judgment_style`),
+  };
+}
+
+function parsePersonaAestheticProfile(
+  value: unknown,
+  fieldPath = "persona_core.aesthetic_profile",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    humor_preferences: normalizePersonaStringArray(
+      root.humor_preferences,
+      `${fieldPath}.humor_preferences`,
+    ),
+    narrative_preferences: normalizePersonaStringArray(
+      root.narrative_preferences,
+      `${fieldPath}.narrative_preferences`,
+    ),
+    creative_preferences: normalizePersonaStringArray(
+      root.creative_preferences,
+      `${fieldPath}.creative_preferences`,
+    ),
+    disliked_patterns: normalizePersonaStringArray(
+      root.disliked_patterns,
+      `${fieldPath}.disliked_patterns`,
+    ),
+    taste_boundaries: normalizePersonaStringArray(
+      root.taste_boundaries,
+      `${fieldPath}.taste_boundaries`,
+    ),
+  };
+}
+
+function parsePersonaLivedContext(
+  value: unknown,
+  fieldPath = "persona_core.lived_context",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    familiar_scenes_of_life: normalizePersonaStringArray(
+      root.familiar_scenes_of_life,
+      `${fieldPath}.familiar_scenes_of_life`,
+    ),
+    personal_experience_flavors: normalizePersonaStringArray(
+      root.personal_experience_flavors,
+      `${fieldPath}.personal_experience_flavors`,
+    ),
+    cultural_contexts: normalizePersonaStringArray(
+      root.cultural_contexts,
+      `${fieldPath}.cultural_contexts`,
+    ),
+    topics_with_confident_grounding: normalizePersonaStringArray(
+      root.topics_with_confident_grounding,
+      `${fieldPath}.topics_with_confident_grounding`,
+    ),
+    topics_requiring_runtime_retrieval: normalizePersonaStringArray(
+      root.topics_requiring_runtime_retrieval,
+      `${fieldPath}.topics_requiring_runtime_retrieval`,
+    ),
+  };
+}
+
+function parsePersonaCreatorAffinity(
+  value: unknown,
+  fieldPath = "persona_core.creator_affinity",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    admired_creator_types: normalizePersonaStringArray(
+      root.admired_creator_types,
+      `${fieldPath}.admired_creator_types`,
+    ),
+    structural_preferences: normalizePersonaStringArray(
+      root.structural_preferences,
+      `${fieldPath}.structural_preferences`,
+    ),
+    detail_selection_habits: normalizePersonaStringArray(
+      root.detail_selection_habits,
+      `${fieldPath}.detail_selection_habits`,
+    ),
+    creative_biases: normalizePersonaStringArray(
+      root.creative_biases,
+      `${fieldPath}.creative_biases`,
+    ),
+  };
+}
+
+function parsePersonaInteractionDefaults(
+  value: unknown,
+  fieldPath = "persona_core.interaction_defaults",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    default_stance: requirePersonaText(root.default_stance, `${fieldPath}.default_stance`),
+    discussion_strengths: normalizePersonaStringArray(
+      root.discussion_strengths,
+      `${fieldPath}.discussion_strengths`,
+    ),
+    friction_triggers: normalizePersonaStringArray(
+      root.friction_triggers,
+      `${fieldPath}.friction_triggers`,
+    ),
+    non_generic_traits: normalizePersonaStringArray(
+      root.non_generic_traits,
+      `${fieldPath}.non_generic_traits`,
+    ),
+  };
+}
+
+function parsePersonaGuardrails(
+  value: unknown,
+  fieldPath = "persona_core.guardrails",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    hard_no: normalizePersonaStringArray(root.hard_no, `${fieldPath}.hard_no`),
+    deescalation_style: normalizePersonaStringArray(
+      root.deescalation_style,
+      `${fieldPath}.deescalation_style`,
+    ),
+  };
 }
 
 function parsePersonaCore(value: unknown): Record<string, unknown> {
   const root = requirePersonaRecord(value, "persona_core");
-  requirePersonaRecord(root.identity_summary, "persona_core.identity_summary");
-  requirePersonaRecord(root.values, "persona_core.values");
-  requirePersonaRecord(root.aesthetic_profile, "persona_core.aesthetic_profile");
-  requirePersonaRecord(root.lived_context, "persona_core.lived_context");
-  requirePersonaRecord(root.creator_affinity, "persona_core.creator_affinity");
-  requirePersonaRecord(root.interaction_defaults, "persona_core.interaction_defaults");
-  requirePersonaRecord(root.guardrails, "persona_core.guardrails");
-  return root;
+  return {
+    ...root,
+    identity_summary: parsePersonaIdentitySummary(root.identity_summary),
+    values: parsePersonaValues(root.values),
+    aesthetic_profile: parsePersonaAestheticProfile(root.aesthetic_profile),
+    lived_context: parsePersonaLivedContext(root.lived_context),
+    creator_affinity: parsePersonaCreatorAffinity(root.creator_affinity),
+    interaction_defaults: parsePersonaInteractionDefaults(root.interaction_defaults),
+    guardrails: parsePersonaGuardrails(root.guardrails),
+  };
 }
 
 function parseReferenceSources(value: unknown): PersonaGenerationStructured["reference_sources"] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error("persona generation output missing reference_sources");
   }
-  return value
+  const normalized = value
     .map((item) => {
       const row = requirePersonaRecord(item, "reference_sources");
-      const name = readString(row.name).trim();
-      const type = readString(row.type).trim();
-      const contribution = requirePersonaStringArray(
+      const name = requirePersonaText(row.name, "reference_sources.name");
+      const type = requirePersonaText(row.type, "reference_sources.type");
+      const contribution = normalizePersonaStringArray(
         row.contribution,
         "reference_sources.contribution",
       );
-      if (!name || !type) {
-        throw new Error("persona generation output missing reference_sources");
-      }
       return { name, type, contribution };
     })
     .filter((item) => item.name.length > 0);
+  if (normalized.length === 0) {
+    throw new Error("persona generation output missing reference_sources");
+  }
+  return normalized;
 }
 
 function parsePersonaMemories(value: unknown): PersonaGenerationStructured["persona_memories"] {
@@ -876,9 +1120,7 @@ function normalizeSingleLineText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function parsePersonaGenerationOutput(rawText: string): {
-  structured: PersonaGenerationStructured;
-} {
+function parsePersonaStageObject(rawText: string): Record<string, unknown> {
   const jsonText = extractJsonFromText(rawText);
   if (!jsonText) {
     throw new PersonaGenerationParseError("persona generation output is empty", rawText);
@@ -898,47 +1140,118 @@ function parsePersonaGenerationOutput(rawText: string): {
       rawText,
     );
   }
+  return record;
+}
 
-  const personas = asRecord(record.personas);
-  const personaCore = asRecord(record.persona_core);
-
+function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedStage {
+  const record = parsePersonaStageObject(rawText);
+  const personas = requirePersonaRecord(record.personas, "personas");
   try {
-    if (!personas) {
-      throw new Error("persona generation output missing personas object");
-    }
-    if (!personaCore) {
-      throw new Error("persona generation output missing persona_core object");
-    }
-    const displayName = readString(personas.display_name).trim();
-    const bio = readString(personas.bio).trim();
-    const status = readString(personas.status) === "inactive" ? "inactive" : "active";
-    const normalizedPersonaCore = parsePersonaCore(personaCore);
-    const referenceSources = parseReferenceSources(record.reference_sources);
-    const referenceDerivation = requirePersonaStringArray(
-      record.reference_derivation,
-      "reference_derivation",
+    return {
+      personas: {
+        display_name: requirePersonaText(personas.display_name, "personas.display_name"),
+        bio: requirePersonaText(personas.bio, "personas.bio"),
+        status: readString(personas.status).trim() === "inactive" ? "inactive" : "active",
+      },
+      identity_summary: parsePersonaIdentitySummary(record.identity_summary),
+      reference_sources: parseReferenceSources(record.reference_sources),
+      reference_derivation: normalizePersonaStringArray(
+        record.reference_derivation,
+        "reference_derivation",
+      ),
+      originalization_note: requirePersonaText(record.originalization_note, "originalization_note"),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
     );
-    const originalizationNote = readString(record.originalization_note).trim();
-    if (!displayName) {
-      throw new Error("persona generation output missing personas.display_name");
-    }
-    if (!bio) {
-      throw new Error("persona generation output missing personas.bio");
-    }
-    if (!originalizationNote) {
-      throw new Error("persona generation output missing originalization_note");
-    }
+  }
+}
+
+function parsePersonaValuesAndAestheticOutput(rawText: string): PersonaGenerationValuesStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      values: parsePersonaValues(record.values),
+      aesthetic_profile: parsePersonaAestheticProfile(record.aesthetic_profile),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+function parsePersonaContextAndAffinityOutput(rawText: string): PersonaGenerationContextStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      lived_context: parsePersonaLivedContext(record.lived_context),
+      creator_affinity: parsePersonaCreatorAffinity(record.creator_affinity),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+function parsePersonaInteractionOutput(rawText: string): PersonaGenerationInteractionStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      interaction_defaults: parsePersonaInteractionDefaults(record.interaction_defaults),
+      guardrails: parsePersonaGuardrails(record.guardrails),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+function parsePersonaMemoriesOutput(rawText: string): PersonaGenerationMemoriesStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      persona_memories: parsePersonaMemories(record.persona_memories),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+function parsePersonaGenerationOutput(rawText: string): {
+  structured: PersonaGenerationStructured;
+} {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    const personas = requirePersonaRecord(record.personas, "personas");
+    const personaCore = requirePersonaRecord(record.persona_core, "persona_core");
     return {
       structured: {
         personas: {
-          display_name: displayName,
-          bio,
-          status,
+          display_name: requirePersonaText(personas.display_name, "personas.display_name"),
+          bio: requirePersonaText(personas.bio, "personas.bio"),
+          status: readString(personas.status).trim() === "inactive" ? "inactive" : "active",
         },
-        persona_core: normalizedPersonaCore,
-        reference_sources: referenceSources,
-        reference_derivation: referenceDerivation,
-        originalization_note: originalizationNote,
+        persona_core: parsePersonaCore(personaCore),
+        reference_sources: parseReferenceSources(record.reference_sources),
+        reference_derivation: normalizePersonaStringArray(
+          record.reference_derivation,
+          "reference_derivation",
+        ),
+        originalization_note: requirePersonaText(
+          record.originalization_note,
+          "originalization_note",
+        ),
         persona_memories: parsePersonaMemories(record.persona_memories),
       },
     };
@@ -2246,53 +2559,6 @@ export class AdminAiControlPlaneStore {
       providers,
       featureLabel: "persona generation",
     });
-
-    const blocks = [
-      { name: "system_baseline", content: "Generate a coherent forum persona profile." },
-      {
-        name: "global_policy",
-        content: `${document.globalPolicyDraft.systemBaseline}\n${document.globalPolicyDraft.globalPolicy}`,
-      },
-      {
-        name: "generator_instruction",
-        content: [
-          "Return one JSON object aligned to DB tables with keys:",
-          "personas{display_name,bio,status},",
-          "persona_core{identity_summary,values,aesthetic_profile,lived_context,creator_affinity,interaction_defaults,guardrails},",
-          "reference_sources[{name,type,contribution}],",
-          "reference_derivation:string[],",
-          "originalization_note:string,",
-          "persona_memories[{memory_type,scope,memory_key,content,metadata,expires_in_hours,is_canonical,importance}].",
-          "Use snake_case keys exactly as provided.",
-          "persona_core.identity_summary must include archetype, core_motivation, and one_sentence_identity.",
-          "persona_core.values must be an object with value_hierarchy, worldview, and judgment_style.",
-          "persona_core.aesthetic_profile must be an object with humor_preferences, narrative_preferences, creative_preferences, disliked_patterns, and taste_boundaries.",
-          "persona_core.lived_context must be an object with familiar_scenes_of_life, personal_experience_flavors, cultural_contexts, topics_with_confident_grounding, and topics_requiring_runtime_retrieval.",
-          "persona_core.creator_affinity must be an object with admired_creator_types, structural_preferences, detail_selection_habits, and creative_biases.",
-          "persona_core.interaction_defaults must be an object with default_stance, discussion_strengths, friction_triggers, and non_generic_traits.",
-          "persona_core.guardrails must be an object with hard_no and deescalation_style.",
-          "reference_sources must explicitly state who or what influenced this persona.",
-          "reference_derivation must be a non-empty string array explaining how the references shaped the persona.",
-          "originalization_note must explain why the persona is original instead of a direct clone.",
-          "persona_memories should be optional and only included when they add clear long_memory or recent memory value.",
-          "persona_memories entries must use memory_type=memory|long_memory and scope=persona|thread|task.",
-          "Do not include markdown, explanation, persona_id, id, timestamps, or extra keys.",
-        ].join("\n"),
-      },
-      { name: "admin_extra_prompt", content: input.extraPrompt },
-      {
-        name: "output_constraints",
-        content: "Output strictly valid JSON.",
-      },
-    ];
-
-    const tokenBudget = buildTokenBudgetSignal({
-      blocks,
-      maxInputTokens: DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens,
-      maxOutputTokens: DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
-    });
-
-    const assembledPrompt = formatPrompt(blocks);
     const invocationConfig = await resolveLlmInvocationConfig({
       taskType: "generic",
       capability: "text_generation",
@@ -2307,78 +2573,248 @@ export class AdminAiControlPlaneStore {
       includeXai: true,
       includeMinimax: true,
     });
+    const commonBlocks = [
+      { name: "system_baseline", content: "Generate a coherent forum persona profile." },
+      {
+        name: "global_policy",
+        content: `${document.globalPolicyDraft.systemBaseline}\n${document.globalPolicyDraft.globalPolicy}`,
+      },
+      {
+        name: "generator_instruction",
+        content: [
+          "Generate the canonical persona payload in smaller validated stages.",
+          "Use snake_case keys exactly as provided.",
+          "Preserve named references when they clarify the persona.",
+          "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
+        ].join("\n"),
+      },
+      { name: "admin_extra_prompt", content: input.extraPrompt },
+    ];
     const maxOutputTokens = Math.min(
       model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
       DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
     );
-    const runPersonaGenerationAttempt = async (prompt: string, attempt: 1 | 2 | 3) =>
-      invokeLLM({
-        registry,
-        taskType: "generic",
-        routeOverride: invocationConfig.route,
-        modelInput: {
-          prompt,
-          maxOutputTokens:
-            attempt === 1
-              ? maxOutputTokens
-              : attempt === 2
-                ? Math.min(600, maxOutputTokens)
-                : Math.min(450, maxOutputTokens),
-          temperature: attempt === 1 ? 0.4 : attempt === 2 ? 0.2 : 0.1,
+    const stagePromptRecords: Array<{ name: string; prompt: string; outputMaxTokens: number }> = [];
+
+    const buildStagePrompt = (input: {
+      stageName: string;
+      stageGoal: string;
+      stageContract: string;
+      validatedContext?: Record<string, unknown> | null;
+    }) => {
+      const blocks = [
+        ...commonBlocks,
+        {
+          name: "persona_generation_stage",
+          content: [`stage_name: ${input.stageName}`, `stage_goal: ${input.stageGoal}`].join("\n"),
         },
-        entityId: `persona-generation-preview:${model.id}:attempt-${attempt}`,
-        timeoutMs: invocationConfig.timeoutMs,
-        retries: invocationConfig.retries,
-        onProviderError: async (event) => {
-          await this.recordLlmInvocationError({
-            providerKey: event.providerId,
-            modelKey: event.modelId,
-            error: event.error,
-            errorDetails: event.errorDetails,
-          });
-        },
+        ...(input.validatedContext
+          ? [
+              {
+                name: "validated_context",
+                content: JSON.stringify(input.validatedContext, null, 2),
+              },
+            ]
+          : []),
+        { name: "stage_contract", content: input.stageContract },
+        { name: "output_constraints", content: "Output strictly valid JSON." },
+      ];
+      return formatPrompt(blocks);
+    };
+
+    const runPersonaGenerationStage = async <T>(input: {
+      stageName: string;
+      stageGoal: string;
+      stageContract: string;
+      parse: (rawText: string) => T;
+      validatedContext?: Record<string, unknown> | null;
+      outputMaxTokens: number;
+    }): Promise<T> => {
+      const basePrompt = buildStagePrompt(input);
+      stagePromptRecords.push({
+        name: input.stageName,
+        prompt: basePrompt,
+        outputMaxTokens: input.outputMaxTokens,
       });
 
-    const llmResult = await runPersonaGenerationAttempt(assembledPrompt, 1);
-    let parsed;
-    try {
-      if (!llmResult.text.trim()) {
-        throw new PersonaGenerationParseError(
-          llmResult.error ?? "persona generation model returned empty output",
-          llmResult.text,
-        );
-      }
-      parsed = parsePersonaGenerationOutput(llmResult.text);
-    } catch (error) {
-      if (!(error instanceof PersonaGenerationParseError)) {
-        throw error;
-      }
-      const repairPrompt = `${assembledPrompt}\n\n[retry_repair]\nYour previous response was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
+      const invokeStageAttempt = async (prompt: string, attempt: 1 | 2 | 3) =>
+        invokeLLM({
+          registry,
+          taskType: "generic",
+          routeOverride: invocationConfig.route,
+          modelInput: {
+            prompt,
+            maxOutputTokens:
+              attempt === 1
+                ? Math.min(input.outputMaxTokens, maxOutputTokens)
+                : attempt === 2
+                  ? Math.min(400, input.outputMaxTokens, maxOutputTokens)
+                  : Math.min(300, input.outputMaxTokens, maxOutputTokens),
+            temperature: attempt === 1 ? 0.4 : attempt === 2 ? 0.2 : 0.1,
+          },
+          entityId: `persona-generation-preview:${model.id}:${input.stageName}:attempt-${attempt}`,
+          timeoutMs: invocationConfig.timeoutMs,
+          retries: invocationConfig.retries,
+          onProviderError: async (event) => {
+            await this.recordLlmInvocationError({
+              providerKey: event.providerId,
+              modelKey: event.modelId,
+              error: event.error,
+              errorDetails: event.errorDetails,
+            });
+          },
+        });
+
+      const attemptParse = (result: { text: string; error: string | null }) => {
+        if (!result.text.trim()) {
+          throw new PersonaGenerationParseError(
+            result.error ?? "persona generation model returned empty output",
+            result.text,
+          );
+        }
+        return input.parse(result.text);
+      };
+
+      const first = await invokeStageAttempt(basePrompt, 1);
       try {
-        const retryResult = await runPersonaGenerationAttempt(repairPrompt, 2);
-        if (!retryResult.text.trim()) {
-          throw new PersonaGenerationParseError(
-            retryResult.error ?? error.message,
-            retryResult.text || error.rawOutput,
-          );
+        return attemptParse(first);
+      } catch (error) {
+        if (!(error instanceof PersonaGenerationParseError)) {
+          throw error;
         }
-        parsed = parsePersonaGenerationOutput(retryResult.text);
-      } catch (retryError) {
-        if (!(retryError instanceof PersonaGenerationParseError)) {
-          throw retryError;
+        const repairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${input.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
+        try {
+          const second = await invokeStageAttempt(repairPrompt, 2);
+          return attemptParse(second);
+        } catch (retryError) {
+          if (!(retryError instanceof PersonaGenerationParseError)) {
+            throw retryError;
+          }
+          const compactRepairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${input.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
+          const third = await invokeStageAttempt(compactRepairPrompt, 3);
+          try {
+            return attemptParse(third);
+          } catch (compactError) {
+            if (compactError instanceof PersonaGenerationParseError) {
+              throw compactError;
+            }
+            throw retryError;
+          }
         }
-        const compactRepairPrompt = `${assembledPrompt}\n\n[retry_repair]\nYour previous responses were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
-        const compactRetryResult = await runPersonaGenerationAttempt(compactRepairPrompt, 3);
-        if (!compactRetryResult.text.trim()) {
-          throw new PersonaGenerationParseError(
-            compactRetryResult.error ?? retryError.message,
-            compactRetryResult.text || retryError.rawOutput || error.rawOutput,
-          );
-        }
-        parsed = parsePersonaGenerationOutput(compactRetryResult.text);
       }
-    }
-    const structured = parsed.structured;
+    };
+
+    const seedStage = await runPersonaGenerationStage({
+      stageName: "seed",
+      stageGoal: "Establish the persona's identity seed, bio, and explicit references.",
+      stageContract: [
+        "Return one JSON object with keys:",
+        "personas{display_name,bio,status},",
+        "identity_summary{archetype,core_motivation,one_sentence_identity},",
+        "reference_sources[{name,type,contribution}],",
+        "reference_derivation:string[],",
+        "originalization_note:string.",
+        "status should be active or inactive.",
+      ].join("\n"),
+      parse: parsePersonaSeedOutput,
+      outputMaxTokens: 650,
+    });
+
+    const valuesStage = await runPersonaGenerationStage({
+      stageName: "values_and_aesthetic",
+      stageGoal: "Define the persona's values and aesthetic taste using the seed identity.",
+      stageContract: [
+        "Return one JSON object with keys:",
+        "values{value_hierarchy,worldview,judgment_style},",
+        "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
+        "value_hierarchy must be an array of {value,priority} objects.",
+      ].join("\n"),
+      parse: parsePersonaValuesAndAestheticOutput,
+      validatedContext: seedStage,
+      outputMaxTokens: 650,
+    });
+
+    const contextStage = await runPersonaGenerationStage({
+      stageName: "context_and_affinity",
+      stageGoal: "Ground the persona in lived context and creator affinity.",
+      stageContract: [
+        "Return one JSON object with keys:",
+        "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
+        "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases}.",
+      ].join("\n"),
+      parse: parsePersonaContextAndAffinityOutput,
+      validatedContext: {
+        ...seedStage,
+        ...valuesStage,
+      },
+      outputMaxTokens: 650,
+    });
+
+    const interactionStage = await runPersonaGenerationStage({
+      stageName: "interaction_and_guardrails",
+      stageGoal: "Define how the persona behaves in discussion and what it avoids.",
+      stageContract: [
+        "Return one JSON object with keys:",
+        "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
+        "guardrails{hard_no,deescalation_style}.",
+      ].join("\n"),
+      parse: parsePersonaInteractionOutput,
+      validatedContext: {
+        ...seedStage,
+        ...valuesStage,
+        ...contextStage,
+      },
+      outputMaxTokens: 550,
+    });
+
+    const personaCore = {
+      identity_summary: seedStage.identity_summary,
+      values: valuesStage.values,
+      aesthetic_profile: valuesStage.aesthetic_profile,
+      lived_context: contextStage.lived_context,
+      creator_affinity: contextStage.creator_affinity,
+      interaction_defaults: interactionStage.interaction_defaults,
+      guardrails: interactionStage.guardrails,
+    };
+
+    const memoriesStage = await runPersonaGenerationStage({
+      stageName: "memories",
+      stageGoal: "Optionally add a few useful canonical or recent persona memories.",
+      stageContract: [
+        "Return one JSON object with key:",
+        "persona_memories[{memory_type,scope,memory_key,content,metadata,expires_in_hours,is_canonical,importance}].",
+        "persona_memories may be an empty array if no useful memories should be added.",
+        "memory_type must be memory or long_memory.",
+        "scope must be persona, thread, or task.",
+      ].join("\n"),
+      parse: parsePersonaMemoriesOutput,
+      validatedContext: {
+        personas: seedStage.personas,
+        persona_core: personaCore,
+        reference_sources: seedStage.reference_sources,
+      },
+      outputMaxTokens: 450,
+    });
+
+    const structured = parsePersonaGenerationOutput(
+      JSON.stringify({
+        personas: seedStage.personas,
+        persona_core: personaCore,
+        reference_sources: seedStage.reference_sources,
+        reference_derivation: seedStage.reference_derivation,
+        originalization_note: seedStage.originalization_note,
+        persona_memories: memoriesStage.persona_memories,
+      }),
+    ).structured;
+    const assembledPrompt = stagePromptRecords
+      .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.prompt}`)
+      .join("\n\n");
+    const tokenBudget = buildTokenBudgetSignal({
+      blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
+      maxInputTokens:
+        DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens * stagePromptRecords.length,
+      maxOutputTokens: stagePromptRecords.reduce((sum, stage) => sum + stage.outputMaxTokens, 0),
+    });
 
     const markdown = [
       `## Persona Preview (${model.displayName})`,

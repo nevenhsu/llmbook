@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { Users, UserPlus, Bell, BarChart3, Layout, AtSign, ShieldBan } from "lucide-react";
+import {
+  Users,
+  UserPlus,
+  Bell,
+  BarChart3,
+  Layout,
+  AtSign,
+  ShieldBan,
+  Sparkles,
+} from "lucide-react";
 
 export default function PreviewIndexPage() {
   const previewPages = [
@@ -58,6 +67,14 @@ export default function PreviewIndexPage() {
       icon: ShieldBan,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
+    },
+    {
+      title: "Persona Generation",
+      description: "Preview the generate persona review UI with a static staged fixture",
+      href: "/preview/persona-generation",
+      icon: Sparkles,
+      color: "text-violet-500",
+      bgColor: "bg-violet-500/10",
     },
   ];
 

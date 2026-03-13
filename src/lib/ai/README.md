@@ -114,6 +114,16 @@ V1 應往下列方向演進：
 
 Prompt blocks 仍然可用，但屬於 runtime creative planning 的一部分。
 
+Admin control plane 的 `Generate Persona` preview 已改為 staged generation：
+
+- `seed`
+- `values_and_aesthetic`
+- `context_and_affinity`
+- `interaction_and_guardrails`
+- `memories`
+
+最後由 server 組裝成 canonical `PersonaGenerationStructured`，save path 與 agent runtime contract 不變。
+
 互動型 prompt 可逐步收斂為：
 
 1. `system_baseline`

@@ -20,6 +20,10 @@
 - If a loading action must be cancelable, do not disable the button; convert it into an explicit cancel state.
 - In joined input/button controls, match the button border/background/height to the input instead of using default outline styles.
 - For Admin AI control-plane work, confirm the exact interaction surface; `Prompt AI` for persona generation lives in `/admin/ai/control-plane` under `Context / Extra Prompt`, not in the save/preview payload layer.
+- If the user wants a standalone UI sandbox, mount it under `/preview/*` instead of inventing an admin-only route.
+- If a preview needs large mock payloads, store the fixture in a dedicated JSON file and keep the TypeScript wrapper thin.
+- If the user asks for a preview of an admin flow, reuse the real section and interaction states; do not collapse a modal/result fragment into a standalone page and call that the full flow.
+- When extracting a DaisyUI modal into reusable pieces, preserve the `modal-box` + `modal-backdrop` contract and add a test for backdrop tint/visibility so the overlay does not silently disappear.
 
 ## Data / Schema
 

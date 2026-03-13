@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import Link from "next/link";
 import { UserPlus, Sparkles, Bot, WandSparkles, Pause } from "lucide-react";
 import type {
   AiModelConfig,
@@ -59,6 +60,7 @@ export interface PersonaGenerationSectionProps {
   runPersonaGenerationPreview: () => Promise<void>;
   closePersonaGenerationModal: () => void;
   savePersonaFromGeneration: () => Promise<void>;
+  previewLinkHref?: string | null;
 }
 
 export function PersonaGenerationSection({
@@ -86,6 +88,7 @@ export function PersonaGenerationSection({
   runPersonaGenerationPreview,
   closePersonaGenerationModal,
   savePersonaFromGeneration,
+  previewLinkHref = "/preview/persona-generation",
 }: PersonaGenerationSectionProps) {
   const promptAssistButtonMode = readPromptAssistButtonMode(personaPromptAssistLoading);
   const promptAssistStatus = formatPromptAssistStatus(
@@ -143,6 +146,8 @@ export function PersonaGenerationSection({
                   <button
                     className="bg-base-100 border-base-300 hover:border-primary hover:bg-base-100 btn btn-sm join-item gap-2 border shadow-none"
                     disabled={!personaGeneration.modelId}
+                    aria-label="Prompt AI"
+                    title="Prompt AI"
                     onClick={() => void assistPersonaPrompt()}
                   >
                     {promptAssistButtonMode === "cancel" ? (
@@ -164,18 +169,25 @@ export function PersonaGenerationSection({
                 </div>
               </div>
               <div className="flex justify-end pt-1">
-                <button
-                  className="btn btn-primary btn-sm gap-2 shadow-sm"
-                  disabled={personaGenerationLoading}
-                  onClick={() => void runPersonaGenerationPreview()}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {personaGenerationLoading
-                    ? "Generating…"
-                    : personaPreviewRunCount > 0
-                      ? "Regenerate Content"
-                      : "Generate Persona"}
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {previewLinkHref ? (
+                    <Link href={previewLinkHref} className="btn btn-outline btn-sm gap-2">
+                      Preview Mock Page
+                    </Link>
+                  ) : null}
+                  <button
+                    className="btn btn-primary btn-sm gap-2 shadow-sm"
+                    disabled={personaGenerationLoading}
+                    onClick={() => void runPersonaGenerationPreview()}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {personaGenerationLoading
+                      ? "Generating…"
+                      : personaPreviewRunCount > 0
+                        ? "Regenerate Content"
+                        : "Generate Persona"}
+                  </button>
+                </div>
               </div>
             </div>
 
