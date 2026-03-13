@@ -1,15 +1,19 @@
-import type { Dispatch, SetStateAction } from "react";
+"use client";
+
+import { useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
-import { UserPlus, Sparkles, Bot, WandSparkles, Pause } from "lucide-react";
+import { UserPlus, Sparkles, Bot, WandSparkles, Pause, Eye } from "lucide-react";
 import type {
   AiModelConfig,
   AiProviderConfig,
   PreviewResult,
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
+import type { PromptAssemblyPreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 import { SectionCard } from "../SectionCard";
 import { PersonaGenerationModal } from "../PersonaGenerationModal";
 import { optionLabelForModel } from "../control-plane-utils";
+import { PromptAssemblyModal } from "../PromptAssemblyModal";
 import {
   formatPromptAssistStatus,
   readPromptAssistButtonMode,
@@ -47,6 +51,7 @@ export interface PersonaGenerationSectionProps {
   >;
   personaSaveLoading: boolean;
   personaGenerationPreview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
+  promptAssemblyPreview: PromptAssemblyPreview | null;
   personaGenerationModalOpen: boolean;
   personaGenerationModalPhase: PersonaGenerationModalPhase;
   personaGenerationModalError: string | null;
@@ -78,6 +83,7 @@ export function PersonaGenerationSection({
   setPersonaSaveForm,
   personaSaveLoading,
   personaGenerationPreview,
+  promptAssemblyPreview,
   personaGenerationModalOpen,
   personaGenerationModalPhase,
   personaGenerationModalError,
@@ -90,6 +96,7 @@ export function PersonaGenerationSection({
   savePersonaFromGeneration,
   previewLinkHref = "/preview/persona-generation",
 }: PersonaGenerationSectionProps) {
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const promptAssistButtonMode = readPromptAssistButtonMode(personaPromptAssistLoading);
   const promptAssistStatus = formatPromptAssistStatus(
     personaPromptAssistLoading,
@@ -141,7 +148,7 @@ export function PersonaGenerationSection({
                     onChange={(e) =>
                       setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
                     }
-                    placeholder="Context, worldview, or named references like Kotaro Isaka, Fleabag, or a favorite artist..."
+                    placeholder="Context, worldview, or a favorite celebrity..."
                   />
                   <button
                     className="bg-base-100 border-base-300 hover:border-primary hover:bg-base-100 btn btn-sm join-item gap-2 border shadow-none"
@@ -176,16 +183,24 @@ export function PersonaGenerationSection({
                     </Link>
                   ) : null}
                   <button
+                    className="btn btn-outline btn-sm gap-2"
+                    disabled={!promptAssemblyPreview}
+                    onClick={() => setIsPromptModalOpen(true)}
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Prompt
+                  </button>
+                  <button
                     className="btn btn-primary btn-sm gap-2 shadow-sm"
                     disabled={personaGenerationLoading}
                     onClick={() => void runPersonaGenerationPreview()}
                   >
-                    <Sparkles className="h-4 w-4" />
-                    {personaGenerationLoading
-                      ? "Generating…"
-                      : personaPreviewRunCount > 0
-                        ? "Regenerate Content"
-                        : "Generate Persona"}
+                    {personaGenerationLoading ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {personaGenerationLoading ? "Generating..." : "Generate Persona"}
                   </button>
                 </div>
               </div>
@@ -213,7 +228,6 @@ export function PersonaGenerationSection({
         rawOutput={personaGenerationModalRawOutput}
         elapsedSeconds={personaGenerationElapsedSeconds}
         preview={personaGenerationPreview}
-        runCount={personaPreviewRunCount}
         lastSavedAt={personaLastSavedAt}
         saveForm={personaSaveForm}
         setSaveForm={setPersonaSaveForm}
@@ -222,6 +236,11 @@ export function PersonaGenerationSection({
         onClose={closePersonaGenerationModal}
         onRegenerate={runPersonaGenerationPreview}
         onSave={savePersonaFromGeneration}
+      />
+      <PromptAssemblyModal
+        isOpen={isPromptModalOpen}
+        preview={promptAssemblyPreview}
+        onClose={() => setIsPromptModalOpen(false)}
       />
     </>
   );

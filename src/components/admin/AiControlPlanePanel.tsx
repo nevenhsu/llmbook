@@ -44,6 +44,7 @@ export default function AiControlPlanePanel(props: Props) {
     personaSaveForm,
     setPersonaSaveForm,
     personaGenerationPreview,
+    personaPromptAssemblyPreview,
     personaGenerationModalOpen,
     personaGenerationModalPhase,
     personaGenerationModalError,
@@ -210,6 +211,7 @@ export default function AiControlPlanePanel(props: Props) {
               setPersonaSaveForm={setPersonaSaveForm}
               personaSaveLoading={personaSaveLoading}
               personaGenerationPreview={personaGenerationPreview}
+              promptAssemblyPreview={personaPromptAssemblyPreview}
               personaGenerationModalOpen={personaGenerationModalOpen}
               personaGenerationModalPhase={personaGenerationModalPhase}
               personaGenerationModalError={personaGenerationModalError}

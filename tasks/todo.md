@@ -2,6 +2,21 @@
 
 ## Active
 
+- [ ] Improve `Prompt Assembly` UI readability so Stage 1~5 are easier to scan than one long block of text
+- [x] Make Persona Generation `View Prompt` always available and back it with template prompt preview instead of resolved generate output
+- [x] Add a shared persona prompt-template preview builder so admin and preview sandbox use the same assembly/token-budget source before generate
+- [x] Verify pre-generate `View Prompt` behavior with targeted tests and remove the old generate-first dependency
+- [x] Raise persona-generation stage output token budgets and retry caps so providers like MiniMax do not return empty output under an overly tight ceiling
+- [x] Keep preview `Token Budget` aligned with the new persona-generation output ceilings and verify the staged preview tests
+- [x] Align `Prompt Assembly` modal UI structure with `Persona Generation` modal while keeping only prompt/token diagnostics content
+- [x] Reuse the same modal shell rhythm for header/body/footer/actions instead of maintaining a separate ad hoc prompt modal layout
+- [x] Add targeted preview-flow verification for opening `View Prompt` and rendering the aligned modal structure
+- [x] Add a consistent loading treatment for Generate/Regenerate in the persona flow
+- [x] Keep Save disabled before or during Generate/Regenerate and verify that state in the preview harness
+- [x] Extend the preview harness so generate/regenerate loading states are visible for UI review
+- [x] Remove persona generation modal run/save count badges and simplify the header
+- [x] Make Save a single-save-per-generate action with saved-state reset on regenerate
+- [x] Add focused tests for Saved/no-op/regenerate-reset behavior in the preview flow
 - [x] Replace the modal-only persona preview page with the full Generate Persona admin flow backed by mock state
 - [x] Reuse the real PersonaGenerationSection/Modal on `/preview/persona-generation` and hide self-referential preview-only affordances
 - [x] Add targeted tests that exercise Prompt AI and Generate Persona using mock data instead of live API calls
@@ -68,6 +83,21 @@
 - Verification: the preview flow test covers Prompt AI mutation, Generate Persona opening the modal, and fixture-backed preview rendering without any live network dependency.
 - Root cause for the missing modal background: the reusable persona modal body no longer carried the expected DaisyUI `modal-box` structure, and this modal also inherited the project-wide transparent `.modal-backdrop` override.
 - Fix: restore `modal-box` on the reusable modal surface and give `PersonaGenerationModal` its own tinted backdrop class so the preview flow keeps a visible overlay without changing other modals globally.
+- Persona generation modal header no longer shows run/save count badges; it now stays focused on the generated persona review state only.
+- Save button behavior is now per-generate: successful preview enables `Save`, failed preview disables it, first successful save flips the label to `Saved`, and any regenerate clears the saved state so one fresh save is allowed again.
+- Verification: preview-flow test now covers first save success toast, Saved no-op clicks, regenerate reset back to Save, and the modal backdrop class.
+- Preview-only save now keeps the modal button in `Saving...` for 1 second before switching to `Saved`, so loading-state spacing and spinner treatment can be reviewed without hitting a live API.
+- Generate and Regenerate now use the same spinner-based loading UI as Save, and the preview harness keeps them in-flight for 1 second so the button state and modal loading treatment can be reviewed visually.
+- Verification: preview-flow test now also asserts `Generating...` appears during both initial Generate and Regenerate, and that Save stays disabled during those loading windows.
+- Persona Generation preview now hides the top token stats bar while keeping the detailed Token Budget panel available below, so the modal review stays focused on the generated content and save flow.
+- Persona generation review now keeps the main modal focused on generated output; `Prompt Assembly` and `Token Budget` are available from a separate `View Prompt` modal beside Generate/Regenerate instead of being embedded inline.
+- `Prompt Assembly` modal now reuses the same shell rhythm as `Persona Generation` modal, including the close button position, bordered header/body/footer layout, and footer action placement, so the preview flow reads as one coherent admin UI.
+- Shared UI naming cleanup: the reusable modal frame is now named generically as `ModalShell` because it no longer contains control-plane-specific behavior.
+- Shared UI placement cleanup: `ModalShell` now lives under `src/components/ui` instead of the admin subtree because it is a generic modal frame, not a control-plane-specific component.
+- Persona generation stage budgets are now higher across the board, and repair/compact retries also get larger output ceilings, so providers like MiniMax are less likely to return empty output when a stage needs more room than the old 650/400/300-style caps allowed.
+- Preview sandbox alignment: the mock model metadata now matches the raised persona-generation max output budget so `/preview/persona-generation` no longer mixes a stale `2950` model ceiling with a newer `3850` token budget payload.
+- Persona-generation output budgets now come from one shared reference module, so runtime stage limits, preview `Token Budget`, sandbox model metadata, and retry-cap tests cannot drift independently.
+- `View Prompt` now shows a shared template prompt preview derived from current policy + extra prompt state, so it is available before generate and no longer depends on resolved post-generation stage context.
 
 ## Current State
 

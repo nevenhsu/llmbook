@@ -12,6 +12,17 @@ import {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const { toastMock } = vi.hoisted(() => ({
+  toastMock: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
+vi.mock("react-hot-toast", () => ({
+  default: toastMock,
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -52,6 +63,8 @@ describe("PersonaGenerationPreviewMockPage", () => {
   let root: ReactDOMClient.Root;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = ReactDOMClient.createRoot(container);
@@ -61,6 +74,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     act(() => {
       root.unmount();
     });
+    vi.useRealTimers();
     container.remove();
   });
 
@@ -75,7 +89,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).not.toContain("Preview Mock Page");
 
     const extraPromptInput = container.querySelector(
-      'input[placeholder*="Kotaro Isaka"]',
+      'input[placeholder*="favorite celebrity"]',
     ) as HTMLInputElement | null;
     expect(extraPromptInput).not.toBeNull();
     expect(extraPromptInput?.value).toBe(mockPersonaGenerationSeedPrompt);
@@ -94,14 +108,48 @@ describe("PersonaGenerationPreviewMockPage", () => {
     );
     expect(generateButton).toBeDefined();
 
+    const preGenerateViewPromptButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("View Prompt"),
+    );
+    expect(preGenerateViewPromptButton).toBeDefined();
+    expect(preGenerateViewPromptButton?.disabled).toBe(false);
+
+    await act(async () => {
+      preGenerateViewPromptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Prompt Assembly");
+    expect(container.textContent).toContain("Token Budget");
+
+    const preGenerateCloseButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Close",
+    );
+    expect(preGenerateCloseButton).toBeDefined();
+
+    await act(async () => {
+      preGenerateCloseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
     await act(async () => {
       generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Generating...");
+    const loadingSaveButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Save"),
+    );
+    expect(loadingSaveButton).toBeDefined();
+    expect(loadingSaveButton?.disabled).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
     });
 
     expect(container.textContent).toContain(
       "Review the generated persona data before saving it to the database.",
     );
     expect(container.textContent).toContain("Jax Harlan");
+    expect(container.textContent).not.toContain("Runs:");
     expect(container.querySelector('[data-testid="preview-panel"]')?.textContent).toContain(
       "Jax Harlan",
     );
@@ -117,5 +165,84 @@ describe("PersonaGenerationPreviewMockPage", () => {
       'input[placeholder="e.g. satoshi"]',
     ) as HTMLInputElement | null;
     expect(usernameInput?.value).toBe("ai_jax_harlan");
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Save"),
+    );
+    expect(saveButton).toBeDefined();
+    expect(saveButton?.disabled).toBe(false);
+
+    const viewPromptButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("View Prompt"),
+    );
+    expect(viewPromptButton).toBeDefined();
+    expect(viewPromptButton?.disabled).toBe(false);
+
+    await act(async () => {
+      viewPromptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Prompt Assembly");
+    expect(container.textContent).toContain("Token Budget");
+    expect(container.textContent).not.toContain("Markdown Output");
+    expect(
+      Array.from(container.querySelectorAll("button")).some(
+        (button) => button.textContent?.trim() === "Close",
+      ),
+    ).toBe(true);
+    expect(
+      Array.from(container.querySelectorAll("h3")).some(
+        (heading) => heading.textContent?.trim() === "Prompt Assembly",
+      ),
+    ).toBe(true);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Saving...");
+    expect(toastMock.success).toHaveBeenCalledTimes(0);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+    expect(toastMock.success).toHaveBeenCalledWith("Persona saved");
+    expect(container.textContent).toContain("Saved");
+
+    const savedButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Saved"),
+    );
+    expect(savedButton).toBeDefined();
+    expect(savedButton?.disabled).toBe(false);
+
+    await act(async () => {
+      savedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+
+    const regenerateButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Regenerate"),
+    );
+    expect(regenerateButton).toBeDefined();
+
+    await act(async () => {
+      regenerateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Generating...");
+    const loadingSaveAfterRegenerate = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Save"),
+    );
+    expect(loadingSaveAfterRegenerate).toBeDefined();
+    expect(loadingSaveAfterRegenerate?.disabled).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(container.textContent).toContain("Save");
   });
 });

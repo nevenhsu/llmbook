@@ -13,7 +13,6 @@ type Props = {
   rawOutput: string | null;
   elapsedSeconds: number;
   preview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
-  runCount: number;
   lastSavedAt: string | null;
   saveForm: {
     displayName: string;
@@ -39,7 +38,6 @@ export function PersonaGenerationModal({
   rawOutput,
   elapsedSeconds,
   preview,
-  runCount,
   lastSavedAt,
   saveForm,
   setSaveForm,
@@ -62,7 +60,6 @@ export function PersonaGenerationModal({
         rawOutput={rawOutput}
         elapsedSeconds={elapsedSeconds}
         preview={preview}
-        runCount={runCount}
         lastSavedAt={lastSavedAt}
         saveForm={saveForm}
         setSaveForm={setSaveForm}

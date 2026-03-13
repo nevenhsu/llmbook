@@ -4,6 +4,7 @@ import {
   PersonaGenerationParseError,
   type AiModelConfig,
 } from "@/lib/ai/admin/control-plane-store";
+import { PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 import { CachedLlmRuntimeConfigProvider } from "@/lib/ai/llm/runtime-config-provider";
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -389,7 +390,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           prompt: expect.stringContaining(
             "Your previous response for stage values_and_aesthetic was invalid or incomplete JSON. Retry once with a shorter response.",
           ),
-          maxOutputTokens: 400,
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
         }),
       }),
     );
@@ -424,7 +425,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           prompt: expect.stringContaining(
             "Return a compact version from scratch using the same contract.",
           ),
-          maxOutputTokens: 300,
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
         }),
       }),
     );

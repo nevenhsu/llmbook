@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import toast from "react-hot-toast";
 import Link from "next/link";
 import { ArrowLeft, FlaskConical } from "lucide-react";
 import type {
@@ -14,10 +15,13 @@ import { derivePersonaUsername } from "./control-plane-utils";
 import { PersonaGenerationSection } from "./sections/PersonaGenerationSection";
 import {
   mockPersonaGenerationAdminExtraPrompt,
+  mockPersonaGenerationGlobalPolicyContent,
   mockPersonaGenerationModelDisplayName,
   mockPersonaGenerationPreview,
   mockPersonaGenerationSeedPrompt,
 } from "@/lib/ai/admin/persona-generation-preview-mock";
+import { PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/persona-generation-token-budgets";
+import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 
 const mockProvider: AiProviderConfig = {
   id: "preview-provider-xai",
@@ -53,12 +57,15 @@ const mockModel: AiModelConfig = {
   supportsImageInputPrompt: false,
   supportsOutput: true,
   contextWindow: 14000,
-  maxOutputTokens: 2950,
+  maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
   metadata: {
     previewOnly: true,
   },
   updatedAt: "2026-03-13T00:00:00.000Z",
 };
+
+const PREVIEW_GENERATE_DELAY_MS = 1000;
+const PREVIEW_SAVE_DELAY_MS = 1000;
 
 export function PersonaGenerationPreviewMockPage() {
   const [personaGeneration, setPersonaGeneration] = useState({
@@ -87,6 +94,10 @@ export function PersonaGenerationPreviewMockPage() {
   );
   const [personaGenerationModalRawOutput] = useState<string | null>(null);
   const [personaGenerationElapsedSeconds] = useState(0);
+  const promptAssemblyPreview = buildPersonaGenerationPromptTemplatePreview({
+    extraPrompt: personaGeneration.extraPrompt || mockPersonaGenerationAdminExtraPrompt,
+    globalPolicyContent: mockPersonaGenerationGlobalPolicyContent,
+  });
 
   const assistPersonaPrompt = async () => {
     setPersonaPromptAssistError(null);
@@ -106,7 +117,10 @@ export function PersonaGenerationPreviewMockPage() {
     setPersonaGenerationModalOpen(true);
     setPersonaGenerationModalPhase("loading");
     setPersonaGenerationModalError(null);
+    setPersonaGenerationPreview(null);
+    setPersonaLastSavedAt(null);
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_GENERATE_DELAY_MS));
       setPersonaGenerationPreview(mockPersonaGenerationPreview);
       const displayName = mockPersonaGenerationPreview.structured.personas.display_name;
       setPersonaSaveForm({
@@ -133,10 +147,15 @@ export function PersonaGenerationPreviewMockPage() {
     if (!personaGenerationPreview) {
       return;
     }
+    if (personaLastSavedAt) {
+      return;
+    }
 
     setPersonaSaveLoading(true);
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_SAVE_DELAY_MS));
       setPersonaLastSavedAt(new Date().toISOString());
+      toast.success("Persona saved");
     } finally {
       setPersonaSaveLoading(false);
     }
@@ -182,6 +201,7 @@ export function PersonaGenerationPreviewMockPage() {
         setPersonaSaveForm={setPersonaSaveForm}
         personaSaveLoading={personaSaveLoading}
         personaGenerationPreview={personaGenerationPreview}
+        promptAssemblyPreview={promptAssemblyPreview}
         personaGenerationModalOpen={personaGenerationModalOpen}
         personaGenerationModalPhase={personaGenerationModalPhase}
         personaGenerationModalError={personaGenerationModalError}

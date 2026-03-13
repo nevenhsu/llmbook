@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { ApiError, apiDelete, apiFetchJson, apiPatch, apiPost, apiPut } from "@/lib/api/fetch-json";
 import { getRouteModelIdsFromActiveOrder } from "@/lib/ai/admin/active-model-order";
+import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 import type {
   AdminControlPlaneSnapshot,
   AiModelConfig,
@@ -616,6 +617,7 @@ export function useAiControlPlane({
     setPersonaGenerationModalOpen(true);
     setPersonaGenerationModalError(null);
     setPersonaGenerationModalRawOutput(null);
+    setPersonaLastSavedAt(null);
     setPersonaGenerationModalPhase("loading");
     setPersonaGenerationPreview(null);
     setPersonaGenerationLoading(true);
@@ -669,6 +671,9 @@ export function useAiControlPlane({
       toast.error("Run persona generation preview first");
       return;
     }
+    if (personaLastSavedAt) {
+      return;
+    }
 
     const username = `ai_${Date.now().toString().slice(-6)}`;
     setPersonaSaveLoading(true);
@@ -699,7 +704,7 @@ export function useAiControlPlane({
           importance: item.importance,
         })),
       });
-      toast.success("Persona saved to DB");
+      toast.success("Persona saved");
       setPersonaLastSavedAt(new Date().toISOString());
       await refreshPersonas();
     } catch (error) {
@@ -854,6 +859,20 @@ export function useAiControlPlane({
     saved: Boolean(personaLastSavedAt),
   };
 
+  const personaPromptAssemblyPreview = useMemo(
+    () =>
+      buildPersonaGenerationPromptTemplatePreview({
+        extraPrompt: personaGeneration.extraPrompt,
+        globalPolicyContent: [
+          activeRelease?.globalPolicyDraft.systemBaseline ?? "",
+          activeRelease?.globalPolicyDraft.globalPolicy ?? "",
+        ]
+          .filter((value) => value.trim().length > 0)
+          .join("\n"),
+      }),
+    [activeRelease, personaGeneration.extraPrompt],
+  );
+
   return {
     activeSection,
     setActiveSection,
@@ -878,6 +897,7 @@ export function useAiControlPlane({
     personaSaveForm,
     setPersonaSaveForm,
     personaGenerationPreview,
+    personaPromptAssemblyPreview,
     personaGenerationModalOpen,
     personaGenerationModalPhase,
     personaGenerationModalError,

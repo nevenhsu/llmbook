@@ -6,6 +6,12 @@ import {
   buildActionOutputConstraints,
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
+import {
+  PERSONA_GENERATION_MAX_INPUT_TOKENS,
+  PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
+  PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS,
+} from "@/lib/ai/admin/persona-generation-token-budgets";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import {
@@ -309,8 +315,8 @@ const DEFAULT_POLICY_DRAFT = {
 const DEFAULT_TOKEN_LIMITS = {
   interactionMaxInputTokens: 3200,
   interactionMaxOutputTokens: 900,
-  personaGenerationMaxInputTokens: 2800,
-  personaGenerationMaxOutputTokens: 1200,
+  personaGenerationMaxInputTokens: PERSONA_GENERATION_MAX_INPUT_TOKENS,
+  personaGenerationMaxOutputTokens: PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
 };
 
 const SUPPORTED_PROVIDER_CATALOG: Array<{
@@ -2648,8 +2654,16 @@ export class AdminAiControlPlaneStore {
               attempt === 1
                 ? Math.min(input.outputMaxTokens, maxOutputTokens)
                 : attempt === 2
-                  ? Math.min(400, input.outputMaxTokens, maxOutputTokens)
-                  : Math.min(300, input.outputMaxTokens, maxOutputTokens),
+                  ? Math.min(
+                      PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
+                      input.outputMaxTokens,
+                      maxOutputTokens,
+                    )
+                  : Math.min(
+                      PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
+                      input.outputMaxTokens,
+                      maxOutputTokens,
+                    ),
             temperature: attempt === 1 ? 0.4 : attempt === 2 ? 0.2 : 0.1,
           },
           entityId: `persona-generation-preview:${model.id}:${input.stageName}:attempt-${attempt}`,
@@ -2717,7 +2731,7 @@ export class AdminAiControlPlaneStore {
         "status should be active or inactive.",
       ].join("\n"),
       parse: parsePersonaSeedOutput,
-      outputMaxTokens: 650,
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
     });
 
     const valuesStage = await runPersonaGenerationStage({
@@ -2731,7 +2745,7 @@ export class AdminAiControlPlaneStore {
       ].join("\n"),
       parse: parsePersonaValuesAndAestheticOutput,
       validatedContext: seedStage,
-      outputMaxTokens: 650,
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
     });
 
     const contextStage = await runPersonaGenerationStage({
@@ -2747,7 +2761,7 @@ export class AdminAiControlPlaneStore {
         ...seedStage,
         ...valuesStage,
       },
-      outputMaxTokens: 650,
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.context_and_affinity,
     });
 
     const interactionStage = await runPersonaGenerationStage({
@@ -2764,7 +2778,7 @@ export class AdminAiControlPlaneStore {
         ...valuesStage,
         ...contextStage,
       },
-      outputMaxTokens: 550,
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails,
     });
 
     const personaCore = {
@@ -2793,7 +2807,7 @@ export class AdminAiControlPlaneStore {
         persona_core: personaCore,
         reference_sources: seedStage.reference_sources,
       },
-      outputMaxTokens: 450,
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.memories,
     });
 
     const structured = parsePersonaGenerationOutput(
@@ -2813,7 +2827,7 @@ export class AdminAiControlPlaneStore {
       blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
       maxInputTokens:
         DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens * stagePromptRecords.length,
-      maxOutputTokens: stagePromptRecords.reduce((sum, stage) => sum + stage.outputMaxTokens, 0),
+      maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
     });
 
     const markdown = [

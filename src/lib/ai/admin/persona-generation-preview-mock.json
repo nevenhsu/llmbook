@@ -4,7 +4,7 @@
   "tokenBudget": {
     "estimatedInputTokens": 3243,
     "maxInputTokens": 14000,
-    "maxOutputTokens": 2950,
+    "maxOutputTokens": 3850,
     "blockStats": [
       { "name": "seed", "tokens": 265 },
       { "name": "values_and_aesthetic", "tokens": 465 },

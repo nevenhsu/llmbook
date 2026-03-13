@@ -1,4 +1,6 @@
 import rawFixture from "@/lib/ai/admin/persona-generation-preview-mock.json";
+import { PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/persona-generation-token-budgets";
+import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 import type {
   PreviewResult,
   PersonaGenerationStructured,
@@ -33,6 +35,7 @@ export const mockPersonaGenerationModelDisplayName = fixture.modelDisplayName;
 export const mockPersonaGenerationAdminExtraPrompt = fixture.adminExtraPrompt;
 export const mockPersonaGenerationSeedPrompt =
   "Cynical tech journalist persona with John Grisham paranoia and Elon Musk theatrics.";
+export const mockPersonaGenerationGlobalPolicyContent = globalPolicy;
 
 const seedContext = {
   personas: fixture.structured.personas,
@@ -192,6 +195,12 @@ const markdown = [
   codeFence,
 ].join("\n");
 
+export const mockPersonaGenerationPromptTemplatePreview =
+  buildPersonaGenerationPromptTemplatePreview({
+    extraPrompt: fixture.adminExtraPrompt,
+    globalPolicyContent: mockPersonaGenerationGlobalPolicyContent,
+  });
+
 export const mockPersonaGenerationPreview: PreviewResult & {
   structured: PersonaGenerationStructured;
 } = {
@@ -199,6 +208,9 @@ export const mockPersonaGenerationPreview: PreviewResult & {
   markdown,
   renderOk: true,
   renderError: null,
-  tokenBudget: fixture.tokenBudget,
+  tokenBudget: {
+    ...fixture.tokenBudget,
+    maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+  },
   structured: fixture.structured,
 };
