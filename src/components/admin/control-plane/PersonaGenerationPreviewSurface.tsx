@@ -12,8 +12,8 @@ import {
   type PersonaGenerationModalPhase,
 } from "./persona-generation-modal-utils";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { PreviewPanel } from "./PreviewPanel";
 import { derivePersonaUsername } from "./control-plane-utils";
+import { PersonaStructuredPreview } from "./PersonaStructuredPreview";
 
 type Props = {
   mode?: "modal" | "page";
@@ -139,13 +139,7 @@ export function PersonaGenerationPreviewSurface({
                   />
                 </div>
               </div>
-              <PreviewPanel
-                preview={preview}
-                emptyLabel="Run preview first"
-                showTokenStatsBar={false}
-                showPromptAssemblySection={false}
-                showTokenBudgetSection={false}
-              />
+              <PersonaStructuredPreview structured={preview.structured} />
             </>
           ) : (
             <div className="border-base-300 rounded-lg border border-dashed p-8 text-center text-sm opacity-60">

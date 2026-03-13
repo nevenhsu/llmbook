@@ -2,6 +2,8 @@
 
 ## Active
 
+- [x] Replace persona modal `Rendered Preview` JSON-style output with a structured card UI for persona data
+- [x] Keep raw JSON available as a secondary collapse while verifying the preview flow still renders the mock persona correctly
 - [x] Make persona `View Prompt` show `[admin_extra_prompt]` as template placeholder text instead of leaking mock/example content
 - [x] Verify prompt preview uses placeholder-only `admin_extra_prompt` text while the editable form input remains unchanged
 - [x] Mark `validated_context` explicitly in the persona `View Prompt` template so staged dependencies are visible before generate
@@ -110,6 +112,7 @@
 - Persona-generation shared output ceilings are now raised again across stages and retry caps, so MiniMax gets more per-stage headroom without drifting preview/runtime/token-budget values apart.
 - Prompt template preview now marks `validated_context` explicitly for downstream stages so prompt review shows the staged dependency location before any generation runs.
 - Persona `View Prompt` now treats `[admin_extra_prompt]` as a template placeholder instead of echoing mock/example prose, so the prompt preview does not look like it contains a fixed system persona.
+- Persona generation `Rendered Preview` now defaults to a structured card-based UI for identity, values, context, references, and memories, with raw JSON moved behind a secondary collapse for diagnostics.
 
 ## Current State
 

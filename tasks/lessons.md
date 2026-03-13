@@ -44,6 +44,14 @@
 - When an interaction should match DaisyUI patterns, prefer DaisyUI primitives like `collapse` over custom `details/summary` styling so the UI stays visually consistent with the rest of the app.
 - When using collapsible stage cards, make the stage title row itself the collapse trigger; do not add a second "View raw prompt" row that forces an extra click target below the real heading.
 - In review modals, put the primary content first and diagnostics second; if users are scanning stages, move `Token Budget` after the stage list instead of ahead of it.
+- For semantic status badges, use neutral styling for data classifications like `canonical`; reserve success colors for true success/completion states.
+- In structured preview sections like `Reference Sources`, keep contribution text as normal copy unless the user explicitly wants tag styling; bordered badges are too heavy for explanatory prose.
+- In structured persona previews, keep descriptive prose sections like `Aesthetic Profile` as normal text lists; bordered tags work for metadata, not for taste/description copy.
+- In structured persona previews, treat `Worldview` as prose, not metadata; render it as normal text instead of bordered tags.
+- In persona profile cards, `Interaction Defaults` reads better as text lists than tag groups; use lists for strengths, triggers, and non-generic traits.
+- If a section is meant to read as a list, add explicit list-style classes; plain `<ul><li>` without markers still looks like paragraph text in this UI.
+- Keep structurally similar persona sections visually aligned: if `Interaction Defaults` uses text lists, `Guardrails` should also use text lists instead of reverting to tag-style metadata.
+- If a preview field like `De-escalation Style` is stored as one comma-separated sentence but should read as a list, normalize it into multiple bullet items at render time.
 
 ## Data / Schema
 

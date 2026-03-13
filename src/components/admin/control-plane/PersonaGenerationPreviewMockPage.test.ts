@@ -43,21 +43,6 @@ vi.mock("next/link", () => ({
     ),
 }));
 
-vi.mock("./PreviewPanel", () => ({
-  PreviewPanel: ({
-    preview,
-  }: {
-    preview: { structured: { personas: { display_name: string } } };
-  }) =>
-    React.createElement(
-      "div",
-      {
-        "data-testid": "preview-panel",
-      },
-      preview.structured.personas.display_name,
-    ),
-}));
-
 describe("PersonaGenerationPreviewMockPage", () => {
   let container: HTMLDivElement;
   let root: ReactDOMClient.Root;
@@ -168,10 +153,13 @@ describe("PersonaGenerationPreviewMockPage", () => {
       "Review the generated persona data before saving it to the database.",
     );
     expect(container.textContent).toContain("Jax Harlan");
+    expect(container.textContent).toContain("Archetype");
+    expect(container.textContent).toContain("Core Motivation");
+    expect(container.textContent).toContain("One-Sentence Identity");
+    expect(container.textContent).toContain("Reference Sources (2)");
+    expect(container.textContent).toContain("Persona Memories (3)");
+    expect(container.textContent).toContain("View Raw JSON");
     expect(container.textContent).not.toContain("Runs:");
-    expect(container.querySelector('[data-testid="preview-panel"]')?.textContent).toContain(
-      "Jax Harlan",
-    );
     const modalBackdrop = container.querySelector("form.modal-backdrop");
     expect(modalBackdrop).not.toBeNull();
     expect(modalBackdrop?.className).toContain("!bg-black/50");
