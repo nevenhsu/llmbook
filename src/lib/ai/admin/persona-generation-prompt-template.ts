@@ -10,6 +10,14 @@ export type PromptBlockStat = {
 
 export type PromptAssemblyPreview = {
   assembledPrompt: string;
+  stages: Array<{
+    index: number;
+    name: string;
+    goal: string;
+    rawPrompt: string;
+    tokens: number;
+    hasValidatedContext: boolean;
+  }>;
   tokenBudget: {
     estimatedInputTokens: number;
     maxInputTokens: number;
@@ -28,11 +36,13 @@ const PERSONA_GENERATION_GENERATOR_INSTRUCTION = [
   "Preserve named references when they clarify the persona.",
   "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
 ].join("\n");
+const PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER = "(from Context / Extra Prompt input)";
 
 const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "seed",
     goal: "Establish the persona's identity seed, bio, and explicit references.",
+    hasValidatedContext: false,
     contract: [
       "Return one JSON object with keys:",
       "personas{display_name,bio,status},",
@@ -46,6 +56,7 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "values_and_aesthetic",
     goal: "Define the persona's values and aesthetic taste using the seed identity.",
+    hasValidatedContext: true,
     contract: [
       "Return one JSON object with keys:",
       "values{value_hierarchy,worldview,judgment_style},",
@@ -56,6 +67,7 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "context_and_affinity",
     goal: "Ground the persona in lived context and creator affinity.",
+    hasValidatedContext: true,
     contract: [
       "Return one JSON object with keys:",
       "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
@@ -65,6 +77,7 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "interaction_and_guardrails",
     goal: "Define how the persona behaves in discussion and what it avoids.",
+    hasValidatedContext: true,
     contract: [
       "Return one JSON object with keys:",
       "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
@@ -74,6 +87,7 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "memories",
     goal: "Optionally add a few useful canonical or recent persona memories.",
+    hasValidatedContext: true,
     contract: [
       "Return one JSON object with key:",
       "persona_memories[{memory_type,scope,memory_key,content,metadata,expires_in_hours,is_canonical,importance}].",
@@ -104,7 +118,10 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
     { name: "system_baseline", content: PERSONA_GENERATION_SYSTEM_BASELINE },
     { name: "global_policy", content: input.globalPolicyContent },
     { name: "generator_instruction", content: PERSONA_GENERATION_GENERATOR_INSTRUCTION },
-    { name: "admin_extra_prompt", content: input.extraPrompt },
+    {
+      name: "admin_extra_prompt",
+      content: PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER,
+    },
   ];
 
   const stagePrompts = PERSONA_GENERATION_TEMPLATE_STAGES.map((stage, index) => {
@@ -114,6 +131,15 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
         name: "persona_generation_stage",
         content: [`stage_name: ${stage.name}`, `stage_goal: ${stage.goal}`].join("\n"),
       },
+      ...(stage.hasValidatedContext
+        ? [
+            {
+              name: "validated_context",
+              content:
+                "(populated from previously validated stage output during runtime generation)",
+            },
+          ]
+        : []),
       { name: "stage_contract", content: stage.contract.join("\n") },
       { name: "output_constraints", content: "Output strictly valid JSON." },
     ]);
@@ -122,6 +148,7 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
       name: stage.name,
       assembled: `### Stage ${index + 1}: ${stage.name}\n${prompt}`,
       tokens: estimateTokens(prompt),
+      hasValidatedContext: stage.hasValidatedContext,
     };
   });
 
@@ -132,6 +159,14 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
 
   return {
     assembledPrompt: stagePrompts.map((stage) => stage.assembled).join("\n\n"),
+    stages: stagePrompts.map((stage, index) => ({
+      index: index + 1,
+      name: stage.name,
+      goal: PERSONA_GENERATION_TEMPLATE_STAGES[index]?.goal ?? "",
+      rawPrompt: stage.assembled.replace(/^### Stage \d+: [^\n]+\n/, ""),
+      tokens: stage.tokens,
+      hasValidatedContext: stage.hasValidatedContext,
+    })),
     tokenBudget: {
       estimatedInputTokens,
       maxInputTokens,

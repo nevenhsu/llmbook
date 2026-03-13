@@ -34,11 +34,50 @@ export function PromptAssemblyModal({ isOpen, preview, onClose }: Props) {
         }
       >
         <div className="space-y-5">
-          <div className="bg-base-100 border-base-300/60 overflow-hidden rounded-xl border">
-            <div className="bg-base-200/70 px-4 py-3 text-sm font-semibold">Prompt Assembly</div>
-            <pre className="bg-base-200/30 max-h-[42vh] overflow-auto p-4 text-xs whitespace-pre-wrap">
-              {preview.assembledPrompt}
-            </pre>
+          <div className="space-y-3">
+            <div className="px-1">
+              <h4 className="text-sm font-semibold">Prompt Assembly</h4>
+              <p className="mt-1 text-xs opacity-60">
+                Review each generation stage separately, then expand raw prompt text only when you
+                need the exact payload.
+              </p>
+            </div>
+
+            {preview.stages.map((stage) => (
+              <div
+                key={stage.name}
+                className="bg-base-100 border-base-300/60 overflow-hidden rounded-xl border"
+              >
+                <div className="collapse-arrow collapse">
+                  <input type="checkbox" />
+                  <div className="collapse-title bg-base-200/70 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3 pr-6">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold">
+                            Stage {stage.index}: {stage.name}
+                          </div>
+                          {stage.hasValidatedContext ? (
+                            <span className="badge badge-outline badge-sm border-base-300/70 text-[11px] font-medium">
+                              [validated_context]
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 text-xs opacity-65">{stage.goal}</div>
+                      </div>
+                      <div className="bg-base-100 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap opacity-80">
+                        {stage.tokens.toLocaleString()} tokens
+                      </div>
+                    </div>
+                  </div>
+                  <div className="collapse-content border-base-300/50 bg-base-200/30 border-t px-0 pb-0">
+                    <pre className="max-h-[34vh] overflow-auto p-4 text-xs whitespace-pre-wrap">
+                      {stage.rawPrompt}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="bg-base-100 border-base-300/60 overflow-hidden rounded-xl border">

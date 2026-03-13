@@ -36,7 +36,14 @@
 - When a provider returns empty output in staged generation, inspect and raise the actual per-stage `maxOutputTokens` and retry caps; changing only the displayed budget will not fix the runtime behavior.
 - When a preview fixture changes a budget or limit, search for matching hardcoded model metadata in the sandbox UI and update that too; stale preview constants make it look like nothing changed.
 - If the same budget number affects runtime behavior and preview UI, store it in a shared reference module and have tests import that constant instead of repeating literals.
+- If staged generation still fails on a provider after one budget bump, raise the shared per-stage ceilings and the global persona-generation output cap together; a low global cap silently cancels the stage-level increase.
 - If a “View Prompt” action is meant to preview the template, do not gate it on successful generation; bind it to current form/policy state instead of resolved model output.
+- If a template preview hides an important runtime-only block like `validated_context`, add an explicit placeholder in the template preview instead of making users infer where that block would appear.
+- If a preview is meant to show a template rather than a resolved prompt, do not echo sample/mock prose inside blocks like `[admin_extra_prompt]`; use an explicit placeholder so examples are not mistaken for fixed system content.
+- If a prompt preview contains multiple stages, render those stages as separate review units with expandable raw text instead of a single monolithic pre block.
+- When an interaction should match DaisyUI patterns, prefer DaisyUI primitives like `collapse` over custom `details/summary` styling so the UI stays visually consistent with the rest of the app.
+- When using collapsible stage cards, make the stage title row itself the collapse trigger; do not add a second "View raw prompt" row that forces an extra click target below the real heading.
+- In review modals, put the primary content first and diagnostics second; if users are scanning stages, move `Token Budget` after the stage list instead of ahead of it.
 
 ## Data / Schema
 

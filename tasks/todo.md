@@ -2,7 +2,14 @@
 
 ## Active
 
-- [ ] Improve `Prompt Assembly` UI readability so Stage 1~5 are easier to scan than one long block of text
+- [x] Make persona `View Prompt` show `[admin_extra_prompt]` as template placeholder text instead of leaking mock/example content
+- [x] Verify prompt preview uses placeholder-only `admin_extra_prompt` text while the editable form input remains unchanged
+- [x] Mark `validated_context` explicitly in the persona `View Prompt` template so staged dependencies are visible before generate
+- [x] Verify prompt preview UI shows which stages inject prior validated output and where that block sits in each raw prompt
+- [x] Raise shared persona-generation stage output budgets again so MiniMax has more headroom per stage
+- [x] Keep preview/runtime/token-budget UI aligned with the higher shared ceilings and verify staged persona tests
+- [x] Align Prompt Assembly stage expanders with DaisyUI `collapse` instead of the current plain `details` styling
+- [x] Improve `Prompt Assembly` UI readability so Stage 1~5 are easier to scan than one long block of text
 - [x] Make Persona Generation `View Prompt` always available and back it with template prompt preview instead of resolved generate output
 - [x] Add a shared persona prompt-template preview builder so admin and preview sandbox use the same assembly/token-budget source before generate
 - [x] Verify pre-generate `View Prompt` behavior with targeted tests and remove the old generate-first dependency
@@ -98,6 +105,11 @@
 - Preview sandbox alignment: the mock model metadata now matches the raised persona-generation max output budget so `/preview/persona-generation` no longer mixes a stale `2950` model ceiling with a newer `3850` token budget payload.
 - Persona-generation output budgets now come from one shared reference module, so runtime stage limits, preview `Token Budget`, sandbox model metadata, and retry-cap tests cannot drift independently.
 - `View Prompt` now shows a shared template prompt preview derived from current policy + extra prompt state, so it is available before generate and no longer depends on resolved post-generation stage context.
+- `Prompt Assembly` UI now renders stage-by-stage cards with per-stage goals and expandable raw prompt sections, instead of one long combined pre block, so Stage 1~5 are easier to review independently.
+- Prompt Assembly stage expanders now use DaisyUI `collapse collapse-arrow`, keeping the per-stage review UI visually consistent with the rest of the admin surface.
+- Persona-generation shared output ceilings are now raised again across stages and retry caps, so MiniMax gets more per-stage headroom without drifting preview/runtime/token-budget values apart.
+- Prompt template preview now marks `validated_context` explicitly for downstream stages so prompt review shows the staged dependency location before any generation runs.
+- Persona `View Prompt` now treats `[admin_extra_prompt]` as a template placeholder instead of echoing mock/example prose, so the prompt preview does not look like it contains a fixed system persona.
 
 ## Current State
 

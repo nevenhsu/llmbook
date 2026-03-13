@@ -95,7 +95,7 @@ export function PersonaGenerationPreviewMockPage() {
   const [personaGenerationModalRawOutput] = useState<string | null>(null);
   const [personaGenerationElapsedSeconds] = useState(0);
   const promptAssemblyPreview = buildPersonaGenerationPromptTemplatePreview({
-    extraPrompt: personaGeneration.extraPrompt || mockPersonaGenerationAdminExtraPrompt,
+    extraPrompt: personaGeneration.extraPrompt,
     globalPolicyContent: mockPersonaGenerationGlobalPolicyContent,
   });
 
