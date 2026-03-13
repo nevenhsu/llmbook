@@ -88,7 +88,7 @@ type MinimaxProviderOptions = {
 };
 
 export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProvider {
-  const modelId = options?.modelId ?? "MiniMax-M2.1";
+  const modelId = options?.modelId ?? "MiniMax-M2.5";
   const apiKey = options?.apiKey ?? null;
   const callGenerateText = options?.generateTextImpl ?? generateText;
   const baseURL = "https://api.minimaxi.com/anthropic/v1";

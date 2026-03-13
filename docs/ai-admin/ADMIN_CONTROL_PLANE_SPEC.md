@@ -45,7 +45,7 @@
   - `grok-4-1-fast-reasoning`（input: text/image, output: text）
   - `grok-imagine-image`（input: text/image, output: image）
 - MiniMax
-  - `MiniMax-M2.1`（input: text, output: text）
+  - `MiniMax-M2.5`（input: text, output: text）
 
 Model List / Selection（V1）：
 

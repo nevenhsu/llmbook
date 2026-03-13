@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { ArrowLeft, FlaskConical } from "lucide-react";
@@ -93,11 +93,28 @@ export function PersonaGenerationPreviewMockPage() {
     null,
   );
   const [personaGenerationModalRawOutput] = useState<string | null>(null);
-  const [personaGenerationElapsedSeconds] = useState(0);
+  const [personaGenerationElapsedSeconds, setPersonaGenerationElapsedSeconds] = useState(0);
+  const personaGenerationStartedAtRef = useRef<number | null>(null);
   const promptAssemblyPreview = buildPersonaGenerationPromptTemplatePreview({
     extraPrompt: personaGeneration.extraPrompt,
     globalPolicyContent: mockPersonaGenerationGlobalPolicyContent,
   });
+
+  useEffect(() => {
+    if (!personaGenerationLoading || personaGenerationStartedAtRef.current === null) {
+      return;
+    }
+
+    const updateElapsed = () => {
+      setPersonaGenerationElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - personaGenerationStartedAtRef.current!) / 1000)),
+      );
+    };
+
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [personaGenerationLoading]);
 
   const assistPersonaPrompt = async () => {
     setPersonaPromptAssistError(null);
@@ -113,6 +130,8 @@ export function PersonaGenerationPreviewMockPage() {
   };
 
   const runPersonaGenerationPreview = async () => {
+    personaGenerationStartedAtRef.current = Date.now();
+    setPersonaGenerationElapsedSeconds(0);
     setPersonaGenerationLoading(true);
     setPersonaGenerationModalOpen(true);
     setPersonaGenerationModalPhase("loading");
@@ -128,6 +147,9 @@ export function PersonaGenerationPreviewMockPage() {
         username: derivePersonaUsername(displayName),
       });
       setPersonaPreviewRunCount((prev) => prev + 1);
+      setPersonaGenerationElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - personaGenerationStartedAtRef.current!) / 1000)),
+      );
       setPersonaGenerationModalPhase("success");
     } finally {
       setPersonaGenerationLoading(false);
@@ -138,8 +160,10 @@ export function PersonaGenerationPreviewMockPage() {
     setPersonaGenerationModalOpen(false);
     if (personaGenerationLoading) {
       setPersonaGenerationLoading(false);
+      personaGenerationStartedAtRef.current = null;
       setPersonaGenerationModalPhase("idle");
       setPersonaGenerationModalError(null);
+      setPersonaGenerationElapsedSeconds(0);
     }
   };
 
@@ -215,7 +239,6 @@ export function PersonaGenerationPreviewMockPage() {
         runPersonaGenerationPreview={runPersonaGenerationPreview}
         closePersonaGenerationModal={closePersonaGenerationModal}
         savePersonaFromGeneration={savePersonaFromGeneration}
-        previewLinkHref={null}
       />
     </div>
   );

@@ -139,6 +139,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     });
 
     expect(container.textContent).toContain("Generating...");
+    expect(container.textContent).toContain("Generating time: 00:00");
     const loadingSaveButton = Array.from(container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Save"),
     );
@@ -152,6 +153,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain(
       "Review the generated persona data before saving it to the database.",
     );
+    expect(container.textContent).toContain("Generation time: 00:01");
     expect(container.textContent).toContain("Jax Harlan");
     expect(container.textContent).toContain("Archetype");
     expect(container.textContent).toContain("Core Motivation");
@@ -159,6 +161,21 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Reference Sources (2)");
     expect(container.textContent).toContain("Persona Memories (3)");
     expect(container.textContent).toContain("View Raw JSON");
+    const rawJsonCopyButton = container.querySelector(
+      'button[aria-label="Copy raw JSON"]',
+    ) as HTMLButtonElement | null;
+    expect(rawJsonCopyButton).not.toBeNull();
+    const rawJsonCollapseInput = Array.from(container.querySelectorAll(".collapse > input")).at(
+      -1,
+    ) as HTMLInputElement | undefined;
+    expect(rawJsonCollapseInput?.checked).toBe(false);
+
+    await act(async () => {
+      rawJsonCopyButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      rawJsonCopyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(rawJsonCollapseInput?.checked).toBe(false);
     expect(container.textContent).not.toContain("Runs:");
     const modalBackdrop = container.querySelector("form.modal-backdrop");
     expect(modalBackdrop).not.toBeNull();

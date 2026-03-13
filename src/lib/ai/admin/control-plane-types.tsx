@@ -80,8 +80,8 @@ export const SUPPORTED_MODELS = [
   },
   {
     providerId: "minimax",
-    modelKey: "MiniMax-M2.1",
-    displayName: "MiniMax M2.1",
+    modelKey: "MiniMax-M2.5",
+    displayName: "MiniMax M2.5",
     capability: "text_generation",
     metadata: { input: ["text"], output: ["text"] },
   },

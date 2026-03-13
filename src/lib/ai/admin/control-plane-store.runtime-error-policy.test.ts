@@ -32,8 +32,8 @@ function buildModel(overrides: Partial<AiModelConfig> = {}): AiModelConfig {
   return {
     id: "model-1",
     providerId: "provider-1",
-    modelKey: "MiniMax-M2.1",
-    displayName: "MiniMax M2.1",
+    modelKey: "MiniMax-M2.5",
+    displayName: "MiniMax M2.5",
     capability: "text_generation",
     status: "active",
     testStatus: "success",
@@ -85,7 +85,7 @@ describe("AdminAiControlPlaneStore.recordLlmInvocationError", () => {
 
     await store.recordLlmInvocationError({
       providerKey: "minimax",
-      modelKey: "MiniMax-M2.1",
+      modelKey: "MiniMax-M2.5",
       error: "LLM_TIMEOUT_12000MS",
     });
 
@@ -124,7 +124,7 @@ describe("AdminAiControlPlaneStore.recordLlmInvocationError", () => {
 
     await store.recordLlmInvocationError({
       providerKey: "minimax",
-      modelKey: "MiniMax-M2.1",
+      modelKey: "MiniMax-M2.5",
       error: "insufficient balance",
       errorDetails: { statusCode: 429, code: "insufficient_balance" },
     });

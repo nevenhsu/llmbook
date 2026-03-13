@@ -63,6 +63,13 @@ export function PersonaGenerationPreviewSurface({
   const canSave = canSavePersonaGeneration(phase, preview) && !disableActions;
   const hasSaved = Boolean(lastSavedAt);
   const actionDisabled = isGenerating || disableActions;
+  const showElapsedStatus = phase === "loading" || (phase !== "idle" && elapsedSeconds > 0);
+  const elapsedLabel =
+    phase === "loading"
+      ? "Generating time"
+      : phase === "error"
+        ? "Attempt time"
+        : "Generation time";
   const content = (
     <>
       {topNotice ? <div className="mb-5">{topNotice}</div> : null}
@@ -75,9 +82,6 @@ export function PersonaGenerationPreviewSurface({
             <div className="text-sm opacity-60">
               Waiting for structured JSON response from the selected model.
             </div>
-          </div>
-          <div className="bg-base-200 rounded-full px-4 py-2 font-mono text-sm">
-            {formatPersonaGenerationElapsed(elapsedSeconds)}
           </div>
         </div>
       ) : (
@@ -153,7 +157,11 @@ export function PersonaGenerationPreviewSurface({
 
   const footer = (
     <>
-      <span></span>
+      <span className="min-w-0 text-sm opacity-70">
+        {showElapsedStatus
+          ? `${elapsedLabel}: ${formatPersonaGenerationElapsed(elapsedSeconds)}`
+          : ""}
+      </span>
 
       <div className="flex items-center gap-2">
         <button

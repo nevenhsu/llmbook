@@ -13,6 +13,14 @@
 - If a feature has its own user-facing behavior, do not reuse another feature's eligibility helper or error wording without checking semantic fit.
 - If malformed model output blocks debugging, surface the raw output instead of only returning a parse error.
 - For persona prompt-assist features, do not genericize away named references; explicit creator/artist/public-figure/IP names are valid user intent and must be preserved when optimizing prompts.
+- If a prompt-assist endpoint is expected to suggest references, do not rely on prompt wording alone; add a post-check that injects a real reference name when the model still returns abstract-only text.
+- For persona prompt-assist, "better" means clearer persona dimensions plus at least one concrete reference name; do not treat a near-identical sentence with one appended name as a successful rewrite.
+- If persona prompt-assist needs a random empty-state seed, sample a concrete reference name in application code and thread that same choice through generation and fallback; do not rely on the model to invent randomness consistently.
+- If persona prompt-assist gets a non-empty brief without explicit references, choose a fitting reference in application code from the brief content before generation; do not fall back to unrelated random names for optimize mode.
+- Short prompt-assist inputs that are really work/IP titles need explicit title normalization; do not feed raw titles like `one piece` through generic subject fallback or they become malformed phrases like `a one piece`.
+- Persona prompt-assist must be reference-first across broad input types; treat works, eras, domains, styles, genres, countries, personalities, values, and claims as retrieval cues for suitable reference entities before rewriting the final brief.
+- In reference-first prompt-assist, the final brief must be behaviorally shaped by the resolved reference; a generic persona sentence plus a pasted name is a failure even if the reference is technically present.
+- For persona-generation modal timing, follow the requested footer layout exactly; elapsed time belongs on the bottom-left status area, not injected into the body when the user asks for action-row alignment.
 
 ## UI
 
@@ -52,6 +60,11 @@
 - If a section is meant to read as a list, add explicit list-style classes; plain `<ul><li>` without markers still looks like paragraph text in this UI.
 - Keep structurally similar persona sections visually aligned: if `Interaction Defaults` uses text lists, `Guardrails` should also use text lists instead of reverting to tag-style metadata.
 - If a preview field like `De-escalation Style` is stored as one comma-separated sentence but should read as a list, normalize it into multiple bullet items at render time.
+- When splitting comma-separated prose into bullets, trim conjunctions like `and`/`or` from follow-up items so the resulting list reads naturally.
+- If a preview-only navigation affordance is no longer part of the shared flow, remove the prop entirely instead of leaving a nullable escape hatch in the shared component API.
+- If a button sits inside a DaisyUI `collapse-title`, assume it may still trigger the collapse; move non-toggle actions like copy buttons outside the clickable title hit area and test that they do not change the checkbox state.
+- When placing custom actions beside a DaisyUI collapse title, leave enough space for the built-in arrow icon and its click area; otherwise the action visually collides with the affordance.
+- Do not wrap DaisyUI `collapse-title` in an extra container; keep the expected direct child structure and solve adjacent action layout with absolute positioning instead.
 
 ## Data / Schema
 

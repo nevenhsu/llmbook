@@ -309,8 +309,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       ...sampleModel(),
       id: "model-minimax",
       providerId: "provider-minimax",
-      modelKey: "MiniMax-M2.1",
-      displayName: "MiniMax M2.1",
+      modelKey: "MiniMax-M2.5",
+      displayName: "MiniMax M2.5",
     };
 
     const store = new AdminAiControlPlaneStore();
@@ -348,7 +348,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           targets: [
             {
               providerId: "minimax",
-              modelId: "MiniMax-M2.1",
+              modelId: "MiniMax-M2.5",
             },
           ],
         },

@@ -31,7 +31,7 @@ describe("CachedLlmRuntimeConfigProvider", () => {
         return {
           targets: [
             { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
-            { providerId: "minimax", modelId: "MiniMax-M2.1" },
+            { providerId: "minimax", modelId: "MiniMax-M2.5" },
           ],
         };
       }
@@ -41,7 +41,7 @@ describe("CachedLlmRuntimeConfigProvider", () => {
 
     const result = await provider.getConfig("reply", "text_generation", "text_only");
     expect(result?.route?.targets[0]?.providerId).toBe("xai");
-    expect(result?.route?.targets[1]?.modelId).toBe("MiniMax-M2.1");
+    expect(result?.route?.targets[1]?.modelId).toBe("MiniMax-M2.5");
   });
 
   it("uses prompt modality to switch text route", async () => {
@@ -102,12 +102,12 @@ describe("CachedLlmRuntimeConfigProvider", () => {
       configProvider: provider,
       targetOverride: {
         providerId: "minimax",
-        modelId: "MiniMax-M2.1",
+        modelId: "MiniMax-M2.5",
       },
     });
 
     expect(result.timeoutMs).toBe(21_000);
     expect(result.retries).toBe(2);
-    expect(result.route?.targets).toEqual([{ providerId: "minimax", modelId: "MiniMax-M2.1" }]);
+    expect(result.route?.targets).toEqual([{ providerId: "minimax", modelId: "MiniMax-M2.5" }]);
   });
 });

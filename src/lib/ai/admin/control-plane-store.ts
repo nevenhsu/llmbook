@@ -358,8 +358,8 @@ const SUPPORTED_MODEL_CATALOG: Array<{
   },
   {
     providerKey: "minimax",
-    modelKey: "MiniMax-M2.1",
-    displayName: "MiniMax M2.1",
+    modelKey: "MiniMax-M2.5",
+    displayName: "MiniMax M2.5",
     capability: "text_generation",
     metadata: { input: ["text"], output: ["text"] },
     supportsImageInputPrompt: false,
@@ -1124,6 +1124,199 @@ function extractJsonFromText(text: string): string {
 
 function normalizeSingleLineText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function containsCjk(text: string): boolean {
+  return /[\u3400-\u9fff]/u.test(text);
+}
+
+function hasLikelyNamedReference(text: string): boolean {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /(?:參考|参考|像|例如|比如|inspired by|reference|references|like|such as)\s*[:：]?\s*[\p{L}]/iu.test(
+      normalized,
+    ) ||
+    /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/.test(normalized) ||
+    /\b(?:Fleabag|Sherlock|Batman|Madonna|Björk|Kafka|Murakami|Didion|Grisham|Musk)\b/.test(
+      normalized,
+    ) ||
+    /(?:伊坂幸太郎|村上春樹|宮藤官九郎|是枝裕和|昆汀|王家衛|芙莉貝格)/u.test(normalized)
+  );
+}
+
+function parseResolvedReferenceNames(text: string): string[] {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .split(/\s*(?:\||,|;|\/|、|，|；|\n)\s*/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2)
+    .filter((item, index, list) => list.indexOf(item) === index)
+    .slice(0, 3);
+}
+
+function buildPromptAssistReferenceFallback(input: {
+  mode: "random" | "optimize";
+  sourceText: string;
+  resolvedReferenceNames?: string[];
+}): string {
+  const referenceName = input.resolvedReferenceNames?.[0]?.trim() ?? "";
+  if (input.mode === "random") {
+    if (referenceName) {
+      return containsCjk(input.sourceText)
+        ? `以${referenceName}為參考，塑造一位有明確審美、重視生活觀察、回覆俐落而有判斷力的論壇人格。`
+        : `A forum persona shaped by ${referenceName}, with grounded observations, sharp taste, and concise, opinionated replies.`;
+    }
+    return containsCjk(input.sourceText)
+      ? "塑造一位有明確審美、重視生活觀察、回覆俐落而有判斷力的論壇人格。"
+      : "A forum persona with grounded observations, sharp taste, and concise, opinionated replies.";
+  }
+
+  return referenceName;
+}
+
+function normalizePromptAssistComparisonText(text: string): string {
+  return normalizeSingleLineText(text)
+    .toLowerCase()
+    .replace(/[“”"'`.,!?;:(){}\[\]<>，。！？；：「」『』（）【】]/gu, "")
+    .trim();
+}
+
+function stripTrailingReferenceAppendix(text: string): string {
+  return normalizeSingleLineText(text)
+    .replace(/\s*(?:reference|references|inspired by|like|such as)\s+[^.]+\.?$/iu, "")
+    .replace(/\s*(?:參考|参考|像|例如|比如)\s*[^。！？」]+[。！？]?$/u, "")
+    .trim();
+}
+
+function looksLikeImperativePersonaRequest(text: string): boolean {
+  const normalized = normalizeSingleLineText(text);
+  return (
+    /^(?:generate|create|write|craft|build)\b/i.test(normalized) ||
+    /^(?:請)?(?:生成|產生|建立|打造|寫出)/u.test(normalized)
+  );
+}
+
+function derivePromptAssistSubject(text: string): string {
+  const normalized = normalizeSingleLineText(text)
+    .replace(
+      /^(?:rewrite|optimize|improve|refine)\s+(?:this|the)?\s*(?:extra\s+)?prompt(?:\s+for\s+generating\s+a\s+forum\s+persona)?[:：]?\s*/iu,
+      "",
+    )
+    .replace(/^(?:generate|create|write|craft|build)\s+(?:me\s+)?(?:a|an|one)?\s*/iu, "")
+    .replace(/^(?:請)?(?:生成|產生|建立|打造|寫出|保留)(?:一個|一位|一名|個|位)?/u, "")
+    .replace(/[.。]+$/u, "")
+    .trim();
+
+  if (!normalized) {
+    return containsCjk(text) ? "創作者人格" : "forum persona";
+  }
+  return normalized;
+}
+
+function buildPromptAssistClarityFallback(
+  sourceText: string,
+  resolvedReferenceNames?: string[],
+): string {
+  const reference = buildPromptAssistReferenceFallback({
+    mode: "optimize",
+    sourceText,
+    resolvedReferenceNames,
+  });
+  const subject = derivePromptAssistSubject(sourceText);
+  if (containsCjk(sourceText)) {
+    return reference
+      ? `塑造一位受${subject}啟發的人格，明確寫出其審美立場、判斷偏好與互動方式，回覆機智但尊重、具體而不討好，參考${reference}。`
+      : `塑造一位受${subject}啟發的人格，明確寫出其審美立場、判斷偏好與互動方式，回覆機智但尊重、具體而不討好。`;
+  }
+
+  return reference
+    ? `A persona inspired by ${subject}, with a clear creative bias, values craft over hype, and responds with witty but respectful specificity. Reference ${reference}.`
+    : `A persona inspired by ${subject}, with a clear creative bias, values craft over hype, and responds with witty but respectful specificity.`;
+}
+
+function ensurePromptAssistReferenceName(input: {
+  text: string;
+  mode: "random" | "optimize";
+  sourceText: string;
+  resolvedReferenceNames?: string[];
+}): string {
+  const normalized = normalizeSingleLineText(input.text);
+  if (!normalized) {
+    return buildPromptAssistReferenceFallback({
+      mode: input.mode,
+      sourceText: input.sourceText,
+      resolvedReferenceNames: input.resolvedReferenceNames,
+    });
+  }
+  if (hasLikelyNamedReference(normalized)) {
+    return normalized;
+  }
+
+  const fallbackReference = buildPromptAssistReferenceFallback({
+    mode: input.mode,
+    sourceText: input.sourceText,
+    resolvedReferenceNames: input.resolvedReferenceNames,
+  });
+  if (!fallbackReference) {
+    return normalized;
+  }
+  if (input.mode === "random") {
+    return containsCjk(input.sourceText || normalized)
+      ? `${normalized} 參考${fallbackReference}。`
+      : `${normalized} Reference ${fallbackReference}.`;
+  }
+
+  return containsCjk(input.sourceText)
+    ? `${normalized} 參考${fallbackReference}。`
+    : `${normalized} Reference ${fallbackReference}.`;
+}
+
+function isWeakPromptAssistRewrite(input: {
+  text: string;
+  mode: "random" | "optimize";
+  sourceText: string;
+}): boolean {
+  if (input.mode !== "optimize") {
+    return false;
+  }
+
+  const normalizedOutput = normalizeSingleLineText(input.text);
+  const normalizedSource = normalizeSingleLineText(input.sourceText);
+  if (!normalizedOutput) {
+    return true;
+  }
+
+  if (looksLikeImperativePersonaRequest(normalizedOutput)) {
+    return true;
+  }
+
+  const outputWithoutReference = stripTrailingReferenceAppendix(normalizedOutput);
+  if (
+    normalizePromptAssistComparisonText(outputWithoutReference) ===
+    normalizePromptAssistComparisonText(normalizedSource)
+  ) {
+    return true;
+  }
+
+  const sourceHasReference = hasLikelyNamedReference(normalizedSource);
+  const outputHasReference = hasLikelyNamedReference(normalizedOutput);
+  if (!sourceHasReference && outputHasReference) {
+    const sourceComparable = normalizePromptAssistComparisonText(normalizedSource);
+    const outputComparable = normalizePromptAssistComparisonText(outputWithoutReference);
+    if (outputComparable === sourceComparable) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function parsePersonaStageObject(rawText: string): Record<string, unknown> {
@@ -2908,8 +3101,10 @@ export class AdminAiControlPlaneStore {
             "Maximum 60 words.",
             "Exactly 1 paragraph.",
             "Be precise and concrete.",
+            "Include at least 1 explicit real reference name.",
+            "Before writing the final prompt, first choose at least 1 real famous reference entity.",
             "Describe the persona's worldview, tone, bias, and interaction style.",
-            "You may include 1-3 explicit reference names such as creators, artists, public figures, or fictional characters when they sharpen the persona.",
+            "Use 1-3 explicit real reference names such as creators, artists, public figures, or fictional characters when they sharpen the persona.",
             "No filler, no explanation, no meta commentary.",
             "Do not mention schema, JSON, database fields, or implementation details.",
             "Do not sound like a generic AI assistant.",
@@ -2921,20 +3116,28 @@ export class AdminAiControlPlaneStore {
             "Keep the same language as the user's input.",
             "Plain text only.",
             "No markdown, no bullets, no numbering, no labels, no quotes, no JSON.",
-            "Maximum 60 words.",
+            "Maximum 75 words.",
             "Exactly 1 paragraph.",
             "Preserve the user's core intent.",
             "Preserve explicit reference names such as creators, artists, public figures, and fictional characters when the user provides them.",
-            "Make it more precise, concrete, and vivid.",
+            "If the user did not provide any explicit reference name, infer at least 1 fitting real reference entity from the user's clues before writing the final brief.",
+            "Interpret the user's input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
+            "Make it materially clearer, more specific, and more usable as a persona brief.",
             "Remove fluff, repetition, vagueness, and filler.",
-            "Strengthen worldview, tone, bias, and interaction style.",
+            "Use the resolved reference as behavioral source material, not just as a name to mention.",
+            "The final brief must reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
+            "Explicitly sharpen the persona's role or domain, worldview or bias, tone, and interaction style.",
+            "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
+            "If the reference name could be swapped with another without changing the rest of the sentence, the result is too generic.",
+            "Do not merely append a reference name to the user's original sentence.",
+            "Do not start with imperative framing like Generate/Create/Write; return the rewritten brief itself.",
             "Do not mention schema, JSON, database fields, or implementation details.",
             "Do not explain your edits.",
             "Return only the rewritten prompt.",
           ].join("\n");
     const userPrompt =
       mode === "random"
-        ? "Create one concise extra prompt for a new forum persona. If useful, include explicit reference names."
+        ? "Create one concise extra prompt for a new forum persona."
         : `Rewrite this extra prompt to be more precise and concise while preserving intent:\n\n${trimmedInput}`;
 
     const invocationConfig = await resolveLlmInvocationConfig({
@@ -2951,36 +3154,162 @@ export class AdminAiControlPlaneStore {
       includeXai: true,
       includeMinimax: true,
     });
-    const llmResult = await invokeLLM({
-      registry,
-      taskType: "generic",
-      routeOverride: invocationConfig.route,
-      modelInput: {
-        prompt: `${systemPrompt}\n\n${userPrompt}`,
-        maxOutputTokens: Math.min(model.maxOutputTokens ?? 256, 256),
-        temperature: mode === "random" ? 0.8 : 0.3,
-      },
-      entityId: `persona-prompt-assist:${model.id}`,
-      timeoutMs: invocationConfig.timeoutMs,
-      retries: invocationConfig.retries,
-      onProviderError: async (event) => {
-        await this.recordLlmInvocationError({
-          providerKey: event.providerId,
-          modelKey: event.modelId,
-          error: event.error,
-          errorDetails: event.errorDetails,
-        });
-      },
-    });
+    const invokePromptAssist = async (promptText: string, temperature: number): Promise<string> => {
+      const llmResult = await invokeLLM({
+        registry,
+        taskType: "generic",
+        routeOverride: invocationConfig.route,
+        modelInput: {
+          prompt: promptText,
+          maxOutputTokens: Math.min(model.maxOutputTokens ?? 320, 320),
+          temperature,
+        },
+        entityId: `persona-prompt-assist:${model.id}`,
+        timeoutMs: invocationConfig.timeoutMs,
+        retries: invocationConfig.retries,
+        onProviderError: async (event) => {
+          await this.recordLlmInvocationError({
+            providerKey: event.providerId,
+            modelKey: event.modelId,
+            error: event.error,
+            errorDetails: event.errorDetails,
+          });
+        },
+      });
 
-    const text = llmResult.text.trim();
+      return llmResult.text.trim();
+    };
+
+    const hasExplicitReference = trimmedInput.length > 0 && hasLikelyNamedReference(trimmedInput);
+    const resolveReferenceNames = async (): Promise<string[]> => {
+      if (hasExplicitReference) {
+        return [];
+      }
+
+      const resolverPrompt =
+        mode === "random"
+          ? [
+              "Choose 1 to 3 real famous reference entities for a distinct forum persona.",
+              "Return only the names, separated by |.",
+              "No explanation, no prose, no bullets, no numbering.",
+              "Allowed types include creators, artists, public figures, fictional characters, and works.",
+            ].join("\n")
+          : [
+              "Infer 1 to 3 fitting real reference entities from the user's persona clues.",
+              "The clues may refer to works, eras, domains, styles, genres, countries, personalities, values, or claims.",
+              "Return only the names, separated by |.",
+              "No explanation, no prose, no bullets, no numbering.",
+              "",
+              `User input:\n${trimmedInput}`,
+            ].join("\n");
+
+      const firstPass = parseResolvedReferenceNames(
+        await invokePromptAssist(resolverPrompt, mode === "random" ? 0.9 : 0.35),
+      );
+      if (firstPass.length > 0) {
+        return firstPass;
+      }
+
+      const repairResolverPrompt =
+        mode === "random"
+          ? [
+              "Your previous answer did not return valid reference names.",
+              "Return 1 to 3 real famous people, characters, or works only.",
+              "Use the format: Name | Name | Name",
+              "No explanation.",
+            ].join("\n")
+          : [
+              "Your previous answer did not return valid reference names.",
+              "Infer 1 to 3 fitting real reference entities from the user's persona clues.",
+              "Return only the names in this format: Name | Name | Name",
+              "No explanation.",
+              "",
+              `User input:\n${trimmedInput}`,
+            ].join("\n");
+
+      return parseResolvedReferenceNames(
+        await invokePromptAssist(repairResolverPrompt, mode === "random" ? 0.7 : 0.25),
+      );
+    };
+
+    const resolvedReferenceNames = await resolveReferenceNames();
+    const resolvedReferenceInstruction =
+      resolvedReferenceNames.length > 0
+        ? mode === "random"
+          ? `Use at least 1 of these resolved reference entities: ${resolvedReferenceNames.join(", ")}.`
+          : `Use at least 1 of these resolved reference entities if they fit: ${resolvedReferenceNames.join(", ")}.`
+        : null;
+
+    let text = await invokePromptAssist(
+      [systemPrompt, resolvedReferenceInstruction, userPrompt]
+        .filter((item): item is string => Boolean(item))
+        .join("\n\n"),
+      mode === "random" ? 0.8 : 0.3,
+    );
     if (!text) {
       if (trimmedInput.length > 0) {
-        return normalizeSingleLineText(trimmedInput);
+        return ensurePromptAssistReferenceName({
+          text: buildPromptAssistClarityFallback(trimmedInput, resolvedReferenceNames),
+          mode,
+          sourceText: trimmedInput,
+          resolvedReferenceNames,
+        });
       }
-      return "A forum persona with clear taste, grounded observations, and a distinct point of view.";
+      return ensurePromptAssistReferenceName({
+        text: "",
+        mode,
+        sourceText: trimmedInput,
+        resolvedReferenceNames,
+      });
     }
-    return normalizeSingleLineText(text);
+
+    if (isWeakPromptAssistRewrite({ text, mode, sourceText: trimmedInput })) {
+      const repairPrompt = [
+        "The previous rewrite was too weak.",
+        "Rewrite the user's persona brief into a meaningfully clearer and more specific version.",
+        "Keep the same language as the user's input.",
+        "Plain text only.",
+        "Exactly 1 paragraph, maximum 75 words.",
+        "Preserve the core intent.",
+        "Include at least 1 explicit real reference name.",
+        resolvedReferenceInstruction,
+        "If there is no explicit reference in the user input, infer one from the clues before writing.",
+        "Treat the input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
+        "Use the resolved reference as behavioral source material, not just as a name to mention.",
+        "Make the final brief reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
+        "Make the role or domain, worldview or bias, tone, and interaction style obvious in the sentence itself.",
+        "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
+        "If the reference name could be swapped with another without changing the rest of the sentence, the rewrite is still too weak.",
+        "Do not simply append a reference name to the original sentence.",
+        "Do not start with Generate/Create/Write or similar imperative phrasing.",
+        "Return only the rewritten brief.",
+        "",
+        `Original input:\n${trimmedInput}`,
+        "",
+        `Weak rewrite to improve:\n${text}`,
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("\n");
+
+      const repairedText = await invokePromptAssist(repairPrompt, 0.35);
+      if (repairedText) {
+        text = repairedText;
+      }
+    }
+
+    const finalizedText = ensurePromptAssistReferenceName({
+      text,
+      mode,
+      sourceText: trimmedInput || text,
+      resolvedReferenceNames,
+    });
+    if (isWeakPromptAssistRewrite({ text: finalizedText, mode, sourceText: trimmedInput })) {
+      return buildPromptAssistClarityFallback(
+        trimmedInput || finalizedText,
+        resolvedReferenceNames,
+      );
+    }
+    return finalizedText;
   }
 
   public async previewPersonaInteraction(input: {

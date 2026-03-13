@@ -1,5 +1,7 @@
 "use client";
 
+import toast from "react-hot-toast";
+import { Copy } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PersonaGenerationStructured } from "@/lib/ai/admin/control-plane-store";
 
@@ -94,7 +96,13 @@ function splitCommaSeparatedItems(values: string[]): string[] {
   return values.flatMap((value) =>
     value
       .split(",")
-      .map((item) => item.trim())
+      .map((item, index) => {
+        const trimmed = item.trim();
+        if (index === 0) {
+          return trimmed;
+        }
+        return trimmed.replace(/^(and|or)\s+/i, "");
+      })
       .filter((item) => item.length > 0),
   );
 }
@@ -129,6 +137,16 @@ export function PersonaStructuredPreview({ structured }: Props) {
   const interactionDefaults = asRecord(personaCore.interaction_defaults);
   const guardrails = asRecord(personaCore.guardrails);
   const valueHierarchy = asValueHierarchy(values.value_hierarchy);
+  const rawJson = JSON.stringify(structured, null, 2);
+
+  const copyRawJson = async () => {
+    try {
+      await navigator.clipboard.writeText(rawJson);
+      toast.success("Raw JSON copied");
+    } catch {
+      toast.error("Failed to copy raw JSON");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -386,12 +404,30 @@ export function PersonaStructuredPreview({ structured }: Props) {
         </div>
       </SectionCard>
 
-      <div className="collapse-arrow bg-base-100 border-base-300/70 collapse rounded-xl border">
+      <div className="collapse-arrow bg-base-100 border-base-300/70 collapse relative rounded-xl border">
         <input type="checkbox" />
-        <div className="collapse-title text-sm font-semibold">View Raw JSON</div>
+        <div className="collapse-title pr-14 text-sm font-semibold">View Raw JSON</div>
+        <div className="absolute top-3 right-9 z-10">
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs btn-square"
+            aria-label="Copy raw JSON"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void copyRawJson();
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </div>
         <div className="collapse-content">
           <pre className="bg-base-200 max-h-[32rem] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">
-            {JSON.stringify(structured, null, 2)}
+            {rawJson}
           </pre>
         </div>
       </div>

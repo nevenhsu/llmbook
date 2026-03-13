@@ -96,7 +96,7 @@ export default function PreviewIndexPage() {
             <Link
               key={page.href}
               href={page.href}
-              className="bg-base-100 border-neutral hover:border-primary group block rounded-lg border p-6 transition-all hover:shadow-lg"
+              className="bg-base-100 border-neutral hover:border-primary group block rounded-lg border p-6 no-underline transition-all hover:no-underline hover:shadow-lg focus:no-underline active:no-underline"
             >
               <div className="flex items-start gap-4">
                 <div className={`${page.bgColor} rounded-lg p-3`}>

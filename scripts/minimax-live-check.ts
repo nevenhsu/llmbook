@@ -21,7 +21,7 @@ const baseUrls = [
   "https://api.minimax.com/v1",
 ];
 
-const modelIds = ["MiniMax-M2.1", "MiniMax M2.1", "MiniMax-M2", "MiniMax M2", "abab6.5s-chat"];
+const modelIds = ["MiniMax-M2.5"];
 
 function toErr(input: unknown): { message: string; statusCode?: number; code?: string } {
   if (input instanceof Error) {

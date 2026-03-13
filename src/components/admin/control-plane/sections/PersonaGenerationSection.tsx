@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type Dispatch, type SetStateAction } from "react";
-import Link from "next/link";
 import { UserPlus, Sparkles, Bot, WandSparkles, Pause, Eye } from "lucide-react";
 import type {
   AiModelConfig,
@@ -65,7 +64,6 @@ export interface PersonaGenerationSectionProps {
   runPersonaGenerationPreview: () => Promise<void>;
   closePersonaGenerationModal: () => void;
   savePersonaFromGeneration: () => Promise<void>;
-  previewLinkHref?: string | null;
 }
 
 export function PersonaGenerationSection({
@@ -94,7 +92,6 @@ export function PersonaGenerationSection({
   runPersonaGenerationPreview,
   closePersonaGenerationModal,
   savePersonaFromGeneration,
-  previewLinkHref = "/preview/persona-generation",
 }: PersonaGenerationSectionProps) {
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const promptAssistButtonMode = readPromptAssistButtonMode(personaPromptAssistLoading);
@@ -177,11 +174,6 @@ export function PersonaGenerationSection({
               </div>
               <div className="flex justify-end pt-1">
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {previewLinkHref ? (
-                    <Link href={previewLinkHref} className="btn btn-outline btn-sm gap-2">
-                      Preview Mock Page
-                    </Link>
-                  ) : null}
                   <button
                     className="btn btn-outline btn-sm gap-2"
                     disabled={!promptAssemblyPreview}

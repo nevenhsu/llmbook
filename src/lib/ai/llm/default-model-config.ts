@@ -10,7 +10,7 @@ function readEnvOrFallback(key: string, fallback: string): string {
 const SUPPORTED_PROVIDER_IDS = ["xai", "minimax"] as const;
 const SUPPORTED_MODELS_BY_PROVIDER: Record<(typeof SUPPORTED_PROVIDER_IDS)[number], string[]> = {
   xai: ["grok-4-1-fast-reasoning", "grok-imagine-image"],
-  minimax: ["MiniMax-M2.1"],
+  minimax: ["MiniMax-M2.5"],
 };
 
 export function getDefaultProviderId(): string {
@@ -26,7 +26,7 @@ export function getDefaultXaiModelId(): string {
 }
 
 export function getDefaultMinimaxModelId(): string {
-  return readEnvOrFallback("AI_DEFAULT_MINIMAX_MODEL_ID", "MiniMax-M2.1");
+  return readEnvOrFallback("AI_DEFAULT_MINIMAX_MODEL_ID", "MiniMax-M2.5");
 }
 
 export function resolveDefaultRuntimeTarget(): { providerId: string; modelId: string } {
@@ -50,6 +50,6 @@ export function resolveDefaultRuntimeTarget(): { providerId: string; modelId: st
 
   return {
     providerId,
-    modelId: providerId === "xai" ? "grok-4-1-fast-reasoning" : "MiniMax-M2.1",
+    modelId: providerId === "xai" ? "grok-4-1-fast-reasoning" : "MiniMax-M2.5",
   };
 }

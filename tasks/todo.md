@@ -2,6 +2,29 @@
 
 ## Active
 
+- [x] Remove underline hover styling from preview-page cards and preview card links
+- [x] Verify preview routes keep card hover affordance without text decoration
+- [x] Show persona-generation elapsed time in the modal as persistent status UI, not only inside the loading state
+- [x] Verify the preview flow preserves and displays the final generation duration after loading completes
+- [x] Make prompt-assist writer prompts derive concrete behavior, values, and interaction style from resolved references instead of emitting generic persona language
+- [x] Verify reference-first outputs feel specifically shaped by the resolved reference rather than a reusable template with a pasted name
+- [x] Redesign persona prompt-assist as a reference-first pipeline that resolves at least one relevant reference entity before rewriting the final prompt
+- [x] Support broad reference cues in `Context / Extra Prompt`, including works, eras, domains, styles, genres, countries, personalities, traits, values, and claims
+- [x] Verify prompt-assist stops doing pure sentence expansion and instead returns a brief shaped by retrieved reference entities plus clearer persona dimensions
+- [x] Normalize work/IP title inputs in persona prompt-assist so raw titles like `one piece` rewrite into clear franchise/character-based briefs
+- [x] Verify prompt-assist no longer produces malformed fallback text such as `a one piece` for short title inputs
+- [x] Route non-empty persona prompt-assist input through a fitting reference selection step before optimize generation
+- [x] Verify optimize prompt-assist injects a suitable reference name when the user did not provide one, while still preserving explicit user references
+- [x] Make empty-input persona prompt-assist choose a random concrete reference person before generation instead of relying on a fixed fallback name
+- [x] Verify random prompt-assist returns a real reference prompt and keeps fallback behavior aligned with the same sampled reference
+- [x] Make persona prompt-assist rewrite generic persona requests into clearer, more specific briefs instead of only appending a reference name
+- [x] Add a second-pass quality gate for weak prompt-assist outputs and verify the tightened optimize flow with targeted tests
+- [x] Make persona prompt-assist always return at least one explicit real reference name instead of abstract-only prompts
+- [x] Verify random/optimize/fallback prompt-assist paths all preserve or inject a concrete reference name
+- [x] Add a copy action to the `View Raw JSON` header in persona structured preview without interfering with the collapse toggle
+- [x] Verify the persona preview flow still renders and exposes the new raw-JSON copy affordance
+- [x] Remove the leftover `previewLinkHref` prop from persona generation section contracts and preview harness wiring
+- [x] Verify persona preview flow still renders after removing the preview-link prop path
 - [x] Replace persona modal `Rendered Preview` JSON-style output with a structured card UI for persona data
 - [x] Keep raw JSON available as a secondary collapse while verifying the preview flow still renders the mock persona correctly
 - [x] Make persona `View Prompt` show `[admin_extra_prompt]` as template placeholder text instead of leaking mock/example content
@@ -113,6 +136,8 @@
 - Prompt template preview now marks `validated_context` explicitly for downstream stages so prompt review shows the staged dependency location before any generation runs.
 - Persona `View Prompt` now treats `[admin_extra_prompt]` as a template placeholder instead of echoing mock/example prose, so the prompt preview does not look like it contains a fixed system persona.
 - Persona generation `Rendered Preview` now defaults to a structured card-based UI for identity, values, context, references, and memories, with raw JSON moved behind a secondary collapse for diagnostics.
+- Persona generation section no longer carries a `previewLinkHref` escape hatch; preview routing should be handled by the page shell, not by a leftover optional prop on the shared section component.
+- Persona prompt-assist now guarantees at least one explicit real reference name, using prompt instructions first and a server-side fallback when the model still responds with only abstract descriptors.
 
 ## Current State
 
@@ -123,3 +148,8 @@
   - existing input -> concise same-language optimization
 - Persona generation parse failures now surface raw model output in the modal.
 - Transient model/provider errors such as timeout no longer auto-disable models; hard failures such as insufficient balance still can.
+
+- [x] Rename all MiniMax model references to MiniMax-M2.5 and update paired display labels/model keys
+- [x] Verify no legacy MiniMax model references remain in code, tests, or docs
+- [ ] Fix persona prompt-assist so short IP/work inputs like "one piece" are recognized as references instead of becoming malformed generic subjects
+- [ ] Verify prompt-assist rewrites work/IP inputs into explicit character or franchise references rather than "a one piece" fallbacks

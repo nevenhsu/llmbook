@@ -4,12 +4,12 @@ import { createMinimaxProvider } from "@/lib/ai/llm/providers/minimax-provider";
 describe("createMinimaxProvider", () => {
   it("returns missing key error when api key is absent", async () => {
     const provider = createMinimaxProvider({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       apiKey: "",
     });
 
     const result = await provider.generateText({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       prompt: "ping",
       maxOutputTokens: 1,
       temperature: 0,
@@ -31,13 +31,13 @@ describe("createMinimaxProvider", () => {
     }));
 
     const provider = createMinimaxProvider({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       apiKey: "test-key",
       generateTextImpl,
     });
 
     const result = await provider.generateText({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       prompt: "ping",
       maxOutputTokens: 1,
       temperature: 0,
@@ -59,13 +59,13 @@ describe("createMinimaxProvider", () => {
     );
 
     const provider = createMinimaxProvider({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       apiKey: "test-key",
       generateTextImpl,
     });
 
     const result = await provider.generateText({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       prompt: "ping",
       maxOutputTokens: 1,
       temperature: 0,
@@ -97,13 +97,13 @@ describe("createMinimaxProvider", () => {
     }));
 
     const provider = createMinimaxProvider({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       apiKey: "test-key",
       generateTextImpl,
     });
 
     const result = await provider.generateText({
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
       prompt: "ping",
       maxOutputTokens: 1,
       temperature: 0,

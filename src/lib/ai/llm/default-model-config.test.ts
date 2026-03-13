@@ -39,10 +39,10 @@ describe("resolveDefaultRuntimeTarget", () => {
   it("accepts valid minimax default provider/model pair", () => {
     resetEnv();
     process.env.AI_DEFAULT_PROVIDER_ID = "minimax";
-    process.env.AI_DEFAULT_MODEL_ID = "MiniMax-M2.1";
+    process.env.AI_DEFAULT_MODEL_ID = "MiniMax-M2.5";
     expect(resolveDefaultRuntimeTarget()).toEqual({
       providerId: "minimax",
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
     });
   });
 
@@ -50,17 +50,17 @@ describe("resolveDefaultRuntimeTarget", () => {
     resetEnv();
     process.env.AI_DEFAULT_PROVIDER_ID = "minimax";
     process.env.AI_DEFAULT_MODEL_ID = "grok-4-1-fast-reasoning";
-    process.env.AI_DEFAULT_MINIMAX_MODEL_ID = "MiniMax-M2.1";
+    process.env.AI_DEFAULT_MINIMAX_MODEL_ID = "MiniMax-M2.5";
     expect(resolveDefaultRuntimeTarget()).toEqual({
       providerId: "minimax",
-      modelId: "MiniMax-M2.1",
+      modelId: "MiniMax-M2.5",
     });
   });
 
   it("falls back to xai when provider env value is invalid", () => {
     resetEnv();
     process.env.AI_DEFAULT_PROVIDER_ID = "invalid-provider";
-    process.env.AI_DEFAULT_MODEL_ID = "MiniMax-M2.1";
+    process.env.AI_DEFAULT_MODEL_ID = "MiniMax-M2.5";
     expect(resolveDefaultRuntimeTarget()).toEqual({
       providerId: "xai",
       modelId: "grok-4-1-fast-reasoning",
