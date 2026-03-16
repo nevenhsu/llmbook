@@ -5,12 +5,40 @@ import {
   type PromptBoardContext,
 } from "@/lib/ai/admin/control-plane-store";
 
+const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM } = vi.hoisted(
+  () => ({
+    createDbBackedLlmProviderRegistry: vi.fn(async () => ({ providers: new Map() })),
+    resolveLlmInvocationConfig: vi.fn(async () => ({
+      route: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
+      timeoutMs: 30_000,
+      retries: 0,
+    })),
+    invokeLLM: vi.fn(async () => ({
+      text: JSON.stringify({ markdown: "Preview response" }),
+      finishReason: "stop",
+      error: null,
+    })),
+  }),
+);
+
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({}),
 }));
 
 vi.mock("@/lib/tiptap-markdown", () => ({
   markdownToEditorHtml: vi.fn(() => "<p>ok</p>"),
+}));
+
+vi.mock("@/lib/ai/llm/default-registry", () => ({
+  createDbBackedLlmProviderRegistry,
+}));
+
+vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
+  resolveLlmInvocationConfig,
+}));
+
+vi.mock("@/lib/ai/llm/invoke-llm", () => ({
+  invokeLLM,
 }));
 
 function sampleModel(): AiModelConfig {
@@ -43,6 +71,24 @@ function sampleBoardContext(): PromptBoardContext {
     name: "Illustration Critique",
     description: "Constructive feedback for visual drafts",
     rules: [{ title: "Be specific", description: "Actionable comments only" }],
+  };
+}
+
+function sampleProvider() {
+  return {
+    id: "provider-1",
+    providerKey: "xai",
+    displayName: "xAI",
+    sdkPackage: "@ai-sdk/xai",
+    status: "active" as const,
+    testStatus: "success" as const,
+    keyLast4: "1234",
+    hasKey: true,
+    lastApiErrorCode: null,
+    lastApiErrorMessage: null,
+    lastApiErrorAt: null,
+    createdAt: "2026-03-06T00:00:00.000Z",
+    updatedAt: "2026-03-06T00:00:00.000Z",
   };
 }
 
@@ -142,7 +188,7 @@ function mockControlPlane(store: AdminAiControlPlaneStore) {
         forbiddenRules: "forbidden",
       },
     },
-    providers: [],
+    providers: [sampleProvider()],
     models: [sampleModel()],
   });
 }
@@ -150,6 +196,14 @@ function mockControlPlane(store: AdminAiControlPlaneStore) {
 describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    createDbBackedLlmProviderRegistry.mockClear();
+    resolveLlmInvocationConfig.mockClear();
+    invokeLLM.mockClear();
+    invokeLLM.mockResolvedValue({
+      text: JSON.stringify({ markdown: "Preview response" }),
+      finishReason: "stop",
+      error: null,
+    });
   });
 
   it("includes post/comment image request contract and populated target_context", async () => {
@@ -193,12 +247,19 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain(
       "[global_policy]\nPolicy:\npolicy\nForbidden:\nforbidden",
     );
+    expect(preview.markdown).toBe("Preview response");
+    expect(preview.rawResponse).toBe(JSON.stringify({ markdown: "Preview response" }));
   });
 
-  it("keeps explicit empty target_context fallback when target info is missing", async () => {
+  it("uses a post-shaped contract with title and body when taskType is post", async () => {
     const store = new AdminAiControlPlaneStore();
     mockControlPlane(store);
     mockPersona(store);
+    invokeLLM.mockResolvedValueOnce({
+      text: JSON.stringify({ title: "Preview title", body: "Preview response" }),
+      finishReason: "stop",
+      error: null,
+    });
 
     const preview = await store.previewPersonaInteraction({
       personaId: "persona-1",
@@ -221,6 +282,13 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("Scenario:");
     expect(preview.assembledPrompt).toContain("Response:");
     expect(preview.assembledPrompt).toContain("Use natural conversational tone");
+    expect(preview.assembledPrompt).toContain("title: string");
+    expect(preview.assembledPrompt).toContain("body: string");
+    expect(preview.assembledPrompt).not.toContain("markdown: string");
+    expect(preview.markdown).toBe("# Preview title\n\nPreview response");
+    expect(preview.rawResponse).toBe(
+      JSON.stringify({ title: "Preview title", body: "Preview response" }),
+    );
   });
 
   it("uses structured vote contract with target metadata", async () => {

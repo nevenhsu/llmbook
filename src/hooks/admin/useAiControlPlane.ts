@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { ApiError, apiDelete, apiFetchJson, apiPatch, apiPost, apiPut } from "@/lib/api/fetch-json";
-import { getRouteModelIdsFromActiveOrder } from "@/lib/ai/admin/active-model-order";
 import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 import type {
   AdminControlPlaneSnapshot,
   AiModelConfig,
   AiProviderConfig,
   PolicyReleaseListItem,
+  PersonaProfile,
   PreviewResult,
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
@@ -21,6 +21,7 @@ import {
   SUPPORTED_PROVIDERS,
 } from "@/lib/ai/admin/control-plane-types";
 import {
+  defaultInteractionTaskContext,
   derivePersonaUsername,
   optionLabelForModel,
 } from "@/components/admin/control-plane/control-plane-utils";
@@ -145,12 +146,21 @@ export function useAiControlPlane({
   const [interactionInput, setInteractionInput] = useState({
     personaId: initialPersonas[0]?.id ?? "",
     modelId: initialModels.find((item) => item.capability === "text_generation")?.id ?? "",
-    taskType: "comment" as "post" | "comment",
-    taskContext: "Reply to a user asking for critique on their concept art draft.",
-    personaCoreOverrideJson: "",
-    longMemoryOverride: "",
+    taskType: "post" as "post" | "comment",
+    taskContext: defaultInteractionTaskContext("post"),
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
+  const [interactionPreviewModalOpen, setInteractionPreviewModalOpen] = useState(false);
+  const [interactionPreviewModalPhase, setInteractionPreviewModalPhase] =
+    useState<PersonaGenerationModalPhase>("idle");
+  const [interactionPreviewModalError, setInteractionPreviewModalError] = useState<string | null>(
+    null,
+  );
+  const [interactionPreviewElapsedSeconds, setInteractionPreviewElapsedSeconds] = useState(0);
+  const [selectedPersonaProfile, setSelectedPersonaProfile] = useState<PersonaProfile | null>(null);
+  const [interactionTaskAssistLoading, setInteractionTaskAssistLoading] = useState(false);
+  const [interactionTaskAssistError, setInteractionTaskAssistError] = useState<string | null>(null);
+  const [interactionTaskAssistElapsedSeconds, setInteractionTaskAssistElapsedSeconds] = useState(0);
   const [modelTestImageLinks, setModelTestImageLinks] = useState<Record<string, string>>({});
 
   const textModels = useMemo(
@@ -171,6 +181,71 @@ export function useAiControlPlane({
     () => personas.find((item) => item.id === interactionInput.personaId) ?? null,
     [personas, interactionInput.personaId],
   );
+  const interactionPreviewStartedAtRef = useRef<number | null>(null);
+  const interactionTaskAssistStartedAtRef = useRef<number | null>(null);
+  const interactionTaskAssistAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!interactionInput.personaId) {
+      setSelectedPersonaProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const profile = await apiFetchJson<PersonaProfile>(
+          `/api/admin/ai/personas/${interactionInput.personaId}`,
+        );
+        if (!cancelled) {
+          setSelectedPersonaProfile(profile);
+        }
+      } catch {
+        if (!cancelled) {
+          setSelectedPersonaProfile(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactionInput.personaId]);
+
+  useEffect(() => {
+    if (
+      interactionPreviewModalPhase !== "loading" ||
+      interactionPreviewStartedAtRef.current === null
+    ) {
+      return;
+    }
+
+    const updateElapsed = () => {
+      setInteractionPreviewElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - interactionPreviewStartedAtRef.current!) / 1000)),
+      );
+    };
+
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [interactionPreviewModalPhase]);
+
+  useEffect(() => {
+    if (!interactionTaskAssistLoading || interactionTaskAssistStartedAtRef.current === null) {
+      return;
+    }
+
+    const updateElapsed = () => {
+      setInteractionTaskAssistElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - interactionTaskAssistStartedAtRef.current!) / 1000)),
+      );
+    };
+
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [interactionTaskAssistLoading]);
 
   const refreshAll = async () => {
     try {
@@ -776,22 +851,17 @@ export function useAiControlPlane({
       toast.error("persona/model are required");
       return;
     }
-
-    let personaCoreOverride: Record<string, unknown> | undefined;
-    if (interactionInput.personaCoreOverrideJson.trim()) {
-      try {
-        const parsed = JSON.parse(interactionInput.personaCoreOverrideJson);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          toast.error("Persona core override must be a JSON object");
-          return;
-        }
-        personaCoreOverride = parsed as Record<string, unknown>;
-      } catch {
-        toast.error("Persona core override JSON is invalid");
-        return;
-      }
+    if (!hasNonEmptyText(interactionInput.taskContext)) {
+      toast.error("Task context is required");
+      return;
     }
 
+    setInteractionPreviewModalOpen(true);
+    setInteractionPreviewModalPhase("loading");
+    setInteractionPreviewModalError(null);
+    setInteractionPreviewElapsedSeconds(0);
+    setInteractionPreview(null);
+    interactionPreviewStartedAtRef.current = Date.now();
     try {
       const res = await apiPost<{ preview: PreviewResult }>(
         "/api/admin/ai/persona-interaction/preview",
@@ -800,58 +870,79 @@ export function useAiControlPlane({
           modelId: interactionInput.modelId,
           taskType: interactionInput.taskType,
           taskContext: interactionInput.taskContext,
-          personaCoreOverride,
-          longMemoryOverride: interactionInput.longMemoryOverride.trim() || undefined,
         },
       );
       setInteractionPreview(res.preview);
+      setInteractionPreviewModalPhase("success");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to run interaction preview");
+      const message = error instanceof Error ? error.message : "Failed to run interaction preview";
+      setInteractionPreviewModalError(message);
+      setInteractionPreviewModalPhase("error");
+      toast.error(message);
+    } finally {
+      interactionPreviewStartedAtRef.current = null;
     }
   };
 
-  const resolveRoutePrimaryModelId = (_scope: "post" | "comment") => {
-    return (
-      getRouteModelIdsFromActiveOrder({
-        providers: providers.map((provider) => ({
-          id: provider.id,
-          providerKey: provider.providerKey,
-          status: provider.status,
-          hasKey: provider.hasKey,
-        })),
-        models: models.map((model) => ({
-          id: model.id,
-          providerId: model.providerId,
-          modelKey: model.modelKey,
-          capability: model.capability,
-          status: model.status,
-          testStatus: model.testStatus,
-          lifecycleStatus: model.lifecycleStatus,
-          displayOrder: model.displayOrder,
-          supportsImageInputPrompt: model.supportsImageInputPrompt,
-        })),
-        capability: "text_generation",
-      })[0] ?? ""
-    );
+  const closeInteractionPreviewModal = () => {
+    setInteractionPreviewModalOpen(false);
   };
 
-  const applyRoutePrimaryModel = () => {
-    const modelId = resolveRoutePrimaryModelId(interactionInput.taskType);
-    if (!modelId) {
-      toast.error("No primary route model found for selected task type");
+  const assistInteractionTaskContext = async () => {
+    if (interactionTaskAssistLoading) {
+      interactionTaskAssistAbortRef.current?.abort();
+      interactionTaskAssistAbortRef.current = null;
+      interactionTaskAssistStartedAtRef.current = null;
+      setInteractionTaskAssistLoading(false);
+      setInteractionTaskAssistElapsedSeconds(0);
       return;
     }
-    setInteractionInput((prev) => ({ ...prev, modelId }));
-    toast.success("Applied route primary model");
-  };
 
-  const routePrimaryModelLabel = () => {
-    const modelId = resolveRoutePrimaryModelId(interactionInput.taskType);
-    if (!modelId) {
-      return "Not configured";
+    if (!interactionInput.modelId) {
+      toast.error("model is required");
+      return;
     }
-    const model = models.find((item) => item.id === modelId);
-    return model ? optionLabelForModel(model, providers) : "Unknown model";
+
+    const abortController = new AbortController();
+    interactionTaskAssistAbortRef.current = abortController;
+    interactionTaskAssistStartedAtRef.current = Date.now();
+    setInteractionTaskAssistElapsedSeconds(0);
+    setInteractionTaskAssistError(null);
+    setInteractionTaskAssistLoading(true);
+
+    try {
+      const res = await apiPost<{ text: string }>(
+        "/api/admin/ai/persona-interaction/context-assist",
+        {
+          modelId: interactionInput.modelId,
+          taskType: interactionInput.taskType,
+          personaId: interactionInput.personaId || undefined,
+          taskContext: interactionInput.taskContext.trim() || undefined,
+        },
+        { signal: abortController.signal },
+      );
+      if (interactionTaskAssistAbortRef.current !== abortController) {
+        return;
+      }
+      setInteractionInput((prev) => ({
+        ...prev,
+        taskContext: res.text,
+      }));
+      toast.success("Task context generated");
+    } catch (error) {
+      if (isPersonaGenerationAbortError(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to generate task context";
+      setInteractionTaskAssistError(message);
+      toast.error(message);
+    } finally {
+      if (interactionTaskAssistAbortRef.current === abortController) {
+        interactionTaskAssistAbortRef.current = null;
+      }
+      interactionTaskAssistStartedAtRef.current = null;
+      setInteractionTaskAssistLoading(false);
+    }
   };
 
   const personaStepStatus = {
@@ -906,6 +997,14 @@ export function useAiControlPlane({
     interactionInput,
     setInteractionInput,
     interactionPreview,
+    interactionPreviewModalOpen,
+    interactionPreviewModalPhase,
+    interactionPreviewModalError,
+    interactionPreviewElapsedSeconds,
+    selectedPersonaProfile,
+    interactionTaskAssistLoading,
+    interactionTaskAssistError,
+    interactionTaskAssistElapsedSeconds,
     modelTestImageLinks,
     latestRelease,
     activeRelease,
@@ -929,8 +1028,8 @@ export function useAiControlPlane({
     closePersonaGenerationModal,
     savePersonaFromGeneration,
     runInteractionPreview,
-    applyRoutePrimaryModel,
-    routePrimaryModelLabel,
+    closeInteractionPreviewModal,
+    assistInteractionTaskContext,
     personaStepStatus,
   };
 }

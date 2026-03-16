@@ -135,14 +135,14 @@
   .select:focus-within {
     outline: none !important;
     box-shadow: none !important;
-    border-color: transparent !important;
   }
 
   /* Input focus styles */
   .input:focus,
   .input:focus-within,
   .textarea:focus,
-  .select:focus {
+  .select:focus,
+  .select:focus-within {
     outline: none !important;
     box-shadow: none !important;
   }
@@ -161,6 +161,14 @@
     .textarea:focus {
       border-color: oklch(0.6 0.02 240) !important;
     }
+  }
+
+  [data-theme="light"] .select:is(:focus, :focus-within) {
+    border-color: oklch(0.4 0.02 240) !important;
+  }
+
+  [data-theme="black"] .select:is(:focus, :focus-within) {
+    border-color: oklch(0.6 0.02 240) !important;
   }
 }
 

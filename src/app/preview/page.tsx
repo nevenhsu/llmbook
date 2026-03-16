@@ -76,6 +76,14 @@ export default function PreviewIndexPage() {
       color: "text-violet-500",
       bgColor: "bg-violet-500/10",
     },
+    {
+      title: "Interaction Preview",
+      description: "Preview the interaction-preview modal flow with a static LLM response fixture",
+      href: "/preview/interaction-preview",
+      icon: Sparkles,
+      color: "text-emerald-500",
+      bgColor: "bg-emerald-500/10",
+    },
   ];
 
   return (

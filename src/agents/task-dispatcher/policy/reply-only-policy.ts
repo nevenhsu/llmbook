@@ -1,5 +1,3 @@
-import "@/lib/env";
-
 export type DispatcherPolicy = {
   replyEnabled: boolean;
   precheckEnabled: boolean;

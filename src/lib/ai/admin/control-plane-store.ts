@@ -7,6 +7,10 @@ import {
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
 import {
+  parseMarkdownActionOutput,
+  parsePostActionOutput,
+} from "@/lib/ai/prompt-runtime/action-output";
+import {
   PERSONA_GENERATION_MAX_INPUT_TOKENS,
   PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
@@ -122,6 +126,7 @@ export type PreviewTokenBudget = {
 export type PreviewResult = {
   assembledPrompt: string;
   markdown: string;
+  rawResponse?: string | null;
   renderOk: boolean;
   renderError: string | null;
   tokenBudget: PreviewTokenBudget;
@@ -160,6 +165,24 @@ export type PersonaGenerationStructured = {
     expires_in_hours: number | null;
     is_canonical: boolean;
     importance: number | null;
+  }>;
+};
+
+export type PersonaProfile = {
+  persona: PersonaSummary;
+  personaCore: Record<string, unknown>;
+  personaMemories: Array<{
+    id: string;
+    memoryType: "memory" | "long_memory";
+    scope: "persona" | "thread" | "task";
+    memoryKey: string | null;
+    content: string;
+    metadata: Record<string, unknown>;
+    expiresAt: string | null;
+    isCanonical: boolean;
+    importance: number | null;
+    createdAt: string;
+    updatedAt: string;
   }>;
 };
 
@@ -2594,23 +2617,7 @@ export class AdminAiControlPlaneStore {
     return { personaId };
   }
 
-  public async getPersonaProfile(personaId: string): Promise<{
-    persona: PersonaSummary;
-    personaCore: Record<string, unknown>;
-    personaMemories: Array<{
-      id: string;
-      memoryType: "memory" | "long_memory";
-      scope: "persona" | "thread" | "task";
-      memoryKey: string | null;
-      content: string;
-      metadata: Record<string, unknown>;
-      expiresAt: string | null;
-      isCanonical: boolean;
-      importance: number | null;
-      createdAt: string;
-      updatedAt: string;
-    }>;
-  }> {
+  public async getPersonaProfile(personaId: string): Promise<PersonaProfile> {
     const { data: persona, error: personaError } = await this.supabase
       .from("personas")
       .select("id, username, display_name, bio, status")
@@ -2689,6 +2696,143 @@ export class AdminAiControlPlaneStore {
         })),
       ],
     };
+  }
+
+  public async assistInteractionTaskContext(input: {
+    modelId: string;
+    taskType: "post" | "comment";
+    personaId?: string;
+    taskContext?: string;
+  }): Promise<string> {
+    const { providers, models } = await this.getActiveControlPlane();
+    const { model, provider } = resolvePersonaTextModel({
+      modelId: input.modelId,
+      models,
+      providers,
+      featureLabel: "interaction context assist",
+    });
+
+    const invocationConfig = await resolveLlmInvocationConfig({
+      taskType: "generic",
+      capability: "text_generation",
+      promptModality: "text_only",
+      targetOverride: {
+        providerId: provider.providerKey,
+        modelId: model.modelKey,
+      },
+    });
+
+    const registry = await createDbBackedLlmProviderRegistry({
+      includeMock: true,
+      includeXai: true,
+      includeMinimax: true,
+    });
+
+    let personaProfile: PersonaProfile | null = null;
+    if (input.personaId) {
+      try {
+        personaProfile = await this.getPersonaProfile(input.personaId);
+      } catch {
+        personaProfile = null;
+      }
+    }
+
+    const personaName = personaProfile?.persona.display_name ?? "the selected persona";
+    const referenceSourceNames = Array.isArray(
+      asRecord(personaProfile?.personaCore ?? {}).reference_sources,
+    )
+      ? (asRecord(personaProfile?.personaCore ?? {}).reference_sources as unknown[])
+          .map((item) => readString(asRecord(item)?.name).trim())
+          .filter((name) => name.length > 0)
+      : [];
+    const existingTaskContext = input.taskContext?.trim() ?? "";
+
+    const prompt = [
+      existingTaskContext
+        ? "Write one short Interaction Preview scenario related to the current task context."
+        : "Write one short random Interaction Preview scenario.",
+      `Task type: ${input.taskType}.`,
+      `Persona: ${personaName}.`,
+      referenceSourceNames.length > 0
+        ? `Reference anchors: ${referenceSourceNames.join(", ")}.`
+        : null,
+      existingTaskContext ? `Existing task context:\n${existingTaskContext}` : null,
+      "Return plain text only.",
+      existingTaskContext
+        ? "Keep it clearly related, but do not copy or paraphrase the input."
+        : "Make it realistic and specific.",
+      input.taskType === "comment"
+        ? existingTaskContext
+          ? "Make it feel like a forum comment or critique that invites a reply."
+          : "Make it feel like a forum comment that invites a reply."
+        : existingTaskContext
+          ? "Make it feel like a related topic seed for the next post."
+          : "Make it feel like a topic seed for a new post.",
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
+
+    const metadata = {
+      entityType: "admin_ai_control_plane" as const,
+      entityId: `interaction-context-assist:${model.id}`,
+    };
+    const runAssistPrompt = async (
+      candidatePrompt: string,
+      maxOutputTokens: number,
+      temperature: number,
+    ) => {
+      return invokeLLM({
+        registry,
+        taskType: "generic",
+        routeOverride: invocationConfig.route,
+        modelInput: {
+          prompt: candidatePrompt,
+          maxOutputTokens,
+          temperature,
+          metadata,
+        },
+        entityId: metadata.entityId,
+        timeoutMs: invocationConfig.timeoutMs,
+        retries: invocationConfig.retries,
+        onProviderError: async (event) => {
+          await this.recordLlmInvocationError({
+            providerKey: event.providerId,
+            modelKey: event.modelId,
+            error: event.error,
+            errorDetails: event.errorDetails,
+          });
+        },
+      });
+    };
+
+    const firstAttempt = await runAssistPrompt(prompt, 900, 0.4);
+    if (firstAttempt.text.trim()) {
+      return firstAttempt.text.trim();
+    }
+
+    const retryPrompt = [
+      existingTaskContext
+        ? "Rewrite the current task context into one short related Interaction Preview scenario."
+        : "Create one short Interaction Preview scenario.",
+      `Task type: ${input.taskType}.`,
+      `Persona: ${personaName}.`,
+      referenceSourceNames.length > 0
+        ? `Reference anchors: ${referenceSourceNames.join(", ")}.`
+        : null,
+      existingTaskContext ? `Existing task context:\n${existingTaskContext}` : null,
+      "Return plain text only.",
+      "One short paragraph. No markdown.",
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
+
+    const secondAttempt = await runAssistPrompt(retryPrompt, 1400, 0.2);
+    if (secondAttempt.text.trim()) {
+      return secondAttempt.text.trim();
+    }
+    throw new Error(
+      `interaction context assist returned empty output (finishReason=${String(secondAttempt.finishReason ?? "unknown")}; error=${String(secondAttempt.error ?? "none")}; attempts=${String(secondAttempt.attempts ?? 0)})`,
+    );
   }
 
   public async patchPersonaProfile(input: {
@@ -3319,30 +3463,39 @@ export class AdminAiControlPlaneStore {
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
-    personaCoreOverride?: Record<string, unknown>;
-    longMemoryOverride?: string;
   }): Promise<PreviewResult> {
-    const { document, models } = await this.getActiveControlPlane();
-    const model = models.find((item) => item.id === input.modelId);
-    if (!model) {
-      throw new Error("model not found");
-    }
+    const { document, providers, models } = await this.getActiveControlPlane();
+    const { model, provider } = resolvePersonaTextModel({
+      modelId: input.modelId,
+      models,
+      providers,
+      featureLabel: "interaction preview",
+    });
+    const invocationConfig = await resolveLlmInvocationConfig({
+      taskType: "generic",
+      capability: "text_generation",
+      promptModality: "text_only",
+      targetOverride: {
+        providerId: provider.providerKey,
+        modelId: model.modelKey,
+      },
+    });
+    const registry = await createDbBackedLlmProviderRegistry({
+      includeMock: true,
+      includeXai: true,
+      includeMinimax: true,
+    });
 
     const profile = await this.getPersonaProfile(input.personaId);
     const personaMemory = profile.personaMemories
       .filter((item) => item.memoryType === "memory")
       .map((item) => `${item.memoryKey ?? "memory"}: ${item.content}`)
       .join("\n");
-    const longMemoryText =
-      input.longMemoryOverride ??
-      profile.personaMemories
-        .filter((item) => item.memoryType === "long_memory")
-        .map((item) => item.content)
-        .join("\n");
-    const effectivePersonaCore = (input.personaCoreOverride ?? profile.personaCore) as Record<
-      string,
-      unknown
-    >;
+    const longMemoryText = profile.personaMemories
+      .filter((item) => item.memoryType === "long_memory")
+      .map((item) => item.content)
+      .join("\n");
+    const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
     const personaCoreText = JSON.stringify(effectivePersonaCore, null, 2);
     const runtimePersonaProfile = normalizeSoulProfile(effectivePersonaCore).profile;
 
@@ -3380,30 +3533,80 @@ export class AdminAiControlPlaneStore {
       maxOutputTokens: DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
     });
 
-    const markdown = [
-      `## Preview (${model.displayName})`,
-      "",
-      `Persona: ${profile.persona.display_name} (${profile.persona.username})`,
-      `Task: ${input.taskType}`,
-      "",
-      input.taskContext || "(empty task context)",
-    ].join("\n");
+    const assembledPrompt = formatPrompt(blocks);
+
+    const llmResult = await invokeLLM({
+      registry,
+      taskType: "generic",
+      routeOverride: invocationConfig.route,
+      modelInput: {
+        prompt: assembledPrompt,
+        maxOutputTokens: Math.min(
+          model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+          DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+        ),
+        temperature: 0.3,
+      },
+      entityId: `interaction-preview:${model.id}`,
+      timeoutMs: invocationConfig.timeoutMs,
+      retries: invocationConfig.retries,
+      onProviderError: async (event) => {
+        await this.recordLlmInvocationError({
+          providerKey: event.providerId,
+          modelKey: event.modelId,
+          error: event.error,
+          errorDetails: event.errorDetails,
+        });
+      },
+    });
+
+    if (!llmResult.text.trim()) {
+      throw new Error(
+        llmResult.error ??
+          `interaction preview returned empty output (finishReason=${String(llmResult.finishReason ?? "unknown")})`,
+      );
+    }
+
+    const normalizedOutput = llmResult.text.trim();
+    let markdown = "";
+    let contractError: string | null = null;
+
+    if (input.taskType === "post") {
+      const parsed = parsePostActionOutput(normalizedOutput);
+      contractError = parsed.error;
+      markdown = [parsed.title ? `# ${parsed.title}` : null, parsed.body.trim()]
+        .filter((part): part is string => Boolean(part))
+        .join("\n\n")
+        .trim();
+    } else if (input.taskType === "comment") {
+      const parsed = parseMarkdownActionOutput(normalizedOutput);
+      markdown = parsed.markdown.trim();
+    } else {
+      markdown = ["```json", normalizedOutput, "```"].join("\n");
+    }
+
+    if (!markdown) {
+      throw new Error("interaction preview returned empty markdown");
+    }
 
     try {
       markdownToEditorHtml(markdown);
       return {
-        assembledPrompt: formatPrompt(blocks),
+        assembledPrompt,
         markdown,
-        renderOk: true,
-        renderError: null,
+        rawResponse: normalizedOutput,
+        renderOk: contractError === null,
+        renderError: contractError,
         tokenBudget,
       };
     } catch (error) {
       return {
-        assembledPrompt: formatPrompt(blocks),
+        assembledPrompt,
         markdown,
+        rawResponse: normalizedOutput,
         renderOk: false,
-        renderError: error instanceof Error ? error.message : "render validation failed",
+        renderError:
+          contractError ?? (error instanceof Error ? error.message : "render validation failed"),
         tokenBudget,
       };
     }

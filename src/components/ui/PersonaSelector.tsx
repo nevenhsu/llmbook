@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, User } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search, Loader2 } from "lucide-react";
 import { apiFetchJson } from "@/lib/api/fetch-json";
 import Avatar from "@/components/ui/Avatar";
 
@@ -21,6 +21,21 @@ interface PersonaSelectorProps {
   disabled?: boolean;
 }
 
+function normalizePersonaQuery(value: string) {
+  return value.trim().replace(/^@+/, "").toLowerCase();
+}
+
+function queryMatchesPersona(query: string, persona: PersonaOption) {
+  if (query.length === 0) {
+    return true;
+  }
+
+  const username = persona.username.toLowerCase();
+  const displayName = persona.display_name.toLowerCase();
+
+  return username.includes(query) || displayName.includes(query);
+}
+
 export default function PersonaSelector({
   value,
   onChange,
@@ -32,17 +47,57 @@ export default function PersonaSelector({
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<PersonaOption[]>(initialOptions);
+  const [recentSelection, setRecentSelection] = useState<PersonaOption | null>(null);
+  const blurTimeoutRef = useRef<number | null>(null);
+
+  const clearBlurTimeout = () => {
+    if (blurTimeoutRef.current !== null) {
+      window.clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+  };
 
   // Sync options with initialOptions
   useEffect(() => {
-    if (initialOptions.length > 0) {
-      setOptions(initialOptions);
-    }
+    setOptions(initialOptions);
   }, [initialOptions]);
+
+  const selectedPersona = useMemo(() => {
+    return options.find((p) => p.id === value) || initialOptions.find((p) => p.id === value);
+  }, [options, initialOptions, value]);
+
+  useEffect(() => {
+    if (selectedPersona) {
+      setRecentSelection(selectedPersona);
+    }
+  }, [selectedPersona]);
+
+  const displayText = selectedPersona ? `@${selectedPersona.username}` : "";
+  const inputValue = open || query.length > 0 ? query : displayText;
+  const normalizedQuery = normalizePersonaQuery(query);
+
+  const visibleOptions = useMemo(() => {
+    const merged = [...options];
+
+    if (recentSelection && queryMatchesPersona(normalizedQuery, recentSelection)) {
+      const alreadyPresent = merged.some((persona) => persona.id === recentSelection.id);
+      if (!alreadyPresent) {
+        merged.unshift(recentSelection);
+      }
+    }
+
+    return merged;
+  }, [options, recentSelection, normalizedQuery]);
 
   // Search effect
   useEffect(() => {
-    if (!open && !query) return;
+    const isSelectedDisplayQuery =
+      Boolean(selectedPersona) && normalizedQuery === selectedPersona.username.toLowerCase();
+
+    if (!open || normalizedQuery.length === 0 || isSelectedDisplayQuery) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     const timer = setTimeout(async () => {
@@ -50,8 +105,8 @@ export default function PersonaSelector({
       try {
         const params = new URLSearchParams();
         params.set("limit", "20");
-        if (query.trim()) {
-          params.set("q", query.trim());
+        if (normalizedQuery) {
+          params.set("q", normalizedQuery);
         }
 
         const res = await apiFetchJson<{ items: PersonaOption[] }>(
@@ -72,34 +127,62 @@ export default function PersonaSelector({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, open]);
+  }, [normalizedQuery, open, selectedPersona]);
 
-  const selectedPersona = useMemo(() => {
-    return options.find((p) => p.id === value) || initialOptions.find((p) => p.id === value);
-  }, [options, initialOptions, value]);
+  useEffect(
+    () => () => {
+      clearBlurTimeout();
+    },
+    [],
+  );
 
-  // Display text for the input when not focused
-  const displayText = selectedPersona ? `@${selectedPersona.username}` : "";
+  const handleInputText = (nextQuery: string) => {
+    setQuery(nextQuery);
+    if (!open) {
+      setOpen(true);
+    }
+    if (value) {
+      onChange("");
+    }
+  };
+
+  const showAvatar = selectedPersona && (!open || query === displayText);
+  const leftAdornment = showAvatar ? (
+    <Avatar
+      src={selectedPersona.avatar_url || undefined}
+      fallbackSeed={selectedPersona.username}
+      size="xs"
+      isPersona
+    />
+  ) : (
+    <Search size={14} />
+  );
 
   return (
     <div className="relative w-full">
       <div className="relative">
-        <div className="absolute top-1/2 left-3 z-10 -translate-y-1/2 opacity-50">
-          <Search size={14} />
+        <div className="absolute top-1/2 left-3 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center opacity-70">
+          {leftAdornment}
         </div>
         <input
           type="text"
-          className="input input-bordered input-sm w-full pr-10 pl-9"
+          className="input input-bordered input-sm w-full pr-10 pl-10"
           placeholder={placeholder}
-          value={open ? query : displayText}
-          onChange={(e) => setQuery(e.target.value)}
+          value={inputValue}
+          onChange={(e) => handleInputText(e.target.value)}
           onFocus={() => {
+            clearBlurTimeout();
             setOpen(true);
-            setQuery("");
+            setQuery((currentQuery) => (currentQuery.length > 0 ? currentQuery : displayText));
           }}
           onBlur={() => {
             // Delay to allow mousedown on options
-            setTimeout(() => setOpen(false), 200);
+            clearBlurTimeout();
+            blurTimeoutRef.current = window.setTimeout(() => {
+              setOpen(false);
+              setLoading(false);
+              blurTimeoutRef.current = null;
+            }, 200);
           }}
           disabled={disabled}
           autoComplete="off"
@@ -111,11 +194,11 @@ export default function PersonaSelector({
 
       {open && (
         <div className="bg-base-100 border-base-300 absolute z-[150] mt-1 max-h-60 w-full overflow-auto rounded-lg border shadow-xl">
-          {options.length === 0 && !loading ? (
+          {visibleOptions.length === 0 && !loading ? (
             <div className="px-4 py-3 text-center text-sm opacity-50">No personas found</div>
           ) : (
             <div className="p-1">
-              {options.map((persona) => (
+              {visibleOptions.map((persona) => (
                 <button
                   key={persona.id}
                   type="button"
@@ -124,9 +207,12 @@ export default function PersonaSelector({
                   }`}
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    clearBlurTimeout();
+                    setRecentSelection(persona);
                     onChange(persona.id, persona);
                     setOpen(false);
                     setQuery("");
+                    setLoading(false);
                   }}
                 >
                   <Avatar

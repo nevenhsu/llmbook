@@ -2,6 +2,74 @@
 
 ## Active
 
+- [x] Fix `taskType=post` interaction preview contract so it no longer reuses the comment-style markdown-only JSON shape
+- [x] Require a post-shaped AI output for interaction preview with at least `title` plus body/image fields
+- [x] Update interaction preview rendering, mock fixtures, and focused tests to reflect the new post contract
+- [x] Verify store, route, and preview-sandbox behavior with focused tests and diff checks
+
+- [x] Add a dedicated /preview interaction-preview sandbox that reuses the real admin Interaction Preview flow with local mock data
+- [x] Store the interaction-preview mock payload in a standalone JSON fixture and wire a thin wrapper around it
+- [x] Verify the interaction-preview preview page flow with focused component tests and preview-index wiring
+- [x] Make Interaction Preview task-category switches apply matching Cthulhu-themed default task context
+- [x] Verify task-category changes update both task type and default context together
+- [x] Open Interaction Preview in a modal immediately on Run Preview and show live loading state
+- [x] Match Interaction Preview modal footer UX to Persona Generation with elapsed time and rerun action
+- [x] Disable Run Preview when Task Context / Content is empty and remove the inline preview panel
+- [x] Verify live interaction preview store/route/UI flow with focused tests
+- [x] Make Interaction Preview run a real LLM generation for the current task context instead of returning placeholder markdown
+- [x] Replace inline Interaction Preview output with a modal flow matching Persona Generation loading/error/success UX
+- [x] Disable Run Preview when Task Context / Content is empty and add rerun from the modal footer
+- [x] Verify the new Interaction Preview live-preview flow with focused store/route/UI tests
+- [x] Make Interaction Preview task-context AI assist extend existing content instead of always generating random text
+- [x] Thread current task context through the context-assist API/route/store path
+- [x] Verify task-context assist respects existing content for related generation and still randomizes when empty
+- [x] Remove deprecated persona/memory override fields from Interaction Preview UI and state
+- [x] Delete the override payload path from persona interaction preview route/store/tests
+- [x] Verify Interaction Preview still runs after removing the override contract
+- [x] Refine the Interaction Preview selected-persona card hierarchy so identity and references are visually separated
+- [x] Verify the selected-persona card keeps the new identity/reference structure in the focused UI test
+- [x] Extract a shared model-selection field for Generate Persona and Interaction Preview
+- [x] Replace Interaction Preview `Model Override` with the shared `Model Selection` UI
+- [x] Verify both sections still render and use the shared model selector correctly
+- [x] Add reference-source display to the Interaction Preview selected-persona summary
+- [x] Add an AI action for Task Context / Content to generate random interaction test data
+- [x] Reuse existing admin/persona APIs or store helpers instead of inventing duplicate fetch paths
+- [x] Verify the Interaction Preview UI flow after adding reference display and task-context AI generation
+- [x] Remove the Interaction Preview Apply Route action from the admin UI
+- [x] Delete the now-unused route-model helper wiring tied only to Apply Route
+- [x] Verify Interaction Preview still compiles without the Apply Route path
+- [x] Simplify global select focus CSS after confirming the explicit override works
+- [x] Verify the simplified select focus selectors still express the same theme-aware border behavior
+- [x] Replace the remaining transparent global select focus border override with explicit theme-aware border colors
+- [x] Verify globals.css no longer emits transparent border-color for select focus states
+- [x] Move admin select focus border styling into global.css so all select controls share the same focus treatment
+- [x] Remove redundant per-component select focus border overrides after the global style is in place
+- [x] Verify global select focus styling matches the Target Persona field treatment
+- [x] Restore visible focus border styling for control-plane select inputs
+- [x] Verify select focus styles stay visible after the control-plane update
+- [x] Remove stale PersonaSelector logic introduced during recent bug fixes
+- [x] Simplify PersonaSelector state flow for selected display, editable query, and recent selection fallback
+- [x] Re-run PersonaSelector regression tests after cleanup
+- [x] Normalize Target Persona queries by stripping leading @ before local and remote matching
+- [x] Add regression coverage for @handle edits querying without the @ prefix
+- [x] Verify PersonaSelector still preserves recent selection while using normalized handle search
+- [x] Preserve the last selected persona in Target Persona dropdown while the edited query still matches it
+- [x] Add a regression test for trimming a selected @ai_username and keeping that persona selectable
+- [x] Verify PersonaSelector still shows matching recent selection even when remote results are empty
+- [x] Reproduce the Interaction Preview target-persona delete-to-empty input lock bug
+- [x] Fix PersonaSelector so clearing a selected persona still leaves the field editable
+- [x] Add a focused regression test for delete-to-empty then continue typing
+- [x] Verify the selector flow after the delete-to-empty fix
+- [x] Fix Interaction Preview target-persona field so selecting a persona does not show misleading input loading
+- [x] Keep target-persona input editable and clear the selected persona immediately when the text changes
+- [x] Show the selected target persona avatar alongside @ai_username in Interaction Preview
+- [x] Verify the Interaction Preview target-persona flow with targeted UI tests
+- [x] Reproduce the `AI Policy Verify` workflow failure locally with the same install and test commands
+- [x] Identify the root cause in the failing policy tests or workflow environment
+- [x] Add or update a focused regression test before changing implementation
+- [x] Implement the minimal fix for the `AI Policy Verify` failure
+- [x] Re-run the workflow-equivalent verification and document the result in the review notes
+
 - [x] Remove underline hover styling from preview-page cards and preview card links
 - [x] Verify preview routes keep card hover affordance without text decoration
 - [x] Show persona-generation elapsed time in the modal as persistent status UI, not only inside the loading state
@@ -79,6 +147,16 @@
 
 ## Review
 
+- Root cause: interaction preview treated `taskType=post` exactly like `comment`, so the prompt contract only required `markdown` and the preview parser never expected `title/body` despite the real post creation path requiring `title` and `body`.
+- Fix: split the prompt/output contract so `post` now requires `title`, `body`, and image fields, add a post-specific parser, and render post previews as `# title` plus body markdown while keeping the full raw JSON response available for contract inspection.
+- Preview sandbox alignment: updated the `/preview/interaction-preview` fixture so the mocked post preview shows the same `title/body` shape as the live runtime contract instead of the old comment-style payload.
+- Verification: `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`, `npx vitest run src/app/api/admin/ai/persona-interaction/preview/route.test.ts`, `npx vitest run src/components/admin/control-plane/InteractionPreviewMockPage.test.ts`, and `git diff --check -- <touched files>` all passed.
+
+- Root cause for `AI Policy Verify`: `src/lib/ai/policy/policy-control-plane.ts` imports `DEFAULT_DISPATCHER_POLICY` from `src/agents/task-dispatcher/policy/reply-only-policy.ts`, and that module had a top-level `import "@/lib/env"`. In GitHub Actions, where `.env` files and Supabase vars are absent, test startup failed with `Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL` before any policy assertions ran.
+- Fix: remove the unnecessary `@/lib/env` side-effect import from `src/agents/task-dispatcher/policy/reply-only-policy.ts` so the dispatcher policy module stays pure and import-safe in CI.
+- Regression coverage: added `src/agents/task-dispatcher/policy/reply-only-policy.test.ts`, which changes into a temp directory with no `.env` files, unsets the required Supabase vars, dynamically imports the module, and verifies `loadDispatcherPolicy()` still returns the default policy.
+- Verification: `npm test -- src/agents/task-dispatcher/policy/reply-only-policy.test.ts` failed before the fix with the same missing-env error. After the fix, `env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY -u SUPABASE_SERVICE_ROLE_KEY -u SUPABASE_STORAGE_BUCKET npx -y node@20 node_modules/vitest/vitest.mjs run src/agents/task-dispatcher/policy/reply-only-policy.test.ts src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/policy/reply-interaction-eligibility.test.ts` passed with `3 passed`, `16 passed`.
+
 - Root cause: prompt over-weights persona tone and cooperative brainstorming, but does not require disagreement, judgment, or new thread-value.
 - Fix direction: add explicit reply objective, hard constraints for stance/new angle, anti-sycophancy rules, and evaluation rubric tied to discussion value rather than warmth.
 - Approved new architecture direction: unify `reference-driven persona synthesis`, `runtime creative planning`, and `auto-ranking generation` under shared logic modules used by admin UI, production execution, and AI agent workflow.
@@ -148,6 +226,18 @@
   - existing input -> concise same-language optimization
 - Persona generation parse failures now surface raw model output in the modal.
 - Transient model/provider errors such as timeout no longer auto-disable models; hard failures such as insufficient balance still can.
+- Interaction Preview now shows the selected persona's reference sources in the summary row, so operators can verify the current reference anchors before running a preview.
+- Interaction Preview `Task Context / Content` now has an AI helper that generates a random scenario using the chosen model and selected persona, so preview testing no longer depends on hand-written seed content.
+- Verification: `npx vitest run src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts src/app/api/admin/ai/persona-interaction/context-assist/route.test.ts`
+- Generate Persona and Interaction Preview now reuse the same `ModelSelectionField` UI, so model labels and dropdown styling stay aligned across both admin flows.
+- Verification: `npx vitest run src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts`
+- Interaction Preview no longer exposes persona-core or long-memory override controls; the preview route/store now use the persisted persona core and memories directly instead of carrying a dead override contract.
+- Verification: `npx vitest run src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts src/app/api/admin/ai/persona-interaction/preview/route.test.ts`
+- Interaction Preview task-context AI assist now uses the current textarea content as an anchor when present and only falls back to a random scenario when the field is empty.
+- Verification: `npx vitest run src/app/api/admin/ai/persona-interaction/context-assist/route.test.ts src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts`
+- Interaction Preview context-assist now raises the output ceiling and retries once with a shorter prompt before surfacing an explicit empty-output AI error, so transient provider empties get one recovery attempt without hiding real model failures.
+- Verification: `npx vitest run src/lib/ai/admin/control-plane-store.interaction-context-assist.test.ts src/app/api/admin/ai/persona-interaction/context-assist/route.test.ts src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts`
+- Interaction Preview context-assist now uses a shorter helper prompt and larger output ceilings (`900` / `1400`), which is a better fit for MiniMax than the earlier heavier wording with `420` / `640`.
 
 - [x] Rename all MiniMax model references to MiniMax-M2.5 and update paired display labels/model keys
 - [x] Verify no legacy MiniMax model references remain in code, tests, or docs

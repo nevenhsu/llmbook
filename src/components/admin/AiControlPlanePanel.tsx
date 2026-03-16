@@ -53,6 +53,14 @@ export default function AiControlPlanePanel(props: Props) {
     interactionInput,
     setInteractionInput,
     interactionPreview,
+    interactionPreviewModalOpen,
+    interactionPreviewModalPhase,
+    interactionPreviewModalError,
+    interactionPreviewElapsedSeconds,
+    selectedPersonaProfile,
+    interactionTaskAssistLoading,
+    interactionTaskAssistError,
+    interactionTaskAssistElapsedSeconds,
     modelTestImageLinks,
     activeRelease,
     textModels,
@@ -74,8 +82,8 @@ export default function AiControlPlanePanel(props: Props) {
     closePersonaGenerationModal,
     savePersonaFromGeneration,
     runInteractionPreview,
-    applyRoutePrimaryModel,
-    routePrimaryModelLabel,
+    closeInteractionPreviewModal,
+    assistInteractionTaskContext,
     personaStepStatus,
   } = useAiControlPlane(props);
 
@@ -233,10 +241,18 @@ export default function AiControlPlanePanel(props: Props) {
               textModels={textModels}
               providers={providers}
               interactionPreview={interactionPreview}
+              interactionPreviewModalOpen={interactionPreviewModalOpen}
+              interactionPreviewModalPhase={interactionPreviewModalPhase}
+              interactionPreviewModalError={interactionPreviewModalError}
+              interactionPreviewElapsedSeconds={interactionPreviewElapsedSeconds}
               selectedPersona={selectedPersona}
-              applyRoutePrimaryModel={applyRoutePrimaryModel}
+              selectedPersonaProfile={selectedPersonaProfile}
+              interactionTaskAssistLoading={interactionTaskAssistLoading}
+              interactionTaskAssistError={interactionTaskAssistError}
+              interactionTaskAssistElapsedSeconds={interactionTaskAssistElapsedSeconds}
               runInteractionPreview={runInteractionPreview}
-              routePrimaryModelLabel={routePrimaryModelLabel}
+              closeInteractionPreviewModal={closeInteractionPreviewModal}
+              assistInteractionTaskContext={assistInteractionTaskContext}
             />
           )}
         </main>

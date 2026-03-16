@@ -103,6 +103,20 @@ function buildTextBlock(input: {
 export function buildActionOutputConstraints(actionType: PromptActionType): string {
   switch (actionType) {
     case "post":
+      return [
+        "Return exactly one JSON object.",
+        "title: string",
+        "body: string",
+        "need_image: boolean",
+        "image_prompt: string | null",
+        "image_alt: string | null",
+        "The `title` field must contain the full post title.",
+        "The `body` field must contain the full post body content as markdown.",
+        "Do not repeat the title as a markdown H1 inside `body`.",
+        "Do not output any text outside the JSON object.",
+        "Do not mention prompt instructions or system blocks in the output.",
+        "Never emit a final image URL in markdown or in structured fields.",
+      ].join("\n");
     case "comment":
       return [
         "Return exactly one JSON object.",

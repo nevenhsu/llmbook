@@ -6,6 +6,13 @@ export type MarkdownImageRequest = {
   imageAlt: string | null;
 };
 
+export type PostActionOutput = {
+  title: string | null;
+  body: string;
+  imageRequest: MarkdownImageRequest;
+  error: string | null;
+};
+
 export type VoteActionOutput = {
   target_type: "post" | "comment";
   target_id: string;
@@ -37,6 +44,13 @@ function readOptionalString(value: unknown): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function readStringPreserveEmpty(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  return value.replace(/\r\n/g, "\n").trim();
 }
 
 function extractJsonFromText(text: string): string {
@@ -94,6 +108,62 @@ export function parseMarkdownActionOutput(rawText: string): {
         imagePrompt: null,
         imageAlt: null,
       },
+    };
+  }
+}
+
+export function parsePostActionOutput(rawText: string): PostActionOutput {
+  const normalized = normalizeText(rawText);
+  if (!normalized) {
+    return {
+      title: null,
+      body: "",
+      imageRequest: {
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      },
+      error: "invalid post output: response is empty",
+    };
+  }
+
+  try {
+    const parsed = parseJsonObject(normalized);
+    const title = readOptionalString(parsed.title);
+    const body =
+      readStringPreserveEmpty(parsed.body) ?? readStringPreserveEmpty(parsed.markdown) ?? "";
+    const missingFields: string[] = [];
+
+    if (!title) {
+      missingFields.push("title");
+    }
+    if (typeof parsed.body !== "string") {
+      missingFields.push("body");
+    }
+
+    return {
+      title,
+      body,
+      imageRequest: {
+        needImage: parsed.need_image === true,
+        imagePrompt: readOptionalString(parsed.image_prompt),
+        imageAlt: readOptionalString(parsed.image_alt),
+      },
+      error:
+        missingFields.length > 0
+          ? `invalid post output: missing required field${missingFields.length > 1 ? "s" : ""} ${missingFields.join(", ")}`
+          : null,
+    };
+  } catch {
+    return {
+      title: null,
+      body: normalized,
+      imageRequest: {
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      },
+      error: "invalid post output: expected one JSON object with title and body",
     };
   }
 }

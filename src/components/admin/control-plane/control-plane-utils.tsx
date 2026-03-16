@@ -21,6 +21,12 @@ export function derivePersonaUsername(displayName: string): string {
   return `ai_${minSized}`;
 }
 
+export function defaultInteractionTaskContext(taskType: "post" | "comment"): string {
+  return taskType === "post"
+    ? "Write a post about Cthulhu-themed worldbuilding and creature design for the forum."
+    : "Reply to a user's Cthulhu-themed concept art draft with specific feedback on the creature design and atmosphere.";
+}
+
 export function renderBadge(renderOk: boolean, renderError: string | null): ReactNode {
   if (renderOk) {
     return (

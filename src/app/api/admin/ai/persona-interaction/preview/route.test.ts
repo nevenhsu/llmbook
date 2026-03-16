@@ -34,6 +34,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     previewPersonaInteraction.mockResolvedValue({
       assembledPrompt: "prompt",
       markdown: "reply",
+      rawResponse: '{"markdown":"reply","need_image":false,"image_prompt":null,"image_alt":null}',
       renderOk: true,
       renderError: null,
       tokenBudget: {
@@ -93,8 +94,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         threadSummary: "Critique thread about composition choices.",
       },
       boardContext: undefined,
-      personaCoreOverride: undefined,
-      longMemoryOverride: undefined,
     });
   });
 
@@ -136,8 +135,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         threadSummary: "Users are split between warm and cool palettes.",
       },
       boardContext: undefined,
-      personaCoreOverride: undefined,
-      longMemoryOverride: undefined,
     });
   });
 
@@ -182,8 +179,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         targetAuthor: "critic_2",
         targetContent: "Push the contrast further in the focal area.",
       },
-      personaCoreOverride: undefined,
-      longMemoryOverride: undefined,
     });
   });
 });

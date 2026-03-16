@@ -11,8 +11,8 @@ import type {
 import type { PromptAssemblyPreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 import { SectionCard } from "../SectionCard";
 import { PersonaGenerationModal } from "../PersonaGenerationModal";
-import { optionLabelForModel } from "../control-plane-utils";
 import { PromptAssemblyModal } from "../PromptAssemblyModal";
+import { ModelSelectionField } from "../ModelSelectionField";
 import {
   formatPromptAssistStatus,
   readPromptAssistButtonMode,
@@ -112,26 +112,12 @@ export function PersonaGenerationSection({
             </p>
 
             <div className="space-y-5">
-              <div className="form-control w-full">
-                <label className="label py-1">
-                  <span className="label-text text-xs font-semibold opacity-70">
-                    Model Selection
-                  </span>
-                </label>
-                <select
-                  className="select select-bordered select-sm focus:select-primary w-full"
-                  value={personaGeneration.modelId}
-                  onChange={(e) =>
-                    setPersonaGeneration((prev) => ({ ...prev, modelId: e.target.value }))
-                  }
-                >
-                  {personaGenerationModels.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {optionLabelForModel(model, providers)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <ModelSelectionField
+                value={personaGeneration.modelId}
+                models={personaGenerationModels}
+                providers={providers}
+                onChange={(modelId) => setPersonaGeneration((prev) => ({ ...prev, modelId }))}
+              />
               <div className="form-control w-full">
                 <label className="label py-1">
                   <span className="label-text text-xs font-semibold opacity-70">
