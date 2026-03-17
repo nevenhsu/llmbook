@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
-import { MockModelAdapter, type ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
-import type { RuntimeSoulContext } from "@/lib/ai/soul/runtime-soul-profile";
+import {
+  MockModelAdapter,
+  type ModelAdapter,
+  type ModelGenerateTextInput,
+  type ModelGenerateTextOutput,
+} from "@/lib/ai/prompt-runtime/model-adapter";
+import type { RuntimeCoreContext } from "@/lib/ai/core/runtime-core-profile";
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { DEFAULT_DISPATCHER_POLICY } from "@/agents/task-dispatcher/policy/reply-only-policy";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
 
-function sampleSoul(): RuntimeSoulContext {
+function sampleSoul(): RuntimeCoreContext {
   return {
     profile: {
       identityCore: {
@@ -55,6 +61,28 @@ function sampleSoul(): RuntimeSoulContext {
         rhythm: "direct",
         preferredStructures: ["context"],
         lexicalTaboos: [],
+      },
+      voiceFingerprint: {
+        openingMove: "Lead with the concrete risk first.",
+        metaphorDomains: ["trade-off", "pressure point", "failure mode"],
+        attackStyle: "direct and evidence-oriented",
+        praiseStyle: "specific praise only after proof",
+        closingMove: "Close with a concrete takeaway.",
+        forbiddenShapes: ["support macro", "balanced explainer"],
+      },
+      taskStyleMatrix: {
+        post: {
+          entryShape: "Plant the angle early.",
+          bodyShape: "Build a clear argument instead of a tutorial.",
+          closeShape: "Land on a concrete takeaway.",
+          forbiddenShapes: ["newsletter tone", "advice list"],
+        },
+        comment: {
+          entryShape: "Sound like a live thread reply.",
+          feedbackShape: "reaction -> concrete note -> pointed close",
+          closeShape: "Keep the close short and thread-native.",
+          forbiddenShapes: ["sectioned critique", "support-macro tone"],
+        },
       },
       guardrails: {
         hardNo: ["unsafe"],
@@ -141,9 +169,23 @@ async function runWithAdapter(modelAdapter: ModelAdapter) {
 describe("generateReplyTextWithPromptRuntime", () => {
   it("uses model output when model returns plain markdown text", async () => {
     const result = await runWithAdapter(
-      new MockModelAdapter({ mode: "success", fixedText: "llm text" }),
+      new MockModelAdapter({
+        scriptedOutputs: [
+          { text: "llm text", finishReason: "stop" },
+          {
+            text: JSON.stringify({
+              passes: true,
+              issues: [],
+              repairGuidance: [],
+              severity: "low",
+              confidence: 0.94,
+              missingSignals: [],
+            }),
+            finishReason: "stop",
+          },
+        ],
+      }),
     );
-    expect(result.usedFallback).toBe(false);
     expect(result.text).toBe("llm text");
     expect(result.imageRequest).toEqual({
       needImage: false,
@@ -155,17 +197,31 @@ describe("generateReplyTextWithPromptRuntime", () => {
   it("parses structured image request from model output", async () => {
     const result = await runWithAdapter(
       new MockModelAdapter({
-        mode: "success",
-        fixedText: JSON.stringify({
-          markdown: "A concise reply.",
-          need_image: true,
-          image_prompt: "Editorial illustration of a roadmap with signposts.",
-          image_alt: "Roadmap signposts illustration",
-        }),
+        scriptedOutputs: [
+          {
+            text: JSON.stringify({
+              markdown: "A concise reply.",
+              need_image: true,
+              image_prompt: "Editorial illustration of a roadmap with signposts.",
+              image_alt: "Roadmap signposts illustration",
+            }),
+            finishReason: "stop",
+          },
+          {
+            text: JSON.stringify({
+              passes: true,
+              issues: [],
+              repairGuidance: [],
+              severity: "low",
+              confidence: 0.94,
+              missingSignals: [],
+            }),
+            finishReason: "stop",
+          },
+        ],
       }),
     );
 
-    expect(result.usedFallback).toBe(false);
     expect(result.text).toBe("A concise reply.");
     expect(result.imageRequest).toEqual({
       needImage: true,
@@ -174,25 +230,46 @@ describe("generateReplyTextWithPromptRuntime", () => {
     });
   });
 
-  it("falls back when model returns empty output", async () => {
-    const result = await runWithAdapter(new MockModelAdapter({ mode: "empty" }));
-    expect(result.usedFallback).toBe(true);
-    expect(result.text).toBe("");
+  it("throws when model returns empty output", async () => {
+    await expect(runWithAdapter(new MockModelAdapter({ mode: "empty" }))).rejects.toThrow(
+      "EMPTY_MODEL_OUTPUT",
+    );
   });
 
-  it("falls back when adapter throws", async () => {
+  it("throws when adapter throws", async () => {
+    const previousEnabled = process.env.AI_TOOL_RUNTIME_ENABLED;
+    process.env.AI_TOOL_RUNTIME_ENABLED = "false";
     const throwingAdapter: ModelAdapter = {
       generateText: async () => {
         throw new Error("model failed");
       },
     };
-    const result = await runWithAdapter(throwingAdapter);
-    expect(result.usedFallback).toBe(true);
-    expect(result.text).toBe("");
+    try {
+      await expect(runWithAdapter(throwingAdapter)).rejects.toThrow("model failed");
+    } finally {
+      process.env.AI_TOOL_RUNTIME_ENABLED = previousEnabled;
+    }
   });
 
   it("uses comment JSON envelope contract and populated target_context when focus target exists", async () => {
-    const result = await runWithAdapter(new MockModelAdapter({ mode: "success", fixedText: "ok" }));
+    const result = await runWithAdapter(
+      new MockModelAdapter({
+        scriptedOutputs: [
+          { text: "ok", finishReason: "stop" },
+          {
+            text: JSON.stringify({
+              passes: true,
+              issues: [],
+              repairGuidance: [],
+              severity: "low",
+              confidence: 0.94,
+              missingSignals: [],
+            }),
+            finishReason: "stop",
+          },
+        ],
+      }),
+    );
     const blockNames = result.promptBlocks.map((block) => block.name);
     const outputConstraints =
       result.promptBlocks.find((block) => block.name === "output_constraints")?.content ?? "";
@@ -200,6 +277,8 @@ describe("generateReplyTextWithPromptRuntime", () => {
       result.promptBlocks.find((block) => block.name === "target_context")?.content ?? "";
     const profileBlock =
       result.promptBlocks.find((block) => block.name === "agent_profile")?.content ?? "";
+    const coreBlock =
+      result.promptBlocks.find((block) => block.name === "agent_core")?.content ?? "";
     const relationshipBlock =
       result.promptBlocks.find((block) => block.name === "agent_relationship_context")?.content ??
       "";
@@ -229,6 +308,11 @@ describe("generateReplyTextWithPromptRuntime", () => {
     expect(targetContext).toContain("target_author: user:abcd1234");
     expect(targetContext).toContain("target_content: which option is safer?");
     expect(profileBlock).toContain("display_name: AI Planner");
+    expect(coreBlock).toContain("Compact persona summary for reply generation:");
+    expect(coreBlock).toContain("Voice fingerprint:");
+    expect(coreBlock).toContain("Comment shape expectations:");
+    expect(coreBlock).toContain("Memory anchors:");
+    expect(coreBlock).not.toContain("MBTI:");
     expect(relationshipBlock).toContain("target_author: user:abcd1234");
     expect(voiceContractBlock).toContain("Respond in a way that is recognizably this persona");
     expect(enactmentBlock).toContain("Form a genuine reaction before writing.");
@@ -253,6 +337,17 @@ describe("generateReplyTextWithPromptRuntime", () => {
           },
           {
             text: JSON.stringify({
+              passes: false,
+              issues: ["too editorial"],
+              repairGuidance: ["Lead with the persona's immediate reaction before explaining."],
+              severity: "medium",
+              confidence: 0.87,
+              missingSignals: ["immediate reaction"],
+            }),
+            finishReason: "stop",
+          },
+          {
+            text: JSON.stringify({
               markdown:
                 "That silhouette lands. Keep the contrast sharp and stop softening the point just to sound polite.",
               need_image: false,
@@ -261,12 +356,183 @@ describe("generateReplyTextWithPromptRuntime", () => {
             }),
             finishReason: "stop",
           },
+          {
+            text: JSON.stringify({
+              passes: true,
+              issues: [],
+              repairGuidance: [],
+              severity: "low",
+              confidence: 0.9,
+              missingSignals: [],
+            }),
+            finishReason: "stop",
+          },
         ],
       }),
     );
 
-    expect(result.usedFallback).toBe(false);
     expect(result.text).toContain("That silhouette lands.");
+  });
+
+  it("retries reply persona audit in compact mode with shared comment budgets when the first audit returns empty output", async () => {
+    const previousEnabled = process.env.AI_TOOL_RUNTIME_ENABLED;
+    process.env.AI_TOOL_RUNTIME_ENABLED = "false";
+    const calls: ModelGenerateTextInput[] = [];
+    const outputs: ModelGenerateTextOutput[] = [
+      {
+        text: JSON.stringify({
+          markdown: "A direct reply.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+      },
+      {
+        text: "",
+        finishReason: "length",
+      },
+      {
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          severity: "low",
+          confidence: 0.9,
+          missingSignals: [],
+        }),
+        finishReason: "stop",
+      },
+    ];
+    const adapter: ModelAdapter = {
+      generateText: async (input) => {
+        calls.push(input);
+        const next = outputs.shift();
+        if (!next) {
+          throw new Error("unexpected call");
+        }
+        return next;
+      },
+    };
+
+    try {
+      const result = await runWithAdapter(adapter);
+
+      expect(result.text).toBe("A direct reply.");
+      expect(calls[0]?.maxOutputTokens).toBe(900);
+      expect(calls[1]?.maxOutputTokens).toBe(900);
+      expect(calls[2]?.maxOutputTokens).toBe(1200);
+      expect(calls[2]?.prompt).toContain("[audit_mode]");
+      expect(calls[2]?.prompt).toContain("compact");
+    } finally {
+      process.env.AI_TOOL_RUNTIME_ENABLED = previousEnabled;
+    }
+  });
+
+  it("retries reply persona audit in compact mode when the first audit returns truncated JSON", async () => {
+    const previousEnabled = process.env.AI_TOOL_RUNTIME_ENABLED;
+    process.env.AI_TOOL_RUNTIME_ENABLED = "false";
+    const calls: ModelGenerateTextInput[] = [];
+    const outputs: ModelGenerateTextOutput[] = [
+      {
+        text: JSON.stringify({
+          markdown: "A direct reply.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+      },
+      {
+        text: '```json\n{\n  "passes": false,\n  "issues": [\n    "Persona claims inability to',
+        finishReason: "length",
+      },
+      {
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          severity: "low",
+          confidence: 0.92,
+          missingSignals: [],
+        }),
+        finishReason: "stop",
+      },
+    ];
+    const adapter: ModelAdapter = {
+      generateText: async (input) => {
+        calls.push(input);
+        const next = outputs.shift();
+        if (!next) {
+          throw new Error("unexpected call");
+        }
+        return next;
+      },
+    };
+
+    try {
+      const result = await runWithAdapter(adapter);
+
+      expect(result.text).toBe("A direct reply.");
+      expect(calls).toHaveLength(3);
+      expect(calls[2]?.prompt).toContain("[audit_mode]");
+      expect(calls[2]?.prompt).toContain("compact");
+    } finally {
+      process.env.AI_TOOL_RUNTIME_ENABLED = previousEnabled;
+    }
+  });
+
+  it("throws when repaired reply output still fails persona audit instead of failing open", async () => {
+    await expect(
+      runWithAdapter(
+        new MockModelAdapter({
+          scriptedOutputs: [
+            {
+              text: JSON.stringify({
+                markdown: "What works:\n- strong silhouette\n- clear contrast\n- scale",
+                need_image: false,
+                image_prompt: null,
+                image_alt: null,
+              }),
+              finishReason: "stop",
+            },
+            {
+              text: JSON.stringify({
+                passes: false,
+                issues: ["too editorial"],
+                repairGuidance: ["Lead with a sharper gut reaction."],
+                severity: "medium",
+                confidence: 0.84,
+                missingSignals: ["immediate reaction"],
+              }),
+              finishReason: "stop",
+            },
+            {
+              text: JSON.stringify({
+                markdown: "That silhouette lands. Keep the contrast sharp.",
+                need_image: false,
+                image_prompt: null,
+                image_alt: null,
+              }),
+              finishReason: "stop",
+            },
+            {
+              text: JSON.stringify({
+                passes: false,
+                issues: ["persona priorities not visible"],
+                repairGuidance: ["Make the persona's priorities visible in what it defends."],
+                severity: "high",
+                confidence: 0.9,
+                missingSignals: ["persona priorities"],
+              }),
+              finishReason: "stop",
+            },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject<Partial<PersonaOutputValidationError>>({
+      code: "persona_repair_failed",
+    });
   });
 
   it("keeps target_context block with explicit empty fallback when no focus target exists", async () => {
@@ -283,7 +549,22 @@ describe("generateReplyTextWithPromptRuntime", () => {
       memoryContext: sampleMemory(),
       boardContext: null,
       policy: DEFAULT_DISPATCHER_POLICY,
-      modelAdapter: new MockModelAdapter({ mode: "success", fixedText: "ok" }),
+      modelAdapter: new MockModelAdapter({
+        scriptedOutputs: [
+          { text: "ok", finishReason: "stop" },
+          {
+            text: JSON.stringify({
+              passes: true,
+              issues: [],
+              repairGuidance: [],
+              severity: "low",
+              confidence: 0.94,
+              missingSignals: [],
+            }),
+            finishReason: "stop",
+          },
+        ],
+      }),
     });
 
     const targetContext = result.promptBlocks.find((block) => block.name === "target_context");
@@ -293,7 +574,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
     expect(targetContext?.content).toContain("No target context available.");
   });
 
-  it("keeps main flow with empty fallback when tool loop hits max iterations", async () => {
+  it("throws when tool loop hits max iterations without producing output", async () => {
     const previousEnabled = process.env.AI_TOOL_RUNTIME_ENABLED;
     const previousTimeout = process.env.AI_TOOL_LOOP_TIMEOUT_MS;
     const previousMaxIterations = process.env.AI_TOOL_LOOP_MAX_ITERATIONS;
@@ -312,9 +593,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
     });
 
     try {
-      const result = await runWithAdapter(toolLoopAdapter);
-      expect(result.usedFallback).toBe(true);
-      expect(result.text).toBe("");
+      await expect(runWithAdapter(toolLoopAdapter)).rejects.toThrow("TOOL_LOOP_MAX_ITERATIONS");
     } finally {
       process.env.AI_TOOL_RUNTIME_ENABLED = previousEnabled;
       process.env.AI_TOOL_LOOP_TIMEOUT_MS = previousTimeout;

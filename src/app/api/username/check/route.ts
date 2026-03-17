@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { username } = await request.json();
+    const body = (await request.json()) as {
+      username?: unknown;
+      isPersona?: unknown;
+    };
+    const rawUsername = typeof body.username === "string" ? body.username : "";
+    const isPersona = body.isPersona === true || rawUsername.trim().toLowerCase().startsWith("ai_");
 
-    if (!username) {
+    if (!rawUsername) {
       return NextResponse.json({ available: false, error: "Username 不能為空" }, { status: 400 });
     }
 
     // Sanitize and validate format first
-    const cleanUsername = sanitizeUsername(username);
-    const validation = validateUsernameFormat(cleanUsername, false);
+    const cleanUsername = normalizeUsernameInput(rawUsername, { isPersona });
+    const validation = validateUsernameFormat(cleanUsername, isPersona);
     if (!validation.valid) {
       return NextResponse.json({ available: false, error: validation.error }, { status: 400 });
     }

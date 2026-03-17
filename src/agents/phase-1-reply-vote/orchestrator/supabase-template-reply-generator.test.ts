@@ -3,7 +3,7 @@ import {
   composeSoulDrivenReply,
   rankFocusCandidates,
 } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
-import type { RuntimeSoulContext } from "@/lib/ai/soul/runtime-soul-profile";
+import type { RuntimeCoreContext } from "@/lib/ai/core/runtime-core-profile";
 
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends Array<infer U>
@@ -53,8 +53,8 @@ describe("rankFocusCandidates", () => {
 });
 
 describe("composeSoulDrivenReply", () => {
-  function buildSoul(overrides: DeepPartial<RuntimeSoulContext>): RuntimeSoulContext {
-    const base: RuntimeSoulContext = {
+  function buildSoul(overrides: DeepPartial<RuntimeCoreContext>): RuntimeCoreContext {
+    const base: RuntimeCoreContext = {
       profile: {
         identityCore: {
           archetype: "A calm operator",
@@ -101,6 +101,28 @@ describe("composeSoulDrivenReply", () => {
           preferredStructures: ["context"],
           lexicalTaboos: [],
         },
+        voiceFingerprint: {
+          openingMove: "Lead with the concrete risk first.",
+          metaphorDomains: ["trade-off", "pressure point", "failure mode"],
+          attackStyle: "direct and evidence-oriented",
+          praiseStyle: "specific praise only after proof",
+          closingMove: "Close with a concrete takeaway.",
+          forbiddenShapes: ["support macro", "balanced explainer"],
+        },
+        taskStyleMatrix: {
+          post: {
+            entryShape: "Plant the angle early.",
+            bodyShape: "Build a clear argument instead of a tutorial.",
+            closeShape: "Land on a concrete takeaway.",
+            forbiddenShapes: ["newsletter tone", "advice list"],
+          },
+          comment: {
+            entryShape: "Sound like a live thread reply.",
+            feedbackShape: "reaction -> concrete note -> pointed close",
+            closeShape: "Keep the close short and thread-native.",
+            forbiddenShapes: ["sectioned critique", "support-macro tone"],
+          },
+        },
         guardrails: {
           hardNo: ["unsafe"],
           deescalationRules: ["reduce risk"],
@@ -133,7 +155,7 @@ describe("composeSoulDrivenReply", () => {
           ...(overrides.profile?.identityCore ?? {}),
         },
         valueHierarchy:
-          (overrides.profile?.valueHierarchy as RuntimeSoulContext["profile"]["valueHierarchy"]) ??
+          (overrides.profile?.valueHierarchy as RuntimeCoreContext["profile"]["valueHierarchy"]) ??
           base.profile.valueHierarchy,
         reasoningLens: {
           ...base.profile.reasoningLens,
@@ -152,7 +174,7 @@ describe("composeSoulDrivenReply", () => {
           base.profile.agentEnactmentRules,
         inCharacterExamples:
           (overrides.profile?.inCharacterExamples as
-            | RuntimeSoulContext["profile"]["inCharacterExamples"]
+            | RuntimeCoreContext["profile"]["inCharacterExamples"]
             | undefined) ?? base.profile.inCharacterExamples,
         decisionPolicy: {
           ...base.profile.decisionPolicy,

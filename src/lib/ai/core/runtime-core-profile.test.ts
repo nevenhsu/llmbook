@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { SoulReasonCode } from "@/lib/ai/reason-codes";
 import {
-  CachedRuntimeSoulProvider,
-  InMemoryRuntimeSoulEventSink,
-  normalizeSoulProfile,
-} from "@/lib/ai/soul/runtime-soul-profile";
+  CachedRuntimeCoreProvider,
+  InMemoryRuntimeCoreEventSink,
+  normalizeCoreProfile,
+} from "@/lib/ai/core/runtime-core-profile";
 
-describe("normalizeSoulProfile", () => {
+describe("normalizeCoreProfile", () => {
   it("fills defaults when fields are missing or invalid", () => {
-    const result = normalizeSoulProfile({
+    const result = normalizeCoreProfile({
       identityCore: {
         archetype: "",
         mbti: "INTJ",
@@ -55,7 +55,7 @@ describe("normalizeSoulProfile", () => {
   });
 
   it("adapts persona_core voice cues into runtime tone, rhythm, lexical taboos, and feedback principles", () => {
-    const result = normalizeSoulProfile({
+    const result = normalizeCoreProfile({
       identity_summary: {
         archetype: "The Rebel",
         one_sentence_identity:
@@ -109,6 +109,28 @@ describe("normalizeSoulProfile", () => {
           "虚伪的politeness (hollow, performative politeness)",
         ],
       },
+      voice_fingerprint: {
+        opening_move: "Lead with suspicion, not neutral setup.",
+        metaphor_domains: ["crime scene", "product launch", "cover-up"],
+        attack_style: "sarcastic and evidence-oriented",
+        praise_style: "grudging respect only after proof",
+        closing_move: "Land a sting or reluctant concession.",
+        forbidden_shapes: ["balanced explainer", "workshop critique"],
+      },
+      task_style_matrix: {
+        post: {
+          entry_shape: "Plant the angle early.",
+          body_shape: "Column-style argument, not tutorial.",
+          close_shape: "End with a sting or reluctant concession.",
+          forbidden_shapes: ["newsletter tone", "advice list"],
+        },
+        comment: {
+          entry_shape: "Sound like a live thread reply.",
+          feedback_shape: "reaction -> suspicion -> concrete note -> grudging respect",
+          close_shape: "Keep the close short and thread-native.",
+          forbidden_shapes: ["sectioned critique", "support-macro tone"],
+        },
+      },
     });
 
     expect(result.profile.responseStyle.tone).toEqual([
@@ -127,25 +149,49 @@ describe("normalizeSoulProfile", () => {
       "passive-aggressive behavior",
     ]);
     expect(result.profile.interactionDoctrine.feedbackPrinciples).toEqual([
+      "reaction -> suspicion -> concrete note -> grudging respect",
+      "grudging respect only after proof",
       "protect the honest core before polishing",
       "cut through empty rhetoric fast",
       "push for vivid stakes and concrete detail",
       "notice the live emotional bond before the clever surface",
     ]);
+    expect(result.profile.voiceFingerprint).toEqual({
+      openingMove: "Lead with suspicion, not neutral setup.",
+      metaphorDomains: ["crime scene", "product launch", "cover-up"],
+      attackStyle: "sarcastic and evidence-oriented",
+      praiseStyle: "grudging respect only after proof",
+      closingMove: "Land a sting or reluctant concession.",
+      forbiddenShapes: ["balanced explainer", "workshop critique"],
+    });
+    expect(result.profile.taskStyleMatrix).toEqual({
+      post: {
+        entryShape: "Plant the angle early.",
+        bodyShape: "Column-style argument, not tutorial.",
+        closeShape: "End with a sting or reluctant concession.",
+        forbiddenShapes: ["newsletter tone", "advice list"],
+      },
+      comment: {
+        entryShape: "Sound like a live thread reply.",
+        feedbackShape: "reaction -> suspicion -> concrete note -> grudging respect",
+        closeShape: "Keep the close short and thread-native.",
+        forbiddenShapes: ["sectioned critique", "support-macro tone"],
+      },
+    });
   });
 });
 
-describe("CachedRuntimeSoulProvider", () => {
+describe("CachedRuntimeCoreProvider", () => {
   it("falls back to empty soul when row is missing", async () => {
-    const eventSink = new InMemoryRuntimeSoulEventSink();
-    const provider = new CachedRuntimeSoulProvider({
+    const eventSink = new InMemoryRuntimeCoreEventSink();
+    const provider = new CachedRuntimeCoreProvider({
       deps: {
-        getSoulProfile: async () => null,
+        getCoreProfile: async () => null,
         eventSink,
       },
     });
 
-    const soul = await provider.getRuntimeSoul({
+    const soul = await provider.getRuntimeCore({
       personaId: "persona-1",
       now: new Date("2026-02-26T00:00:00.000Z"),
     });
@@ -158,15 +204,15 @@ describe("CachedRuntimeSoulProvider", () => {
   });
 
   it("degrades safely when soul read throws", async () => {
-    const eventSink = new InMemoryRuntimeSoulEventSink();
-    const provider = new CachedRuntimeSoulProvider({
+    const eventSink = new InMemoryRuntimeCoreEventSink();
+    const provider = new CachedRuntimeCoreProvider({
       deps: {
-        getSoulProfile: vi.fn().mockRejectedValue(new Error("db down")),
+        getCoreProfile: vi.fn().mockRejectedValue(new Error("db down")),
         eventSink,
       },
     });
 
-    const soul = await provider.getRuntimeSoul({
+    const soul = await provider.getRuntimeCore({
       personaId: "persona-2",
       now: new Date("2026-02-26T00:00:00.000Z"),
       tolerateFailure: true,
@@ -180,10 +226,10 @@ describe("CachedRuntimeSoulProvider", () => {
   });
 
   it("records SOUL_APPLIED as observable event", async () => {
-    const eventSink = new InMemoryRuntimeSoulEventSink();
-    const provider = new CachedRuntimeSoulProvider({
+    const eventSink = new InMemoryRuntimeCoreEventSink();
+    const provider = new CachedRuntimeCoreProvider({
       deps: {
-        getSoulProfile: async () => ({
+        getCoreProfile: async () => ({
           identityCore: { archetype: "debug", mbti: "INTJ", coreMotivation: "clarify" },
           reasoningLens: { primary: ["clarity"], secondary: [], promptHint: "clarity first" },
           responseStyle: { tone: ["direct"], patterns: ["short_paragraphs"], avoid: [] },

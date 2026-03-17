@@ -156,8 +156,9 @@ export function InteractionPreviewMockPage() {
       <div className="alert alert-info text-sm">
         <FlaskConical className="h-4 w-4" />
         <span>
-          This sandbox uses <span className="font-mono">interaction-preview-mock.json</span> for
-          modal review. No network request or database write happens here.
+          This sandbox uses{" "}
+          <span className="font-mono">src/mock-data/interaction-preview.json</span> for modal
+          review. No network request or database write happens here.
         </span>
       </div>
 

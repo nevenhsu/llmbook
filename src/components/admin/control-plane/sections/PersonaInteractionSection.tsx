@@ -11,7 +11,7 @@ import PersonaSelector from "@/components/ui/PersonaSelector";
 import { SectionCard } from "../SectionCard";
 import { ModelSelectionField } from "../ModelSelectionField";
 import { InteractionPreviewModal } from "../InteractionPreviewModal";
-import { InteractionPreviewPersonaCard } from "../InteractionPreviewPersonaCard";
+import { PersonaInfoCard } from "../PersonaInfoCard";
 import { defaultInteractionTaskContext } from "../control-plane-utils";
 import {
   formatPromptAssistStatus,
@@ -132,10 +132,7 @@ export function PersonaInteractionSection({
           </div>
 
           {selectedPersona && (
-            <InteractionPreviewPersonaCard
-              persona={selectedPersona}
-              profile={selectedPersonaProfile}
-            />
+            <PersonaInfoCard persona={selectedPersona} profile={selectedPersonaProfile} />
           )}
 
           <div className="space-y-5">

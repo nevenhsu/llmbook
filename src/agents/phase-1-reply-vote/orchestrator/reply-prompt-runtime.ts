@@ -8,6 +8,13 @@ import {
   derivePromptPersonaDirectives,
   detectPersonaVoiceDrift,
 } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import {
+  PersonaOutputValidationError,
+  buildPersonaOutputAuditPrompt,
+  isRetryablePersonaAuditParseFailure,
+  parsePersonaAuditResult,
+} from "@/lib/ai/prompt-runtime/persona-output-audit";
+import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
   LlmRuntimeAdapter,
@@ -15,7 +22,10 @@ import {
   recordModelFallbackUsed,
   type ModelGenerateTextOutput,
 } from "@/lib/ai/prompt-runtime/model-adapter";
-import type { RuntimeSoulContext } from "@/lib/ai/soul/runtime-soul-profile";
+import {
+  buildInteractionCoreSummary,
+  type RuntimeCoreContext,
+} from "@/lib/ai/core/runtime-core-profile";
 
 export type ReplyPromptBoardRule = {
   title: string;
@@ -44,7 +54,7 @@ export type ReplyPromptRuntimeInput = {
   focusActor: string;
   focusSnippet: string | null;
   participantCount: number;
-  soul: RuntimeSoulContext;
+  soul: RuntimeCoreContext;
   memoryContext: RuntimeMemoryContext | null;
   boardContext?: ReplyPromptBoardContext | null;
   policy: DispatcherPolicy;
@@ -59,8 +69,6 @@ export type ReplyPromptRuntimeResult = {
     imagePrompt: string | null;
     imageAlt: string | null;
   };
-  usedFallback: boolean;
-  fallbackReason: string | null;
   promptBlocks: PromptBlock[];
   model: {
     provider: string | null;
@@ -95,24 +103,6 @@ function readAllowlist(): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
-}
-
-function formatSoulBlock(soul: RuntimeSoulContext): string {
-  return [
-    `Identity: ${soul.summary.identity}`,
-    `MBTI: ${soul.summary.mbti}`,
-    `Core motivation: ${soul.profile.identityCore.coreMotivation}`,
-    `Top values: ${soul.summary.topValues.join(", ") || "n/a"}`,
-    `Reasoning lens: ${soul.profile.reasoningLens.primary.join(", ") || "n/a"}`,
-    `Reasoning hint: ${soul.summary.promptHint}`,
-    `Response style: ${soul.profile.responseStyle.tone.join(", ") || "n/a"}`,
-    `Relationship default: ${soul.summary.defaultRelationshipStance}`,
-    `Tradeoff style: ${soul.summary.tradeoffStyle}`,
-    `Risk preference: ${soul.summary.riskPreference}`,
-    `Collaboration stance: ${soul.summary.collaborationStance}`,
-    `Language rhythm: ${soul.summary.rhythm}`,
-    `Guardrail count: ${String(soul.summary.guardrailCount)}`,
-  ].join("\n");
 }
 
 function formatAgentProfile(
@@ -180,32 +170,44 @@ function formatRelationshipContext(input: ReplyPromptRuntimeInput): string | und
   ].join("\n");
 }
 
-function formatEnactmentRules(soul: RuntimeSoulContext): string | undefined {
-  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+function formatEnactmentRules(soul: RuntimeCoreContext): string | undefined {
+  const directives = derivePromptPersonaDirectives({
+    actionType: "comment",
+    profile: soul.profile,
+  });
   if (directives.enactmentRules.length === 0) {
     return undefined;
   }
   return directives.enactmentRules.join("\n");
 }
 
-function formatVoiceContract(soul: RuntimeSoulContext): string | undefined {
-  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+function formatVoiceContract(soul: RuntimeCoreContext): string | undefined {
+  const directives = derivePromptPersonaDirectives({
+    actionType: "comment",
+    profile: soul.profile,
+  });
   if (directives.voiceContract.length === 0) {
     return undefined;
   }
   return directives.voiceContract.join("\n");
 }
 
-function formatAntiStyleRules(soul: RuntimeSoulContext): string | undefined {
-  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+function formatAntiStyleRules(soul: RuntimeCoreContext): string | undefined {
+  const directives = derivePromptPersonaDirectives({
+    actionType: "comment",
+    profile: soul.profile,
+  });
   if (directives.antiStyleRules.length === 0) {
     return undefined;
   }
   return directives.antiStyleRules.join("\n");
 }
 
-function formatAgentExamples(soul: RuntimeSoulContext): string | undefined {
-  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+function formatAgentExamples(soul: RuntimeCoreContext): string | undefined {
+  const directives = derivePromptPersonaDirectives({
+    actionType: "comment",
+    profile: soul.profile,
+  });
   if (directives.inCharacterExamples.length === 0) {
     return undefined;
   }
@@ -284,6 +286,21 @@ export async function generateReplyTextWithPromptRuntime(
 ): Promise<ReplyPromptRuntimeResult> {
   const now = input.now ?? new Date();
   const modelAdapter = input.modelAdapter ?? new LlmRuntimeAdapter();
+  const interactionBudgets = getInteractionRuntimeBudgets("reply");
+  const coreText = buildInteractionCoreSummary({
+    actionType: "reply",
+    profile: input.soul.profile,
+    shortTermMemory:
+      input.memoryContext?.threadShortMemory.entries
+        .slice(0, 2)
+        .map((entry) => `${entry.key}: ${entry.value}`)
+        .join(" | ") ?? null,
+    longTermMemory: input.memoryContext?.personaLongMemory?.content ?? null,
+  });
+  const directives = derivePromptPersonaDirectives({
+    actionType: "comment",
+    profile: input.soul.profile,
+  });
 
   const prompt = await buildPhase1ReplyPrompt({
     entityId: input.entityId,
@@ -293,7 +310,7 @@ export async function generateReplyTextWithPromptRuntime(
       "You are a phase1 reply agent. Be accurate, concise, and constructive. Keep language natural.",
     policyText: formatPolicyBlock(input.policy),
     agentProfileText: formatAgentProfile(input.agentProfile),
-    soulText: formatSoulBlock(input.soul),
+    coreText,
     memoryText: formatMemoryBlock(input.memoryContext),
     relationshipContextText: formatRelationshipContext(input),
     boardContextText: formatBoardContext(input.boardContext),
@@ -316,7 +333,7 @@ export async function generateReplyTextWithPromptRuntime(
       modelResult = await modelAdapter.generateText({
         prompt: prompt.prompt,
         messages: prompt.messages,
-        maxOutputTokens: 320,
+        maxOutputTokens: interactionBudgets.initial,
         temperature: 0.4,
         metadata: {
           entityId: input.entityId,
@@ -348,7 +365,7 @@ export async function generateReplyTextWithPromptRuntime(
         modelInput: {
           prompt: prompt.prompt,
           messages: prompt.messages,
-          maxOutputTokens: 320,
+          maxOutputTokens: interactionBudgets.initial,
           temperature: 0.4,
           metadata: {
             entityId: input.entityId,
@@ -380,56 +397,179 @@ export async function generateReplyTextWithPromptRuntime(
 
   const parsedOutput = parseMarkdownActionOutput(modelResult.text);
   if (parsedOutput.markdown.length > 0) {
-    const directives = derivePromptPersonaDirectives({ profile: input.soul.profile });
-    const driftIssues = detectPersonaVoiceDrift(parsedOutput.markdown, {
-      framingSignals: directives.framingSignals,
-    });
-    if (driftIssues.length > 0) {
-      try {
-        const repaired = await modelAdapter.generateText({
-          prompt: buildPersonaVoiceRepairPrompt({
-            assembledPrompt: prompt.prompt,
-            rawOutput: modelResult.text,
+    const runPersonaAudit = async (
+      renderedOutput: string,
+      failureCode: "persona_audit_invalid" | "persona_repair_invalid",
+    ) => {
+      const observedIssues = detectPersonaVoiceDrift(renderedOutput);
+      let auditMode: "default" | "compact" = "default";
+      const parseAuditText = (auditText: string) => {
+        try {
+          return parsePersonaAuditResult(auditText);
+        } catch (error) {
+          if (error instanceof PersonaOutputValidationError) {
+            throw new PersonaOutputValidationError({
+              code: failureCode,
+              message: error.message,
+              rawOutput: auditText,
+            });
+          }
+          throw error;
+        }
+      };
+      const runCompactAuditAttempt = async () => {
+        auditMode = "compact";
+        const compactAuditResult = await modelAdapter.generateText({
+          prompt: buildPersonaOutputAuditPrompt({
             actionType: "comment",
+            taskContext: formatTaskContext(input),
+            renderedOutput,
             directives,
-            issues: driftIssues,
+            observedIssues,
+            mode: "compact",
           }),
           messages: prompt.messages,
-          maxOutputTokens: 320,
-          temperature: 0.2,
+          maxOutputTokens: interactionBudgets.compactPersonaAudit,
+          temperature: 0,
           metadata: {
             entityId: input.entityId,
             personaId: input.personaId,
             postId: input.postId,
-            taskType: "reply_persona_repair",
+            taskType: "reply_persona_audit",
             promptBlockOrder: prompt.blocks.map((block) => block.name),
+            auditMode,
           },
         });
-        const repairedParsed = parseMarkdownActionOutput(repaired.text);
-        if (repairedParsed.markdown.length > 0) {
-          return {
-            text: repairedParsed.markdown,
-            imageRequest: repairedParsed.imageRequest,
-            usedFallback: false,
-            fallbackReason: null,
-            promptBlocks: prompt.blocks,
-            model: {
-              provider: repaired.provider ?? modelResult.provider ?? null,
-              model: repaired.model ?? modelResult.model ?? null,
-              finishReason: repaired.finishReason ?? null,
-              usage: repaired.usage,
-            },
-          };
+        const compactAuditText = compactAuditResult.text.trim();
+        if (!compactAuditText) {
+          throw new PersonaOutputValidationError({
+            code: failureCode,
+            message:
+              failureCode === "persona_audit_invalid"
+                ? "Persona audit returned empty output."
+                : "Persona re-audit returned empty output.",
+            rawOutput: compactAuditResult.text,
+          });
         }
-      } catch {
-        // Keep the original parsed output if repair fails.
+        return parseAuditText(compactAuditText);
+      };
+      const auditResult = await modelAdapter.generateText({
+        prompt: buildPersonaOutputAuditPrompt({
+          actionType: "comment",
+          taskContext: formatTaskContext(input),
+          renderedOutput,
+          directives,
+          observedIssues,
+        }),
+        messages: prompt.messages,
+        maxOutputTokens: interactionBudgets.personaAudit,
+        temperature: 0,
+        metadata: {
+          entityId: input.entityId,
+          personaId: input.personaId,
+          postId: input.postId,
+          taskType: "reply_persona_audit",
+          promptBlockOrder: prompt.blocks.map((block) => block.name),
+        },
+      });
+      const auditText = auditResult.text.trim();
+      if (!auditText) {
+        const compactAudit = await runCompactAuditAttempt();
+        return { ...compactAudit, auditMode };
       }
+      try {
+        const parsedAudit = parseAuditText(auditText);
+        return { ...parsedAudit, auditMode };
+      } catch (error) {
+        if (auditMode === "default" && isRetryablePersonaAuditParseFailure(error)) {
+          const compactAudit = await runCompactAuditAttempt();
+          return { ...compactAudit, auditMode };
+        }
+        throw error;
+      }
+    };
+
+    const audit = await runPersonaAudit(parsedOutput.markdown, "persona_audit_invalid");
+    if (!audit.passes) {
+      const repaired = await modelAdapter.generateText({
+        prompt: buildPersonaVoiceRepairPrompt({
+          assembledPrompt: prompt.prompt,
+          rawOutput: modelResult.text,
+          actionType: "comment",
+          directives,
+          issues: audit.issues,
+          repairGuidance: audit.repairGuidance,
+          severity: audit.severity,
+          missingSignals: audit.missingSignals,
+        }),
+        messages: prompt.messages,
+        maxOutputTokens: interactionBudgets.personaRepair,
+        temperature: 0.2,
+        metadata: {
+          entityId: input.entityId,
+          personaId: input.personaId,
+          postId: input.postId,
+          taskType: "reply_persona_repair",
+          promptBlockOrder: prompt.blocks.map((block) => block.name),
+        },
+      });
+      const repairedText = repaired.text.trim();
+      if (!repairedText) {
+        throw new PersonaOutputValidationError({
+          code: "persona_repair_invalid",
+          message: "Persona repair returned empty output.",
+          issues: audit.issues,
+          repairGuidance: audit.repairGuidance,
+          severity: audit.severity,
+          confidence: audit.confidence,
+          missingSignals: audit.missingSignals,
+          rawOutput: repaired.text,
+        });
+      }
+      const repairedParsed = parseMarkdownActionOutput(repairedText);
+      if (!repairedParsed.markdown.trim()) {
+        throw new PersonaOutputValidationError({
+          code: "persona_repair_invalid",
+          message: "Persona repair returned empty markdown.",
+          issues: audit.issues,
+          repairGuidance: audit.repairGuidance,
+          severity: audit.severity,
+          confidence: audit.confidence,
+          missingSignals: audit.missingSignals,
+          rawOutput: repairedText,
+        });
+      }
+      const repairedAudit = await runPersonaAudit(
+        repairedParsed.markdown,
+        "persona_repair_invalid",
+      );
+      if (!repairedAudit.passes) {
+        throw new PersonaOutputValidationError({
+          code: "persona_repair_failed",
+          message: "Repaired output still failed persona audit.",
+          issues: repairedAudit.issues,
+          repairGuidance: repairedAudit.repairGuidance,
+          severity: repairedAudit.severity,
+          confidence: repairedAudit.confidence,
+          missingSignals: repairedAudit.missingSignals,
+          rawOutput: repairedText,
+        });
+      }
+      return {
+        text: repairedParsed.markdown,
+        imageRequest: repairedParsed.imageRequest,
+        promptBlocks: prompt.blocks,
+        model: {
+          provider: repaired.provider ?? modelResult.provider ?? null,
+          model: repaired.model ?? modelResult.model ?? null,
+          finishReason: repaired.finishReason ?? null,
+          usage: repaired.usage,
+        },
+      };
     }
     return {
       text: parsedOutput.markdown,
       imageRequest: parsedOutput.imageRequest,
-      usedFallback: false,
-      fallbackReason: null,
       promptBlocks: prompt.blocks,
       model: {
         provider: modelResult.provider ?? null,
@@ -450,22 +590,5 @@ export async function generateReplyTextWithPromptRuntime(
       model: modelResult.model ?? null,
     },
   });
-
-  return {
-    text: "",
-    imageRequest: {
-      needImage: false,
-      imagePrompt: null,
-      imageAlt: null,
-    },
-    usedFallback: true,
-    fallbackReason,
-    promptBlocks: prompt.blocks,
-    model: {
-      provider: modelResult.provider ?? null,
-      model: modelResult.model ?? null,
-      finishReason: modelResult.finishReason ?? null,
-      usage: modelResult.usage,
-    },
-  };
+  throw new Error(fallbackReason);
 }

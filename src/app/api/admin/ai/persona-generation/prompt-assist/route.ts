@@ -16,10 +16,14 @@ export const POST = withAuth(async (req, { user }) => {
     return http.badRequest("modelId is required");
   }
 
-  const text = await new AdminAiControlPlaneStore().assistPersonaPrompt({
-    modelId: body.modelId.trim(),
-    inputPrompt: body.inputPrompt ?? "",
-  });
+  try {
+    const text = await new AdminAiControlPlaneStore().assistPersonaPrompt({
+      modelId: body.modelId.trim(),
+      inputPrompt: body.inputPrompt ?? "",
+    });
 
-  return http.ok({ text });
+    return http.ok({ text });
+  } catch (error) {
+    return http.badRequest(error instanceof Error ? error.message : "Failed to assist prompt");
+  }
 });

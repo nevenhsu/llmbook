@@ -1,0 +1,240 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { createAdminClient } = vi.hoisted(() => ({
+  createAdminClient: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient,
+}));
+
+function buildPersonaCore() {
+  return {
+    identity_summary: {
+      archetype: "Impulsive Champion",
+      core_motivation: "Prove loyalty through action, not words",
+      one_sentence_identity:
+        "A loud, loyal forum brawler who rewards gutsy allies and smashes pretentious arguments with chaotic energy.",
+    },
+    values: {
+      value_hierarchy: [
+        { value: "Loyalty through action", priority: 1 },
+        { value: "Gutsy conviction over polished argument", priority: 2 },
+      ],
+      worldview: [
+        "Actions speak louder than words, and anyone who hides behind fancy talk or credentials is just scared to get their hands dirty.",
+      ],
+      judgment_style: "Judges posts by heart and hustle not by how polished they sound.",
+    },
+    aesthetic_profile: {
+      humor_preferences: ["Loud taunts over polished wit."],
+      narrative_preferences: ["Underdogs proving themselves through daring action."],
+      creative_preferences: ["Raw passion over technical perfection."],
+      disliked_patterns: ["Overly formal debate structure."],
+      taste_boundaries: ["Appreciates chaos but not actual harm."],
+    },
+    lived_context: {
+      familiar_scenes_of_life: ["Jumping into heated forum threads."],
+      personal_experience_flavors: ["Impulsive rush of jumping into arguments."],
+      cultural_contexts: ["Forum culture where bold stances earn respect."],
+      topics_with_confident_grounding: ["Loyalty and crew bonds"],
+      topics_requiring_runtime_retrieval: ["Technical debate specifics"],
+    },
+    creator_affinity: {
+      admired_creator_types: ["Creators who take bold risks over safe plays"],
+      structural_preferences: ["Prefers chaotic energy over rigid structure"],
+      detail_selection_habits: ["Notices conviction and guts in presentation"],
+      creative_biases: ["Favors raw expression over technical perfection"],
+    },
+    interaction_defaults: {
+      default_stance: "Jumps into threads with gutsy declarations and rallying calls.",
+      discussion_strengths: ["Rallying allies and exposing cowardly arguments"],
+      friction_triggers: ["Pomposity and credential-flaunting"],
+      non_generic_traits: ["Treats forum threads like battles"],
+    },
+    guardrails: {
+      hard_no: ["Will not tolerate attacks on allies"],
+      deescalation_style: ["Cracks jokes to defuse without backing down"],
+    },
+    voice_fingerprint: {
+      opening_move: "Starts with a laugh or a challenge.",
+      metaphor_domains: ["Battle and crew metaphors"],
+      attack_style: "Calls out weakness directly.",
+      praise_style: "Celebrates allies with loud enthusiasm.",
+      closing_move: "Ends with a rallying challenge.",
+      forbidden_shapes: ["Polite disagreement"],
+    },
+    task_style_matrix: {
+      post: {
+        entry_shape: "Burst in with a loud declaration.",
+        body_shape: "Rallying rhetoric over tidy logic.",
+        close_shape: "End with a challenge.",
+        forbidden_shapes: ["Formal debate etiquette"],
+      },
+      comment: {
+        entry_shape: "Jump in like joining a fight mid-brawl.",
+        feedback_shape: "Quick emotional hit with taunts or cheers.",
+        close_shape: "Short burst that cements alliance.",
+        forbidden_shapes: ["Neutral feedback tones"],
+      },
+    },
+  };
+}
+
+describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("upserts existing persona_cores rows using the persona_id conflict target", async () => {
+    const personasUpdateEq = vi.fn(async () => ({ error: null }));
+    const personasUpdate = vi.fn(() => ({ eq: personasUpdateEq }));
+    const personaCoresUpsert = vi.fn(async () => ({ error: null }));
+
+    createAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "personas") {
+          return {
+            update: personasUpdate,
+          };
+        }
+        if (table === "persona_cores") {
+          return {
+            upsert: personaCoresUpsert,
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    const { AdminAiControlPlaneStore } = await import("@/lib/ai/admin/control-plane-store");
+    const store = new AdminAiControlPlaneStore();
+
+    await store.patchPersonaProfile({
+      personaId: "persona-1",
+      displayName: "RiptideRoo",
+      username: "ai_riptideroo",
+      bio: "Boisterous forum warrior.",
+      personaCore: buildPersonaCore(),
+      referenceSources: [
+        {
+          name: "Monkey D. Luffy",
+          type: "character_inspiration",
+          contribution: ["Impulsive crew-first energy"],
+        },
+      ],
+      referenceDerivation: ["Impulsive first-reaction posting style"],
+      originalizationNote: "Reference-inspired, not reference-cosplay.",
+    });
+
+    expect(personaCoresUpsert).toHaveBeenCalledTimes(1);
+    expect(personaCoresUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persona_id: "persona-1",
+      }),
+      expect.objectContaining({
+        onConflict: "persona_id",
+      }),
+    );
+  });
+
+  it("normalizes persona usernames with the shared persona username helper before update", async () => {
+    const personasUpdateEq = vi.fn(async () => ({ error: null }));
+    const personasUpdate = vi.fn(() => ({ eq: personasUpdateEq }));
+
+    createAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "personas") {
+          return {
+            update: personasUpdate,
+          };
+        }
+        if (table === "persona_cores") {
+          return {
+            upsert: vi.fn(async () => ({ error: null })),
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    const { AdminAiControlPlaneStore } = await import("@/lib/ai/admin/control-plane-store");
+    const store = new AdminAiControlPlaneStore();
+
+    await store.patchPersonaProfile({
+      personaId: "persona-1",
+      username: "AI_RIPTIDE-ROO!?漢字",
+    });
+
+    expect(personasUpdate).toHaveBeenCalledWith({
+      username: "ai_riptideroo",
+    });
+  });
+});
+
+describe("AdminAiControlPlaneStore.createPersona", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("normalizes explicit persona usernames with the shared persona username helper", async () => {
+    const personasInsertSingle = vi.fn(async () => ({
+      data: { id: "persona-1" },
+      error: null,
+    }));
+    const personasInsertSelect = vi.fn(() => ({
+      single: personasInsertSingle,
+    }));
+    const personasInsert = vi.fn(() => ({
+      select: personasInsertSelect,
+    }));
+    const personaCoresUpsert = vi.fn(async () => ({ error: null }));
+
+    createAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "personas") {
+          return {
+            insert: personasInsert,
+          };
+        }
+        if (table === "persona_cores") {
+          return {
+            upsert: personaCoresUpsert,
+          };
+        }
+        if (table === "persona_memories") {
+          return {
+            insert: vi.fn(async () => ({ error: null })),
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    const { AdminAiControlPlaneStore } = await import("@/lib/ai/admin/control-plane-store");
+    const store = new AdminAiControlPlaneStore();
+
+    await store.createPersona({
+      username: "AI_RIPTIDE-ROO!?漢字",
+      personas: {
+        display_name: "Riptide Roo",
+        bio: "Boisterous forum warrior.",
+        status: "active",
+      },
+      personaCore: buildPersonaCore(),
+      referenceSources: [],
+      referenceDerivation: [],
+      originalizationNote: "Reference-inspired, not reference-cosplay.",
+      personaMemories: [],
+    });
+
+    expect(personasInsert).toHaveBeenCalledWith({
+      username: "ai_riptideroo",
+      display_name: "Riptide Roo",
+      bio: "Boisterous forum warrior.",
+      status: "active",
+    });
+  });
+});

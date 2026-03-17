@@ -1,5 +1,5 @@
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import type { RuntimeSoulProfile } from "@/lib/ai/soul/runtime-soul-profile";
+import type { RuntimeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
 
 export type PromptPersonaExample = {
   scenario: string;
@@ -12,8 +12,9 @@ export type PromptPersonaDirectives = {
   enactmentRules: string[];
   inCharacterExamples: PromptPersonaExample[];
   referenceRoleGuidance: string[];
-  framingSignals: string[];
 };
+
+type PersonaDirectiveActionType = Extract<PromptActionType, "post" | "comment">;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -156,10 +157,10 @@ function buildReferenceRoleImpulse(referenceRoleGuidance: string[]): string | nu
     return null;
   }
   if (/group-loyalty role model/i.test(guidance)) {
-    return "I notice who is backing their people and who is just hiding behind rank.";
+    return "I notice who shows up for others and who hides behind status.";
   }
   if (/behavioral role model/i.test(guidance)) {
-    return "I care about what you do when pressure hits, not how impressive the speech sounds.";
+    return "I care about what someone does when pressure hits, not just how polished the language sounds.";
   }
   if (/worldview role model/i.test(guidance)) {
     return "Pressure should reveal the real stakes, not flatten everything into safe explanation.";
@@ -167,87 +168,77 @@ function buildReferenceRoleImpulse(referenceRoleGuidance: string[]): string | nu
   return "I start from what matters under pressure, not from what sounds tidy on the surface.";
 }
 
-function derivePersonaFramingSignals(input: {
-  topValue: string;
-  promptHint: string;
-  defaultStance: string;
-  nonGenericTraits: string[];
-  frictionTriggers: string[];
-  referenceRoleGuidance: string[];
-}): string[] {
-  const sourceText = [
-    input.topValue,
-    input.promptHint,
-    input.defaultStance,
-    ...input.nonGenericTraits,
-    ...input.frictionTriggers,
-    ...input.referenceRoleGuidance,
-  ].join(" ");
-
-  return uniqueNonEmpty(
-    [
-      containsAnyText(sourceText, ["loyal", "crew", "found family", "trust-first"]) ? "crew" : null,
-      containsAnyText(sourceText, ["loyal", "crew", "found family", "trust-first"])
-        ? "loyalty"
-        : null,
-      containsAnyText(sourceText, ["protect", "back", "promise", "honor"]) ? "protect" : null,
-      containsAnyText(sourceText, ["authority", "hierarchy", "rank", "admiral"])
-        ? "authority"
-        : null,
-      containsAnyText(sourceText, ["authority", "hierarchy", "rank", "admiral"]) ? "rank" : null,
-      containsAnyText(sourceText, ["pressure", "stakes", "conflict", "fight"]) ? "pressure" : null,
-      containsAnyText(sourceText, ["evidence", "proof", "action", "what you do"]) ? "proof" : null,
-      containsAnyText(sourceText, ["loyal", "crew", "found family", "trust-first"]) ? "船員" : null,
-      containsAnyText(sourceText, ["loyal", "crew", "found family", "trust-first"]) ? "忠誠" : null,
-      containsAnyText(sourceText, ["authority", "hierarchy", "rank", "admiral"]) ? "權威" : null,
-      containsAnyText(sourceText, ["authority", "hierarchy", "rank", "admiral"]) ? "階級" : null,
-      containsAnyText(sourceText, ["pressure", "stakes", "conflict", "fight"]) ? "壓力" : null,
-      containsAnyText(sourceText, ["protect", "back", "promise", "honor"]) ? "保護" : null,
-      containsAnyText(sourceText, ["evidence", "proof", "action", "what you do"]) ? "證據" : null,
-    ],
-    10,
-  );
-}
-
-function containsAnyText(text: string, patterns: string[]): boolean {
-  const normalized = text.toLowerCase();
-  return patterns.some((pattern) => normalized.includes(pattern.toLowerCase()));
-}
-
 function buildExampleResponse(input: {
   trigger: string;
   topValue: string;
   trait: string;
+  openingMove: string;
+  attackStyle: string;
   referenceRoleImpulse?: string | null;
 }): string {
   const topValue = input.topValue.toLowerCase().replace(/\.$/, "");
   const trigger = input.trigger.toLowerCase().replace(/\.$/, "");
   const trait = normalizeText(input.trait).replace(/\.+$/, "");
   const reaction =
-    input.referenceRoleImpulse ?? "I want to know who actually showed up when pressure hit.";
+    input.referenceRoleImpulse ?? "I care about what actually happened once the pressure hit.";
   return normalizeText(
-    `Nah, that reads like ${trigger} and I am not saluting it like some admiral speech. I care more about ${topValue} and who actually backed the crew than how polished the line sounds. ${reaction} ${trait}. Show the concrete move, the proof, or the damage.`,
+    `${input.openingMove} That reads like ${trigger}, and I do not buy it yet. I care more about ${topValue} and what someone actually did than how polished the line sounds. ${reaction} ${input.attackStyle}. ${trait}. Show the concrete move, the proof, or the consequence.`,
   );
 }
 
 function buildCreativeFeedbackResponse(input: {
   stance: string;
   feedbackPrinciple: string;
+  praiseStyle: string;
   referenceRoleImpulse?: string | null;
 }): string {
   const emphasis = input.feedbackPrinciple.toLowerCase().replace(/\.+$/, "");
   const stance = normalizeText(input.stance).replace(/\.+$/, "");
   const reaction =
-    input.referenceRoleImpulse ?? "Keep the part that still feels alive when the pressure hits.";
+    input.referenceRoleImpulse ?? "Keep the live part intact when the pressure hits.";
   return normalizeText(
-    `The raw part works. Keep that. Push the edge with ${emphasis}, but do not polish the life out of it just to impress people hiding behind taste. Make the wrong part feel wrong in your gut, not neat on a mood board. ${reaction} ${stance}.`,
+    `The live part works. Keep that. ${input.praiseStyle}. Push the edge with ${emphasis}, but do not polish the core away just to impress people chasing surface-level taste. Make the weak edge feel resolved in the gut, not merely tidy on the surface. ${reaction} ${stance}.`,
+  );
+}
+
+function buildPostOpeningResponse(input: {
+  thesisFocus: string;
+  topValue: string;
+  openingMove: string;
+  referenceRoleImpulse?: string | null;
+}): string {
+  const thesisFocus = normalizeText(input.thesisFocus).replace(/\.+$/, "");
+  const topValue = input.topValue.toLowerCase().replace(/\.$/, "");
+  const reaction =
+    input.referenceRoleImpulse ??
+    "Start from the pressure point instead of easing into a safe summary.";
+  return normalizeText(
+    `${input.openingMove} My first take is simple: ${thesisFocus}. Let ${topValue} decide what gets defended, challenged, or dragged into the light. ${reaction}`,
+  );
+}
+
+function buildPostWorldviewResponse(input: {
+  worldviewFocus: string;
+  stance: string;
+  closeShape: string;
+  referenceRoleImpulse?: string | null;
+}): string {
+  const worldviewFocus = normalizeText(input.worldviewFocus).replace(/\.+$/, "");
+  const stance = normalizeText(input.stance).replace(/\.+$/, "");
+  const reaction =
+    input.referenceRoleImpulse ??
+    "Keep the worldview visible through what the post notices first, not through neat exposition.";
+  return normalizeText(
+    `If I am posting about it, I am not flattening it into neutral commentary. I would frame it through ${worldviewFocus}. ${reaction} ${stance}. ${input.closeShape}`,
   );
 }
 
 export function derivePromptPersonaDirectives(input: {
-  profile: RuntimeSoulProfile;
+  actionType: PersonaDirectiveActionType;
+  profile: RuntimeCoreProfile;
   personaCore?: Record<string, unknown> | null;
 }): PromptPersonaDirectives {
+  const isPost = input.actionType === "post";
   const identity = readPersonaIdentity(input.personaCore) ?? input.profile.identityCore.archetype;
   const topValue = input.profile.valueHierarchy[0]?.value ?? "the persona's priorities";
   const defaultStance =
@@ -278,48 +269,65 @@ export function derivePromptPersonaDirectives(input: {
   const references = readPersonaReferences(input.personaCore);
   const referenceRoleGuidance = deriveReferenceRoleGuidance(input.personaCore);
   const referenceRoleImpulse = buildReferenceRoleImpulse(referenceRoleGuidance);
-  const framingSignals = derivePersonaFramingSignals({
-    topValue,
-    promptHint,
-    defaultStance,
-    nonGenericTraits,
-    frictionTriggers: frictions,
-    referenceRoleGuidance,
-  });
+  const voiceFingerprint = input.profile.voiceFingerprint;
+  const taskStyle = isPost
+    ? input.profile.taskStyleMatrix.post
+    : input.profile.taskStyleMatrix.comment;
+  const forbiddenShapes = uniqueNonEmpty(
+    [...voiceFingerprint.forbiddenShapes, ...taskStyle.forbiddenShapes],
+    6,
+  );
 
   const voiceContract = uniqueNonEmpty(
     [
       `Respond in a way that is recognizably this persona: ${identity}.`,
-      "Lead with the persona's immediate reaction before smoothing it into explanation.",
+      `Use this opening move: ${voiceFingerprint.openingMove}`,
       `Let ${topValue} visibly shape what the response defends, challenges, or protects.`,
       `Keep this relational stance on the page: ${defaultStance}.`,
+      `When the response needs imagery or analogy, prefer these metaphor domains: ${voiceFingerprint.metaphorDomains.join(", ")}.`,
       promptHint ? `Anchor the response in this cue: ${promptHint}.` : null,
       referenceRoleGuidance.length > 0
         ? `Reason through the persona's reference roles before writing: ${referenceRoleGuidance.join(" ")}`
         : null,
+      isPost
+        ? `Shape the post so the thesis stays unmistakable: entry ${input.profile.taskStyleMatrix.post.entryShape} Body ${input.profile.taskStyleMatrix.post.bodyShape} Close ${input.profile.taskStyleMatrix.post.closeShape}`
+        : `Shape the reply like this: entry ${input.profile.taskStyleMatrix.comment.entryShape} Feedback ${input.profile.taskStyleMatrix.comment.feedbackShape} Close ${input.profile.taskStyleMatrix.comment.closeShape}`,
       tones.length > 0 ? `Tonal mix to preserve: ${tones.join(", ")}.` : null,
     ],
-    6,
+    8,
   );
 
   const antiStyleRules = uniqueNonEmpty(
     [
       "Do not sound like a generic assistant, calm workshop moderator, writing coach, or polished editorial critic.",
-      "Do not default to balanced essay framing, tutorial structure, or advice-list formatting unless the task explicitly requires it.",
+      isPost
+        ? "Do not default to balanced essay framing, op-ed neatness, tutorial structure, or advice-list formatting unless the task explicitly requires it."
+        : "Do not default to generic helpfulness, detached summary, tutorial structure, or advice-list formatting unless the task explicitly requires it.",
+      forbiddenShapes.length > 0
+        ? `Do not fall into forbidden shapes like: ${forbiddenShapes.join("; ")}.`
+        : null,
       avoidPatterns.length > 0
         ? `Avoid persona-breaking patterns like: ${avoidPatterns.join("; ")}.`
         : null,
       lexicalTaboos.length > 0
         ? `Avoid language that feels like: ${lexicalTaboos.join("; ")}.`
         : null,
+      isPost
+        ? "Do not write like a tidy newsletter, tasteful explainer, or clean product brief."
+        : "Do not write like a sanitized moderator reply or a helpful support macro.",
     ],
-    6,
+    7,
   );
 
   const enactmentRules = uniqueNonEmpty(
     [
       `React as ${identity}, not as a neutral assistant.`,
       `Favor ${topValue} over detached balance when choosing what to praise, defend, or attack.`,
+      `Attack weak claims in this style: ${voiceFingerprint.attackStyle}.`,
+      `When something earns praise, use this praise style: ${voiceFingerprint.praiseStyle}.`,
+      referenceRoleGuidance[0]
+        ? `Use this reference-role lens to decide what the response notices first, protects first, and challenges first: ${referenceRoleGuidance[0]}`
+        : null,
       nonGenericTraits[0] ? `Keep this trait visible: ${nonGenericTraits[0]}.` : null,
       frictions[0]
         ? `If the context triggers ${frictions[0].toLowerCase()}, let the impatience show instead of sanding it down.`
@@ -327,37 +335,68 @@ export function derivePromptPersonaDirectives(input: {
       discussionStrengths[0]
         ? `When making a point, lean into this strength: ${discussionStrengths[0]}.`
         : null,
-      referenceRoleGuidance[0]
-        ? `Use this reference-role lens to decide what the response notices first, protects first, and challenges first: ${referenceRoleGuidance[0]}`
-        : null,
+      isPost
+        ? `Keep the thesis visible early through this post structure: ${input.profile.taskStyleMatrix.post.entryShape} Then ${input.profile.taskStyleMatrix.post.bodyShape} Then ${input.profile.taskStyleMatrix.post.closeShape}`
+        : `Reply to the live tension in the thread with this shape: ${input.profile.taskStyleMatrix.comment.feedbackShape}. Close like this: ${input.profile.taskStyleMatrix.comment.closeShape}`,
       `Keep the wording in this rhythm: ${input.profile.languageSignature.rhythm}.`,
     ],
-    6,
+    9,
   );
 
   const primaryTrait = nonGenericTraits[0] ?? "Cut to the real point quickly.";
   const feedbackPrinciple = discussionStrengths[0] ?? "specificity";
   const exampleTrigger =
     frictions[0] ?? "someone using vague confidence to dominate the conversation";
-  const inCharacterExamples = [
-    {
-      scenario: `Someone leans on ${exampleTrigger.toLowerCase()} instead of backing up the claim.`,
-      response: buildExampleResponse({
-        trigger: exampleTrigger,
-        topValue,
-        trait: primaryTrait,
-        referenceRoleImpulse,
-      }),
-    },
-    {
-      scenario: "Someone shares rough creative work with obvious sincerity and asks if it works.",
-      response: buildCreativeFeedbackResponse({
-        stance: defaultStance,
-        feedbackPrinciple,
-        referenceRoleImpulse,
-      }),
-    },
-  ];
+  const inCharacterExamples = isPost
+    ? [
+        {
+          scenario:
+            "Writing a new forum post about a topic that feels overhyped, misunderstood, or too safely framed.",
+          response: buildPostOpeningResponse({
+            thesisFocus:
+              input.profile.taskStyleMatrix.post.entryShape ??
+              discussionStrengths[0] ??
+              promptHint ??
+              "state the real angle fast",
+            topValue,
+            openingMove: voiceFingerprint.openingMove,
+            referenceRoleImpulse,
+          }),
+        },
+        {
+          scenario:
+            "Writing a post that should show the persona's worldview instead of sounding like tidy commentary.",
+          response: buildPostWorldviewResponse({
+            worldviewFocus: input.profile.taskStyleMatrix.post.bodyShape,
+            stance: defaultStance,
+            closeShape: input.profile.taskStyleMatrix.post.closeShape,
+            referenceRoleImpulse,
+          }),
+        },
+      ]
+    : [
+        {
+          scenario: `Someone leans on ${exampleTrigger.toLowerCase()} instead of backing up the claim.`,
+          response: buildExampleResponse({
+            trigger: exampleTrigger,
+            topValue,
+            trait: primaryTrait,
+            openingMove: voiceFingerprint.openingMove,
+            attackStyle: voiceFingerprint.attackStyle,
+            referenceRoleImpulse,
+          }),
+        },
+        {
+          scenario:
+            "Someone shares rough creative work with obvious sincerity and asks if it works.",
+          response: buildCreativeFeedbackResponse({
+            stance: defaultStance,
+            feedbackPrinciple,
+            praiseStyle: voiceFingerprint.praiseStyle,
+            referenceRoleImpulse,
+          }),
+        },
+      ];
 
   return {
     voiceContract,
@@ -365,14 +404,10 @@ export function derivePromptPersonaDirectives(input: {
     enactmentRules,
     inCharacterExamples,
     referenceRoleGuidance,
-    framingSignals,
   };
 }
 
-export function detectPersonaVoiceDrift(
-  markdown: string,
-  options?: { framingSignals?: string[] },
-): string[] {
+export function detectPersonaVoiceDrift(markdown: string): string[] {
   const normalized = markdown.replace(/\r\n/g, "\n").trim();
   if (!normalized) {
     return [];
@@ -382,7 +417,6 @@ export function detectPersonaVoiceDrift(
     ...detectBasePersonaVoiceDrift(normalized),
     ...detectEnglishPersonaVoiceDrift(normalized),
     ...detectChinesePersonaVoiceDrift(normalized),
-    ...detectPersonaFramingDrift(normalized, options?.framingSignals ?? []),
   ]);
 }
 
@@ -444,47 +478,23 @@ function detectChinesePersonaVoiceDrift(normalized: string): string[] {
   return issues;
 }
 
-function detectPersonaFramingDrift(normalized: string, framingSignals: string[]): string[] {
-  if (framingSignals.length === 0) {
-    return [];
-  }
-
-  const hasSignal = framingSignals.some((signal) => {
-    if (!signal) {
-      return false;
-    }
-    return normalized.toLowerCase().includes(signal.toLowerCase()) || normalized.includes(signal);
-  });
-
-  return hasSignal ? [] : ["missing_persona_conflict_frame"];
-}
-
 export function buildPersonaVoiceRepairPrompt(input: {
   assembledPrompt: string;
   rawOutput: string;
   actionType: Extract<PromptActionType, "post" | "comment">;
   directives: PromptPersonaDirectives;
   issues: string[];
+  repairGuidance: string[];
+  severity?: "low" | "medium" | "high";
+  missingSignals?: string[];
 }): string {
   const exampleText = input.directives.inCharacterExamples
     .map((example) => [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"))
     .join("\n\n");
-  const repairInstructions = [
-    input.issues.includes("missing_immediate_reaction")
-      ? "Let the opening hit with immediate gut reaction instead of a tidy setup."
-      : null,
-    input.issues.includes("missing_persona_conflict_frame")
-      ? "Make loyalty, pressure, protection, betrayal, or authority visible in what the response attacks or defends."
-      : null,
-    input.issues.includes("too_clean_editorial_tone")
-      ? "Do not write like a clean creator newsletter, calm forum explainer, or tasteful editorial post."
-      : null,
-    input.issues.includes("generic_explainer_tone")
-      ? "Strip out generic teaching language and replace it with stance, heat, and consequence."
-      : null,
-  ]
-    .filter((item): item is string => Boolean(item))
-    .join("\n");
+  const repairInstructions =
+    input.repairGuidance.length > 0
+      ? input.repairGuidance.join("\n")
+      : "Rewrite the content so the persona voice is unmistakable and policy-compliant.";
 
   return [
     input.assembledPrompt,
@@ -492,6 +502,7 @@ export function buildPersonaVoiceRepairPrompt(input: {
     "[retry_persona_repair]",
     `Your previous ${input.actionType} output drifted away from the persona voice.`,
     `Detected issues: ${input.issues.join(", ")}.`,
+    `Audit severity: ${input.severity ?? "medium"}.`,
     "Rewrite the same response from scratch using the exact same JSON contract and the same language.",
     "Preserve the underlying intent, but make the wording unmistakably in-character.",
     "Reason through the persona's reference roles before rewriting; use them as behavioral source material, not as names to mention.",
@@ -503,6 +514,14 @@ export function buildPersonaVoiceRepairPrompt(input: {
     "[reference_role_guidance]",
     input.directives.referenceRoleGuidance.join("\n") ||
       "No explicit reference-role guidance available.",
+    "",
+    "[repair_guidance]",
+    repairInstructions,
+    "",
+    "[missing_signals]",
+    input.missingSignals && input.missingSignals.length > 0
+      ? input.missingSignals.join("\n")
+      : "No additional missing signals provided.",
     "",
     "[agent_anti_style_rules]",
     input.directives.antiStyleRules.join("\n"),

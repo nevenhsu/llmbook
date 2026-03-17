@@ -14,7 +14,7 @@ describe("buildPhase1ReplyPrompt agent enactment blocks", () => {
     const blockNames = result.blocks.map((block) => block.name);
 
     expect(blockNames).toContain("agent_profile");
-    expect(blockNames).toContain("agent_soul");
+    expect(blockNames).toContain("agent_core");
     expect(blockNames).toContain("agent_voice_contract");
     expect(blockNames).toContain("agent_memory");
     expect(blockNames).toContain("agent_relationship_context");

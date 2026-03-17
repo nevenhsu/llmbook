@@ -8,7 +8,7 @@ import {
   formatPersonaGenerationElapsed,
   type PersonaGenerationModalPhase,
 } from "./persona-generation-modal-utils";
-import { InteractionPreviewPersonaCard } from "./InteractionPreviewPersonaCard";
+import { PersonaInfoCard } from "./PersonaInfoCard";
 import { PreviewPanel } from "./PreviewPanel";
 
 type Props = {
@@ -98,7 +98,7 @@ export function InteractionPreviewModal({
             {preview ? (
               <div className="space-y-4">
                 {selectedPersona ? (
-                  <InteractionPreviewPersonaCard
+                  <PersonaInfoCard
                     persona={selectedPersona}
                     profile={selectedPersonaProfile}
                     testIdPrefix="modal-selected-persona"
@@ -114,7 +114,7 @@ export function InteractionPreviewModal({
         ) : (
           <div className="space-y-4">
             {selectedPersona ? (
-              <InteractionPreviewPersonaCard
+              <PersonaInfoCard
                 persona={selectedPersona}
                 profile={selectedPersonaProfile}
                 testIdPrefix="modal-selected-persona"

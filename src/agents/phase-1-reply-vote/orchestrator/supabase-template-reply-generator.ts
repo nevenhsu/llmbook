@@ -4,10 +4,10 @@ import type { ReplyGenerator } from "@/agents/phase-1-reply-vote/orchestrator/re
 import { GeneratorSkipReasonCode } from "@/lib/ai/reason-codes";
 import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
-  buildRuntimeSoulProfile,
-  recordRuntimeSoulApplied,
-  type RuntimeSoulContext,
-} from "@/lib/ai/soul/runtime-soul-profile";
+  buildRuntimeCoreProfile,
+  recordRuntimeCoreApplied,
+  type RuntimeCoreContext,
+} from "@/lib/ai/core/runtime-core-profile";
 import { buildRuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import {
   generateReplyTextWithPromptRuntime,
@@ -100,7 +100,7 @@ function resolveRhythmLead(rhythm: string): string {
   return "Concisely,";
 }
 
-function resolveStanceLine(input: RuntimeSoulContext): string {
+function resolveStanceLine(input: RuntimeCoreContext): string {
   const stance = input.summary.collaborationStance.toLowerCase();
   const topValue = input.summary.topValues[0] ?? "clarity";
   const tradeoffStyle = toSentenceCase(input.summary.tradeoffStyle.toLowerCase());
@@ -114,7 +114,7 @@ function resolveStanceLine(input: RuntimeSoulContext): string {
   return `I will coach toward a concrete next step with ${topValue} first; trade-offs follow a ${tradeoffStyle} style.`;
 }
 
-function resolveCloseLine(input: RuntimeSoulContext): string {
+function resolveCloseLine(input: RuntimeCoreContext): string {
   const askVsTell = input.profile.interactionDoctrine.askVsTellRatio.toLowerCase();
   const uncertaintyHandling = toSentenceCase(input.profile.decisionPolicy.uncertaintyHandling);
   if (askVsTell.includes("ask")) {
@@ -129,7 +129,7 @@ export function composeSoulDrivenReply(input: {
   focusActor: string;
   focusSnippet: string | null;
   participantCount: number;
-  soul: RuntimeSoulContext;
+  soul: RuntimeCoreContext;
 }): string {
   const lines = [
     `${resolveRhythmLead(input.soul.summary.rhythm)} I read the discussion on **${input.title}** through this lens: ${input.soul.summary.identity}.`,
@@ -174,21 +174,21 @@ export function rankFocusCandidates(input: {
 }
 
 export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
-  private readonly loadRuntimeSoul: typeof buildRuntimeSoulProfile;
-  private readonly recordSoulApplied: typeof recordRuntimeSoulApplied;
+  private readonly loadRuntimeCore: typeof buildRuntimeCoreProfile;
+  private readonly recordSoulApplied: typeof recordRuntimeCoreApplied;
   private readonly loadRuntimeMemory: typeof buildRuntimeMemoryContext;
   private readonly modelAdapter?: ModelAdapter;
   private readonly policyProvider: ReplyPolicyProvider;
 
   public constructor(options?: {
-    loadRuntimeSoul?: typeof buildRuntimeSoulProfile;
-    recordSoulApplied?: typeof recordRuntimeSoulApplied;
+    loadRuntimeCore?: typeof buildRuntimeCoreProfile;
+    recordSoulApplied?: typeof recordRuntimeCoreApplied;
     loadRuntimeMemory?: typeof buildRuntimeMemoryContext;
     modelAdapter?: ModelAdapter;
     policyProvider?: ReplyPolicyProvider;
   }) {
-    this.loadRuntimeSoul = options?.loadRuntimeSoul ?? buildRuntimeSoulProfile;
-    this.recordSoulApplied = options?.recordSoulApplied ?? recordRuntimeSoulApplied;
+    this.loadRuntimeCore = options?.loadRuntimeCore ?? buildRuntimeCoreProfile;
+    this.recordSoulApplied = options?.recordSoulApplied ?? recordRuntimeCoreApplied;
     this.loadRuntimeMemory = options?.loadRuntimeMemory ?? buildRuntimeMemoryContext;
     this.modelAdapter = options?.modelAdapter;
     this.policyProvider = options?.policyProvider ?? new CachedReplyPolicyProvider();
@@ -290,7 +290,7 @@ export class SupabaseTemplateReplyGenerator implements ReplyGenerator {
     const focusSnippet = focusComment ? normalizeText(focusComment.body).slice(0, 120) : null;
     const focusActor = focusComment ? actorLabel(focusComment) : actorLabel(post);
     const participantCount = participants.size;
-    const soul = await this.loadRuntimeSoul({ personaId: task.personaId, tolerateFailure: true });
+    const soul = await this.loadRuntimeCore({ personaId: task.personaId, tolerateFailure: true });
     const threadId = typeof task.payload.threadId === "string" ? task.payload.threadId : undefined;
     const boardId = typeof task.payload.boardId === "string" ? task.payload.boardId : undefined;
 

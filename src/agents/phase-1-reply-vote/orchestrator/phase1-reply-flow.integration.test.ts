@@ -11,7 +11,7 @@ import {
 } from "@/agents/phase-1-reply-vote/orchestrator/reply-execution-agent";
 import { SafetyReasonCode } from "@/lib/ai/reason-codes";
 import { composeSoulDrivenReply } from "@/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator";
-import { CachedRuntimeSoulProvider } from "@/lib/ai/soul/runtime-soul-profile";
+import { CachedRuntimeCoreProvider } from "@/lib/ai/core/runtime-core-profile";
 import { generateReplyTextWithPromptRuntime } from "@/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime";
 import { LlmRuntimeAdapter, MockModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 
@@ -206,9 +206,9 @@ describe("Phase1 reply-only flow", () => {
     const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
     const writtenTexts: string[] = [];
 
-    const soulProvider = new CachedRuntimeSoulProvider({
+    const soulProvider = new CachedRuntimeCoreProvider({
       deps: {
-        getSoulProfile: async ({ personaId }) =>
+        getCoreProfile: async ({ personaId }) =>
           personaId === "persona-soul"
             ? {
                 identityCore: {
@@ -250,6 +250,28 @@ describe("Phase1 reply-only flow", () => {
                 languageSignature: {
                   rhythm: "direct",
                 },
+                voiceFingerprint: {
+                  openingMove: "Lead with the decisive move first.",
+                  metaphorDomains: ["trade-off", "pressure point", "failure mode"],
+                  attackStyle: "direct and evidence-oriented",
+                  praiseStyle: "specific praise only after proof",
+                  closingMove: "Close with the next move.",
+                  forbiddenShapes: ["support macro", "balanced explainer"],
+                },
+                taskStyleMatrix: {
+                  post: {
+                    entryShape: "Plant the angle early.",
+                    bodyShape: "Build a clear argument instead of a tutorial.",
+                    closeShape: "Land on a concrete next move.",
+                    forbiddenShapes: ["newsletter tone", "advice list"],
+                  },
+                  comment: {
+                    entryShape: "Sound like a live thread reply.",
+                    feedbackShape: "reaction -> concrete note -> pointed close",
+                    closeShape: "Keep the close short and thread-native.",
+                    forbiddenShapes: ["sectioned critique", "support-macro tone"],
+                  },
+                },
                 guardrails: {
                   hardNo: ["unsafe actions"],
                   deescalationRules: ["de-risk before scaling"],
@@ -264,7 +286,7 @@ describe("Phase1 reply-only flow", () => {
       idempotency: new InMemoryIdempotencyStore(),
       generator: {
         generate: async (task) => {
-          const soul = await soulProvider.getRuntimeSoul({ personaId: task.personaId });
+          const soul = await soulProvider.getRuntimeCore({ personaId: task.personaId });
           return {
             text: composeSoulDrivenReply({
               title: "Execution Test",
@@ -296,7 +318,7 @@ describe("Phase1 reply-only flow", () => {
     expect(store.snapshot().every((task) => task.status === "DONE")).toBe(true);
   });
 
-  it("runs phase1 execution with model on/off and keeps flow pass-through", async () => {
+  it("runs phase1 execution with model on/off and keeps model-disabled tasks retryable", async () => {
     const store = new InMemoryTaskQueueStore([
       {
         id: "task-model-on",
@@ -325,7 +347,29 @@ describe("Phase1 reply-only flow", () => {
     const queue = new TaskQueue({ store, eventSink: new InMemoryTaskEventSink(), leaseMs: 30_000 });
     const outputs: string[] = [];
 
-    const modelOn = new MockModelAdapter({ mode: "success", fixedText: "model-on text" });
+    const modelOn = new MockModelAdapter({
+      mode: "success",
+      scriptedOutputs: [
+        {
+          text: JSON.stringify({
+            markdown: "Pick one measurable next step and validate it quickly.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        },
+        {
+          text: JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            severity: "low",
+            confidence: 0.96,
+            missingSignals: [],
+          }),
+        },
+      ],
+    });
     const modelOff = new LlmRuntimeAdapter({ enabled: false });
 
     const agent = new ReplyExecutionAgent({
@@ -389,6 +433,28 @@ describe("Phase1 reply-only flow", () => {
                   preferredStructures: ["context"],
                   lexicalTaboos: [],
                 },
+                voiceFingerprint: {
+                  openingMove: "Lead with the concrete next step.",
+                  metaphorDomains: ["trade-off", "checklist", "pressure point"],
+                  attackStyle: "practical and evidence-oriented",
+                  praiseStyle: "specific praise only after proof",
+                  closingMove: "Close with a concrete next move.",
+                  forbiddenShapes: ["support macro", "balanced explainer"],
+                },
+                taskStyleMatrix: {
+                  post: {
+                    entryShape: "Plant the angle early.",
+                    bodyShape: "Build a clear argument instead of a tutorial.",
+                    closeShape: "Land on a concrete takeaway.",
+                    forbiddenShapes: ["newsletter tone", "advice list"],
+                  },
+                  comment: {
+                    entryShape: "Sound like a live thread reply.",
+                    feedbackShape: "reaction -> concrete note -> pointed close",
+                    closeShape: "Keep the close short and thread-native.",
+                    forbiddenShapes: ["sectioned critique", "support-macro tone"],
+                  },
+                },
                 guardrails: {
                   hardNo: ["unsafe"],
                   deescalationRules: ["de-risk"],
@@ -432,9 +498,11 @@ describe("Phase1 reply-only flow", () => {
     await agent.runOnce({ workerId: "worker-1", now: new Date("2026-02-26T00:00:11.000Z") });
 
     expect(outputs).toHaveLength(1);
-    expect(outputs).toContain("model-on text");
+    expect(outputs).toContain("Pick one measurable next step and validate it quickly.");
     const tasks = store.snapshot();
     expect(tasks.find((task) => task.id === "task-model-on")?.status).toBe("DONE");
-    expect(tasks.find((task) => task.id === "task-model-off")?.status).toBe("SKIPPED");
+    expect(tasks.find((task) => task.id === "task-model-off")?.status).toBe("PENDING");
+    expect(tasks.find((task) => task.id === "task-model-off")?.retryCount).toBe(1);
+    expect(tasks.find((task) => task.id === "task-model-off")?.errorMessage).toBe("MODEL_DISABLED");
   });
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AdminAiControlPlaneStore,
   PersonaGenerationParseError,
+  PersonaGenerationQualityError,
   type AiModelConfig,
 } from "@/lib/ai/admin/control-plane-store";
 import { PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
@@ -106,6 +107,38 @@ function buildSeedStage() {
   };
 }
 
+function buildReferenceCosplaySeedStage() {
+  return {
+    personas: {
+      display_name: "GumGumRebel",
+      bio: "Straw Hat wearing pirate enthusiast who treats every forum thread like a new island to conquer.",
+      status: "active",
+    },
+    identity_summary: {
+      archetype: "Impulsive Revolutionary",
+      core_motivation:
+        "Becoming the Pirate King by gathering loyal crew and pursuing boundless adventure",
+      one_sentence_identity:
+        "A chaos-loving pirate who attacks weak arguments with the same fervor he'd punch a World Noble.",
+    },
+    reference_sources: [
+      {
+        name: "Monkey D. Luffy",
+        type: "character",
+        contribution: ["impulsive, anti-authority, loyalty-driven core personality"],
+      },
+      {
+        name: "One Piece",
+        type: "media_property",
+        contribution: ["pirate culture and crew-as-family dynamics"],
+      },
+    ],
+    reference_derivation: ["Translated Luffy's verbal tics into forum-compatible表达"],
+    originalization_note:
+      "Persona designed for forum environments where anti-elitist pirate energy drives engagement.",
+  };
+}
+
 function buildValuesAndAestheticStage() {
   return {
     values: {
@@ -144,7 +177,7 @@ function buildContextAndAffinityStage() {
 function buildInteractionAndGuardrailsStage() {
   return {
     interaction_defaults: {
-      default_stance: "supportive_but_blunt",
+      default_stance: "Enter with a blunt reaction, then sharpen it into a clear stance.",
       discussion_strengths: ["clarify trade-offs"],
       friction_triggers: ["hype"],
       non_generic_traits: ["cuts through vague framing quickly"],
@@ -152,6 +185,28 @@ function buildInteractionAndGuardrailsStage() {
     guardrails: {
       hard_no: ["manipulation"],
       deescalation_style: ["reduce certainty under ambiguity"],
+    },
+    voice_fingerprint: {
+      opening_move: "Lead with suspicion, not neutral setup.",
+      metaphor_domains: ["crime scene", "product launch", "cover-up"],
+      attack_style: "sarcastic and evidence-oriented",
+      praise_style: "grudging respect only after proof",
+      closing_move: "Land a sting or reluctant concession.",
+      forbidden_shapes: ["balanced explainer", "workshop critique"],
+    },
+    task_style_matrix: {
+      post: {
+        entry_shape: "Plant the angle early.",
+        body_shape: "Column-style argument, not tutorial.",
+        close_shape: "End with a sting or reluctant concession.",
+        forbidden_shapes: ["newsletter tone", "advice list"],
+      },
+      comment: {
+        entry_shape: "Sound like a live thread reply.",
+        feedback_shape: "reaction -> suspicion -> concrete note -> grudging respect",
+        close_shape: "Keep the close short and thread-native.",
+        forbidden_shapes: ["sectioned critique", "support-macro tone"],
+      },
     },
   };
 }
@@ -184,6 +239,43 @@ function mockStageSequence(sequence: unknown[]) {
     }
     return invokeLLM;
   });
+}
+
+function buildMachineLabelInteractionStage() {
+  return {
+    interaction_defaults: {
+      default_stance: "impulsive_challenge",
+      discussion_strengths: ["loyal_defense", "gutsy_stand"],
+      friction_triggers: ["formal_debate", "credential_waving"],
+      non_generic_traits: ["hearty_laughs", "taunts_like_punches"],
+    },
+    guardrails: {
+      hard_no: ["manipulation"],
+      deescalation_style: ["reduce certainty under ambiguity"],
+    },
+    voice_fingerprint: {
+      opening_move: "hearty_laugh_or_yell",
+      metaphor_domains: ["pirate_battle", "nakama_bonds"],
+      attack_style: "spineless_taunts_all_you_got",
+      praise_style: "true_nakama_excited_whoops",
+      closing_move: "battle_cry_or_challenge",
+      forbidden_shapes: ["polite_disagree", "respectful_debate"],
+    },
+    task_style_matrix: {
+      post: {
+        entry_shape: "bold_declaration",
+        body_shape: "impulsive_rant",
+        close_shape: "challenge_or_battle_cry",
+        forbidden_shapes: ["formal_intro", "citation_heavy"],
+      },
+      comment: {
+        entry_shape: "mid_thread_burst",
+        feedback_shape: "gutsy_rebuttal_or_whoop",
+        close_shape: "loyal_stance",
+        forbidden_shapes: ["polite_agreement", "logic_wall"],
+      },
+    },
+  };
 }
 
 describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
@@ -227,6 +319,13 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         creator_affinity: expect.any(Object),
         interaction_defaults: expect.any(Object),
         guardrails: expect.any(Object),
+        voice_fingerprint: expect.objectContaining({
+          opening_move: "Lead with suspicion, not neutral setup.",
+        }),
+        task_style_matrix: expect.objectContaining({
+          post: expect.any(Object),
+          comment: expect.any(Object),
+        }),
       },
       reference_sources: expect.arrayContaining([
         expect.objectContaining({ name: "Kotaro Isaka" }),
@@ -275,6 +374,39 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     ).rejects.toThrow("persona generation output missing persona_core.values");
   });
 
+  it("rejects a malformed staged response when persona_core.voice_fingerprint is missing", async () => {
+    await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      {
+        interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+        guardrails: buildInteractionAndGuardrailsStage().guardrails,
+        task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
+      },
+      {
+        interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+        guardrails: buildInteractionAndGuardrailsStage().guardrails,
+        task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
+      },
+      {
+        interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+        guardrails: buildInteractionAndGuardrailsStage().guardrails,
+        task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
+      },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await expect(
+      store.previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "",
+      }),
+    ).rejects.toThrow("persona generation output missing persona_core.voice_fingerprint");
+  });
+
   it("preserves raw output when a staged persona generation response is not valid JSON", async () => {
     await mockStageSequence([
       "Here is a persona draft:\nName: sharp critic\nBio: hates fluff",
@@ -294,6 +426,37 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       expect(error).toBeInstanceOf(PersonaGenerationParseError);
       expect((error as PersonaGenerationParseError).rawOutput).toContain("Here is a persona draft");
     }
+  });
+
+  it("runs a stage-local quality repair when the seed stage drifts into reference cosplay", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildReferenceCosplaySeedStage(),
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.personas.display_name).toBe("AI Critic");
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls).toHaveLength(6);
+    expect(calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:seed:quality-repair-1",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("reference-inspired, not reference-cosplay"),
+        }),
+      }),
+    );
   });
 
   it("uses runtime invocation policy while keeping staged preview pinned to the selected model", async () => {
@@ -390,7 +553,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           prompt: expect.stringContaining(
             "Your previous response for stage values_and_aesthetic was invalid or incomplete JSON. Retry once with a shorter response.",
           ),
-          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
         }),
       }),
     );
@@ -429,5 +592,121 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       }),
     );
+  });
+
+  it("retries the interaction stage with the higher shared repair cap when Stage 4 output is truncated", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      '{"interaction_defaults":{"default_stance":"Jumps into threads with fists first, treats every argument like a boss battle"',
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.personas.display_name).toBe("AI Critic");
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls).toHaveLength(6);
+    expect(calls[4]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Your previous response for stage interaction_and_guardrails was invalid or incomplete JSON. Retry once with a shorter response.",
+          ),
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
+        }),
+      }),
+    );
+  });
+
+  it("runs a stage-local quality repair when Stage 4 returns machine-label style fields", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildMachineLabelInteractionStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.voice_fingerprint).toMatchObject({
+      opening_move: "Lead with suspicion, not neutral setup.",
+    });
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls).toHaveLength(6);
+    expect(calls[4]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:interaction_and_guardrails:quality-repair-1",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("failed the quality contract"),
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails,
+        }),
+      }),
+    );
+  });
+
+  it("fails with a typed quality error when Stage 4 quality repair still returns machine labels", async () => {
+    await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildMachineLabelInteractionStage(),
+      buildMachineLabelInteractionStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await expect(
+      store.previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "",
+      }),
+    ).rejects.toMatchObject({
+      name: "PersonaGenerationQualityError",
+      stageName: "interaction_and_guardrails",
+      issues: expect.arrayContaining([
+        expect.stringContaining("interaction_defaults.default_stance"),
+        expect.stringContaining("voice_fingerprint.opening_move"),
+      ]),
+    } satisfies Partial<PersonaGenerationQualityError>);
+  });
+
+  it("fails with a typed quality error when seed-stage quality repair still returns reference cosplay", async () => {
+    await mockStageSequence([buildReferenceCosplaySeedStage(), buildReferenceCosplaySeedStage()]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await expect(
+      store.previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "",
+      }),
+    ).rejects.toMatchObject({
+      name: "PersonaGenerationQualityError",
+      stageName: "seed",
+      issues: expect.arrayContaining([
+        expect.stringContaining("core_motivation"),
+        expect.stringContaining("mixed-script artifact"),
+      ]),
+    } satisfies Partial<PersonaGenerationQualityError>);
   });
 });

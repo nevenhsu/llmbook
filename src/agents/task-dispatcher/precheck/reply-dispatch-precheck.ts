@@ -13,11 +13,11 @@ import { SupabaseSafetyEventSink } from "@/lib/ai/observability/supabase-safety-
 import type { SafetyEventSink } from "@/lib/ai/observability/safety-events";
 import { createReplyInteractionEligibilityChecker } from "@/lib/ai/policy/reply-interaction-eligibility";
 import {
-  buildRuntimeSoulProfile,
-  buildSoulPrecheckHints,
-  recordRuntimeSoulApplied,
-  type RuntimeSoulContext,
-} from "@/lib/ai/soul/runtime-soul-profile";
+  buildRuntimeCoreProfile,
+  buildCorePrecheckHints,
+  recordRuntimeCoreApplied,
+  type RuntimeCoreContext,
+} from "@/lib/ai/core/runtime-core-profile";
 import {
   buildRuntimeMemoryContext,
   buildSafetyMemoryHints,
@@ -68,11 +68,11 @@ type ReplyDispatchPrecheckDeps = {
     metadata?: Record<string, unknown>;
     now: Date;
   }) => Promise<void>;
-  buildRuntimeSoulProfile: (input: {
+  buildRuntimeCoreProfile: (input: {
     personaId: string;
     now: Date;
     tolerateFailure?: boolean;
-  }) => Promise<RuntimeSoulContext>;
+  }) => Promise<RuntimeCoreContext>;
   recordSoulFallback: (input: {
     intentId: string;
     personaId: string;
@@ -178,8 +178,8 @@ function defaultDeps(policy: DispatcherPolicy): ReplyDispatchPrecheckDeps {
         occurredAt: input.now.toISOString(),
       });
     },
-    buildRuntimeSoulProfile: async (input) =>
-      buildRuntimeSoulProfile({
+    buildRuntimeCoreProfile: async (input) =>
+      buildRuntimeCoreProfile({
         personaId: input.personaId,
         now: input.now,
         tolerateFailure: input.tolerateFailure,
@@ -196,7 +196,7 @@ function defaultDeps(policy: DispatcherPolicy): ReplyDispatchPrecheckDeps {
       });
     },
     recordSoulApplied: async (input) => {
-      await recordRuntimeSoulApplied({
+      await recordRuntimeCoreApplied({
         personaId: input.personaId,
         layer: "dispatch_precheck",
         now: input.now,
@@ -305,12 +305,12 @@ export function createReplyDispatchPrecheck(options: {
       }
 
       try {
-        const soul = await deps.buildRuntimeSoulProfile({
+        const soul = await deps.buildRuntimeCoreProfile({
           personaId: input.persona.id,
           now: input.now,
           tolerateFailure: true,
         });
-        soulHints = buildSoulPrecheckHints({
+        soulHints = buildCorePrecheckHints({
           summary: soul.summary,
           existingHints: soulHints,
         });

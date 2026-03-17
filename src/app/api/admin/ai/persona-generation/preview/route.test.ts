@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PersonaGenerationParseError } from "@/lib/ai/admin/control-plane-store";
+import {
+  PersonaGenerationParseError,
+  PersonaGenerationQualityError,
+} from "@/lib/ai/admin/control-plane-store";
 
 const { isAdmin, previewPersonaGeneration } = vi.hoisted(() => ({
   isAdmin: vi.fn(),
@@ -82,6 +85,37 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
       error: "persona generation output missing persona_core.values",
       rawOutput:
         '{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
+    });
+  });
+
+  it("returns stage-specific details when persona generation quality repair fails", async () => {
+    previewPersonaGeneration.mockRejectedValue(
+      new PersonaGenerationQualityError({
+        stageName: "interaction_and_guardrails",
+        message: "persona generation stage interaction_and_guardrails quality repair failed",
+        rawOutput: '{"interaction_defaults":{"default_stance":"impulsive_challenge"}}',
+        issues: [
+          "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
+        ],
+      }),
+    );
+
+    const req = new Request("http://localhost/api/admin/ai/persona-generation/preview", {
+      method: "POST",
+      body: JSON.stringify({ modelId: "model-1", extraPrompt: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({
+      error: "persona generation stage interaction_and_guardrails quality repair failed",
+      code: "persona_generation_stage_quality_failed",
+      stageName: "interaction_and_guardrails",
+      issues: [
+        "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
+      ],
+      rawOutput: '{"interaction_defaults":{"default_stance":"impulsive_challenge"}}',
     });
   });
 });

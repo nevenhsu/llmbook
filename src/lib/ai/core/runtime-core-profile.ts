@@ -1,15 +1,15 @@
 import { SoulReasonCode } from "@/lib/ai/reason-codes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type SoulValuePriority = 1 | 2 | 3;
+type CoreValuePriority = 1 | 2 | 3;
 
-export type RuntimeSoulProfile = {
+export type RuntimeCoreProfile = {
   identityCore: {
     archetype: string;
     mbti: string;
     coreMotivation: string;
   };
-  valueHierarchy: Array<{ value: string; priority: SoulValuePriority }>;
+  valueHierarchy: Array<{ value: string; priority: CoreValuePriority }>;
   reasoningLens: {
     primary: string[];
     secondary: string[];
@@ -47,13 +47,35 @@ export type RuntimeSoulProfile = {
     preferredStructures: string[];
     lexicalTaboos: string[];
   };
+  voiceFingerprint: {
+    openingMove: string;
+    metaphorDomains: string[];
+    attackStyle: string;
+    praiseStyle: string;
+    closingMove: string;
+    forbiddenShapes: string[];
+  };
+  taskStyleMatrix: {
+    post: {
+      entryShape: string;
+      bodyShape: string;
+      closeShape: string;
+      forbiddenShapes: string[];
+    };
+    comment: {
+      entryShape: string;
+      feedbackShape: string;
+      closeShape: string;
+      forbiddenShapes: string[];
+    };
+  };
   guardrails: {
     hardNo: string[];
     deescalationRules: string[];
   };
 };
 
-export type RuntimeSoulSummary = {
+export type RuntimeCoreSummary = {
   identity: string;
   mbti: string;
   topValues: string[];
@@ -68,39 +90,41 @@ export type RuntimeSoulSummary = {
   guardrailCount: number;
 };
 
-export type RuntimeSoulContext = {
-  profile: RuntimeSoulProfile;
-  summary: RuntimeSoulSummary;
+export type RuntimeCoreContext = {
+  profile: RuntimeCoreProfile;
+  summary: RuntimeCoreSummary;
   normalized: boolean;
   source: "db" | "fallback_empty";
 };
 
-export type RuntimeSoulReasonCodeValue = (typeof SoulReasonCode)[keyof typeof SoulReasonCode];
+export type InteractionCoreSummaryActionType = "post" | "comment" | "reply";
 
-export type RuntimeSoulAuditEvent = {
+export type RuntimeCoreReasonCodeValue = (typeof SoulReasonCode)[keyof typeof SoulReasonCode];
+
+export type RuntimeCoreAuditEvent = {
   layer: "soul_runtime" | "generation" | "dispatch_precheck";
   operation: "LOAD" | "FALLBACK" | "APPLY";
-  reasonCode: RuntimeSoulReasonCodeValue;
+  reasonCode: RuntimeCoreReasonCodeValue;
   entityId: string;
   occurredAt: string;
   metadata?: Record<string, unknown>;
 };
 
-export interface RuntimeSoulEventSink {
-  record(event: RuntimeSoulAuditEvent): Promise<void>;
+export interface RuntimeCoreEventSink {
+  record(event: RuntimeCoreAuditEvent): Promise<void>;
 }
 
-export class InMemoryRuntimeSoulEventSink implements RuntimeSoulEventSink {
-  public readonly events: RuntimeSoulAuditEvent[] = [];
+export class InMemoryRuntimeCoreEventSink implements RuntimeCoreEventSink {
+  public readonly events: RuntimeCoreAuditEvent[] = [];
 
-  public async record(event: RuntimeSoulAuditEvent): Promise<void> {
+  public async record(event: RuntimeCoreAuditEvent): Promise<void> {
     this.events.push(event);
   }
 }
 
-type RuntimeSoulDeps = {
-  getSoulProfile: (input: { personaId: string }) => Promise<unknown>;
-  eventSink?: RuntimeSoulEventSink;
+type RuntimeCoreDeps = {
+  getCoreProfile: (input: { personaId: string }) => Promise<unknown>;
+  eventSink?: RuntimeCoreEventSink;
 };
 
 type CacheEntry<T> = {
@@ -112,23 +136,23 @@ type PersonaCoreRow = {
   core_profile: unknown;
 };
 
-export type RuntimeSoulProviderStatus = {
+export type RuntimeCoreProviderStatus = {
   ttlMs: number;
-  personas: Record<string, RuntimeSoulPersonaStatus>;
-  lastFallbackEvent: RuntimeSoulAuditEvent | null;
-  lastAppliedEvent: RuntimeSoulAuditEvent | null;
+  personas: Record<string, RuntimeCorePersonaStatus>;
+  lastFallbackEvent: RuntimeCoreAuditEvent | null;
+  lastAppliedEvent: RuntimeCoreAuditEvent | null;
 };
 
-export type RuntimeSoulPersonaStatus = {
+export type RuntimeCorePersonaStatus = {
   cacheExpiresAt: string | null;
-  lastReasonCode: RuntimeSoulReasonCodeValue | null;
+  lastReasonCode: RuntimeCoreReasonCodeValue | null;
   lastLoadError: string | null;
   lastOccurredAt: string | null;
-  lastSummary: RuntimeSoulSummary | null;
+  lastSummary: RuntimeCoreSummary | null;
 };
 
 const DEFAULT_TTL_MS = 30_000;
-const DEFAULT_SOUL_PROFILE: RuntimeSoulProfile = {
+const DEFAULT_CORE_PROFILE: RuntimeCoreProfile = {
   identityCore: {
     archetype: "A pragmatic collaborator who keeps discussion constructive and useful.",
     mbti: "INTJ",
@@ -181,6 +205,28 @@ const DEFAULT_SOUL_PROFILE: RuntimeSoulProfile = {
     rhythm: "concise",
     preferredStructures: ["context", "analysis", "next step"],
     lexicalTaboos: [],
+  },
+  voiceFingerprint: {
+    openingMove: "Lead with a real reaction, not a sterile setup.",
+    metaphorDomains: ["pressure point", "stakes", "trade-off"],
+    attackStyle: "direct and evidence-oriented",
+    praiseStyle: "specific praise only after substance earns it",
+    closingMove: "Close with a concrete takeaway, not a motivational sign-off.",
+    forbiddenShapes: ["balanced explainer", "support macro"],
+  },
+  taskStyleMatrix: {
+    post: {
+      entryShape: "Plant the angle early.",
+      bodyShape: "Build a clear argument instead of a tutorial.",
+      closeShape: "Land on a sting, concession, or concrete takeaway.",
+      forbiddenShapes: ["newsletter tone", "advice list"],
+    },
+    comment: {
+      entryShape: "Sound like a live thread reply.",
+      feedbackShape: "reaction -> concrete note -> pointed close",
+      closeShape: "Keep the close short and thread-native.",
+      forbiddenShapes: ["sectioned critique", "support-macro tone"],
+    },
   },
   guardrails: {
     hardNo: ["fabricate facts", "unsafe instructions"],
@@ -238,7 +284,7 @@ function normalizeStringArray(value: unknown, fallback: string[]): string[] {
   return unique.length > 0 ? unique : fallback;
 }
 
-function normalizePriority(value: unknown): SoulValuePriority | null {
+function normalizePriority(value: unknown): CoreValuePriority | null {
   if (value === 1 || value === 2 || value === 3) {
     return value;
   }
@@ -331,7 +377,7 @@ function derivePersonaRhythm(input: {
   if (containsAny(sourceText, ["blunt", "direct"])) {
     return "direct and clipped";
   }
-  return DEFAULT_SOUL_PROFILE.languageSignature.rhythm;
+  return DEFAULT_CORE_PROFILE.languageSignature.rhythm;
 }
 
 function derivePersonaLexicalTaboos(input: {
@@ -396,6 +442,90 @@ function derivePersonaFeedbackPrinciples(input: {
   return principles.length > 0 ? principles.slice(0, 6) : input.discussionStrengths.slice(0, 6);
 }
 
+function normalizeVoiceFingerprint(value: unknown): RuntimeCoreProfile["voiceFingerprint"] {
+  const record = asRecord(value);
+  return {
+    openingMove: normalizeText(
+      record?.opening_move ?? record?.openingMove,
+      DEFAULT_CORE_PROFILE.voiceFingerprint.openingMove,
+    ),
+    metaphorDomains: normalizeStringArray(
+      record?.metaphor_domains ?? record?.metaphorDomains,
+      DEFAULT_CORE_PROFILE.voiceFingerprint.metaphorDomains,
+    ),
+    attackStyle: normalizeText(
+      record?.attack_style ?? record?.attackStyle,
+      DEFAULT_CORE_PROFILE.voiceFingerprint.attackStyle,
+    ),
+    praiseStyle: normalizeText(
+      record?.praise_style ?? record?.praiseStyle,
+      DEFAULT_CORE_PROFILE.voiceFingerprint.praiseStyle,
+    ),
+    closingMove: normalizeText(
+      record?.closing_move ?? record?.closingMove,
+      DEFAULT_CORE_PROFILE.voiceFingerprint.closingMove,
+    ),
+    forbiddenShapes: normalizeStringArray(
+      record?.forbidden_shapes ?? record?.forbiddenShapes,
+      DEFAULT_CORE_PROFILE.voiceFingerprint.forbiddenShapes,
+    ),
+  };
+}
+
+function normalizePostTaskStyle(value: unknown): RuntimeCoreProfile["taskStyleMatrix"]["post"] {
+  const record = asRecord(value);
+  return {
+    entryShape: normalizeText(
+      record?.entry_shape ?? record?.entryShape,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.post.entryShape,
+    ),
+    bodyShape: normalizeText(
+      record?.body_shape ?? record?.bodyShape,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.post.bodyShape,
+    ),
+    closeShape: normalizeText(
+      record?.close_shape ?? record?.closeShape,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.post.closeShape,
+    ),
+    forbiddenShapes: normalizeStringArray(
+      record?.forbidden_shapes ?? record?.forbiddenShapes,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.post.forbiddenShapes,
+    ),
+  };
+}
+
+function normalizeCommentTaskStyle(
+  value: unknown,
+): RuntimeCoreProfile["taskStyleMatrix"]["comment"] {
+  const record = asRecord(value);
+  return {
+    entryShape: normalizeText(
+      record?.entry_shape ?? record?.entryShape,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.comment.entryShape,
+    ),
+    feedbackShape: normalizeText(
+      record?.feedback_shape ?? record?.feedbackShape,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.comment.feedbackShape,
+    ),
+    closeShape: normalizeText(
+      record?.close_shape ?? record?.closeShape,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.comment.closeShape,
+    ),
+    forbiddenShapes: normalizeStringArray(
+      record?.forbidden_shapes ?? record?.forbiddenShapes,
+      DEFAULT_CORE_PROFILE.taskStyleMatrix.comment.forbiddenShapes,
+    ),
+  };
+}
+
+function normalizeTaskStyleMatrix(value: unknown): RuntimeCoreProfile["taskStyleMatrix"] {
+  const record = asRecord(value);
+  return {
+    post: normalizePostTaskStyle(record?.post),
+    comment: normalizeCommentTaskStyle(record?.comment),
+  };
+}
+
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -419,7 +549,194 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
   return result;
 }
 
-function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | null {
+function truncateCompactSummaryValue(value: string, maxLength = 220): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 14)).trimEnd()} [truncated]`;
+}
+
+function formatCompactSummarySection(
+  label: string,
+  values: string[],
+  emptyLabel = "(none)",
+): string {
+  return [
+    `${label}:`,
+    ...(values.length > 0
+      ? values.map((value) => `- ${truncateCompactSummaryValue(value)}`)
+      : [`- ${emptyLabel}`]),
+  ].join("\n");
+}
+
+function readCompactPersonaCoreStrings(
+  personaCore: Record<string, unknown> | null | undefined,
+  key: string,
+): string[] {
+  const record = asRecord(personaCore?.[key]);
+  if (!record) {
+    return [];
+  }
+  return Object.values(record)
+    .flatMap((value) => {
+      if (typeof value === "string") {
+        return [value];
+      }
+      if (Array.isArray(value)) {
+        return value.filter((item): item is string => typeof item === "string");
+      }
+      return [];
+    })
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter((value) => value.length > 0);
+}
+
+function readCompactReferenceSources(
+  personaCore: Record<string, unknown> | null | undefined,
+): string[] {
+  const referenceSources = Array.isArray(personaCore?.reference_sources)
+    ? personaCore.reference_sources
+    : [];
+  return uniqueStrings(
+    referenceSources
+      .map((item) => {
+        const record = asRecord(item);
+        const name = typeof record?.name === "string" ? record.name.trim() : "";
+        const type = typeof record?.type === "string" ? record.type.trim() : "";
+        if (!name) {
+          return null;
+        }
+        return type ? `${name} (${type})` : name;
+      })
+      .filter((item): item is string => Boolean(item)),
+  ).slice(0, 4);
+}
+
+export function buildInteractionCoreSummary(input: {
+  actionType: InteractionCoreSummaryActionType;
+  profile: RuntimeCoreProfile;
+  personaCore?: Record<string, unknown> | null;
+  shortTermMemory?: string | null;
+  longTermMemory?: string | null;
+}): string {
+  const actionType = input.actionType === "reply" ? "comment" : input.actionType;
+  const identitySummary = asRecord(input.personaCore?.identity_summary);
+  const values = asRecord(input.personaCore?.values);
+  const aestheticProfile = asRecord(input.personaCore?.aesthetic_profile);
+  const interactionDefaults = asRecord(input.personaCore?.interaction_defaults);
+  const guardrails = asRecord(input.personaCore?.guardrails);
+  const voiceFingerprint = input.profile.voiceFingerprint;
+  const taskStyle = input.profile.taskStyleMatrix;
+
+  const identityLines = uniqueStrings([
+    typeof identitySummary?.one_sentence_identity === "string"
+      ? identitySummary.one_sentence_identity
+      : null,
+    `Archetype: ${input.profile.identityCore.archetype}`,
+    `Core motivation: ${input.profile.identityCore.coreMotivation}`,
+  ]).slice(0, 3);
+
+  const priorityLines = uniqueStrings([
+    ...input.profile.valueHierarchy
+      .slice()
+      .sort((a, b) => a.priority - b.priority)
+      .slice(0, 3)
+      .map((entry) => `${entry.value} (priority ${String(entry.priority)})`),
+    ...normalizeStringArray(values?.worldview, []).slice(0, 2),
+  ]).slice(0, 5);
+
+  const referenceLines = readCompactReferenceSources(input.personaCore);
+  const memoryLines = uniqueStrings([
+    input.shortTermMemory ? `Recent context: ${input.shortTermMemory}` : null,
+    input.longTermMemory ? `Long memory anchor: ${input.longTermMemory}` : null,
+  ]).slice(0, 2);
+
+  if (actionType === "post") {
+    const aestheticLines = uniqueStrings([
+      ...normalizeStringArray(aestheticProfile?.creative_preferences, []).slice(0, 2),
+      ...normalizeStringArray(aestheticProfile?.narrative_preferences, []).slice(0, 2),
+      ...normalizeStringArray(aestheticProfile?.humor_preferences, []).slice(0, 1),
+    ]).slice(0, 4);
+    const interactionLines = uniqueStrings([
+      `Default stance: ${input.profile.relationshipTendencies.defaultStance}`,
+      ...normalizeStringArray(interactionDefaults?.discussion_strengths, []).slice(0, 2),
+      ...normalizeStringArray(interactionDefaults?.non_generic_traits, []).slice(0, 2),
+    ]).slice(0, 5);
+
+    return [
+      "Compact persona summary for post generation:",
+      formatCompactSummarySection("Identity", identityLines),
+      formatCompactSummarySection("Values and worldview pressure", priorityLines),
+      formatCompactSummarySection(
+        "Aesthetic and storytelling pull",
+        aestheticLines.length > 0
+          ? aestheticLines
+          : input.profile.responseStyle.patterns.slice(0, 3),
+      ),
+      formatCompactSummarySection("Posting stance", interactionLines),
+      formatCompactSummarySection("Voice fingerprint", [
+        `Opening move: ${voiceFingerprint.openingMove}`,
+        `Attack style: ${voiceFingerprint.attackStyle}`,
+        `Praise style: ${voiceFingerprint.praiseStyle}`,
+        `Metaphor domains: ${voiceFingerprint.metaphorDomains.join(", ")}`,
+      ]),
+      formatCompactSummarySection("Post shape expectations", [
+        `Entry: ${taskStyle.post.entryShape}`,
+        `Body: ${taskStyle.post.bodyShape}`,
+        `Close: ${taskStyle.post.closeShape}`,
+        `Avoid: ${taskStyle.post.forbiddenShapes.join(", ")}`,
+      ]),
+      formatCompactSummarySection("Reference roles", referenceLines),
+      formatCompactSummarySection("Language signature", [
+        `Rhythm: ${input.profile.languageSignature.rhythm}`,
+        ...input.profile.responseStyle.tone.slice(0, 3),
+      ]),
+    ].join("\n\n");
+  }
+
+  const replyLines = uniqueStrings([
+    `Default stance: ${input.profile.relationshipTendencies.defaultStance}`,
+    ...normalizeStringArray(interactionDefaults?.friction_triggers, []).slice(0, 2),
+    ...normalizeStringArray(interactionDefaults?.discussion_strengths, []).slice(0, 2),
+  ]).slice(0, 5);
+  const guardrailLines = uniqueStrings([
+    ...normalizeStringArray(guardrails?.hard_no, []).slice(0, 2),
+    ...normalizeStringArray(guardrails?.deescalation_style, []).slice(0, 2),
+    ...input.profile.interactionDoctrine.feedbackPrinciples.slice(0, 2),
+  ]).slice(0, 5);
+  const compactMemoryLines =
+    memoryLines.length > 0
+      ? memoryLines
+      : readCompactPersonaCoreStrings(input.personaCore, "guardrails").slice(0, 2);
+
+  return [
+    "Compact persona summary for reply generation:",
+    formatCompactSummarySection("Identity", identityLines),
+    formatCompactSummarySection("Reply stance and live pressure", replyLines),
+    formatCompactSummarySection("Guardrails and feedback doctrine", guardrailLines),
+    formatCompactSummarySection("Voice fingerprint", [
+      `Opening move: ${voiceFingerprint.openingMove}`,
+      `Attack style: ${voiceFingerprint.attackStyle}`,
+      `Praise style: ${voiceFingerprint.praiseStyle}`,
+      `Metaphor domains: ${voiceFingerprint.metaphorDomains.join(", ")}`,
+    ]),
+    formatCompactSummarySection("Comment shape expectations", [
+      `Entry: ${taskStyle.comment.entryShape}`,
+      `Feedback: ${taskStyle.comment.feedbackShape}`,
+      `Close: ${taskStyle.comment.closeShape}`,
+      `Avoid: ${taskStyle.comment.forbiddenShapes.join(", ")}`,
+    ]),
+    formatCompactSummarySection("Memory anchors", compactMemoryLines, "No salient memory anchor."),
+    formatCompactSummarySection("Reference roles", referenceLines),
+    formatCompactSummarySection("Language signature", [
+      `Rhythm: ${input.profile.languageSignature.rhythm}`,
+      ...input.profile.responseStyle.tone.slice(0, 3),
+    ]),
+  ].join("\n\n");
+}
+
+function adaptPersonaCoreToCoreProfile(input: unknown): RuntimeCoreProfile | null {
   const source = asRecord(input);
   if (!source) {
     return null;
@@ -432,6 +749,8 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
   const interactionDefaults = asRecord(source.interaction_defaults);
   const guardrails = asRecord(source.guardrails);
   const livedContext = asRecord(source.lived_context);
+  const voiceFingerprint = normalizeVoiceFingerprint(source.voice_fingerprint);
+  const taskStyleMatrix = normalizeTaskStyleMatrix(source.task_style_matrix);
 
   if (
     !identitySummary &&
@@ -457,7 +776,7 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
       }
       return { value, priority };
     })
-    .filter((item): item is { value: string; priority: SoulValuePriority } => item !== null)
+    .filter((item): item is { value: string; priority: CoreValuePriority } => item !== null)
     .sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
 
   const judgmentStyle = normalizeText(values?.judgment_style, "");
@@ -482,12 +801,12 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
   );
   const guardrailHardNo = normalizeStringArray(
     guardrails?.hard_no,
-    DEFAULT_SOUL_PROFILE.guardrails.hardNo,
+    DEFAULT_CORE_PROFILE.guardrails.hardNo,
   );
   const derivedTone = derivePersonaTone({
     defaultStance: normalizeText(
       interactionDefaults?.default_stance,
-      DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+      DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
     ),
     nonGenericTraits,
     creatorBiases,
@@ -496,7 +815,7 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
   const derivedRhythm = derivePersonaRhythm({
     defaultStance: normalizeText(
       interactionDefaults?.default_stance,
-      DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+      DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
     ),
     nonGenericTraits,
     humorPreferences,
@@ -511,8 +830,33 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
     creatorDetails,
     discussionStrengths,
   });
+  const derivedAvoidPatterns = uniqueStrings([
+    ...dislikedPatterns,
+    ...voiceFingerprint.forbiddenShapes,
+    ...taskStyleMatrix.post.forbiddenShapes,
+    ...taskStyleMatrix.comment.forbiddenShapes,
+  ]).slice(0, 8);
+  const derivedPreferredStructures = uniqueStrings([
+    taskStyleMatrix.post.entryShape,
+    taskStyleMatrix.post.bodyShape,
+    taskStyleMatrix.comment.feedbackShape,
+    taskStyleMatrix.comment.closeShape,
+    ...narrativePreferences,
+    ...DEFAULT_CORE_PROFILE.languageSignature.preferredStructures,
+  ]).slice(0, 6);
+  const mergedFeedbackPrinciples = uniqueStrings([
+    taskStyleMatrix.comment.feedbackShape,
+    voiceFingerprint.praiseStyle,
+    ...derivedFeedbackPrinciples,
+  ]).slice(0, 6);
+  const mergedResponsePatterns = uniqueStrings([
+    voiceFingerprint.openingMove,
+    voiceFingerprint.closingMove,
+    ...creatorDetails,
+    ...creativePreferences,
+  ]).slice(0, 6);
 
-  const tradeoffStyle = judgmentStyle || DEFAULT_SOUL_PROFILE.decisionPolicy.tradeoffStyle;
+  const tradeoffStyle = judgmentStyle || DEFAULT_CORE_PROFILE.decisionPolicy.tradeoffStyle;
   const riskPreference = deriveRiskPreference({
     tradeoffStyle,
     riskPreference: values?.risk_preference,
@@ -522,134 +866,134 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
     identityCore: {
       archetype: normalizeText(
         identitySummary?.archetype ?? identitySummary?.one_sentence_identity,
-        DEFAULT_SOUL_PROFILE.identityCore.archetype,
+        DEFAULT_CORE_PROFILE.identityCore.archetype,
       ),
-      mbti: normalizeMbti(identitySummary?.mbti, DEFAULT_SOUL_PROFILE.identityCore.mbti),
+      mbti: normalizeMbti(identitySummary?.mbti, DEFAULT_CORE_PROFILE.identityCore.mbti),
       coreMotivation: normalizeText(
         identitySummary?.core_motivation,
-        DEFAULT_SOUL_PROFILE.identityCore.coreMotivation,
+        DEFAULT_CORE_PROFILE.identityCore.coreMotivation,
       ),
     },
     valueHierarchy:
-      valueHierarchy.length > 0 ? valueHierarchy.slice(0, 6) : DEFAULT_SOUL_PROFILE.valueHierarchy,
+      valueHierarchy.length > 0 ? valueHierarchy.slice(0, 6) : DEFAULT_CORE_PROFILE.valueHierarchy,
     reasoningLens: {
       primary:
         creatorStructuralPreferences.length > 0
           ? creatorStructuralPreferences.slice(0, 6)
           : creativePreferences.length > 0
             ? creativePreferences.slice(0, 6)
-            : DEFAULT_SOUL_PROFILE.reasoningLens.primary,
+            : DEFAULT_CORE_PROFILE.reasoningLens.primary,
       secondary:
         humorPreferences.length > 0
           ? humorPreferences.slice(0, 6)
           : narrativePreferences.length > 0
             ? narrativePreferences.slice(0, 6)
-            : DEFAULT_SOUL_PROFILE.reasoningLens.secondary,
+            : DEFAULT_CORE_PROFILE.reasoningLens.secondary,
       promptHint: normalizeText(
         nonGenericTraits[0] ??
           creatorBiases[0] ??
           worldview[0] ??
           identitySummary?.one_sentence_identity,
-        DEFAULT_SOUL_PROFILE.reasoningLens.promptHint,
+        DEFAULT_CORE_PROFILE.reasoningLens.promptHint,
       ),
     },
     responseStyle: {
-      tone: derivedTone.length > 0 ? derivedTone : DEFAULT_SOUL_PROFILE.responseStyle.tone,
+      tone: derivedTone.length > 0 ? derivedTone : DEFAULT_CORE_PROFILE.responseStyle.tone,
       patterns:
-        creatorDetails.length > 0
-          ? creatorDetails.slice(0, 6)
-          : creativePreferences.length > 0
-            ? creativePreferences.slice(0, 6)
-            : DEFAULT_SOUL_PROFILE.responseStyle.patterns,
+        mergedResponsePatterns.length > 0
+          ? mergedResponsePatterns
+          : DEFAULT_CORE_PROFILE.responseStyle.patterns,
       avoid:
-        dislikedPatterns.length > 0
-          ? dislikedPatterns.slice(0, 6)
-          : DEFAULT_SOUL_PROFILE.responseStyle.avoid,
+        derivedAvoidPatterns.length > 0
+          ? derivedAvoidPatterns
+          : DEFAULT_CORE_PROFILE.responseStyle.avoid,
     },
     relationshipTendencies: {
       defaultStance: normalizeText(
         interactionDefaults?.default_stance,
-        DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+        DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
       ),
       trustSignals:
         discussionStrengths.length > 0
           ? discussionStrengths.slice(0, 6)
-          : DEFAULT_SOUL_PROFILE.relationshipTendencies.trustSignals,
+          : DEFAULT_CORE_PROFILE.relationshipTendencies.trustSignals,
       frictionTriggers:
         frictionTriggers.length > 0
           ? frictionTriggers.slice(0, 6)
-          : DEFAULT_SOUL_PROFILE.relationshipTendencies.frictionTriggers,
+          : DEFAULT_CORE_PROFILE.relationshipTendencies.frictionTriggers,
     },
     agentEnactmentRules:
       nonGenericTraits.length > 0
         ? nonGenericTraits.slice(0, 6)
         : discussionStrengths.length > 0
           ? discussionStrengths.slice(0, 6)
-          : DEFAULT_SOUL_PROFILE.agentEnactmentRules,
-    inCharacterExamples: DEFAULT_SOUL_PROFILE.inCharacterExamples,
+          : DEFAULT_CORE_PROFILE.agentEnactmentRules,
+    inCharacterExamples: DEFAULT_CORE_PROFILE.inCharacterExamples,
     decisionPolicy: {
       evidenceStandard: normalizeText(
         topicsRequiringRetrieval.length > 0
           ? "use runtime retrieval when context-specific support is weak"
           : livedContext?.topics_with_confident_grounding,
-        DEFAULT_SOUL_PROFILE.decisionPolicy.evidenceStandard,
+        DEFAULT_CORE_PROFILE.decisionPolicy.evidenceStandard,
       ),
       tradeoffStyle,
       uncertaintyHandling:
         topicsRequiringRetrieval.length > 0
           ? `Narrow claims when support is weak; retrieve for: ${topicsRequiringRetrieval.join(", ")}`
-          : DEFAULT_SOUL_PROFILE.decisionPolicy.uncertaintyHandling,
+          : DEFAULT_CORE_PROFILE.decisionPolicy.uncertaintyHandling,
       antiPatterns:
         dislikedPatterns.length > 0
           ? dislikedPatterns.slice(0, 8)
-          : DEFAULT_SOUL_PROFILE.decisionPolicy.antiPatterns,
+          : DEFAULT_CORE_PROFILE.decisionPolicy.antiPatterns,
       riskPreference,
     },
     interactionDoctrine: {
-      askVsTellRatio: DEFAULT_SOUL_PROFILE.interactionDoctrine.askVsTellRatio,
+      askVsTellRatio: DEFAULT_CORE_PROFILE.interactionDoctrine.askVsTellRatio,
       feedbackPrinciples:
-        derivedFeedbackPrinciples.length > 0
-          ? derivedFeedbackPrinciples
-          : DEFAULT_SOUL_PROFILE.interactionDoctrine.feedbackPrinciples,
+        mergedFeedbackPrinciples.length > 0
+          ? mergedFeedbackPrinciples
+          : DEFAULT_CORE_PROFILE.interactionDoctrine.feedbackPrinciples,
       collaborationStance: normalizeText(
         interactionDefaults?.default_stance,
-        DEFAULT_SOUL_PROFILE.interactionDoctrine.collaborationStance,
+        DEFAULT_CORE_PROFILE.interactionDoctrine.collaborationStance,
       ),
     },
     languageSignature: {
       rhythm: derivedRhythm,
       preferredStructures:
-        narrativePreferences.length > 0
-          ? narrativePreferences.slice(0, 6)
-          : DEFAULT_SOUL_PROFILE.languageSignature.preferredStructures,
+        derivedPreferredStructures.length > 0
+          ? derivedPreferredStructures
+          : DEFAULT_CORE_PROFILE.languageSignature.preferredStructures,
       lexicalTaboos: derivedLexicalTaboos,
     },
+    voiceFingerprint,
+    taskStyleMatrix,
     guardrails: {
       hardNo: guardrailHardNo,
       deescalationRules: normalizeStringArray(
         guardrails?.deescalation_style,
-        DEFAULT_SOUL_PROFILE.guardrails.deescalationRules,
+        DEFAULT_CORE_PROFILE.guardrails.deescalationRules,
       ),
     },
   };
 }
 
-export function normalizeSoulProfile(input: unknown): {
-  profile: RuntimeSoulProfile;
+export function normalizeCoreProfile(input: unknown): {
+  profile: RuntimeCoreProfile;
   normalized: boolean;
 } {
-  const adaptedCore = adaptPersonaCoreToSoulProfile(input);
+  const adaptedCore = adaptPersonaCoreToCoreProfile(input);
   if (adaptedCore) {
     return { profile: adaptedCore, normalized: true };
   }
 
   const source = asRecord(input);
   if (!source) {
-    return { profile: DEFAULT_SOUL_PROFILE, normalized: true };
+    return { profile: DEFAULT_CORE_PROFILE, normalized: true };
   }
 
   const valueHierarchyRaw = Array.isArray(source.valueHierarchy) ? source.valueHierarchy : [];
-  const valueHierarchy: Array<{ value: string; priority: SoulValuePriority }> = [];
+  const valueHierarchy: Array<{ value: string; priority: CoreValuePriority }> = [];
   for (const item of valueHierarchyRaw) {
     const record = asRecord(item);
     if (!record) {
@@ -673,6 +1017,8 @@ export function normalizeSoulProfile(input: unknown): {
   const decisionPolicy = asRecord(source.decisionPolicy);
   const interactionDoctrine = asRecord(source.interactionDoctrine);
   const languageSignature = asRecord(source.languageSignature);
+  const voiceFingerprint = asRecord(source.voiceFingerprint);
+  const taskStyleMatrix = asRecord(source.taskStyleMatrix);
   const guardrails = asRecord(source.guardrails);
   const inCharacterExamplesRaw = Array.isArray(source.inCharacterExamples)
     ? source.inCharacterExamples
@@ -701,80 +1047,80 @@ export function normalizeSoulProfile(input: unknown): {
 
   const tradeoffStyle = normalizeText(
     decisionPolicy?.tradeoffStyle,
-    DEFAULT_SOUL_PROFILE.decisionPolicy.tradeoffStyle,
+    DEFAULT_CORE_PROFILE.decisionPolicy.tradeoffStyle,
   );
 
-  const profile: RuntimeSoulProfile = {
+  const profile: RuntimeCoreProfile = {
     identityCore: {
       archetype: normalizeText(
         identityCore?.archetype ?? source.identityCore,
-        DEFAULT_SOUL_PROFILE.identityCore.archetype,
+        DEFAULT_CORE_PROFILE.identityCore.archetype,
       ),
-      mbti: normalizeMbti(identityCore?.mbti, DEFAULT_SOUL_PROFILE.identityCore.mbti),
+      mbti: normalizeMbti(identityCore?.mbti, DEFAULT_CORE_PROFILE.identityCore.mbti),
       coreMotivation: normalizeText(
         identityCore?.coreMotivation,
-        DEFAULT_SOUL_PROFILE.identityCore.coreMotivation,
+        DEFAULT_CORE_PROFILE.identityCore.coreMotivation,
       ),
     },
     valueHierarchy:
-      valueHierarchy.length > 0 ? valueHierarchy.slice(0, 6) : DEFAULT_SOUL_PROFILE.valueHierarchy,
+      valueHierarchy.length > 0 ? valueHierarchy.slice(0, 6) : DEFAULT_CORE_PROFILE.valueHierarchy,
     reasoningLens: {
       primary: normalizeStringArray(
         reasoningLens?.primary,
-        DEFAULT_SOUL_PROFILE.reasoningLens.primary,
+        DEFAULT_CORE_PROFILE.reasoningLens.primary,
       ),
       secondary: normalizeStringArray(
         reasoningLens?.secondary,
-        DEFAULT_SOUL_PROFILE.reasoningLens.secondary,
+        DEFAULT_CORE_PROFILE.reasoningLens.secondary,
       ),
       promptHint: normalizeText(
         reasoningLens?.promptHint,
-        DEFAULT_SOUL_PROFILE.reasoningLens.promptHint,
+        DEFAULT_CORE_PROFILE.reasoningLens.promptHint,
       ),
     },
     responseStyle: {
-      tone: normalizeStringArray(responseStyle?.tone, DEFAULT_SOUL_PROFILE.responseStyle.tone),
+      tone: normalizeStringArray(responseStyle?.tone, DEFAULT_CORE_PROFILE.responseStyle.tone),
       patterns: normalizeStringArray(
         responseStyle?.patterns,
-        DEFAULT_SOUL_PROFILE.responseStyle.patterns,
+        DEFAULT_CORE_PROFILE.responseStyle.patterns,
       ),
-      avoid: normalizeStringArray(responseStyle?.avoid, DEFAULT_SOUL_PROFILE.responseStyle.avoid),
+      avoid: normalizeStringArray(responseStyle?.avoid, DEFAULT_CORE_PROFILE.responseStyle.avoid),
     },
     relationshipTendencies: {
       defaultStance: normalizeText(
         relationshipTendencies?.defaultStance,
-        DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+        DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
       ),
       trustSignals: normalizeStringArray(
         relationshipTendencies?.trustSignals,
-        DEFAULT_SOUL_PROFILE.relationshipTendencies.trustSignals,
+        DEFAULT_CORE_PROFILE.relationshipTendencies.trustSignals,
       ),
       frictionTriggers: normalizeStringArray(
         relationshipTendencies?.frictionTriggers,
-        DEFAULT_SOUL_PROFILE.relationshipTendencies.frictionTriggers,
+        DEFAULT_CORE_PROFILE.relationshipTendencies.frictionTriggers,
       ),
     },
     agentEnactmentRules: normalizeStringArray(
       source.agentEnactmentRules,
-      DEFAULT_SOUL_PROFILE.agentEnactmentRules,
+      DEFAULT_CORE_PROFILE.agentEnactmentRules,
     ),
     inCharacterExamples:
       inCharacterExamples.length > 0
         ? inCharacterExamples.slice(0, 4)
-        : DEFAULT_SOUL_PROFILE.inCharacterExamples,
+        : DEFAULT_CORE_PROFILE.inCharacterExamples,
     decisionPolicy: {
       evidenceStandard: normalizeText(
         decisionPolicy?.evidenceStandard,
-        DEFAULT_SOUL_PROFILE.decisionPolicy.evidenceStandard,
+        DEFAULT_CORE_PROFILE.decisionPolicy.evidenceStandard,
       ),
       tradeoffStyle,
       uncertaintyHandling: normalizeText(
         decisionPolicy?.uncertaintyHandling,
-        DEFAULT_SOUL_PROFILE.decisionPolicy.uncertaintyHandling,
+        DEFAULT_CORE_PROFILE.decisionPolicy.uncertaintyHandling,
       ),
       antiPatterns: normalizeStringArray(
         decisionPolicy?.antiPatterns,
-        DEFAULT_SOUL_PROFILE.decisionPolicy.antiPatterns,
+        DEFAULT_CORE_PROFILE.decisionPolicy.antiPatterns,
       ),
       riskPreference: deriveRiskPreference({
         riskPreference: decisionPolicy?.riskPreference,
@@ -784,33 +1130,35 @@ export function normalizeSoulProfile(input: unknown): {
     interactionDoctrine: {
       askVsTellRatio: normalizeText(
         interactionDoctrine?.askVsTellRatio,
-        DEFAULT_SOUL_PROFILE.interactionDoctrine.askVsTellRatio,
+        DEFAULT_CORE_PROFILE.interactionDoctrine.askVsTellRatio,
       ),
       feedbackPrinciples: normalizeStringArray(
         interactionDoctrine?.feedbackPrinciples,
-        DEFAULT_SOUL_PROFILE.interactionDoctrine.feedbackPrinciples,
+        DEFAULT_CORE_PROFILE.interactionDoctrine.feedbackPrinciples,
       ),
       collaborationStance: normalizeText(
         interactionDoctrine?.collaborationStance,
-        DEFAULT_SOUL_PROFILE.interactionDoctrine.collaborationStance,
+        DEFAULT_CORE_PROFILE.interactionDoctrine.collaborationStance,
       ),
     },
     languageSignature: {
       rhythm: normalizeText(
         languageSignature?.rhythm,
-        DEFAULT_SOUL_PROFILE.languageSignature.rhythm,
+        DEFAULT_CORE_PROFILE.languageSignature.rhythm,
       ),
       preferredStructures: normalizeStringArray(
         languageSignature?.preferredStructures,
-        DEFAULT_SOUL_PROFILE.languageSignature.preferredStructures,
+        DEFAULT_CORE_PROFILE.languageSignature.preferredStructures,
       ),
       lexicalTaboos: normalizeStringArray(languageSignature?.lexicalTaboos, []),
     },
+    voiceFingerprint: normalizeVoiceFingerprint(voiceFingerprint),
+    taskStyleMatrix: normalizeTaskStyleMatrix(taskStyleMatrix),
     guardrails: {
-      hardNo: normalizeStringArray(guardrails?.hardNo, DEFAULT_SOUL_PROFILE.guardrails.hardNo),
+      hardNo: normalizeStringArray(guardrails?.hardNo, DEFAULT_CORE_PROFILE.guardrails.hardNo),
       deescalationRules: normalizeStringArray(
         guardrails?.deescalationRules,
-        DEFAULT_SOUL_PROFILE.guardrails.deescalationRules,
+        DEFAULT_CORE_PROFILE.guardrails.deescalationRules,
       ),
     },
   };
@@ -819,7 +1167,7 @@ export function normalizeSoulProfile(input: unknown): {
   return { profile, normalized };
 }
 
-export function summarizeSoulProfile(profile: RuntimeSoulProfile): RuntimeSoulSummary {
+export function summarizeCoreProfile(profile: RuntimeCoreProfile): RuntimeCoreSummary {
   return {
     identity: profile.identityCore.archetype,
     mbti: profile.identityCore.mbti,
@@ -840,9 +1188,9 @@ export function summarizeSoulProfile(profile: RuntimeSoulProfile): RuntimeSoulSu
   };
 }
 
-function createSupabaseRuntimeSoulDeps(): RuntimeSoulDeps {
+function createSupabaseRuntimeCoreDeps(): RuntimeCoreDeps {
   return {
-    getSoulProfile: async ({ personaId }) => {
+    getCoreProfile: async ({ personaId }) => {
       const supabase = createAdminClient();
       const { data, error } = await supabase
         .from("persona_cores")
@@ -860,30 +1208,30 @@ function createSupabaseRuntimeSoulDeps(): RuntimeSoulDeps {
   };
 }
 
-export class CachedRuntimeSoulProvider {
-  private readonly deps: RuntimeSoulDeps;
+export class CachedRuntimeCoreProvider {
+  private readonly deps: RuntimeCoreDeps;
   private readonly ttlMs: number;
   private readonly now: () => Date;
 
-  private cache = new Map<string, CacheEntry<RuntimeSoulContext>>();
+  private cache = new Map<string, CacheEntry<RuntimeCoreContext>>();
 
-  private personaStatus = new Map<string, RuntimeSoulPersonaStatus>();
-  private lastFallbackEvent: RuntimeSoulAuditEvent | null = null;
-  private lastAppliedEvent: RuntimeSoulAuditEvent | null = null;
+  private personaStatus = new Map<string, RuntimeCorePersonaStatus>();
+  private lastFallbackEvent: RuntimeCoreAuditEvent | null = null;
+  private lastAppliedEvent: RuntimeCoreAuditEvent | null = null;
 
   public constructor(options?: {
-    deps?: Partial<RuntimeSoulDeps>;
+    deps?: Partial<RuntimeCoreDeps>;
     ttlMs?: number;
     now?: () => Date;
   }) {
-    this.deps = { ...createSupabaseRuntimeSoulDeps(), ...(options?.deps ?? {}) };
+    this.deps = { ...createSupabaseRuntimeCoreDeps(), ...(options?.deps ?? {}) };
     this.ttlMs = Math.max(1_000, options?.ttlMs ?? DEFAULT_TTL_MS);
     this.now = options?.now ?? (() => new Date());
   }
 
-  private async emit(event: Omit<RuntimeSoulAuditEvent, "occurredAt">, now: Date): Promise<void> {
+  private async emit(event: Omit<RuntimeCoreAuditEvent, "occurredAt">, now: Date): Promise<void> {
     const occurredAt = now.toISOString();
-    const auditEvent: RuntimeSoulAuditEvent = {
+    const auditEvent: RuntimeCoreAuditEvent = {
       ...event,
       occurredAt,
     };
@@ -908,7 +1256,7 @@ export class CachedRuntimeSoulProvider {
           : prevStatus.lastLoadError,
       lastSummary:
         metadataSummary && typeof metadataSummary === "object"
-          ? (metadataSummary as RuntimeSoulSummary)
+          ? (metadataSummary as RuntimeCoreSummary)
           : prevStatus.lastSummary,
     });
 
@@ -940,11 +1288,11 @@ export class CachedRuntimeSoulProvider {
     });
   }
 
-  public async getRuntimeSoul(input: {
+  public async getRuntimeCore(input: {
     personaId: string;
     now?: Date;
     tolerateFailure?: boolean;
-  }): Promise<RuntimeSoulContext> {
+  }): Promise<RuntimeCoreContext> {
     const now = input.now ?? this.now();
     const nowMs = now.getTime();
 
@@ -954,12 +1302,12 @@ export class CachedRuntimeSoulProvider {
     }
 
     try {
-      const rawSoul = await this.deps.getSoulProfile({ personaId: input.personaId });
+      const rawSoul = await this.deps.getCoreProfile({ personaId: input.personaId });
 
       if (!rawSoul) {
-        const context: RuntimeSoulContext = {
-          profile: DEFAULT_SOUL_PROFILE,
-          summary: summarizeSoulProfile(DEFAULT_SOUL_PROFILE),
+        const context: RuntimeCoreContext = {
+          profile: DEFAULT_CORE_PROFILE,
+          summary: summarizeCoreProfile(DEFAULT_CORE_PROFILE),
           normalized: true,
           source: "fallback_empty",
         };
@@ -984,9 +1332,9 @@ export class CachedRuntimeSoulProvider {
         return context;
       }
 
-      const normalizedSoul = normalizeSoulProfile(rawSoul);
-      const summary = summarizeSoulProfile(normalizedSoul.profile);
-      const context: RuntimeSoulContext = {
+      const normalizedSoul = normalizeCoreProfile(rawSoul);
+      const summary = summarizeCoreProfile(normalizedSoul.profile);
+      const context: RuntimeCoreContext = {
         profile: normalizedSoul.profile,
         summary,
         normalized: normalizedSoul.normalized,
@@ -1027,9 +1375,9 @@ export class CachedRuntimeSoulProvider {
         now,
       );
 
-      const fallback: RuntimeSoulContext = {
-        profile: DEFAULT_SOUL_PROFILE,
-        summary: summarizeSoulProfile(DEFAULT_SOUL_PROFILE),
+      const fallback: RuntimeCoreContext = {
+        profile: DEFAULT_CORE_PROFILE,
+        summary: summarizeCoreProfile(DEFAULT_CORE_PROFILE),
         normalized: true,
         source: "fallback_empty",
       };
@@ -1078,8 +1426,8 @@ export class CachedRuntimeSoulProvider {
     );
   }
 
-  public getStatus(): RuntimeSoulProviderStatus {
-    const personas: Record<string, RuntimeSoulPersonaStatus> = {};
+  public getStatus(): RuntimeCoreProviderStatus {
+    const personas: Record<string, RuntimeCorePersonaStatus> = {};
     for (const [personaId, status] of this.personaStatus.entries()) {
       personas[personaId] = status;
     }
@@ -1093,49 +1441,49 @@ export class CachedRuntimeSoulProvider {
   }
 }
 
-export function createRuntimeSoulBuilder(
-  customDeps?: Partial<RuntimeSoulDeps>,
+export function createRuntimeCoreBuilder(
+  customDeps?: Partial<RuntimeCoreDeps>,
   options?: {
     ttlMs?: number;
     now?: () => Date;
   },
 ) {
-  const provider = new CachedRuntimeSoulProvider({
+  const provider = new CachedRuntimeCoreProvider({
     deps: customDeps,
     ttlMs: options?.ttlMs,
     now: options?.now,
   });
 
-  return async function buildRuntimeSoul(input: {
+  return async function buildRuntimeCore(input: {
     personaId: string;
     now?: Date;
     tolerateFailure?: boolean;
-  }): Promise<RuntimeSoulContext> {
-    return provider.getRuntimeSoul(input);
+  }): Promise<RuntimeCoreContext> {
+    return provider.getRuntimeCore(input);
   };
 }
 
-const defaultRuntimeSoulProvider = new CachedRuntimeSoulProvider();
+const defaultRuntimeCoreProvider = new CachedRuntimeCoreProvider();
 
-export const buildRuntimeSoulProfile = async (input: {
+export const buildRuntimeCoreProfile = async (input: {
   personaId: string;
   now?: Date;
   tolerateFailure?: boolean;
-}) => defaultRuntimeSoulProvider.getRuntimeSoul(input);
+}) => defaultRuntimeCoreProvider.getRuntimeCore(input);
 
-export const recordRuntimeSoulApplied = async (input: {
+export const recordRuntimeCoreApplied = async (input: {
   personaId: string;
   layer?: "generation" | "dispatch_precheck";
   metadata?: Record<string, unknown>;
   now?: Date;
-}) => defaultRuntimeSoulProvider.recordApplied(input);
+}) => defaultRuntimeCoreProvider.recordApplied(input);
 
-export function getRuntimeSoulProviderStatus(): RuntimeSoulProviderStatus {
-  return defaultRuntimeSoulProvider.getStatus();
+export function getRuntimeCoreProviderStatus(): RuntimeCoreProviderStatus {
+  return defaultRuntimeCoreProvider.getStatus();
 }
 
-export function buildSoulPrecheckHints(input: {
-  summary: RuntimeSoulSummary;
+export function buildCorePrecheckHints(input: {
+  summary: RuntimeCoreSummary;
   existingHints?: string[];
 }): string[] {
   const hints = new Set<string>(input.existingHints ?? []);

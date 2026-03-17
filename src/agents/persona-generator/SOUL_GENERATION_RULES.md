@@ -45,6 +45,8 @@ Persona generation 的 canonical payload 應為：
 - creator affinity tendencies
 - reasoning defaults
 - interaction defaults
+- voice fingerprint
+- post/comment task style matrix
 - guardrails
 - reference sources
 - reference derivation
@@ -148,6 +150,28 @@ reference entity 不是最終 persona 身份。
 - what structural patterns the persona is drawn to
 - what kinds of composition logic the persona prefers
 
+### 4.5 Task-facing style behavior
+
+必須有：
+
+- `voice_fingerprint`
+  - opening move
+  - metaphor domains
+  - attack style
+  - praise style
+  - closing move
+  - forbidden shapes
+- `task_style_matrix.post`
+  - entry shape
+  - body shape
+  - close shape
+  - forbidden shapes
+- `task_style_matrix.comment`
+  - entry shape
+  - feedback shape
+  - close shape
+  - forbidden shapes
+
 ## 5. Runtime Compatibility Rules
 
 產生的 persona core 必須能被後續 runtime creative planning 使用於：
@@ -163,8 +187,9 @@ reference entity 不是最終 persona 身份。
 - creator logic inference
 - framework selection
 - grounding assembly
-- candidate generation
-- ranking rubric alignment
+- prompt-time persona directive derivation
+- downstream persona audit / repair compatibility
+- task-shape-specific post/comment generation
 
 ## 6. Quality Gates
 

@@ -1,23 +1,23 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
-import { UserPlus, Sparkles, Bot, WandSparkles, Pause, Eye } from "lucide-react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { UserPlus, Sparkles, Eye, RefreshCw } from "lucide-react";
 import type {
   AiModelConfig,
   AiProviderConfig,
+  PersonaProfile,
   PreviewResult,
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
-import type { PromptAssemblyPreview } from "@/lib/ai/admin/persona-generation-prompt-template";
-import { SectionCard } from "../SectionCard";
+import {
+  buildPersonaGenerationPromptTemplatePreview,
+  type PromptAssemblyPreview,
+} from "@/lib/ai/admin/persona-generation-prompt-template";
+import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
 import { PersonaGenerationModal } from "../PersonaGenerationModal";
 import { PromptAssemblyModal } from "../PromptAssemblyModal";
-import { ModelSelectionField } from "../ModelSelectionField";
-import {
-  formatPromptAssistStatus,
-  readPromptAssistButtonMode,
-} from "../persona-prompt-assist-utils";
 import type { PersonaGenerationModalPhase } from "../persona-generation-modal-utils";
+import { PersonaPromptCard } from "../PersonaPromptCard";
 
 export interface PersonaGenerationSectionProps {
   personaGeneration: {
@@ -30,12 +30,31 @@ export interface PersonaGenerationSectionProps {
       extraPrompt: string;
     }>
   >;
+  personaUpdate: {
+    personaId: string;
+    modelId: string;
+    extraPrompt: string;
+  };
+  setPersonaUpdate: Dispatch<
+    SetStateAction<{
+      personaId: string;
+      modelId: string;
+      extraPrompt: string;
+    }>
+  >;
+  personas: PersonaItem[];
+  selectedUpdatePersona: PersonaItem | null;
+  selectedUpdatePersonaProfile: PersonaProfile | null;
   personaGenerationModels: AiModelConfig[];
   providers: AiProviderConfig[];
   personaGenerationLoading: boolean;
+  personaUpdateLoading: boolean;
   personaPromptAssistLoading: boolean;
   personaPromptAssistError: string | null;
   personaPromptAssistElapsedSeconds: number;
+  personaUpdatePromptAssistLoading: boolean;
+  personaUpdatePromptAssistError: string | null;
+  personaUpdatePromptAssistElapsedSeconds: number;
   personaPreviewRunCount: number;
   personaLastSavedAt: string | null;
   personaSaveForm: {
@@ -50,7 +69,8 @@ export interface PersonaGenerationSectionProps {
   >;
   personaSaveLoading: boolean;
   personaGenerationPreview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
-  promptAssemblyPreview: PromptAssemblyPreview | null;
+  promptAssemblyGlobalPolicyContent: string;
+  personaGenerationMode: "create" | "update";
   personaGenerationModalOpen: boolean;
   personaGenerationModalPhase: PersonaGenerationModalPhase;
   personaGenerationModalError: string | null;
@@ -61,7 +81,9 @@ export interface PersonaGenerationSectionProps {
     saved: boolean;
   };
   assistPersonaPrompt: () => Promise<void>;
+  assistPersonaUpdatePrompt: () => Promise<void>;
   runPersonaGenerationPreview: () => Promise<void>;
+  runPersonaUpdatePreview: () => Promise<void>;
   closePersonaGenerationModal: () => void;
   savePersonaFromGeneration: () => Promise<void>;
 }
@@ -69,19 +91,29 @@ export interface PersonaGenerationSectionProps {
 export function PersonaGenerationSection({
   personaGeneration,
   setPersonaGeneration,
+  personaUpdate,
+  setPersonaUpdate,
+  personas,
+  selectedUpdatePersona,
+  selectedUpdatePersonaProfile,
   personaGenerationModels,
   providers,
   personaGenerationLoading,
+  personaUpdateLoading,
   personaPromptAssistLoading,
   personaPromptAssistError,
   personaPromptAssistElapsedSeconds,
+  personaUpdatePromptAssistLoading,
+  personaUpdatePromptAssistError,
+  personaUpdatePromptAssistElapsedSeconds,
   personaPreviewRunCount,
   personaLastSavedAt,
   personaSaveForm,
   setPersonaSaveForm,
   personaSaveLoading,
   personaGenerationPreview,
-  promptAssemblyPreview,
+  promptAssemblyGlobalPolicyContent,
+  personaGenerationMode,
   personaGenerationModalOpen,
   personaGenerationModalPhase,
   personaGenerationModalError,
@@ -89,114 +121,127 @@ export function PersonaGenerationSection({
   personaGenerationElapsedSeconds,
   personaStepStatus,
   assistPersonaPrompt,
+  assistPersonaUpdatePrompt,
   runPersonaGenerationPreview,
+  runPersonaUpdatePreview,
   closePersonaGenerationModal,
   savePersonaFromGeneration,
 }: PersonaGenerationSectionProps) {
-  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
-  const promptAssistButtonMode = readPromptAssistButtonMode(personaPromptAssistLoading);
-  const promptAssistStatus = formatPromptAssistStatus(
-    personaPromptAssistLoading,
-    personaPromptAssistElapsedSeconds,
-    personaPromptAssistError,
+  const [promptModalPreview, setPromptModalPreview] = useState<PromptAssemblyPreview | null>(null);
+  const modalTitle = personaGenerationMode === "update" ? "Update Persona" : "Persona Generation";
+  const modalPrimaryActionLabel = personaGenerationMode === "update" ? "Update" : "Save";
+  const modalCompletedActionLabel = personaGenerationMode === "update" ? "Updated" : "Saved";
+  const modalSuccessDescription =
+    personaGenerationMode === "update"
+      ? "Review the regenerated persona data before updating the existing persona record."
+      : "Review the generated persona data before saving it to the database.";
+  const modalErrorDescription =
+    personaGenerationMode === "update"
+      ? "Update preview failed. Review the error or regenerate."
+      : "Generation failed. Review the error or regenerate.";
+  const generatePromptAssemblyPreview = useMemo(
+    () =>
+      buildPersonaGenerationPromptTemplatePreview({
+        extraPrompt: personaGeneration.extraPrompt,
+        globalPolicyContent: promptAssemblyGlobalPolicyContent,
+      }),
+    [personaGeneration.extraPrompt, promptAssemblyGlobalPolicyContent],
   );
+  const canRunUpdate =
+    Boolean(personaUpdate.personaId) && !personaUpdateLoading && personaGenerationModels.length > 0;
 
   return (
     <>
       <div className="space-y-6">
-        <SectionCard title="Generate Persona" icon={<UserPlus className="h-4 w-4" />}>
-          <div className="space-y-6">
-            <p className="max-w-2xl text-sm leading-relaxed opacity-60">
-              Choose a model, shape the extra prompt, and generate a structured persona preview in
-              the modal.
-            </p>
+        <PersonaPromptCard
+          title="Generate Persona"
+          icon={<UserPlus className="h-4 w-4" />}
+          description="Choose a model, shape the extra prompt, and generate a structured persona preview in the modal."
+          modelId={personaGeneration.modelId}
+          models={personaGenerationModels}
+          providers={providers}
+          onModelChange={(modelId) => setPersonaGeneration((prev) => ({ ...prev, modelId }))}
+          extraPrompt={personaGeneration.extraPrompt}
+          onExtraPromptChange={(value) =>
+            setPersonaGeneration((prev) => ({ ...prev, extraPrompt: value }))
+          }
+          extraPromptPlaceholder="Context, worldview, or a favorite celebrity..."
+          assistAriaLabel="Prompt AI"
+          assistLoading={personaPromptAssistLoading}
+          assistError={personaPromptAssistError}
+          assistElapsedSeconds={personaPromptAssistElapsedSeconds}
+          assistIdleDescription="Empty: generate in English. Existing: refine in the same language."
+          onAssist={assistPersonaPrompt}
+          footerActions={
+            <>
+              <button
+                className="btn btn-outline btn-sm gap-2"
+                disabled={!generatePromptAssemblyPreview}
+                onClick={() => setPromptModalPreview(generatePromptAssemblyPreview)}
+              >
+                <Eye className="h-4 w-4" />
+                View Prompt
+              </button>
+              <button
+                className="btn btn-primary btn-sm gap-2 shadow-sm"
+                disabled={personaGenerationLoading}
+                onClick={() => void runPersonaGenerationPreview()}
+              >
+                {personaGenerationLoading ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {personaGenerationLoading ? "Generating..." : "Generate Persona"}
+              </button>
+            </>
+          }
+        />
 
-            <div className="space-y-5">
-              <ModelSelectionField
-                value={personaGeneration.modelId}
-                models={personaGenerationModels}
-                providers={providers}
-                onChange={(modelId) => setPersonaGeneration((prev) => ({ ...prev, modelId }))}
-              />
-              <div className="form-control w-full">
-                <label className="label py-1">
-                  <span className="label-text text-xs font-semibold opacity-70">
-                    Context / Extra Prompt
-                  </span>
-                </label>
-                <div className="join w-full">
-                  <input
-                    className="input input-bordered input-sm focus:input-primary join-item w-full"
-                    value={personaGeneration.extraPrompt}
-                    onChange={(e) =>
-                      setPersonaGeneration((prev) => ({ ...prev, extraPrompt: e.target.value }))
-                    }
-                    placeholder="Context, worldview, or a favorite celebrity..."
-                  />
-                  <button
-                    className="bg-base-100 border-base-300 hover:border-primary hover:bg-base-100 btn btn-sm join-item gap-2 border shadow-none"
-                    disabled={!personaGeneration.modelId}
-                    aria-label="Prompt AI"
-                    title="Prompt AI"
-                    onClick={() => void assistPersonaPrompt()}
-                  >
-                    {promptAssistButtonMode === "cancel" ? (
-                      <>
-                        <Pause className="h-4 w-4" />
-                      </>
-                    ) : (
-                      <>
-                        <WandSparkles className="h-4 w-4" />
-                      </>
-                    )}
-                  </button>
-                </div>
-                <div
-                  className={`mt-2 text-xs ${personaPromptAssistError ? "text-error" : "opacity-55"}`}
-                >
-                  {promptAssistStatus ??
-                    "Empty prompt: generate a concise English prompt. Existing prompt: optimize in the same language. You can include named references here."}
-                </div>
-              </div>
-              <div className="flex justify-end pt-1">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    className="btn btn-outline btn-sm gap-2"
-                    disabled={!promptAssemblyPreview}
-                    onClick={() => setIsPromptModalOpen(true)}
-                  >
-                    <Eye className="h-4 w-4" />
-                    View Prompt
-                  </button>
-                  <button
-                    className="btn btn-primary btn-sm gap-2 shadow-sm"
-                    disabled={personaGenerationLoading}
-                    onClick={() => void runPersonaGenerationPreview()}
-                  >
-                    {personaGenerationLoading ? (
-                      <span className="loading loading-spinner loading-xs" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                    {personaGenerationLoading ? "Generating..." : "Generate Persona"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {personaGenerationModels.length === 0 && (
-              <div className="alert alert-warning text-sm shadow-sm">
-                <div className="flex gap-2">
-                  <Bot className="h-5 w-5" />
-                  <span>
-                    No eligible model. Add API key to provider and enable at least one
-                    text_generation model.
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </SectionCard>
+        <PersonaPromptCard
+          title="Update Persona"
+          icon={<RefreshCw className="h-4 w-4" />}
+          description="Pick an existing persona, regenerate canonical data against its current bio and reference roles, then review the update in the shared modal before writing it back."
+          modelId={personaUpdate.modelId}
+          models={personaGenerationModels}
+          providers={providers}
+          onModelChange={(modelId) => setPersonaUpdate((prev) => ({ ...prev, modelId }))}
+          extraPrompt={personaUpdate.extraPrompt}
+          onExtraPromptChange={(value) =>
+            setPersonaUpdate((prev) => ({ ...prev, extraPrompt: value }))
+          }
+          extraPromptPlaceholder="Current bio and reference roles are seeded here..."
+          assistAriaLabel="Prompt AI for update"
+          assistLoading={personaUpdatePromptAssistLoading}
+          assistError={personaUpdatePromptAssistError}
+          assistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
+          assistIdleDescription="Starts from current bio and references, then refines with AI."
+          onAssist={assistPersonaUpdatePrompt}
+          footerActions={
+            <button
+              className="btn btn-primary btn-sm gap-2 shadow-sm"
+              disabled={!canRunUpdate}
+              onClick={() => void runPersonaUpdatePreview()}
+            >
+              {personaUpdateLoading ? (
+                <span className="loading loading-spinner loading-xs" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {personaUpdateLoading ? "Generating..." : "Update Persona"}
+            </button>
+          }
+          targetPersonaId={personaUpdate.personaId}
+          targetPersonaOptions={personas}
+          onTargetPersonaChange={(personaId) =>
+            setPersonaUpdate((prev) => ({
+              ...prev,
+              personaId,
+            }))
+          }
+          targetPersona={selectedUpdatePersona}
+          targetPersonaProfile={selectedUpdatePersonaProfile}
+        />
       </div>
 
       <PersonaGenerationModal
@@ -209,16 +254,25 @@ export function PersonaGenerationSection({
         lastSavedAt={personaLastSavedAt}
         saveForm={personaSaveForm}
         setSaveForm={setPersonaSaveForm}
-        isGenerating={personaGenerationLoading}
+        isGenerating={
+          personaGenerationMode === "update" ? personaUpdateLoading : personaGenerationLoading
+        }
         isSaving={personaSaveLoading}
+        title={modalTitle}
+        errorDescription={modalErrorDescription}
+        successDescription={modalSuccessDescription}
+        primaryActionLabel={modalPrimaryActionLabel}
+        completedActionLabel={modalCompletedActionLabel}
         onClose={closePersonaGenerationModal}
-        onRegenerate={runPersonaGenerationPreview}
+        onRegenerate={
+          personaGenerationMode === "update" ? runPersonaUpdatePreview : runPersonaGenerationPreview
+        }
         onSave={savePersonaFromGeneration}
       />
       <PromptAssemblyModal
-        isOpen={isPromptModalOpen}
-        preview={promptAssemblyPreview}
-        onClose={() => setIsPromptModalOpen(false)}
+        isOpen={promptModalPreview !== null}
+        preview={promptModalPreview}
+        onClose={() => setPromptModalPreview(null)}
       />
     </>
   );

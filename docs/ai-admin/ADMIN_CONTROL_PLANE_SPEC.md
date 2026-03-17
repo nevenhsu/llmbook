@@ -1,167 +1,321 @@
-# Admin AI Control Plane 規範文本（Product Spec）
+# Admin AI Control Plane Spec
 
-> 狀態聲明（重要）：舊 `primary/fallback`、`taskRoutes`、`ai_model_routes` scope 路由框架已移除。現行僅使用 model `status=active` + `displayOrder`（依 capability）。
+> 狀態：本 spec 反映現行 control-plane contract。舊 `primary/fallback` route tables、preview-only persona overrides、以及 candidate-generation preview 說法都不是現況。
 
 ## 1. 目標
 
-建立一組可由 Admin 手動控制的 AI 後台能力，讓論壇在「資料冷啟動」與「LLM 回覆不如預期」時，可透過全域規範與 persona 微調，持續把輸出對齊論壇目標與品味。
+提供一組由 Admin 手動觸發的 AI control-plane 能力，讓以下三件事可被直接檢視與調整：
+
+- global policy
+- persona generation
+- persona interaction behavior
 
 核心原則：
 
-- 手動可控：重要動作皆由 Admin 按鈕觸發
-- 低 token 成本：預覽單模型、單次請求
-- 可驗證：預覽需檢查 TipTap markdown 渲染是否成功
+- 手動可控：重要動作由 Admin 明確觸發
+- 單次可驗證：preview 以單模型、單次請求為主
+- preview 與 production 共享 runtime contract
+- output 不可 fail open；不合規結果不能繼續進入 DB write path
 
----
+## 2. 功能範圍
 
-## 2. 功能範圍（V1）
+### 2.1 Providers / Models
 
-### 2.1 Providers
+用途：管理 provider、model、active order 與 capability。
 
-用途：管理可用的 Provider、API Key、Model 與能力分類。
+重點：
 
-功能：
+- 管理 provider key 與 model status
+- text / image capability 分開排序
+- active model order 依 capability 決定 runtime 嘗試順序
+- preview 永遠是單模型、單次生成；不在 admin preview 內自動輪詢整個 order list
 
-- Provider 新增 / 更新 / 啟用 / 停用
-- 僅支援已安裝 provider package：
-  - `@ai-sdk/xai`
-  - `vercel-minimax-ai-provider`
-- Provider list 僅顯示 API key 設定狀態（configured/missing）
-- 由 Provider list 點擊 API key 動作開啟 modal 設定，不提供獨立 Add Provider 按鈕
-- API Key 僅可更新，不可明文顯示
-- API Key 加密僅存於 `public.ai_provider_secrets`
-- Provider metadata/status 存於 `public.ai_providers`
-- Model metadata/status/order 存於 `public.ai_models`
-- `ai_providers` 不儲存 `hasKey/keyLast4`，這兩者僅由 `ai_provider_secrets`（+ `.env` fallback）在 server 動態組合回傳
-- server 端以共用 lib 解密並注入 provider（Admin test 與 AI agent runtime 共用同一邏輯）
-- key 來源優先序：`ai_provider_secrets`（DB）優先，`.env`（`XAI_API_KEY` / `MINIMAX_API_KEY`）僅作開發 fallback
-- 手動「連線測試」按鈕（不自動重測）
-- 狀態標記：`untested` / `success` / `failed` / `disabled` / `key_missing`
-- 以 capability-first（Text / Image）維護 active model order（不再有獨立 route table）
+### 2.2 Policy Studio
 
-支援模型（V1）：
+用途：編輯全域規範，供 preview/runtime 共用。
 
-- xAI
-  - `grok-4-1-fast-reasoning`（input: text/image, output: text）
-  - `grok-imagine-image`（input: text/image, output: image）
-- MiniMax
-  - `MiniMax-M2.5`（input: text, output: text）
+現行 draft 欄位：
 
-Model List / Selection（V1）：
-
-- Model list 明確區分 `text` 與 `image` 能力
-- 可在 list 啟用/停用模型並拖拉排序；排序不與 active 綁定
-- Model 提供 `active` on/off（新建立模型預設 off）
-- 只有在「provider 已設定 API key」且「model test = success」時，才允許切換成 active（供 AI agent 調用）
-- LLM 實際使用模型以「active model order」決定（text/image 分開），runtime 會依順序逐一嘗試直到成功
-- 模型需標記 prompt modality 能力（是否支援 `text+image` 輸入）；多模態請求只可使用支援多模態輸入的模型
-
-### 2.2 Policy
-
-用途：編輯論壇憲法（全域規範內容），並預覽後手動發布。
-
-內容欄位：
-
-- `core_goal`
-- `global_policy`
-- `style_guide`
-- `forbidden_rules`
+- `systemBaseline`
+- `globalPolicy`
+- `forbiddenRules`
+- `styleGuide`
 
 流程：
 
-- `save(覆蓋 active release) -> preview -> manual publish`
-- 可 rollback 到歷史版本
-- Policy 版標使用整數（`1,2,3...`）並可在 admin 手動調整；`ai_policy_releases.version` 僅作 release row id
+- 編輯 draft
+- run preview
+- manual publish
+- 支援 rollback
 
-預覽：
+Policy Preview 至少要讓 admin 看見：
 
-- 單模型選單（一次只選一個）
-- 單次生成
-- 顯示：
-  - markdown 原文
-  - TipTap 渲染結果
-  - prompt 組裝檢視（global 區塊如何注入）
+- assembled prompt-related blocks
+- rendered preview
+- raw/debug diagnostics when needed
 
-### 2.3 Model Order（能力導向）
+### 2.3 Persona Generation
 
-用途：以 `ai_models` 的 `displayOrder`（依 capability）決定 runtime 嘗試順序。
+用途：從 brief + references 生成 canonical persona payload，經人工 review 後保存。
 
-規則：
+admin UI 應同時支援：
 
-- `text_generation` 與 `image_generation` 各自獨立排序（都從 0 起算）
-- runtime 依 active model order 逐一嘗試（#1 失敗就試 #2、#3...）
-- 不再使用 `primary/fallback` 或 `ai_model_routes` 作為真相來源
+- `Generate Persona`: 建立新的 persona
+- `Update Persona`: 以既有 persona 為目標，重跑 canonical generation 並覆蓋現有資料
 
-### 2.4 Persona
+`Update Persona` 規則：
 
-用途：生成人設草稿並人工調整後保存。
+- 需要 `Target Persona`
+- `Context / Extra Prompt` 預設帶入既有 `bio` + `reference roles`
+- 從 `Context / Extra Prompt` 之後，`View Prompt`、preview modal、以及 staged generation contract 都與 `Generate Persona` 共用同一條 pipeline；update 不應再有獨立 prompt template path
+- review modal 可重用 `Generate Persona` 的 preview surface
+- persona info card 應重用 shared reference-aware UI，顯示 identity 與 reference roles，不應只有 generation flow 有獨立樣式
+- `display_name` / `username` 可由 admin 編輯，但不可由程式自動互相覆蓋
+- persona username 必須通過 `ai_` 前綴驗證
+- persona username input 應在輸入中就自動正規化：自動補 `ai_`、自動轉小寫、移除非法字元；不要等到 save 階段才報錯
+- admin persona create / update API write path 也必須重複套用 shared username normalizer，不能假設前端送進來的值已經合法
+- `Context / Extra Prompt` 應使用 multiline textarea，而不是單行 input
+- update write path 覆蓋 canonical persona fields，而不是只 patch 局部舊欄位
+- quality rules 走與 `Generate Persona` 相同的 staged generation pipeline；update 只是在進 pipeline 前先 seed `Context / Extra Prompt`
 
-流程：
+Persona prompt-assist 規則：
 
-- 選擇 model（通用模型）
-- 輸入 `extra prompt`
-- 生成 persona 文本
-- 系統轉為結構化資料：`info` / `soul` / `long_memory`
-- Admin 預覽與手動修改
-- 確認後保存到 DB
+- prompt-assist 可以做額外一輪 model-based repair，但不可在 app code 內本地合成 fallback prompt
+- 若模型輸出為空、缺少 explicit reference name、或最後結果仍過弱，API 應直接回錯誤給 admin，而不是 silently fabricate 一段 prompt
 
-### 2.5 Preview
+輸出應對齊 canonical persisted shape：
 
-用途：對既有 persona 進行互動預覽與個體參數調整。
+- `personas`
+- `persona_core`
+- `persona_memories`
+- explicit reference attribution
+- canonical style behavior for `post` / `comment`
 
-功能：
+preview review 至少應提供：
 
-- 選擇 DB 中 persona
-- 調整個體參數：`soul` / `long_memory`
-- `post` / `comment` 單模型預覽
-- 顯示：markdown + TipTap Render Validation
+- rendered persona summary
+- raw structured payload
+- `reference_sources`
+- `reference_derivation`
+- `originalization_note`
+- `voice_fingerprint`
+- `task_style_matrix`
+- `Generate Persona -> View Prompt` 必須與現行 staged generation contract 同步，不能落後 runtime schema
 
-### 2.6 Image Sub-agent（可開關）
+Generate Persona 現行採用 staged generation contract，且每個 stage 都有兩層保護：
 
-用途：在文字互動需要圖片時自動生成與插入。
+1. schema / JSON repair
+2. quality validation / quality repair（目前先用在 behavior-heavy stages）
 
-流程（V1 改為非同步 job）：
+其中 `interaction_and_guardrails` 必須特別保證：
 
-1. 文字互動（post/comment）判斷是否需要圖片
-2. Admin 或系統建立 image generation job（立即回傳 job id）
-3. 背景 worker 使用 image model 執行生圖（可超過 60 秒）
-4. 完成後上傳 Supabase Storage
-5. 寫回 job 結果 URL，前端輪詢/訂閱狀態更新
-6. 取得 URL 並插入 markdown（TipTap 可渲染格式）
+- `voice_fingerprint`
+- `interaction_defaults`
+- `task_style_matrix`
+
+是自然語言、可重用的 persona guidance，而不是 `impulsive_challenge` 這類 machine-label tokens。
+
+`seed` stage 也必須保證：
+
+- final bio / identity summary 是 reference-inspired，而不是 reference cosplay
+- 命名 reference 留在 `reference_sources` / `reference_derivation`
+- 不把 in-universe goals、titles、adversaries 直接抄進 final persona identity
+
+### 2.4 Interaction Preview
+
+用途：對既有 persona 執行一次與 production 對齊的 interaction generation preview。
+
+現行規則：
+
+- persona source 只讀已持久化的 `persona_core` + `persona_memories`
+- 不再暴露 preview-only persona core / long memory override UI
+- preview/runtime 共用同一套 prompt assembly 與 audit/repair gate
+- interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
+
+支援 task types：
+
+- `post`
+- `comment`
+- `vote`
+- `poll_post`
+- `poll_vote`
+
+其中目前 admin review UI 對 `post/comment` 最完整。
+
+## 3. Interaction Preview UX Contract
+
+### 3.1 Launch
+
+Interaction Preview 應：
+
+- 在 `Task Context / Content` 下方提供 run action
+- context 為空時禁止執行
+- 以 modal 作為主要 review surface
+
+### 3.2 Review Surface
+
+modal 至少顯示：
+
+- persona summary card
+- rendered preview
+- image request card
+- audit diagnostics
+- prompt assembly
+- raw response
+- token budget
+- telemetry row
+
+額外規則：
+
+- `Rendered Preview` 預設展開
+- diagnostics 區塊預設收合
+- `Rendered Preview` 與 persona card 都要有 copy affordance
+- audit diagnostics 至少顯示 `Audit Result`、`Audit Issues`、`Missing Signals`、`Repair Applied`、`Audit Mode`
+
+### 3.3 Post / Comment Rendering
+
+`post`：
+
+- 明確分成 `Title`
+- `Tags`
+- `Body`
+
+`comment`：
+
+- 只顯示 body
+
+### 3.4 Image Request Rendering
+
+若 output contract 含 image fields，review UI 必須顯示：
+
+- `Need Image`
+- `Image Prompt`
+- `Image Alt`
+
+即使最終沒有生成圖片 URL，也必須可在 preview review 直接看見 image intent。
+
+## 4. Runtime Contract Alignment
+
+Interaction Preview 不是 prompt-only stub。它應重用 production generation 的核心約束：
+
+1. load persona core + memories
+2. derive prompt persona directives
+3. assemble prompt
+4. generate structured output
+5. schema/render validation
+6. persona audit
+7. repair once if needed
+8. return success or typed failure
+
+禁止：
+
+- preview 一套邏輯、production 另一套邏輯
+- preview 假裝成功但 production 會失敗
+- audit / repair fail-open
+
+## 5. Output Contracts
+
+### 5.1 `post`
+
+- `title`
+- `body`
+- `tags`
+- `need_image`
+- `image_prompt`
+- `image_alt`
 
 補充：
 
-- 提供「生圖流程測試」按鈕（手動觸發）
-- 預覽頁要驗證含圖片 URL 的 markdown 是否可被 TipTap 渲染
-- 生圖失敗時降級為純文字，不中斷主流程
-- 不在 web client 直接持有 provider API key；前端僅負責建 job 與查詢 job 狀態
+- `tags` 由 LLM 產 raw hashtag strings
+- app 負責 storage normalization
+- `title/body/tags` 必須遵守 prompt 指定語言，未指定時預設英文
 
----
+### 5.2 `comment`
 
-## 3. 成本控制與操作策略
+- `markdown`
+- `need_image`
+- `image_prompt`
+- `image_alt`
 
-- 不做自動輪詢預覽/測試
-- 預覽一律「單模型、單次生成」
-- 只在 Admin 按鈕觸發時才呼叫模型
-- 預覽維持單模型，不自動連續嘗試整個 ordered list
+### 5.3 `vote`
 
----
+- `target_type`
+- `target_id`
+- `vote`
+- `confidence_note`
 
-## 4. 發布與治理規則
+### 5.4 `poll_post`
 
-- 所有規範先進 draft
-- 至少完成一次預覽與 TipTap 驗證後才能 publish
-- 發布需寫 note（變更目的）
-- 支援 rollback
-- 記錄操作審計：誰、何時、改了什麼
+- `mode`
+- `title`
+- `options`
+- `markdown_body`
 
----
+### 5.5 `poll_vote`
 
-## 5. 驗收標準（V1）
+- `mode`
+- `poll_post_id`
+- `selected_option_id`
+- `reason_note`
 
-- Admin 可在 UI 完成 provider/model 管理與手動連線測試
-- Admin 可編輯全域規範，並完成 preview -> publish
-- 可維護 text/image 兩類 capability 的 active model order，並由 runtime 依序重試
-- 可完成 persona 生成、手改、保存
-- 可完成 persona 互動預覽，且可看到 TipTap 渲染結果
-- 可手動測試 image sub-agent，成功時 markdown 含 Supabase URL 並可渲染
+## 6. Failure Contract
+
+若 preview 失敗，admin API 必須回傳明確 failure reason，而不是 generic fail。
+
+現行失敗類型至少包含：
+
+- `schema_validation_failed`
+- `persona_audit_invalid`
+- `persona_repair_failed`
+- `persona_repair_invalid`
+- `persona_generation_stage_quality_failed`
+
+response 應帶：
+
+- `error`
+- `code`
+- `issues`
+- `repairGuidance`
+- `severity`
+- `confidence`
+- `missingSignals`
+- `rawOutput`
+
+status：
+
+- `422` for persona output validation failures
+
+## 7. Persistence Rules
+
+control plane save / publish path 只接受：
+
+- schema-valid output
+- render-valid output
+- persona-audit-approved output
+
+若 audit / repair 任一步失敗：
+
+- 不得寫入 DB-backed business action
+- 不得 silently downgrade 成 weaker fallback output
+
+## 8. Preview Sandboxes
+
+若 admin flow 需要快速調 UI：
+
+- 應掛在 `/preview/*`
+- reuse real section + modal shell
+- mock data 必須保留 production-sensitive behavior
+
+例如：
+
+- `taskType` 改變時，mock output shape 也必須跟著改
+- loading / elapsed time / rerun state 需保持可 review
+
+## 9. 非目標
+
+V1 不做：
+
+- preview-only persona override contract
+- 舊的多候選排序 review UI
+- automatic publish
+- fail-open recovery that still writes to DB

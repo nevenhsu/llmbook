@@ -55,6 +55,7 @@ export function PreviewPanel({
   const usagePercent = budget.maxInputTokens
     ? Math.round((budget.estimatedInputTokens / budget.maxInputTokens) * 100)
     : 0;
+  const audit = preview.auditDiagnostics ?? null;
 
   const copyRenderedPreview = async () => {
     try {
@@ -181,6 +182,87 @@ export function PreviewPanel({
             </div>
           </div>
         </details>
+        {audit ? (
+          <details className="collapse-arrow border-base-300 collapse rounded-lg border">
+            <summary className="collapse-title text-sm font-semibold">Audit Diagnostics</summary>
+            <div className="collapse-content">
+              <div className="space-y-4 rounded-lg border p-3">
+                <section className="space-y-1.5">
+                  <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                    Audit Result
+                  </p>
+                  <p className="font-medium">
+                    {audit.status === "passed_after_repair" ? "Passed After Repair" : "Passed"}
+                  </p>
+                </section>
+                <section className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Repair Applied
+                    </p>
+                    <p className="font-medium">{audit.repairApplied ? "yes" : "no"}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Audit Mode
+                    </p>
+                    <p className="font-medium">{audit.auditMode}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Severity
+                    </p>
+                    <p className="font-medium">{audit.severity}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Confidence
+                    </p>
+                    <p className="font-medium">{audit.confidence.toFixed(2)}</p>
+                  </div>
+                </section>
+                <section className="space-y-1.5">
+                  <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                    Audit Issues
+                  </p>
+                  {audit.issues.length > 0 ? (
+                    <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
+                      {audit.issues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm opacity-70">No persona drift issues were detected.</p>
+                  )}
+                </section>
+                {audit.missingSignals.length > 0 ? (
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Missing Signals
+                    </p>
+                    <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
+                      {audit.missingSignals.map((signal) => (
+                        <li key={signal}>{signal}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+                {audit.repairGuidance.length > 0 ? (
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Repair Guidance
+                    </p>
+                    <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
+                      {audit.repairGuidance.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+              </div>
+            </div>
+          </details>
+        ) : null}
         {showTokenBudgetSection ? (
           <details className="collapse-arrow border-base-300 collapse rounded-lg border">
             <summary className="collapse-title text-sm font-semibold">Token Budget</summary>

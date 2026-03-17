@@ -1,4 +1,4 @@
-import rawFixture from "@/lib/ai/admin/persona-generation-preview-mock.json";
+import rawFixture from "@/mock-data/persona-generation-preview.json";
 import { PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/persona-generation-token-budgets";
 import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 import type {
@@ -24,15 +24,27 @@ const generatorInstruction = [
   "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
 ].join("\n");
 
-const fixture = rawFixture as {
+const fixture = (
+  rawFixture as {
+    preview: {
+      modelDisplayName?: string;
+      adminExtraPrompt?: string;
+      tokenBudget?: PreviewResult["tokenBudget"];
+      structured: PersonaGenerationStructured;
+    };
+  }
+).preview as {
   modelDisplayName: string;
   adminExtraPrompt: string;
   tokenBudget: PreviewResult["tokenBudget"];
   structured: PersonaGenerationStructured;
 };
 
-export const mockPersonaGenerationModelDisplayName = fixture.modelDisplayName;
-export const mockPersonaGenerationAdminExtraPrompt = fixture.adminExtraPrompt;
+export const mockPersonaGenerationModelDisplayName =
+  fixture.modelDisplayName ?? "Mock Persona Model";
+export const mockPersonaGenerationAdminExtraPrompt =
+  fixture.adminExtraPrompt ??
+  "A cynical tech journalist persona with a clear opening angle, recurring launch/crime-scene metaphors, sharp attacks on weak claims, and grudging praise only after proof.";
 export const mockPersonaGenerationSeedPrompt =
   "Cynical tech journalist persona with John Grisham paranoia and Elon Musk theatrics.";
 export const mockPersonaGenerationGlobalPolicyContent = globalPolicy;
@@ -112,6 +124,9 @@ const assembledPrompt = [
       "reference_derivation:string[],",
       "originalization_note:string.",
       "status should be active or inactive.",
+      "The final persona must be reference-inspired, not reference-cosplay.",
+      "Keep named references inside reference_sources and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
+      "Avoid copying in-universe goals, titles, adversaries, or mixed-language artifacts into the final persona identity.",
     ],
   }),
   buildStageSection({
@@ -124,6 +139,7 @@ const assembledPrompt = [
       "values{value_hierarchy,worldview,judgment_style},",
       "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
       "value_hierarchy must be an array of {value,priority} objects.",
+      "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
     ],
   }),
   buildStageSection({
@@ -145,7 +161,12 @@ const assembledPrompt = [
     stageContract: [
       "Return one JSON object with keys:",
       "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
-      "guardrails{hard_no,deescalation_style}.",
+      "guardrails{hard_no,deescalation_style},",
+      "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
+      "task_style_matrix{post{entry_shape,body_shape,close_shape,forbidden_shapes},comment{entry_shape,feedback_shape,close_shape,forbidden_shapes}}.",
+      "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
+      "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
+      "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
     ],
   }),
   buildStageSection({

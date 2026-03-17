@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { XCircle, CheckCircle } from "lucide-react";
 import UsernameInput from "@/components/ui/UsernameInput";
+import { normalizeUsernameInput } from "@/lib/username-validation";
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -31,14 +32,7 @@ export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: Re
     // Auto-fill username from email prefix if not manually edited
     if (!isUsernameManuallyEdited && newEmail.includes("@")) {
       const prefix = newEmail.split("@")[0];
-      // Sanitize: lowercase, remove invalid chars for username
-      const sanitized = prefix
-        .toLowerCase()
-        .replace(/[^a-z0-9_.]/g, "")
-        .replace(/^\.+/, "")
-        .replace(/\.+$/, "")
-        .replace(/\.{2,}/g, ".")
-        .substring(0, 20);
+      const sanitized = normalizeUsernameInput(prefix);
       if (sanitized) {
         setUsername(sanitized);
       }

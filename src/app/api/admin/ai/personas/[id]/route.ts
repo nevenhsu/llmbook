@@ -27,18 +27,39 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
   }
 
   const body = (await req.json().catch(() => ({}))) as {
+    displayName?: string;
     username?: string;
     bio?: string;
     personaCore?: Record<string, unknown>;
-    longMemory?: string;
+    referenceSources?: Array<{
+      name: string;
+      type: string;
+      contribution: string[];
+    }>;
+    referenceDerivation?: string[];
+    originalizationNote?: string;
+    personaMemories?: Array<{
+      memoryType: "memory" | "long_memory";
+      scope: "persona" | "thread" | "task";
+      memoryKey?: string | null;
+      content: string;
+      metadata?: Record<string, unknown>;
+      expiresAt?: string | null;
+      isCanonical?: boolean;
+      importance?: number | null;
+    }>;
   };
 
   await new AdminAiControlPlaneStore().patchPersonaProfile({
     personaId: id.trim(),
+    displayName: body.displayName,
     username: body.username,
     bio: body.bio,
     personaCore: body.personaCore,
-    longMemory: body.longMemory,
+    referenceSources: body.referenceSources,
+    referenceDerivation: body.referenceDerivation,
+    originalizationNote: body.originalizationNote,
+    personaMemories: body.personaMemories,
   });
 
   return http.ok({ success: true });

@@ -15,6 +15,10 @@ export interface UsernameValidationResult {
   error?: string;
 }
 
+const USERNAME_MAX_LENGTH = 20;
+const PERSONA_USERNAME_PREFIX = "ai_";
+const PERSONA_USERNAME_BASE_MAX_LENGTH = USERNAME_MAX_LENGTH - PERSONA_USERNAME_PREFIX.length;
+
 /**
  * Validate username format
  * NOTE: Input should already be trimmed and lowercased before calling this function
@@ -79,13 +83,49 @@ export function sanitizeUsername(input: string): string {
     .replace(/^\.+/, "") // Remove leading periods
     .replace(/\.+$/, "") // Remove trailing periods
     .replace(/\.{2,}/g, ".") // Replace consecutive periods with single period
-    .substring(0, 20); // Limit to 20 chars
+    .substring(0, USERNAME_MAX_LENGTH); // Limit to 20 chars
+}
+
+export function normalizeUsernameInput(
+  input: string,
+  options: {
+    isPersona?: boolean;
+  } = {},
+): string {
+  const normalized = input.trim().toLowerCase();
+
+  if (!options.isPersona) {
+    return sanitizeUsername(normalized);
+  }
+
+  const withoutPrefix = normalized.startsWith(PERSONA_USERNAME_PREFIX)
+    ? normalized.slice(PERSONA_USERNAME_PREFIX.length)
+    : normalized;
+  const sanitizedBase = sanitizeUsername(withoutPrefix).slice(0, PERSONA_USERNAME_BASE_MAX_LENGTH);
+  return `${PERSONA_USERNAME_PREFIX}${sanitizedBase}`;
+}
+
+export function derivePersonaUsername(displayName: string): string {
+  const normalized = normalizeUsernameInput(displayName.replace(/\s+/g, "_"), {
+    isPersona: true,
+  });
+  const base = normalized.startsWith(PERSONA_USERNAME_PREFIX)
+    ? normalized.slice(PERSONA_USERNAME_PREFIX.length)
+    : normalized;
+  const constrained = (base || "persona").slice(0, PERSONA_USERNAME_BASE_MAX_LENGTH);
+  const minSized = constrained.length >= 3 ? constrained : `${constrained}bot`.slice(0, 3);
+  return `${PERSONA_USERNAME_PREFIX}${minSized}`;
 }
 
 /**
  * Client-side username availability check
  */
-export async function checkUsernameAvailability(username: string): Promise<{
+export async function checkUsernameAvailability(
+  username: string,
+  options: {
+    isPersona?: boolean;
+  } = {},
+): Promise<{
   available: boolean;
   error?: string;
 }> {
@@ -93,7 +133,10 @@ export async function checkUsernameAvailability(username: string): Promise<{
     const response = await fetch("/api/username/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username }),
+      body: JSON.stringify({
+        username,
+        isPersona: options.isPersona === true,
+      }),
     });
 
     if (!response.ok) {

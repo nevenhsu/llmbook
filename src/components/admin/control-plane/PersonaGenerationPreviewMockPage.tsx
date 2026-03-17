@@ -7,11 +7,13 @@ import { ArrowLeft, FlaskConical } from "lucide-react";
 import type {
   AiModelConfig,
   AiProviderConfig,
+  PersonaProfile,
   PreviewResult,
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
+import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
 import type { PersonaGenerationModalPhase } from "./persona-generation-modal-utils";
-import { derivePersonaUsername } from "./control-plane-utils";
+import { buildPersonaUpdateExtraPrompt, derivePersonaUsername } from "./control-plane-utils";
 import { PersonaGenerationSection } from "./sections/PersonaGenerationSection";
 import {
   mockPersonaGenerationAdminExtraPrompt,
@@ -21,7 +23,6 @@ import {
   mockPersonaGenerationSeedPrompt,
 } from "@/lib/ai/admin/persona-generation-preview-mock";
 import { PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/persona-generation-token-budgets";
-import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 
 const mockProvider: AiProviderConfig = {
   id: "preview-provider-xai",
@@ -66,19 +67,55 @@ const mockModel: AiModelConfig = {
 
 const PREVIEW_GENERATE_DELAY_MS = 1000;
 const PREVIEW_SAVE_DELAY_MS = 1000;
+const mockPersona: PersonaItem = {
+  id: "persona-jax-harlan",
+  username: "ai_jax_harlan",
+  display_name: "Jax Harlan",
+  bio: mockPersonaGenerationPreview.structured.personas.bio,
+  status: mockPersonaGenerationPreview.structured.personas.status,
+};
+
+const mockPersonaProfile: PersonaProfile = {
+  persona: {
+    id: mockPersona.id,
+    username: mockPersona.username,
+    display_name: mockPersona.display_name,
+    bio: mockPersona.bio,
+    status: mockPersona.status,
+  },
+  personaCore: {
+    ...mockPersonaGenerationPreview.structured.persona_core,
+    reference_sources: mockPersonaGenerationPreview.structured.reference_sources,
+    reference_derivation: mockPersonaGenerationPreview.structured.reference_derivation,
+    originalization_note: mockPersonaGenerationPreview.structured.originalization_note,
+  },
+  personaMemories: [],
+};
 
 export function PersonaGenerationPreviewMockPage() {
   const [personaGeneration, setPersonaGeneration] = useState({
     modelId: mockModel.id,
     extraPrompt: mockPersonaGenerationSeedPrompt,
   });
+  const [personaUpdate, setPersonaUpdate] = useState({
+    personaId: mockPersona.id,
+    modelId: mockModel.id,
+    extraPrompt: buildPersonaUpdateExtraPrompt(mockPersonaProfile),
+  });
   const [personaGenerationLoading, setPersonaGenerationLoading] = useState(false);
+  const [personaUpdateLoading, setPersonaUpdateLoading] = useState(false);
   const [personaPromptAssistLoading, setPersonaPromptAssistLoading] = useState(false);
   const [personaPromptAssistError, setPersonaPromptAssistError] = useState<string | null>(null);
   const [personaPromptAssistElapsedSeconds] = useState(0);
+  const [personaUpdatePromptAssistLoading, setPersonaUpdatePromptAssistLoading] = useState(false);
+  const [personaUpdatePromptAssistError, setPersonaUpdatePromptAssistError] = useState<
+    string | null
+  >(null);
+  const [personaUpdatePromptAssistElapsedSeconds] = useState(0);
   const [personaPreviewRunCount, setPersonaPreviewRunCount] = useState(0);
   const [personaLastSavedAt, setPersonaLastSavedAt] = useState<string | null>(null);
   const [personaSaveLoading, setPersonaSaveLoading] = useState(false);
+  const [personaGenerationMode, setPersonaGenerationMode] = useState<"create" | "update">("create");
   const [personaSaveForm, setPersonaSaveForm] = useState({
     displayName: mockPersonaGenerationPreview.structured.personas.display_name,
     username: derivePersonaUsername(mockPersonaGenerationPreview.structured.personas.display_name),
@@ -95,11 +132,6 @@ export function PersonaGenerationPreviewMockPage() {
   const [personaGenerationModalRawOutput] = useState<string | null>(null);
   const [personaGenerationElapsedSeconds, setPersonaGenerationElapsedSeconds] = useState(0);
   const personaGenerationStartedAtRef = useRef<number | null>(null);
-  const promptAssemblyPreview = buildPersonaGenerationPromptTemplatePreview({
-    extraPrompt: personaGeneration.extraPrompt,
-    globalPolicyContent: mockPersonaGenerationGlobalPolicyContent,
-  });
-
   useEffect(() => {
     if (!personaGenerationLoading || personaGenerationStartedAtRef.current === null) {
       return;
@@ -116,23 +148,41 @@ export function PersonaGenerationPreviewMockPage() {
     return () => window.clearInterval(timer);
   }, [personaGenerationLoading]);
 
-  const assistPersonaPrompt = async () => {
-    setPersonaPromptAssistError(null);
-    setPersonaPromptAssistLoading(true);
+  const assistPersonaPromptByMode = async (mode: "create" | "update") => {
+    const isUpdate = mode === "update";
+    const setLoading = isUpdate
+      ? setPersonaUpdatePromptAssistLoading
+      : setPersonaPromptAssistLoading;
+    const setError = isUpdate ? setPersonaUpdatePromptAssistError : setPersonaPromptAssistError;
+
+    setError(null);
+    setLoading(true);
     try {
-      setPersonaGeneration((prev) => ({
-        ...prev,
-        extraPrompt: mockPersonaGenerationAdminExtraPrompt,
-      }));
+      if (isUpdate) {
+        setPersonaUpdate((prev) => ({
+          ...prev,
+          extraPrompt: mockPersonaGenerationAdminExtraPrompt,
+        }));
+      } else {
+        setPersonaGeneration((prev) => ({
+          ...prev,
+          extraPrompt: mockPersonaGenerationAdminExtraPrompt,
+        }));
+      }
     } finally {
-      setPersonaPromptAssistLoading(false);
+      setLoading(false);
     }
   };
+
+  const assistPersonaPrompt = async () => assistPersonaPromptByMode("create");
+
+  const assistPersonaUpdatePrompt = async () => assistPersonaPromptByMode("update");
 
   const runPersonaGenerationPreview = async () => {
     personaGenerationStartedAtRef.current = Date.now();
     setPersonaGenerationElapsedSeconds(0);
     setPersonaGenerationLoading(true);
+    setPersonaGenerationMode("create");
     setPersonaGenerationModalOpen(true);
     setPersonaGenerationModalPhase("loading");
     setPersonaGenerationModalError(null);
@@ -156,10 +206,41 @@ export function PersonaGenerationPreviewMockPage() {
     }
   };
 
+  const runPersonaUpdatePreview = async () => {
+    setPersonaSaveForm((prev) =>
+      personaGenerationMode === "update" && personaGenerationModalOpen
+        ? prev
+        : {
+            displayName: mockPersona.display_name,
+            username: mockPersona.username,
+          },
+    );
+    personaGenerationStartedAtRef.current = Date.now();
+    setPersonaGenerationElapsedSeconds(0);
+    setPersonaUpdateLoading(true);
+    setPersonaGenerationMode("update");
+    setPersonaGenerationModalOpen(true);
+    setPersonaGenerationModalPhase("loading");
+    setPersonaGenerationModalError(null);
+    setPersonaGenerationPreview(null);
+    setPersonaLastSavedAt(null);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_GENERATE_DELAY_MS));
+      setPersonaGenerationPreview(mockPersonaGenerationPreview);
+      setPersonaGenerationElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - personaGenerationStartedAtRef.current!) / 1000)),
+      );
+      setPersonaGenerationModalPhase("success");
+    } finally {
+      setPersonaUpdateLoading(false);
+    }
+  };
+
   const closePersonaGenerationModal = () => {
     setPersonaGenerationModalOpen(false);
     if (personaGenerationLoading) {
       setPersonaGenerationLoading(false);
+      setPersonaUpdateLoading(false);
       personaGenerationStartedAtRef.current = null;
       setPersonaGenerationModalPhase("idle");
       setPersonaGenerationModalError(null);
@@ -179,7 +260,7 @@ export function PersonaGenerationPreviewMockPage() {
     try {
       await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_SAVE_DELAY_MS));
       setPersonaLastSavedAt(new Date().toISOString());
-      toast.success("Persona saved");
+      toast.success(personaGenerationMode === "update" ? "Persona updated" : "Persona saved");
     } finally {
       setPersonaSaveLoading(false);
     }
@@ -204,8 +285,9 @@ export function PersonaGenerationPreviewMockPage() {
       <div className="alert alert-info text-sm">
         <FlaskConical className="h-4 w-4" />
         <span>
-          This sandbox uses <span className="font-mono">persona-generation-preview-mock.json</span>{" "}
-          for Prompt AI, Generate Persona, and modal review. No network request or database write
+          This sandbox uses{" "}
+          <span className="font-mono">src/mock-data/persona-generation-preview.json</span> for
+          Prompt AI, Generate Persona, and modal review. No network request or database write
           happens here.
         </span>
       </div>
@@ -213,19 +295,29 @@ export function PersonaGenerationPreviewMockPage() {
       <PersonaGenerationSection
         personaGeneration={personaGeneration}
         setPersonaGeneration={setPersonaGeneration}
+        personaUpdate={personaUpdate}
+        setPersonaUpdate={setPersonaUpdate}
+        personas={[mockPersona]}
+        selectedUpdatePersona={mockPersona}
+        selectedUpdatePersonaProfile={mockPersonaProfile}
         personaGenerationModels={[mockModel]}
         providers={[mockProvider]}
         personaGenerationLoading={personaGenerationLoading}
+        personaUpdateLoading={personaUpdateLoading}
         personaPromptAssistLoading={personaPromptAssistLoading}
         personaPromptAssistError={personaPromptAssistError}
         personaPromptAssistElapsedSeconds={personaPromptAssistElapsedSeconds}
+        personaUpdatePromptAssistLoading={personaUpdatePromptAssistLoading}
+        personaUpdatePromptAssistError={personaUpdatePromptAssistError}
+        personaUpdatePromptAssistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
         personaPreviewRunCount={personaPreviewRunCount}
         personaLastSavedAt={personaLastSavedAt}
         personaSaveForm={personaSaveForm}
         setPersonaSaveForm={setPersonaSaveForm}
         personaSaveLoading={personaSaveLoading}
         personaGenerationPreview={personaGenerationPreview}
-        promptAssemblyPreview={promptAssemblyPreview}
+        promptAssemblyGlobalPolicyContent={mockPersonaGenerationGlobalPolicyContent}
+        personaGenerationMode={personaGenerationMode}
         personaGenerationModalOpen={personaGenerationModalOpen}
         personaGenerationModalPhase={personaGenerationModalPhase}
         personaGenerationModalError={personaGenerationModalError}
@@ -236,7 +328,9 @@ export function PersonaGenerationPreviewMockPage() {
           saved: Boolean(personaLastSavedAt),
         }}
         assistPersonaPrompt={assistPersonaPrompt}
+        assistPersonaUpdatePrompt={assistPersonaUpdatePrompt}
         runPersonaGenerationPreview={runPersonaGenerationPreview}
+        runPersonaUpdatePreview={runPersonaUpdatePreview}
         closePersonaGenerationModal={closePersonaGenerationModal}
         savePersonaFromGeneration={savePersonaFromGeneration}
       />

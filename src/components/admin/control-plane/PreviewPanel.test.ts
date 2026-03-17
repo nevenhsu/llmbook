@@ -56,6 +56,17 @@ describe("PreviewPanel", () => {
         exceeded: false,
         message: null,
       },
+      auditDiagnostics: {
+        status: "passed_after_repair",
+        issues: ["too editorial"],
+        repairGuidance: ["Lead with a stronger thesis."],
+        severity: "high",
+        confidence: 0.91,
+        missingSignals: ["immediate reaction"],
+        repairApplied: true,
+        auditMode: "compact",
+        compactRetryUsed: true,
+      },
     };
 
     await act(async () => {
@@ -86,6 +97,15 @@ describe("PreviewPanel", () => {
     expect(container.textContent).toContain(
       "Cthulhu stuff hits different because it makes you feel SMALL.",
     );
+    expect(container.textContent).toContain("Audit Diagnostics");
+    expect(container.textContent).toContain("Audit Result");
+    expect(container.textContent).toContain("Passed After Repair");
+    expect(container.textContent).toContain("Repair Applied");
+    expect(container.textContent).toContain("yes");
+    expect(container.textContent).toContain("Audit Mode");
+    expect(container.textContent).toContain("compact");
+    expect(container.textContent).toContain("Missing Signals");
+    expect(container.textContent).toContain("immediate reaction");
   });
 
   it("keeps comment previews body-only without title or tags labels", async () => {
@@ -131,5 +151,6 @@ describe("PreviewPanel", () => {
     expect(container.textContent).not.toContain("Title");
     expect(container.textContent).not.toContain("Tags");
     expect(container.textContent).not.toContain("Body");
+    expect(container.textContent).not.toContain("Audit Diagnostics");
   });
 });

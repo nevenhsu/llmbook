@@ -34,17 +34,24 @@ export default function AiControlPlanePanel(props: Props) {
     policyPreview,
     personaGeneration,
     setPersonaGeneration,
+    personaUpdate,
+    setPersonaUpdate,
     personaGenerationLoading,
+    personaUpdateLoading,
     personaPromptAssistLoading,
     personaPromptAssistError,
     personaPromptAssistElapsedSeconds,
+    personaUpdatePromptAssistLoading,
+    personaUpdatePromptAssistError,
+    personaUpdatePromptAssistElapsedSeconds,
     personaPreviewRunCount,
     personaLastSavedAt,
     personaSaveLoading,
     personaSaveForm,
     setPersonaSaveForm,
     personaGenerationPreview,
-    personaPromptAssemblyPreview,
+    personaPromptAssemblyGlobalPolicyContent,
+    personaGenerationMode,
     personaGenerationModalOpen,
     personaGenerationModalPhase,
     personaGenerationModalError,
@@ -58,6 +65,8 @@ export default function AiControlPlanePanel(props: Props) {
     interactionPreviewModalError,
     interactionPreviewElapsedSeconds,
     selectedPersonaProfile,
+    selectedUpdatePersona,
+    selectedUpdatePersonaProfile,
     interactionTaskAssistLoading,
     interactionTaskAssistError,
     interactionTaskAssistElapsedSeconds,
@@ -78,7 +87,9 @@ export default function AiControlPlanePanel(props: Props) {
     deletePolicyRelease,
     viewPolicyVersion,
     runPersonaGenerationPreview,
+    runPersonaUpdatePreview,
     assistPersonaPrompt,
+    assistPersonaUpdatePrompt,
     closePersonaGenerationModal,
     savePersonaFromGeneration,
     runInteractionPreview,
@@ -207,19 +218,29 @@ export default function AiControlPlanePanel(props: Props) {
             <PersonaGenerationSection
               personaGeneration={personaGeneration}
               setPersonaGeneration={setPersonaGeneration}
+              personaUpdate={personaUpdate}
+              setPersonaUpdate={setPersonaUpdate}
+              personas={personas}
+              selectedUpdatePersona={selectedUpdatePersona}
+              selectedUpdatePersonaProfile={selectedUpdatePersonaProfile}
               personaGenerationModels={personaGenerationModels}
               providers={providers}
               personaGenerationLoading={personaGenerationLoading}
+              personaUpdateLoading={personaUpdateLoading}
               personaPromptAssistLoading={personaPromptAssistLoading}
               personaPromptAssistError={personaPromptAssistError}
               personaPromptAssistElapsedSeconds={personaPromptAssistElapsedSeconds}
+              personaUpdatePromptAssistLoading={personaUpdatePromptAssistLoading}
+              personaUpdatePromptAssistError={personaUpdatePromptAssistError}
+              personaUpdatePromptAssistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
               personaPreviewRunCount={personaPreviewRunCount}
               personaLastSavedAt={personaLastSavedAt}
               personaSaveForm={personaSaveForm}
               setPersonaSaveForm={setPersonaSaveForm}
               personaSaveLoading={personaSaveLoading}
               personaGenerationPreview={personaGenerationPreview}
-              promptAssemblyPreview={personaPromptAssemblyPreview}
+              promptAssemblyGlobalPolicyContent={personaPromptAssemblyGlobalPolicyContent}
+              personaGenerationMode={personaGenerationMode}
               personaGenerationModalOpen={personaGenerationModalOpen}
               personaGenerationModalPhase={personaGenerationModalPhase}
               personaGenerationModalError={personaGenerationModalError}
@@ -227,7 +248,9 @@ export default function AiControlPlanePanel(props: Props) {
               personaGenerationElapsedSeconds={personaGenerationElapsedSeconds}
               personaStepStatus={personaStepStatus}
               assistPersonaPrompt={assistPersonaPrompt}
+              assistPersonaUpdatePrompt={assistPersonaUpdatePrompt}
               runPersonaGenerationPreview={runPersonaGenerationPreview}
+              runPersonaUpdatePreview={runPersonaUpdatePreview}
               closePersonaGenerationModal={closePersonaGenerationModal}
               savePersonaFromGeneration={savePersonaFromGeneration}
             />

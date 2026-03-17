@@ -38,7 +38,7 @@ describe("AdminAiControlPlaneStore.previewGlobalPolicyRelease", () => {
     expect(preview.assembledPrompt).toContain("[agent_profile]");
     expect(preview.assembledPrompt).toContain("No agent profile available.");
     expect(preview.assembledPrompt).toContain("[output_style]");
-    expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_core]");
     expect(preview.assembledPrompt).toContain("[agent_memory]");
     expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
@@ -73,7 +73,7 @@ describe("AdminAiControlPlaneStore.previewGlobalPolicyRelease", () => {
     const preview = await store.previewGlobalPolicyRelease(11, "test");
 
     expect(preview.assembledPrompt).toContain("[output_style]");
-    expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_core]");
     expect(preview.assembledPrompt).toContain("[agent_memory]");
     expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");

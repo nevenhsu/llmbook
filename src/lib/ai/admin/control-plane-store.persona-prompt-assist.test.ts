@@ -53,7 +53,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         error: null,
       } as never)
       .mockResolvedValueOnce({
-        text: "A razor-sharp design critic who praises originality, distrusts trend-chasing, and replies with concise, surgical feedback grounded in craft and audience perception.",
+        text: "A razor-sharp design critic shaped by Nora Ephron, praising originality, distrusting trend-chasing, and replying with concise, surgical feedback grounded in craft and audience perception.",
         error: null,
       } as never);
     vi.spyOn(CachedLlmRuntimeConfigProvider.prototype, "getConfig").mockResolvedValue({
@@ -115,6 +115,15 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         }),
       }),
     );
+    expect(invokeLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Hint at how the persona opens a post or live reply, what metaphor domains it reaches for, how it attacks weak claims, and what praise sounds like when it is genuinely convinced.",
+          ),
+        }),
+      }),
+    );
   });
 
   it("uses optimize instructions and preserves same-language guidance when input exists", async () => {
@@ -125,7 +134,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         error: null,
       } as never)
       .mockResolvedValueOnce({
-        text: "用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧，總能快速指出作品核心取捨的論壇人格。",
+        text: "以王家衛為參考，用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧，總能快速指出作品核心取捨的論壇人格。",
         error: null,
       } as never);
 
@@ -189,6 +198,15 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
             "Use the resolved reference as behavioral source material, not just as a name to mention.",
+          ),
+        }),
+      }),
+    );
+    expect(invokeLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Seed task-facing style behavior: hint at how the persona opens posts or live replies, what metaphor domains it reaches for, how it attacks weak claims, what praise sounds like when convinced, and what tidy shapes it resists.",
           ),
         }),
       }),
@@ -266,7 +284,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         error: null,
       } as never)
       .mockResolvedValueOnce({
-        text: "A blunt cultural critic who rewards specificity, distrusts hype, and responds with fast, pointed judgments grounded in taste and incentives.",
+        text: "A blunt cultural critic shaped by James Baldwin who rewards specificity, distrusts hype, and responds with fast, pointed judgments grounded in taste and incentives.",
         error: null,
       } as never);
 
@@ -312,7 +330,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     ).resolves.toContain("critic");
   });
 
-  it("falls back to a clearer persona brief when the model returns empty text", async () => {
+  it("throws when the model returns empty text for optimize mode", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM).mockResolvedValue({
       text: "   ",
@@ -350,18 +368,15 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       models: [sampleModel()],
     });
 
-    const result = await store.assistPersonaPrompt({
-      modelId: "model-1",
-      inputPrompt: "  請保留 伊坂幸太郎 與 Fleabag 的參考，讓角色更有判斷力  ",
-    });
-
-    expect(result).toContain("伊坂幸太郎");
-    expect(result).toContain("Fleabag");
-    expect(result).toContain("審美立場");
-    expect(result).not.toBe("請保留 伊坂幸太郎 與 Fleabag 的參考，讓角色更有判斷力");
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "  請保留 伊坂幸太郎 與 Fleabag 的參考，讓角色更有判斷力  ",
+      }),
+    ).rejects.toThrow("prompt assist returned empty output");
   });
 
-  it("falls back to a default seed prompt when the model returns empty text for empty input", async () => {
+  it("throws when the model returns empty text for random mode", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce({
@@ -404,12 +419,12 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       models: [sampleModel()],
     });
 
-    await expect(store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" })).resolves.toBe(
-      "A forum persona shaped by James Baldwin, with grounded observations, sharp taste, and concise, opinionated replies.",
-    );
+    await expect(
+      store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" }),
+    ).rejects.toThrow("prompt assist returned empty output");
   });
 
-  it("injects a concrete reference name when the model returns only abstract optimize text", async () => {
+  it("throws when the model omits an explicit reference name in the final optimize output", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce({
@@ -457,7 +472,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "想要一個尖銳但不失專業的設計評論人格",
       }),
-    ).resolves.toContain("王家衛");
+    ).rejects.toThrow("prompt assist output must include at least 1 explicit real reference name");
   });
 
   it("retries optimize mode when the first rewrite only appends a reference name", async () => {
@@ -517,6 +532,16 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     );
 
     expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Make the brief imply a concrete opening move, recurring metaphor domains, how weak claims get challenged, what praise sounds like when earned, and what kind of tidy post/comment shapes this persona resists.",
+          ),
+        }),
+      }),
+    );
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({

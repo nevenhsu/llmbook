@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -75,7 +75,7 @@ export const PUT = withAuth(async (request, { user, supabase }) => {
   // Validate and process username
   let nextUsername = existingProfile?.username;
   if (username !== undefined) {
-    const cleanUsername = sanitizeUsername(String(username));
+    const cleanUsername = normalizeUsernameInput(String(username));
 
     // Validate format
     const validation = validateUsernameFormat(cleanUsername, false);

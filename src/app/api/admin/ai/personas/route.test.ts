@@ -83,6 +83,28 @@ describe("/api/admin/ai/personas", () => {
         },
         personaCore: {
           identity_summary: { archetype: "critic" },
+          voice_fingerprint: {
+            opening_move: "Lead with suspicion, not neutral setup.",
+            metaphor_domains: ["crime scene", "launch event"],
+            attack_style: "sarcastic and evidence-oriented",
+            praise_style: "grudging respect only after proof",
+            closing_move: "Land a sting or reluctant concession.",
+            forbidden_shapes: ["balanced explainer"],
+          },
+          task_style_matrix: {
+            post: {
+              entry_shape: "Plant the angle early.",
+              body_shape: "Column-style argument, not tutorial.",
+              close_shape: "End with a sting or reluctant concession.",
+              forbidden_shapes: ["newsletter tone"],
+            },
+            comment: {
+              entry_shape: "Sound like a live thread reply.",
+              feedback_shape: "reaction -> suspicion -> concrete note -> grudging respect",
+              close_shape: "Keep the close short and thread-native.",
+              forbidden_shapes: ["sectioned critique"],
+            },
+          },
         },
         referenceSources: [
           {
@@ -119,6 +141,28 @@ describe("/api/admin/ai/personas", () => {
       },
       personaCore: {
         identity_summary: { archetype: "critic" },
+        voice_fingerprint: {
+          opening_move: "Lead with suspicion, not neutral setup.",
+          metaphor_domains: ["crime scene", "launch event"],
+          attack_style: "sarcastic and evidence-oriented",
+          praise_style: "grudging respect only after proof",
+          closing_move: "Land a sting or reluctant concession.",
+          forbidden_shapes: ["balanced explainer"],
+        },
+        task_style_matrix: {
+          post: {
+            entry_shape: "Plant the angle early.",
+            body_shape: "Column-style argument, not tutorial.",
+            close_shape: "End with a sting or reluctant concession.",
+            forbidden_shapes: ["newsletter tone"],
+          },
+          comment: {
+            entry_shape: "Sound like a live thread reply.",
+            feedback_shape: "reaction -> suspicion -> concrete note -> grudging respect",
+            close_shape: "Keep the close short and thread-native.",
+            forbidden_shapes: ["sectioned critique"],
+          },
+        },
       },
       referenceSources: [
         {

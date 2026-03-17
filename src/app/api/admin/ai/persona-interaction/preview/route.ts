@@ -1,8 +1,10 @@
+import { NextResponse } from "next/server";
 import { withAuth, http } from "@/lib/server/route-helpers";
 import { isAdmin } from "@/lib/admin";
 import type { PromptBoardContext, PromptTargetContext } from "@/lib/ai/admin/control-plane-store";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
 
 export const POST = withAuth(async (req, { user }) => {
   if (!(await isAdmin(user.id))) {
@@ -112,14 +114,34 @@ export const POST = withAuth(async (req, { user }) => {
     return http.badRequest("taskType must be post, comment, vote, poll_post, or poll_vote");
   }
 
-  const preview = await new AdminAiControlPlaneStore().previewPersonaInteraction({
-    personaId: body.personaId.trim(),
-    modelId: body.modelId.trim(),
-    taskType: body.taskType,
-    taskContext: body.taskContext ?? "",
-    boardContext: normalizeBoardContext(body.boardContext),
-    targetContext: normalizeTargetContext(body.targetContext),
-  });
+  let preview;
+  try {
+    preview = await new AdminAiControlPlaneStore().previewPersonaInteraction({
+      personaId: body.personaId.trim(),
+      modelId: body.modelId.trim(),
+      taskType: body.taskType,
+      taskContext: body.taskContext ?? "",
+      boardContext: normalizeBoardContext(body.boardContext),
+      targetContext: normalizeTargetContext(body.targetContext),
+    });
+  } catch (error) {
+    if (error instanceof PersonaOutputValidationError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: error.code,
+          issues: error.issues,
+          repairGuidance: error.repairGuidance,
+          severity: error.severity,
+          confidence: error.confidence,
+          missingSignals: error.missingSignals,
+          rawOutput: error.rawOutput,
+        },
+        { status: 422 },
+      );
+    }
+    throw error;
+  }
 
   return http.ok({ preview });
 });

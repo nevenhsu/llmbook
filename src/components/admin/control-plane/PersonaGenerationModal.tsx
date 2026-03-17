@@ -26,6 +26,12 @@ type Props = {
   >;
   isGenerating: boolean;
   isSaving: boolean;
+  title?: string;
+  loadingDescription?: string;
+  errorDescription?: string;
+  successDescription?: string;
+  primaryActionLabel?: string;
+  completedActionLabel?: string;
   onClose: () => void;
   onRegenerate: () => Promise<void>;
   onSave: () => Promise<void>;
@@ -43,6 +49,12 @@ export function PersonaGenerationModal({
   setSaveForm,
   isGenerating,
   isSaving,
+  title,
+  loadingDescription,
+  errorDescription,
+  successDescription,
+  primaryActionLabel,
+  completedActionLabel,
   onClose,
   onRegenerate,
   onSave,
@@ -65,6 +77,12 @@ export function PersonaGenerationModal({
         setSaveForm={setSaveForm}
         isGenerating={isGenerating}
         isSaving={isSaving}
+        title={title}
+        loadingDescription={loadingDescription}
+        errorDescription={errorDescription}
+        successDescription={successDescription}
+        primaryActionLabel={primaryActionLabel}
+        completedActionLabel={completedActionLabel}
         onClose={onClose}
         onRegenerate={onRegenerate}
         onSave={onSave}

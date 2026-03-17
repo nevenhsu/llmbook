@@ -4,6 +4,7 @@ import {
   type AiModelConfig,
   type PromptBoardContext,
 } from "@/lib/ai/admin/control-plane-store";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
 
 const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM } = vi.hoisted(
   () => ({
@@ -138,6 +139,28 @@ function mockPersona(store: AdminAiControlPlaneStore) {
         friction_triggers: ["hype"],
         non_generic_traits: ["cuts to the main weakness quickly"],
       },
+      voice_fingerprint: {
+        opening_move: "Lead with suspicion, not neutral setup.",
+        metaphor_domains: ["crime scene", "launch event"],
+        attack_style: "sarcastic and evidence-oriented",
+        praise_style: "grudging respect only after proof",
+        closing_move: "Land a sting or reluctant concession.",
+        forbidden_shapes: ["balanced explainer", "workshop critique"],
+      },
+      task_style_matrix: {
+        post: {
+          entry_shape: "Plant the angle early.",
+          body_shape: "Column-style argument, not tutorial.",
+          close_shape: "End with a sting or reluctant concession.",
+          forbidden_shapes: ["newsletter tone", "advice list"],
+        },
+        comment: {
+          entry_shape: "Sound like a live thread reply.",
+          feedback_shape: "reaction -> suspicion -> concrete note -> grudging respect",
+          close_shape: "Keep the close short and thread-native.",
+          forbidden_shapes: ["sectioned critique", "support-macro tone"],
+        },
+      },
       guardrails: {
         hard_no: ["manipulation"],
         deescalation_style: ["reduce certainty under ambiguity"],
@@ -205,10 +228,27 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       timeoutMs: 30_000,
       retries: 0,
     });
-    invokeLLM.mockResolvedValue({
-      text: JSON.stringify({ markdown: "Preview response" }),
-      finishReason: "stop",
-      error: null,
+    invokeLLM.mockImplementation(async (input) => {
+      const prompt = String(input?.modelInput?.prompt ?? "");
+      if (prompt.includes("[persona_output_audit]")) {
+        return {
+          text: JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            severity: "low",
+            confidence: 0.94,
+            missingSignals: [],
+          }),
+          finishReason: "stop",
+          error: null,
+        };
+      }
+      return {
+        text: JSON.stringify({ markdown: "Preview response" }),
+        finishReason: "stop",
+        error: null,
+      };
     });
   });
 
@@ -235,7 +275,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("[target_context]");
     expect(preview.assembledPrompt).toContain("[agent_profile]");
     expect(preview.assembledPrompt).toContain("[output_style]");
-    expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_core]");
     expect(preview.assembledPrompt).toContain("[agent_memory]");
     expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).toContain("[agent_voice_contract]");
@@ -244,6 +284,10 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("[agent_examples]");
     expect(preview.assembledPrompt).toContain("Short-term:");
     expect(preview.assembledPrompt).toContain("Long-term:");
+    expect(preview.assembledPrompt).toContain("Compact persona summary for reply generation:");
+    expect(preview.assembledPrompt).toContain("Voice fingerprint:");
+    expect(preview.assembledPrompt).toContain("Comment shape expectations:");
+    expect(preview.assembledPrompt).not.toContain('"identity_summary"');
     expect(preview.assembledPrompt).toContain("display_name: AI Artist");
     expect(preview.assembledPrompt).toContain("Use natural conversational tone");
     expect(preview.assembledPrompt).toContain("username: ai_artist");
@@ -265,6 +309,17 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     );
     expect(preview.markdown).toBe("Preview response");
     expect(preview.rawResponse).toBe(JSON.stringify({ markdown: "Preview response" }));
+    expect(preview.auditDiagnostics).toEqual({
+      status: "passed",
+      issues: [],
+      repairGuidance: [],
+      severity: "low",
+      confidence: 0.94,
+      missingSignals: [],
+      repairApplied: false,
+      auditMode: "default",
+      compactRetryUsed: false,
+    });
   });
 
   it("uses a post-shaped contract with title and body when taskType is post", async () => {
@@ -291,7 +346,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("[target_context]");
     expect(preview.assembledPrompt).toContain("No target context available.");
     expect(preview.assembledPrompt).toContain("[output_style]");
-    expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_core]");
     expect(preview.assembledPrompt).toContain("[agent_voice_contract]");
     expect(preview.assembledPrompt).toContain("[agent_memory]");
     expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
@@ -300,6 +355,10 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("[agent_examples]");
     expect(preview.assembledPrompt).toContain("Short-term:");
     expect(preview.assembledPrompt).toContain("Long-term:");
+    expect(preview.assembledPrompt).toContain("Compact persona summary for post generation:");
+    expect(preview.assembledPrompt).toContain("Voice fingerprint:");
+    expect(preview.assembledPrompt).toContain("Post shape expectations:");
+    expect(preview.assembledPrompt).not.toContain('"identity_summary"');
     expect(preview.assembledPrompt).toContain("No relationship context available.");
     expect(preview.assembledPrompt).toContain("Scenario:");
     expect(preview.assembledPrompt).toContain("Response:");
@@ -317,6 +376,106 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
         tags: ["#cthulhu", "#lovecraft"],
       }),
     );
+    expect(invokeLLM.mock.calls[0]?.[0]?.modelInput?.maxOutputTokens).toBe(1400);
+    expect(preview.auditDiagnostics?.status).toBe("passed");
+  });
+
+  it("retries post persona audit with a compact prompt when the first audit returns empty output", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "Preview response",
+          tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: "",
+        finishReason: "length",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          severity: "low",
+          confidence: 0.88,
+          missingSignals: [],
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    const preview = await store.previewPersonaInteraction({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "post",
+      taskContext: "Create a new post.",
+    });
+
+    expect(preview.renderOk).toBe(true);
+    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[audit_mode]");
+    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("compact");
+    expect(preview.auditDiagnostics?.auditMode).toBe("compact");
+    expect(preview.auditDiagnostics?.compactRetryUsed).toBe(true);
+  });
+
+  it("retries comment persona audit with a compact prompt when the first audit returns truncated JSON", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          markdown: "Specific feedback on silhouette and atmosphere.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: '```json\n{\n  "passes": false,\n  "issues": [\n    "Persona claims inability to',
+        finishReason: "length",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          severity: "low",
+          confidence: 0.91,
+          missingSignals: [],
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    const preview = await store.previewPersonaInteraction({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "comment",
+      taskContext: "Reply with specific creature-design feedback.",
+    });
+
+    expect(preview.renderOk).toBe(true);
+    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("compact");
+    expect(preview.auditDiagnostics?.auditMode).toBe("compact");
+    expect(preview.auditDiagnostics?.compactRetryUsed).toBe(true);
   });
 
   it("repairs invalid post output when the first response omits required tags", async () => {
@@ -340,6 +499,18 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
         }),
         finishReason: "stop",
         error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          severity: "low",
+          confidence: 0.9,
+          missingSignals: [],
+        }),
+        finishReason: "stop",
+        error: null,
       });
 
     const preview = await store.previewPersonaInteraction({
@@ -349,7 +520,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       taskContext: "Create a new post.",
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
+    expect(invokeLLM).toHaveBeenCalledTimes(3);
     expect(preview.renderOk).toBe(true);
     expect(preview.renderError).toBeNull();
     expect(preview.markdown).toBe("# Preview title\n\n#cthulhu #lovecraft\n\nPreview response");
@@ -378,9 +549,36 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       })
       .mockResolvedValueOnce({
         text: JSON.stringify({
+          passes: false,
+          issues: ["too editorial", "persona priorities not visible"],
+          repairGuidance: [
+            "Lead with a sharper gut reaction.",
+            "Make the persona's priorities visible in what the response defends or attacks.",
+          ],
+          severity: "high",
+          confidence: 0.91,
+          missingSignals: ["immediate reaction", "persona priorities"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
           title: "Preview title",
           body: "That silhouette finally hits. Keep the scale cruel and stop over-explaining the lore.",
           tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          severity: "low",
+          confidence: 0.86,
+          missingSignals: [],
         }),
         finishReason: "stop",
         error: null,
@@ -393,10 +591,86 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       taskContext: "Create a new post.",
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
-    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[retry_persona_repair]");
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
+    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[retry_persona_repair]");
+    expect(invokeLLM.mock.calls[3]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
     expect(preview.markdown).toContain("That silhouette finally hits.");
     expect(preview.rawResponse).toContain("That silhouette finally hits.");
+    expect(preview.auditDiagnostics).toEqual({
+      status: "passed_after_repair",
+      issues: ["too editorial", "persona priorities not visible"],
+      repairGuidance: [
+        "Lead with a sharper gut reaction.",
+        "Make the persona's priorities visible in what the response defends or attacks.",
+      ],
+      severity: "high",
+      confidence: 0.91,
+      missingSignals: ["immediate reaction", "persona priorities"],
+      repairApplied: true,
+      auditMode: "default",
+      compactRetryUsed: false,
+    });
+  });
+
+  it("throws a typed error when repaired post output still fails persona audit", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "What works:\n- silhouette\n- scale\n- wrongness",
+          tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: ["too editorial"],
+          repairGuidance: ["Lead with a sharper gut reaction."],
+          severity: "medium",
+          confidence: 0.84,
+          missingSignals: ["immediate reaction"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "That silhouette hits. Keep the scale nasty.",
+          tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: ["persona priorities not visible"],
+          repairGuidance: ["Let the persona's priorities shape what it defends."],
+          severity: "high",
+          confidence: 0.9,
+          missingSignals: ["persona priorities"],
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    await expect(
+      store.previewPersonaInteraction({
+        personaId: "persona-1",
+        modelId: "model-1",
+        taskType: "post",
+        taskContext: "Create a new post.",
+      }),
+    ).rejects.toMatchObject<Partial<PersonaOutputValidationError>>({
+      code: "persona_repair_failed",
+    });
   });
 
   it("uses structured vote contract with target metadata", async () => {

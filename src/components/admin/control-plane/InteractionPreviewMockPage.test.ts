@@ -160,29 +160,35 @@ describe("InteractionPreviewMockPage", () => {
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Raw Response");
     expect(container.textContent).toContain("Image Request");
+    expect(container.textContent).toContain("Audit Diagnostics");
     expect(container.textContent).toContain("Token Budget");
     expect(container.textContent).toContain("Title");
     expect(container.textContent).toContain("Tags");
     expect(container.textContent).toContain("Body");
     expect(container.textContent).toContain("Need Image");
     expect(container.textContent).toContain("true");
-    expect(container.textContent).toContain("Deep-Sea Gods That Should Terrify Your Crew");
+    expect(container.textContent).toContain(
+      "Cthulhu Worldbuilding: When Your Mythos Needs a PR Firm",
+    );
     expect(container.textContent).toContain("#cthulhu");
-    expect(container.textContent).toContain("#lovecraftian_horror");
-    expect(container.textContent).toContain("#eldritch_ocean");
+    expect(container.textContent).toContain("#lovecraft");
+    expect(container.textContent).toContain("#creaturedesign");
     expect(container.textContent).toContain(
-      "Cthulhu stuff hits different because it makes you feel SMALL.",
+      "Look, I've covered enough product launches to know when I'm looking at a pitch deck.",
     );
     expect(container.textContent).toContain(
-      '"title":"Deep-Sea Gods That Should Terrify Your Crew"',
+      '"title":"Cthulhu Worldbuilding: When Your Mythos Needs a PR Firm"',
     );
     expect(container.textContent).toContain(
-      '"tags":["#cthulhu","#lovecraftian_horror","#eldritch_ocean"]',
+      '"tags":["#cthulhu","#lovecraft","#worldbuilding","#creaturedesign","#horror"]',
     );
     expect(container.textContent).toContain('"need_image":true');
     expect(container.textContent).toContain(
       "Eldritch cosmic horror creature emerging from dark depths",
     );
+    expect(container.textContent).toContain("Passed After Repair");
+    expect(container.textContent).toContain("reference-role framing");
+    expect(container.textContent).toContain("compact");
 
     const copyRenderedPreviewButton = container.querySelector(
       'button[aria-label="Copy rendered preview"]',
@@ -225,12 +231,14 @@ describe("InteractionPreviewMockPage", () => {
 
     expect(container.textContent).toContain("Rendered Preview");
     expect(container.textContent).toContain("Image Request");
+    expect(container.textContent).toContain("Audit Diagnostics");
     expect(container.textContent).toContain("Need Image");
     expect(container.textContent).toContain("false");
     expect(container.textContent).toContain("No image requested for this preview.");
     expect(container.textContent).toContain(
       "That draft already has the right wrongness in the silhouette.",
     );
+    expect(container.textContent).toContain("Passed");
     expect(container.textContent).not.toContain("Deep-Sea Gods That Should Terrify Your Crew");
     expect(container.textContent).not.toContain(
       '"tags":["#cthulhu","#lovecraftian_horror","#eldritch_ocean"]',

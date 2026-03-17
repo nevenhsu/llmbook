@@ -3,6 +3,11 @@ import { createXai } from "@ai-sdk/xai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import {
+  derivePersonaUsername,
+  normalizeUsernameInput,
+  validateUsernameFormat,
+} from "@/lib/username-validation";
+import {
   buildActionOutputConstraints,
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
@@ -16,11 +21,21 @@ import {
   detectPersonaVoiceDrift,
 } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 import {
+  PersonaOutputValidationError,
+  buildPersonaOutputAuditPrompt,
+  isRetryablePersonaAuditParseFailure,
+  type PersonaAuditResult,
+  type PersonaAuditSeverity,
+  type PersonaOutputAuditPromptMode,
+  parsePersonaAuditResult,
+} from "@/lib/ai/prompt-runtime/persona-output-audit";
+import {
   PERSONA_GENERATION_MAX_INPUT_TOKENS,
   PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS,
 } from "@/lib/ai/admin/persona-generation-token-budgets";
+import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import {
@@ -29,7 +44,11 @@ import {
   upsertProviderSecret,
 } from "@/lib/ai/llm/provider-secrets";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import { normalizeSoulProfile, type RuntimeSoulProfile } from "@/lib/ai/soul/runtime-soul-profile";
+import {
+  buildInteractionCoreSummary,
+  normalizeCoreProfile,
+  type RuntimeCoreProfile,
+} from "@/lib/ai/core/runtime-core-profile";
 
 export type ProviderTestStatus = "untested" | "success" | "failed" | "disabled" | "key_missing";
 export type ProviderStatus = "active" | "disabled";
@@ -135,6 +154,19 @@ export type PreviewResult = {
   renderOk: boolean;
   renderError: string | null;
   tokenBudget: PreviewTokenBudget;
+  auditDiagnostics?: PreviewAuditDiagnostics | null;
+};
+
+export type PreviewAuditDiagnostics = {
+  status: "passed" | "passed_after_repair";
+  issues: string[];
+  repairGuidance: string[];
+  severity: PersonaAuditSeverity;
+  confidence: number;
+  missingSignals: string[];
+  repairApplied: boolean;
+  auditMode: PersonaOutputAuditPromptMode;
+  compactRetryUsed: boolean;
 };
 
 export class PersonaGenerationParseError extends Error {
@@ -144,6 +176,23 @@ export class PersonaGenerationParseError extends Error {
     super(message);
     this.name = "PersonaGenerationParseError";
     this.rawOutput = rawOutput;
+  }
+}
+
+export class PersonaGenerationQualityError extends PersonaGenerationParseError {
+  public readonly stageName: string;
+  public readonly issues: string[];
+
+  public constructor(input: {
+    stageName: string;
+    message: string;
+    rawOutput: string;
+    issues: string[];
+  }) {
+    super(input.message, input.rawOutput);
+    this.name = "PersonaGenerationQualityError";
+    this.stageName = input.stageName;
+    this.issues = input.issues;
   }
 }
 
@@ -212,6 +261,8 @@ type PersonaGenerationContextStage = {
 type PersonaGenerationInteractionStage = {
   interaction_defaults: Record<string, unknown>;
   guardrails: Record<string, unknown>;
+  voice_fingerprint: Record<string, unknown>;
+  task_style_matrix: Record<string, unknown>;
 };
 
 type PersonaGenerationMemoriesStage = {
@@ -536,22 +587,6 @@ function isGenericModelTestError(message: string): boolean {
   );
 }
 
-function toPersonaUsername(input: string): string {
-  const normalized = input
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9._]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^[_\.]+|[_\.]+$/g, "");
-
-  const withoutPrefix = normalized.startsWith("ai_") ? normalized.slice(3) : normalized;
-  const fallback = withoutPrefix.length > 0 ? withoutPrefix : "persona";
-  const constrained = fallback.slice(0, 17);
-  const minSized = constrained.length >= 3 ? constrained : `${constrained}bot`.slice(0, 3);
-  return `ai_${minSized}`;
-}
-
 function estimateTokens(content: string): number {
   const normalized = content.trim();
   if (!normalized) {
@@ -596,7 +631,7 @@ function buildPromptBlocks(input: {
   globalDraft: GlobalPolicyStudioDraft;
   agentProfile?: string;
   outputStyle?: string;
-  personaSoul: string;
+  agentCore: string;
   agentVoiceContract?: string;
   agentMemory: string;
   agentRelationshipContext?: string;
@@ -629,7 +664,7 @@ function buildPromptBlocks(input: {
       name: "agent_profile",
       content: input.agentProfile?.trim() || "No agent profile available.",
     },
-    { name: "agent_soul", content: input.personaSoul },
+    { name: "agent_core", content: input.agentCore },
     {
       name: "agent_voice_contract",
       content:
@@ -654,7 +689,7 @@ function buildPromptBlocks(input: {
       content:
         input.agentEnactmentRules?.trim() ||
         [
-          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_soul, agent_memory, target_context, and agent_relationship_context.",
+          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, agent_memory, target_context, and agent_relationship_context.",
           "The response must reflect the agent's priorities, biases, tone, and decision style.",
           "Do not produce a generic assistant-style reply.",
         ].join("\n"),
@@ -781,7 +816,7 @@ function formatAgentProfile(input: { displayName: string; username: string; bio:
 }
 
 function formatAgentRelationshipContext(input: {
-  runtimePersonaProfile?: RuntimeSoulProfile | Record<string, unknown> | null;
+  runtimePersonaProfile?: RuntimeCoreProfile | Record<string, unknown> | null;
   targetContext?: PromptTargetContext;
 }): string {
   const runtimePersonaProfile = asRecord(input.runtimePersonaProfile);
@@ -814,7 +849,7 @@ function formatAgentRelationshipContext(input: {
 }
 
 function formatAgentEnactmentRules(
-  runtimePersonaProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
+  runtimePersonaProfile?: RuntimeCoreProfile | Record<string, unknown> | null,
 ): string {
   const record = asRecord(runtimePersonaProfile);
   const rules = Array.isArray(record?.agentEnactmentRules)
@@ -827,7 +862,7 @@ function formatAgentEnactmentRules(
 }
 
 function formatAgentExamples(
-  runtimePersonaProfile?: RuntimeSoulProfile | Record<string, unknown> | null,
+  runtimePersonaProfile?: RuntimeCoreProfile | Record<string, unknown> | null,
 ): string {
   const record = asRecord(runtimePersonaProfile);
   const examples = Array.isArray(record?.inCharacterExamples) ? record.inCharacterExamples : [];
@@ -880,6 +915,254 @@ function normalizePersonaStringArray(value: unknown, fieldPath: string): string[
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
   return normalized;
+}
+
+function countWords(text: string): number {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return 0;
+  }
+  if (containsCjk(normalized)) {
+    return Math.max(1, Math.ceil(normalized.length / 4));
+  }
+  return normalized.split(/\s+/u).filter(Boolean).length;
+}
+
+function looksLikeIdentifierLabel(text: string): boolean {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return false;
+  }
+  return /^[a-z0-9]+(?:_[a-z0-9]+)+$/u.test(normalized);
+}
+
+function maybeAddIdentifierIssue(issues: string[], fieldPath: string, text: string) {
+  if (looksLikeIdentifierLabel(text)) {
+    issues.push(
+      `${fieldPath} must be a natural-language description, not an identifier-style label.`,
+    );
+  }
+}
+
+function maybeAddInstructionIssue(issues: string[], fieldPath: string, text: string) {
+  maybeAddIdentifierIssue(issues, fieldPath, text);
+  if (countWords(text) < 3) {
+    issues.push(
+      `${fieldPath} must be a reusable natural-language instruction, not a compressed label.`,
+    );
+  }
+}
+
+function hasMixedScriptArtifact(text: string): boolean {
+  return /[A-Za-z][\u3400-\u9fff]|[\u3400-\u9fff][A-Za-z]/u.test(text);
+}
+
+function extractCapitalizedPhrases(text: string): string[] {
+  return Array.from(text.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g), (match) =>
+    match[0].trim(),
+  );
+}
+
+function normalizeComparisonText(text: string): string {
+  return normalizeSingleLineText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u3400-\u9fff]+/gu, " ")
+    .trim();
+}
+
+function validateSeedStageQuality(stage: PersonaGenerationSeedStage): string[] {
+  const issues: string[] = [];
+  const allowedReferenceNames = new Set(
+    stage.reference_sources.map((item) => normalizeComparisonText(item.name)),
+  );
+  const seedTexts: Array<[string, string]> = [
+    ["personas.bio", stage.personas.bio],
+    ["identity_summary.core_motivation", readString(stage.identity_summary.core_motivation)],
+    [
+      "identity_summary.one_sentence_identity",
+      readString(stage.identity_summary.one_sentence_identity),
+    ],
+    ["originalization_note", stage.originalization_note],
+    ...stage.reference_derivation.map((item, index) => [`reference_derivation[${index}]`, item]),
+  ];
+
+  for (const [fieldPath, text] of seedTexts) {
+    if (hasMixedScriptArtifact(text)) {
+      issues.push(
+        `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
+      );
+    }
+  }
+
+  for (const fieldPath of [
+    "personas.bio",
+    "identity_summary.core_motivation",
+    "identity_summary.one_sentence_identity",
+  ] as const) {
+    const text =
+      fieldPath === "personas.bio"
+        ? stage.personas.bio
+        : fieldPath === "identity_summary.core_motivation"
+          ? readString(stage.identity_summary.core_motivation)
+          : readString(stage.identity_summary.one_sentence_identity);
+
+    for (const phrase of extractCapitalizedPhrases(text)) {
+      if (allowedReferenceNames.has(normalizeComparisonText(phrase))) {
+        continue;
+      }
+      issues.push(
+        `${fieldPath} leaks a reference-world proper noun (${phrase}) and should be originalized into forum-native language.`,
+      );
+    }
+  }
+
+  const originalizationNote = normalizeComparisonText(stage.originalization_note);
+  if (!/(original|adapt|forum|inspired|lens|filtered)/u.test(originalizationNote)) {
+    issues.push(
+      "originalization_note must explain how the persona is adapted into an original forum-native identity.",
+    );
+  }
+
+  return issues;
+}
+
+function validateValuesStageQuality(stage: PersonaGenerationValuesStage): string[] {
+  const issues: string[] = [];
+  for (const [index, item] of (
+    stage.values.value_hierarchy as Array<{ value: string; priority: number }>
+  ).entries()) {
+    maybeAddIdentifierIssue(issues, `values.value_hierarchy[${index}].value`, item.value);
+  }
+  maybeAddIdentifierIssue(issues, "values.judgment_style", readString(stage.values.judgment_style));
+  for (const fieldName of [
+    "humor_preferences",
+    "narrative_preferences",
+    "creative_preferences",
+    "disliked_patterns",
+    "taste_boundaries",
+  ] as const) {
+    const items = stage.aesthetic_profile[fieldName];
+    if (!Array.isArray(items)) {
+      continue;
+    }
+    for (const [index, item] of items.entries()) {
+      maybeAddIdentifierIssue(issues, `aesthetic_profile.${fieldName}[${index}]`, readString(item));
+    }
+  }
+  return issues;
+}
+
+function validateInteractionStageQuality(stage: PersonaGenerationInteractionStage): string[] {
+  const issues: string[] = [];
+  maybeAddInstructionIssue(
+    issues,
+    "interaction_defaults.default_stance",
+    readString(stage.interaction_defaults.default_stance),
+  );
+  for (const fieldName of [
+    "discussion_strengths",
+    "friction_triggers",
+    "non_generic_traits",
+  ] as const) {
+    const items = stage.interaction_defaults[fieldName];
+    if (!Array.isArray(items)) {
+      continue;
+    }
+    for (const [index, item] of items.entries()) {
+      maybeAddIdentifierIssue(
+        issues,
+        `interaction_defaults.${fieldName}[${index}]`,
+        readString(item),
+      );
+    }
+  }
+
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.opening_move",
+    readString(stage.voice_fingerprint.opening_move),
+  );
+  for (const [index, item] of (stage.voice_fingerprint.metaphor_domains as unknown[]).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `voice_fingerprint.metaphor_domains[${index}]`,
+      readString(item),
+    );
+  }
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.attack_style",
+    readString(stage.voice_fingerprint.attack_style),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.praise_style",
+    readString(stage.voice_fingerprint.praise_style),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.closing_move",
+    readString(stage.voice_fingerprint.closing_move),
+  );
+  for (const [index, item] of (stage.voice_fingerprint.forbidden_shapes as unknown[]).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `voice_fingerprint.forbidden_shapes[${index}]`,
+      readString(item),
+    );
+  }
+
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.post.entry_shape",
+    readString(stage.task_style_matrix.post.entry_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.post.body_shape",
+    readString(stage.task_style_matrix.post.body_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.post.close_shape",
+    readString(stage.task_style_matrix.post.close_shape),
+  );
+  for (const [index, item] of (
+    stage.task_style_matrix.post.forbidden_shapes as unknown[]
+  ).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `task_style_matrix.post.forbidden_shapes[${index}]`,
+      readString(item),
+    );
+  }
+
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.comment.entry_shape",
+    readString(stage.task_style_matrix.comment.entry_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.comment.feedback_shape",
+    readString(stage.task_style_matrix.comment.feedback_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.comment.close_shape",
+    readString(stage.task_style_matrix.comment.close_shape),
+  );
+  for (const [index, item] of (
+    stage.task_style_matrix.comment.forbidden_shapes as unknown[]
+  ).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `task_style_matrix.comment.forbidden_shapes[${index}]`,
+      readString(item),
+    );
+  }
+
+  return issues;
 }
 
 function normalizePersonaValueHierarchy(
@@ -1085,6 +1368,63 @@ function parsePersonaGuardrails(
   };
 }
 
+function parsePersonaVoiceFingerprint(
+  value: unknown,
+  fieldPath = "persona_core.voice_fingerprint",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    opening_move: requirePersonaText(root.opening_move, `${fieldPath}.opening_move`),
+    metaphor_domains: normalizePersonaStringArray(
+      root.metaphor_domains,
+      `${fieldPath}.metaphor_domains`,
+    ),
+    attack_style: requirePersonaText(root.attack_style, `${fieldPath}.attack_style`),
+    praise_style: requirePersonaText(root.praise_style, `${fieldPath}.praise_style`),
+    closing_move: requirePersonaText(root.closing_move, `${fieldPath}.closing_move`),
+    forbidden_shapes: normalizePersonaStringArray(
+      root.forbidden_shapes,
+      `${fieldPath}.forbidden_shapes`,
+    ),
+  };
+}
+
+function parsePersonaTaskStyleMatrix(
+  value: unknown,
+  fieldPath = "persona_core.task_style_matrix",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  const post = requirePersonaRecord(root.post, `${fieldPath}.post`);
+  const comment = requirePersonaRecord(root.comment, `${fieldPath}.comment`);
+  return {
+    ...root,
+    post: {
+      ...post,
+      entry_shape: requirePersonaText(post.entry_shape, `${fieldPath}.post.entry_shape`),
+      body_shape: requirePersonaText(post.body_shape, `${fieldPath}.post.body_shape`),
+      close_shape: requirePersonaText(post.close_shape, `${fieldPath}.post.close_shape`),
+      forbidden_shapes: normalizePersonaStringArray(
+        post.forbidden_shapes,
+        `${fieldPath}.post.forbidden_shapes`,
+      ),
+    },
+    comment: {
+      ...comment,
+      entry_shape: requirePersonaText(comment.entry_shape, `${fieldPath}.comment.entry_shape`),
+      feedback_shape: requirePersonaText(
+        comment.feedback_shape,
+        `${fieldPath}.comment.feedback_shape`,
+      ),
+      close_shape: requirePersonaText(comment.close_shape, `${fieldPath}.comment.close_shape`),
+      forbidden_shapes: normalizePersonaStringArray(
+        comment.forbidden_shapes,
+        `${fieldPath}.comment.forbidden_shapes`,
+      ),
+    },
+  };
+}
+
 function parsePersonaCore(value: unknown): Record<string, unknown> {
   const root = requirePersonaRecord(value, "persona_core");
   return {
@@ -1096,6 +1436,24 @@ function parsePersonaCore(value: unknown): Record<string, unknown> {
     creator_affinity: parsePersonaCreatorAffinity(root.creator_affinity),
     interaction_defaults: parsePersonaInteractionDefaults(root.interaction_defaults),
     guardrails: parsePersonaGuardrails(root.guardrails),
+    voice_fingerprint: parsePersonaVoiceFingerprint(root.voice_fingerprint),
+    task_style_matrix: parsePersonaTaskStyleMatrix(root.task_style_matrix),
+  };
+}
+
+function parseStoredPersonaCoreProfile(value: unknown): Record<string, unknown> {
+  const root = requirePersonaRecord(value, "persona_core");
+  return {
+    ...parsePersonaCore(root),
+    reference_sources: parseReferenceSources(root.reference_sources),
+    reference_derivation: normalizePersonaStringArray(
+      root.reference_derivation,
+      "persona_core.reference_derivation",
+    ),
+    originalization_note: requirePersonaText(
+      root.originalization_note,
+      "persona_core.originalization_note",
+    ),
   };
 }
 
@@ -1210,26 +1568,6 @@ function parseResolvedReferenceNames(text: string): string[] {
     .slice(0, 3);
 }
 
-function buildPromptAssistReferenceFallback(input: {
-  mode: "random" | "optimize";
-  sourceText: string;
-  resolvedReferenceNames?: string[];
-}): string {
-  const referenceName = input.resolvedReferenceNames?.[0]?.trim() ?? "";
-  if (input.mode === "random") {
-    if (referenceName) {
-      return containsCjk(input.sourceText)
-        ? `以${referenceName}為參考，塑造一位有明確審美、重視生活觀察、回覆俐落而有判斷力的論壇人格。`
-        : `A forum persona shaped by ${referenceName}, with grounded observations, sharp taste, and concise, opinionated replies.`;
-    }
-    return containsCjk(input.sourceText)
-      ? "塑造一位有明確審美、重視生活觀察、回覆俐落而有判斷力的論壇人格。"
-      : "A forum persona with grounded observations, sharp taste, and concise, opinionated replies.";
-  }
-
-  return referenceName;
-}
-
 function normalizePromptAssistComparisonText(text: string): string {
   return normalizeSingleLineText(text)
     .toLowerCase()
@@ -1250,81 +1588,6 @@ function looksLikeImperativePersonaRequest(text: string): boolean {
     /^(?:generate|create|write|craft|build)\b/i.test(normalized) ||
     /^(?:請)?(?:生成|產生|建立|打造|寫出)/u.test(normalized)
   );
-}
-
-function derivePromptAssistSubject(text: string): string {
-  const normalized = normalizeSingleLineText(text)
-    .replace(
-      /^(?:rewrite|optimize|improve|refine)\s+(?:this|the)?\s*(?:extra\s+)?prompt(?:\s+for\s+generating\s+a\s+forum\s+persona)?[:：]?\s*/iu,
-      "",
-    )
-    .replace(/^(?:generate|create|write|craft|build)\s+(?:me\s+)?(?:a|an|one)?\s*/iu, "")
-    .replace(/^(?:請)?(?:生成|產生|建立|打造|寫出|保留)(?:一個|一位|一名|個|位)?/u, "")
-    .replace(/[.。]+$/u, "")
-    .trim();
-
-  if (!normalized) {
-    return containsCjk(text) ? "創作者人格" : "forum persona";
-  }
-  return normalized;
-}
-
-function buildPromptAssistClarityFallback(
-  sourceText: string,
-  resolvedReferenceNames?: string[],
-): string {
-  const reference = buildPromptAssistReferenceFallback({
-    mode: "optimize",
-    sourceText,
-    resolvedReferenceNames,
-  });
-  const subject = derivePromptAssistSubject(sourceText);
-  if (containsCjk(sourceText)) {
-    return reference
-      ? `塑造一位受${subject}啟發的人格，明確寫出其審美立場、判斷偏好與互動方式，回覆機智但尊重、具體而不討好，參考${reference}。`
-      : `塑造一位受${subject}啟發的人格，明確寫出其審美立場、判斷偏好與互動方式，回覆機智但尊重、具體而不討好。`;
-  }
-
-  return reference
-    ? `A persona inspired by ${subject}, with a clear creative bias, values craft over hype, and responds with witty but respectful specificity. Reference ${reference}.`
-    : `A persona inspired by ${subject}, with a clear creative bias, values craft over hype, and responds with witty but respectful specificity.`;
-}
-
-function ensurePromptAssistReferenceName(input: {
-  text: string;
-  mode: "random" | "optimize";
-  sourceText: string;
-  resolvedReferenceNames?: string[];
-}): string {
-  const normalized = normalizeSingleLineText(input.text);
-  if (!normalized) {
-    return buildPromptAssistReferenceFallback({
-      mode: input.mode,
-      sourceText: input.sourceText,
-      resolvedReferenceNames: input.resolvedReferenceNames,
-    });
-  }
-  if (hasLikelyNamedReference(normalized)) {
-    return normalized;
-  }
-
-  const fallbackReference = buildPromptAssistReferenceFallback({
-    mode: input.mode,
-    sourceText: input.sourceText,
-    resolvedReferenceNames: input.resolvedReferenceNames,
-  });
-  if (!fallbackReference) {
-    return normalized;
-  }
-  if (input.mode === "random") {
-    return containsCjk(input.sourceText || normalized)
-      ? `${normalized} 參考${fallbackReference}。`
-      : `${normalized} Reference ${fallbackReference}.`;
-  }
-
-  return containsCjk(input.sourceText)
-    ? `${normalized} 參考${fallbackReference}。`
-    : `${normalized} Reference ${fallbackReference}.`;
 }
 
 function isWeakPromptAssistRewrite(input: {
@@ -1365,6 +1628,24 @@ function isWeakPromptAssistRewrite(input: {
   }
 
   return false;
+}
+
+function validatePromptAssistResult(input: {
+  text: string;
+  mode: "random" | "optimize";
+  sourceText: string;
+}): string {
+  const normalized = normalizeSingleLineText(input.text);
+  if (!normalized) {
+    throw new Error("prompt assist returned empty output");
+  }
+  if (!hasLikelyNamedReference(normalized)) {
+    throw new Error("prompt assist output must include at least 1 explicit real reference name");
+  }
+  if (isWeakPromptAssistRewrite(input)) {
+    throw new Error("prompt assist output is too weak");
+  }
+  return normalized;
 }
 
 function parsePersonaStageObject(rawText: string): Record<string, unknown> {
@@ -1452,6 +1733,8 @@ function parsePersonaInteractionOutput(rawText: string): PersonaGenerationIntera
     return {
       interaction_defaults: parsePersonaInteractionDefaults(record.interaction_defaults),
       guardrails: parsePersonaGuardrails(record.guardrails),
+      voice_fingerprint: parsePersonaVoiceFingerprint(record.voice_fingerprint),
+      task_style_matrix: parsePersonaTaskStyleMatrix(record.task_style_matrix),
     };
   } catch (error) {
     throw new PersonaGenerationParseError(
@@ -2495,7 +2778,7 @@ export class AdminAiControlPlaneStore {
       actionType: "comment",
       globalDraft: document.globalPolicyDraft,
       outputStyle: document.globalPolicyDraft.styleGuide,
-      personaSoul: "(global preview mode)",
+      agentCore: "(global preview mode)",
       agentMemory: formatAgentMemory({
         shortTerm: "",
         longTerm: "",
@@ -2511,7 +2794,7 @@ export class AdminAiControlPlaneStore {
     const tokenBudget = buildTokenBudgetSignal({
       blocks,
       maxInputTokens: DEFAULT_TOKEN_LIMITS.interactionMaxInputTokens,
-      maxOutputTokens: DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+      maxOutputTokens: getInteractionRuntimeBudgets("comment").initial,
     });
 
     const markdown = [
@@ -2582,7 +2865,10 @@ export class AdminAiControlPlaneStore {
       importance?: number | null;
     }>;
   }): Promise<{ personaId: string }> {
-    const username = toPersonaUsername(input.username?.trim() || input.personas.display_name);
+    const username = input.username?.trim()
+      ? normalizeUsernameInput(input.username, { isPersona: true })
+      : derivePersonaUsername(input.personas.display_name);
+    const canonicalPersonaCore = parsePersonaCore(input.personaCore);
 
     const { data: persona, error: personaError } = await this.supabase
       .from("personas")
@@ -2601,16 +2887,21 @@ export class AdminAiControlPlaneStore {
 
     const personaId = persona.id;
 
-    const { error: personaCoreError } = await this.supabase.from("persona_cores").upsert({
-      persona_id: personaId,
-      core_profile: {
-        ...input.personaCore,
-        reference_sources: input.referenceSources,
-        reference_derivation: input.referenceDerivation,
-        originalization_note: input.originalizationNote,
+    const { error: personaCoreError } = await this.supabase.from("persona_cores").upsert(
+      {
+        persona_id: personaId,
+        core_profile: {
+          ...canonicalPersonaCore,
+          reference_sources: input.referenceSources,
+          reference_derivation: input.referenceDerivation,
+          originalization_note: input.originalizationNote,
+        },
+        updated_at: nowIso(),
       },
-      updated_at: nowIso(),
-    });
+      {
+        onConflict: "persona_id",
+      },
+    );
     if (personaCoreError) {
       throw new Error(`save persona core failed: ${personaCoreError.message}`);
     }
@@ -2691,7 +2982,9 @@ export class AdminAiControlPlaneStore {
 
     return {
       persona,
-      personaCore: (asRecord(personaCoreRes.data?.core_profile) ?? {}) as Record<string, unknown>,
+      personaCore: personaCoreRes.data?.core_profile
+        ? parseStoredPersonaCoreProfile(personaCoreRes.data.core_profile)
+        : {},
       personaMemories: [
         ...((memoryRes.data ?? []) as PersonaMemoryStoreRow[]).map((row) => ({
           id: row.id,
@@ -2862,17 +3155,46 @@ export class AdminAiControlPlaneStore {
 
   public async patchPersonaProfile(input: {
     personaId: string;
+    displayName?: string;
     username?: string;
     bio?: string;
     personaCore?: Record<string, unknown>;
-    longMemory?: string;
+    referenceSources?: PersonaGenerationStructured["reference_sources"];
+    referenceDerivation?: string[];
+    originalizationNote?: string;
+    personaMemories?: Array<{
+      memoryType: "memory" | "long_memory";
+      scope: "persona" | "thread" | "task";
+      memoryKey?: string | null;
+      content: string;
+      metadata?: Record<string, unknown>;
+      expiresAt?: string | null;
+      isCanonical?: boolean;
+      importance?: number | null;
+    }>;
   }): Promise<void> {
     const updates: Record<string, unknown> = {};
+    if (input.displayName !== undefined) {
+      const trimmedDisplayName = input.displayName.trim();
+      if (!trimmedDisplayName) {
+        throw new Error("display_name is required");
+      }
+      updates.display_name = trimmedDisplayName;
+    }
     if (input.username !== undefined) {
-      updates.username = toPersonaUsername(input.username);
+      const normalizedUsername = normalizeUsernameInput(input.username, { isPersona: true });
+      const validation = validateUsernameFormat(normalizedUsername, true);
+      if (!validation.valid) {
+        throw new Error(validation.error ?? "invalid persona username");
+      }
+      updates.username = normalizedUsername;
     }
     if (input.bio !== undefined) {
-      updates.bio = input.bio;
+      const trimmedBio = input.bio.trim();
+      if (!trimmedBio) {
+        throw new Error("bio is required");
+      }
+      updates.bio = trimmedBio;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -2885,31 +3207,76 @@ export class AdminAiControlPlaneStore {
       }
     }
 
-    if (input.personaCore) {
-      const { error } = await this.supabase.from("persona_cores").upsert({
-        persona_id: input.personaId,
-        core_profile: input.personaCore,
-        updated_at: nowIso(),
-      });
+    const hasCanonicalCoreUpdate =
+      input.personaCore !== undefined ||
+      input.referenceSources !== undefined ||
+      input.referenceDerivation !== undefined ||
+      input.originalizationNote !== undefined;
+
+    if (hasCanonicalCoreUpdate) {
+      if (!input.personaCore) {
+        throw new Error("personaCore is required when updating canonical persona data");
+      }
+      if (!input.referenceSources) {
+        throw new Error("referenceSources is required when updating canonical persona data");
+      }
+      if (!input.referenceDerivation) {
+        throw new Error("referenceDerivation is required when updating canonical persona data");
+      }
+      if (input.originalizationNote === undefined) {
+        throw new Error("originalizationNote is required when updating canonical persona data");
+      }
+      const canonicalPersonaCore = parsePersonaCore(input.personaCore);
+      const { error } = await this.supabase.from("persona_cores").upsert(
+        {
+          persona_id: input.personaId,
+          core_profile: {
+            ...canonicalPersonaCore,
+            reference_sources: input.referenceSources,
+            reference_derivation: input.referenceDerivation,
+            originalization_note: input.originalizationNote,
+          },
+          updated_at: nowIso(),
+        },
+        {
+          onConflict: "persona_id",
+        },
+      );
       if (error) {
         throw new Error(`update persona core failed: ${error.message}`);
       }
     }
 
-    if (input.longMemory !== undefined) {
-      const trimmed = input.longMemory.trim();
-      if (trimmed.length > 0) {
-        const { error } = await this.supabase.from("persona_memories").insert({
+    if (input.personaMemories) {
+      const { error: deleteError } = await this.supabase
+        .from("persona_memories")
+        .delete()
+        .eq("persona_id", input.personaId)
+        .eq("scope", "persona");
+      if (deleteError) {
+        throw new Error(`clear persona memories failed: ${deleteError.message}`);
+      }
+
+      const memoryRows = input.personaMemories
+        .map((item) => ({
           persona_id: input.personaId,
-          memory_type: "long_memory",
-          scope: "persona",
-          content: trimmed,
-          importance: 0.9,
-          is_canonical: true,
-          metadata: { memoryCategory: "knowledge" },
-        });
-        if (error) {
-          throw new Error(`append long memory failed: ${error.message}`);
+          memory_type: item.memoryType,
+          scope: item.scope,
+          memory_key: item.memoryKey?.trim() || null,
+          content: item.content.trim(),
+          metadata: item.metadata ?? {},
+          expires_at: item.expiresAt ?? null,
+          is_canonical: item.isCanonical ?? false,
+          importance: item.importance ?? null,
+        }))
+        .filter((item) => item.content.length > 0);
+
+      if (memoryRows.length > 0) {
+        const { error: memoryError } = await this.supabase
+          .from("persona_memories")
+          .insert(memoryRows);
+        if (memoryError) {
+          throw new Error(`update persona memories failed: ${memoryError.message}`);
         }
       }
     }
@@ -2995,6 +3362,7 @@ export class AdminAiControlPlaneStore {
       stageGoal: string;
       stageContract: string;
       parse: (rawText: string) => T;
+      validateQuality?: (parsed: T) => string[];
       validatedContext?: Record<string, unknown> | null;
       outputMaxTokens: number;
     }): Promise<T> => {
@@ -3041,6 +3409,33 @@ export class AdminAiControlPlaneStore {
           },
         });
 
+      const invokeQualityRepairAttempt = async (prompt: string) =>
+        invokeLLM({
+          registry,
+          taskType: "generic",
+          routeOverride: invocationConfig.route,
+          modelInput: {
+            prompt,
+            maxOutputTokens: Math.min(
+              PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
+              input.outputMaxTokens,
+              maxOutputTokens,
+            ),
+            temperature: 0.2,
+          },
+          entityId: `persona-generation-preview:${model.id}:${input.stageName}:quality-repair-1`,
+          timeoutMs: invocationConfig.timeoutMs,
+          retries: invocationConfig.retries,
+          onProviderError: async (event) => {
+            await this.recordLlmInvocationError({
+              providerKey: event.providerId,
+              modelKey: event.modelId,
+              error: event.error,
+              errorDetails: event.errorDetails,
+            });
+          },
+        });
+
       const attemptParse = (result: { text: string; error: string | null }) => {
         if (!result.text.trim()) {
           throw new PersonaGenerationParseError(
@@ -3051,33 +3446,87 @@ export class AdminAiControlPlaneStore {
         return input.parse(result.text);
       };
 
-      const first = await invokeStageAttempt(basePrompt, 1);
+      const resolveParsedStage = async (): Promise<T> => {
+        const first = await invokeStageAttempt(basePrompt, 1);
+        try {
+          return attemptParse(first);
+        } catch (error) {
+          if (!(error instanceof PersonaGenerationParseError)) {
+            throw error;
+          }
+          const repairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${input.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
+          try {
+            const second = await invokeStageAttempt(repairPrompt, 2);
+            return attemptParse(second);
+          } catch (retryError) {
+            if (!(retryError instanceof PersonaGenerationParseError)) {
+              throw retryError;
+            }
+            const compactRepairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${input.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
+            const third = await invokeStageAttempt(compactRepairPrompt, 3);
+            try {
+              return attemptParse(third);
+            } catch (compactError) {
+              if (compactError instanceof PersonaGenerationParseError) {
+                throw compactError;
+              }
+              throw retryError;
+            }
+          }
+        }
+      };
+
+      const parsedStage = await resolveParsedStage();
+      const qualityIssues = input.validateQuality?.(parsedStage) ?? [];
+      if (qualityIssues.length === 0) {
+        return parsedStage;
+      }
+
+      const qualityRepairPrompt = [
+        basePrompt,
+        "",
+        "[quality_repair]",
+        `Your previous response for stage ${input.stageName} was valid JSON but failed the quality contract.`,
+        "Rewrite this stage from scratch using the same JSON schema.",
+        "Use natural-language behavioral descriptions, not enum labels, taxonomy tokens, or snake_case identifiers.",
+        "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
+        "Quality issues:",
+        ...qualityIssues.map((issue) => `- ${issue}`),
+        "",
+        "Previous parsed output:",
+        JSON.stringify(parsedStage, null, 2),
+        "",
+        "Return strictly valid JSON only.",
+        "Do not add commentary.",
+      ].join("\n");
+
+      const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt);
+      let repairedStage: T;
       try {
-        return attemptParse(first);
+        repairedStage = attemptParse(qualityRepaired);
       } catch (error) {
         if (!(error instanceof PersonaGenerationParseError)) {
           throw error;
         }
-        const repairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${input.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
-        try {
-          const second = await invokeStageAttempt(repairPrompt, 2);
-          return attemptParse(second);
-        } catch (retryError) {
-          if (!(retryError instanceof PersonaGenerationParseError)) {
-            throw retryError;
-          }
-          const compactRepairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${input.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
-          const third = await invokeStageAttempt(compactRepairPrompt, 3);
-          try {
-            return attemptParse(third);
-          } catch (compactError) {
-            if (compactError instanceof PersonaGenerationParseError) {
-              throw compactError;
-            }
-            throw retryError;
-          }
-        }
+        throw new PersonaGenerationQualityError({
+          stageName: input.stageName,
+          message: `persona generation stage ${input.stageName} quality repair returned invalid JSON`,
+          rawOutput: error.rawOutput,
+          issues: qualityIssues,
+        });
       }
+
+      const repairedQualityIssues = input.validateQuality?.(repairedStage) ?? [];
+      if (repairedQualityIssues.length > 0) {
+        throw new PersonaGenerationQualityError({
+          stageName: input.stageName,
+          message: `persona generation stage ${input.stageName} quality repair failed`,
+          rawOutput: qualityRepaired.text,
+          issues: repairedQualityIssues,
+        });
+      }
+
+      return repairedStage;
     };
 
     const seedStage = await runPersonaGenerationStage({
@@ -3091,8 +3540,12 @@ export class AdminAiControlPlaneStore {
         "reference_derivation:string[],",
         "originalization_note:string.",
         "status should be active or inactive.",
+        "The final persona must be reference-inspired, not reference-cosplay.",
+        "Keep named references inside reference_sources and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
+        "Avoid copying in-universe goals, titles, adversaries, or mixed-language artifacts into the final persona identity.",
       ].join("\n"),
       parse: parsePersonaSeedOutput,
+      validateQuality: validateSeedStageQuality,
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
     });
 
@@ -3104,8 +3557,10 @@ export class AdminAiControlPlaneStore {
         "values{value_hierarchy,worldview,judgment_style},",
         "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
         "value_hierarchy must be an array of {value,priority} objects.",
+        "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
       ].join("\n"),
       parse: parsePersonaValuesAndAestheticOutput,
+      validateQuality: validateValuesStageQuality,
       validatedContext: seedStage,
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
     });
@@ -3132,9 +3587,15 @@ export class AdminAiControlPlaneStore {
       stageContract: [
         "Return one JSON object with keys:",
         "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
-        "guardrails{hard_no,deescalation_style}.",
+        "guardrails{hard_no,deescalation_style},",
+        "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
+        "task_style_matrix{post{entry_shape,body_shape,close_shape,forbidden_shapes},comment{entry_shape,feedback_shape,close_shape,forbidden_shapes}}.",
+        "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
+        "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
+        "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
       ].join("\n"),
       parse: parsePersonaInteractionOutput,
+      validateQuality: validateInteractionStageQuality,
       validatedContext: {
         ...seedStage,
         ...valuesStage,
@@ -3151,6 +3612,8 @@ export class AdminAiControlPlaneStore {
       creator_affinity: contextStage.creator_affinity,
       interaction_defaults: interactionStage.interaction_defaults,
       guardrails: interactionStage.guardrails,
+      voice_fingerprint: interactionStage.voice_fingerprint,
+      task_style_matrix: interactionStage.task_style_matrix,
     };
 
     const memoriesStage = await runPersonaGenerationStage({
@@ -3273,6 +3736,7 @@ export class AdminAiControlPlaneStore {
             "Include at least 1 explicit real reference name.",
             "Before writing the final prompt, first choose at least 1 real famous reference entity.",
             "Describe the persona's worldview, tone, bias, and interaction style.",
+            "Hint at how the persona opens a post or live reply, what metaphor domains it reaches for, how it attacks weak claims, and what praise sounds like when it is genuinely convinced.",
             "Use 1-3 explicit real reference names such as creators, artists, public figures, or fictional characters when they sharpen the persona.",
             "No filler, no explanation, no meta commentary.",
             "Do not mention schema, JSON, database fields, or implementation details.",
@@ -3296,6 +3760,7 @@ export class AdminAiControlPlaneStore {
             "Use the resolved reference as behavioral source material, not just as a name to mention.",
             "The final brief must reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
             "Explicitly sharpen the persona's role or domain, worldview or bias, tone, and interaction style.",
+            "Seed task-facing style behavior: hint at how the persona opens posts or live replies, what metaphor domains it reaches for, how it attacks weak claims, what praise sounds like when convinced, and what tidy shapes it resists.",
             "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
             "If the reference name could be swapped with another without changing the rest of the sentence, the result is too generic.",
             "Do not merely append a reference name to the user's original sentence.",
@@ -3416,20 +3881,7 @@ export class AdminAiControlPlaneStore {
       mode === "random" ? 0.8 : 0.3,
     );
     if (!text) {
-      if (trimmedInput.length > 0) {
-        return ensurePromptAssistReferenceName({
-          text: buildPromptAssistClarityFallback(trimmedInput, resolvedReferenceNames),
-          mode,
-          sourceText: trimmedInput,
-          resolvedReferenceNames,
-        });
-      }
-      return ensurePromptAssistReferenceName({
-        text: "",
-        mode,
-        sourceText: trimmedInput,
-        resolvedReferenceNames,
-      });
+      throw new Error("prompt assist returned empty output");
     }
 
     if (isWeakPromptAssistRewrite({ text, mode, sourceText: trimmedInput })) {
@@ -3447,6 +3899,7 @@ export class AdminAiControlPlaneStore {
         "Use the resolved reference as behavioral source material, not just as a name to mention.",
         "Make the final brief reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
         "Make the role or domain, worldview or bias, tone, and interaction style obvious in the sentence itself.",
+        "Make the brief imply a concrete opening move, recurring metaphor domains, how weak claims get challenged, what praise sounds like when earned, and what kind of tidy post/comment shapes this persona resists.",
         "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
         "If the reference name could be swapped with another without changing the rest of the sentence, the rewrite is still too weak.",
         "Do not simply append a reference name to the original sentence.",
@@ -3466,19 +3919,11 @@ export class AdminAiControlPlaneStore {
       }
     }
 
-    const finalizedText = ensurePromptAssistReferenceName({
+    return validatePromptAssistResult({
       text,
       mode,
-      sourceText: trimmedInput || text,
-      resolvedReferenceNames,
+      sourceText: trimmedInput,
     });
-    if (isWeakPromptAssistRewrite({ text: finalizedText, mode, sourceText: trimmedInput })) {
-      return buildPromptAssistClarityFallback(
-        trimmedInput || finalizedText,
-        resolvedReferenceNames,
-      );
-    }
-    return finalizedText;
   }
 
   public async previewPersonaInteraction(input: {
@@ -3521,11 +3966,19 @@ export class AdminAiControlPlaneStore {
       .map((item) => item.content)
       .join("\n");
     const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
-    const personaCoreText = JSON.stringify(effectivePersonaCore, null, 2);
-    const runtimePersonaProfile = normalizeSoulProfile(effectivePersonaCore).profile;
+    const runtimePersonaProfile = normalizeCoreProfile(effectivePersonaCore).profile;
+    const personaDirectiveActionType = input.taskType === "post" ? "post" : "comment";
     const personaPromptDirectives = derivePromptPersonaDirectives({
+      actionType: personaDirectiveActionType,
       profile: runtimePersonaProfile,
       personaCore: effectivePersonaCore,
+    });
+    const personaCoreSummary = buildInteractionCoreSummary({
+      actionType: input.taskType === "post" ? "post" : "comment",
+      profile: runtimePersonaProfile,
+      personaCore: effectivePersonaCore,
+      shortTermMemory: personaMemory,
+      longTermMemory: longMemoryText,
     });
 
     const blocks = buildPromptBlocks({
@@ -3537,7 +3990,7 @@ export class AdminAiControlPlaneStore {
         username: profile.persona.username,
         bio: profile.persona.bio,
       }),
-      personaSoul: personaCoreText,
+      agentCore: personaCoreSummary,
       agentVoiceContract: personaPromptDirectives.voiceContract.join("\n"),
       agentMemory: formatAgentMemory({
         shortTerm: personaMemory,
@@ -3569,6 +4022,7 @@ export class AdminAiControlPlaneStore {
     });
 
     const assembledPrompt = formatPrompt(blocks);
+    const interactionOutputBudgets = getInteractionRuntimeBudgets(input.taskType);
 
     const invokePreviewAttempt = async (
       prompt: string,
@@ -3600,8 +4054,8 @@ export class AdminAiControlPlaneStore {
     let llmResult = await invokePreviewAttempt(
       assembledPrompt,
       Math.min(
-        model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
-        DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+        model.maxOutputTokens ?? interactionOutputBudgets.initial,
+        interactionOutputBudgets.initial,
       ),
       0.3,
     );
@@ -3615,7 +4069,110 @@ export class AdminAiControlPlaneStore {
 
     let normalizedOutput = llmResult.text.trim();
     let markdown = "";
-    let contractError: string | null = null;
+    let previewAuditDiagnostics: PreviewAuditDiagnostics | null = null;
+
+    const runPersonaAudit = async (
+      actionType: Extract<PromptActionType, "post" | "comment">,
+      renderedOutput: string,
+      failureCode: "persona_audit_invalid" | "persona_repair_invalid",
+    ): Promise<
+      PersonaAuditResult & {
+        auditMode: PersonaOutputAuditPromptMode;
+        compactRetryUsed: boolean;
+      }
+    > => {
+      const observedIssues = detectPersonaVoiceDrift(renderedOutput);
+      let auditMode: PersonaOutputAuditPromptMode = "default";
+      let compactRetryUsed = false;
+      const parseAuditText = (auditText: string): PersonaAuditResult => {
+        try {
+          return parsePersonaAuditResult(auditText);
+        } catch (error) {
+          if (error instanceof PersonaOutputValidationError) {
+            throw new PersonaOutputValidationError({
+              code: failureCode,
+              message: error.message,
+              rawOutput: auditText,
+            });
+          }
+          throw error;
+        }
+      };
+      const runCompactAuditAttempt = async (): Promise<PersonaAuditResult> => {
+        compactRetryUsed = true;
+        auditMode = "compact";
+        const compactAuditPrompt = buildPersonaOutputAuditPrompt({
+          actionType,
+          taskContext: input.taskContext,
+          renderedOutput,
+          directives: personaPromptDirectives,
+          observedIssues,
+          mode: "compact",
+        });
+        const compactAuditResult = await invokePreviewAttempt(
+          compactAuditPrompt,
+          Math.min(
+            model.maxOutputTokens ?? interactionOutputBudgets.compactPersonaAudit,
+            interactionOutputBudgets.compactPersonaAudit,
+          ),
+          0,
+        );
+        const compactAuditText = compactAuditResult.text.trim();
+        if (!compactAuditText) {
+          throw new PersonaOutputValidationError({
+            code: failureCode,
+            message:
+              failureCode === "persona_audit_invalid"
+                ? "Persona audit returned empty output."
+                : "Persona re-audit returned empty output.",
+            rawOutput: compactAuditResult.text,
+          });
+        }
+        return parseAuditText(compactAuditText);
+      };
+      const auditPrompt = buildPersonaOutputAuditPrompt({
+        actionType,
+        taskContext: input.taskContext,
+        renderedOutput,
+        directives: personaPromptDirectives,
+        observedIssues,
+      });
+      const auditResult = await invokePreviewAttempt(
+        auditPrompt,
+        Math.min(
+          model.maxOutputTokens ?? interactionOutputBudgets.personaAudit,
+          interactionOutputBudgets.personaAudit,
+        ),
+        0,
+      );
+      const auditText = auditResult.text.trim();
+      if (!auditText) {
+        const compactAudit = await runCompactAuditAttempt();
+        return {
+          ...compactAudit,
+          auditMode,
+          compactRetryUsed,
+        };
+      }
+      try {
+        const parsedAudit = parseAuditText(auditText);
+        return {
+          ...parsedAudit,
+          auditMode,
+          compactRetryUsed,
+        };
+      } catch (error) {
+        if (auditMode === "default" && isRetryablePersonaAuditParseFailure(error)) {
+          const compactAudit = await runCompactAuditAttempt();
+          return {
+            ...compactAudit,
+            auditMode,
+            compactRetryUsed,
+          };
+        }
+        throw error;
+      }
+    };
 
     if (input.taskType === "post") {
       let parsed = parsePostActionOutput(normalizedOutput);
@@ -3635,7 +4192,10 @@ export class AdminAiControlPlaneStore {
         ].join("\n");
         const repaired = await invokePreviewAttempt(
           repairPrompt,
-          Math.min(DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens, 1200),
+          Math.min(
+            model.maxOutputTokens ?? interactionOutputBudgets.schemaRepair,
+            interactionOutputBudgets.schemaRepair,
+          ),
           0.15,
         );
         if (repaired.text.trim()) {
@@ -3644,37 +4204,117 @@ export class AdminAiControlPlaneStore {
           llmResult = repaired;
         }
       }
-      if (!parsed.error) {
-        const driftIssues = detectPersonaVoiceDrift(parsed.body, {
-          framingSignals: personaPromptDirectives.framingSignals,
+      if (parsed.error) {
+        throw new PersonaOutputValidationError({
+          code: "schema_validation_failed",
+          message: parsed.error,
+          rawOutput: normalizedOutput,
         });
-        if (driftIssues.length > 0) {
-          const repaired = await invokePreviewAttempt(
-            buildPersonaVoiceRepairPrompt({
-              assembledPrompt,
-              rawOutput: normalizedOutput,
-              actionType: "post",
-              directives: personaPromptDirectives,
-              issues: driftIssues,
-            }),
-            Math.min(DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens, 1200),
-            0.15,
-          );
-          if (repaired.text.trim()) {
-            const repairedParsed = parsePostActionOutput(repaired.text.trim());
-            if (!repairedParsed.error) {
-              normalizedOutput = repaired.text.trim();
-              parsed = repairedParsed;
-              llmResult = repaired;
-            }
-          }
-        }
       }
-      contractError = parsed.error;
-      const hashtagsLine = parsed.tags.join(" ").trim();
+
+      const toRenderedPost = () =>
+        [
+          parsed.title ? `# ${parsed.title}` : null,
+          parsed.tags.join(" ").trim() || null,
+          parsed.body.trim(),
+        ]
+          .filter((part): part is string => Boolean(part))
+          .join("\n\n")
+          .trim();
+
+      const initialAudit = await runPersonaAudit("post", toRenderedPost(), "persona_audit_invalid");
+      if (!initialAudit.passes) {
+        const repaired = await invokePreviewAttempt(
+          buildPersonaVoiceRepairPrompt({
+            assembledPrompt,
+            rawOutput: normalizedOutput,
+            actionType: "post",
+            directives: personaPromptDirectives,
+            issues: initialAudit.issues,
+            repairGuidance: initialAudit.repairGuidance,
+            severity: initialAudit.severity,
+            missingSignals: initialAudit.missingSignals,
+          }),
+          Math.min(
+            model.maxOutputTokens ?? interactionOutputBudgets.personaRepair,
+            interactionOutputBudgets.personaRepair,
+          ),
+          0.15,
+        );
+        const repairedText = repaired.text.trim();
+        if (!repairedText) {
+          throw new PersonaOutputValidationError({
+            code: "persona_repair_invalid",
+            message: "Persona repair returned empty output.",
+            issues: initialAudit.issues,
+            repairGuidance: initialAudit.repairGuidance,
+            severity: initialAudit.severity,
+            confidence: initialAudit.confidence,
+            missingSignals: initialAudit.missingSignals,
+            rawOutput: repaired.text,
+          });
+        }
+        const repairedParsed = parsePostActionOutput(repairedText);
+        if (repairedParsed.error) {
+          throw new PersonaOutputValidationError({
+            code: "persona_repair_invalid",
+            message: repairedParsed.error,
+            issues: initialAudit.issues,
+            repairGuidance: initialAudit.repairGuidance,
+            severity: initialAudit.severity,
+            confidence: initialAudit.confidence,
+            missingSignals: initialAudit.missingSignals,
+            rawOutput: repairedText,
+          });
+        }
+        parsed = repairedParsed;
+        normalizedOutput = repairedText;
+        llmResult = repaired;
+        const repairedAudit = await runPersonaAudit(
+          "post",
+          toRenderedPost(),
+          "persona_repair_invalid",
+        );
+        if (!repairedAudit.passes) {
+          throw new PersonaOutputValidationError({
+            code: "persona_repair_failed",
+            message: "Repaired output still failed persona audit.",
+            issues: repairedAudit.issues,
+            repairGuidance: repairedAudit.repairGuidance,
+            severity: repairedAudit.severity,
+            confidence: repairedAudit.confidence,
+            missingSignals: repairedAudit.missingSignals,
+            rawOutput: normalizedOutput,
+          });
+        }
+        previewAuditDiagnostics = {
+          status: "passed_after_repair",
+          issues: initialAudit.issues,
+          repairGuidance: initialAudit.repairGuidance,
+          severity: initialAudit.severity,
+          confidence: initialAudit.confidence,
+          missingSignals: initialAudit.missingSignals,
+          repairApplied: true,
+          auditMode: repairedAudit.auditMode,
+          compactRetryUsed: initialAudit.compactRetryUsed || repairedAudit.compactRetryUsed,
+        };
+      } else {
+        previewAuditDiagnostics = {
+          status: "passed",
+          issues: initialAudit.issues,
+          repairGuidance: initialAudit.repairGuidance,
+          severity: initialAudit.severity,
+          confidence: initialAudit.confidence,
+          missingSignals: initialAudit.missingSignals,
+          repairApplied: false,
+          auditMode: initialAudit.auditMode,
+          compactRetryUsed: initialAudit.compactRetryUsed,
+        };
+      }
+
       markdown = [
         parsed.title ? `# ${parsed.title}` : null,
-        hashtagsLine || null,
+        parsed.tags.join(" ").trim() || null,
         parsed.body.trim(),
       ]
         .filter((part): part is string => Boolean(part))
@@ -3682,29 +4322,105 @@ export class AdminAiControlPlaneStore {
         .trim();
     } else if (input.taskType === "comment") {
       let parsed = parseMarkdownActionOutput(normalizedOutput);
-      const driftIssues = detectPersonaVoiceDrift(parsed.markdown, {
-        framingSignals: personaPromptDirectives.framingSignals,
-      });
-      if (driftIssues.length > 0) {
+      if (!parsed.markdown.trim()) {
+        throw new PersonaOutputValidationError({
+          code: "schema_validation_failed",
+          message: "interaction preview returned empty markdown",
+          rawOutput: normalizedOutput,
+        });
+      }
+      const initialAudit = await runPersonaAudit(
+        "comment",
+        parsed.markdown,
+        "persona_audit_invalid",
+      );
+      if (!initialAudit.passes) {
         const repaired = await invokePreviewAttempt(
           buildPersonaVoiceRepairPrompt({
             assembledPrompt,
             rawOutput: normalizedOutput,
             actionType: "comment",
             directives: personaPromptDirectives,
-            issues: driftIssues,
+            issues: initialAudit.issues,
+            repairGuidance: initialAudit.repairGuidance,
+            severity: initialAudit.severity,
+            missingSignals: initialAudit.missingSignals,
           }),
-          Math.min(DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens, 1200),
+          Math.min(
+            model.maxOutputTokens ?? interactionOutputBudgets.personaRepair,
+            interactionOutputBudgets.personaRepair,
+          ),
           0.15,
         );
-        if (repaired.text.trim()) {
-          const repairedParsed = parseMarkdownActionOutput(repaired.text.trim());
-          if (repairedParsed.markdown.trim()) {
-            normalizedOutput = repaired.text.trim();
-            parsed = repairedParsed;
-            llmResult = repaired;
-          }
+        const repairedText = repaired.text.trim();
+        if (!repairedText) {
+          throw new PersonaOutputValidationError({
+            code: "persona_repair_invalid",
+            message: "Persona repair returned empty output.",
+            issues: initialAudit.issues,
+            repairGuidance: initialAudit.repairGuidance,
+            severity: initialAudit.severity,
+            confidence: initialAudit.confidence,
+            missingSignals: initialAudit.missingSignals,
+            rawOutput: repaired.text,
+          });
         }
+        const repairedParsed = parseMarkdownActionOutput(repairedText);
+        if (!repairedParsed.markdown.trim()) {
+          throw new PersonaOutputValidationError({
+            code: "persona_repair_invalid",
+            message: "Persona repair returned empty markdown.",
+            issues: initialAudit.issues,
+            repairGuidance: initialAudit.repairGuidance,
+            severity: initialAudit.severity,
+            confidence: initialAudit.confidence,
+            missingSignals: initialAudit.missingSignals,
+            rawOutput: repairedText,
+          });
+        }
+        normalizedOutput = repairedText;
+        parsed = repairedParsed;
+        llmResult = repaired;
+        const repairedAudit = await runPersonaAudit(
+          "comment",
+          parsed.markdown,
+          "persona_repair_invalid",
+        );
+        if (!repairedAudit.passes) {
+          throw new PersonaOutputValidationError({
+            code: "persona_repair_failed",
+            message: "Repaired output still failed persona audit.",
+            issues: repairedAudit.issues,
+            repairGuidance: repairedAudit.repairGuidance,
+            severity: repairedAudit.severity,
+            confidence: repairedAudit.confidence,
+            missingSignals: repairedAudit.missingSignals,
+            rawOutput: normalizedOutput,
+          });
+        }
+        previewAuditDiagnostics = {
+          status: "passed_after_repair",
+          issues: initialAudit.issues,
+          repairGuidance: initialAudit.repairGuidance,
+          severity: initialAudit.severity,
+          confidence: initialAudit.confidence,
+          missingSignals: initialAudit.missingSignals,
+          repairApplied: true,
+          auditMode: repairedAudit.auditMode,
+          compactRetryUsed: initialAudit.compactRetryUsed || repairedAudit.compactRetryUsed,
+        };
+      } else {
+        previewAuditDiagnostics = {
+          status: "passed",
+          issues: initialAudit.issues,
+          repairGuidance: initialAudit.repairGuidance,
+          severity: initialAudit.severity,
+          confidence: initialAudit.confidence,
+          missingSignals: initialAudit.missingSignals,
+          repairApplied: false,
+          auditMode: initialAudit.auditMode,
+          compactRetryUsed: initialAudit.compactRetryUsed,
+        };
       }
       markdown = parsed.markdown.trim();
     } else {
@@ -3721,19 +4437,29 @@ export class AdminAiControlPlaneStore {
         assembledPrompt,
         markdown,
         rawResponse: normalizedOutput,
-        renderOk: contractError === null,
-        renderError: contractError,
-        tokenBudget,
+        renderOk: true,
+        renderError: null,
+        tokenBudget: {
+          ...tokenBudget,
+          maxOutputTokens: interactionOutputBudgets.initial,
+        },
+        auditDiagnostics: previewAuditDiagnostics,
       };
     } catch (error) {
+      if (error instanceof PersonaOutputValidationError) {
+        throw error;
+      }
       return {
         assembledPrompt,
         markdown,
         rawResponse: normalizedOutput,
         renderOk: false,
-        renderError:
-          contractError ?? (error instanceof Error ? error.message : "render validation failed"),
-        tokenBudget,
+        renderError: error instanceof Error ? error.message : "render validation failed",
+        tokenBudget: {
+          ...tokenBudget,
+          maxOutputTokens: interactionOutputBudgets.initial,
+        },
+        auditDiagnostics: previewAuditDiagnostics,
       };
     }
   }

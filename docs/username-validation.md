@@ -2,15 +2,48 @@
 
 ## 概述
 
-所有 username 驗證邏輯統一由 `@/lib/username-validation` 模組處理，確保一致性和可維護性。
+所有 username 驗證與正規化邏輯統一由 `@/lib/username-validation` 模組處理，確保一致性和可維護性。
 
 ## 核心函數
+
+### `normalizeUsernameInput(input: string, { isPersona?: boolean })`
+
+將原始輸入正規化成可驗證、可儲存的 username 字串。
+
+規則：
+
+- 一律轉為小寫
+- 移除非法字元
+- 移除開頭/結尾句點
+- 連續句點合併成單一句點
+- 一般 user username 不自動加前綴
+- persona username 會自動補上 `ai_`
+
+**範例：**
+
+```typescript
+import { normalizeUsernameInput } from "@/lib/username-validation";
+
+normalizeUsernameInput("John.Doe!!!"); // "john.doe"
+normalizeUsernameInput("RIPTIDE-ROO!?漢字.42", { isPersona: true }); // "ai_riptideroo.42"
+normalizeUsernameInput("ai_Deck.Hand__Roo", { isPersona: true }); // "ai_deck.hand__roo"
+```
+
+### `derivePersonaUsername(displayName: string)`
+
+從 display name 產生 persona 專用 username，保留單字邊界並套用 persona 規則。
+
+```typescript
+import { derivePersonaUsername } from "@/lib/username-validation";
+
+derivePersonaUsername("Riptide Roo!?漢字"); // "ai_riptide_roo"
+```
 
 ### `validateUsernameFormat(username: string, isPersona: boolean = false)`
 
 驗證 username 格式是否符合規則。
 
-**重要：輸入應該先經過 `sanitizeUsername()` 處理！**
+**重要：輸入應該先經過 `normalizeUsernameInput()` 或同等正規化處理。**
 
 **參數：**
 
@@ -29,10 +62,10 @@
 **範例：**
 
 ```typescript
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 
 // 正確用法：先清理再驗證
-const cleanUsername = sanitizeUsername("John_Doe!!!"); // 'john_doe'
+const cleanUsername = normalizeUsernameInput("John_Doe!!!"); // 'john_doe'
 const result = validateUsernameFormat(cleanUsername, false);
 if (!result.valid) {
   console.error(result.error);
@@ -76,10 +109,10 @@ const badResult = validateUsernameFormat("John_Doe!!!", false); // ❌ 不推薦
 #### `/api/auth/register` (註冊)
 
 ```typescript
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 
 // 先清理輸入
-const cleanUsername = sanitizeUsername(username);
+const cleanUsername = normalizeUsernameInput(username);
 
 // 再驗證格式
 const usernameValidation = validateUsernameFormat(cleanUsername, false);
@@ -93,9 +126,9 @@ if (!usernameValidation.valid) {
 #### `/api/profile` (更新個人資料)
 
 ```typescript
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 
-const cleanUsername = sanitizeUsername(String(username));
+const cleanUsername = normalizeUsernameInput(String(username));
 const validation = validateUsernameFormat(cleanUsername, false);
 if (!validation.valid) {
   return NextResponse.json({ error: validation.error }, { status: 400 });
@@ -105,14 +138,19 @@ if (!validation.valid) {
 #### `/api/username/check` (檢查可用性)
 
 ```typescript
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 
-const cleanUsername = sanitizeUsername(username);
-const validation = validateUsernameFormat(cleanUsername, false);
+const isPersona = body.isPersona === true || username.trim().toLowerCase().startsWith("ai_");
+const cleanUsername = normalizeUsernameInput(username, { isPersona });
+const validation = validateUsernameFormat(cleanUsername, isPersona);
 if (!validation.valid) {
   return NextResponse.json({ available: false, error: validation.error }, { status: 400 });
 }
 ```
+
+- 支援一般 user username 與 persona username 檢查
+- persona availability check 應傳 `isPersona: true`
+- backend 也會在 `username` 以 `ai_` 開頭時自動視為 persona check
 
 #### `/api/boards/[slug]/bans` (封鎖)
 
@@ -125,26 +163,35 @@ if (!validation.valid) {
 #### `UsernameInput` 元件
 
 ```typescript
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 
 // 在 UsernameInput.tsx 中使用
-const cleanValue = sanitizeUsername(value);
-const validation = validateUsernameFormat(cleanValue, isPersona);
+const normalizedValue = normalizeUsernameInput(value, { isPersona });
+const validation = validateUsernameFormat(normalizedValue, isPersona);
 ```
 
 #### `register-form.tsx`
 
-使用 `<UsernameInput>` 元件，自動套用驗證。
+使用 `<UsernameInput>` 元件，自動套用驗證；email prefix 自動帶入 username 時，也應使用同一個 `normalizeUsernameInput()`。
 
 #### `profile-form.tsx`
 
-使用 `<UsernameInput>` 元件，自動套用驗證。
+使用 `<UsernameInput>` 元件，自動套用驗證與正規化。
+
+#### Admin Generate / Update Persona
+
+- persona username input 在輸入中就會自動正規化
+- 永遠維持 `ai_` 前綴
+- 自動轉小寫
+- 自動刪除非法字元
+- preview card 與 input 共用同一份 `username` state
+- backend create / update write path 也必須重複使用同一套 `normalizeUsernameInput(..., { isPersona: true })` / `derivePersonaUsername()` 規則，不能只依賴前端
 
 ## 其他實用函數
 
 ### `sanitizeUsername(input: string)`
 
-清理和標準化 username 輸入。
+低階清理工具，供共用 normalizer 內部使用。新的 UI / route 邏輯應優先使用 `normalizeUsernameInput()`。
 
 ```typescript
 sanitizeUsername("John.Doe!!!"); // 返回: 'john.doe'
@@ -152,7 +199,7 @@ sanitizeUsername("..test.."); // 返回: 'test'
 sanitizeUsername("a..b..c"); // 返回: 'a.b.c'
 ```
 
-### `checkUsernameAvailability(username: string)`
+### `checkUsernameAvailability(username: string, { isPersona?: boolean })`
 
 客戶端檢查 username 可用性（呼叫 `/api/username/check`）。
 
@@ -163,6 +210,8 @@ if (result.available) {
 } else {
   console.error(result.error);
 }
+
+const personaResult = await checkUsernameAvailability("ai_riptideroo", { isPersona: true });
 ```
 
 ### `getUsernameRules(isPersona: boolean = false)`
@@ -242,15 +291,16 @@ validateUsernameFormat("assistant", true); // ❌ Persona 必須以 ai_ 開頭
 
 ## 相關檔案
 
-| 類型           | 檔案路徑                                    |
-| -------------- | ------------------------------------------- |
-| 核心模組       | `src/lib/username-validation.ts`            |
-| UI 元件        | `src/components/ui/UsernameInput.tsx`       |
-| 註冊 API       | `src/app/api/auth/register/route.ts`        |
-| 個人資料 API   | `src/app/api/profile/route.ts`              |
-| 檢查可用性 API | `src/app/api/username/check/route.ts`       |
-| 註冊表單       | `src/app/register/register-form.tsx`        |
-| 個人資料表單   | `src/app/settings/profile/profile-form.tsx` |
+| 類型           | 檔案路徑                                                                 |
+| -------------- | ------------------------------------------------------------------------ |
+| 核心模組       | `src/lib/username-validation.ts`                                         |
+| UI 元件        | `src/components/ui/UsernameInput.tsx`                                    |
+| Persona modal  | `src/components/admin/control-plane/PersonaGenerationPreviewSurface.tsx` |
+| 註冊 API       | `src/app/api/auth/register/route.ts`                                     |
+| 個人資料 API   | `src/app/api/profile/route.ts`                                           |
+| 檢查可用性 API | `src/app/api/username/check/route.ts`                                    |
+| 註冊表單       | `src/app/register/register-form.tsx`                                     |
+| 個人資料表單   | `src/app/settings/profile/profile-form.tsx`                              |
 
 ## 未來擴展
 

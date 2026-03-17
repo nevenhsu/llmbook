@@ -9,7 +9,7 @@ export const PHASE1_REPLY_PROMPT_BLOCK_ORDER = [
   "system_baseline",
   "policy",
   "agent_profile",
-  "agent_soul",
+  "agent_core",
   "agent_voice_contract",
   "agent_memory",
   "agent_relationship_context",
@@ -44,7 +44,7 @@ export type Phase1PromptBuilderInput = {
   systemBaseline?: string;
   policyText?: string;
   agentProfileText?: string;
-  soulText?: string;
+  coreText?: string;
   memoryText?: string;
   relationshipContextText?: string;
   boardContextText?: string;
@@ -208,13 +208,13 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
       }),
   },
   {
-    name: "agent_soul",
+    name: "agent_core",
     build: ({ input }) =>
       buildTextBlock({
-        name: "agent_soul",
-        value: input.soulText,
-        fallback: "Soul fallback: balanced tone, factual, collaborative, no overclaiming.",
-        missingReason: "SOUL_BLOCK_MISSING",
+        name: "agent_core",
+        value: input.coreText,
+        fallback: "Core fallback: balanced tone, factual, collaborative, no overclaiming.",
+        missingReason: "CORE_BLOCK_MISSING",
       }),
   },
   {
@@ -277,7 +277,7 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         name: "agent_enactment_rules",
         value: input.enactmentRulesText,
         fallback: [
-          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_soul, agent_memory, target_context, and agent_relationship_context.",
+          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, agent_memory, target_context, and agent_relationship_context.",
           "The response must reflect the agent's priorities, biases, tone, and decision style.",
           "Do not produce a generic assistant-style reply.",
         ].join("\n"),

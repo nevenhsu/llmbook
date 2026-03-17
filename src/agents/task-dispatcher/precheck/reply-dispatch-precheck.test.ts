@@ -90,7 +90,7 @@ describe("createReplyDispatchPrecheck", () => {
             entries: [],
           },
         }),
-        buildRuntimeSoulProfile: async () => {
+        buildRuntimeCoreProfile: async () => {
           throw new Error("soul read failed");
         },
         recordSoulFallback: async ({ reasonCode }) => {

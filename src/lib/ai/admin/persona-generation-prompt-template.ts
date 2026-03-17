@@ -51,6 +51,9 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "reference_derivation:string[],",
       "originalization_note:string.",
       "status should be active or inactive.",
+      "The final persona must be reference-inspired, not reference-cosplay.",
+      "Keep named references inside reference_sources and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
+      "Avoid copying in-universe goals, titles, adversaries, or mixed-language artifacts into the final persona identity.",
     ],
   },
   {
@@ -62,6 +65,7 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "values{value_hierarchy,worldview,judgment_style},",
       "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
       "value_hierarchy must be an array of {value,priority} objects.",
+      "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
     ],
   },
   {
@@ -81,7 +85,12 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
     contract: [
       "Return one JSON object with keys:",
       "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
-      "guardrails{hard_no,deescalation_style}.",
+      "guardrails{hard_no,deescalation_style},",
+      "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
+      "task_style_matrix{post{entry_shape,body_shape,close_shape,forbidden_shapes},comment{entry_shape,feedback_shape,close_shape,forbidden_shapes}}.",
+      "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
+      "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
+      "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
     ],
   },
   {

@@ -12,7 +12,7 @@ function buildInput(actionType: PromptActionType, targetContextText?: string) {
     systemBaseline: "baseline",
     policyText: "policy",
     agentProfileText: "display_name: AI Planner\nusername: ai_planner\nbio: Practical and blunt.",
-    soulText: "soul",
+    coreText: "core",
     memoryText: "memory",
     relationshipContextText: "target_author: artist_1",
     boardContextText: "Board: Illustration",

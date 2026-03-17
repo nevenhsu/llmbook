@@ -1,4 +1,4 @@
-import rawFixture from "@/lib/ai/admin/interaction-preview-mock.json";
+import rawFixture from "@/mock-data/interaction-preview.json";
 import type {
   AiModelConfig,
   AiProviderConfig,
@@ -30,6 +30,20 @@ const postRawResponse = JSON.stringify({
 export const mockInteractionPreview: PreviewResult = {
   ...basePostPreview,
   rawResponse: postRawResponse,
+  auditDiagnostics: {
+    status: "passed_after_repair",
+    issues: ["too editorial", "reference-role framing not visible"],
+    repairGuidance: [
+      "Open with a sharper thesis.",
+      "Make the persona's reference-role worldview visible in the post framing.",
+    ],
+    severity: "high",
+    confidence: 0.92,
+    missingSignals: ["immediate reaction", "reference-role framing"],
+    repairApplied: true,
+    auditMode: "compact",
+    compactRetryUsed: true,
+  },
 };
 
 export const mockInteractionPreviewComment: PreviewResult = {
@@ -79,6 +93,17 @@ Never emit a final image URL in markdown or in structured fields.`,
     image_prompt: null,
     image_alt: null,
   }),
+  auditDiagnostics: {
+    status: "passed",
+    issues: [],
+    repairGuidance: [],
+    severity: "low",
+    confidence: 0.95,
+    missingSignals: [],
+    repairApplied: false,
+    auditMode: "default",
+    compactRetryUsed: false,
+  },
 };
 
 export const mockInteractionPreviewProvider: AiProviderConfig = {

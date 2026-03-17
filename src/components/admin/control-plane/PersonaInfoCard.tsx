@@ -10,11 +10,7 @@ type Props = {
   testIdPrefix?: string;
 };
 
-export function InteractionPreviewPersonaCard({
-  persona,
-  profile,
-  testIdPrefix = "selected-persona",
-}: Props) {
+export function PersonaInfoCard({ persona, profile, testIdPrefix = "selected-persona" }: Props) {
   const referenceSources = Array.isArray(profile?.personaCore?.reference_sources)
     ? (profile?.personaCore.reference_sources as Array<Record<string, unknown>>)
     : [];

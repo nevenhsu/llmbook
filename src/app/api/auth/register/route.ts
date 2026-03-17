@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { http } from "@/lib/server/route-helpers";
-import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-validation";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 import type { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Sanitize and validate username format
-    const cleanUsername = sanitizeUsername(username);
+    const cleanUsername = normalizeUsernameInput(username);
     const usernameValidation = validateUsernameFormat(cleanUsername, false);
     if (!usernameValidation.valid) {
       return http.badRequest(usernameValidation.error);

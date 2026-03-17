@@ -2,18 +2,21 @@
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { Save, Sparkles, UserPlus } from "lucide-react";
+import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
 import type {
+  PersonaProfile,
   PreviewResult,
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
+import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
 import {
   canSavePersonaGeneration,
   formatPersonaGenerationElapsed,
   type PersonaGenerationModalPhase,
 } from "./persona-generation-modal-utils";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { derivePersonaUsername } from "./control-plane-utils";
 import { PersonaStructuredPreview } from "./PersonaStructuredPreview";
+import { PersonaInfoCard } from "./PersonaInfoCard";
 
 type Props = {
   mode?: "modal" | "page";
@@ -37,10 +40,52 @@ type Props = {
   isSaving: boolean;
   disableActions?: boolean;
   topNotice?: ReactNode;
+  title?: string;
+  loadingDescription?: string;
+  errorDescription?: string;
+  successDescription?: string;
+  primaryActionLabel?: string;
+  completedActionLabel?: string;
   onClose?: () => void;
   onRegenerate: () => Promise<void> | void;
   onSave: () => Promise<void> | void;
 };
+
+function buildGeneratedPersonaCardData(
+  structured: PersonaGenerationStructured,
+  saveForm: {
+    displayName: string;
+    username: string;
+  },
+): { persona: PersonaItem; profile: PersonaProfile } {
+  const displayName = saveForm.displayName;
+  const username = saveForm.username;
+
+  return {
+    persona: {
+      id: "generated-persona-preview",
+      username,
+      display_name: displayName,
+      avatar_url: null,
+      bio: structured.personas.bio,
+      status: structured.personas.status,
+    },
+    profile: {
+      persona: {
+        id: "generated-persona-preview",
+        username,
+        display_name: displayName,
+        bio: structured.personas.bio,
+        status: structured.personas.status,
+      },
+      personaCore: {
+        reference_sources: structured.reference_sources,
+        reference_derivation: structured.reference_derivation,
+      },
+      personaMemories: [],
+    },
+  };
+}
 
 export function PersonaGenerationPreviewSurface({
   mode = "modal",
@@ -56,11 +101,31 @@ export function PersonaGenerationPreviewSurface({
   isSaving,
   disableActions = false,
   topNotice,
+  title = "Persona Generation",
+  loadingDescription = "Generating structured persona data...",
+  errorDescription = "Generation failed. Review the error or regenerate.",
+  successDescription = "Review the generated persona data before saving it to the database.",
+  primaryActionLabel = "Save",
+  completedActionLabel = "Saved",
   onClose,
   onRegenerate,
   onSave,
 }: Props) {
   const canSave = canSavePersonaGeneration(phase, preview) && !disableActions;
+  const trimmedDisplayName = saveForm.displayName.trim();
+  const normalizedUsername = saveForm.username.trim().toLowerCase();
+  const usernameValidation =
+    preview && saveForm.username.trim().length > 0
+      ? validateUsernameFormat(normalizedUsername, true)
+      : { valid: false, error: "AI Persona 的 username 必須以 ai_ 開頭" };
+  const identityError =
+    preview && trimmedDisplayName.length === 0
+      ? "Display name is required."
+      : preview && saveForm.username.trim().length === 0
+        ? "Username is required."
+        : preview && !usernameValidation.valid
+          ? (usernameValidation.error ?? "Invalid username")
+          : null;
   const hasSaved = Boolean(lastSavedAt);
   const actionDisabled = isGenerating || disableActions;
   const showElapsedStatus = phase === "loading" || (phase !== "idle" && elapsedSeconds > 0);
@@ -70,6 +135,10 @@ export function PersonaGenerationPreviewSurface({
       : phase === "error"
         ? "Attempt time"
         : "Generation time";
+  const canPersist = canSave && !identityError;
+  const generatedPersonaCard = preview
+    ? buildGeneratedPersonaCardData(preview.structured, saveForm)
+    : null;
   const content = (
     <>
       {topNotice ? <div className="mb-5">{topNotice}</div> : null}
@@ -104,6 +173,11 @@ export function PersonaGenerationPreviewSurface({
 
           {preview ? (
             <>
+              <PersonaInfoCard
+                persona={generatedPersonaCard!.persona}
+                profile={generatedPersonaCard!.profile}
+                testIdPrefix="generated-persona"
+              />
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="form-control w-full">
                   <label className="label py-1">
@@ -116,10 +190,10 @@ export function PersonaGenerationPreviewSurface({
                     value={saveForm.displayName}
                     onChange={(event) => {
                       const displayName = event.target.value;
-                      setSaveForm({
+                      setSaveForm((prev) => ({
+                        ...prev,
                         displayName,
-                        username: derivePersonaUsername(displayName),
-                      });
+                      }));
                     }}
                     placeholder="e.g. Satoshi Nakamoto"
                   />
@@ -127,22 +201,26 @@ export function PersonaGenerationPreviewSurface({
                 <div className="form-control w-full">
                   <label className="label py-1">
                     <span className="label-text text-xs font-semibold opacity-70">
-                      Username (auto-prefixed with <span className="font-mono">ai_</span>)
+                      Username (must start with <span className="font-mono">ai_</span>)
                     </span>
                   </label>
                   <input
                     className="input input-bordered input-sm focus:input-primary w-full"
                     value={saveForm.username}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const nextUsername = normalizeUsernameInput(event.target.value, {
+                        isPersona: true,
+                      });
                       setSaveForm((prev) => ({
                         ...prev,
-                        username: derivePersonaUsername(event.target.value),
-                      }))
-                    }
+                        username: nextUsername,
+                      }));
+                    }}
                     placeholder="e.g. satoshi"
                   />
                 </div>
               </div>
+              {identityError ? <div className="text-error text-xs">{identityError}</div> : null}
               <PersonaStructuredPreview structured={preview.structured} />
             </>
           ) : (
@@ -177,10 +255,10 @@ export function PersonaGenerationPreviewSurface({
           {isGenerating ? "Generating..." : "Regenerate"}
         </button>
         <button
-          className={`btn btn-primary btn-sm gap-2 ${!canSave || isSaving ? "btn-disabled" : ""}`}
-          disabled={!canSave || isSaving}
+          className={`btn btn-primary btn-sm gap-2 ${!canPersist || isSaving ? "btn-disabled" : ""}`}
+          disabled={!canPersist || isSaving}
           onClick={() => {
-            if (hasSaved || !canSave || isSaving) {
+            if (hasSaved || !canPersist || isSaving) {
               return;
             }
             void onSave();
@@ -194,7 +272,7 @@ export function PersonaGenerationPreviewSurface({
           ) : (
             <>
               <Save className="h-4 w-4" />
-              {hasSaved ? "Saved" : "Save"}
+              {hasSaved ? completedActionLabel : primaryActionLabel}
             </>
           )}
         </button>
@@ -205,13 +283,13 @@ export function PersonaGenerationPreviewSurface({
   if (mode === "modal" && onClose) {
     return (
       <ModalShell
-        title="Persona Generation"
+        title={title}
         description={
           phase === "loading"
-            ? "Generating structured persona data..."
+            ? loadingDescription
             : phase === "error"
-              ? "Generation failed. Review the error or regenerate."
-              : "Review the generated persona data before saving it to the database."
+              ? errorDescription
+              : successDescription
         }
         onClose={onClose}
         footer={footer}
@@ -227,14 +305,14 @@ export function PersonaGenerationPreviewSurface({
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold">
             <UserPlus className="h-5 w-5" />
-            Persona Generation
+            {title}
           </h3>
           <p className="mt-1 text-sm opacity-60">
             {phase === "loading"
-              ? "Generating structured persona data..."
+              ? loadingDescription
               : phase === "error"
-                ? "Generation failed. Review the error or regenerate."
-                : "Review the generated persona data before saving it to the database."}
+                ? errorDescription
+                : successDescription}
           </p>
         </div>
       </div>

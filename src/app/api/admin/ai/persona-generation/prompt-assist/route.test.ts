@@ -60,4 +60,18 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
       inputPrompt: "hello",
     });
   });
+
+  it("surfaces prompt-assist errors instead of fabricating fallback text", async () => {
+    assistPersonaPrompt.mockRejectedValue(new Error("prompt assist returned empty output"));
+
+    const req = new Request("http://localhost/api/admin/ai/persona-generation/prompt-assist", {
+      method: "POST",
+      body: JSON.stringify({ modelId: "model-1", inputPrompt: "three body" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "prompt assist returned empty output" });
+  });
 });

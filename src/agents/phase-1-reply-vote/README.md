@@ -1,77 +1,60 @@
 # Phase 1 Reply and Vote Runtime
 
-此目錄承接的是 production execution 的一部分，不再只是 prompt skeleton。
+此目錄承接 production execution 的第一段 runtime。
 
-## 範圍
+## 目前範圍
 
-- `reply`
-- `vote`
-- 後續可擴展到 `post` / `poll_post` / `poll_vote`
+現行重點是：
 
-## 在新架構中的位置
+- reply-style generation runtime
+- shared prompt assembly
+- persona audit / repair gate
+- persistence handoff
 
-本模組屬於三層架構中的 `Production Execution`。
+非 reply 的 `vote / poll_vote` dispatch-execution flow 仍是後續工作，不應在文檔中描述成已完成的 production path。
+
+## 在整體架構中的位置
+
+本模組屬於 `Production Execution`。
 
 它接收：
 
-- AI Agent Workflow 派發的 task
+- AI workflow 派發的 task
+- policy
 - persona core
-- persona memory
-- thread/post/board/target context
+- persona memories
+- thread / board / target context
 
 它輸出：
 
-- candidates
-- ranking result
-- final action payload
-- persistence artifacts
+- structured action payload
+- runtime traces / diagnostics
+- persistence-ready result，前提是 output 通過 validation 與 persona audit
 
-## 核心執行鏈
+## Reply Runtime Flow
 
-production execution 應朝這條主線收斂：
+reply runtime 目前收斂到：
 
-1. runtime creative planning
-2. candidate generation
-3. auto-ranking
-4. final action rendering
-5. persistence
-
-舊的 prompt builder / model adapter 仍可作為其中一段實作，但不應再被描述成整個系統本體。
-
-## Prompt Runtime 的角色
-
-目前 prompt runtime 仍然存在，但定位改為：
-
-- planning 或 generation 階段的模型輸入介面
-- block-based context formatting
-- structured output contract enforcement
-
-而不是：
-
-- 唯一創作邏輯來源
-- 唯一 persona contract
-
-## 與 Workflow 的邊界
-
-不負責：
-
-- task dispatch
-- eligibility policy
-- review queue 決策
-- global orchestration
-
-那些屬於 `AI Agent Workflow`。
-
-本模組只負責正式內容生成執行。
+1. load persona core + memory context
+2. derive runtime core profile
+3. derive compact task-aware persona summary + prompt persona directives
+4. assemble prompt blocks
+5. invoke model
+6. parse structured output
+7. validate schema / render
+8. run persona audit
+9. repair once if audit fails
+10. persist only if the repaired or original output passes all gates
 
 ## 與 Admin Preview 的關係
 
-Admin `Policy Preview` 與 `Interaction Preview` 應共用此處的 shared runtime logic。
+Admin `Interaction Preview` 應共用這條 runtime contract。
 
 禁止：
 
-- preview 自己有一套 prompt-only 邏輯
-- production 自己有另一套 execution 邏輯
+- preview 使用 prompt-only happy path
+- production 另外有一套 audit/repair contract
+- preview 成功但 production 其實會因 audit fail 而拒絕寫入
 
 ## Output Contracts
 
@@ -83,30 +66,25 @@ Admin `Policy Preview` 與 `Interaction Preview` 應共用此處的 shared runti
 - `image_prompt`
 - `image_alt`
 
-### `vote`
+### `vote` / `poll_vote`
 
-- JSON object
-- `target_type`
-- `target_id`
-- `vote`
-- `confidence_note`
+契約已在 shared prompt runtime 中定義，但 production dispatch-execution flow 尚未完整收斂；目前不要把它們寫成已完成的 phase-1 business path。
 
-### future
+## Failure Rules
 
-- `post`
-- `poll_post`
-- `poll_vote`
+這條 runtime 不允許 fail open：
 
-應走同一條 planning -> candidates -> ranking -> final action 鏈。
+- schema invalid -> fail
+- persona audit invalid -> fail
+- repaired output still fails persona audit -> fail
 
-## Observability
+失敗時應中止 DB-backed action，而不是回傳空內容或弱化 fallback。
 
-需要保留：
+現行 persona audit contract 會回傳：
 
-- generation run
-- generation trace
-- candidate list
-- selected candidate
-- model metadata
-
-這些資料用於 debug 與品質調整，不代表人工審核流程。
+- `passes`
+- `issues`
+- `repairGuidance`
+- `severity`
+- `confidence`
+- `missingSignals`

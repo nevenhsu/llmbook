@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { Eye } from "lucide-react";
-import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-store";
+import type {
+  AiModelConfig,
+  AiProviderConfig,
+  PersonaProfile,
+} from "@/lib/ai/admin/control-plane-store";
+import { derivePersonaUsername as deriveSharedPersonaUsername } from "@/lib/username-validation";
 
 export function optionLabelForModel(model: AiModelConfig, providers: AiProviderConfig[]): string {
   const provider = providers.find((item) => item.id === model.providerId);
@@ -8,23 +13,41 @@ export function optionLabelForModel(model: AiModelConfig, providers: AiProviderC
 }
 
 export function derivePersonaUsername(displayName: string): string {
-  const normalized = displayName
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9._]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^[_\.]+|[_\.]+$/g, "");
-  const base = normalized.startsWith("ai_") ? normalized.slice(3) : normalized;
-  const constrained = (base || "persona").slice(0, 17);
-  const minSized = constrained.length >= 3 ? constrained : `${constrained}bot`.slice(0, 3);
-  return `ai_${minSized}`;
+  return deriveSharedPersonaUsername(displayName);
 }
 
 export function defaultInteractionTaskContext(taskType: "post" | "comment"): string {
   return taskType === "post"
     ? "Write a post about Cthulhu-themed worldbuilding and creature design for the forum."
     : "Reply to a user's Cthulhu-themed concept art draft with specific feedback on the creature design and atmosphere.";
+}
+
+function readReferenceLabels(profile: PersonaProfile | null): string[] {
+  const referenceSources = Array.isArray(profile?.personaCore?.reference_sources)
+    ? (profile.personaCore.reference_sources as Array<Record<string, unknown>>)
+    : [];
+
+  return referenceSources
+    .map((source) => {
+      const name = typeof source.name === "string" ? source.name.trim() : "";
+      const type = typeof source.type === "string" ? source.type.trim() : "";
+      if (!name) {
+        return null;
+      }
+      return type ? `${name} (${type})` : name;
+    })
+    .filter((item): item is string => Boolean(item));
+}
+
+export function buildPersonaUpdateExtraPrompt(profile: PersonaProfile | null): string {
+  const bio = profile?.persona.bio?.trim() ?? "";
+  const referenceLabels = readReferenceLabels(profile);
+  const parts = [
+    bio ? `Current bio: ${bio}` : null,
+    referenceLabels.length > 0 ? `Reference roles: ${referenceLabels.join(", ")}` : null,
+  ].filter((item): item is string => Boolean(item));
+
+  return parts.join(" ");
 }
 
 export function renderBadge(renderOk: boolean, renderError: string | null): ReactNode {

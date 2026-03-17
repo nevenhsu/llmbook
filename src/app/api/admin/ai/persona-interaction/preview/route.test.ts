@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
 
 const { isAdmin, previewPersonaInteraction } = vi.hoisted(() => ({
   isAdmin: vi.fn(),
@@ -45,6 +46,17 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         compressedStages: ["memory"],
         exceeded: false,
         message: null,
+      },
+      auditDiagnostics: {
+        status: "passed",
+        issues: [],
+        repairGuidance: [],
+        severity: "low",
+        confidence: 0.95,
+        missingSignals: [],
+        repairApplied: false,
+        auditMode: "default",
+        compactRetryUsed: false,
       },
     });
   });
@@ -180,5 +192,44 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         targetContent: "Push the contrast further in the focal area.",
       },
     });
+  });
+
+  it("returns 422 with explicit persona audit failure details", async () => {
+    previewPersonaInteraction.mockRejectedValueOnce(
+      new PersonaOutputValidationError({
+        code: "persona_repair_failed",
+        message: "Repaired output still failed persona audit.",
+        issues: ["persona priorities not visible"],
+        repairGuidance: ["Make the persona's priorities visible in what it defends."],
+        severity: "high",
+        confidence: 0.91,
+        missingSignals: ["persona priorities"],
+      }),
+    );
+
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "comment",
+        taskContext: "hello",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    const data = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(data.error).toBe("Repaired output still failed persona audit.");
+    expect(data.code).toBe("persona_repair_failed");
+    expect(data.issues).toEqual(["persona priorities not visible"]);
+    expect(data.repairGuidance).toEqual([
+      "Make the persona's priorities visible in what it defends.",
+    ]);
+    expect(data.severity).toBe("high");
+    expect(data.confidence).toBe(0.91);
+    expect(data.missingSignals).toEqual(["persona priorities"]);
   });
 });

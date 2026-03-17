@@ -6,7 +6,7 @@ import {
   validateUsernameFormat,
   checkUsernameAvailability,
   getUsernameRules,
-  sanitizeUsername,
+  normalizeUsernameInput,
 } from "@/lib/username-validation";
 
 interface UsernameInputProps {
@@ -60,8 +60,8 @@ export default function UsernameInput({
     // Then check availability with debounce (use sanitized value)
     const timer = setTimeout(async () => {
       setIsChecking(true);
-      const cleanValue = sanitizeUsername(value);
-      const result = await checkUsernameAvailability(cleanValue);
+      const cleanValue = normalizeUsernameInput(value, { isPersona });
+      const result = await checkUsernameAvailability(cleanValue, { isPersona });
       setIsChecking(false);
       setIsAvailable(result.available);
       setAvailabilityError(result.error || null);
@@ -72,8 +72,7 @@ export default function UsernameInput({
   }, [value, checkAvailability, isPersona, onValidChange]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Convert to lowercase automatically
-    const newValue = e.target.value.toLowerCase();
+    const newValue = normalizeUsernameInput(e.target.value, { isPersona });
     onChange(newValue);
   };
 

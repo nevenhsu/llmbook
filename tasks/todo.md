@@ -2,304 +2,146 @@
 
 ## Active
 
-- [x] Save the approved persona drift/audit refactor plan to `plans/2026-03-17-persona-drift-audit-refactor-plan.md` before starting implementation
-- [ ] Write the layered refactor plan for persona drift handling before changing implementation code
-- [ ] Keep code-level drift checks limited to universal structural/schema/listicle signals instead of persona-specific framing words
-- [ ] Move persona-specific voice/framing judgment into an English-instruction LLM audit step that evaluates output in the caller-requested target language
-- [ ] Define how language heuristics stay lightweight and optional while audit/repair remain shared across preview and production runtime paths
-- [ ] Remove fail-open fallback for persona audit/repair; if audit or repair fails, stop before any DB-backed action or business write executes
-- [ ] Confirm affected files, migration order, and verification coverage before starting the refactor
+- [x] Switch Persona Generation `Context / Extra Prompt` fields to multiline textareas
+- [x] Remove prompt-assist local fallback synthesis so empty/weak outputs surface as API errors instead of fabricated prompts
+- [x] Unify backend persona username normalization with the shared username helpers across create, update, and availability-check paths
+- [x] Add focused regression coverage for persona username normalization in admin store writes and `/api/username/check`
+- [x] Update username/admin docs so they reflect shared normalization helpers and persona username input auto-normalization
+- [x] Consolidate username normalization into one shared helper used by profile, register, and persona editing flows
+- [x] Improve Persona username input UX so it auto-enforces `ai_` prefix, lowercase-only persona usernames, and invalid-character stripping while typing
+- [x] Remove remaining legacy-format persona/admin compatibility paths so current preview/profile flows only accept the latest contract shapes
+- [x] Fix `/api/admin/ai/personas/[id]` canonical update writes so existing `persona_cores` rows update by `persona_id` instead of inserting duplicate rows
+- [x] Fix Update Persona modal identity source-of-truth so the persona card mirrors editable `display_name` / `username` inputs and never reverts to preview response identity
+- [x] Raise persona-generation stage-4 and retry budgets so natural-language `interaction_and_guardrails` output stops truncating into invalid JSON
+- [x] Enforce reference-inspired-not-cosplay seed-stage quality rules in the shared persona-generation pipeline used by both Generate Persona and Update Persona
+- [x] Consolidate scattered admin mock JSON fixtures into `src/mock-data` and update imports/UI copy
+- [x] Improve `Generate Persona` quality by tightening stage contracts, rejecting machine-label style fields, and adding stage-local quality repair for behavior-heavy stages
+- [x] Add an `Update Persona` card to AI Control Plane that seeds `Context / Extra Prompt` from the selected persona, then reuses the shared generation modal/prompt pipeline with editable `display_name`/`username`, `ai_` username validation, and canonical overwrite semantics
+- [x] Extend persona update API/store contracts to accept full regenerated canonical payloads instead of legacy partial patch fields
+- [x] Sync `Generate Persona -> View Prompt` template preview with the current staged generation contract, including `voice_fingerprint` and `task_style_matrix`
+- [x] Strengthen persona prompt-assist wording so generated briefs imply opening move, metaphor domains, attack/praise style, and task-facing post/comment behavior
+- [x] Extend canonical `persona_core` with `voice_fingerprint` and `task_style_matrix` so `post` / `comment` style fidelity comes from persisted contract, not runtime guesswork
+- [x] Retry truncated/invalid persona audit JSON before failing preview/runtime interaction flows
+- [x] Rename the remaining runtime soul-profile filenames/imports/API surface to core-aligned names
+- [x] Rename shared prompt block and docs contract from `agent_soul` to `agent_core` across preview/runtime
+- [x] Centralize generous task/stage runtime budgets and apply them to preview/runtime without provider-specific branching
+- [x] Replace oversized interaction `agent_core` payloads with compact task-aware persona summaries in generation prompts
+- [x] Make persona directives task-aware for `post` vs `comment`
+- [x] Enrich persona audit contract with severity, confidence, and missingSignals; thread them through repair logic
+- [x] Add audit diagnostics to Interaction Preview UI and preview mocks
+- [x] Update canonical docs for the Phase 3 runtime contract and verify focused tests/diff checks
 
-- [x] Refactor persona drift detection into shared base rules plus language-specific English and Chinese heuristics
-- [x] Add focused Chinese drift-detection tests without routing multilingual output through an English-first translation path
-- [x] Keep persona repair prompts language-agnostic while letting drift detection recognize both English and Chinese editorial/tutorial drift
-- [x] Verify multilingual drift detection changes with focused persona-directive tests and downstream runtime/preview suites
+## Backlog
 
-- [x] Replace persona-derived agent examples with more natural Straw_Hat_Outlaw-style challenge and creative-feedback responses
-- [x] Extend persona drift detection to catch missing immediate reaction, missing loyalty/conflict framing, and overly clean editorial tone
-- [x] Strengthen persona repair prompts to explicitly restore gut reaction, loyalty/authority framing, and anti-editorial voice
-- [x] Verify stronger examples and repair heuristics with focused persona-directive and downstream runtime/preview tests
-
-- [x] Refine `runtime-soul-profile` persona-core adaptation so `responseStyle.tone` comes from voice/stance cues instead of raw creator-bias prose
-- [x] Refine `runtime-soul-profile` persona-core adaptation so `languageSignature.rhythm` and `lexicalTaboos` reflect actual speaking cadence and taboo language cues
-- [x] Refine `runtime-soul-profile` persona-core adaptation so `interactionDoctrine.feedbackPrinciples` produces usable critique/reaction principles instead of raw discussion-strength prose
-- [x] Add focused runtime-soul-profile tests for the new persona-core mapping behavior and verify downstream prompt tests still pass
-
-- [x] Add reference-role guidance to persona prompt derivation so reference sources shape runtime voice, reasoning, and conflict framing
-- [x] Thread reference-role guidance through persona voice contract, enactment rules, in-character examples, and persona-drift repair prompts
-- [x] Add focused tests proving reference-role guidance reaches derived directives and repair prompts
-- [x] Verify the reference-role persona prompting changes with focused vitest coverage and diff checks
-
-- [x] Unify admin interaction-preview prompt assembly and runtime prompt builder so persona behavior tuning applies to the same block structure in preview and production
-- [x] Derive a compact persona voice contract from `persona_core` at runtime instead of relying on raw `agent_soul` JSON plus generic fallback examples
-- [x] Generate persona-specific enactment rules, anti-style rules, and in-character examples from `interaction_defaults`, `values`, `guardrails`, and references
-- [x] Insert the derived voice contract and anti-style instructions into interaction prompt assembly ahead of `task_context`
-- [x] Add persona-compliance repair for post/comment generation when output slips into generic assistant, workshop-critique, or tutorial tone
-- [x] Add focused tests for persona directive derivation, prompt block assembly, and persona-compliance repair with a distinct persona like `Straw_Hat_Outlaw`
-
-- [x] Add an Image Request review collapse to Interaction Preview for `need_image`, `image_prompt`, and `image_alt`
-- [x] Parse image-request data for both post and comment raw responses without changing the existing preview contracts
-- [x] Make the interaction preview sandbox branch preview output by task type so post/comment image states can both be reviewed
-- [x] Verify the new Image Request UI with focused preview-panel and interaction-preview sandbox tests
-
-- [x] Split Interaction Preview post Rendered Preview into labeled Title, Tags, and Body sections
-- [x] Keep comment Rendered Preview body-only without extra labels
-- [x] Add focused tests covering post-labeled render and comment unlabeled render
-- [x] Verify the updated Interaction Preview Rendered Preview UI with focused tests and diff checks
-
-- [x] Add a repair retry for invalid `taskType=post` interaction preview output when the first model response misses required structured fields like `tags`
-- [x] Verify post preview can recover from first-pass `title/body` output by repairing into valid `title/body/tags` JSON
-
-- [x] Add the same explicit language-selection rule to the `comment` interaction output contract
-- [x] Verify comment preview prompt assembly includes the same default-to-English language instruction
-
-- [x] Extend `taskType=post` interaction preview contract to require 1-5 hashtag tags in the model raw response
-- [x] Normalize post tags for downstream storage by stripping leading `#` while keeping raw preview tags unchanged
-- [x] Instruct post generation to use the system-specified language for title/body/tags, defaulting to English when unspecified
-- [x] Update post preview fixtures, docs, and focused tests for the new tags/language contract
-
-- [x] Fix `taskType=post` interaction preview contract so it no longer reuses the comment-style markdown-only JSON shape
-- [x] Require a post-shaped AI output for interaction preview with at least `title` plus body/image fields
-- [x] Update interaction preview rendering, mock fixtures, and focused tests to reflect the new post contract
-- [x] Verify store, route, and preview-sandbox behavior with focused tests and diff checks
-
-- [x] Add a dedicated /preview interaction-preview sandbox that reuses the real admin Interaction Preview flow with local mock data
-- [x] Store the interaction-preview mock payload in a standalone JSON fixture and wire a thin wrapper around it
-- [x] Verify the interaction-preview preview page flow with focused component tests and preview-index wiring
-- [x] Make Interaction Preview task-category switches apply matching Cthulhu-themed default task context
-- [x] Verify task-category changes update both task type and default context together
-- [x] Open Interaction Preview in a modal immediately on Run Preview and show live loading state
-- [x] Match Interaction Preview modal footer UX to Persona Generation with elapsed time and rerun action
-- [x] Disable Run Preview when Task Context / Content is empty and remove the inline preview panel
-- [x] Verify live interaction preview store/route/UI flow with focused tests
-- [x] Make Interaction Preview run a real LLM generation for the current task context instead of returning placeholder markdown
-- [x] Replace inline Interaction Preview output with a modal flow matching Persona Generation loading/error/success UX
-- [x] Disable Run Preview when Task Context / Content is empty and add rerun from the modal footer
-- [x] Verify the new Interaction Preview live-preview flow with focused store/route/UI tests
-- [x] Make Interaction Preview task-context AI assist extend existing content instead of always generating random text
-- [x] Thread current task context through the context-assist API/route/store path
-- [x] Verify task-context assist respects existing content for related generation and still randomizes when empty
-- [x] Remove deprecated persona/memory override fields from Interaction Preview UI and state
-- [x] Delete the override payload path from persona interaction preview route/store/tests
-- [x] Verify Interaction Preview still runs after removing the override contract
-- [x] Refine the Interaction Preview selected-persona card hierarchy so identity and references are visually separated
-- [x] Verify the selected-persona card keeps the new identity/reference structure in the focused UI test
-- [x] Extract a shared model-selection field for Generate Persona and Interaction Preview
-- [x] Replace Interaction Preview `Model Override` with the shared `Model Selection` UI
-- [x] Verify both sections still render and use the shared model selector correctly
-- [x] Add reference-source display to the Interaction Preview selected-persona summary
-- [x] Add an AI action for Task Context / Content to generate random interaction test data
-- [x] Reuse existing admin/persona APIs or store helpers instead of inventing duplicate fetch paths
-- [x] Verify the Interaction Preview UI flow after adding reference display and task-context AI generation
-- [x] Remove the Interaction Preview Apply Route action from the admin UI
-- [x] Delete the now-unused route-model helper wiring tied only to Apply Route
-- [x] Verify Interaction Preview still compiles without the Apply Route path
-- [x] Simplify global select focus CSS after confirming the explicit override works
-- [x] Verify the simplified select focus selectors still express the same theme-aware border behavior
-- [x] Replace the remaining transparent global select focus border override with explicit theme-aware border colors
-- [x] Verify globals.css no longer emits transparent border-color for select focus states
-- [x] Move admin select focus border styling into global.css so all select controls share the same focus treatment
-- [x] Remove redundant per-component select focus border overrides after the global style is in place
-- [x] Verify global select focus styling matches the Target Persona field treatment
-- [x] Restore visible focus border styling for control-plane select inputs
-- [x] Verify select focus styles stay visible after the control-plane update
-- [x] Remove stale PersonaSelector logic introduced during recent bug fixes
-- [x] Simplify PersonaSelector state flow for selected display, editable query, and recent selection fallback
-- [x] Re-run PersonaSelector regression tests after cleanup
-- [x] Normalize Target Persona queries by stripping leading @ before local and remote matching
-- [x] Add regression coverage for @handle edits querying without the @ prefix
-- [x] Verify PersonaSelector still preserves recent selection while using normalized handle search
-- [x] Preserve the last selected persona in Target Persona dropdown while the edited query still matches it
-- [x] Add a regression test for trimming a selected @ai_username and keeping that persona selectable
-- [x] Verify PersonaSelector still shows matching recent selection even when remote results are empty
-- [x] Reproduce the Interaction Preview target-persona delete-to-empty input lock bug
-- [x] Fix PersonaSelector so clearing a selected persona still leaves the field editable
-- [x] Add a focused regression test for delete-to-empty then continue typing
-- [x] Verify the selector flow after the delete-to-empty fix
-- [x] Fix Interaction Preview target-persona field so selecting a persona does not show misleading input loading
-- [x] Keep target-persona input editable and clear the selected persona immediately when the text changes
-- [x] Show the selected target persona avatar alongside @ai_username in Interaction Preview
-- [x] Verify the Interaction Preview target-persona flow with targeted UI tests
-- [x] Reproduce the `AI Policy Verify` workflow failure locally with the same install and test commands
-- [x] Identify the root cause in the failing policy tests or workflow environment
-- [x] Add or update a focused regression test before changing implementation
-- [x] Implement the minimal fix for the `AI Policy Verify` failure
-- [x] Re-run the workflow-equivalent verification and document the result in the review notes
-
-- [x] Remove underline hover styling from preview-page cards and preview card links
-- [x] Verify preview routes keep card hover affordance without text decoration
-- [x] Show persona-generation elapsed time in the modal as persistent status UI, not only inside the loading state
-- [x] Verify the preview flow preserves and displays the final generation duration after loading completes
-- [x] Make prompt-assist writer prompts derive concrete behavior, values, and interaction style from resolved references instead of emitting generic persona language
-- [x] Verify reference-first outputs feel specifically shaped by the resolved reference rather than a reusable template with a pasted name
-- [x] Redesign persona prompt-assist as a reference-first pipeline that resolves at least one relevant reference entity before rewriting the final prompt
-- [x] Support broad reference cues in `Context / Extra Prompt`, including works, eras, domains, styles, genres, countries, personalities, traits, values, and claims
-- [x] Verify prompt-assist stops doing pure sentence expansion and instead returns a brief shaped by retrieved reference entities plus clearer persona dimensions
-- [x] Normalize work/IP title inputs in persona prompt-assist so raw titles like `one piece` rewrite into clear franchise/character-based briefs
-- [x] Verify prompt-assist no longer produces malformed fallback text such as `a one piece` for short title inputs
-- [x] Route non-empty persona prompt-assist input through a fitting reference selection step before optimize generation
-- [x] Verify optimize prompt-assist injects a suitable reference name when the user did not provide one, while still preserving explicit user references
-- [x] Make empty-input persona prompt-assist choose a random concrete reference person before generation instead of relying on a fixed fallback name
-- [x] Verify random prompt-assist returns a real reference prompt and keeps fallback behavior aligned with the same sampled reference
-- [x] Make persona prompt-assist rewrite generic persona requests into clearer, more specific briefs instead of only appending a reference name
-- [x] Add a second-pass quality gate for weak prompt-assist outputs and verify the tightened optimize flow with targeted tests
-- [x] Make persona prompt-assist always return at least one explicit real reference name instead of abstract-only prompts
-- [x] Verify random/optimize/fallback prompt-assist paths all preserve or inject a concrete reference name
-- [x] Add a copy action to the `View Raw JSON` header in persona structured preview without interfering with the collapse toggle
-- [x] Verify the persona preview flow still renders and exposes the new raw-JSON copy affordance
-- [x] Remove the leftover `previewLinkHref` prop from persona generation section contracts and preview harness wiring
-- [x] Verify persona preview flow still renders after removing the preview-link prop path
-- [x] Replace persona modal `Rendered Preview` JSON-style output with a structured card UI for persona data
-- [x] Keep raw JSON available as a secondary collapse while verifying the preview flow still renders the mock persona correctly
-- [x] Make persona `View Prompt` show `[admin_extra_prompt]` as template placeholder text instead of leaking mock/example content
-- [x] Verify prompt preview uses placeholder-only `admin_extra_prompt` text while the editable form input remains unchanged
-- [x] Mark `validated_context` explicitly in the persona `View Prompt` template so staged dependencies are visible before generate
-- [x] Verify prompt preview UI shows which stages inject prior validated output and where that block sits in each raw prompt
-- [x] Raise shared persona-generation stage output budgets again so MiniMax has more headroom per stage
-- [x] Keep preview/runtime/token-budget UI aligned with the higher shared ceilings and verify staged persona tests
-- [x] Align Prompt Assembly stage expanders with DaisyUI `collapse` instead of the current plain `details` styling
-- [x] Improve `Prompt Assembly` UI readability so Stage 1~5 are easier to scan than one long block of text
-- [x] Make Persona Generation `View Prompt` always available and back it with template prompt preview instead of resolved generate output
-- [x] Add a shared persona prompt-template preview builder so admin and preview sandbox use the same assembly/token-budget source before generate
-- [x] Verify pre-generate `View Prompt` behavior with targeted tests and remove the old generate-first dependency
-- [x] Raise persona-generation stage output token budgets and retry caps so providers like MiniMax do not return empty output under an overly tight ceiling
-- [x] Keep preview `Token Budget` aligned with the new persona-generation output ceilings and verify the staged preview tests
-- [x] Align `Prompt Assembly` modal UI structure with `Persona Generation` modal while keeping only prompt/token diagnostics content
-- [x] Reuse the same modal shell rhythm for header/body/footer/actions instead of maintaining a separate ad hoc prompt modal layout
-- [x] Add targeted preview-flow verification for opening `View Prompt` and rendering the aligned modal structure
-- [x] Add a consistent loading treatment for Generate/Regenerate in the persona flow
-- [x] Keep Save disabled before or during Generate/Regenerate and verify that state in the preview harness
-- [x] Extend the preview harness so generate/regenerate loading states are visible for UI review
-- [x] Remove persona generation modal run/save count badges and simplify the header
-- [x] Make Save a single-save-per-generate action with saved-state reset on regenerate
-- [x] Add focused tests for Saved/no-op/regenerate-reset behavior in the preview flow
-- [x] Replace the modal-only persona preview page with the full Generate Persona admin flow backed by mock state
-- [x] Reuse the real PersonaGenerationSection/Modal on `/preview/persona-generation` and hide self-referential preview-only affordances
-- [x] Add targeted tests that exercise Prompt AI and Generate Persona using mock data instead of live API calls
-- [x] Move the persona generation mock preview route to `/preview/persona-generation` and remove the admin-only route
-- [x] Wire the reusable persona preview surface into the new preview page and keep the mock fixture loaded from JSON
-- [x] Add targeted UI verification for the mock preview page and capture preview-routing lessons
-- [x] Diagnose why persona forum replies become agreeable but shallow
-- [x] Define prompt constraints that require subjective stance and discussion advancement
-- [x] Deliver revised prompt blocks and evaluation criteria
-- [x] Design persona-driven creator affinity and composition framework architecture
-- [x] Define required data model changes for grounded creative structuring
-- [x] Produce implementation-ready design doc after discussion alignment
-- [x] Rewrite active AI docs to align with reference-driven persona runtime architecture
-- [x] Remove obsolete prompt-only plan docs and keep one canonical plan set
-- [x] Update persona generation docs to require explicit reference attribution
-- [x] Align minimal schema proposal with existing schema and draft migration SQL
-- [x] Add minimal persona core and unified memory schema plus persona poll vote support
-- [x] Switch runtime soul loader from `persona_souls` to `persona_cores` with a persona-core adapter
-- [x] Switch runtime memory context from legacy memory tables to unified `persona_memories`
-- [x] Extend runtime task/model/type unions and heartbeat payloads for `poll_vote`
-- [x] Move admin control-plane persona persistence off legacy persona tables
-- [x] Drop legacy persona tables and cleanup function from final schema/migrations
-- [x] Cut admin persona generation/preview/save to the canonical `personas + persona_core + reference attribution + persona_memories` contract
-- [x] Write a dedicated implementation plan for the remaining `generate persona` feature flow
-- [x] Let `/admin/ai/control-plane` Prompt AI preserve named reference targets in `Context / Extra Prompt`
-- [x] Replace one-shot persona generation preview with segmented generation and server-side assembly
 - [ ] Implement production dispatch/execution flow for non-reply `vote` / `poll_vote` tasks
+- [ ] Fix persona prompt-assist so short IP/work inputs like `one piece` are recognized as references instead of becoming malformed generic subjects
+- [ ] Verify prompt-assist rewrites work/IP inputs into explicit character or franchise references rather than `a one piece` fallbacks
 
 ## Review
 
-- Root cause: interaction preview treated `taskType=post` exactly like `comment`, so the prompt contract only required `markdown` and the preview parser never expected `title/body` despite the real post creation path requiring `title` and `body`.
-- Fix: split the prompt/output contract so `post` now requires `title`, `body`, and image fields, add a post-specific parser, and render post previews as `# title` plus body markdown while keeping the full raw JSON response available for contract inspection.
-- Preview sandbox alignment: updated the `/preview/interaction-preview` fixture so the mocked post preview shows the same `title/body` shape as the live runtime contract instead of the old comment-style payload.
-- Verification: `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`, `npx vitest run src/app/api/admin/ai/persona-interaction/preview/route.test.ts`, `npx vitest run src/components/admin/control-plane/InteractionPreviewMockPage.test.ts`, and `git diff --check -- <touched files>` all passed.
-- Follow-up contract tightening: `post` now also requires `tags` as 1-5 raw hashtag strings, with language alignment instructions in the prompt (`system-specified language`, else English). The app derives storage-safe tags by stripping `#`; the model is not asked to emit both raw and normalized forms.
-- Verification: `npx vitest run src/lib/ai/prompt-runtime/action-output.test.ts`, `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`, `npx vitest run src/app/api/admin/ai/persona-interaction/preview/route.test.ts src/components/admin/control-plane/InteractionPreviewMockPage.test.ts`, and `git diff --check -- <touched files>` all passed.
-- Reliability fix: interaction preview post generation now performs one repair retry when the first model response is non-empty but violates the required `title/body/tags` JSON contract. The repair prompt keeps the same language and asks only for corrected JSON.
-- Verification: `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts` now covers the first-pass-missing-tags case and passes.
-
-- Root cause for `AI Policy Verify`: `src/lib/ai/policy/policy-control-plane.ts` imports `DEFAULT_DISPATCHER_POLICY` from `src/agents/task-dispatcher/policy/reply-only-policy.ts`, and that module had a top-level `import "@/lib/env"`. In GitHub Actions, where `.env` files and Supabase vars are absent, test startup failed with `Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL` before any policy assertions ran.
-- Fix: remove the unnecessary `@/lib/env` side-effect import from `src/agents/task-dispatcher/policy/reply-only-policy.ts` so the dispatcher policy module stays pure and import-safe in CI.
-- Regression coverage: added `src/agents/task-dispatcher/policy/reply-only-policy.test.ts`, which changes into a temp directory with no `.env` files, unsets the required Supabase vars, dynamically imports the module, and verifies `loadDispatcherPolicy()` still returns the default policy.
-- Verification: `npm test -- src/agents/task-dispatcher/policy/reply-only-policy.test.ts` failed before the fix with the same missing-env error. After the fix, `env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY -u SUPABASE_SERVICE_ROLE_KEY -u SUPABASE_STORAGE_BUCKET npx -y node@20 node_modules/vitest/vitest.mjs run src/agents/task-dispatcher/policy/reply-only-policy.test.ts src/lib/ai/policy/policy-control-plane.test.ts src/lib/ai/policy/reply-interaction-eligibility.test.ts` passed with `3 passed`, `16 passed`.
-
-- Root cause: prompt over-weights persona tone and cooperative brainstorming, but does not require disagreement, judgment, or new thread-value.
-- Fix direction: add explicit reply objective, hard constraints for stance/new angle, anti-sycophancy rules, and evaluation rubric tied to discussion value rather than warmth.
-- Approved new architecture direction: unify `reference-driven persona synthesis`, `runtime creative planning`, and `auto-ranking generation` under shared logic modules used by admin UI, production execution, and AI agent workflow.
-- Runtime strategy: persist persona core and traces, keep creator/framework/knowledge selection runtime-first in V1, and remove old prompt-only plan docs so the new design is the single source of truth.
-- Active docs updated: admin prompt/runtime spec, persona generator docs, phase1 runtime README, and shared AI README now describe the new module boundaries instead of treating prompt assembly or `persona_souls.soul_profile` as the long-term architecture center.
-- Persona generation contract tightened: generated bio must be backed by explicit `reference_sources`, `reference_derivation`, and `originalization_note` so admin preview and runtime can both see who the persona was derived from.
-- Minimal schema direction finalized: keep `personas` and `persona_tasks`, introduce `persona_cores` and unified `persona_memories`, write final outputs directly into existing business tables, and extend `poll_votes` so AI personas can vote on polls.
-- Implemented schema layer only: added `persona_cores`, added unified `persona_memories`, extended `persona_tasks` and `task_intents` for `poll_vote`, extended `ai_thread_memories` task type coverage, and updated `poll_votes` to support either `user_id` or `persona_id`.
-- Verification: `git diff --check -- supabase/schema.sql supabase/migrations/20260312093000_minimal_persona_core_and_poll_vote.sql` passed; schema and migration were also spot-checked with `rg` to confirm matching support for `persona_cores`, `persona_memories`, and persona poll voting.
-- Runtime storage migration is now active for the AI agent path: soul loading reads `persona_cores.core_profile`, memory context reads `persona_memories`, and runtime keeps the previous prompt-facing shape via an adapter instead of dual-writing old tables.
-- Runtime contracts now recognize `poll_vote` across task intents, queue/review/task model unions, LLM task typing, and heartbeat payload ingestion; `poll_votes` events now expose `personaId` in the runtime data source.
-- Verification: targeted vitest suites passed for runtime soul, runtime memory, task dispatch, reply execution, and heartbeat intent collection. Full `tsc --noEmit` still fails on pre-existing unrelated errors outside this migration slice.
-- Admin control-plane persistence now writes persona core and unified persona memories only; there are no remaining `src` SQL reads/writes against `persona_souls`, `persona_memory`, `ai_thread_memories`, or `persona_long_memories`.
-- Legacy tables are removed from `supabase/schema.sql`, a dedicated drop migration was added, and `supabase/verification.sql` was updated to validate `persona_cores` plus `persona_memories` instead of the removed tables.
-- Current migration focus: finish the app-facing persona generation contract so admin control plane and AI agent runtime both use the same canonical `persona_core` payload, without `soulProfile` or split memory payload sections.
-- Persona generation is now cut to the canonical payload in the admin path: preview parser, save route, interaction preview override, and app-facing labels all use `persona_core`, explicit reference attribution, and unified `persona_memories`.
-- Verification: targeted vitest suites passed for persona generation preview, persona interaction preview, persona create route, and persona profile get/patch route. `git diff --check` passed for the touched files.
-- Dedicated implementation handoff is now saved in `docs/plans/2026-03-13-generate-persona-implementation-plan.md` so the feature can be executed task-by-task without re-deriving the contract.
-- Prompt AI on `/admin/ai/control-plane` now treats `Context / Extra Prompt` as a valid place for named references; prompt assist instructions preserve explicit creator/artist/public-figure/fictional-character names instead of genericizing them.
-- Verification: `control-plane-store.persona-prompt-assist`, `persona-generation-preview`, and `persona-generation/preview` route tests all passed, and the touched files pass `git diff --check`.
-- Prompt assist no longer throws `prompt assist returned empty output` for blank model responses; it now falls back to the normalized user prompt when input exists, or to a safe default seed prompt when input is empty.
-- Verification: prompt-assist store and route tests passed after adding explicit empty-output fallback coverage.
-- Persona generation preview now retries once with a shorter repair prompt when the first model response is truncated or invalid JSON, and schema-invalid outputs now surface as 422 with the actual missing-field message instead of a generic JSON parse error.
-- Verification: persona-generation preview store and route tests passed after adding retry and schema-error coverage.
-- Persona generation prompt now constrains nested field shapes and shorter payloads more aggressively, reducing the chance of truncated JSON such as outputs that stop mid-`value_hierarchy`.
-- Persona generation preview now performs a third ultra-compact retry when both the initial response and the first repair response are still truncated JSON, reducing repeated 422s from long persona payloads that stop mid-object.
-- Verification: persona-generation preview and prompt-assist test suites passed after adding third-retry coverage for repeated truncation.
-- New recommended fix direction: stop treating persona generation as a single JSON emission problem and split preview generation into smaller validated stages, while keeping the persisted canonical persona payload unchanged.
-- Persona generation preview now runs in five validated stages (`seed`, `values_and_aesthetic`, `context_and_affinity`, `interaction_and_guardrails`, `memories`) and assembles the canonical payload server-side before returning preview/save data.
-- Verification: staged persona-generation preview store tests passed, and the targeted preview/prompt-assist route suite still passes end-to-end.
-- Persona generation UI now has a dedicated mock review route at `/preview/persona-generation`, backed by a reusable preview surface component and a JSON fixture so layout iteration no longer depends on live preview execution.
-- Verification: `npx vitest run src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts` passed, `git diff --check` passed for the touched preview files, and `rg` confirmed no remaining references to the old admin-only preview route.
-- `/preview/persona-generation` now reuses the real `PersonaGenerationSection` and modal flow, with Prompt AI and Generate Persona backed by local mock state instead of API calls, so the page reflects the actual admin interaction surface rather than a flattened result-only view.
-- Verification: the preview flow test covers Prompt AI mutation, Generate Persona opening the modal, and fixture-backed preview rendering without any live network dependency.
-- Root cause for the missing modal background: the reusable persona modal body no longer carried the expected DaisyUI `modal-box` structure, and this modal also inherited the project-wide transparent `.modal-backdrop` override.
-- Fix: restore `modal-box` on the reusable modal surface and give `PersonaGenerationModal` its own tinted backdrop class so the preview flow keeps a visible overlay without changing other modals globally.
-- Persona generation modal header no longer shows run/save count badges; it now stays focused on the generated persona review state only.
-- Save button behavior is now per-generate: successful preview enables `Save`, failed preview disables it, first successful save flips the label to `Saved`, and any regenerate clears the saved state so one fresh save is allowed again.
-- Verification: preview-flow test now covers first save success toast, Saved no-op clicks, regenerate reset back to Save, and the modal backdrop class.
-- Preview-only save now keeps the modal button in `Saving...` for 1 second before switching to `Saved`, so loading-state spacing and spinner treatment can be reviewed without hitting a live API.
-- Generate and Regenerate now use the same spinner-based loading UI as Save, and the preview harness keeps them in-flight for 1 second so the button state and modal loading treatment can be reviewed visually.
-- Verification: preview-flow test now also asserts `Generating...` appears during both initial Generate and Regenerate, and that Save stays disabled during those loading windows.
-- Persona Generation preview now hides the top token stats bar while keeping the detailed Token Budget panel available below, so the modal review stays focused on the generated content and save flow.
-- Persona generation review now keeps the main modal focused on generated output; `Prompt Assembly` and `Token Budget` are available from a separate `View Prompt` modal beside Generate/Regenerate instead of being embedded inline.
-- `Prompt Assembly` modal now reuses the same shell rhythm as `Persona Generation` modal, including the close button position, bordered header/body/footer layout, and footer action placement, so the preview flow reads as one coherent admin UI.
-- Shared UI naming cleanup: the reusable modal frame is now named generically as `ModalShell` because it no longer contains control-plane-specific behavior.
-- Shared UI placement cleanup: `ModalShell` now lives under `src/components/ui` instead of the admin subtree because it is a generic modal frame, not a control-plane-specific component.
-- Persona generation stage budgets are now higher across the board, and repair/compact retries also get larger output ceilings, so providers like MiniMax are less likely to return empty output when a stage needs more room than the old 650/400/300-style caps allowed.
-- Preview sandbox alignment: the mock model metadata now matches the raised persona-generation max output budget so `/preview/persona-generation` no longer mixes a stale `2950` model ceiling with a newer `3850` token budget payload.
-- Persona-generation output budgets now come from one shared reference module, so runtime stage limits, preview `Token Budget`, sandbox model metadata, and retry-cap tests cannot drift independently.
-- `View Prompt` now shows a shared template prompt preview derived from current policy + extra prompt state, so it is available before generate and no longer depends on resolved post-generation stage context.
-- `Prompt Assembly` UI now renders stage-by-stage cards with per-stage goals and expandable raw prompt sections, instead of one long combined pre block, so Stage 1~5 are easier to review independently.
-- Prompt Assembly stage expanders now use DaisyUI `collapse collapse-arrow`, keeping the per-stage review UI visually consistent with the rest of the admin surface.
-- Persona-generation shared output ceilings are now raised again across stages and retry caps, so MiniMax gets more per-stage headroom without drifting preview/runtime/token-budget values apart.
-- Prompt template preview now marks `validated_context` explicitly for downstream stages so prompt review shows the staged dependency location before any generation runs.
-- Persona `View Prompt` now treats `[admin_extra_prompt]` as a template placeholder instead of echoing mock/example prose, so the prompt preview does not look like it contains a fixed system persona.
-- Persona generation `Rendered Preview` now defaults to a structured card-based UI for identity, values, context, references, and memories, with raw JSON moved behind a secondary collapse for diagnostics.
-- Persona generation section no longer carries a `previewLinkHref` escape hatch; preview routing should be handled by the page shell, not by a leftover optional prop on the shared section component.
-- Persona prompt-assist now guarantees at least one explicit real reference name, using prompt instructions first and a server-side fallback when the model still responds with only abstract descriptors.
-
-## Current State
-
-- AI control plane persona generation uses shared runtime timeout/retry policy.
-- Generate Persona uses a modal with loading state, elapsed timer, cancel support, preview/error display, and save gating.
-- Prompt assist supports:
-  - empty input -> concise English prompt
-  - existing input -> concise same-language optimization
-- Persona generation parse failures now surface raw model output in the modal.
-- Transient model/provider errors such as timeout no longer auto-disable models; hard failures such as insufficient balance still can.
-- Interaction Preview now shows the selected persona's reference sources in the summary row, so operators can verify the current reference anchors before running a preview.
-- Interaction Preview `Task Context / Content` now has an AI helper that generates a random scenario using the chosen model and selected persona, so preview testing no longer depends on hand-written seed content.
-- Verification: `npx vitest run src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts src/app/api/admin/ai/persona-interaction/context-assist/route.test.ts`
-- Generate Persona and Interaction Preview now reuse the same `ModelSelectionField` UI, so model labels and dropdown styling stay aligned across both admin flows.
-- Verification: `npx vitest run src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts`
-- Interaction Preview no longer exposes persona-core or long-memory override controls; the preview route/store now use the persisted persona core and memories directly instead of carrying a dead override contract.
-- Verification: `npx vitest run src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts src/app/api/admin/ai/persona-interaction/preview/route.test.ts`
-- Interaction Preview task-context AI assist now uses the current textarea content as an anchor when present and only falls back to a random scenario when the field is empty.
-- Verification: `npx vitest run src/app/api/admin/ai/persona-interaction/context-assist/route.test.ts src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts`
-- Interaction Preview context-assist now raises the output ceiling and retries once with a shorter prompt before surfacing an explicit empty-output AI error, so transient provider empties get one recovery attempt without hiding real model failures.
-- Verification: `npx vitest run src/lib/ai/admin/control-plane-store.interaction-context-assist.test.ts src/app/api/admin/ai/persona-interaction/context-assist/route.test.ts src/components/admin/control-plane/sections/PersonaInteractionSection.test.ts`
-- Interaction Preview context-assist now uses a shorter helper prompt and larger output ceilings (`900` / `1400`), which is a better fit for MiniMax than the earlier heavier wording with `420` / `640`.
-
-- [x] Rename all MiniMax model references to MiniMax-M2.5 and update paired display labels/model keys
-- [x] Verify no legacy MiniMax model references remain in code, tests, or docs
-- [ ] Fix persona prompt-assist so short IP/work inputs like "one piece" are recognized as references instead of becoming malformed generic subjects
-- [ ] Verify prompt-assist rewrites work/IP inputs into explicit character or franchise references rather than "a one piece" fallbacks
+- Switched the admin Persona Generation / Update `Context / Extra Prompt` control from single-line input to multiline textarea so seeded bio/reference context and manual edits fit the field shape.
+- Removed local prompt-assist fallback synthesis in the admin persona prompt-assist path; empty output, missing explicit reference names, and still-weak final rewrites now return API errors instead of fabricated prompts.
+- Added route/store regression coverage for prompt-assist error surfacing and updated the preview sandbox test to follow the textarea UI.
+- Updated [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) so the persona prompt field and prompt-assist no-fallback behavior are part of the documented contract.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+- Unified backend persona username handling onto the shared `@/lib/username-validation` contract so persona create, persona update, and `/api/username/check` now all reuse the same normalization/validation rules as the client.
+- Added `derivePersonaUsername()` to the shared username library and switched admin persona username derivation plus backend persona create fallback logic onto that one implementation.
+- Extended `/api/username/check` and the shared `checkUsernameAvailability()` client helper to support persona availability checks via `isPersona`, while still inferring persona checks from `ai_` when present.
+- Updated [docs/username-validation.md](/Users/neven/Documents/projects/llmbook/docs/username-validation.md) and [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) so the documented contract matches the new shared backend behavior.
+- Verification:
+  - `npx vitest run src/lib/username-validation.test.ts src/app/api/username/check/route.test.ts src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts src/app/api/admin/ai/personas/route.test.ts 'src/app/api/admin/ai/personas/[id]/route.test.ts' src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/username-validation.ts src/lib/username-validation.test.ts src/components/ui/UsernameInput.tsx src/app/api/username/check/route.ts src/app/api/username/check/route.test.ts src/app/api/auth/register/route.ts src/app/api/profile/route.ts src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts src/components/admin/control-plane/control-plane-utils.tsx docs/username-validation.md docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md tasks/todo.md tasks/lessons.md`
+- Updated [docs/username-validation.md](/Users/neven/Documents/projects/llmbook/docs/username-validation.md) to document `normalizeUsernameInput()`, shared profile/persona normalization rules, and the admin persona modal's auto-normalizing username UX.
+- Updated [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) so `Update Persona` explicitly requires persona username inputs to auto-apply `ai_`, lowercase, and invalid-character stripping during input.
+- Verification:
+  - `git diff --check -- docs/username-validation.md docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md tasks/todo.md tasks/lessons.md`
+- Consolidated username normalization into shared `normalizeUsernameInput(input, { isPersona })` logic and switched persona modal, shared `UsernameInput`, and register email-to-username autofill to use it.
+- Updated `derivePersonaUsername()` to build on the same normalization rules instead of keeping a separate sanitization implementation.
+- Verification:
+  - `npx vitest run src/lib/username-validation.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/username-validation.ts src/lib/username-validation.test.ts src/components/admin/control-plane/PersonaGenerationPreviewSurface.tsx src/components/admin/control-plane/control-plane-utils.tsx src/components/ui/UsernameInput.tsx src/app/register/register-form.tsx tasks/todo.md`
+- Added a shared `normalizePersonaUsernameInput()` helper so persona username editing now normalizes to lowercase, strips invalid characters, and re-applies the `ai_` prefix on every keystroke instead of waiting for validation errors.
+- Wired the Generate/Update Persona modal username input to that helper and added unit/UI regression tests covering `ai_` auto-prefixing plus illegal-character removal.
+- Verification:
+  - `npx vitest run src/lib/username-validation.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/username-validation.ts src/lib/username-validation.test.ts src/components/admin/control-plane/PersonaGenerationPreviewSurface.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts tasks/todo.md`
+- Removed the remaining legacy contract tolerance in the current persona/admin flow by making the persona-generation mock loader require the latest `{ preview: ... }` shape and by making admin persona profile reads strictly parse the latest canonical `persona_core` structure instead of falling back to raw legacy rows.
+- Replaced the old persona-profile fallback test with a strict-contract regression that now expects invalid legacy `persona_core` rows to fail with a canonical missing-field error.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-profile.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/control-plane-store.persona-profile.test.ts src/lib/ai/admin/persona-generation-preview-mock.ts tasks/todo.md tasks/lessons.md`
+- Fixed the admin persona canonical write path so both create and update use `persona_cores.upsert(..., { onConflict: "persona_id" })`, which prevents duplicate-key failures when an existing persona already has a core row.
+- Added a store-level regression test that reproduces the update path and asserts the `persona_id` conflict target is passed into Supabase for `persona_cores` writes.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts 'src/app/api/admin/ai/personas/[id]/route.test.ts'`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts 'src/app/api/admin/ai/personas/[id]/route.test.ts' tasks/todo.md`
+- Seeded `Update Persona` identity from the targeted persona before preview generation begins, then stopped preview responses from resetting `personaSaveForm` on success or regenerate.
+- Changed the modal persona card to render `display_name` / `username` from the editable save form while still using preview bio/reference data, so the card now stays in lockstep with the inputs.
+- Added a hook-level regression test for update-preview seeding/preservation and refreshed the preview sandbox test to cover linked card/input behavior. Also made the shared persona-generation mock loader tolerant of top-level `{ preview: ... }` fixture shape and aligned the memory-count assertion with fixture data.
+- Verification:
+  - `npx vitest run src/hooks/admin/useAiControlPlane.update-persona-preview.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/components/admin/control-plane/PersonaGenerationPreviewSurface.tsx src/hooks/admin/useAiControlPlane.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts src/hooks/admin/useAiControlPlane.update-persona-preview.test.ts src/lib/ai/admin/persona-generation-preview-mock.ts tasks/todo.md tasks/lessons.md`
+- Raised `interaction_and_guardrails` plus shared persona-generation retry caps so the longer natural-language Stage 4 contract has enough output headroom and does not regress into repeated truncation.
+- Added a Stage 4 truncation regression test that retries `interaction_and_guardrails` with the higher repair cap and completes preview generation successfully.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts`
+  - `git diff --check -- src/lib/ai/admin/persona-generation-token-budgets.ts src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts tasks/todo.md tasks/lessons.md`
+- Added shared seed-stage quality checks so persona generation now repairs or rejects over-literal reference cosplay, mixed-language artifacts, and in-universe identity leakage before later stages consume the output.
+- Tightened Stage 1 contracts in runtime/template/mock prompt assembly so persona generation explicitly requires reference-inspired originalization instead of canon-character carryover.
+- Confirmed this applies to both `Generate Persona` and `Update Persona` because update only seeds `Context / Extra Prompt` before entering the same staged generation pipeline.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/persona-generation-prompt-template.ts src/lib/ai/admin/persona-generation-preview-mock.ts src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md src/agents/persona-generator/README.md tasks/todo.md tasks/lessons.md`
+- Moved the admin preview JSON fixtures into `src/mock-data/` so interaction and persona-generation mock payloads now live under one shared folder.
+- Updated mock fixture imports and sandbox copy to point at `src/mock-data/interaction-preview.json` and `src/mock-data/persona-generation-preview.json` instead of feature-local JSON paths.
+- Verification:
+  - `npx vitest run src/components/admin/control-plane/InteractionPreviewMockPage.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/mock-data/interaction-preview.json src/mock-data/persona-generation-preview.json src/lib/ai/admin/interaction-preview-mock.ts src/lib/ai/admin/persona-generation-preview-mock.ts src/components/admin/control-plane/InteractionPreviewMockPage.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.tsx tasks/todo.md tasks/lessons.md`
+- Tightened Stage 2 and Stage 4 persona-generation contracts so `View Prompt`, runtime generation, and preview mocks now explicitly require natural-language persona guidance instead of enum-like style labels.
+- Added stage-local persona-generation quality validation and a single quality-repair retry for behavior-heavy stages, while preserving the existing per-stage JSON/schema repair ladder.
+- Added typed admin preview failures for stage quality repair so `/api/admin/ai/persona-generation/preview` can return `stageName`, `issues`, and `rawOutput` when a stage stays low-quality after repair.
+- Refreshed the persona-generation mock fixture and preview tests so Stage 4 demonstrates natural-language `interaction_defaults`, `voice_fingerprint`, and `task_style_matrix` content instead of machine-label tokens.
+- Updated canonical docs to distinguish persona-generation stage schema repair from stage quality repair and to require natural-language canonical style fields.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/app/api/admin/ai/persona-generation/preview/route.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/persona-generation-token-budgets.ts src/app/api/admin/ai/persona-generation/preview/route.ts src/app/api/admin/ai/persona-generation/preview/route.test.ts src/lib/ai/admin/persona-generation-prompt-template.ts src/lib/ai/admin/persona-generation-preview-mock.ts src/mock-data/persona-generation-preview.json src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts plans/2026-03-17-persona-generation-quality-repair-plan.md tasks/todo.md tasks/lessons.md docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/agents/persona-generator/README.md`
+- Wrote the implementation-ready quality-repair plan to `plans/2026-03-17-persona-generation-quality-repair-plan.md`, separating existing per-stage schema repair from new stage-local quality validation/repair for behavior-heavy persona-generation stages.
+- Wrote the implementation-ready Scheme C plan to `plans/2026-03-17-persona-core-task-style-matrix-plan.md`, defining canonical `voice_fingerprint` and `task_style_matrix` additions for persisted `persona_core`.
+- Extended persona generation, runtime core normalization, prompt directives, and admin/runtime fixtures so `voice_fingerprint` plus `task_style_matrix.post/comment` now act as the canonical source for post/comment style behavior.
+- Updated canonical docs so persona generation and prompt runtime specs describe `voice_fingerprint` and `task_style_matrix` as persisted `persona_core` fields, not runtime-only heuristics.
+- Strengthened the short persona prompt-assist wording and fallback briefs so admin-generated seed prompts now imply opening move, metaphor domains, attack/praise style, and task-facing post/comment behavior instead of only abstract tone/worldview.
+- Added an `Update Persona` card to the Persona tab that seeds `Context / Extra Prompt` from the selected persona's current bio and reference roles, then reuses the same `View Prompt`, staged template, and generation modal pipeline as `Generate Persona`, while still letting admin edit `display_name` / `username` independently with `ai_` validation.
+- Simplified `Update Persona` so it no longer carries a separate prompt-preview branch; the selected persona only seeds `Context / Extra Prompt`, and the shared prompt builder renders whichever card's current prompt text is under review.
+- Promoted the reference-role persona summary card to a generic shared UI component so Update Persona, generation review, and Interaction Preview all render the same reference-aware persona info card.
+- Made admin persona profile reads tolerant of legacy `persona_core` rows so shared persona cards still receive `reference_sources` even when strict canonical parsing fails.
+- Cleared stale selected-persona profile state immediately on persona switches so old reference data and seeded update prompts disappear before the next profile fetch resolves.
+- Unified Generate Persona and Update Persona prompt-assist behavior so update now shares the same assist helper and only differs by its pre-seeded extra prompt content.
+- Extracted the shared Generate/Update Persona card UI into a common prompt-form component so both cards now reuse the same model selection, prompt input, assist status, and footer layout.
+- Upgraded the persona update write path from the old partial patch shape to a canonical overwrite payload covering `display_name`, `username`, `bio`, `persona_core`, references, originalization note, and persona memories.
+- Synced `Generate Persona -> View Prompt` so the staged prompt preview now shows `voice_fingerprint` and `task_style_matrix` in the interaction-and-guardrails contract.
+- Wrote the implementation-ready Phase 3 optimization plan to `plans/2026-03-17-phase-3-persona-runtime-optimization-plan.md`.
+- Locked the budget direction to generous shared task/stage budgets instead of provider-specific branching.
+- Added a new lesson so future runtime-budget changes do not reintroduce provider-specific budget trees without explicit user direction.
+- Implemented shared interaction runtime budgets in `src/lib/ai/prompt-runtime/runtime-budgets.ts` and switched both admin preview and reply runtime onto the same generous task/stage caps.
+- Replaced oversized interaction `agent_core` payloads with compact task-aware persona summaries in preview/runtime generation paths.
+- Renamed the shared prompt block and docs contract from `agent_soul` to `agent_core` across preview/runtime, tests, and fixtures.
+- Made persona directives task-aware for `post` vs `comment`, enriched persona audit output with `severity`, `confidence`, and `missingSignals`, and threaded those signals through repair and admin error responses.
+- Added audit diagnostics to Interaction Preview UI, mocks, and preview results so operators can see pass/repair state, issues, missing signals, and audit mode.
+- Updated canonical docs to describe the compact runtime summary, richer audit contract, and admin diagnostics behavior.
+- Renamed the runtime soul-profile module path and exported API surface to core-aligned names under `src/lib/ai/core/runtime-core-profile.ts`, and updated dependent imports/tests/docs to match.
+- Refreshed the phase-1 integration assertion for model-disabled runtime retries so the expanded rename verification reflects the current fail-and-retry contract instead of an obsolete skip assumption.
+- Extended preview/runtime persona audit retry so truncated or malformed audit JSON also falls back to compact audit mode before failing, and raised shared comment/generic audit budgets to match the longer audit contract.
+- Verification:
+  - `npx vitest run src/lib/ai/prompt-runtime/persona-output-audit.test.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts src/app/api/admin/ai/persona-interaction/preview/route.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts`
+  - `git diff --check -- src/lib/ai/prompt-runtime/runtime-budgets.ts src/lib/ai/prompt-runtime/persona-output-audit.ts src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts src/app/api/admin/ai/persona-interaction/preview/route.test.ts tasks/todo.md tasks/lessons.md`
+- Verification:
+  - `npx vitest run src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts src/hooks/admin/useAiControlPlane.test.ts src/app/api/admin/ai/personas/[id]/route.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts`
+  - `git diff --check -- src/components/admin/control-plane/control-plane-utils.tsx src/lib/ai/admin/control-plane-store.ts src/app/api/admin/ai/personas/[id]/route.ts src/lib/ai/admin/persona-generation-prompt-template.ts src/lib/ai/admin/persona-generation-preview-mock.ts src/components/admin/control-plane/PersonaGenerationPreviewSurface.tsx src/components/admin/control-plane/PersonaGenerationModal.tsx src/hooks/admin/useAiControlPlane.ts src/components/admin/control-plane/sections/PersonaGenerationSection.tsx src/components/admin/AiControlPlanePanel.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts src/app/api/admin/ai/personas/[id]/route.test.ts docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md tasks/todo.md tasks/lessons.md`
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts tasks/todo.md`
+- Verification:
+  - `npx vitest run src/lib/ai/prompt-runtime/persona-output-audit.test.ts src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts src/app/api/admin/ai/persona-interaction/preview/route.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts src/components/admin/control-plane/PreviewPanel.test.ts src/components/admin/control-plane/InteractionPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/ai/prompt-runtime/runtime-budgets.ts src/lib/ai/core/runtime-core-profile.ts src/lib/ai/prompt-runtime/persona-prompt-directives.ts src/lib/ai/prompt-runtime/persona-output-audit.ts src/lib/ai/admin/control-plane-store.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.ts src/components/admin/control-plane/PreviewPanel.tsx src/lib/ai/admin/interaction-preview-mock.ts src/lib/ai/prompt-runtime/persona-output-audit.test.ts src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts src/app/api/admin/ai/persona-interaction/preview/route.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts src/components/admin/control-plane/PreviewPanel.test.ts src/components/admin/control-plane/InteractionPreviewMockPage.test.ts docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md src/lib/ai/README.md src/agents/phase-1-reply-vote/README.md tasks/todo.md`
+  - `npx vitest run src/lib/ai/core/runtime-core-profile.test.ts src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts src/lib/ai/prompt-runtime/persona-output-audit.test.ts src/lib/ai/admin/control-plane-store.preview-global-policy-release.test.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts src/agents/phase-1-reply-vote/orchestrator/reply-prompt-runtime.test.ts src/agents/phase-1-reply-vote/orchestrator/supabase-template-reply-generator.test.ts src/agents/phase-1-reply-vote/orchestrator/phase1-reply-flow.integration.test.ts src/agents/task-dispatcher/precheck/reply-dispatch-precheck.test.ts`
