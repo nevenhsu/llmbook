@@ -270,6 +270,155 @@ function deriveRiskPreference(input: {
   return "balanced";
 }
 
+function containsAny(text: string, patterns: string[]): boolean {
+  const normalized = text.toLowerCase();
+  return patterns.some((pattern) => normalized.includes(pattern));
+}
+
+function derivePersonaTone(input: {
+  defaultStance: string;
+  nonGenericTraits: string[];
+  creatorBiases: string[];
+  humorPreferences: string[];
+}): string[] {
+  const sourceText = [
+    input.defaultStance,
+    ...input.nonGenericTraits,
+    ...input.humorPreferences,
+  ].join(" ");
+
+  const tone = uniqueStrings([
+    containsAny(sourceText, ["impuls", "speaks before thinking"]) ? "impulsive" : null,
+    containsAny(sourceText, ["emotionally direct", "raw emotional honesty"])
+      ? "emotionally direct"
+      : null,
+    containsAny(sourceText, ["reckless optimism", "optimism"]) ? "reckless optimism" : null,
+    containsAny(sourceText, ["blunt conviction", "blunt"]) ? "blunt conviction" : null,
+    containsAny(sourceText, ["fight against authority", "anti-authority", "authority"])
+      ? "anti-authority"
+      : null,
+  ]);
+
+  return tone.length > 0 ? tone.slice(0, 6) : input.creatorBiases.slice(0, 6);
+}
+
+function derivePersonaRhythm(input: {
+  defaultStance: string;
+  nonGenericTraits: string[];
+  humorPreferences: string[];
+}): string {
+  const sourceText = [
+    input.defaultStance,
+    ...input.nonGenericTraits,
+    ...input.humorPreferences,
+  ].join(" ");
+
+  if (
+    containsAny(sourceText, [
+      "speaks before thinking",
+      "impuls",
+      "explosive",
+      "exaggerated reactions",
+      "chaotic",
+      "reckless",
+    ])
+  ) {
+    return "bursty and reactive";
+  }
+  if (containsAny(sourceText, ["measured", "deliberate", "carefully worded"])) {
+    return "measured and deliberate";
+  }
+  if (containsAny(sourceText, ["blunt", "direct"])) {
+    return "direct and clipped";
+  }
+  return DEFAULT_SOUL_PROFILE.languageSignature.rhythm;
+}
+
+function derivePersonaLexicalTaboos(input: {
+  hardNo: string[];
+  tasteBoundaries: string[];
+  dislikedPatterns: string[];
+}): string[] {
+  const sourceText = [...input.hardNo, ...input.tasteBoundaries, ...input.dislikedPatterns].join(
+    " ",
+  );
+  const taboos = uniqueStrings([
+    containsAny(sourceText, ["fake outrage"]) ? "fake outrage" : null,
+    containsAny(sourceText, ["manufactured drama"]) ? "manufactured drama" : null,
+    containsAny(sourceText, ["bootlicking authority", "bootlicking"])
+      ? "bootlicking authority"
+      : null,
+    containsAny(sourceText, ["performative politeness", "虚伪的politeness"])
+      ? "performative politeness"
+      : null,
+    containsAny(sourceText, ["passive-aggressive"]) ? "passive-aggressive behavior" : null,
+    containsAny(sourceText, ["credentialism", "hide behind titles"]) ? "credentialism" : null,
+  ]);
+
+  return taboos.length > 0 ? taboos.slice(0, 6) : input.tasteBoundaries.slice(0, 6);
+}
+
+function derivePersonaFeedbackPrinciples(input: {
+  creativePreferences: string[];
+  creatorDetails: string[];
+  discussionStrengths: string[];
+}): string[] {
+  const sourceText = [
+    ...input.creativePreferences,
+    ...input.creatorDetails,
+    ...input.discussionStrengths,
+  ].join(" ");
+
+  const principles = uniqueStrings([
+    containsAny(sourceText, [
+      "sincerity over polish",
+      "rough but genuine",
+      "honest part",
+      "genuine",
+    ])
+      ? "protect the honest core before polishing"
+      : null,
+    containsAny(sourceText, ["empty rhetoric", "fake authority", "obvious power trips"])
+      ? "cut through empty rhetoric fast"
+      : null,
+    containsAny(sourceText, [
+      "visceral moments",
+      "bold, direct creative expression",
+      "direct creative expression",
+    ])
+      ? "push for vivid stakes and concrete detail"
+      : null,
+    containsAny(sourceText, ["character bonds", "crew dynamics", "found family"])
+      ? "notice the live emotional bond before the clever surface"
+      : null,
+  ]);
+
+  return principles.length > 0 ? principles.slice(0, 6) : input.discussionStrengths.slice(0, 6);
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    const normalized = value.trim();
+    if (!normalized) {
+      continue;
+    }
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
 function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | null {
   const source = asRecord(input);
   if (!source) {
@@ -331,6 +480,37 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
     livedContext?.topics_requiring_runtime_retrieval,
     [],
   );
+  const guardrailHardNo = normalizeStringArray(
+    guardrails?.hard_no,
+    DEFAULT_SOUL_PROFILE.guardrails.hardNo,
+  );
+  const derivedTone = derivePersonaTone({
+    defaultStance: normalizeText(
+      interactionDefaults?.default_stance,
+      DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+    ),
+    nonGenericTraits,
+    creatorBiases,
+    humorPreferences,
+  });
+  const derivedRhythm = derivePersonaRhythm({
+    defaultStance: normalizeText(
+      interactionDefaults?.default_stance,
+      DEFAULT_SOUL_PROFILE.relationshipTendencies.defaultStance,
+    ),
+    nonGenericTraits,
+    humorPreferences,
+  });
+  const derivedLexicalTaboos = derivePersonaLexicalTaboos({
+    hardNo: guardrailHardNo,
+    tasteBoundaries,
+    dislikedPatterns,
+  });
+  const derivedFeedbackPrinciples = derivePersonaFeedbackPrinciples({
+    creativePreferences,
+    creatorDetails,
+    discussionStrengths,
+  });
 
   const tradeoffStyle = judgmentStyle || DEFAULT_SOUL_PROFILE.decisionPolicy.tradeoffStyle;
   const riskPreference = deriveRiskPreference({
@@ -374,10 +554,7 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
       ),
     },
     responseStyle: {
-      tone:
-        creatorBiases.length > 0
-          ? creatorBiases.slice(0, 6)
-          : DEFAULT_SOUL_PROFILE.responseStyle.tone,
+      tone: derivedTone.length > 0 ? derivedTone : DEFAULT_SOUL_PROFILE.responseStyle.tone,
       patterns:
         creatorDetails.length > 0
           ? creatorDetails.slice(0, 6)
@@ -431,8 +608,8 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
     interactionDoctrine: {
       askVsTellRatio: DEFAULT_SOUL_PROFILE.interactionDoctrine.askVsTellRatio,
       feedbackPrinciples:
-        discussionStrengths.length > 0
-          ? discussionStrengths.slice(0, 6)
+        derivedFeedbackPrinciples.length > 0
+          ? derivedFeedbackPrinciples
           : DEFAULT_SOUL_PROFILE.interactionDoctrine.feedbackPrinciples,
       collaborationStance: normalizeText(
         interactionDefaults?.default_stance,
@@ -440,15 +617,15 @@ function adaptPersonaCoreToSoulProfile(input: unknown): RuntimeSoulProfile | nul
       ),
     },
     languageSignature: {
-      rhythm: DEFAULT_SOUL_PROFILE.languageSignature.rhythm,
+      rhythm: derivedRhythm,
       preferredStructures:
         narrativePreferences.length > 0
           ? narrativePreferences.slice(0, 6)
           : DEFAULT_SOUL_PROFILE.languageSignature.preferredStructures,
-      lexicalTaboos: tasteBoundaries,
+      lexicalTaboos: derivedLexicalTaboos,
     },
     guardrails: {
-      hardNo: normalizeStringArray(guardrails?.hard_no, DEFAULT_SOUL_PROFILE.guardrails.hardNo),
+      hardNo: guardrailHardNo,
       deescalationRules: normalizeStringArray(
         guardrails?.deescalation_style,
         DEFAULT_SOUL_PROFILE.guardrails.deescalationRules,

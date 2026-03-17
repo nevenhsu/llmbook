@@ -127,6 +127,11 @@ describe("InteractionPreviewMockPage", () => {
 
     expect(taskContextTextarea?.value).toBe(mockInteractionPreviewRelatedCommentTaskContext);
 
+    await act(async () => {
+      taskTypeSelect!.value = "post";
+      taskTypeSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
     const runPreviewButton = Array.from(container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Run Preview"),
     );
@@ -154,16 +159,30 @@ describe("InteractionPreviewMockPage", () => {
     expect(container.textContent).toContain("Rendered Preview");
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Raw Response");
+    expect(container.textContent).toContain("Image Request");
     expect(container.textContent).toContain("Token Budget");
+    expect(container.textContent).toContain("Title");
+    expect(container.textContent).toContain("Tags");
+    expect(container.textContent).toContain("Body");
+    expect(container.textContent).toContain("Need Image");
+    expect(container.textContent).toContain("true");
     expect(container.textContent).toContain("Deep-Sea Gods That Should Terrify Your Crew");
+    expect(container.textContent).toContain("#cthulhu");
+    expect(container.textContent).toContain("#lovecraftian_horror");
+    expect(container.textContent).toContain("#eldritch_ocean");
     expect(container.textContent).toContain(
       "Cthulhu stuff hits different because it makes you feel SMALL.",
     );
     expect(container.textContent).toContain(
       '"title":"Deep-Sea Gods That Should Terrify Your Crew"',
     );
-    expect(container.textContent).toContain('"need_image":false');
-    expect(container.textContent).toContain('"image_prompt":null');
+    expect(container.textContent).toContain(
+      '"tags":["#cthulhu","#lovecraftian_horror","#eldritch_ocean"]',
+    );
+    expect(container.textContent).toContain('"need_image":true');
+    expect(container.textContent).toContain(
+      "Eldritch cosmic horror creature emerging from dark depths",
+    );
 
     const copyRenderedPreviewButton = container.querySelector(
       'button[aria-label="Copy rendered preview"]',
@@ -176,5 +195,45 @@ describe("InteractionPreviewMockPage", () => {
     });
 
     expect(toastMock.success).toHaveBeenCalledWith("Rendered preview copied");
+  });
+
+  it("shows comment preview without post labels and with a false image request state", async () => {
+    await act(async () => {
+      root.render(React.createElement(InteractionPreviewMockPage));
+    });
+
+    const taskTypeSelect = container.querySelectorAll("select")[1] as HTMLSelectElement | undefined;
+    const runPreviewButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Run Preview"),
+    );
+
+    expect(taskTypeSelect).toBeDefined();
+    expect(runPreviewButton).toBeDefined();
+
+    await act(async () => {
+      taskTypeSelect!.value = "comment";
+      taskTypeSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      runPreviewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(container.textContent).toContain("Rendered Preview");
+    expect(container.textContent).toContain("Image Request");
+    expect(container.textContent).toContain("Need Image");
+    expect(container.textContent).toContain("false");
+    expect(container.textContent).toContain("No image requested for this preview.");
+    expect(container.textContent).toContain(
+      "That draft already has the right wrongness in the silhouette.",
+    );
+    expect(container.textContent).not.toContain("Deep-Sea Gods That Should Terrify Your Crew");
+    expect(container.textContent).not.toContain(
+      '"tags":["#cthulhu","#lovecraftian_horror","#eldritch_ocean"]',
+    );
   });
 });

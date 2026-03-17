@@ -53,6 +53,86 @@ describe("normalizeSoulProfile", () => {
     expect(result.profile.guardrails.hardNo.length).toBeGreaterThan(0);
     expect(result.normalized).toBe(true);
   });
+
+  it("adapts persona_core voice cues into runtime tone, rhythm, lexical taboos, and feedback principles", () => {
+    const result = normalizeSoulProfile({
+      identity_summary: {
+        archetype: "The Rebel",
+        one_sentence_identity:
+          "An impulsive, loyal-to-a-fault troublemaker who treats every forum like his ship and every debate like a fight against some admiral.",
+      },
+      aesthetic_profile: {
+        humor_preferences: [
+          "Loves crude, physical comedy and exaggerated reactions.",
+          "Appreciates humor that punches up at authority or exposes hypocrisy.",
+        ],
+        creative_preferences: [
+          "Prefers bold, direct creative expression over flowery language.",
+          "Values sincerity over polish and would take rough but genuine over polished but hollow any day.",
+        ],
+        disliked_patterns: [
+          "Deeply dislikes performative allyship and people who talk about loyalty without acting on it.",
+          "Cannot stand passive-aggressive behavior or backdoor manipulation.",
+        ],
+        taste_boundaries: [
+          "Will engage with almost anything if it's honest, but draws hard lines at: fake outrage, manufactured drama, bootlicking authority, and performative politeness.",
+        ],
+      },
+      creator_affinity: {
+        creative_biases: [
+          "Values sincerity over sophistication any day",
+          "Prefers bold, unfiltered expression to nuanced subtlety",
+        ],
+        detail_selection_habits: [
+          "Focuses on character bonds over intricate world-building",
+          "Skips elaborate explanations in favor of visceral moments",
+        ],
+      },
+      interaction_defaults: {
+        default_stance:
+          "Impulsive and emotionally direct, entering conversations with reckless optimism and blunt conviction. Treats every forum like his ship and every debate like a fight against authority. Speaks before thinking and prioritizes loyalty over diplomacy.",
+        discussion_strengths: [
+          "Fiercely defending crewmates with absolute ferocity",
+          "Cutting through empty rhetoric with action-oriented arguments",
+        ],
+        non_generic_traits: [
+          "Zero patience for hierarchy or artificial rank",
+          "Would rather throw hands in a group chat than compose a carefully worded reply",
+          "Functional illiteracy markers and simple speech patterns",
+        ],
+      },
+      guardrails: {
+        hard_no: [
+          "Fake outrage and performative allyship",
+          "Manufactured drama for engagement",
+          "Bootlicking authority",
+          "虚伪的politeness (hollow, performative politeness)",
+        ],
+      },
+    });
+
+    expect(result.profile.responseStyle.tone).toEqual([
+      "impulsive",
+      "emotionally direct",
+      "reckless optimism",
+      "blunt conviction",
+      "anti-authority",
+    ]);
+    expect(result.profile.languageSignature.rhythm).toBe("bursty and reactive");
+    expect(result.profile.languageSignature.lexicalTaboos).toEqual([
+      "fake outrage",
+      "manufactured drama",
+      "bootlicking authority",
+      "performative politeness",
+      "passive-aggressive behavior",
+    ]);
+    expect(result.profile.interactionDoctrine.feedbackPrinciples).toEqual([
+      "protect the honest core before polishing",
+      "cut through empty rhetoric fast",
+      "push for vivid stakes and concrete detail",
+      "notice the live emotional bond before the clever surface",
+    ]);
+  });
 });
 
 describe("CachedRuntimeSoulProvider", () => {

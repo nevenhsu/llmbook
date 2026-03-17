@@ -1,6 +1,10 @@
 import toast from "react-hot-toast";
 import { Copy, Eye, Layers } from "lucide-react";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
+import {
+  parseMarkdownActionOutput,
+  parsePostActionOutput,
+} from "@/lib/ai/prompt-runtime/action-output";
 import SafeHtml from "@/components/ui/SafeHtml";
 import { renderBadge } from "./control-plane-utils";
 
@@ -32,6 +36,22 @@ export function PreviewPanel({
 
   const budget = preview.tokenBudget;
   const rawResponse = preview.rawResponse ?? preview.markdown;
+  const postOutput = preview.rawResponse ? parsePostActionOutput(preview.rawResponse) : null;
+  const shouldRenderStructuredPost =
+    Boolean(postOutput) &&
+    !postOutput?.error &&
+    Boolean(postOutput?.title) &&
+    postOutput.body.trim().length > 0 &&
+    postOutput.tags.length > 0;
+  const imageRequest = preview.rawResponse
+    ? shouldRenderStructuredPost && postOutput
+      ? postOutput.imageRequest
+      : parseMarkdownActionOutput(preview.rawResponse).imageRequest
+    : {
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      };
   const usagePercent = budget.maxInputTokens
     ? Math.round((budget.estimatedInputTokens / budget.maxInputTokens) * 100)
     : 0;
@@ -79,7 +99,36 @@ export function PreviewPanel({
           </div>
           <div className="collapse-content">
             <div className="rounded-lg border p-3">
-              <SafeHtml markdown={preview.markdown} className="tiptap-html" />
+              {shouldRenderStructuredPost && postOutput ? (
+                <div className="space-y-4">
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Title
+                    </p>
+                    <p className="text-base font-semibold">{postOutput.title}</p>
+                  </section>
+                  <section className="space-y-2">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Tags
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {postOutput.tags.map((tag) => (
+                        <span key={tag} className="badge badge-outline">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="space-y-2">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Body
+                    </p>
+                    <SafeHtml markdown={postOutput.body} className="tiptap-html" />
+                  </section>
+                </div>
+              ) : (
+                <SafeHtml markdown={preview.markdown} className="tiptap-html" />
+              )}
             </div>
           </div>
         </details>
@@ -99,6 +148,37 @@ export function PreviewPanel({
             <pre className="bg-base-200 max-h-64 overflow-auto rounded p-3 text-xs whitespace-pre-wrap">
               {rawResponse}
             </pre>
+          </div>
+        </details>
+        <details className="collapse-arrow border-base-300 collapse rounded-lg border">
+          <summary className="collapse-title text-sm font-semibold">Image Request</summary>
+          <div className="collapse-content">
+            <div className="space-y-4 rounded-lg border p-3">
+              <section className="space-y-1.5">
+                <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                  Need Image
+                </p>
+                <p className="font-medium">{imageRequest.needImage ? "true" : "false"}</p>
+              </section>
+              {imageRequest.needImage ? (
+                <>
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Image Prompt
+                    </p>
+                    <p className="text-sm leading-6">{imageRequest.imagePrompt ?? "None"}</p>
+                  </section>
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Image Alt
+                    </p>
+                    <p className="text-sm leading-6">{imageRequest.imageAlt ?? "None"}</p>
+                  </section>
+                </>
+              ) : (
+                <p className="text-sm opacity-70">No image requested for this preview.</p>
+              )}
+            </div>
           </div>
         </details>
         {showTokenBudgetSection ? (

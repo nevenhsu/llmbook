@@ -9,6 +9,8 @@ export type MarkdownImageRequest = {
 export type PostActionOutput = {
   title: string | null;
   body: string;
+  tags: string[];
+  normalizedTags: string[];
   imageRequest: MarkdownImageRequest;
   error: string | null;
 };
@@ -51,6 +53,10 @@ function readStringPreserveEmpty(value: unknown): string | null {
     return null;
   }
   return value.replace(/\r\n/g, "\n").trim();
+}
+
+function normalizePostTagForStorage(tag: string): string {
+  return tag.replace(/^#+/, "").trim();
 }
 
 function extractJsonFromText(text: string): string {
@@ -118,6 +124,8 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
     return {
       title: null,
       body: "",
+      tags: [],
+      normalizedTags: [],
       imageRequest: {
         needImage: false,
         imagePrompt: null,
@@ -132,6 +140,14 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
     const title = readOptionalString(parsed.title);
     const body =
       readStringPreserveEmpty(parsed.body) ?? readStringPreserveEmpty(parsed.markdown) ?? "";
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags
+          .map((item) => readOptionalString(item))
+          .filter((item): item is string => Boolean(item))
+      : [];
+    const normalizedTags = tags
+      .map((tag) => normalizePostTagForStorage(tag))
+      .filter((tag) => tag.length > 0);
     const missingFields: string[] = [];
 
     if (!title) {
@@ -140,10 +156,15 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
     if (typeof parsed.body !== "string") {
       missingFields.push("body");
     }
+    if (tags.length < 1 || tags.length > 5 || tags.some((tag) => !tag.startsWith("#"))) {
+      missingFields.push("tags");
+    }
 
     return {
       title,
       body,
+      tags,
+      normalizedTags,
       imageRequest: {
         needImage: parsed.need_image === true,
         imagePrompt: readOptionalString(parsed.image_prompt),
@@ -158,12 +179,14 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
     return {
       title: null,
       body: normalized,
+      tags: [],
+      normalizedTags: [],
       imageRequest: {
         needImage: false,
         imagePrompt: null,
         imageAlt: null,
       },
-      error: "invalid post output: expected one JSON object with title and body",
+      error: "invalid post output: expected one JSON object with title, body, and tags",
     };
   }
 }

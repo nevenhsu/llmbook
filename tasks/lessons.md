@@ -6,6 +6,9 @@
 - After a user correction, update this file with the rule that would have prevented the mistake.
 - Before claiming success, run targeted tests and/or focused typecheck on touched areas.
 - If the user says "update docs first", finish the canonical doc and contract changes before continuing with code migration.
+- If the user explicitly asks for a plan before refactoring, stop implementation work and deliver the confirmed plan first; do not continue reshaping the architecture in code until that plan is approved.
+- For AI write paths, do not fail open when persona audit or repair breaks; if the system cannot produce a policy-compliant, audit-approved result, block the DB write instead of silently saving a weaker fallback.
+- For non-trivial refactors that need confirmation, do not leave the plan as chat-only context; save the agreed approach under `/plans/*.md` before implementation starts.
 
 ## Prompt / AI Contracts
 
@@ -107,3 +110,9 @@
 - Keep default preview task type and default preview text semantically aligned; if the default scenario is "publish a post", do not leave the task type on comment response.
 - If task category changes imply a different kind of seed content, update the default task-context text in the same interaction; do not leave a comment-oriented seed under post mode or vice versa.
 - Do not let `taskType=post` inherit the `comment` output contract by convenience; post previews and runtime prompts must require post-shaped fields like `title` and `body`, because operators use raw response inspection to verify schema compliance.
+- For AI-generated post tags, keep the LLM contract limited to raw hashtag strings (for example `#cthulhu`); derive storage-safe normalized tags in app code instead of asking the model for both forms.
+- When a language-selection rule applies to one generated interaction contract, mirror it across sibling contracts like `post` and `comment`; otherwise operators get inconsistent multilingual behavior between closely related actions.
+- If a structured LLM contract is strict enough that providers often miss one required field, do not silently relax the contract; keep the schema strict and add a focused repair retry that rewrites the first response into valid JSON.
+- In interaction preview review UI, do not render post outputs as one undifferentiated markdown blob; label `Title`, `Tags`, and `Body` explicitly, while keeping comment previews body-only because they do not carry post fields.
+- If interaction preview output includes image-generation fields, expose them in a dedicated review card with explicit `Need Image` true/false state and text-only prompt/alt fields; do not force operators to inspect raw JSON just to see whether an image was requested.
+- Drift detection must keep shared rules generic; never hardcode one persona's framing words (for example Luffy-style `crew/loyalty/authority`) into the base detector. Pass persona-derived framing signals separately so other personas are not judged by the wrong voice markers.

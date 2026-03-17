@@ -203,15 +203,21 @@ describe("generateReplyTextWithPromptRuntime", () => {
     const relationshipBlock =
       result.promptBlocks.find((block) => block.name === "agent_relationship_context")?.content ??
       "";
+    const voiceContractBlock =
+      result.promptBlocks.find((block) => block.name === "agent_voice_contract")?.content ?? "";
     const enactmentBlock =
       result.promptBlocks.find((block) => block.name === "agent_enactment_rules")?.content ?? "";
+    const antiStyleBlock =
+      result.promptBlocks.find((block) => block.name === "agent_anti_style_rules")?.content ?? "";
     const examplesBlock =
       result.promptBlocks.find((block) => block.name === "agent_examples")?.content ?? "";
 
     expect(blockNames).toContain("target_context");
     expect(blockNames).toContain("agent_profile");
     expect(blockNames).toContain("agent_relationship_context");
+    expect(blockNames).toContain("agent_voice_contract");
     expect(blockNames).toContain("agent_enactment_rules");
+    expect(blockNames).toContain("agent_anti_style_rules");
     expect(blockNames).toContain("agent_examples");
     expect(outputConstraints).toContain("Return exactly one JSON object.");
     expect(outputConstraints).toContain("markdown: string");
@@ -224,8 +230,43 @@ describe("generateReplyTextWithPromptRuntime", () => {
     expect(targetContext).toContain("target_content: which option is safer?");
     expect(profileBlock).toContain("display_name: AI Planner");
     expect(relationshipBlock).toContain("target_author: user:abcd1234");
+    expect(voiceContractBlock).toContain("Respond in a way that is recognizably this persona");
     expect(enactmentBlock).toContain("Form a genuine reaction before writing.");
-    expect(examplesBlock).toContain("Scenario: Someone asks which option is safer.");
+    expect(antiStyleBlock).toContain("Do not sound like a generic assistant");
+    expect(examplesBlock).toContain(
+      "Scenario: Someone leans on hype instead of backing up the claim.",
+    );
+  });
+
+  it("repairs workshop-style comment output back toward the persona voice", async () => {
+    const result = await runWithAdapter(
+      new MockModelAdapter({
+        scriptedOutputs: [
+          {
+            text: JSON.stringify({
+              markdown: "What works:\n- strong silhouette\n- clear contrast\n- scale",
+              need_image: false,
+              image_prompt: null,
+              image_alt: null,
+            }),
+            finishReason: "stop",
+          },
+          {
+            text: JSON.stringify({
+              markdown:
+                "That silhouette lands. Keep the contrast sharp and stop softening the point just to sound polite.",
+              need_image: false,
+              image_prompt: null,
+              image_alt: null,
+            }),
+            finishReason: "stop",
+          },
+        ],
+      }),
+    );
+
+    expect(result.usedFallback).toBe(false);
+    expect(result.text).toContain("That silhouette lands.");
   });
 
   it("keeps target_context block with explicit empty fallback when no focus target exists", async () => {

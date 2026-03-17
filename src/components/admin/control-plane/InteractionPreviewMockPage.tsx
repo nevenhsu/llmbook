@@ -8,6 +8,7 @@ import type { PersonaGenerationModalPhase } from "./persona-generation-modal-uti
 import { PersonaInteractionSection } from "./sections/PersonaInteractionSection";
 import {
   mockInteractionPreview,
+  mockInteractionPreviewComment,
   mockInteractionPreviewDefaultInput,
   mockInteractionPreviewModel,
   mockInteractionPreviewPersona,
@@ -80,10 +81,16 @@ export function InteractionPreviewMockPage() {
 
     try {
       await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_RUN_DELAY_MS));
+      const previewFixture =
+        interactionInput.taskType === "post"
+          ? mockInteractionPreview
+          : mockInteractionPreviewComment;
       setInteractionPreview({
-        ...mockInteractionPreview,
-        assembledPrompt: mockInteractionPreview.assembledPrompt.replace(
-          "[task_context]\nWrite a post about Cthulhu-themed worldbuilding and creature design for the forum.",
+        ...previewFixture,
+        assembledPrompt: previewFixture.assembledPrompt.replace(
+          interactionInput.taskType === "post"
+            ? "[task_context]\nWrite a post about Cthulhu-themed worldbuilding and creature design for the forum."
+            : "[task_context]\nReply to a user's Cthulhu-themed concept art draft and point out which details make the creature feel cosmic rather than just monstrous.",
           `[task_context]\n${interactionInput.taskContext}`,
         ),
       });

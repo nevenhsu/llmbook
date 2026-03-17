@@ -2,6 +2,62 @@
 
 ## Active
 
+- [x] Save the approved persona drift/audit refactor plan to `plans/2026-03-17-persona-drift-audit-refactor-plan.md` before starting implementation
+- [ ] Write the layered refactor plan for persona drift handling before changing implementation code
+- [ ] Keep code-level drift checks limited to universal structural/schema/listicle signals instead of persona-specific framing words
+- [ ] Move persona-specific voice/framing judgment into an English-instruction LLM audit step that evaluates output in the caller-requested target language
+- [ ] Define how language heuristics stay lightweight and optional while audit/repair remain shared across preview and production runtime paths
+- [ ] Remove fail-open fallback for persona audit/repair; if audit or repair fails, stop before any DB-backed action or business write executes
+- [ ] Confirm affected files, migration order, and verification coverage before starting the refactor
+
+- [x] Refactor persona drift detection into shared base rules plus language-specific English and Chinese heuristics
+- [x] Add focused Chinese drift-detection tests without routing multilingual output through an English-first translation path
+- [x] Keep persona repair prompts language-agnostic while letting drift detection recognize both English and Chinese editorial/tutorial drift
+- [x] Verify multilingual drift detection changes with focused persona-directive tests and downstream runtime/preview suites
+
+- [x] Replace persona-derived agent examples with more natural Straw_Hat_Outlaw-style challenge and creative-feedback responses
+- [x] Extend persona drift detection to catch missing immediate reaction, missing loyalty/conflict framing, and overly clean editorial tone
+- [x] Strengthen persona repair prompts to explicitly restore gut reaction, loyalty/authority framing, and anti-editorial voice
+- [x] Verify stronger examples and repair heuristics with focused persona-directive and downstream runtime/preview tests
+
+- [x] Refine `runtime-soul-profile` persona-core adaptation so `responseStyle.tone` comes from voice/stance cues instead of raw creator-bias prose
+- [x] Refine `runtime-soul-profile` persona-core adaptation so `languageSignature.rhythm` and `lexicalTaboos` reflect actual speaking cadence and taboo language cues
+- [x] Refine `runtime-soul-profile` persona-core adaptation so `interactionDoctrine.feedbackPrinciples` produces usable critique/reaction principles instead of raw discussion-strength prose
+- [x] Add focused runtime-soul-profile tests for the new persona-core mapping behavior and verify downstream prompt tests still pass
+
+- [x] Add reference-role guidance to persona prompt derivation so reference sources shape runtime voice, reasoning, and conflict framing
+- [x] Thread reference-role guidance through persona voice contract, enactment rules, in-character examples, and persona-drift repair prompts
+- [x] Add focused tests proving reference-role guidance reaches derived directives and repair prompts
+- [x] Verify the reference-role persona prompting changes with focused vitest coverage and diff checks
+
+- [x] Unify admin interaction-preview prompt assembly and runtime prompt builder so persona behavior tuning applies to the same block structure in preview and production
+- [x] Derive a compact persona voice contract from `persona_core` at runtime instead of relying on raw `agent_soul` JSON plus generic fallback examples
+- [x] Generate persona-specific enactment rules, anti-style rules, and in-character examples from `interaction_defaults`, `values`, `guardrails`, and references
+- [x] Insert the derived voice contract and anti-style instructions into interaction prompt assembly ahead of `task_context`
+- [x] Add persona-compliance repair for post/comment generation when output slips into generic assistant, workshop-critique, or tutorial tone
+- [x] Add focused tests for persona directive derivation, prompt block assembly, and persona-compliance repair with a distinct persona like `Straw_Hat_Outlaw`
+
+- [x] Add an Image Request review collapse to Interaction Preview for `need_image`, `image_prompt`, and `image_alt`
+- [x] Parse image-request data for both post and comment raw responses without changing the existing preview contracts
+- [x] Make the interaction preview sandbox branch preview output by task type so post/comment image states can both be reviewed
+- [x] Verify the new Image Request UI with focused preview-panel and interaction-preview sandbox tests
+
+- [x] Split Interaction Preview post Rendered Preview into labeled Title, Tags, and Body sections
+- [x] Keep comment Rendered Preview body-only without extra labels
+- [x] Add focused tests covering post-labeled render and comment unlabeled render
+- [x] Verify the updated Interaction Preview Rendered Preview UI with focused tests and diff checks
+
+- [x] Add a repair retry for invalid `taskType=post` interaction preview output when the first model response misses required structured fields like `tags`
+- [x] Verify post preview can recover from first-pass `title/body` output by repairing into valid `title/body/tags` JSON
+
+- [x] Add the same explicit language-selection rule to the `comment` interaction output contract
+- [x] Verify comment preview prompt assembly includes the same default-to-English language instruction
+
+- [x] Extend `taskType=post` interaction preview contract to require 1-5 hashtag tags in the model raw response
+- [x] Normalize post tags for downstream storage by stripping leading `#` while keeping raw preview tags unchanged
+- [x] Instruct post generation to use the system-specified language for title/body/tags, defaulting to English when unspecified
+- [x] Update post preview fixtures, docs, and focused tests for the new tags/language contract
+
 - [x] Fix `taskType=post` interaction preview contract so it no longer reuses the comment-style markdown-only JSON shape
 - [x] Require a post-shaped AI output for interaction preview with at least `title` plus body/image fields
 - [x] Update interaction preview rendering, mock fixtures, and focused tests to reflect the new post contract
@@ -151,6 +207,10 @@
 - Fix: split the prompt/output contract so `post` now requires `title`, `body`, and image fields, add a post-specific parser, and render post previews as `# title` plus body markdown while keeping the full raw JSON response available for contract inspection.
 - Preview sandbox alignment: updated the `/preview/interaction-preview` fixture so the mocked post preview shows the same `title/body` shape as the live runtime contract instead of the old comment-style payload.
 - Verification: `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`, `npx vitest run src/app/api/admin/ai/persona-interaction/preview/route.test.ts`, `npx vitest run src/components/admin/control-plane/InteractionPreviewMockPage.test.ts`, and `git diff --check -- <touched files>` all passed.
+- Follow-up contract tightening: `post` now also requires `tags` as 1-5 raw hashtag strings, with language alignment instructions in the prompt (`system-specified language`, else English). The app derives storage-safe tags by stripping `#`; the model is not asked to emit both raw and normalized forms.
+- Verification: `npx vitest run src/lib/ai/prompt-runtime/action-output.test.ts`, `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`, `npx vitest run src/app/api/admin/ai/persona-interaction/preview/route.test.ts src/components/admin/control-plane/InteractionPreviewMockPage.test.ts`, and `git diff --check -- <touched files>` all passed.
+- Reliability fix: interaction preview post generation now performs one repair retry when the first model response is non-empty but violates the required `title/body/tags` JSON contract. The repair prompt keeps the same language and asks only for corrected JSON.
+- Verification: `npx vitest run src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts` now covers the first-pass-missing-tags case and passes.
 
 - Root cause for `AI Policy Verify`: `src/lib/ai/policy/policy-control-plane.ts` imports `DEFAULT_DISPATCHER_POLICY` from `src/agents/task-dispatcher/policy/reply-only-policy.ts`, and that module had a top-level `import "@/lib/env"`. In GitHub Actions, where `.env` files and Supabase vars are absent, test startup failed with `Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL` before any policy assertions ran.
 - Fix: remove the unnecessary `@/lib/env` side-effect import from `src/agents/task-dispatcher/policy/reply-only-policy.ts` so the dispatcher policy module stays pure and import-safe in CI.

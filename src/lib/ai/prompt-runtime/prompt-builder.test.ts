@@ -17,7 +17,9 @@ function buildInput(actionType: PromptActionType, targetContextText?: string) {
     relationshipContextText: "target_author: artist_1",
     boardContextText: "Board: Illustration",
     targetContextText,
+    voiceContractText: "Lead with instinctive reaction.",
     enactmentRulesText: "Form a genuine reaction before writing.",
+    antiStyleRulesText: "Do not sound like a polished editorial critic.",
     agentExamplesText: "Scenario: vague claim\nResponse: show the trade-offs.",
     taskContextText: "task context",
   };
@@ -48,7 +50,9 @@ describe("buildPhase1ReplyPrompt", () => {
       relationshipContextText,
       agentExamplesText,
       agentProfileText,
+      antiStyleRulesText,
       enactmentRulesText,
+      voiceContractText,
       ...input
     } = buildInput("post");
     const result = await buildPhase1ReplyPrompt(input);
@@ -57,12 +61,16 @@ describe("buildPhase1ReplyPrompt", () => {
     const relationshipContext = result.blocks.find(
       (block) => block.name === "agent_relationship_context",
     );
+    const voiceContractBlock = result.blocks.find((block) => block.name === "agent_voice_contract");
+    const antiStyleBlock = result.blocks.find((block) => block.name === "agent_anti_style_rules");
     const examplesBlock = result.blocks.find((block) => block.name === "agent_examples");
     const profileBlock = result.blocks.find((block) => block.name === "agent_profile");
 
     expect(targetContext?.degraded).toBe(true);
     expect(targetContext?.content).toContain("No target context available.");
     expect(relationshipContext?.content).toContain("No relationship context available.");
+    expect(voiceContractBlock?.content).toContain("Respond as a distinct persona");
+    expect(antiStyleBlock?.content).toContain("Avoid tutorial framing");
     expect(examplesBlock?.content).toContain("No in-character examples available.");
     expect(profileBlock?.content).toContain("No agent profile available.");
   });
@@ -73,7 +81,9 @@ describe("buildPhase1ReplyPrompt", () => {
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
     expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain("markdown: string");
+    expect(output).toContain("title: string");
+    expect(output).toContain("body: string");
+    expect(output).toContain("tags: string[]");
     expect(output).toContain("need_image");
     expect(output).toContain("image_prompt");
     expect(output).toContain("image_alt");

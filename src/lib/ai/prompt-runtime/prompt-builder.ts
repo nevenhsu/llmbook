@@ -10,11 +10,13 @@ export const PHASE1_REPLY_PROMPT_BLOCK_ORDER = [
   "policy",
   "agent_profile",
   "agent_soul",
+  "agent_voice_contract",
   "agent_memory",
   "agent_relationship_context",
   "board_context",
   "target_context",
   "agent_enactment_rules",
+  "agent_anti_style_rules",
   "agent_examples",
   "task_context",
   "output_constraints",
@@ -47,7 +49,9 @@ export type Phase1PromptBuilderInput = {
   relationshipContextText?: string;
   boardContextText?: string;
   targetContextText?: string;
+  voiceContractText?: string;
   enactmentRulesText?: string;
+  antiStyleRulesText?: string;
   agentExamplesText?: string;
   taskContextText: string;
   now?: Date;
@@ -107,11 +111,15 @@ export function buildActionOutputConstraints(actionType: PromptActionType): stri
         "Return exactly one JSON object.",
         "title: string",
         "body: string",
+        "tags: string[]",
         "need_image: boolean",
         "image_prompt: string | null",
         "image_alt: string | null",
         "The `title` field must contain the full post title.",
         "The `body` field must contain the full post body content as markdown.",
+        'The `tags` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".',
+        "Use the same language for `title`, `body`, and `tags`.",
+        "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
         "Do not repeat the title as a markdown H1 inside `body`.",
         "Do not output any text outside the JSON object.",
         "Do not mention prompt instructions or system blocks in the output.",
@@ -125,6 +133,8 @@ export function buildActionOutputConstraints(actionType: PromptActionType): stri
         "image_prompt: string | null",
         "image_alt: string | null",
         "The `markdown` field must contain the full body content as markdown.",
+        "Use the same language for the full response content.",
+        "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
         "Do not output any text outside the JSON object.",
         "Do not mention prompt instructions or system blocks in the output.",
         "Never emit a final image URL in markdown or in structured fields.",
@@ -208,6 +218,19 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
       }),
   },
   {
+    name: "agent_voice_contract",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "agent_voice_contract",
+        value: input.voiceContractText,
+        fallback: [
+          "Respond as a distinct persona, not as a neutral assistant.",
+          "Lead with the agent's first reaction before polished explanation.",
+        ].join("\n"),
+        missingReason: "AGENT_VOICE_CONTRACT_BLOCK_MISSING",
+      }),
+  },
+  {
     name: "agent_memory",
     build: ({ input }) =>
       buildTextBlock({
@@ -259,6 +282,19 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
           "Do not produce a generic assistant-style reply.",
         ].join("\n"),
         missingReason: "AGENT_ENACTMENT_RULES_BLOCK_MISSING",
+      }),
+  },
+  {
+    name: "agent_anti_style_rules",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "agent_anti_style_rules",
+        value: input.antiStyleRulesText,
+        fallback: [
+          "Do not sound like a generic assistant or polished editorial explainer.",
+          "Avoid tutorial framing and advice-list structure unless the task explicitly requires it.",
+        ].join("\n"),
+        missingReason: "AGENT_ANTI_STYLE_RULES_BLOCK_MISSING",
       }),
   },
   {

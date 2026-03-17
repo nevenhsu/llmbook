@@ -3,6 +3,11 @@ import { createReplyPhase1ToolRegistry } from "@/agents/phase-1-reply-vote/orche
 import type { RuntimeMemoryContext } from "@/lib/ai/memory/runtime-memory-context";
 import { buildPhase1ReplyPrompt, type PromptBlock } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { parseMarkdownActionOutput } from "@/lib/ai/prompt-runtime/action-output";
+import {
+  buildPersonaVoiceRepairPrompt,
+  derivePromptPersonaDirectives,
+  detectPersonaVoiceDrift,
+} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 import type { ModelAdapter } from "@/lib/ai/prompt-runtime/model-adapter";
 import {
   LlmRuntimeAdapter,
@@ -176,17 +181,35 @@ function formatRelationshipContext(input: ReplyPromptRuntimeInput): string | und
 }
 
 function formatEnactmentRules(soul: RuntimeSoulContext): string | undefined {
-  if (soul.profile.agentEnactmentRules.length === 0) {
+  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+  if (directives.enactmentRules.length === 0) {
     return undefined;
   }
-  return soul.profile.agentEnactmentRules.join("\n");
+  return directives.enactmentRules.join("\n");
+}
+
+function formatVoiceContract(soul: RuntimeSoulContext): string | undefined {
+  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+  if (directives.voiceContract.length === 0) {
+    return undefined;
+  }
+  return directives.voiceContract.join("\n");
+}
+
+function formatAntiStyleRules(soul: RuntimeSoulContext): string | undefined {
+  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+  if (directives.antiStyleRules.length === 0) {
+    return undefined;
+  }
+  return directives.antiStyleRules.join("\n");
 }
 
 function formatAgentExamples(soul: RuntimeSoulContext): string | undefined {
-  if (soul.profile.inCharacterExamples.length === 0) {
+  const directives = derivePromptPersonaDirectives({ profile: soul.profile });
+  if (directives.inCharacterExamples.length === 0) {
     return undefined;
   }
-  return soul.profile.inCharacterExamples
+  return directives.inCharacterExamples
     .map((example) => [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"))
     .join("\n\n");
 }
@@ -275,7 +298,9 @@ export async function generateReplyTextWithPromptRuntime(
     relationshipContextText: formatRelationshipContext(input),
     boardContextText: formatBoardContext(input.boardContext),
     targetContextText: formatTargetContext(input),
+    voiceContractText: formatVoiceContract(input.soul),
     enactmentRulesText: formatEnactmentRules(input.soul),
+    antiStyleRulesText: formatAntiStyleRules(input.soul),
     agentExamplesText: formatAgentExamples(input.soul),
     taskContextText: formatTaskContext(input),
   });
@@ -355,6 +380,51 @@ export async function generateReplyTextWithPromptRuntime(
 
   const parsedOutput = parseMarkdownActionOutput(modelResult.text);
   if (parsedOutput.markdown.length > 0) {
+    const directives = derivePromptPersonaDirectives({ profile: input.soul.profile });
+    const driftIssues = detectPersonaVoiceDrift(parsedOutput.markdown, {
+      framingSignals: directives.framingSignals,
+    });
+    if (driftIssues.length > 0) {
+      try {
+        const repaired = await modelAdapter.generateText({
+          prompt: buildPersonaVoiceRepairPrompt({
+            assembledPrompt: prompt.prompt,
+            rawOutput: modelResult.text,
+            actionType: "comment",
+            directives,
+            issues: driftIssues,
+          }),
+          messages: prompt.messages,
+          maxOutputTokens: 320,
+          temperature: 0.2,
+          metadata: {
+            entityId: input.entityId,
+            personaId: input.personaId,
+            postId: input.postId,
+            taskType: "reply_persona_repair",
+            promptBlockOrder: prompt.blocks.map((block) => block.name),
+          },
+        });
+        const repairedParsed = parseMarkdownActionOutput(repaired.text);
+        if (repairedParsed.markdown.length > 0) {
+          return {
+            text: repairedParsed.markdown,
+            imageRequest: repairedParsed.imageRequest,
+            usedFallback: false,
+            fallbackReason: null,
+            promptBlocks: prompt.blocks,
+            model: {
+              provider: repaired.provider ?? modelResult.provider ?? null,
+              model: repaired.model ?? modelResult.model ?? null,
+              finishReason: repaired.finishReason ?? null,
+              usage: repaired.usage,
+            },
+          };
+        }
+      } catch {
+        // Keep the original parsed output if repair fails.
+      }
+    }
     return {
       text: parsedOutput.markdown,
       imageRequest: parsedOutput.imageRequest,

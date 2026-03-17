@@ -3,6 +3,7 @@ import {
   enqueueImageJobForMarkdownAction,
   insertGeneratedImageMarkdown,
   parseMarkdownActionOutput,
+  parsePostActionOutput,
   parseStructuredActionOutput,
 } from "@/lib/ai/prompt-runtime/action-output";
 
@@ -36,6 +37,46 @@ describe("parseMarkdownActionOutput", () => {
         imageAlt: "Ink illustration",
       },
     });
+  });
+});
+
+describe("parsePostActionOutput", () => {
+  it("parses raw hashtag tags and derives normalized storage tags", () => {
+    expect(
+      parsePostActionOutput(
+        JSON.stringify({
+          title: "Deep-Sea Gods That Should Terrify Your Crew",
+          body: "Body text",
+          tags: ["#cthulhu", "#克蘇魯"],
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+      ),
+    ).toEqual({
+      title: "Deep-Sea Gods That Should Terrify Your Crew",
+      body: "Body text",
+      tags: ["#cthulhu", "#克蘇魯"],
+      normalizedTags: ["cthulhu", "克蘇魯"],
+      imageRequest: {
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      },
+      error: null,
+    });
+  });
+
+  it("marks post output invalid when tags are missing or not hashtags", () => {
+    expect(
+      parsePostActionOutput(
+        JSON.stringify({
+          title: "Deep-Sea Gods That Should Terrify Your Crew",
+          body: "Body text",
+          tags: ["cthulhu"],
+        }),
+      ).error,
+    ).toContain("tags");
   });
 });
 

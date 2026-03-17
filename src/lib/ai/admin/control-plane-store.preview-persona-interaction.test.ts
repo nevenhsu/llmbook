@@ -196,9 +196,15 @@ function mockControlPlane(store: AdminAiControlPlaneStore) {
 describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    createDbBackedLlmProviderRegistry.mockClear();
-    resolveLlmInvocationConfig.mockClear();
-    invokeLLM.mockClear();
+    createDbBackedLlmProviderRegistry.mockReset();
+    resolveLlmInvocationConfig.mockReset();
+    invokeLLM.mockReset();
+    createDbBackedLlmProviderRegistry.mockResolvedValue({ providers: new Map() });
+    resolveLlmInvocationConfig.mockResolvedValue({
+      route: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
+      timeoutMs: 30_000,
+      retries: 0,
+    });
     invokeLLM.mockResolvedValue({
       text: JSON.stringify({ markdown: "Preview response" }),
       finishReason: "stop",
@@ -232,7 +238,9 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("[agent_soul]");
     expect(preview.assembledPrompt).toContain("[agent_memory]");
     expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
+    expect(preview.assembledPrompt).toContain("[agent_voice_contract]");
     expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
+    expect(preview.assembledPrompt).toContain("[agent_anti_style_rules]");
     expect(preview.assembledPrompt).toContain("[agent_examples]");
     expect(preview.assembledPrompt).toContain("Short-term:");
     expect(preview.assembledPrompt).toContain("Long-term:");
@@ -241,9 +249,17 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("username: ai_artist");
     expect(preview.assembledPrompt).toContain("target_author: artist_2");
     expect(preview.assembledPrompt).toContain("default_stance");
+    expect(preview.assembledPrompt).toContain("React as");
+    expect(preview.assembledPrompt).toContain("Do not sound like a generic assistant");
     expect(preview.assembledPrompt).toContain("need_image");
     expect(preview.assembledPrompt).toContain("image_prompt");
     expect(preview.assembledPrompt).toContain("image_alt");
+    expect(preview.assembledPrompt).toContain(
+      "Use the same language for the full response content.",
+    );
+    expect(preview.assembledPrompt).toContain(
+      "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
+    );
     expect(preview.assembledPrompt).toContain(
       "[global_policy]\nPolicy:\npolicy\nForbidden:\nforbidden",
     );
@@ -256,7 +272,11 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     mockControlPlane(store);
     mockPersona(store);
     invokeLLM.mockResolvedValueOnce({
-      text: JSON.stringify({ title: "Preview title", body: "Preview response" }),
+      text: JSON.stringify({
+        title: "Preview title",
+        body: "Preview response",
+        tags: ["#cthulhu", "#lovecraft"],
+      }),
       finishReason: "stop",
       error: null,
     });
@@ -272,9 +292,11 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("No target context available.");
     expect(preview.assembledPrompt).toContain("[output_style]");
     expect(preview.assembledPrompt).toContain("[agent_soul]");
+    expect(preview.assembledPrompt).toContain("[agent_voice_contract]");
     expect(preview.assembledPrompt).toContain("[agent_memory]");
     expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
+    expect(preview.assembledPrompt).toContain("[agent_anti_style_rules]");
     expect(preview.assembledPrompt).toContain("[agent_examples]");
     expect(preview.assembledPrompt).toContain("Short-term:");
     expect(preview.assembledPrompt).toContain("Long-term:");
@@ -284,11 +306,97 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.assembledPrompt).toContain("Use natural conversational tone");
     expect(preview.assembledPrompt).toContain("title: string");
     expect(preview.assembledPrompt).toContain("body: string");
+    expect(preview.assembledPrompt).toContain("tags: string[]");
+    expect(preview.assembledPrompt).toContain("if none is specified, use English");
     expect(preview.assembledPrompt).not.toContain("markdown: string");
-    expect(preview.markdown).toBe("# Preview title\n\nPreview response");
+    expect(preview.markdown).toBe("# Preview title\n\n#cthulhu #lovecraft\n\nPreview response");
     expect(preview.rawResponse).toBe(
-      JSON.stringify({ title: "Preview title", body: "Preview response" }),
+      JSON.stringify({
+        title: "Preview title",
+        body: "Preview response",
+        tags: ["#cthulhu", "#lovecraft"],
+      }),
     );
+  });
+
+  it("repairs invalid post output when the first response omits required tags", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "Preview response",
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "Preview response",
+          tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    const preview = await store.previewPersonaInteraction({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "post",
+      taskContext: "Create a new post.",
+    });
+
+    expect(invokeLLM).toHaveBeenCalledTimes(2);
+    expect(preview.renderOk).toBe(true);
+    expect(preview.renderError).toBeNull();
+    expect(preview.markdown).toBe("# Preview title\n\n#cthulhu #lovecraft\n\nPreview response");
+    expect(preview.rawResponse).toBe(
+      JSON.stringify({
+        title: "Preview title",
+        body: "Preview response",
+        tags: ["#cthulhu", "#lovecraft"],
+      }),
+    );
+  });
+
+  it("repairs persona-drifted post output when the first response falls into workshop critique tone", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "What works:\n- silhouette\n- scale\n- wrongness",
+          tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: "Preview title",
+          body: "That silhouette finally hits. Keep the scale cruel and stop over-explaining the lore.",
+          tags: ["#cthulhu", "#lovecraft"],
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    const preview = await store.previewPersonaInteraction({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "post",
+      taskContext: "Create a new post.",
+    });
+
+    expect(invokeLLM).toHaveBeenCalledTimes(2);
+    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[retry_persona_repair]");
+    expect(preview.markdown).toContain("That silhouette finally hits.");
+    expect(preview.rawResponse).toContain("That silhouette finally hits.");
   });
 
   it("uses structured vote contract with target metadata", async () => {

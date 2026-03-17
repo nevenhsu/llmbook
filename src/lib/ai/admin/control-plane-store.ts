@@ -11,6 +11,11 @@ import {
   parsePostActionOutput,
 } from "@/lib/ai/prompt-runtime/action-output";
 import {
+  buildPersonaVoiceRepairPrompt,
+  derivePromptPersonaDirectives,
+  detectPersonaVoiceDrift,
+} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import {
   PERSONA_GENERATION_MAX_INPUT_TOKENS,
   PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
@@ -592,11 +597,13 @@ function buildPromptBlocks(input: {
   agentProfile?: string;
   outputStyle?: string;
   personaSoul: string;
+  agentVoiceContract?: string;
   agentMemory: string;
   agentRelationshipContext?: string;
   boardContext?: string;
   targetContext?: string;
   agentEnactmentRules?: string;
+  agentAntiStyleRules?: string;
   agentExamples?: string;
   taskContext: string;
 }): Array<{ name: string; content: string }> {
@@ -623,6 +630,15 @@ function buildPromptBlocks(input: {
       content: input.agentProfile?.trim() || "No agent profile available.",
     },
     { name: "agent_soul", content: input.personaSoul },
+    {
+      name: "agent_voice_contract",
+      content:
+        input.agentVoiceContract?.trim() ||
+        [
+          "Respond as a distinct persona, not as a neutral assistant.",
+          "Lead with the agent's first reaction before polished explanation.",
+        ].join("\n"),
+    },
     { name: "agent_memory", content: input.agentMemory },
     {
       name: "agent_relationship_context",
@@ -641,6 +657,15 @@ function buildPromptBlocks(input: {
           "Before responding, infer how this agent would genuinely react based on agent_profile, agent_soul, agent_memory, target_context, and agent_relationship_context.",
           "The response must reflect the agent's priorities, biases, tone, and decision style.",
           "Do not produce a generic assistant-style reply.",
+        ].join("\n"),
+    },
+    {
+      name: "agent_anti_style_rules",
+      content:
+        input.agentAntiStyleRules?.trim() ||
+        [
+          "Do not sound like a generic assistant or polished editorial explainer.",
+          "Avoid tutorial framing and advice-list structure unless the task explicitly requires it.",
         ].join("\n"),
     },
     {
@@ -3498,6 +3523,10 @@ export class AdminAiControlPlaneStore {
     const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
     const personaCoreText = JSON.stringify(effectivePersonaCore, null, 2);
     const runtimePersonaProfile = normalizeSoulProfile(effectivePersonaCore).profile;
+    const personaPromptDirectives = derivePromptPersonaDirectives({
+      profile: runtimePersonaProfile,
+      personaCore: effectivePersonaCore,
+    });
 
     const blocks = buildPromptBlocks({
       actionType: input.taskType,
@@ -3509,6 +3538,7 @@ export class AdminAiControlPlaneStore {
         bio: profile.persona.bio,
       }),
       personaSoul: personaCoreText,
+      agentVoiceContract: personaPromptDirectives.voiceContract.join("\n"),
       agentMemory: formatAgentMemory({
         shortTerm: personaMemory,
         longTerm: longMemoryText,
@@ -3522,8 +3552,13 @@ export class AdminAiControlPlaneStore {
         taskType: input.taskType,
         targetContext: input.targetContext,
       }),
-      agentEnactmentRules: formatAgentEnactmentRules(runtimePersonaProfile),
-      agentExamples: formatAgentExamples(runtimePersonaProfile),
+      agentEnactmentRules: personaPromptDirectives.enactmentRules.join("\n"),
+      agentAntiStyleRules: personaPromptDirectives.antiStyleRules.join("\n"),
+      agentExamples: personaPromptDirectives.inCharacterExamples
+        .map((example) =>
+          [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"),
+        )
+        .join("\n\n"),
       taskContext: input.taskContext,
     });
 
@@ -3535,30 +3570,41 @@ export class AdminAiControlPlaneStore {
 
     const assembledPrompt = formatPrompt(blocks);
 
-    const llmResult = await invokeLLM({
-      registry,
-      taskType: "generic",
-      routeOverride: invocationConfig.route,
-      modelInput: {
-        prompt: assembledPrompt,
-        maxOutputTokens: Math.min(
-          model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
-          DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
-        ),
-        temperature: 0.3,
-      },
-      entityId: `interaction-preview:${model.id}`,
-      timeoutMs: invocationConfig.timeoutMs,
-      retries: invocationConfig.retries,
-      onProviderError: async (event) => {
-        await this.recordLlmInvocationError({
-          providerKey: event.providerId,
-          modelKey: event.modelId,
-          error: event.error,
-          errorDetails: event.errorDetails,
-        });
-      },
-    });
+    const invokePreviewAttempt = async (
+      prompt: string,
+      maxOutputTokens: number,
+      temperature: number,
+    ) =>
+      invokeLLM({
+        registry,
+        taskType: "generic",
+        routeOverride: invocationConfig.route,
+        modelInput: {
+          prompt,
+          maxOutputTokens,
+          temperature,
+        },
+        entityId: `interaction-preview:${model.id}`,
+        timeoutMs: invocationConfig.timeoutMs,
+        retries: invocationConfig.retries,
+        onProviderError: async (event) => {
+          await this.recordLlmInvocationError({
+            providerKey: event.providerId,
+            modelKey: event.modelId,
+            error: event.error,
+            errorDetails: event.errorDetails,
+          });
+        },
+      });
+
+    let llmResult = await invokePreviewAttempt(
+      assembledPrompt,
+      Math.min(
+        model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+        DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+      ),
+      0.3,
+    );
 
     if (!llmResult.text.trim()) {
       throw new Error(
@@ -3567,19 +3613,99 @@ export class AdminAiControlPlaneStore {
       );
     }
 
-    const normalizedOutput = llmResult.text.trim();
+    let normalizedOutput = llmResult.text.trim();
     let markdown = "";
     let contractError: string | null = null;
 
     if (input.taskType === "post") {
-      const parsed = parsePostActionOutput(normalizedOutput);
+      let parsed = parsePostActionOutput(normalizedOutput);
+      if (parsed.error) {
+        const repairPrompt = [
+          assembledPrompt,
+          "",
+          "[retry_repair]",
+          "Your previous response was invalid for the required post JSON contract.",
+          "Rewrite it as exactly one valid JSON object using the same language.",
+          "Required keys: title, body, tags, need_image, image_prompt, image_alt.",
+          "The tags array must contain 1 to 5 hashtags like #cthulhu.",
+          "Return JSON only. Do not use markdown fences.",
+          "",
+          "[previous_invalid_response]",
+          normalizedOutput,
+        ].join("\n");
+        const repaired = await invokePreviewAttempt(
+          repairPrompt,
+          Math.min(DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens, 1200),
+          0.15,
+        );
+        if (repaired.text.trim()) {
+          normalizedOutput = repaired.text.trim();
+          parsed = parsePostActionOutput(normalizedOutput);
+          llmResult = repaired;
+        }
+      }
+      if (!parsed.error) {
+        const driftIssues = detectPersonaVoiceDrift(parsed.body, {
+          framingSignals: personaPromptDirectives.framingSignals,
+        });
+        if (driftIssues.length > 0) {
+          const repaired = await invokePreviewAttempt(
+            buildPersonaVoiceRepairPrompt({
+              assembledPrompt,
+              rawOutput: normalizedOutput,
+              actionType: "post",
+              directives: personaPromptDirectives,
+              issues: driftIssues,
+            }),
+            Math.min(DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens, 1200),
+            0.15,
+          );
+          if (repaired.text.trim()) {
+            const repairedParsed = parsePostActionOutput(repaired.text.trim());
+            if (!repairedParsed.error) {
+              normalizedOutput = repaired.text.trim();
+              parsed = repairedParsed;
+              llmResult = repaired;
+            }
+          }
+        }
+      }
       contractError = parsed.error;
-      markdown = [parsed.title ? `# ${parsed.title}` : null, parsed.body.trim()]
+      const hashtagsLine = parsed.tags.join(" ").trim();
+      markdown = [
+        parsed.title ? `# ${parsed.title}` : null,
+        hashtagsLine || null,
+        parsed.body.trim(),
+      ]
         .filter((part): part is string => Boolean(part))
         .join("\n\n")
         .trim();
     } else if (input.taskType === "comment") {
-      const parsed = parseMarkdownActionOutput(normalizedOutput);
+      let parsed = parseMarkdownActionOutput(normalizedOutput);
+      const driftIssues = detectPersonaVoiceDrift(parsed.markdown, {
+        framingSignals: personaPromptDirectives.framingSignals,
+      });
+      if (driftIssues.length > 0) {
+        const repaired = await invokePreviewAttempt(
+          buildPersonaVoiceRepairPrompt({
+            assembledPrompt,
+            rawOutput: normalizedOutput,
+            actionType: "comment",
+            directives: personaPromptDirectives,
+            issues: driftIssues,
+          }),
+          Math.min(DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens, 1200),
+          0.15,
+        );
+        if (repaired.text.trim()) {
+          const repairedParsed = parseMarkdownActionOutput(repaired.text.trim());
+          if (repairedParsed.markdown.trim()) {
+            normalizedOutput = repaired.text.trim();
+            parsed = repairedParsed;
+            llmResult = repaired;
+          }
+        }
+      }
       markdown = parsed.markdown.trim();
     } else {
       markdown = ["```json", normalizedOutput, "```"].join("\n");
