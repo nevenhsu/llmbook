@@ -106,12 +106,16 @@ export function PersonaGenerationPreviewMockPage() {
   const [personaUpdateLoading, setPersonaUpdateLoading] = useState(false);
   const [personaPromptAssistLoading, setPersonaPromptAssistLoading] = useState(false);
   const [personaPromptAssistError, setPersonaPromptAssistError] = useState<string | null>(null);
-  const [personaPromptAssistElapsedSeconds] = useState(0);
+  const [personaPromptAssistCompleted, setPersonaPromptAssistCompleted] = useState(false);
+  const [personaPromptAssistElapsedSeconds, setPersonaPromptAssistElapsedSeconds] = useState(0);
   const [personaUpdatePromptAssistLoading, setPersonaUpdatePromptAssistLoading] = useState(false);
   const [personaUpdatePromptAssistError, setPersonaUpdatePromptAssistError] = useState<
     string | null
   >(null);
-  const [personaUpdatePromptAssistElapsedSeconds] = useState(0);
+  const [personaUpdatePromptAssistCompleted, setPersonaUpdatePromptAssistCompleted] =
+    useState(false);
+  const [personaUpdatePromptAssistElapsedSeconds, setPersonaUpdatePromptAssistElapsedSeconds] =
+    useState(0);
   const [personaPreviewRunCount, setPersonaPreviewRunCount] = useState(0);
   const [personaLastSavedAt, setPersonaLastSavedAt] = useState<string | null>(null);
   const [personaSaveLoading, setPersonaSaveLoading] = useState(false);
@@ -154,10 +158,19 @@ export function PersonaGenerationPreviewMockPage() {
       ? setPersonaUpdatePromptAssistLoading
       : setPersonaPromptAssistLoading;
     const setError = isUpdate ? setPersonaUpdatePromptAssistError : setPersonaPromptAssistError;
+    const setElapsed = isUpdate
+      ? setPersonaUpdatePromptAssistElapsedSeconds
+      : setPersonaPromptAssistElapsedSeconds;
+    const setCompleted = isUpdate
+      ? setPersonaUpdatePromptAssistCompleted
+      : setPersonaPromptAssistCompleted;
 
     setError(null);
+    setCompleted(false);
+    setElapsed(0);
     setLoading(true);
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_GENERATE_DELAY_MS));
       if (isUpdate) {
         setPersonaUpdate((prev) => ({
           ...prev,
@@ -169,6 +182,8 @@ export function PersonaGenerationPreviewMockPage() {
           extraPrompt: mockPersonaGenerationAdminExtraPrompt,
         }));
       }
+      setElapsed(PREVIEW_GENERATE_DELAY_MS / 1000);
+      setCompleted(true);
     } finally {
       setLoading(false);
     }
@@ -306,9 +321,11 @@ export function PersonaGenerationPreviewMockPage() {
         personaUpdateLoading={personaUpdateLoading}
         personaPromptAssistLoading={personaPromptAssistLoading}
         personaPromptAssistError={personaPromptAssistError}
+        personaPromptAssistCompleted={personaPromptAssistCompleted}
         personaPromptAssistElapsedSeconds={personaPromptAssistElapsedSeconds}
         personaUpdatePromptAssistLoading={personaUpdatePromptAssistLoading}
         personaUpdatePromptAssistError={personaUpdatePromptAssistError}
+        personaUpdatePromptAssistCompleted={personaUpdatePromptAssistCompleted}
         personaUpdatePromptAssistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
         personaPreviewRunCount={personaPreviewRunCount}
         personaLastSavedAt={personaLastSavedAt}

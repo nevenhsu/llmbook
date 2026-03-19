@@ -79,6 +79,7 @@ export function validateUsernameFormat(
 export function sanitizeUsername(input: string): string {
   return input
     .toLowerCase()
+    .replace(/\s+/g, "_") // Preserve word boundaries from pasted names
     .replace(/[^a-z0-9_.]/g, "") // Remove invalid characters
     .replace(/^\.+/, "") // Remove leading periods
     .replace(/\.+$/, "") // Remove trailing periods

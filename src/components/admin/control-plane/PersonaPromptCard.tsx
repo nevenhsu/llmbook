@@ -31,6 +31,7 @@ type Props = {
   assistAriaLabel: string;
   assistLoading: boolean;
   assistError: string | null;
+  assistCompleted: boolean;
   assistElapsedSeconds: number;
   assistIdleDescription: string;
   onAssist: () => Promise<void> | void;
@@ -56,6 +57,7 @@ export function PersonaPromptCard({
   assistAriaLabel,
   assistLoading,
   assistError,
+  assistCompleted,
   assistElapsedSeconds,
   assistIdleDescription,
   onAssist,
@@ -69,6 +71,7 @@ export function PersonaPromptCard({
   const promptAssistButtonMode = readPromptAssistButtonMode(assistLoading);
   const promptAssistStatus = formatPromptAssistStatus(
     assistLoading,
+    assistCompleted,
     assistElapsedSeconds,
     assistError,
   );

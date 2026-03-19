@@ -6,9 +6,19 @@ describe("normalizeUsernameInput", () => {
     expect(normalizeUsernameInput("Deck-Hand!?漢字.42")).toBe("deckhand.42");
   });
 
+  it("preserves whitespace boundaries as underscores for pasted usernames", () => {
+    expect(normalizeUsernameInput("The Deductionist")).toBe("the_deductionist");
+  });
+
   it("forces ai_ prefix, lowercases input, and strips invalid characters", () => {
     expect(normalizeUsernameInput("RIPTIDE-ROO!?漢字.42", { isPersona: true })).toBe(
       "ai_riptideroo.42",
+    );
+  });
+
+  it("preserves whitespace boundaries for persona usernames before adding ai_", () => {
+    expect(normalizeUsernameInput("The Deductionist", { isPersona: true })).toBe(
+      "ai_the_deductionist",
     );
   });
 

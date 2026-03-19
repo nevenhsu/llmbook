@@ -123,11 +123,14 @@ export function useAiControlPlane({
   const [personaUpdateLoading, setPersonaUpdateLoading] = useState(false);
   const [personaPromptAssistLoading, setPersonaPromptAssistLoading] = useState(false);
   const [personaPromptAssistError, setPersonaPromptAssistError] = useState<string | null>(null);
+  const [personaPromptAssistCompleted, setPersonaPromptAssistCompleted] = useState(false);
   const [personaPromptAssistElapsedSeconds, setPersonaPromptAssistElapsedSeconds] = useState(0);
   const [personaUpdatePromptAssistLoading, setPersonaUpdatePromptAssistLoading] = useState(false);
   const [personaUpdatePromptAssistError, setPersonaUpdatePromptAssistError] = useState<
     string | null
   >(null);
+  const [personaUpdatePromptAssistCompleted, setPersonaUpdatePromptAssistCompleted] =
+    useState(false);
   const [personaUpdatePromptAssistElapsedSeconds, setPersonaUpdatePromptAssistElapsedSeconds] =
     useState(0);
   const [personaSaveLoading, setPersonaSaveLoading] = useState(false);
@@ -1039,6 +1042,9 @@ export function useAiControlPlane({
       ? setPersonaUpdatePromptAssistElapsedSeconds
       : setPersonaPromptAssistElapsedSeconds;
     const setError = isUpdate ? setPersonaUpdatePromptAssistError : setPersonaPromptAssistError;
+    const setCompleted = isUpdate
+      ? setPersonaUpdatePromptAssistCompleted
+      : setPersonaPromptAssistCompleted;
 
     if (loading) {
       abortRef.current?.abort();
@@ -1046,6 +1052,7 @@ export function useAiControlPlane({
       startedAtRef.current = null;
       setLoading(false);
       setElapsed(0);
+      setCompleted(false);
       return;
     }
     if (!modelId) {
@@ -1061,6 +1068,7 @@ export function useAiControlPlane({
     startedAtRef.current = Date.now();
     setElapsed(0);
     setError(null);
+    setCompleted(false);
     setLoading(true);
     try {
       const hadExistingPrompt = hasNonEmptyText(extraPrompt);
@@ -1086,12 +1094,20 @@ export function useAiControlPlane({
           extraPrompt: res.text,
         }));
       }
+      if (startedAtRef.current !== null) {
+        setElapsed(Math.max(0, Math.floor((Date.now() - startedAtRef.current) / 1000)));
+      }
+      setCompleted(true);
       toast.success(hadExistingPrompt ? "Prompt optimized" : "Prompt generated");
     } catch (error) {
       if (isPersonaGenerationAbortError(error)) {
         return;
       }
       const message = error instanceof Error ? error.message : "Failed to assist prompt";
+      if (startedAtRef.current !== null) {
+        setElapsed(Math.max(0, Math.floor((Date.now() - startedAtRef.current) / 1000)));
+      }
+      setCompleted(false);
       setError(message);
       toast.error(message);
     } finally {
@@ -1242,9 +1258,11 @@ export function useAiControlPlane({
     personaUpdateLoading,
     personaPromptAssistLoading,
     personaPromptAssistError,
+    personaPromptAssistCompleted,
     personaPromptAssistElapsedSeconds,
     personaUpdatePromptAssistLoading,
     personaUpdatePromptAssistError,
+    personaUpdatePromptAssistCompleted,
     personaUpdatePromptAssistElapsedSeconds,
     personaPreviewRunCount,
     personaLastSavedAt,

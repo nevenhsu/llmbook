@@ -92,6 +92,20 @@ function renderTextList(title: string, values: string[]) {
   );
 }
 
+function renderTextBlock(title: string, value: unknown) {
+  const text = asText(value);
+  if (!text) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-semibold tracking-wide uppercase opacity-55">{title}</div>
+      <p className="text-sm leading-6">{text}</p>
+    </div>
+  );
+}
+
 function splitCommaSeparatedItems(values: string[]): string[] {
   return values.flatMap((value) =>
     value
@@ -136,6 +150,10 @@ export function PersonaStructuredPreview({ structured }: Props) {
   const creatorAffinity = asRecord(personaCore.creator_affinity);
   const interactionDefaults = asRecord(personaCore.interaction_defaults);
   const guardrails = asRecord(personaCore.guardrails);
+  const voiceFingerprint = asRecord(personaCore.voice_fingerprint);
+  const taskStyleMatrix = asRecord(personaCore.task_style_matrix);
+  const postStyle = asRecord(taskStyleMatrix.post);
+  const commentStyle = asRecord(taskStyleMatrix.comment);
   const valueHierarchy = asValueHierarchy(values.value_hierarchy);
   const rawJson = JSON.stringify(structured, null, 2);
 
@@ -306,6 +324,40 @@ export function PersonaStructuredPreview({ structured }: Props) {
             "De-escalation Style",
             splitCommaSeparatedItems(asStringArray(guardrails.deescalation_style)),
           )}
+        </SectionCard>
+
+        <SectionCard
+          title="Voice Fingerprint"
+          description="How this persona tends to open, attack, praise, and close."
+        >
+          {renderTextBlock("Opening Move", voiceFingerprint.opening_move)}
+          {renderTagList("Metaphor Domains", asStringArray(voiceFingerprint.metaphor_domains))}
+          {renderTextBlock("Attack Style", voiceFingerprint.attack_style)}
+          {renderTextBlock("Praise Style", voiceFingerprint.praise_style)}
+          {renderTextBlock("Closing Move", voiceFingerprint.closing_move)}
+          {renderTextList("Forbidden Shapes", asStringArray(voiceFingerprint.forbidden_shapes))}
+        </SectionCard>
+
+        <SectionCard
+          title="Task Style Matrix"
+          description="How this persona should shape posts versus comments."
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="bg-base-200/40 space-y-4 rounded-xl p-4">
+              <div className="text-sm font-semibold">Post</div>
+              {renderTextBlock("Entry Shape", postStyle.entry_shape)}
+              {renderTextBlock("Body Shape", postStyle.body_shape)}
+              {renderTextBlock("Close Shape", postStyle.close_shape)}
+              {renderTextList("Forbidden Shapes", asStringArray(postStyle.forbidden_shapes))}
+            </div>
+            <div className="bg-base-200/40 space-y-4 rounded-xl p-4">
+              <div className="text-sm font-semibold">Comment</div>
+              {renderTextBlock("Entry Shape", commentStyle.entry_shape)}
+              {renderTextBlock("Feedback Shape", commentStyle.feedback_shape)}
+              {renderTextBlock("Close Shape", commentStyle.close_shape)}
+              {renderTextList("Forbidden Shapes", asStringArray(commentStyle.forbidden_shapes))}
+            </div>
+          </div>
         </SectionCard>
       </div>
 

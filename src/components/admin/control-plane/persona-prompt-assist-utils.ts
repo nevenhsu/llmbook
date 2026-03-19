@@ -6,6 +6,7 @@ export function readPromptAssistButtonMode(isLoading: boolean): "idle" | "cancel
 
 export function formatPromptAssistStatus(
   isLoading: boolean,
+  hasCompleted: boolean,
   elapsedSeconds: number,
   errorMessage: string | null,
 ): string | null {
@@ -14,6 +15,9 @@ export function formatPromptAssistStatus(
   }
   if (errorMessage) {
     return errorMessage;
+  }
+  if (hasCompleted) {
+    return `AI assist completed ${formatPersonaGenerationElapsed(elapsedSeconds)}`;
   }
   return null;
 }

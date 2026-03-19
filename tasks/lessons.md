@@ -30,6 +30,7 @@
 - If persona distinctiveness depends on how `post` and `comment` should open, attack, praise, and close, persist that style behavior in canonical `persona_core` fields instead of leaving runtime to infer it from broad traits.
 - In persona generation, style-bearing canonical fields like `voice_fingerprint`, `interaction_defaults`, and `task_style_matrix` must be natural-language reusable guidance, not enum-like machine labels that only satisfy schema shape.
 - When `Generate Persona` and `Update Persona` share the same staged generation pipeline after prompt seeding, persona-quality rules like originalization and anti-cosplay checks must be enforced in the shared generation path so both modes improve together.
+- If anti-cosplay quality rules protect the seed identity, extend the same protection to `persona_memories`; otherwise literal reference roleplay can leak back in through canonical memories even when the top-level persona is originalized.
 - After making persona-generation stage outputs more natural-language and verbose, re-evaluate the affected stage budgets and retry caps; otherwise later stages like `interaction_and_guardrails` can start truncating valid content into parse failures.
 - When prompt helpers only support `post` / `comment`, explicitly map `vote` / `poll_*` task types to a safe generic path instead of piping unsupported task types into post/comment-only runtime helpers.
 
@@ -63,8 +64,24 @@
 - When persona username input is normalized on the client, mirror the same normalization in backend create/update/check APIs; otherwise admin persona writes and availability checks drift from the UI contract.
 - If an admin prompt field is expected to hold seeded bio/reference context plus manual edits, use a textarea instead of a single-line input so the UI contract matches the content shape.
 - For admin prompt-assist flows, never paper over empty or weak model output with local fallback prose; surface the error so operators know the assist failed instead of saving fabricated text.
+- For admin prompt-assist flows, "no local fallback" does not mean "no repair": if the main rewrite returns empty, give the model one explicit empty-output repair attempt before surfacing the error.
+- When an admin AI helper can fail for multiple reasons, keep the API error typed with a stable `code`; otherwise provider timeouts, empty model text, and contract-validation failures all collapse into the same misleading generic message.
+- When typed AI-helper errors are still too opaque for debugging, include the final LLM-attempt diagnostics (`attemptStage`, `providerId`, `modelId`, `finishReason`, `hadText`) in error details instead of forcing operators to infer where the empty output happened.
+- If prompt-assist diagnostics show `finishReason=length` with `hadText=false`, treat output headroom as a likely root cause and raise the shared prompt-assist cap before assuming the model simply returned blank text.
+- In prompt-assist, non-empty output is not automatically valid; if the last attempt ends with `finishReason=length` or a dangling clause like a trailing conjunction, repair truncation once before returning text to the UI.
+- For prompt-assist, if the user already supplied an explicit reference name, treat "descriptive paraphrase with no visible name" as a contract failure; preserve the original name when possible, or make a related replacement name explicit.
+- If a prompt-assist contract depends on preserving explicit source names, inject those names into the main rewrite and every repair prompt up front; do not rely on a final validator or a last-ditch repair to reintroduce them.
+- If truncation repair returns blank text, surface that as a repair-stage empty-output failure with `truncated_output_repair` details; do not fall through and misreport the stale `main_rewrite` truncation metadata.
+- If MiniMax prompt-assist still ends with `finishReason=length` after one headroom bump, raise the shared cap decisively rather than nudging it by another small increment.
+- Admin staged previews should not inherit high provider retry counts from general runtime policy; they already have stage-local repair loops, so provider retries only multiply latency.
+- Keep the reliability split explicit: admin preview/assist flows should usually fail fast with low provider retries, while production runtime / agent execution paths should keep their normal retry policy unless the user explicitly asks otherwise.
+- If the user says preview stage budgets are already correct, do not keep tuning output caps; look for lower-risk latency wins like compacting internal prompt context or removing duplicated retries.
+- Shared username normalization should preserve pasted word boundaries by converting whitespace to underscores; stripping spaces outright makes display-name-derived usernames unreadable.
+- When a user asks whether a tuning change like a token cap was actually applied, answer with the exact current numeric value and file location, not only a qualitative summary.
 - Helper copy in admin cards should stay short and scannable; if the behavior is simple, do not pack multiple caveats into one long status sentence.
 - When the preview generate-persona modal's structured data contract changes, update the corresponding modal UI mapping in the same change; do not leave the review surface on stale field wiring.
+- If an admin AI helper shows elapsed status while running, preserve a separate completed state and final elapsed time after success; otherwise the UI will fall back to idle helper copy too early.
+- When create/update cards share one prompt-assist status component, add regression coverage for both cards; otherwise it is easy to verify the update card and miss the create card's fallback-to-idle behavior.
 
 ## Data / Schema
 

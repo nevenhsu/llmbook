@@ -229,9 +229,11 @@ export default function AiControlPlanePanel(props: Props) {
               personaUpdateLoading={personaUpdateLoading}
               personaPromptAssistLoading={personaPromptAssistLoading}
               personaPromptAssistError={personaPromptAssistError}
+              personaPromptAssistCompleted={personaPromptAssistCompleted}
               personaPromptAssistElapsedSeconds={personaPromptAssistElapsedSeconds}
               personaUpdatePromptAssistLoading={personaUpdatePromptAssistLoading}
               personaUpdatePromptAssistError={personaUpdatePromptAssistError}
+              personaUpdatePromptAssistCompleted={personaUpdatePromptAssistCompleted}
               personaUpdatePromptAssistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
               personaPreviewRunCount={personaPreviewRunCount}
               personaLastSavedAt={personaLastSavedAt}

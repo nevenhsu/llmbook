@@ -2,6 +2,22 @@
 
 ## Active
 
+- [x] Converge the remaining admin preview/assist LLM flows onto low provider retries: `previewPersonaInteraction`, `assistPersonaPrompt`, and `assistInteractionTaskContext`
+- [x] Preserve whitespace as underscores in shared username normalization so pasted names like "The Deductionist" become `the_deductionist` / `ai_the_deductionist`
+- [x] Investigate persona-generation preview 6-minute latency by checking both API stage attempts and frontend generation-time measurement, then fix the confirmed root cause
+- [x] Keep persona prompt-assist status lines on their completed elapsed-time state after AI assist finishes instead of snapping back to idle helper copy
+- [x] Stop persona-generation preview from inheriting high provider retry counts so staged preview stays low-latency
+- [x] Raise prompt-assist headroom again and preserve truncated-repair failure details instead of leaking stale main-rewrite diagnostics
+- [x] Inject explicit source reference names into prompt-assist main/repair prompts so name-preservation is enforced before final validation
+- [x] Preserve explicit or related reference names in prompt-assist outputs instead of letting them get paraphrased away
+- [x] Raise the shared prompt-assist output cap again from 512 to 640
+- [x] Repair truncated prompt-assist outputs before returning them to the admin UI
+- [x] Raise persona prompt-assist output cap so MiniMax length-finish empty outputs get more headroom before failing
+- [x] Add prompt-assist diagnostic details to typed errors so empty-output failures reveal stage/model/provider metadata
+- [x] Make persona prompt-assist retry empty main output with a model-based repair before returning an API error
+- [x] Return typed prompt-assist error codes so provider timeouts/failures and contract failures no longer collapse into the same generic message
+- [x] Add anti-cosplay quality validation/repair to the `memories` stage so `persona_memories` cannot drift back into literal reference roleplay
+- [x] Update the preview Generate Persona modal UI so it renders the latest mock-data fields instead of leaving newer structured fields hidden
 - [x] Switch Persona Generation `Context / Extra Prompt` fields to multiline textareas
 - [x] Remove prompt-assist local fallback synthesis so empty/weak outputs surface as API errors instead of fabricated prompts
 - [x] Unify backend persona username normalization with the shared username helpers across create, update, and availability-check paths
@@ -39,6 +55,75 @@
 
 ## Review
 
+- Prompt-assist small status text now keeps the completed elapsed-time state after AI assist succeeds, so Generate/Update cards no longer snap back to idle helper copy immediately after the request finishes.
+- Updated the preview sandbox to simulate the same async prompt-assist flow with visible `processing` -> `completed` status transitions, so the UI review page matches production behavior instead of staying instant.
+- Verification:
+  - `npx vitest run src/components/admin/control-plane/persona-prompt-assist-utils.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+- Converged the remaining admin UI preview/assist paths onto the same low-retry provider policy as persona-generation preview: `previewPersonaInteraction`, `assistPersonaPrompt`, and `assistInteractionTaskContext` now fail fast with provider retries pinned to `0` instead of inheriting general runtime retry counts.
+- Kept the reliability boundary explicit: only admin preview/assist flows changed, while production runtime / agent execution paths still keep their normal retry behavior.
+- Added focused regression coverage proving all four admin UI LLM flows keep their selected-model route/timeout behavior while overriding provider retries to `0`.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/lib/ai/admin/control-plane-store.interaction-context-assist.test.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`
+- Updated the shared username normalizer so pasted whitespace is preserved as `_` instead of being collapsed away, which fixes persona/profile username inputs turning `The Deductionist` into `thedeductionist`.
+- Added regression coverage at both the library layer and the Generate/Update Persona preview UI to verify `The Deductionist` normalizes to `the_deductionist` and `ai_the_deductionist`.
+- Verification:
+  - `npx vitest run src/lib/username-validation.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+- Confirmed `Generation time` was measuring the real request path, not a stale UI timer, and kept the existing preview stage budgets intact.
+- Reduced persona-generation preview prompt size without changing stage budgets: model invocations now receive compact `validated_context` JSON while the returned assembled prompt remains pretty-printed for admin review.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/app/api/admin/ai/persona-generation/preview/route.test.ts`
+- Stopped staged persona-generation preview from inheriting high provider retry counts: preview still uses the selected model, stage-local JSON repair, and quality repair, but provider-level retries are now pinned to `0` so admin preview fails fast instead of multiplying latency across five serialized stages.
+- Added focused regression coverage proving preview keeps the selected model route/timeout while disabling provider retries for low-latency preview runs.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/app/api/admin/ai/persona-generation/preview/route.test.ts`
+- Raised the shared prompt-assist output cap from `640` to `1024` after MiniMax continued returning `finishReason=length` on persona rewrites, so prompt-assist now has materially more output headroom before truncation.
+- Fixed the truncation-repair error path so if the dedicated truncation repair returns blank text, the API now surfaces `prompt_assist_repair_output_empty` with `attemptStage: truncated_output_repair` instead of leaking stale `main_rewrite` diagnostics.
+- Added focused regression coverage for the blank truncation-repair case alongside the existing incomplete truncation-repair test.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Moved explicit source-reference preservation earlier in persona prompt-assist: when optimize input already names someone like `Anthony Bourdain`, the main rewrite and all repair prompts now receive the same explicit-name instruction block instead of leaving name preservation to the final validator or the late reference-name repair only.
+- Added focused regression coverage proving prompt-assist now injects source names into both the first optimize rewrite and the empty-output repair path for explicit-name inputs.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Tightened prompt-assist reference preservation so explicit source references like `Anthony Bourdain` can no longer be paraphrased away into anonymous descriptions; the optimize path now repairs missing-name rewrites once and keeps at least one explicit source or related reference name visible in the final brief.
+- Fixed the prompt-assist reference detector so ordinary prose like `sounds like quiet reverence` no longer triggers a false positive reference match, which was previously letting name-less outputs slip through validation.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Bumped the shared prompt-assist output cap again in [persona-generation-token-budgets.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-token-budgets.ts) from `512` to `640` so MiniMax prompt-assist rewrites/repairs get more output headroom before hitting `finishReason=length`.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Added a prompt-assist truncation gate so non-empty but incomplete outputs are no longer treated as success: `finishReason=length` and dangling-clause endings now trigger one dedicated truncation repair before the UI sees any text.
+- Added a typed `prompt_assist_truncated_output` failure when the truncation repair still returns an incomplete sentence, and covered both the successful repair and hard-fail paths in focused tests.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Raised the shared persona prompt-assist output cap from the old 320-token ceiling to [PROMPT_ASSIST_MAX_OUTPUT_TOKENS](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-token-budgets.ts), so MiniMax prompt-assist rewrites and repairs have more headroom before ending with `finishReason=length` and no visible text.
+- Centralized the cap in the shared admin persona-generation budget module and added regression coverage to confirm prompt-assist invocations actually use the higher limit on both reference resolution and rewrite calls.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Added prompt-assist error diagnostics so empty/provider failures now expose the last LLM attempt metadata (`attemptStage`, `providerId`, `modelId`, `finishReason`, `hadText`) instead of leaving operators with only a message/code.
+- Threaded those diagnostics through both store-side `PromptAssistError` details and the API response payload, without weakening the existing fail-closed prompt-assist behavior.
+- Added regression coverage for diagnostics on empty-output repair failures and provider timeouts, and for route-level propagation of typed error details.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Added typed `PromptAssistError` handling for persona prompt-assist so the store/route now distinguish provider timeout, provider failure, missing reference, weak output, and empty repair output instead of flattening everything into one generic empty-output message.
+- Kept prompt-assist fail-closed while improving diagnostics: the API now returns stable error `code` values for admin consumers, and provider-side empty/error states are classified before they can be misreported as blank text.
+- Added regression coverage for typed timeout classification and route-level typed error payloads, alongside the empty-output repair tests.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
+- Fixed persona prompt-assist so an empty main rewrite no longer fails immediately; it now gets one model-based empty-output repair attempt in both optimize and random modes before the API returns an error.
+- Kept the no-fallback contract intact: app code still never fabricates prompt text locally, and prompt-assist only succeeds if the model itself returns a valid final brief after repair.
+- Added focused regression coverage for optimize/random empty-output repair, retained the hard failure when repair is still empty, and isolated `invokeLLM` test state so queued mock responses do not leak between prompt-assist tests.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts`
+- Added a stage-local anti-cosplay quality validator for the `memories` stage so `persona_memories[].content` now fails/retries when it drifts into literal reference-world roleplay instead of staying originalized to forum-native incidents, habits, or beliefs.
+- Synced the Stage 5 memories prompt contract and admin spec with the new anti-cosplay rule so both preview assembly and runtime preview use the same "reference-inspired, not reference-cosplay" guidance for canonical memories.
+- Added focused regression tests covering both successful memories-stage quality repair and typed `PersonaGenerationQualityError` failure when repair still returns cosplay-like memories.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts`
+- Updated the Generate Persona preview modal's structured review UI so newer mock-data fields like `voice_fingerprint` and `task_style_matrix` now render directly in the modal instead of only being visible inside raw JSON.
+- Added a regression assertion in the preview sandbox test so future mock-data contract changes fail fast if the modal stops rendering newly added structured sections.
+- Verification:
+  - `npx vitest run src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
 - Switched the admin Persona Generation / Update `Context / Extra Prompt` control from single-line input to multiline textarea so seeded bio/reference context and manual edits fit the field shape.
 - Removed local prompt-assist fallback synthesis in the admin persona prompt-assist path; empty output, missing explicit reference names, and still-weak final rewrites now return API errors instead of fabricated prompts.
 - Added route/store regression coverage for prompt-assist error surfacing and updated the preview sandbox test to follow the textarea UI.

@@ -322,6 +322,32 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     });
   });
 
+  it("keeps interaction preview on the selected model route but disables provider retries for low-latency admin preview", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+    resolveLlmInvocationConfig.mockResolvedValue({
+      route: { targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }] },
+      timeoutMs: 23_456,
+      retries: 4,
+    });
+
+    await store.previewPersonaInteraction({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "comment",
+      taskContext: "Reply to the thread.",
+    });
+
+    expect(invokeLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: 23_456,
+        retries: 0,
+        routeOverride: { targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }] },
+      }),
+    );
+  });
+
   it("uses a post-shaped contract with title and body when taskType is post", async () => {
     const store = new AdminAiControlPlaneStore();
     mockControlPlane(store);

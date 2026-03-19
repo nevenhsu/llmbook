@@ -51,9 +51,11 @@ export interface PersonaGenerationSectionProps {
   personaUpdateLoading: boolean;
   personaPromptAssistLoading: boolean;
   personaPromptAssistError: string | null;
+  personaPromptAssistCompleted: boolean;
   personaPromptAssistElapsedSeconds: number;
   personaUpdatePromptAssistLoading: boolean;
   personaUpdatePromptAssistError: string | null;
+  personaUpdatePromptAssistCompleted: boolean;
   personaUpdatePromptAssistElapsedSeconds: number;
   personaPreviewRunCount: number;
   personaLastSavedAt: string | null;
@@ -102,9 +104,11 @@ export function PersonaGenerationSection({
   personaUpdateLoading,
   personaPromptAssistLoading,
   personaPromptAssistError,
+  personaPromptAssistCompleted,
   personaPromptAssistElapsedSeconds,
   personaUpdatePromptAssistLoading,
   personaUpdatePromptAssistError,
+  personaUpdatePromptAssistCompleted,
   personaUpdatePromptAssistElapsedSeconds,
   personaPreviewRunCount,
   personaLastSavedAt,
@@ -169,6 +173,7 @@ export function PersonaGenerationSection({
           assistAriaLabel="Prompt AI"
           assistLoading={personaPromptAssistLoading}
           assistError={personaPromptAssistError}
+          assistCompleted={personaPromptAssistCompleted}
           assistElapsedSeconds={personaPromptAssistElapsedSeconds}
           assistIdleDescription="Empty: generate in English. Existing: refine in the same language."
           onAssist={assistPersonaPrompt}
@@ -214,6 +219,7 @@ export function PersonaGenerationSection({
           assistAriaLabel="Prompt AI for update"
           assistLoading={personaUpdatePromptAssistLoading}
           assistError={personaUpdatePromptAssistError}
+          assistCompleted={personaUpdatePromptAssistCompleted}
           assistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
           assistIdleDescription="Starts from current bio and references, then refines with AI."
           onAssist={assistPersonaUpdatePrompt}

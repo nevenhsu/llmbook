@@ -103,6 +103,8 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "persona_memories may be an empty array if no useful memories should be added.",
       "memory_type must be memory or long_memory.",
       "scope must be persona, thread, or task.",
+      "Keep memories reference-inspired, not reference-cosplay.",
+      "Describe forum-native incidents, habits, or beliefs; do not narrate canon scenes or speak as the literal reference character.",
     ],
   },
 ] as const;

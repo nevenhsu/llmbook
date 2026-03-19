@@ -30,10 +30,12 @@ import {
   parsePersonaAuditResult,
 } from "@/lib/ai/prompt-runtime/persona-output-audit";
 import {
+  ADMIN_UI_LLM_PROVIDER_RETRIES,
   PERSONA_GENERATION_MAX_INPUT_TOKENS,
   PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS,
+  PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
 } from "@/lib/ai/admin/persona-generation-token-budgets";
 import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
@@ -193,6 +195,39 @@ export class PersonaGenerationQualityError extends PersonaGenerationParseError {
     this.name = "PersonaGenerationQualityError";
     this.stageName = input.stageName;
     this.issues = input.issues;
+  }
+}
+
+export type PromptAssistErrorCode =
+  | "prompt_assist_provider_failed"
+  | "prompt_assist_provider_timeout"
+  | "prompt_assist_missing_reference"
+  | "prompt_assist_output_too_weak"
+  | "prompt_assist_truncated_output"
+  | "prompt_assist_repair_output_empty"
+  | "prompt_assist_final_output_empty";
+
+type PromptAssistAttemptStage =
+  | "reference_resolution"
+  | "main_rewrite"
+  | "empty_output_repair"
+  | "weak_output_repair"
+  | "reference_name_repair"
+  | "truncated_output_repair";
+
+export class PromptAssistError extends Error {
+  public readonly code: PromptAssistErrorCode;
+  public readonly details: Record<string, unknown> | null;
+
+  public constructor(input: {
+    code: PromptAssistErrorCode;
+    message: string;
+    details?: Record<string, unknown> | null;
+  }) {
+    super(input.message);
+    this.name = "PromptAssistError";
+    this.code = input.code;
+    this.details = input.details ?? null;
   }
 }
 
@@ -1165,6 +1200,57 @@ function validateInteractionStageQuality(stage: PersonaGenerationInteractionStag
   return issues;
 }
 
+const FORUM_NATIVE_MEMORY_ANCHOR_PATTERN =
+  /\b(?:forum|thread|post|poster|comment|reply|board|chat|discussion|debate|argument|mod|moderator|admin|feed|timeline|upvote|downvote)\b/i;
+const REFERENCE_WORLD_ROLEPLAY_MEMORY_PATTERN =
+  /\bthe\s+(?:captain|commander|king|queen|prince|princess|emperor|empress|hero|villain|chosen one)\b|\b(?:my|our|his|her|their)\s+(?:crew|fleet|ship|court|throne|kingdom|empire|realm|powers?|magic|mission)\b/i;
+
+function validateMemoriesStageQuality(
+  stage: PersonaGenerationMemoriesStage,
+  input: {
+    referenceSources: PersonaGenerationStructured["reference_sources"];
+  },
+): string[] {
+  const issues: string[] = [];
+  const allowedReferenceNames = new Set(
+    input.referenceSources.map((item) => normalizeComparisonText(item.name)),
+  );
+
+  for (const [index, memory] of stage.persona_memories.entries()) {
+    const fieldPath = `persona_memories[${index}].content`;
+    const content = readString(memory.content);
+    if (!content) {
+      continue;
+    }
+
+    if (hasMixedScriptArtifact(content)) {
+      issues.push(
+        `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
+      );
+    }
+
+    for (const phrase of extractCapitalizedPhrases(content)) {
+      if (allowedReferenceNames.has(normalizeComparisonText(phrase))) {
+        continue;
+      }
+      issues.push(
+        `${fieldPath} leaks a reference-world proper noun (${phrase}) and should stay originalized into forum-native memory language.`,
+      );
+    }
+
+    if (
+      REFERENCE_WORLD_ROLEPLAY_MEMORY_PATTERN.test(content) &&
+      !FORUM_NATIVE_MEMORY_ANCHOR_PATTERN.test(content)
+    ) {
+      issues.push(
+        `${fieldPath} drifts into literal reference roleplay; keep memories in original forum-native incidents, habits, or philosophy.`,
+      );
+    }
+  }
+
+  return issues;
+}
+
 function normalizePersonaValueHierarchy(
   value: unknown,
   fieldPath: string,
@@ -1543,7 +1629,8 @@ function hasLikelyNamedReference(text: string): boolean {
   }
 
   return (
-    /(?:參考|参考|像|例如|比如|inspired by|reference|references|like|such as)\s*[:：]?\s*[\p{L}]/iu.test(
+    /(?:參考|参考|像|例如|比如)\s*[:：]?\s*[\p{L}]/u.test(normalized) ||
+    /\b(?:inspired by|reference|references|like|such as)\b\s*[:：]?\s*(?:[A-Z][\p{L}'-]*|[\u3400-\u9fff])/u.test(
       normalized,
     ) ||
     /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/.test(normalized) ||
@@ -1552,6 +1639,49 @@ function hasLikelyNamedReference(text: string): boolean {
     ) ||
     /(?:伊坂幸太郎|村上春樹|宮藤官九郎|是枝裕和|昆汀|王家衛|芙莉貝格)/u.test(normalized)
   );
+}
+
+function extractLikelyNamedReferences(text: string): string[] {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  const matches = new Set<string>();
+  for (const match of normalized.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/g)) {
+    if (match[0]) {
+      matches.add(match[0].trim());
+    }
+  }
+  for (const match of normalized.matchAll(
+    /\b(?:Fleabag|Sherlock|Batman|Madonna|Björk|Kafka|Murakami|Didion|Grisham|Musk)\b/g,
+  )) {
+    if (match[0]) {
+      matches.add(match[0].trim());
+    }
+  }
+  for (const match of normalized.matchAll(
+    /(?:伊坂幸太郎|村上春樹|宮藤官九郎|是枝裕和|昆汀|王家衛|芙莉貝格)/gu,
+  )) {
+    if (match[0]) {
+      matches.add(match[0].trim());
+    }
+  }
+
+  return Array.from(matches);
+}
+
+function buildExplicitSourceReferenceInstruction(sourceReferenceNames: string[]): string | null {
+  if (sourceReferenceNames.length === 0) {
+    return null;
+  }
+
+  return [
+    `The user explicitly referenced these names: ${sourceReferenceNames.join(", ")}.`,
+    "Keep at least 1 of those exact names explicit in the final brief whenever possible.",
+    "If the user's input is only a name or short list of names, still write a full persona brief around those names instead of replacing them with anonymous description.",
+    "If you swap to a closely related reference, keep that related name explicit in the final brief.",
+  ].join(" ");
 }
 
 function parseResolvedReferenceNames(text: string): string[] {
@@ -1577,7 +1707,10 @@ function normalizePromptAssistComparisonText(text: string): string {
 
 function stripTrailingReferenceAppendix(text: string): string {
   return normalizeSingleLineText(text)
-    .replace(/\s*(?:reference|references|inspired by|like|such as)\s+[^.]+\.?$/iu, "")
+    .replace(
+      /\s*\b(?:reference|references|inspired by|like|such as)\b\s+(?:[A-Z][^.?!]*|[\u3400-\u9fff][^.?!]*)[.?!]?$/u,
+      "",
+    )
     .replace(/\s*(?:參考|参考|像|例如|比如)\s*[^。！？」]+[。！？]?$/u, "")
     .trim();
 }
@@ -1630,22 +1763,111 @@ function isWeakPromptAssistRewrite(input: {
   return false;
 }
 
+function isLikelyTruncatedPromptAssistText(input: {
+  text: string;
+  details?: Record<string, unknown> | null;
+}): boolean {
+  const normalized = normalizeSingleLineText(input.text);
+  if (!normalized) {
+    return false;
+  }
+
+  const finishReason = readString(input.details?.finishReason).trim().toLowerCase();
+  if (finishReason === "length") {
+    return true;
+  }
+
+  if (/[,:;\/\-(]$/.test(normalized)) {
+    return true;
+  }
+
+  if (
+    /\b(?:and|or|with|to|for|of|in|on|by|but|as|than|that|which|who|when|while|if|because)$/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function validatePromptAssistResult(input: {
   text: string;
   mode: "random" | "optimize";
   sourceText: string;
+  details?: Record<string, unknown> | null;
 }): string {
   const normalized = normalizeSingleLineText(input.text);
   if (!normalized) {
-    throw new Error("prompt assist returned empty output");
+    throw new PromptAssistError({
+      code: "prompt_assist_final_output_empty",
+      message: "prompt assist final output was empty",
+      details: input.details ?? null,
+    });
   }
   if (!hasLikelyNamedReference(normalized)) {
-    throw new Error("prompt assist output must include at least 1 explicit real reference name");
+    throw new PromptAssistError({
+      code: "prompt_assist_missing_reference",
+      message: "prompt assist output must include at least 1 explicit real reference name",
+    });
   }
   if (isWeakPromptAssistRewrite(input)) {
-    throw new Error("prompt assist output is too weak");
+    throw new PromptAssistError({
+      code: "prompt_assist_output_too_weak",
+      message: "prompt assist output is too weak",
+    });
   }
   return normalized;
+}
+
+function buildPromptAssistProviderError(input: {
+  stage: PromptAssistAttemptStage;
+  error: string;
+  details: Record<string, unknown>;
+  errorDetails?: unknown;
+}): PromptAssistError {
+  const suffix = buildLlmErrorDetailsSuffix(input.errorDetails);
+  if (input.error.startsWith("LLM_TIMEOUT_")) {
+    return new PromptAssistError({
+      code: "prompt_assist_provider_timeout",
+      message: `prompt assist provider timed out during ${input.stage} before returning text${suffix}`,
+      details: input.details,
+    });
+  }
+
+  return new PromptAssistError({
+    code: "prompt_assist_provider_failed",
+    message: `prompt assist provider failed during ${input.stage} before returning text: ${input.error}${suffix}`,
+    details: input.details,
+  });
+}
+
+function buildPromptAssistAttemptDetails(input: {
+  stage: PromptAssistAttemptStage;
+  llmResult: {
+    text: string;
+    finishReason?: string | null;
+    providerId?: string | null;
+    modelId?: string | null;
+    attempts?: number | null;
+    usedFallback?: boolean | null;
+    error?: string | null;
+    errorDetails?: unknown;
+  };
+}): Record<string, unknown> {
+  const trimmedText = input.llmResult.text.trim();
+  return {
+    attemptStage: input.stage,
+    providerId: input.llmResult.providerId ?? null,
+    modelId: input.llmResult.modelId ?? null,
+    finishReason: input.llmResult.finishReason ?? null,
+    hadText: trimmedText.length > 0,
+    attempts: input.llmResult.attempts ?? null,
+    usedFallback: input.llmResult.usedFallback ?? false,
+    ...(input.llmResult.error ? { providerError: input.llmResult.error } : {}),
+    ...(input.llmResult.errorDetails ? { errorDetails: input.llmResult.errorDetails } : {}),
+  };
 }
 
 function parsePersonaStageObject(rawText: string): Record<string, unknown> {
@@ -3111,7 +3333,7 @@ export class AdminAiControlPlaneStore {
         },
         entityId: metadata.entityId,
         timeoutMs: invocationConfig.timeoutMs,
-        retries: invocationConfig.retries,
+        retries: Math.min(invocationConfig.retries, ADMIN_UI_LLM_PROVIDER_RETRIES),
         onProviderError: async (event) => {
           await this.recordLlmInvocationError({
             providerKey: event.providerId,
@@ -3329,14 +3551,31 @@ export class AdminAiControlPlaneStore {
       model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
       DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
     );
-    const stagePromptRecords: Array<{ name: string; prompt: string; outputMaxTokens: number }> = [];
+    const previewProviderRetries = Math.min(
+      invocationConfig.retries,
+      ADMIN_UI_LLM_PROVIDER_RETRIES,
+    );
+    const stagePromptRecords: Array<{
+      name: string;
+      prompt: string;
+      displayPrompt: string;
+      outputMaxTokens: number;
+    }> = [];
 
     const buildStagePrompt = (input: {
       stageName: string;
       stageGoal: string;
       stageContract: string;
       validatedContext?: Record<string, unknown> | null;
+      contextFormatting?: "compact" | "pretty";
     }) => {
+      const validatedContextContent = input.validatedContext
+        ? JSON.stringify(
+            input.validatedContext,
+            null,
+            input.contextFormatting === "compact" ? 0 : 2,
+          )
+        : null;
       const blocks = [
         ...commonBlocks,
         {
@@ -3347,7 +3586,7 @@ export class AdminAiControlPlaneStore {
           ? [
               {
                 name: "validated_context",
-                content: JSON.stringify(input.validatedContext, null, 2),
+                content: validatedContextContent ?? "",
               },
             ]
           : []),
@@ -3366,10 +3605,18 @@ export class AdminAiControlPlaneStore {
       validatedContext?: Record<string, unknown> | null;
       outputMaxTokens: number;
     }): Promise<T> => {
-      const basePrompt = buildStagePrompt(input);
+      const basePrompt = buildStagePrompt({
+        ...input,
+        contextFormatting: "compact",
+      });
+      const displayPrompt = buildStagePrompt({
+        ...input,
+        contextFormatting: "pretty",
+      });
       stagePromptRecords.push({
         name: input.stageName,
         prompt: basePrompt,
+        displayPrompt,
         outputMaxTokens: input.outputMaxTokens,
       });
 
@@ -3398,7 +3645,7 @@ export class AdminAiControlPlaneStore {
           },
           entityId: `persona-generation-preview:${model.id}:${input.stageName}:attempt-${attempt}`,
           timeoutMs: invocationConfig.timeoutMs,
-          retries: invocationConfig.retries,
+          retries: previewProviderRetries,
           onProviderError: async (event) => {
             await this.recordLlmInvocationError({
               providerKey: event.providerId,
@@ -3425,7 +3672,7 @@ export class AdminAiControlPlaneStore {
           },
           entityId: `persona-generation-preview:${model.id}:${input.stageName}:quality-repair-1`,
           timeoutMs: invocationConfig.timeoutMs,
-          retries: invocationConfig.retries,
+          retries: previewProviderRetries,
           onProviderError: async (event) => {
             await this.recordLlmInvocationError({
               providerKey: event.providerId,
@@ -3625,8 +3872,14 @@ export class AdminAiControlPlaneStore {
         "persona_memories may be an empty array if no useful memories should be added.",
         "memory_type must be memory or long_memory.",
         "scope must be persona, thread, or task.",
+        "Keep memories reference-inspired, not reference-cosplay.",
+        "Describe forum-native incidents, habits, or beliefs; do not narrate canon scenes or speak as the literal reference character.",
       ].join("\n"),
       parse: parsePersonaMemoriesOutput,
+      validateQuality: (stage) =>
+        validateMemoriesStageQuality(stage, {
+          referenceSources: seedStage.reference_sources,
+        }),
       validatedContext: {
         personas: seedStage.personas,
         persona_core: personaCore,
@@ -3646,7 +3899,7 @@ export class AdminAiControlPlaneStore {
       }),
     ).structured;
     const assembledPrompt = stagePromptRecords
-      .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.prompt}`)
+      .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.displayPrompt}`)
       .join("\n\n");
     const tokenBudget = buildTokenBudgetSignal({
       blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
@@ -3753,6 +4006,7 @@ export class AdminAiControlPlaneStore {
             "Exactly 1 paragraph.",
             "Preserve the user's core intent.",
             "Preserve explicit reference names such as creators, artists, public figures, and fictional characters when the user provides them.",
+            "If the user already provided explicit reference names, keep at least 1 of those exact names in the final brief whenever possible; if you swap to a closely related reference, that related name must stay explicit in the final brief.",
             "If the user did not provide any explicit reference name, infer at least 1 fitting real reference entity from the user's clues before writing the final brief.",
             "Interpret the user's input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
             "Make it materially clearer, more specific, and more usable as a persona brief.",
@@ -3788,19 +4042,29 @@ export class AdminAiControlPlaneStore {
       includeXai: true,
       includeMinimax: true,
     });
-    const invokePromptAssist = async (promptText: string, temperature: number): Promise<string> => {
+    const sourceReferenceNames = extractLikelyNamedReferences(trimmedInput);
+    const explicitSourceReferenceInstruction =
+      mode === "optimize" ? buildExplicitSourceReferenceInstruction(sourceReferenceNames) : null;
+    const invokePromptAssist = async (
+      promptText: string,
+      temperature: number,
+      stage: PromptAssistAttemptStage,
+    ): Promise<{ text: string; details: Record<string, unknown> }> => {
       const llmResult = await invokeLLM({
         registry,
         taskType: "generic",
         routeOverride: invocationConfig.route,
         modelInput: {
           prompt: promptText,
-          maxOutputTokens: Math.min(model.maxOutputTokens ?? 320, 320),
+          maxOutputTokens: Math.min(
+            model.maxOutputTokens ?? PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
+            PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
+          ),
           temperature,
         },
         entityId: `persona-prompt-assist:${model.id}`,
         timeoutMs: invocationConfig.timeoutMs,
-        retries: invocationConfig.retries,
+        retries: Math.min(invocationConfig.retries, ADMIN_UI_LLM_PROVIDER_RETRIES),
         onProviderError: async (event) => {
           await this.recordLlmInvocationError({
             providerKey: event.providerId,
@@ -3811,7 +4075,20 @@ export class AdminAiControlPlaneStore {
         },
       });
 
-      return llmResult.text.trim();
+      const text = llmResult.text.trim();
+      const details = buildPromptAssistAttemptDetails({
+        stage,
+        llmResult,
+      });
+      if (llmResult.error && !text) {
+        throw buildPromptAssistProviderError({
+          stage,
+          error: llmResult.error,
+          details,
+          errorDetails: llmResult.errorDetails,
+        });
+      }
+      return { text, details };
     };
 
     const hasExplicitReference = trimmedInput.length > 0 && hasLikelyNamedReference(trimmedInput);
@@ -3838,7 +4115,13 @@ export class AdminAiControlPlaneStore {
             ].join("\n");
 
       const firstPass = parseResolvedReferenceNames(
-        await invokePromptAssist(resolverPrompt, mode === "random" ? 0.9 : 0.35),
+        (
+          await invokePromptAssist(
+            resolverPrompt,
+            mode === "random" ? 0.9 : 0.35,
+            "reference_resolution",
+          )
+        ).text,
       );
       if (firstPass.length > 0) {
         return firstPass;
@@ -3862,7 +4145,13 @@ export class AdminAiControlPlaneStore {
             ].join("\n");
 
       return parseResolvedReferenceNames(
-        await invokePromptAssist(repairResolverPrompt, mode === "random" ? 0.7 : 0.25),
+        (
+          await invokePromptAssist(
+            repairResolverPrompt,
+            mode === "random" ? 0.7 : 0.25,
+            "reference_resolution",
+          )
+        ).text,
       );
     };
 
@@ -3873,15 +4162,54 @@ export class AdminAiControlPlaneStore {
           ? `Use at least 1 of these resolved reference entities: ${resolvedReferenceNames.join(", ")}.`
           : `Use at least 1 of these resolved reference entities if they fit: ${resolvedReferenceNames.join(", ")}.`
         : null;
+    const mainPrompt = [
+      systemPrompt,
+      explicitSourceReferenceInstruction,
+      resolvedReferenceInstruction,
+      userPrompt,
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join("\n\n");
 
-    let text = await invokePromptAssist(
-      [systemPrompt, resolvedReferenceInstruction, userPrompt]
-        .filter((item): item is string => Boolean(item))
-        .join("\n\n"),
+    let mainAttempt = await invokePromptAssist(
+      mainPrompt,
       mode === "random" ? 0.8 : 0.3,
+      "main_rewrite",
     );
+    let text = mainAttempt.text;
+    let textDetails = mainAttempt.details;
     if (!text) {
-      throw new Error("prompt assist returned empty output");
+      const emptyRepairPrompt = [
+        systemPrompt,
+        explicitSourceReferenceInstruction,
+        resolvedReferenceInstruction,
+        userPrompt,
+        "",
+        "[retry_repair]",
+        "Your previous prompt-assist output was empty.",
+        "Rewrite from scratch and return one usable persona brief only.",
+        mode === "random"
+          ? "Keep it concise, in English, and explicitly grounded in a real named reference."
+          : "Keep the same language as the user's input and include at least 1 explicit real reference name.",
+        "Do not explain the failure.",
+        "Do not return blank output.",
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("\n\n");
+      const repairAttempt = await invokePromptAssist(
+        emptyRepairPrompt,
+        mode === "random" ? 0.65 : 0.25,
+        "empty_output_repair",
+      );
+      text = repairAttempt.text;
+      textDetails = repairAttempt.details;
+    }
+    if (!text) {
+      throw new PromptAssistError({
+        code: "prompt_assist_repair_output_empty",
+        message: "prompt assist repair returned empty output",
+        details: textDetails,
+      });
     }
 
     if (isWeakPromptAssistRewrite({ text, mode, sourceText: trimmedInput })) {
@@ -3893,6 +4221,7 @@ export class AdminAiControlPlaneStore {
         "Exactly 1 paragraph, maximum 75 words.",
         "Preserve the core intent.",
         "Include at least 1 explicit real reference name.",
+        explicitSourceReferenceInstruction,
         resolvedReferenceInstruction,
         "If there is no explicit reference in the user input, infer one from the clues before writing.",
         "Treat the input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
@@ -3913,16 +4242,80 @@ export class AdminAiControlPlaneStore {
         .filter((item): item is string => Boolean(item))
         .join("\n");
 
-      const repairedText = await invokePromptAssist(repairPrompt, 0.35);
-      if (repairedText) {
-        text = repairedText;
+      const repairedAttempt = await invokePromptAssist(repairPrompt, 0.35, "weak_output_repair");
+      if (repairedAttempt.text) {
+        text = repairedAttempt.text;
+        textDetails = repairedAttempt.details;
       }
+    }
+
+    if (mode === "optimize" && sourceReferenceNames.length > 0 && !hasLikelyNamedReference(text)) {
+      const referenceRepairPrompt = [
+        systemPrompt,
+        explicitSourceReferenceInstruction,
+        userPrompt,
+        "",
+        "[retry_repair]",
+        "The previous rewrite paraphrased away explicit reference names.",
+        "Rewrite from scratch and keep at least one original source reference name explicit in the final brief whenever possible.",
+        "If you switch to a closely related reference, keep that related name explicit in the final brief.",
+        "Return only one complete persona brief.",
+      ].join("\n\n");
+      const repairedAttempt = await invokePromptAssist(
+        referenceRepairPrompt,
+        0.25,
+        "reference_name_repair",
+      );
+      if (repairedAttempt.text) {
+        text = repairedAttempt.text;
+        textDetails = repairedAttempt.details;
+      }
+    }
+
+    if (isLikelyTruncatedPromptAssistText({ text, details: textDetails })) {
+      const truncatedRepairPrompt = [
+        systemPrompt,
+        explicitSourceReferenceInstruction,
+        resolvedReferenceInstruction,
+        userPrompt,
+        "",
+        "[retry_repair]",
+        "The previous rewrite was truncated or incomplete.",
+        "Rewrite from scratch and return one complete persona brief only.",
+        "Do not end with a dangling conjunction, unfinished clause, or cut-off sentence.",
+        "Return one complete paragraph with a clean ending.",
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("\n\n");
+      const repairedAttempt = await invokePromptAssist(
+        truncatedRepairPrompt,
+        mode === "random" ? 0.55 : 0.25,
+        "truncated_output_repair",
+      );
+      if (!repairedAttempt.text) {
+        throw new PromptAssistError({
+          code: "prompt_assist_repair_output_empty",
+          message: "prompt assist truncation repair returned empty output",
+          details: repairedAttempt.details,
+        });
+      }
+      text = repairedAttempt.text;
+      textDetails = repairedAttempt.details;
+    }
+
+    if (isLikelyTruncatedPromptAssistText({ text, details: textDetails })) {
+      throw new PromptAssistError({
+        code: "prompt_assist_truncated_output",
+        message: "prompt assist output was truncated or incomplete",
+        details: textDetails,
+      });
     }
 
     return validatePromptAssistResult({
       text,
       mode,
       sourceText: trimmedInput,
+      details: textDetails,
     });
   }
 
@@ -4040,7 +4433,7 @@ export class AdminAiControlPlaneStore {
         },
         entityId: `interaction-preview:${model.id}`,
         timeoutMs: invocationConfig.timeoutMs,
-        retries: invocationConfig.retries,
+        retries: Math.min(invocationConfig.retries, ADMIN_UI_LLM_PROVIDER_RETRIES),
         onProviderError: async (event) => {
           await this.recordLlmInvocationError({
             providerKey: event.providerId,

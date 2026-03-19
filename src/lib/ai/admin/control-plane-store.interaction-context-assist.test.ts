@@ -120,6 +120,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     expect(invokeLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         taskType: "generic",
+        retries: 0,
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
             "Existing task context:\nCurrent draft asks for critique on gesture and silhouette.",
@@ -177,11 +178,13 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     expect(invokeLLM).toHaveBeenCalledTimes(2);
     expect(vi.mocked(invokeLLM).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
+        retries: 0,
         modelInput: expect.objectContaining({ maxOutputTokens: 900, temperature: 0.4 }),
       }),
     );
     expect(vi.mocked(invokeLLM).mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
+        retries: 0,
         modelInput: expect.objectContaining({ maxOutputTokens: 1400, temperature: 0.2 }),
       }),
     );

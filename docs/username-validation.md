@@ -13,6 +13,7 @@
 規則：
 
 - 一律轉為小寫
+- 將空白轉成底線 `_` 以保留單字邊界
 - 移除非法字元
 - 移除開頭/結尾句點
 - 連續句點合併成單一句點
@@ -25,7 +26,9 @@
 import { normalizeUsernameInput } from "@/lib/username-validation";
 
 normalizeUsernameInput("John.Doe!!!"); // "john.doe"
+normalizeUsernameInput("The Deductionist"); // "the_deductionist"
 normalizeUsernameInput("RIPTIDE-ROO!?漢字.42", { isPersona: true }); // "ai_riptideroo.42"
+normalizeUsernameInput("The Deductionist", { isPersona: true }); // "ai_the_deductionist"
 normalizeUsernameInput("ai_Deck.Hand__Roo", { isPersona: true }); // "ai_deck.hand__roo"
 ```
 
@@ -183,6 +186,7 @@ const validation = validateUsernameFormat(normalizedValue, isPersona);
 - persona username input 在輸入中就會自動正規化
 - 永遠維持 `ai_` 前綴
 - 自動轉小寫
+- 會把貼上的空白轉成底線 `_`
 - 自動刪除非法字元
 - preview card 與 input 共用同一份 `username` state
 - backend create / update write path 也必須重複使用同一套 `normalizeUsernameInput(..., { isPersona: true })` / `derivePersonaUsername()` 規則，不能只依賴前端

@@ -95,6 +95,29 @@ describe("PersonaGenerationPreviewMockPage", () => {
     const updateExtraPromptInput = allPromptInputs.item(1) as HTMLTextAreaElement | null;
     expect(updateExtraPromptInput?.value).toContain("Current bio:");
     expect(updateExtraPromptInput?.value).toContain("Reference roles:");
+    expect(container.textContent).toContain(
+      "Starts from current bio and references, then refines with AI.",
+    );
+
+    const updatePromptAssistButton = container.querySelector(
+      'button[aria-label="Prompt AI for update"]',
+    );
+    expect(updatePromptAssistButton).not.toBeNull();
+
+    await act(async () => {
+      updatePromptAssistButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("AI assist processing 00:00");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(container.textContent).toContain("AI assist completed 00:01");
+    expect(container.textContent).not.toContain(
+      "Starts from current bio and references, then refines with AI.",
+    );
 
     const promptAssistButton = container.querySelector('button[aria-label="Prompt AI"]');
     expect(promptAssistButton).not.toBeNull();
@@ -103,6 +126,16 @@ describe("PersonaGenerationPreviewMockPage", () => {
       promptAssistButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    expect(container.textContent).toContain("AI assist processing 00:00");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(container.textContent).toContain("AI assist completed 00:01");
+    expect(container.textContent).not.toContain(
+      "Empty: generate in English. Existing: refine in the same language.",
+    );
     expect(extraPromptInput?.value).toBe(mockPersonaGenerationAdminExtraPrompt);
 
     const generateButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -191,6 +224,14 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Archetype");
     expect(container.textContent).toContain("Core Motivation");
     expect(container.textContent).toContain("One-Sentence Identity");
+    expect(container.textContent).toContain("Voice Fingerprint");
+    expect(container.textContent).toContain("Task Style Matrix");
+    expect(container.textContent).toContain(
+      mockPersonaGenerationPreview.structured.persona_core.voice_fingerprint.opening_move,
+    );
+    expect(container.textContent).toContain(
+      mockPersonaGenerationPreview.structured.persona_core.task_style_matrix.post.entry_shape,
+    );
     expect(container.querySelector('[data-testid="generated-persona-identity"]')).not.toBeNull();
     expect(
       container.querySelector('[data-testid="generated-persona-reference-section"]'),
@@ -240,6 +281,12 @@ describe("PersonaGenerationPreviewMockPage", () => {
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "")}`,
     );
+
+    await act(async () => {
+      setInputValue(usernameInput!, "The Deductionist");
+    });
+
+    expect(usernameInput?.value).toBe("ai_the_deductionist");
 
     const saveButton = Array.from(container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Save"),

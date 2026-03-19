@@ -228,6 +228,24 @@ function buildMemoriesStage() {
   };
 }
 
+function buildReferenceCosplayMemoriesStage() {
+  return {
+    persona_memories: [
+      {
+        memory_type: "long_memory",
+        scope: "persona",
+        memory_key: "captain_credo",
+        content:
+          "The captain doesn't ask for credentials before trusting his crew. He'd rather charge into the fight than stand around talking.",
+        metadata: { source_reference: "Monkey D. Luffy" },
+        expires_in_hours: null,
+        is_canonical: true,
+        importance: 1,
+      },
+    ],
+  };
+}
+
 function mockStageSequence(sequence: unknown[]) {
   return import("@/lib/ai/llm/invoke-llm").then(({ invokeLLM }) => {
     vi.mocked(invokeLLM).mockReset();
@@ -349,6 +367,37 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
   });
 
+  it("uses compact validated context for model invocation while keeping assembled prompt readable", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.assembledPrompt).toContain('"personas": {');
+    expect(preview.assembledPrompt).toContain('\n  "personas": {');
+    expect(invokeLLM).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            '[validated_context]\n{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"}',
+          ),
+        }),
+      }),
+    );
+  });
+
   it("rejects a malformed staged response when persona_core.values is missing", async () => {
     await mockStageSequence([
       buildSeedStage(),
@@ -459,7 +508,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
   });
 
-  it("uses runtime invocation policy while keeping staged preview pinned to the selected model", async () => {
+  it("keeps staged preview pinned to the selected model but disables provider retries for low-latency preview runs", async () => {
     const invokeLLM = await mockStageSequence([
       buildSeedStage(),
       buildValuesAndAestheticStage(),
@@ -506,7 +555,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(invokeLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         timeoutMs: 23_456,
-        retries: 4,
+        retries: 0,
         routeOverride: {
           targets: [
             {
@@ -706,6 +755,67 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       issues: expect.arrayContaining([
         expect.stringContaining("core_motivation"),
         expect.stringContaining("mixed-script artifact"),
+      ]),
+    } satisfies Partial<PersonaGenerationQualityError>);
+  });
+
+  it("runs a stage-local quality repair when persona_memories drift into literal reference roleplay", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildReferenceCosplayMemoriesStage(),
+      buildMemoriesStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_memories[0]?.content).toBe(
+      "Has a long-running bias toward precision over hype.",
+    );
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls).toHaveLength(6);
+    expect(calls[5]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:memories:quality-repair-1",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("literal reference roleplay"),
+        }),
+      }),
+    );
+  });
+
+  it("fails with a typed quality error when memories-stage quality repair still returns literal reference roleplay", async () => {
+    await mockStageSequence([
+      buildSeedStage(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildReferenceCosplayMemoriesStage(),
+      buildReferenceCosplayMemoriesStage(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await expect(
+      store.previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "",
+      }),
+    ).rejects.toMatchObject({
+      name: "PersonaGenerationQualityError",
+      stageName: "memories",
+      issues: expect.arrayContaining([
+        expect.stringContaining("persona_memories[0].content"),
+        expect.stringContaining("literal reference roleplay"),
       ]),
     } satisfies Partial<PersonaGenerationQualityError>);
   });

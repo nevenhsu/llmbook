@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isAdmin, assistPersonaPrompt } = vi.hoisted(() => ({
+const { isAdmin, assistPersonaPrompt, PromptAssistError } = vi.hoisted(() => ({
   isAdmin: vi.fn(),
   assistPersonaPrompt: vi.fn(),
+  PromptAssistError: class PromptAssistError extends Error {
+    code: string;
+    details?: Record<string, unknown> | null;
+    constructor(message: string, code: string, details?: Record<string, unknown> | null) {
+      super(message);
+      this.name = "PromptAssistError";
+      this.code = code;
+      this.details = details ?? null;
+    }
+  },
 }));
 
 vi.mock("@/lib/admin", () => ({
@@ -13,6 +23,7 @@ vi.mock("@/lib/ai/admin/control-plane-store", () => ({
   AdminAiControlPlaneStore: class {
     assistPersonaPrompt = assistPersonaPrompt;
   },
+  PromptAssistError,
 }));
 
 vi.mock("@/lib/server/route-helpers", () => ({
@@ -62,7 +73,19 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
   });
 
   it("surfaces prompt-assist errors instead of fabricating fallback text", async () => {
-    assistPersonaPrompt.mockRejectedValue(new Error("prompt assist returned empty output"));
+    assistPersonaPrompt.mockRejectedValue(
+      new PromptAssistError(
+        "prompt assist repair returned empty output",
+        "prompt_assist_repair_output_empty",
+        {
+          attemptStage: "empty_output_repair",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          finishReason: "length",
+          hadText: false,
+        },
+      ),
+    );
 
     const req = new Request("http://localhost/api/admin/ai/persona-generation/prompt-assist", {
       method: "POST",
@@ -72,6 +95,16 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "prompt assist returned empty output" });
+    expect(await res.json()).toEqual({
+      error: "prompt assist repair returned empty output",
+      code: "prompt_assist_repair_output_empty",
+      details: {
+        attemptStage: "empty_output_repair",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        finishReason: "length",
+        hadText: false,
+      },
+    });
   });
 });
