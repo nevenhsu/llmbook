@@ -2,10 +2,37 @@
 
 ## Active
 
+- [x] Add a failing persona-generation preview regression that proves truncated stage output should trigger a partial-output-aware repair instead of another blind rewrite
+- [x] Improve staged persona-generation truncation repair to reuse the truncated partial JSON as repair context while still rewriting a full valid object from scratch
+- [x] Add a second-stage compact truncation repair path that aggressively shortens heavy fields without relying on provider continuation support
+- [x] Run focused persona-generation preview verification and record the truncation-recovery approach in review notes
+- [x] Replace memories-stage roleplay/proper-noun regex gating with the same compact semantic-audit pattern used for seed originalization
+- [x] Replace seed-stage `hasAdaptationSignal` pass/fail gating with an LLM semantic audit so originalization judgment is not tied to brittle keyword regexes
+- [x] Re-tighten seed originalization-note validation so it uses English-only, generic adaptation/contrast signals instead of multilingual keywords or reference-specific noun checks
+- [x] Relax seed originalization-note validation so notes that explicitly separate the persona from both references via generic contrast language like “unlike” or “different space” do not falsely fail quality repair
+- [x] Migrate the canonical persona-generation contract from `personas` to singular `persona` across types, staged prompts, preview payloads, admin save payloads, mocks, UI, tests, and docs
+- [x] Remove plural parser aliases/fallback assumptions from persona-generation parsing so latest-contract-only preview flows require top-level `persona`
+- [x] Add focused regression coverage that pins singular `persona` in preview assembly, update/save flows, and parser error handling
+- [x] Wrap seed-stage `missing persona` schema misses as `PersonaGenerationParseError` so preview failures return the original LLM result instead of `result: null`
+- [x] Add regression coverage for seed-stage `missing persona` preserving raw parse output
+- [x] Enforce a shared English-only quality gate across persona-generation stages while still allowing explicit reference names to remain non-English
+- [x] Add regression coverage for non-English seed prose being repaired while non-English reference names inside English prose remain valid
+- [x] Relax seed originalization-note quality detection so clearly transformed original identities do not fail just because they omit explicit `forum-native` wording
+- [x] Add a regression test for the Cataract seed note so seed quality validation accepts explicit transformation/originalization language without literal `forum` keywords
+- [x] Add truncation-aware stage repair for persona-generation preview so length-cut JSON retries use compact schema-preserving prompts before failing
+- [x] Add focused regression coverage for truncated `interaction_and_guardrails` stage output that should recover on retry without changing preview budgets
+- [x] Unify `/api/admin/ai/persona-generation/preview` failure payloads so every generate error returns the failing LLM result under one canonical `result` field
+- [x] Update persona-generation admin hook/modal wiring to read and display the canonical preview error `result`
+- [x] Add focused route/hook regression tests for persona-generation preview error-result propagation
+- [x] Fix `AiControlPlanePanel` prompt-assist wiring so the new completed-status props are destructured from `useAiControlPlane()` instead of crashing at runtime
+- [x] Keep non-English reference names allowed inside otherwise-English prose without reopening multilingual originalization semantics
+- [x] Force Generate Persona / Update Persona staged generation to emit English regardless of policy text or extra-prompt language
+- [x] Accept one-layer wrapped seed/final persona-generation JSON objects so common model wrapper drift does not fail with `missing persona`
 - [x] Converge the remaining admin preview/assist LLM flows onto low provider retries: `previewPersonaInteraction`, `assistPersonaPrompt`, and `assistInteractionTaskContext`
 - [x] Preserve whitespace as underscores in shared username normalization so pasted names like "The Deductionist" become `the_deductionist` / `ai_the_deductionist`
 - [x] Investigate persona-generation preview 6-minute latency by checking both API stage attempts and frontend generation-time measurement, then fix the confirmed root cause
 - [x] Keep persona prompt-assist status lines on their completed elapsed-time state after AI assist finishes instead of snapping back to idle helper copy
+- [x] Make Persona Generation and Interaction Preview modal card sections stack vertically instead of switching into responsive multi-column layouts
 - [x] Stop persona-generation preview from inheriting high provider retry counts so staged preview stays low-latency
 - [x] Raise prompt-assist headroom again and preserve truncated-repair failure details instead of leaking stale main-rewrite diagnostics
 - [x] Inject explicit source reference names into prompt-assist main/repair prompts so name-preservation is enforced before final validation
@@ -55,10 +82,48 @@
 
 ## Review
 
+- Persona-generation preview now handles `finishReason=length` conservatively by feeding the latest truncated partial JSON into the next repair prompt as context, while still forcing the model to rewrite the whole stage from scratch instead of attempting unsafe token-by-token continuation.
+- The third-stage compact retry now keys off the latest truncated attempt, not only the first one, so repeated length cuts stay on the truncation-specific repair path.
+- Added focused regressions that pin both truncation-repair prompts to include `[previous_truncated_output]`, preventing future regressions back to blind rewrites that discard useful partial context.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts tasks/todo.md`
+- Seed-stage originalization validation now accepts strong generic contrast/adaptation language like `unlike`, `different space than`, and `not a literal reenactment` as valid evidence that the persona is adapted away from its references, without hardcoding reference-specific nouns.
+- Seed-stage originalization semantics are no longer decided by a keyword regex alone; deterministic checks still catch concrete contract violations, but ambiguous adaptation/originalization meaning now goes through a small LLM audit before quality repair.
+- Memories-stage originalization/roleplay checks now follow the same split: deterministic guards still catch language/register problems, while forum-native-vs-roleplay meaning is judged by a compact semantic audit instead of hardcoded roleplay regexes.
+- Added a focused regression for the `Apex Construct` style note so seed-stage quality checks pass when the note clearly distinguishes the resulting persona from both references without relying on literal `adapt` wording.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/app/api/admin/ai/persona-generation/preview/route.test.ts`
+- Canonical persona-generation now uses singular `persona` end-to-end across staged prompt contracts, structured preview payloads, admin save payloads, UI consumers, fixtures, and docs; plural `personas` is no longer accepted as a parser alias in the latest-contract-only preview flow.
+- Updated create/save wiring so admin-generated personas post `{ persona: {...} }` to `/api/admin/ai/personas`, while preview/update surfaces read `structured.persona` consistently for display name, bio, and status.
+- Added/updated focused regressions to pin the singular contract, including a parser test that now rejects top-level `personas` seed payloads and preserves the original raw result under the new `missing persona` parse error.
+- Verification:
+  - `npx vitest run src/app/api/admin/ai/personas/route.test.ts src/hooks/admin/useAiControlPlane.update-persona-preview.test.ts src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+  - `git diff --check -- src/lib/ai/admin/control-plane-store.ts src/lib/ai/admin/persona-generation-prompt-template.ts src/lib/ai/admin/persona-generation-preview-mock.ts src/mock-data/persona-generation-preview.json src/hooks/admin/useAiControlPlane.ts src/components/admin/control-plane/PersonaGenerationPreviewSurface.tsx src/components/admin/control-plane/PersonaStructuredPreview.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.tsx src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts src/hooks/admin/useAiControlPlane.update-persona-preview.test.ts src/app/api/admin/ai/personas/route.ts src/app/api/admin/ai/personas/route.test.ts src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md tasks/todo.md tasks/lessons.md`
+- Fixed the prompt-assist completed-status regression in `AiControlPlanePanel`: the panel now destructures `personaPromptAssistCompleted` and `personaUpdatePromptAssistCompleted` from `useAiControlPlane()` before passing them into `PersonaGenerationSection`, so the admin page no longer throws a `ReferenceError` on render.
+- Verification:
+  - `npx vitest run src/components/admin/AiControlPlanePanel.test.ts`
+  - `npx tsc --noEmit --pretty false` currently still fails on unrelated pre-existing repo-wide type errors outside this panel fix.
+- Seed-stage quality validation now keeps generated prose English-only while still allowing explicit non-English reference names to appear as named references inside otherwise-English output.
+- Added a focused regression proving non-English reference names are still accepted without reopening multilingual prose acceptance in the semantic rule.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts`
+- Persona generation now hard-locks staged output to English in the shared generator instruction, so Generate Persona and Update Persona no longer inherit output language from the global policy text or a non-English extra prompt.
+- Added focused regressions at both the store prompt level and the preview sandbox prompt display to make that English-only generation rule visible and durable.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+- Persona-generation parsing now tolerates the common one-layer wrapper drift where a model nests the whole seed or final payload under `result`/similar outer keys before the real schema object.
+- Added a focused staged-preview regression that verifies wrapped seed-stage payloads still parse and assemble correctly.
+- Verification:
+  - `npx vitest run src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts`
 - Prompt-assist small status text now keeps the completed elapsed-time state after AI assist succeeds, so Generate/Update cards no longer snap back to idle helper copy immediately after the request finishes.
 - Updated the preview sandbox to simulate the same async prompt-assist flow with visible `processing` -> `completed` status transitions, so the UI review page matches production behavior instead of staying instant.
 - Verification:
   - `npx vitest run src/components/admin/control-plane/persona-prompt-assist-utils.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
+- Persona Generation modal and Interaction Preview modal now keep their lower card sections in one vertical flow by removing the responsive multi-column card grids from `PersonaStructuredPreview` and `PreviewPanel`.
+- Added focused layout regressions so those modal preview surfaces cannot silently reintroduce `md/xl/lg` multi-column card grids.
+- Verification:
+  - `npx vitest run src/components/admin/control-plane/PersonaStructuredPreview.test.ts src/components/admin/control-plane/PreviewPanel.test.ts src/components/admin/control-plane/InteractionPreviewMockPage.test.ts src/components/admin/control-plane/PersonaGenerationPreviewMockPage.test.ts`
 - Converged the remaining admin UI preview/assist paths onto the same low-retry provider policy as persona-generation preview: `previewPersonaInteraction`, `assistPersonaPrompt`, and `assistInteractionTaskContext` now fail fast with provider retries pinned to `0` instead of inheriting general runtime retry counts.
 - Kept the reliability boundary explicit: only admin preview/assist flows changed, while production runtime / agent execution paths still keep their normal retry behavior.
 - Added focused regression coverage proving all four admin UI LLM flows keep their selected-model route/timeout behavior while overriding provider retries to `0`.

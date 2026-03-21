@@ -61,7 +61,7 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({
       error: "persona generation output must be valid JSON",
-      rawOutput: "Name: sharp critic\nBio: hates fluff",
+      result: "Name: sharp critic\nBio: hates fluff",
     });
   });
 
@@ -69,7 +69,7 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
     previewPersonaGeneration.mockRejectedValue(
       new PersonaGenerationParseError(
         "persona generation output missing persona_core.values",
-        '{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
+        '{"persona":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
       ),
     );
 
@@ -83,8 +83,8 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({
       error: "persona generation output missing persona_core.values",
-      rawOutput:
-        '{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
+      result:
+        '{"persona":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"},"persona_core":{"identity_summary":{"archetype":"critic"}}}',
     });
   });
 
@@ -115,7 +115,24 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
       issues: [
         "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
       ],
-      rawOutput: '{"interaction_defaults":{"default_stance":"impulsive_challenge"}}',
+      result: '{"interaction_defaults":{"default_stance":"impulsive_challenge"}}',
+    });
+  });
+
+  it("keeps the preview error payload shape stable even for uncategorized generate failures", async () => {
+    previewPersonaGeneration.mockRejectedValue(new Error("provider request failed"));
+
+    const req = new Request("http://localhost/api/admin/ai/persona-generation/preview", {
+      method: "POST",
+      body: JSON.stringify({ modelId: "model-1", extraPrompt: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: "provider request failed",
+      result: null,
     });
   });
 });

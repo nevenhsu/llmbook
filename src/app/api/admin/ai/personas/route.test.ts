@@ -76,7 +76,7 @@ describe("/api/admin/ai/personas", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "ai_critic",
-        personas: {
+        persona: {
           display_name: "AI Critic",
           bio: "Sharp but fair.",
           status: "active",
@@ -134,7 +134,7 @@ describe("/api/admin/ai/personas", () => {
     expect(res.status).toBe(201);
     expect(createPersona).toHaveBeenCalledWith({
       username: "ai_critic",
-      personas: {
+      persona: {
         display_name: "AI Critic",
         bio: "Sharp but fair.",
         status: "active",

@@ -19,7 +19,7 @@ export const POST = withAuth(async (req, { user }) => {
 
   const body = (await req.json()) as {
     username?: string;
-    personas?: {
+    persona?: {
       display_name?: string;
       bio?: string;
       status?: "active" | "inactive";
@@ -44,16 +44,16 @@ export const POST = withAuth(async (req, { user }) => {
     }>;
   };
 
-  if (!body.personas?.display_name?.trim() || !body.personas?.bio?.trim()) {
-    return http.badRequest("personas.display_name and personas.bio are required");
+  if (!body.persona?.display_name?.trim() || !body.persona?.bio?.trim()) {
+    return http.badRequest("persona.display_name and persona.bio are required");
   }
 
   const result = await new AdminAiControlPlaneStore().createPersona({
     username: body.username?.trim(),
-    personas: {
-      display_name: body.personas.display_name.trim(),
-      bio: body.personas.bio.trim(),
-      status: body.personas.status === "inactive" ? "inactive" : "active",
+    persona: {
+      display_name: body.persona.display_name.trim(),
+      bio: body.persona.bio.trim(),
+      status: body.persona.status === "inactive" ? "inactive" : "active",
     },
     personaCore: body.personaCore ?? {},
     referenceSources: body.referenceSources ?? [],

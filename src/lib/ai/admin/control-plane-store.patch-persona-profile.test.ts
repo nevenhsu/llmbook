@@ -218,7 +218,7 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
 
     await store.createPersona({
       username: "AI_RIPTIDE-ROO!?漢字",
-      personas: {
+      persona: {
         display_name: "Riptide Roo",
         bio: "Boisterous forum warrior.",
         status: "active",

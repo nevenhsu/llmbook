@@ -2,16 +2,17 @@ export const PERSONA_GENERATION_MAX_INPUT_TOKENS = 2800;
 export const PERSONA_GENERATION_MAX_OUTPUT_TOKENS = 1800;
 export const PROMPT_ASSIST_MAX_OUTPUT_TOKENS = 1024;
 export const ADMIN_UI_LLM_PROVIDER_RETRIES = 0;
+export const PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS = 240;
 
 export const PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS = {
   seed: 1200,
   values_and_aesthetic: 1200,
   context_and_affinity: 1200,
-  interaction_and_guardrails: 1500,
+  interaction_and_guardrails: 1800,
   memories: 900,
-  repairRetryCap: 1400,
-  compactRetryCap: 1100,
-  qualityRepairCap: 1500,
+  repairRetryCap: 1700,
+  compactRetryCap: 1300,
+  qualityRepairCap: 1800,
 } as const;
 
 export const PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS =

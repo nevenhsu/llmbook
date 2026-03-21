@@ -17,7 +17,17 @@ const apiFetchJsonMock = vi.fn();
 const apiPostMock = vi.fn();
 
 vi.mock("@/lib/api/fetch-json", () => ({
-  ApiError: class extends Error {},
+  ApiError: class extends Error {
+    public status: number;
+    public details?: unknown;
+
+    public constructor(message: string, status: number, details?: unknown) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+      this.details = details;
+    }
+  },
   apiFetchJson: (...args: unknown[]) => apiFetchJsonMock(...args),
   apiDelete: vi.fn(),
   apiPatch: vi.fn(),
@@ -39,6 +49,8 @@ type Snapshot = {
   };
   modalOpen: boolean;
   mode: "create" | "update";
+  modalError: string | null;
+  modalResult: string | null;
 };
 
 type HarnessProps = {
@@ -86,7 +98,7 @@ function buildPreview(): PreviewResult & { structured: PersonaGenerationStructur
       message: null,
     },
     structured: {
-      personas: {
+      persona: {
         display_name: "Preview Mutation",
         bio: "Preview bio",
         status: "active",
@@ -174,11 +186,15 @@ function Harness({ onSnapshot }: HarnessProps) {
       saveForm: hook.personaSaveForm,
       modalOpen: hook.personaGenerationModalOpen,
       mode: hook.personaGenerationMode,
+      modalError: hook.personaGenerationModalError,
+      modalResult: hook.personaGenerationModalRawOutput,
     });
   }, [
     hook.personaSaveForm,
     hook.personaGenerationModalOpen,
     hook.personaGenerationMode,
+    hook.personaGenerationModalError,
+    hook.personaGenerationModalRawOutput,
     onSnapshot,
   ]);
 
@@ -284,5 +300,43 @@ describe("useAiControlPlane update persona preview", () => {
     expect(apiPostMock).toHaveBeenCalledTimes(2);
     expect(preservedSnapshot?.saveForm.displayName).not.toBe("Preview Mutation");
     expect(preservedSnapshot?.saveForm.username).not.toBe("ai_preview_mutation");
+  });
+
+  it("captures the canonical preview error result from the API payload", async () => {
+    const { ApiError } = await import("@/lib/api/fetch-json");
+    const snapshots: Snapshot[] = [];
+    apiPostMock.mockRejectedValueOnce(
+      new ApiError("persona generation output missing persona", 422, {
+        error: "persona generation output missing persona",
+        result: '{"result":{"persona":{"display_name":"Deep Focus"}}}',
+      }),
+    );
+
+    await act(async () => {
+      root.render(
+        React.createElement(Harness, { onSnapshot: (snapshot) => snapshots.push(snapshot) }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const runButton = container.querySelector("#run-update-preview") as HTMLButtonElement | null;
+    expect(runButton).not.toBeNull();
+
+    await act(async () => {
+      runButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const erroredSnapshot = snapshots.at(-1);
+    expect(erroredSnapshot?.modalOpen).toBe(true);
+    expect(erroredSnapshot?.modalError).toBe("persona generation output missing persona");
+    expect(erroredSnapshot?.modalResult).toBe(
+      '{"result":{"persona":{"display_name":"Deep Focus"}}}',
+    );
   });
 });

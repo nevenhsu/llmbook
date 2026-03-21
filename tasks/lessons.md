@@ -82,6 +82,22 @@
 - When the preview generate-persona modal's structured data contract changes, update the corresponding modal UI mapping in the same change; do not leave the review surface on stale field wiring.
 - If an admin AI helper shows elapsed status while running, preserve a separate completed state and final elapsed time after success; otherwise the UI will fall back to idle helper copy too early.
 - When create/update cards share one prompt-assist status component, add regression coverage for both cards; otherwise it is easy to verify the update card and miss the create card's fallback-to-idle behavior.
+- If an operator asks for modal review cards to stay in one vertical order, remove the responsive multi-column grid classes from the shared preview components themselves; changing only the modal shell will not stop nested cards from reflowing side by side.
+- When adding new hook-return fields to a panel and forwarding them to child props, update the hook destructuring in the parent immediately; otherwise the page can still compile in pieces but crash at runtime with a missing local binding.
+- For staged LLM JSON contracts in active development, once the user chooses the canonical key shape, migrate every prompt/parser/UI/test/doc consumer to that shape instead of preserving singular/plural aliases.
+- After a canonical contract migration lands, sweep tests/docs/review notes for stale examples of the old shape; leaving outdated fixtures or historical notes behind will keep reintroducing the wrong contract.
+- Persona generation has a stricter language contract than prompt-assist: the shared staged generation prompt must explicitly force English output regardless of global policy language or admin extra-prompt language, or models will drift to the user's input language.
+- Once persona generation is contractually English-only, do not keep multilingual prose acceptance logic around; add a shared English-only quality gate for generated prose and only exempt explicit reference names from non-English rejection.
+- In staged persona-generation parsing, every schema miss that depends on raw model output must be wrapped as `PersonaGenerationParseError`; if one helper leaks a plain `Error`, the API falls back to `result: null` and throws away the debugging artifact.
+- For staged persona-generation parsing, one-layer `result`/`output` wrappers are still reasonable to unwrap, but singular/plural key aliases should be removed once the canonical contract is explicitly chosen.
+- For persona-generation preview failures, do not expose a parser/debug payload only on some paths or under ambiguous names like `rawOutput`; return one canonical `result` field from the API and have the admin modal read that same field directly.
+- When preview error `result` clearly shows a stage JSON was cut off mid-object, treat it as a truncation problem first: raise the affected stage headroom and use a truncation-specific retry prompt before chasing parser aliases or schema changes.
+- For `interaction_and_guardrails`, truncation fixes need stage-specific compression rules, not only generic “be shorter” wording; explicitly constrain heavy list fields and remind the model that `voice_fingerprint.closing_move` is a single string, not an array.
+- Seed-stage originalization validation should judge meaning, not one literal phrase like `forum-native`; accept notes that clearly describe a transformed original identity/voice/persona even if they use wording like `rather than being`, `not an imitation`, or `internalized`.
+- Seed-stage originalization validation should stay English-only and generic: accept contrast/adaptation wording like `unlike`, `different space than`, or `not a literal reenactment`, but do not hardcode multilingual keywords or reference-specific nouns into the semantic rule.
+- When a language contract is already English-only, remove stale multilingual semantic cues from docs/tasks too; leaving review notes that still mention multilingual acceptance will cause the validator to drift back later.
+- When a persona quality rule is fundamentally semantic, do not let a regex be the final pass/fail gate; keep deterministic checks for concrete violations, then hand the semantic judgment to a compact LLM audit that returns repairable issues.
+- Apply that split consistently across persona-generation stages: if seed originalization moved to semantic audit, memories-stage forum-native-vs-roleplay judgment should not stay behind as a brittle keyword pattern.
 
 ## Data / Schema
 
@@ -90,4 +106,5 @@
 - When the user says "app" in this project, confirm whether they mean the AI runtime or admin/UI surfaces before prioritizing work.
 - For Supabase upserts keyed by a non-primary unique constraint like `persona_cores.persona_id`, always pass the explicit `onConflict` column list; default upsert targeting can fall back to primary-key behavior and trigger duplicate-key errors on updates.
 - In this repo's active-development stage, shared mock/preview loaders should consume the latest contract shape directly; do not add legacy shape fallbacks unless the user explicitly asks for compatibility.
+- If the user decides the canonical shape itself is wrong, finish the full contract migration instead of keeping a parser alias; latest-contract-only means prompts, parsers, UI, fixtures, tests, and docs should all converge on the new singular/plural choice together.
 - This repo's Vitest config only matches `src/**/*.test.ts`; new React DOM tests still need the `.test.ts` suffix.

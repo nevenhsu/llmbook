@@ -167,6 +167,9 @@ describe("PersonaGenerationPreviewMockPage", () => {
       "The final persona must be reference-inspired, not reference-cosplay.",
     );
     expect(container.textContent).toContain(
+      "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
+    );
+    expect(container.textContent).toContain(
       "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
     );
     expect(container.textContent).toContain(
@@ -219,7 +222,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     );
     expect(container.textContent).toContain("Generation time: 00:01");
     expect(container.textContent).toContain(
-      mockPersonaGenerationPreview.structured.personas.display_name,
+      mockPersonaGenerationPreview.structured.persona.display_name,
     );
     expect(container.textContent).toContain("Archetype");
     expect(container.textContent).toContain("Core Motivation");
@@ -270,13 +273,13 @@ describe("PersonaGenerationPreviewMockPage", () => {
       'input[placeholder="e.g. Satoshi Nakamoto"]',
     ) as HTMLInputElement | null;
     expect(displayNameInput?.value).toBe(
-      mockPersonaGenerationPreview.structured.personas.display_name,
+      mockPersonaGenerationPreview.structured.persona.display_name,
     );
     const usernameInput = container.querySelector(
       'input[placeholder="e.g. satoshi"]',
     ) as HTMLInputElement | null;
     expect(usernameInput?.value).toBe(
-      `ai_${mockPersonaGenerationPreview.structured.personas.display_name
+      `ai_${mockPersonaGenerationPreview.structured.persona.display_name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "")}`,

@@ -34,6 +34,7 @@ import {
   PERSONA_GENERATION_MAX_INPUT_TOKENS,
   PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+  PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS,
   PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS,
   PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
 } from "@/lib/ai/admin/persona-generation-token-budgets";
@@ -171,6 +172,12 @@ export type PreviewAuditDiagnostics = {
   compactRetryUsed: boolean;
 };
 
+type PersonaGenerationSemanticAuditResult = {
+  passes: boolean;
+  issues: string[];
+  repairGuidance: string[];
+};
+
 export class PersonaGenerationParseError extends Error {
   public readonly rawOutput: string;
 
@@ -232,7 +239,7 @@ export class PromptAssistError extends Error {
 }
 
 export type PersonaGenerationStructured = {
-  personas: {
+  persona: {
     display_name: string;
     bio: string;
     status: "active" | "inactive";
@@ -276,7 +283,7 @@ export type PersonaProfile = {
 };
 
 type PersonaGenerationSeedStage = {
-  personas: PersonaGenerationStructured["personas"];
+  persona: PersonaGenerationStructured["persona"];
   identity_summary: Record<string, unknown>;
   reference_sources: PersonaGenerationStructured["reference_sources"];
   reference_derivation: string[];
@@ -927,6 +934,27 @@ function requirePersonaRecord(value: unknown, fieldPath: string): Record<string,
   return record;
 }
 
+function unwrapPersonaStageRoot(
+  root: Record<string, unknown>,
+  requiredFieldGroups: string[][],
+): Record<string, unknown> {
+  const satisfiesGroups = (record: Record<string, unknown>) =>
+    requiredFieldGroups.every((group) => group.some((field) => field in record));
+
+  if (satisfiesGroups(root)) {
+    return root;
+  }
+
+  for (const value of Object.values(root)) {
+    const nested = asRecord(value);
+    if (nested && satisfiesGroups(nested)) {
+      return nested;
+    }
+  }
+
+  return root;
+}
+
 function requirePersonaText(value: unknown, fieldPath: string): string {
   const text = readString(value).trim();
   if (!text) {
@@ -992,26 +1020,109 @@ function hasMixedScriptArtifact(text: string): boolean {
   return /[A-Za-z][\u3400-\u9fff]|[\u3400-\u9fff][A-Za-z]/u.test(text);
 }
 
-function extractCapitalizedPhrases(text: string): string[] {
-  return Array.from(text.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g), (match) =>
-    match[0].trim(),
-  );
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function normalizeComparisonText(text: string): string {
-  return normalizeSingleLineText(text)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u3400-\u9fff]+/gu, " ")
-    .trim();
+function stripAllowedReferenceNames(text: string, allowedReferenceNames: string[]): string {
+  if (allowedReferenceNames.length === 0) {
+    return text;
+  }
+
+  let normalized = text;
+  for (const name of allowedReferenceNames) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      continue;
+    }
+    normalized = normalized.replace(new RegExp(escapeRegExp(trimmed), "gu"), " ");
+  }
+  return normalized;
+}
+
+function collectAllowedReferenceNameVariants(referenceNames: string[]): string[] {
+  const variants = new Set<string>();
+
+  for (const name of referenceNames) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      continue;
+    }
+    variants.add(trimmed);
+
+    for (const part of trimmed.split(/[\s/_-]+/u)) {
+      const token = part.trim();
+      if (token.length < 4) {
+        continue;
+      }
+      variants.add(token);
+    }
+  }
+
+  return Array.from(variants).sort((left, right) => right.length - left.length);
+}
+
+function collectReferenceSourceNames(value: unknown): string[] {
+  const record = asRecord(value);
+  if (!record || !Array.isArray(record.reference_sources)) {
+    return [];
+  }
+
+  return record.reference_sources
+    .map((item) => readString(asRecord(item)?.name).trim())
+    .filter((item) => item.length > 0);
+}
+
+function collectEnglishOnlyIssues(
+  value: unknown,
+  input?: {
+    fieldPath?: string;
+    allowedReferenceNames?: string[];
+  },
+): string[] {
+  const fieldPath = input?.fieldPath ?? "";
+  const allowedReferenceNamesRaw = collectAllowedReferenceNameVariants([
+    ...(input?.allowedReferenceNames ?? []),
+    ...collectReferenceSourceNames(value),
+  ]);
+  const issues: string[] = [];
+
+  const visit = (current: unknown, currentPath: string) => {
+    if (typeof current === "string") {
+      if (containsCjk(stripAllowedReferenceNames(current, allowedReferenceNamesRaw))) {
+        issues.push(`${currentPath} must be English-only.`);
+      }
+      return;
+    }
+
+    if (Array.isArray(current)) {
+      current.forEach((item, index) => {
+        visit(item, `${currentPath}[${index}]`);
+      });
+      return;
+    }
+
+    const record = asRecord(current);
+    if (!record) {
+      return;
+    }
+
+    for (const [key, item] of Object.entries(record)) {
+      visit(item, currentPath ? `${currentPath}.${key}` : key);
+    }
+  };
+
+  visit(value, fieldPath);
+  return issues;
 }
 
 function validateSeedStageQuality(stage: PersonaGenerationSeedStage): string[] {
   const issues: string[] = [];
-  const allowedReferenceNames = new Set(
-    stage.reference_sources.map((item) => normalizeComparisonText(item.name)),
+  const allowedReferenceNamesRaw = collectAllowedReferenceNameVariants(
+    stage.reference_sources.map((item) => item.name).filter(Boolean),
   );
   const seedTexts: Array<[string, string]> = [
-    ["personas.bio", stage.personas.bio],
+    ["persona.bio", stage.persona.bio],
     ["identity_summary.core_motivation", readString(stage.identity_summary.core_motivation)],
     [
       "identity_summary.one_sentence_identity",
@@ -1022,40 +1133,11 @@ function validateSeedStageQuality(stage: PersonaGenerationSeedStage): string[] {
   ];
 
   for (const [fieldPath, text] of seedTexts) {
-    if (hasMixedScriptArtifact(text)) {
+    if (hasMixedScriptArtifact(stripAllowedReferenceNames(text, allowedReferenceNamesRaw))) {
       issues.push(
         `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
       );
     }
-  }
-
-  for (const fieldPath of [
-    "personas.bio",
-    "identity_summary.core_motivation",
-    "identity_summary.one_sentence_identity",
-  ] as const) {
-    const text =
-      fieldPath === "personas.bio"
-        ? stage.personas.bio
-        : fieldPath === "identity_summary.core_motivation"
-          ? readString(stage.identity_summary.core_motivation)
-          : readString(stage.identity_summary.one_sentence_identity);
-
-    for (const phrase of extractCapitalizedPhrases(text)) {
-      if (allowedReferenceNames.has(normalizeComparisonText(phrase))) {
-        continue;
-      }
-      issues.push(
-        `${fieldPath} leaks a reference-world proper noun (${phrase}) and should be originalized into forum-native language.`,
-      );
-    }
-  }
-
-  const originalizationNote = normalizeComparisonText(stage.originalization_note);
-  if (!/(original|adapt|forum|inspired|lens|filtered)/u.test(originalizationNote)) {
-    issues.push(
-      "originalization_note must explain how the persona is adapted into an original forum-native identity.",
-    );
   }
 
   return issues;
@@ -1200,21 +1282,8 @@ function validateInteractionStageQuality(stage: PersonaGenerationInteractionStag
   return issues;
 }
 
-const FORUM_NATIVE_MEMORY_ANCHOR_PATTERN =
-  /\b(?:forum|thread|post|poster|comment|reply|board|chat|discussion|debate|argument|mod|moderator|admin|feed|timeline|upvote|downvote)\b/i;
-const REFERENCE_WORLD_ROLEPLAY_MEMORY_PATTERN =
-  /\bthe\s+(?:captain|commander|king|queen|prince|princess|emperor|empress|hero|villain|chosen one)\b|\b(?:my|our|his|her|their)\s+(?:crew|fleet|ship|court|throne|kingdom|empire|realm|powers?|magic|mission)\b/i;
-
-function validateMemoriesStageQuality(
-  stage: PersonaGenerationMemoriesStage,
-  input: {
-    referenceSources: PersonaGenerationStructured["reference_sources"];
-  },
-): string[] {
+function validateMemoriesStageQuality(stage: PersonaGenerationMemoriesStage): string[] {
   const issues: string[] = [];
-  const allowedReferenceNames = new Set(
-    input.referenceSources.map((item) => normalizeComparisonText(item.name)),
-  );
 
   for (const [index, memory] of stage.persona_memories.entries()) {
     const fieldPath = `persona_memories[${index}].content`;
@@ -1226,24 +1295,6 @@ function validateMemoriesStageQuality(
     if (hasMixedScriptArtifact(content)) {
       issues.push(
         `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
-      );
-    }
-
-    for (const phrase of extractCapitalizedPhrases(content)) {
-      if (allowedReferenceNames.has(normalizeComparisonText(phrase))) {
-        continue;
-      }
-      issues.push(
-        `${fieldPath} leaks a reference-world proper noun (${phrase}) and should stay originalized into forum-native memory language.`,
-      );
-    }
-
-    if (
-      REFERENCE_WORLD_ROLEPLAY_MEMORY_PATTERN.test(content) &&
-      !FORUM_NATIVE_MEMORY_ANCHOR_PATTERN.test(content)
-    ) {
-      issues.push(
-        `${fieldPath} drifts into literal reference roleplay; keep memories in original forum-native incidents, habits, or philosophy.`,
       );
     }
   }
@@ -1893,15 +1944,70 @@ function parsePersonaStageObject(rawText: string): Record<string, unknown> {
   return record;
 }
 
-function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedStage {
-  const record = parsePersonaStageObject(rawText);
-  const personas = requirePersonaRecord(record.personas, "personas");
+function parsePersonaGenerationSemanticAuditResult(
+  rawText: string,
+): PersonaGenerationSemanticAuditResult {
+  const jsonText = extractJsonFromText(rawText);
+  if (!jsonText) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit returned empty output",
+      rawText,
+    );
+  }
+
+  let parsed: unknown;
   try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit returned invalid JSON",
+      rawText,
+    );
+  }
+
+  const record = asRecord(parsed);
+  if (!record) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit must return a JSON object",
+      rawText,
+    );
+  }
+
+  const issuesRaw = Array.isArray(record.issues) ? record.issues : null;
+  const repairGuidanceRaw = Array.isArray(record.repairGuidance) ? record.repairGuidance : null;
+  if (typeof record.passes !== "boolean" || issuesRaw === null || repairGuidanceRaw === null) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit must include boolean passes and string-array issues/repairGuidance",
+      rawText,
+    );
+  }
+
+  return {
+    passes: record.passes,
+    issues: issuesRaw
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter((item) => item.length > 0),
+    repairGuidance: repairGuidanceRaw
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter((item) => item.length > 0),
+  };
+}
+
+function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedStage {
+  try {
+    const record = unwrapPersonaStageRoot(parsePersonaStageObject(rawText), [
+      ["persona"],
+      ["identity_summary"],
+      ["reference_sources"],
+      ["reference_derivation"],
+      ["originalization_note"],
+    ]);
+    const persona = requirePersonaRecord(record.persona, "persona");
     return {
-      personas: {
-        display_name: requirePersonaText(personas.display_name, "personas.display_name"),
-        bio: requirePersonaText(personas.bio, "personas.bio"),
-        status: readString(personas.status).trim() === "inactive" ? "inactive" : "active",
+      persona: {
+        display_name: requirePersonaText(persona.display_name, "persona.display_name"),
+        bio: requirePersonaText(persona.bio, "persona.bio"),
+        status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
       },
       identity_summary: parsePersonaIdentitySummary(record.identity_summary),
       reference_sources: parseReferenceSources(record.reference_sources),
@@ -1983,16 +2089,23 @@ function parsePersonaMemoriesOutput(rawText: string): PersonaGenerationMemoriesS
 function parsePersonaGenerationOutput(rawText: string): {
   structured: PersonaGenerationStructured;
 } {
-  const record = parsePersonaStageObject(rawText);
+  const record = unwrapPersonaStageRoot(parsePersonaStageObject(rawText), [
+    ["persona"],
+    ["persona_core"],
+    ["reference_sources"],
+    ["reference_derivation"],
+    ["originalization_note"],
+    ["persona_memories"],
+  ]);
   try {
-    const personas = requirePersonaRecord(record.personas, "personas");
+    const persona = requirePersonaRecord(record.persona, "persona");
     const personaCore = requirePersonaRecord(record.persona_core, "persona_core");
     return {
       structured: {
-        personas: {
-          display_name: requirePersonaText(personas.display_name, "personas.display_name"),
-          bio: requirePersonaText(personas.bio, "personas.bio"),
-          status: readString(personas.status).trim() === "inactive" ? "inactive" : "active",
+        persona: {
+          display_name: requirePersonaText(persona.display_name, "persona.display_name"),
+          bio: requirePersonaText(persona.bio, "persona.bio"),
+          status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
         },
         persona_core: parsePersonaCore(personaCore),
         reference_sources: parseReferenceSources(record.reference_sources),
@@ -3071,7 +3184,7 @@ export class AdminAiControlPlaneStore {
 
   public async createPersona(input: {
     username?: string;
-    personas: PersonaGenerationStructured["personas"];
+    persona: PersonaGenerationStructured["persona"];
     personaCore: Record<string, unknown>;
     referenceSources: PersonaGenerationStructured["reference_sources"];
     referenceDerivation: string[];
@@ -3089,16 +3202,16 @@ export class AdminAiControlPlaneStore {
   }): Promise<{ personaId: string }> {
     const username = input.username?.trim()
       ? normalizeUsernameInput(input.username, { isPersona: true })
-      : derivePersonaUsername(input.personas.display_name);
+      : derivePersonaUsername(input.persona.display_name);
     const canonicalPersonaCore = parsePersonaCore(input.personaCore);
 
     const { data: persona, error: personaError } = await this.supabase
       .from("personas")
       .insert({
         username,
-        display_name: input.personas.display_name,
-        bio: input.personas.bio,
-        status: input.personas.status === "inactive" ? "inactive" : "active",
+        display_name: input.persona.display_name,
+        bio: input.persona.bio,
+        status: input.persona.status === "inactive" ? "inactive" : "active",
       })
       .select("id")
       .single<{ id: string }>();
@@ -3540,6 +3653,7 @@ export class AdminAiControlPlaneStore {
         name: "generator_instruction",
         content: [
           "Generate the canonical persona payload in smaller validated stages.",
+          "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
           "Use snake_case keys exactly as provided.",
           "Preserve named references when they clarify the persona.",
           "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
@@ -3596,13 +3710,136 @@ export class AdminAiControlPlaneStore {
       return formatPrompt(blocks);
     };
 
+    const runPersonaGenerationSemanticAudit = async (input: {
+      stageName: string;
+      auditLabel: string;
+      instructions: string[];
+      parsedOutput: Record<string, unknown>;
+      defaultIssue: string;
+    }): Promise<{
+      issues: string[];
+      repairGuidance: string[];
+    }> => {
+      const auditPrompt = [
+        `[${input.auditLabel}]`,
+        ...input.instructions,
+        "Keep your response in English.",
+        "Return exactly one JSON object.",
+        "Return raw JSON only. Do not use markdown fences.",
+        "passes: boolean",
+        "issues: string[]",
+        "repairGuidance: string[]",
+        "If the note is already sufficient, set passes=true and return empty arrays.",
+        "Keep every issue and repairGuidance item short and functional.",
+        "",
+        "[parsed_stage]",
+        JSON.stringify(input.parsedOutput, null, 2),
+      ].join("\n");
+
+      const auditResult = await invokeLLM({
+        registry,
+        taskType: "generic",
+        routeOverride: invocationConfig.route,
+        modelInput: {
+          prompt: auditPrompt,
+          maxOutputTokens: Math.min(
+            PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS,
+            maxOutputTokens,
+          ),
+          temperature: 0,
+        },
+        entityId: `persona-generation-preview:${model.id}:${input.stageName}:semantic-audit-1`,
+        timeoutMs: invocationConfig.timeoutMs,
+        retries: previewProviderRetries,
+        onProviderError: async (event) => {
+          await this.recordLlmInvocationError({
+            providerKey: event.providerId,
+            modelKey: event.modelId,
+            error: event.error,
+            errorDetails: event.errorDetails,
+          });
+        },
+      });
+
+      if (!auditResult.text.trim()) {
+        return { issues: [], repairGuidance: [] };
+      }
+
+      try {
+        const parsed = parsePersonaGenerationSemanticAuditResult(auditResult.text);
+        if (parsed.passes) {
+          return { issues: [], repairGuidance: [] };
+        }
+        return {
+          issues: parsed.issues.length > 0 ? parsed.issues : [input.defaultIssue],
+          repairGuidance: parsed.repairGuidance,
+        };
+      } catch {
+        return { issues: [], repairGuidance: [] };
+      }
+    };
+
+    const auditSeedOriginalizationSemantics = async (
+      stage: PersonaGenerationSeedStage,
+    ): Promise<{
+      issues: string[];
+      repairGuidance: string[];
+    }> =>
+      runPersonaGenerationSemanticAudit({
+        stageName: "seed",
+        auditLabel: "seed_originalization_audit",
+        instructions: [
+          "You are judging whether the seed-stage output has been adapted into a new forum-native identity rather than staying as literal roleplay, direct copy, or reference-world transplant.",
+          "Judge semantic meaning, not specific keywords.",
+          "Flag unresolved reference-world proper noun leakage in persona.bio, identity_summary, or originalization_note when it keeps the persona too close to the source material.",
+          "Check whether originalization_note clearly explains the adaptation into a new identity.",
+        ],
+        parsedOutput: {
+          persona: stage.persona,
+          identity_summary: stage.identity_summary,
+          reference_sources: stage.reference_sources,
+          reference_derivation: stage.reference_derivation,
+          originalization_note: stage.originalization_note,
+        },
+        defaultIssue:
+          "originalization_note must explain how the persona is adapted into an original forum-native identity.",
+      });
+
+    const auditMemoriesOriginalizationSemantics = async (
+      stage: PersonaGenerationMemoriesStage,
+      referenceSources: PersonaGenerationStructured["reference_sources"],
+    ): Promise<{
+      issues: string[];
+      repairGuidance: string[];
+    }> =>
+      runPersonaGenerationSemanticAudit({
+        stageName: "memories",
+        auditLabel: "memories_originalization_audit",
+        instructions: [
+          "You are judging whether persona memories stay originalized into forum-native incidents, habits, beliefs, and lived context rather than drifting into canon scenes, in-universe identity, or literal reference roleplay.",
+          "Judge semantic meaning, not specific keywords.",
+          "Flag reference-world proper nouns or roleplay framing when the memory content reads like the persona is literally inside the source world instead of a forum-native identity.",
+        ],
+        parsedOutput: {
+          persona_memories: stage.persona_memories,
+          reference_sources: referenceSources,
+        },
+        defaultIssue:
+          "persona_memories must stay originalized into forum-native incidents, habits, or beliefs instead of literal reference roleplay.",
+      });
+
     const runPersonaGenerationStage = async <T>(input: {
       stageName: string;
       stageGoal: string;
       stageContract: string;
       parse: (rawText: string) => T;
       validateQuality?: (parsed: T) => string[];
+      validateQualityAsync?: (parsed: T) => Promise<{
+        issues: string[];
+        repairGuidance?: string[];
+      }>;
       validatedContext?: Record<string, unknown> | null;
+      allowedReferenceNames?: string[];
       outputMaxTokens: number;
     }): Promise<T> => {
       const basePrompt = buildStagePrompt({
@@ -3683,6 +3920,67 @@ export class AdminAiControlPlaneStore {
           },
         });
 
+      const isLengthTruncated = (result: { text: string; finishReason?: string | null }) =>
+        result.finishReason === "length" && result.text.trim().length > 0;
+
+      const formatTruncatedOutputForRepair = (rawText: string) => {
+        const text = rawText.trim();
+        if (!text) {
+          return "";
+        }
+        if (text.length <= 1600) {
+          return text;
+        }
+        const head = text.slice(0, 1000).trimEnd();
+        const tail = text.slice(-500).trimStart();
+        return `${head}\n...[middle omitted for repair context]...\n${tail}`;
+      };
+
+      const buildTruncatedOutputContext = (rawText: string | null | undefined) => {
+        const formatted = formatTruncatedOutputForRepair(rawText ?? "");
+        if (!formatted) {
+          return "";
+        }
+        return [
+          "",
+          "[previous_truncated_output]",
+          formatted,
+          "",
+          "Use the partial output only as repair context.",
+          "Do not continue token-by-token.",
+          "Do not copy the broken JSON verbatim.",
+          "Rewrite a complete valid JSON object from scratch that preserves the same intended meaning in a shorter form.",
+        ].join("\n");
+      };
+
+      const buildStageSpecificTruncationGuidance = () => {
+        if (input.stageName !== "interaction_and_guardrails") {
+          return "";
+        }
+        return [
+          "For interaction_and_guardrails, keep every array as short as possible.",
+          "Use at most 2 items for discussion_strengths, friction_triggers, non_generic_traits, metaphor_domains, and forbidden_shapes.",
+          "Keep voice_fingerprint.closing_move as one short string, not an array.",
+          "Keep post/comment entry_shape, body_shape, feedback_shape, and close_shape to one short clause each.",
+        ].join("\n");
+      };
+
+      const buildRetryRepairPrompt = (inputData: {
+        mode: "generic" | "truncated";
+        previousTruncatedOutput?: string | null;
+      }) =>
+        inputData.mode === "truncated"
+          ? `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${input.stageName} was truncated before the JSON object was complete.\nRewrite it from scratch in a shorter form.\nReturn strictly valid JSON only.\nKeep every string to one short sentence.\nLimit arrays to at most 2 items unless the schema requires more.\nPrioritize finishing the full JSON object over richness.${buildTruncatedOutputContext(inputData.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`
+          : `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${input.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
+
+      const buildCompactRepairPrompt = (inputData: {
+        mode: "generic" | "truncated";
+        previousTruncatedOutput?: string | null;
+      }) =>
+        inputData.mode === "truncated"
+          ? `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${input.stageName} were truncated before the JSON object was complete.\nReturn a much shorter version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string extremely short.\nUse only 1 item in arrays unless the schema requires more.\nPrefer the shortest valid phrasing for every field.\nPrioritize closing the full JSON object.${buildTruncatedOutputContext(inputData.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`
+          : `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${input.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
+
       const attemptParse = (result: { text: string; error: string | null }) => {
         if (!result.text.trim()) {
           throw new PersonaGenerationParseError(
@@ -3695,21 +3993,34 @@ export class AdminAiControlPlaneStore {
 
       const resolveParsedStage = async (): Promise<T> => {
         const first = await invokeStageAttempt(basePrompt, 1);
+        const firstWasTruncated = isLengthTruncated(first);
         try {
           return attemptParse(first);
         } catch (error) {
           if (!(error instanceof PersonaGenerationParseError)) {
             throw error;
           }
-          const repairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${input.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
+          const repairPrompt = buildRetryRepairPrompt({
+            mode: firstWasTruncated ? "truncated" : "generic",
+            previousTruncatedOutput: firstWasTruncated ? first.text : null,
+          });
+          const second = await invokeStageAttempt(repairPrompt, 2);
+          const secondWasTruncated = isLengthTruncated(second);
           try {
-            const second = await invokeStageAttempt(repairPrompt, 2);
             return attemptParse(second);
-          } catch (retryError) {
-            if (!(retryError instanceof PersonaGenerationParseError)) {
-              throw retryError;
+          } catch (secondParseError) {
+            if (!(secondParseError instanceof PersonaGenerationParseError)) {
+              throw secondParseError;
             }
-            const compactRepairPrompt = `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${input.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
+            const latestTruncatedOutput = secondWasTruncated
+              ? second.text
+              : firstWasTruncated
+                ? first.text
+                : null;
+            const compactRepairPrompt = buildCompactRepairPrompt({
+              mode: latestTruncatedOutput ? "truncated" : "generic",
+              previousTruncatedOutput: latestTruncatedOutput,
+            });
             const third = await invokeStageAttempt(compactRepairPrompt, 3);
             try {
               return attemptParse(third);
@@ -3717,14 +4028,27 @@ export class AdminAiControlPlaneStore {
               if (compactError instanceof PersonaGenerationParseError) {
                 throw compactError;
               }
-              throw retryError;
+              throw secondParseError;
             }
           }
         }
       };
 
       const parsedStage = await resolveParsedStage();
-      const qualityIssues = input.validateQuality?.(parsedStage) ?? [];
+      const deterministicQualityIssues = [
+        ...collectEnglishOnlyIssues(parsedStage, {
+          allowedReferenceNames: input.allowedReferenceNames,
+        }),
+        ...(input.validateQuality?.(parsedStage) ?? []),
+      ];
+      const semanticQualityResult =
+        deterministicQualityIssues.length === 0 && input.validateQualityAsync
+          ? await input.validateQualityAsync(parsedStage)
+          : null;
+      const qualityIssues = [
+        ...deterministicQualityIssues,
+        ...(semanticQualityResult?.issues ?? []),
+      ];
       if (qualityIssues.length === 0) {
         return parsedStage;
       }
@@ -3739,6 +4063,13 @@ export class AdminAiControlPlaneStore {
         "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
         "Quality issues:",
         ...qualityIssues.map((issue) => `- ${issue}`),
+        ...(semanticQualityResult?.repairGuidance?.length
+          ? [
+              "",
+              "Additional repair guidance:",
+              ...semanticQualityResult.repairGuidance.map((item) => `- ${item}`),
+            ]
+          : []),
         "",
         "Previous parsed output:",
         JSON.stringify(parsedStage, null, 2),
@@ -3763,7 +4094,20 @@ export class AdminAiControlPlaneStore {
         });
       }
 
-      const repairedQualityIssues = input.validateQuality?.(repairedStage) ?? [];
+      const repairedDeterministicQualityIssues = [
+        ...collectEnglishOnlyIssues(repairedStage, {
+          allowedReferenceNames: input.allowedReferenceNames,
+        }),
+        ...(input.validateQuality?.(repairedStage) ?? []),
+      ];
+      const repairedSemanticQualityResult =
+        repairedDeterministicQualityIssues.length === 0 && input.validateQualityAsync
+          ? await input.validateQualityAsync(repairedStage)
+          : null;
+      const repairedQualityIssues = [
+        ...repairedDeterministicQualityIssues,
+        ...(repairedSemanticQualityResult?.issues ?? []),
+      ];
       if (repairedQualityIssues.length > 0) {
         throw new PersonaGenerationQualityError({
           stageName: input.stageName,
@@ -3781,7 +4125,7 @@ export class AdminAiControlPlaneStore {
       stageGoal: "Establish the persona's identity seed, bio, and explicit references.",
       stageContract: [
         "Return one JSON object with keys:",
-        "personas{display_name,bio,status},",
+        "persona{display_name,bio,status},",
         "identity_summary{archetype,core_motivation,one_sentence_identity},",
         "reference_sources[{name,type,contribution}],",
         "reference_derivation:string[],",
@@ -3793,6 +4137,8 @@ export class AdminAiControlPlaneStore {
       ].join("\n"),
       parse: parsePersonaSeedOutput,
       validateQuality: validateSeedStageQuality,
+      validateQualityAsync: auditSeedOriginalizationSemantics,
+      allowedReferenceNames: [],
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
     });
 
@@ -3809,6 +4155,7 @@ export class AdminAiControlPlaneStore {
       parse: parsePersonaValuesAndAestheticOutput,
       validateQuality: validateValuesStageQuality,
       validatedContext: seedStage,
+      allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
     });
 
@@ -3825,6 +4172,7 @@ export class AdminAiControlPlaneStore {
         ...seedStage,
         ...valuesStage,
       },
+      allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.context_and_affinity,
     });
 
@@ -3848,6 +4196,7 @@ export class AdminAiControlPlaneStore {
         ...valuesStage,
         ...contextStage,
       },
+      allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails,
     });
 
@@ -3876,21 +4225,21 @@ export class AdminAiControlPlaneStore {
         "Describe forum-native incidents, habits, or beliefs; do not narrate canon scenes or speak as the literal reference character.",
       ].join("\n"),
       parse: parsePersonaMemoriesOutput,
-      validateQuality: (stage) =>
-        validateMemoriesStageQuality(stage, {
-          referenceSources: seedStage.reference_sources,
-        }),
+      validateQuality: (stage) => validateMemoriesStageQuality(stage),
+      validateQualityAsync: (stage) =>
+        auditMemoriesOriginalizationSemantics(stage, seedStage.reference_sources),
       validatedContext: {
-        personas: seedStage.personas,
+        persona: seedStage.persona,
         persona_core: personaCore,
         reference_sources: seedStage.reference_sources,
       },
+      allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.memories,
     });
 
     const structured = parsePersonaGenerationOutput(
       JSON.stringify({
-        personas: seedStage.personas,
+        persona: seedStage.persona,
         persona_core: personaCore,
         reference_sources: seedStage.reference_sources,
         reference_derivation: seedStage.reference_derivation,
@@ -3911,10 +4260,10 @@ export class AdminAiControlPlaneStore {
     const markdown = [
       `## Persona Preview (${model.displayName})`,
       "",
-      `### personas`,
-      `- display_name: ${structured.personas.display_name}`,
-      `- status: ${structured.personas.status}`,
-      `- bio: ${structured.personas.bio}`,
+      `### persona`,
+      `- display_name: ${structured.persona.display_name}`,
+      `- status: ${structured.persona.status}`,
+      `- bio: ${structured.persona.bio}`,
       "",
       `### persona_core`,
       "```json",

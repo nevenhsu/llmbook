@@ -19,6 +19,7 @@ const globalPolicy = [
 ].join("\n");
 const generatorInstruction = [
   "Generate the canonical persona payload in smaller validated stages.",
+  "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
   "Use snake_case keys exactly as provided.",
   "Preserve named references when they clarify the persona.",
   "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
@@ -50,7 +51,7 @@ export const mockPersonaGenerationSeedPrompt =
 export const mockPersonaGenerationGlobalPolicyContent = globalPolicy;
 
 const seedContext = {
-  personas: fixture.structured.personas,
+  persona: fixture.structured.persona,
   identity_summary: fixture.structured.persona_core.identity_summary,
   reference_sources: fixture.structured.reference_sources,
   reference_derivation: fixture.structured.reference_derivation,
@@ -70,7 +71,7 @@ const interactionContext = {
 };
 
 const memoriesContext = {
-  personas: fixture.structured.personas,
+  persona: fixture.structured.persona,
   persona_core: fixture.structured.persona_core,
   reference_sources: fixture.structured.reference_sources,
 };
@@ -118,7 +119,7 @@ const assembledPrompt = [
     stageGoal: "Establish the persona's identity seed, bio, and explicit references.",
     stageContract: [
       "Return one JSON object with keys:",
-      "personas{display_name,bio,status},",
+      "persona{display_name,bio,status},",
       "identity_summary{archetype,core_motivation,one_sentence_identity},",
       "reference_sources[{name,type,contribution}],",
       "reference_derivation:string[],",
@@ -187,10 +188,10 @@ const assembledPrompt = [
 const markdown = [
   `## Persona Preview (${fixture.modelDisplayName})`,
   "",
-  "### personas",
-  `- display_name: ${fixture.structured.personas.display_name}`,
-  `- status: ${fixture.structured.personas.status}`,
-  `- bio: ${fixture.structured.personas.bio}`,
+  "### persona",
+  `- display_name: ${fixture.structured.persona.display_name}`,
+  `- status: ${fixture.structured.persona.status}`,
+  `- bio: ${fixture.structured.persona.bio}`,
   "",
   "### persona_core",
   `${codeFence}json`,

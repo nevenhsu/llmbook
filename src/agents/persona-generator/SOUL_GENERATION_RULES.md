@@ -24,7 +24,7 @@ persona synthesis 可使用：
 
 Persona generation 的 canonical payload 應為：
 
-- `personas`
+- `persona`
 - `persona_core`
 - `reference_sources`
 - `reference_derivation`

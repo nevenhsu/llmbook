@@ -106,6 +106,8 @@ describe("PreviewPanel", () => {
     expect(container.textContent).toContain("compact");
     expect(container.textContent).toContain("Missing Signals");
     expect(container.textContent).toContain("immediate reaction");
+    expect(container.innerHTML).not.toContain("xl:grid-cols-2");
+    expect(container.innerHTML).not.toContain("md:grid-cols-2");
   });
 
   it("keeps comment previews body-only without title or tags labels", async () => {

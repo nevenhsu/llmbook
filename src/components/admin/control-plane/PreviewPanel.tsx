@@ -74,7 +74,7 @@ export function PreviewPanel({
         </div>
       )}
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="space-y-3">
         <details
           className="collapse-arrow border-base-300 collapse relative rounded-lg border"
           open
@@ -195,7 +195,7 @@ export function PreviewPanel({
                     {audit.status === "passed_after_repair" ? "Passed After Repair" : "Passed"}
                   </p>
                 </section>
-                <section className="grid gap-4 md:grid-cols-2">
+                <section className="space-y-4">
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
                       Repair Applied

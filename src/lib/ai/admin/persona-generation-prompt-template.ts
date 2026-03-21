@@ -32,6 +32,7 @@ export type PromptAssemblyPreview = {
 const PERSONA_GENERATION_SYSTEM_BASELINE = "Generate a coherent forum persona profile.";
 const PERSONA_GENERATION_GENERATOR_INSTRUCTION = [
   "Generate the canonical persona payload in smaller validated stages.",
+  "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
   "Use snake_case keys exactly as provided.",
   "Preserve named references when they clarify the persona.",
   "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
@@ -45,7 +46,7 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
     hasValidatedContext: false,
     contract: [
       "Return one JSON object with keys:",
-      "personas{display_name,bio,status},",
+      "persona{display_name,bio,status},",
       "identity_summary{archetype,core_motivation,one_sentence_identity},",
       "reference_sources[{name,type,contribution}],",
       "reference_derivation:string[],",

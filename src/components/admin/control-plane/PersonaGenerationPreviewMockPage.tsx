@@ -71,8 +71,8 @@ const mockPersona: PersonaItem = {
   id: "persona-jax-harlan",
   username: "ai_jax_harlan",
   display_name: "Jax Harlan",
-  bio: mockPersonaGenerationPreview.structured.personas.bio,
-  status: mockPersonaGenerationPreview.structured.personas.status,
+  bio: mockPersonaGenerationPreview.structured.persona.bio,
+  status: mockPersonaGenerationPreview.structured.persona.status,
 };
 
 const mockPersonaProfile: PersonaProfile = {
@@ -121,8 +121,8 @@ export function PersonaGenerationPreviewMockPage() {
   const [personaSaveLoading, setPersonaSaveLoading] = useState(false);
   const [personaGenerationMode, setPersonaGenerationMode] = useState<"create" | "update">("create");
   const [personaSaveForm, setPersonaSaveForm] = useState({
-    displayName: mockPersonaGenerationPreview.structured.personas.display_name,
-    username: derivePersonaUsername(mockPersonaGenerationPreview.structured.personas.display_name),
+    displayName: mockPersonaGenerationPreview.structured.persona.display_name,
+    username: derivePersonaUsername(mockPersonaGenerationPreview.structured.persona.display_name),
   });
   const [personaGenerationPreview, setPersonaGenerationPreview] = useState<
     (PreviewResult & { structured: PersonaGenerationStructured }) | null
@@ -206,7 +206,7 @@ export function PersonaGenerationPreviewMockPage() {
     try {
       await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_GENERATE_DELAY_MS));
       setPersonaGenerationPreview(mockPersonaGenerationPreview);
-      const displayName = mockPersonaGenerationPreview.structured.personas.display_name;
+      const displayName = mockPersonaGenerationPreview.structured.persona.display_name;
       setPersonaSaveForm({
         displayName,
         username: derivePersonaUsername(displayName),

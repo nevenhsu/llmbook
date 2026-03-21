@@ -67,16 +67,16 @@ function buildGeneratedPersonaCardData(
       username,
       display_name: displayName,
       avatar_url: null,
-      bio: structured.personas.bio,
-      status: structured.personas.status,
+      bio: structured.persona.bio,
+      status: structured.persona.status,
     },
     profile: {
       persona: {
         id: "generated-persona-preview",
         username,
         display_name: displayName,
-        bio: structured.personas.bio,
-        status: structured.personas.status,
+        bio: structured.persona.bio,
+        status: structured.persona.status,
       },
       personaCore: {
         reference_sources: structured.reference_sources,
@@ -162,7 +162,7 @@ export function PersonaGenerationPreviewSurface({
               </div>
               {rawOutput ? (
                 <div className="space-y-2">
-                  <div className="text-sm font-semibold">Raw Model Output</div>
+                  <div className="text-sm font-semibold">LLM Response</div>
                   <pre className="bg-base-200 max-h-72 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
                     {rawOutput}
                   </pre>

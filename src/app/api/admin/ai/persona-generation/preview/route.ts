@@ -35,7 +35,7 @@ export const POST = withAuth(async (req, { user }) => {
           code: "persona_generation_stage_quality_failed",
           stageName: error.stageName,
           issues: error.issues,
-          rawOutput: error.rawOutput,
+          result: error.rawOutput,
         },
         { status: 422 },
       );
@@ -44,9 +44,28 @@ export const POST = withAuth(async (req, { user }) => {
       return NextResponse.json(
         {
           error: error.message,
-          rawOutput: error.rawOutput,
+          result: error.rawOutput,
         },
         { status: 422 },
+      );
+    }
+    if (
+      error &&
+      typeof error === "object" &&
+      "message" in error &&
+      typeof error.message === "string"
+    ) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          result:
+            "result" in error && typeof error.result === "string"
+              ? error.result
+              : "rawOutput" in error && typeof error.rawOutput === "string"
+                ? error.rawOutput
+                : null,
+        },
+        { status: 500 },
       );
     }
     throw error;

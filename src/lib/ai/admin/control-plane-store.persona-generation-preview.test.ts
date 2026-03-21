@@ -83,7 +83,7 @@ function sampleActiveControlPlane() {
 
 function buildSeedStage() {
   return {
-    personas: {
+    persona: {
       display_name: "AI Critic",
       bio: "Sharp but fair.",
       status: "active",
@@ -107,9 +107,45 @@ function buildSeedStage() {
   };
 }
 
+function buildPassingSeedSemanticAudit() {
+  return {
+    passes: true,
+    issues: [],
+    repairGuidance: [],
+  };
+}
+
+function buildPassingMemoriesSemanticAudit() {
+  return {
+    passes: true,
+    issues: [],
+    repairGuidance: [],
+  };
+}
+
+function buildFailingSeedSemanticAudit(issue: string) {
+  return {
+    passes: false,
+    issues: [issue],
+    repairGuidance: [
+      "Explain clearly how the persona becomes a new forum identity instead of restating the references.",
+    ],
+  };
+}
+
+function buildFailingMemoriesSemanticAudit(issue: string) {
+  return {
+    passes: false,
+    issues: [issue],
+    repairGuidance: [
+      "Rewrite memories as forum-native incidents, habits, or beliefs instead of literal reference-world scenes.",
+    ],
+  };
+}
+
 function buildReferenceCosplaySeedStage() {
   return {
-    personas: {
+    persona: {
       display_name: "GumGumRebel",
       bio: "Straw Hat wearing pirate enthusiast who treats every forum thread like a new island to conquer.",
       status: "active",
@@ -259,6 +295,37 @@ function mockStageSequence(sequence: unknown[]) {
   });
 }
 
+function mockStageResults(
+  sequence: Array<{
+    text: string;
+    error?: string | null;
+    finishReason?: string | null;
+    attempts?: number;
+  }>,
+) {
+  return import("@/lib/ai/llm/invoke-llm").then(({ invokeLLM }) => {
+    vi.mocked(invokeLLM).mockReset();
+    for (const item of sequence) {
+      vi.mocked(invokeLLM).mockResolvedValueOnce({
+        text: item.text,
+        error: item.error ?? null,
+        finishReason: item.finishReason ?? "stop",
+        attempts: item.attempts ?? 1,
+      } as never);
+    }
+    return invokeLLM;
+  });
+}
+
+function withPassingSeedSemanticAudit(sequence: unknown[]) {
+  return [
+    sequence[0],
+    buildPassingSeedSemanticAudit(),
+    ...sequence.slice(1),
+    buildPassingMemoriesSemanticAudit(),
+  ];
+}
+
 function buildMachineLabelInteractionStage() {
   return {
     interaction_defaults: {
@@ -302,13 +369,15 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("runs staged persona generation and assembles the canonical payload", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
-    ]);
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -324,7 +393,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(preview.assembledPrompt).toContain("stage_name: interaction_and_guardrails");
     expect(preview.assembledPrompt).toContain("stage_name: memories");
     expect(preview.structured).toMatchObject({
-      personas: {
+      persona: {
         display_name: "AI Critic",
         bio: "Sharp but fair.",
         status: "active",
@@ -354,7 +423,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(5);
+    expect(calls).toHaveLength(7);
     expect(calls[0]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:seed:attempt-1",
@@ -362,19 +431,31 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
     expect(calls[1]?.[0]).toEqual(
       expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:seed:semantic-audit-1",
+      }),
+    );
+    expect(calls[2]?.[0]).toEqual(
+      expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:attempt-1",
+      }),
+    );
+    expect(calls[6]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:memories:semantic-audit-1",
       }),
     );
   });
 
   it("uses compact validated context for model invocation while keeping assembled prompt readable", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
-    ]);
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -384,14 +465,14 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       extraPrompt: "Make the persona opinionated.",
     });
 
-    expect(preview.assembledPrompt).toContain('"personas": {');
-    expect(preview.assembledPrompt).toContain('\n  "personas": {');
+    expect(preview.assembledPrompt).toContain('"persona": {');
+    expect(preview.assembledPrompt).toContain('\n  "persona": {');
     expect(invokeLLM).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.objectContaining({
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
-            '[validated_context]\n{"personas":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"}',
+            '[validated_context]\n{"persona":{"display_name":"AI Critic","bio":"Sharp but fair.","status":"active"}',
           ),
         }),
       }),
@@ -399,18 +480,20 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("rejects a malformed staged response when persona_core.values is missing", async () => {
-    await mockStageSequence([
-      buildSeedStage(),
-      {
-        aesthetic_profile: buildValuesAndAestheticStage().aesthetic_profile,
-      },
-      {
-        aesthetic_profile: buildValuesAndAestheticStage().aesthetic_profile,
-      },
-      {
-        aesthetic_profile: buildValuesAndAestheticStage().aesthetic_profile,
-      },
-    ]);
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        {
+          aesthetic_profile: buildValuesAndAestheticStage().aesthetic_profile,
+        },
+        {
+          aesthetic_profile: buildValuesAndAestheticStage().aesthetic_profile,
+        },
+        {
+          aesthetic_profile: buildValuesAndAestheticStage().aesthetic_profile,
+        },
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -424,26 +507,28 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("rejects a malformed staged response when persona_core.voice_fingerprint is missing", async () => {
-    await mockStageSequence([
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      {
-        interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
-        guardrails: buildInteractionAndGuardrailsStage().guardrails,
-        task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
-      },
-      {
-        interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
-        guardrails: buildInteractionAndGuardrailsStage().guardrails,
-        task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
-      },
-      {
-        interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
-        guardrails: buildInteractionAndGuardrailsStage().guardrails,
-        task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
-      },
-    ]);
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        {
+          interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+          guardrails: buildInteractionAndGuardrailsStage().guardrails,
+          task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
+        },
+        {
+          interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+          guardrails: buildInteractionAndGuardrailsStage().guardrails,
+          task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
+        },
+        {
+          interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+          guardrails: buildInteractionAndGuardrailsStage().guardrails,
+          task_style_matrix: buildInteractionAndGuardrailsStage().task_style_matrix,
+        },
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -477,14 +562,41 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     }
   });
 
-  it("runs a stage-local quality repair when the seed stage drifts into reference cosplay", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildReferenceCosplaySeedStage(),
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
+  it("wraps seed-stage missing persona as a parse error with the original result attached", async () => {
+    const missingPersonasRaw =
+      '{"identity_summary":{"archetype":"critic"},"reference_sources":[{"name":"Anthony Bourdain","type":"creator","contribution":["observational candor"]}],"reference_derivation":["Observational candor adapted into forum voice."],"originalization_note":"This persona is an original identity, not roleplay."}';
+    await mockStageSequence([missingPersonasRaw, missingPersonasRaw, missingPersonasRaw]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    try {
+      await store.previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "",
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(PersonaGenerationParseError);
+      expect((error as PersonaGenerationParseError).message).toBe(
+        "persona generation output missing persona",
+      );
+      expect((error as PersonaGenerationParseError).rawOutput).toBe(missingPersonasRaw);
+    }
+  });
+
+  it("uses a truncation-aware repair prompt when a stage response is cut off by length", async () => {
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      {
+        text: `{"interaction_defaults":{"default_stance":"Enters discussions as an unyielding force","discussion_strengths":["Shatters surface-level reasoning"],"friction_triggers":["Surface analyses"],"non_generic_traits":["Fuses artistic deconstruction with imperial presence"]},"guardrails":{"hard_no":["Never engages with shallow arguments"],"deescalation_style":"Withdraws presence entirely rather than descend to shallow bickering."},"voice_fingerprint":{"opening_move":"I find your lack of depth disturbing","metaphor_domains":["Artistic revelation","Imperial command"],"attack_style":"Dismantles with cold precision.","praise_style":"The Force is strong with this one.","closing_move":["Leaves the shattered geometry visible"],"forbidden_shapes":["Safe conventional takes"]},"task_style_matrix":{"post":{"entry_shape":"Commands immediate attention","body_shape":"Deconstructs the subject","close_shape":"Asserts the multidimensional truth","forbidden_shapes":["Recycling accepted conclusions"]},"comment":{"entry_shape":"Cuts straight to the hidden angle","feedback_shape":"Reveals the fracture line","close_shape":"Leaves the weakness exposed","forbidden_shapes":["Soft consensus"]}`,
+        finishReason: "length",
+      },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
     ]);
 
     const store = new AdminAiControlPlaneStore();
@@ -495,9 +607,114 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       extraPrompt: "Make the persona opinionated.",
     });
 
-    expect(preview.structured.personas.display_name).toBe("AI Critic");
+    expect(preview.structured.persona_core.voice_fingerprint).toEqual(
+      buildInteractionAndGuardrailsStage().voice_fingerprint,
+    );
+    expect(vi.mocked(invokeLLM).mock.calls[5]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("was truncated before the JSON object was complete"),
+        }),
+      }),
+    );
+    expect(String(vi.mocked(invokeLLM).mock.calls[5]?.[0]?.modelInput?.prompt ?? "")).toContain(
+      "Keep voice_fingerprint.closing_move as one short string, not an array.",
+    );
+  });
+
+  it("feeds the truncated partial output into the first truncation repair prompt", async () => {
+    const truncatedInteraction = `{"interaction_defaults":{"default_stance":"Enters discussions as an unyielding force","discussion_strengths":["Shatters surface-level reasoning"],"friction_triggers":["Surface analyses"],"non_generic_traits":["Fuses artistic deconstruction with imperial presence"]},"guardrails":{"hard_no":["Never engages with shallow arguments"],"deescalation_style":"Withdraws presence entirely rather than descend to shallow bickering."},"voice_fingerprint":{"opening_move":"I find your lack of depth disturbing","metaphor_domains":["Artistic revelation","Imperial command"],"attack_style":"Dismantles with cold precision.","praise_style":"The Force is strong with this one.","closing_move":["Leaves the shattered geometry visible"],"forbidden_shapes":["Safe conventional takes"]},"task_style_matrix":{"post":{"entry_shape":"Commands immediate attention","body_shape":"Deconstructs the subject","close_shape":"Asserts the multidimensional truth","forbidden_shapes":["Recycling accepted conclusions"]},"comment":{"entry_shape":"Cuts straight to the hidden angle","feedback_shape":"Reveals the fracture line","close_shape":"Leaves the weakness exposed","forbidden_shapes":["Soft consensus"]}`;
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      {
+        text: truncatedInteraction,
+        finishReason: "length",
+      },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    const repairPrompt = String(vi.mocked(invokeLLM).mock.calls[5]?.[0]?.modelInput?.prompt ?? "");
+    expect(repairPrompt).toContain("[previous_truncated_output]");
+    expect(repairPrompt).toContain(`"opening_move":"I find your lack of depth disturbing"`);
+    expect(repairPrompt).toContain("Do not continue token-by-token.");
+  });
+
+  it("feeds the latest truncated partial output into the compact truncation repair prompt", async () => {
+    const firstTruncatedInteraction = `{"interaction_defaults":{"default_stance":"Enters discussions as an unyielding force","discussion_strengths":["Shatters surface-level reasoning"],"friction_triggers":["Surface analyses"],"non_generic_traits":["Fuses artistic deconstruction with imperial presence"]},"guardrails":{"hard_no":["Never engages with shallow arguments"],"deescalation_style":"Withdraws presence entirely rather than descend to shallow bickering."},"voice_fingerprint":{"opening_move":"I find your lack of depth disturbing","metaphor_domains":["Artistic revelation","Imperial command"],"attack_style":"Dismantles with cold precision.","praise_style":"The Force is strong with this one.","closing_move":["Leaves the shattered geometry visible"],"forbidden_shapes":["Safe conventional takes"]},"task_style_matrix":{"post":{"entry_shape":"Commands immediate attention"}`;
+    const secondTruncatedInteraction = `{"interaction_defaults":{"default_stance":"Short blunt entry.","discussion_strengths":["Expose weak framing"],"friction_triggers":["Consensus fog"],"non_generic_traits":["Cuts to the hidden angle fast"]},"guardrails":{"hard_no":["Empty swagger"],"deescalation_style":"Leaves once the point is obvious."},"voice_fingerprint":{"opening_move":"Depth first.","metaphor_domains":["fractured canvas"],"attack_style":"Calm, cold dismantling.","praise_style":"Rare gravitational respect.","closing_move":"Leaves the fracture visible.","forbidden_shapes":["soft balance"]},"task_style_matrix":{"post":{"entry_shape":"Name the deception early","body_shape":"Break the claim apart"}`;
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      {
+        text: firstTruncatedInteraction,
+        finishReason: "length",
+      },
+      {
+        text: secondTruncatedInteraction,
+        finishReason: "length",
+      },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    const compactRepairPrompt = String(
+      vi.mocked(invokeLLM).mock.calls[6]?.[0]?.modelInput?.prompt ?? "",
+    );
+    expect(compactRepairPrompt).toContain("[previous_truncated_output]");
+    expect(compactRepairPrompt).toContain(`"default_stance":"Short blunt entry."`);
+    expect(compactRepairPrompt).toContain(
+      "Use only 1 item in arrays unless the schema requires more.",
+    );
+  });
+
+  it("runs a stage-local quality repair when the seed stage drifts into reference cosplay", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildReferenceCosplaySeedStage(),
+      buildSeedStage(),
+      buildPassingSeedSemanticAudit(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+      buildPassingMemoriesSemanticAudit(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(8);
     expect(calls[1]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:seed:quality-repair-1",
@@ -508,14 +725,515 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
   });
 
-  it("keeps staged preview pinned to the selected model but disables provider retries for low-latency preview runs", async () => {
+  it("accepts a seed-stage top-level persona payload", async () => {
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        JSON.stringify({
+          persona: {
+            display_name: "AI Critic",
+            bio: "Sharp but fair.",
+            status: "active",
+          },
+          identity_summary: {
+            archetype: "critic",
+            core_motivation: "Find the strongest argument.",
+            one_sentence_identity: "A sharp critic who rewards rigor and rejects fluff.",
+          },
+          reference_sources: [
+            {
+              name: "Anthony Bourdain",
+              type: "creator",
+              contribution: ["Observational candor and lived-detail framing."],
+            },
+          ],
+          reference_derivation: ["Turned observational candor into forum-native voice."],
+          originalization_note: "Built as a forum-native critic, not literal roleplay.",
+        }),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt:
+        "Create a forum persona who channels Pablo Picasso's cubist mind fused with Darth Vader's commanding presence.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
+    expect(preview.structured.persona.bio).toBe("Sharp but fair.");
+  });
+
+  it("rejects a seed-stage top-level personas payload now that the canonical contract is singular", async () => {
+    const pluralSeedRaw = JSON.stringify({
+      personas: {
+        display_name: "AI Critic",
+        bio: "Sharp but fair.",
+        status: "active",
+      },
+      identity_summary: {
+        archetype: "critic",
+        core_motivation: "Find the strongest argument.",
+        one_sentence_identity: "A sharp critic who rewards rigor and rejects fluff.",
+      },
+      reference_sources: [
+        {
+          name: "Anthony Bourdain",
+          type: "creator",
+          contribution: ["Observational candor and lived-detail framing."],
+        },
+      ],
+      reference_derivation: ["Turned observational candor into forum-native voice."],
+      originalization_note: "Built as a forum-native critic, not literal roleplay.",
+    });
+    await mockStageSequence([pluralSeedRaw, pluralSeedRaw, pluralSeedRaw]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await expect(
+      store.previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "Make the persona opinionated.",
+      }),
+    ).rejects.toMatchObject({
+      message: "persona generation output missing persona",
+      rawOutput: pluralSeedRaw,
+    });
+  });
+
+  it("accepts a seed-stage payload wrapped in one outer result object", async () => {
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        {
+          result: {
+            persona: {
+              display_name: "AI Critic",
+              bio: "Sharp but fair.",
+              status: "active",
+            },
+            identity_summary: {
+              archetype: "sharp but fair critic",
+              core_motivation: "push discussion toward clarity",
+              one_sentence_identity: "A precise forum critic who dislikes fluff.",
+            },
+            reference_sources: [
+              {
+                name: "Kotaro Isaka",
+                type: "creator",
+                contribution: ["connects scattered details into payoff"],
+              },
+            ],
+            reference_derivation: [
+              "Uses the reference for structural taste rather than direct prose imitation.",
+            ],
+            originalization_note:
+              "This persona is an original critic, not a clone of any reference.",
+          },
+        },
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
+    expect(preview.structured.persona.bio).toBe("Sharp but fair.");
+  });
+
+  it("forces English persona-generation output in the shared staged prompt even when extraPrompt is not English", async () => {
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "請生成一個偏執又銳利的論壇人格。",
+    });
+
+    expect(vi.mocked(invokeLLM).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
+          ),
+        }),
+      }),
+    );
+  });
+
+  it("runs a seed-stage quality repair when the seed output contains non-English prose", async () => {
     const invokeLLM = await mockStageSequence([
+      JSON.stringify({
+        persona: {
+          display_name: "深淵觀察者",
+          bio: "以立體派視角審視論述的資深分析者，擅長從隱藏維度解構表面論點。",
+          status: "active",
+        },
+        identity_summary: {
+          archetype: "解構者與支配者",
+          core_motivation: "透過多維度視角征服淺薄論述，並賦予深刻思考應有的影響力",
+          one_sentence_identity:
+            "融合立體派分析精神與強勢存在感的論壇評論者，以揭示論點隱藏面向為劍。",
+        },
+        reference_sources: [
+          {
+            name: "Pablo Picasso",
+            type: "藝術家",
+            contribution: ["立體派視角帶來多維度分析方法。"],
+          },
+          {
+            name: "Darth Vader",
+            type: "虛構角色",
+            contribution: ["commanding presence 轉化為壓迫性的討論氣場。"],
+          },
+        ],
+        reference_derivation: [
+          "Cubist deconstruction → 將對象解構為多視角並置的分析方法",
+          "Empire's rejection of weakness → 對邏輯脆弱性的不接受",
+        ],
+        originalization_note:
+          "此人格並非直接扮演任何角色，而是萃取其核心特質並轉化為論壇上的原創身份。Picasso與Vader的特質只作為靈感來源，最後呈現的是論壇原生的批評者形象。",
+      }),
       buildSeedStage(),
+      buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
       buildInteractionAndGuardrailsStage(),
       buildMemoriesStage(),
+      buildPassingMemoriesSemanticAudit(),
     ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt:
+        "Create a forum persona who channels Pablo Picasso's cubist mind fused with Darth Vader's commanding presence.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(8);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:quality-repair-1"),
+        ),
+    ).toBe(true);
+  });
+
+  it("does not force a seed-stage quality repair when only the reference name is non-English inside otherwise English prose", async () => {
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        JSON.stringify({
+          persona: {
+            display_name: "Signal Cut",
+            bio: "A precise critic who treats every argument as something to be stripped down to its structure.",
+            status: "active",
+          },
+          identity_summary: {
+            archetype: "Forensic Critic",
+            core_motivation: "Expose weak reasoning and preserve only what survives inspection.",
+            one_sentence_identity:
+              "A sharp analytical persona who turns dense discussion into clean structure and hard conclusions.",
+          },
+          reference_sources: [
+            {
+              name: "三體",
+              type: "work",
+              contribution: ["Cold scale and existential pressure."],
+            },
+          ],
+          reference_derivation: [
+            "Takes the scale and dread of 三體 as a tonal reference without copying its plot or characters.",
+          ],
+          originalization_note:
+            "This persona is an original identity, not literal roleplay. It adapts the scale associated with 三體 into an English forum voice built around pressure, scrutiny, and restraint.",
+        }),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Create a high-pressure analytical persona.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("Signal Cut");
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(7);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:quality-repair-1"),
+        ),
+    ).toBe(false);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:semantic-audit-1"),
+        ),
+    ).toBe(true);
+  });
+
+  it("does not force a seed-stage quality repair when the originalization note clearly describes a transformed original identity without literal forum-native wording", async () => {
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        JSON.stringify({
+          persona: {
+            display_name: "Cataract",
+            bio: "A sharp-tongued analytical presence who treats every argument as raw material to be examined, dismantled, and either refined or discarded.",
+            status: "active",
+          },
+          identity_summary: {
+            archetype: "The Dissecting Authority",
+            core_motivation:
+              "To elevate discourse by forcing clarity and substance through relentless analysis",
+            one_sentence_identity:
+              "A commanding intellectual force who deconstructs superficial arguments with surgical precision while demanding that discourse meet the standard it pretends to hold",
+          },
+          reference_sources: [
+            {
+              name: "Pablo Picasso",
+              type: "artist",
+              contribution: [
+                "Radical deconstruction of established forms to reveal hidden structures beneath surface appearance",
+              ],
+            },
+            {
+              name: "Darth Vader",
+              type: "fictional_character",
+              contribution: [
+                "Controlled, economical communication that carries weight through restraint",
+              ],
+            },
+          ],
+          reference_derivation: [
+            "The analytical precision of an artist who sees beneath surface presentation to structural truth",
+            "The commanding weight of presence that doesn't need to raise its voice because the space itself responds",
+          ],
+          originalization_note:
+            "This persona transforms the artistic philosophy of deconstruction into intellectual analysis, while adopting the commanding presence and measured communication style as a natural voice rather than an imitation. Rather than being Picasso or Vader, this is someone who has internalized the lesson that true mastery lies in seeing what others miss and reshaping what others accept at face value.",
+        }),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt:
+        "Create a forum persona who channels Pablo Picasso's cubist mind fused with Darth Vader's commanding presence.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("Cataract");
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(7);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:quality-repair-1"),
+        ),
+    ).toBe(false);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:semantic-audit-1"),
+        ),
+    ).toBe(true);
+  });
+
+  it("does not force a seed-stage quality repair when the originalization note separates the persona from both references through generic contrast language", async () => {
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        JSON.stringify({
+          persona: {
+            display_name: "Apex Construct",
+            bio: "A relentless intellectual force who sees through the scaffolding of lazy argumentation the way a master sees flaws in a forgery.",
+            status: "active",
+          },
+          identity_summary: {
+            archetype: "The Demanding Mentor",
+            core_motivation:
+              "To reshape intellectual discourse by exposing superficiality and demanding genuine depth from all participants, including himself",
+            one_sentence_identity:
+              "An exacting analytical force who deconstructs weak arguments with artistic precision and commanding authority while seeking only substantive engagement",
+          },
+          reference_sources: [
+            {
+              name: "Pablo Picasso",
+              type: "artist",
+              contribution: ["Method of breaking conventional forms to reveal underlying truth"],
+            },
+            {
+              name: "Darth Vader",
+              type: "fictional_character",
+              contribution: ["Commanding presence that shifts dynamics of any room without volume"],
+            },
+          ],
+          reference_derivation: [
+            "Extracted Picasso's deconstructive methodology without borrowing his artistic persona.",
+            "Drew from Vader's commanding presence without borrowing domination or villainy.",
+          ],
+          originalization_note:
+            "The resulting persona occupies a different space than either reference. Unlike Picasso's creative chaos, this figure operates with focused precision and intentionality. Unlike Vader's domination through fear, this figure commands through demonstrated intellectual superiority and the unsettling clarity of pointing out what others have missed. It is not a literal reenactment of either source, but a rigorous intellectual presence who treats every discussion as an opportunity to reach deeper truth and expects the same from others.",
+        }),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt:
+        "Create a forum persona who channels Pablo Picasso's cubist mind fused with Darth Vader's commanding presence.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("Apex Construct");
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(7);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:quality-repair-1"),
+        ),
+    ).toBe(false);
+    expect(
+      vi
+        .mocked(invokeLLM)
+        .mock.calls.some((call) =>
+          String(call[0]?.entityId ?? "").includes("seed:semantic-audit-1"),
+        ),
+    ).toBe(true);
+  });
+
+  it("lets the seed semantic audit trigger a quality repair even when the note uses adaptation keywords superficially", async () => {
+    const invokeLLM = await mockStageSequence([
+      JSON.stringify({
+        persona: {
+          display_name: "Stage Fright",
+          bio: "A severe critic who enters threads with pressure and restraint.",
+          status: "active",
+        },
+        identity_summary: {
+          archetype: "Pressure Critic",
+          core_motivation: "Force weak arguments to collapse under scrutiny.",
+          one_sentence_identity:
+            "A commanding critical presence that frames every exchange as a stress test for ideas.",
+        },
+        reference_sources: [
+          {
+            name: "Pablo Picasso",
+            type: "artist",
+            contribution: ["Breaks surfaces apart to inspect the hidden structure."],
+          },
+          {
+            name: "Darth Vader",
+            type: "fictional_character",
+            contribution: ["Applies pressure through control and certainty."],
+          },
+        ],
+        reference_derivation: [
+          "Takes structural deconstruction from Picasso.",
+          "Takes pressure and command from Vader.",
+        ],
+        originalization_note:
+          "This persona is original and adapted from the references, but it keeps the same role and simply moves that energy into forum form.",
+      }),
+      buildFailingSeedSemanticAudit(
+        "originalization_note still reads like a direct forum transfer of the references instead of a newly adapted persona identity.",
+      ),
+      buildSeedStage(),
+      buildPassingSeedSemanticAudit(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+      buildPassingMemoriesSemanticAudit(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt:
+        "Create a forum persona who channels Pablo Picasso's cubist mind fused with Darth Vader's commanding presence.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls).toHaveLength(9);
+    expect(calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:seed:semantic-audit-1",
+      }),
+    );
+    expect(calls[2]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:seed:quality-repair-1",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "originalization_note still reads like a direct forum transfer of the references",
+          ),
+        }),
+      }),
+    );
+  });
+
+  it("keeps staged preview pinned to the selected model but disables provider retries for low-latency preview runs", async () => {
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const minimaxModel: AiModelConfig = {
       ...sampleModel(),
@@ -569,14 +1287,16 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("retries only the failing stage with stricter repair instructions when a later staged response is truncated JSON", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildSeedStage(),
-      '{"values":{"value_hierarchy":[{"value":"clarity","priority":1}],"worldview":["people reveal themselves"]',
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
-    ]);
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        '{"values":{"value_hierarchy":[{"value":"clarity","priority":1}],"worldview":["people reveal themselves"]',
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -586,16 +1306,16 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       extraPrompt: "Make the persona opinionated.",
     });
 
-    expect(preview.structured.personas.display_name).toBe("AI Critic");
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(8);
     expect(
       calls.filter(
         (call) =>
           typeof call[0]?.entityId === "string" && call[0].entityId.includes(":seed:attempt-1"),
       ),
     ).toHaveLength(1);
-    expect(calls[2]?.[0]).toEqual(
+    expect(calls[3]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:attempt-2",
         modelInput: expect.objectContaining({
@@ -609,15 +1329,17 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("falls back to a third ultra-compact retry on the failing stage when repair output is still truncated", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildSeedStage(),
-      '{"values":{"value_hierarchy":[{"value":"clarity","priority":1}],"worldview":["people reveal themselves"]',
-      '{"values":{"value_hierarchy":[{"value":"clarity","priority":1}],"worldview":["people reveal themselves"]',
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
-    ]);
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        '{"values":{"value_hierarchy":[{"value":"clarity","priority":1}],"worldview":["people reveal themselves"]',
+        '{"values":{"value_hierarchy":[{"value":"clarity","priority":1}],"worldview":["people reveal themselves"]',
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -627,31 +1349,36 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       extraPrompt: "Make the persona opinionated.",
     });
 
-    expect(preview.structured.personas.display_name).toBe("AI Critic");
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(7);
-    expect(calls[3]?.[0]).toEqual(
+    expect(calls).toHaveLength(9);
+    expect(calls[4]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:attempt-3",
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
             "Return a compact version from scratch using the same contract.",
           ),
-          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
+          maxOutputTokens: Math.min(
+            PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
+            PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
+          ),
         }),
       }),
     );
   });
 
   it("retries the interaction stage with the higher shared repair cap when Stage 4 output is truncated", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      '{"interaction_defaults":{"default_stance":"Jumps into threads with fists first, treats every argument like a boss battle"',
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
-    ]);
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        '{"interaction_defaults":{"default_stance":"Jumps into threads with fists first, treats every argument like a boss battle"',
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -661,10 +1388,10 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       extraPrompt: "Make the persona opinionated.",
     });
 
-    expect(preview.structured.personas.display_name).toBe("AI Critic");
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(6);
-    expect(calls[4]?.[0]).toEqual(
+    expect(calls).toHaveLength(8);
+    expect(calls[5]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-2",
         modelInput: expect.objectContaining({
@@ -678,14 +1405,16 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("runs a stage-local quality repair when Stage 4 returns machine-label style fields", async () => {
-    const invokeLLM = await mockStageSequence([
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildMachineLabelInteractionStage(),
-      buildInteractionAndGuardrailsStage(),
-      buildMemoriesStage(),
-    ]);
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildMachineLabelInteractionStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -699,8 +1428,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       opening_move: "Lead with suspicion, not neutral setup.",
     });
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(6);
-    expect(calls[4]?.[0]).toEqual(
+    expect(calls).toHaveLength(8);
+    expect(calls[5]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:quality-repair-1",
         modelInput: expect.objectContaining({
@@ -712,13 +1441,15 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("fails with a typed quality error when Stage 4 quality repair still returns machine labels", async () => {
-    await mockStageSequence([
-      buildSeedStage(),
-      buildValuesAndAestheticStage(),
-      buildContextAndAffinityStage(),
-      buildMachineLabelInteractionStage(),
-      buildMachineLabelInteractionStage(),
-    ]);
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        buildMachineLabelInteractionStage(),
+        buildMachineLabelInteractionStage(),
+      ]),
+    );
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -753,7 +1484,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       name: "PersonaGenerationQualityError",
       stageName: "seed",
       issues: expect.arrayContaining([
-        expect.stringContaining("core_motivation"),
+        expect.stringContaining("reference_derivation[0] must be English-only."),
         expect.stringContaining("mixed-script artifact"),
       ]),
     } satisfies Partial<PersonaGenerationQualityError>);
@@ -762,11 +1493,16 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("runs a stage-local quality repair when persona_memories drift into literal reference roleplay", async () => {
     const invokeLLM = await mockStageSequence([
       buildSeedStage(),
+      buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
       buildInteractionAndGuardrailsStage(),
       buildReferenceCosplayMemoriesStage(),
+      buildFailingMemoriesSemanticAudit(
+        "persona_memories[0].content drifts into literal reference roleplay instead of a forum-native memory.",
+      ),
       buildMemoriesStage(),
+      buildPassingMemoriesSemanticAudit(),
     ]);
 
     const store = new AdminAiControlPlaneStore();
@@ -781,8 +1517,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       "Has a long-running bias toward precision over hype.",
     );
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(6);
-    expect(calls[5]?.[0]).toEqual(
+    expect(calls).toHaveLength(9);
+    expect(calls[7]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:memories:quality-repair-1",
         modelInput: expect.objectContaining({
@@ -795,11 +1531,18 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("fails with a typed quality error when memories-stage quality repair still returns literal reference roleplay", async () => {
     await mockStageSequence([
       buildSeedStage(),
+      buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
       buildInteractionAndGuardrailsStage(),
       buildReferenceCosplayMemoriesStage(),
+      buildFailingMemoriesSemanticAudit(
+        "persona_memories[0].content drifts into literal reference roleplay instead of a forum-native memory.",
+      ),
       buildReferenceCosplayMemoriesStage(),
+      buildFailingMemoriesSemanticAudit(
+        "persona_memories[0].content still reads like literal reference roleplay after repair.",
+      ),
     ]);
 
     const store = new AdminAiControlPlaneStore();

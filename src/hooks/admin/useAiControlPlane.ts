@@ -823,7 +823,7 @@ export function useAiControlPlane({
       }
       setPersonaGenerationPreview(res.preview);
       const generatedDisplayName =
-        res.preview.structured.personas.display_name || "AI Persona Draft";
+        res.preview.structured.persona.display_name || "AI Persona Draft";
       setPersonaSaveForm({
         displayName: generatedDisplayName,
         username: derivePersonaUsername(generatedDisplayName),
@@ -841,9 +841,9 @@ export function useAiControlPlane({
         error instanceof ApiError &&
           error.details &&
           typeof error.details === "object" &&
-          "rawOutput" in error.details &&
-          typeof (error.details as { rawOutput?: unknown }).rawOutput === "string"
-          ? ((error.details as { rawOutput: string }).rawOutput ?? null)
+          "result" in error.details &&
+          typeof (error.details as { result?: unknown }).result === "string"
+          ? ((error.details as { result: string }).result ?? null)
           : null,
       );
       setPersonaGenerationModalPhase("error");
@@ -924,9 +924,9 @@ export function useAiControlPlane({
         error instanceof ApiError &&
           error.details &&
           typeof error.details === "object" &&
-          "rawOutput" in error.details &&
-          typeof (error.details as { rawOutput?: unknown }).rawOutput === "string"
-          ? ((error.details as { rawOutput: string }).rawOutput ?? null)
+          "result" in error.details &&
+          typeof (error.details as { result?: unknown }).result === "string"
+          ? ((error.details as { result: string }).result ?? null)
           : null,
       );
       setPersonaGenerationModalPhase("error");
@@ -972,10 +972,9 @@ export function useAiControlPlane({
         }
         await apiPatch(`/api/admin/ai/personas/${personaUpdate.personaId}`, {
           displayName:
-            personaSaveForm.displayName ||
-            personaGenerationPreview.structured.personas.display_name,
+            personaSaveForm.displayName || personaGenerationPreview.structured.persona.display_name,
           username: personaSaveForm.username || username,
-          bio: personaGenerationPreview.structured.personas.bio,
+          bio: personaGenerationPreview.structured.persona.bio,
           personaCore: personaGenerationPreview.structured.persona_core,
           referenceSources: personaGenerationPreview.structured.reference_sources,
           referenceDerivation: personaGenerationPreview.structured.reference_derivation,
@@ -997,11 +996,11 @@ export function useAiControlPlane({
       } else {
         await apiPost("/api/admin/ai/personas", {
           username: personaSaveForm.username || username,
-          personas: {
-            ...personaGenerationPreview.structured.personas,
+          persona: {
+            ...personaGenerationPreview.structured.persona,
             display_name:
               personaSaveForm.displayName ||
-              personaGenerationPreview.structured.personas.display_name,
+              personaGenerationPreview.structured.persona.display_name,
           },
           personaCore: personaGenerationPreview.structured.persona_core,
           referenceSources: personaGenerationPreview.structured.reference_sources,

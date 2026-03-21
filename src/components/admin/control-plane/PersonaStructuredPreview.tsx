@@ -171,19 +171,19 @@ export function PersonaStructuredPreview({ structured }: Props) {
       <section className="from-base-200 via-base-100 to-base-200 border-base-300/70 rounded-2xl border bg-gradient-to-br p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-2">
-            <div className="text-xl font-semibold">{structured.personas.display_name}</div>
-            <p className="max-w-3xl text-sm leading-6 opacity-80">{structured.personas.bio}</p>
+            <div className="text-xl font-semibold">{structured.persona.display_name}</div>
+            <p className="max-w-3xl text-sm leading-6 opacity-80">{structured.persona.bio}</p>
           </div>
           <span
             className={`badge px-3 py-3 text-xs font-semibold ${
-              structured.personas.status === "active" ? "badge-success" : "badge-ghost"
+              structured.persona.status === "active" ? "badge-success" : "badge-ghost"
             }`}
           >
-            {structured.personas.status}
+            {structured.persona.status}
           </span>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 space-y-3">
           <div className="bg-base-100/70 rounded-xl p-4">
             <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
               Archetype
@@ -192,13 +192,13 @@ export function PersonaStructuredPreview({ structured }: Props) {
               {asText(identitySummary.archetype) ?? "—"}
             </div>
           </div>
-          <div className="bg-base-100/70 rounded-xl p-4 md:col-span-2">
+          <div className="bg-base-100/70 rounded-xl p-4">
             <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
               Core Motivation
             </div>
             <div className="mt-2 text-sm">{asText(identitySummary.core_motivation) ?? "—"}</div>
           </div>
-          <div className="bg-base-100/70 rounded-xl p-4 md:col-span-3">
+          <div className="bg-base-100/70 rounded-xl p-4">
             <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
               One-Sentence Identity
             </div>
@@ -209,7 +209,7 @@ export function PersonaStructuredPreview({ structured }: Props) {
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="space-y-4">
         <SectionCard title="Values" description="Priority order, worldview, and judgment style.">
           {valueHierarchy.length > 0 ? (
             <ol className="space-y-2">
@@ -342,7 +342,7 @@ export function PersonaStructuredPreview({ structured }: Props) {
           title="Task Style Matrix"
           description="How this persona should shape posts versus comments."
         >
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
             <div className="bg-base-200/40 space-y-4 rounded-xl p-4">
               <div className="text-sm font-semibold">Post</div>
               {renderTextBlock("Entry Shape", postStyle.entry_shape)}
