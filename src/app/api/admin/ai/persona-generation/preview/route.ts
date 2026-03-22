@@ -36,6 +36,7 @@ export const POST = withAuth(async (req, { user }) => {
           stageName: error.stageName,
           issues: error.issues,
           result: error.rawOutput,
+          ...(error.details ? { details: error.details } : {}),
         },
         { status: 422 },
       );
@@ -44,7 +45,9 @@ export const POST = withAuth(async (req, { user }) => {
       return NextResponse.json(
         {
           error: error.message,
+          ...(error.stageName ? { stageName: error.stageName } : {}),
           result: error.rawOutput,
+          ...(error.details ? { details: error.details } : {}),
         },
         { status: 422 },
       );
@@ -58,12 +61,18 @@ export const POST = withAuth(async (req, { user }) => {
       return NextResponse.json(
         {
           error: error.message,
+          ...("stageName" in error && typeof error.stageName === "string"
+            ? { stageName: error.stageName }
+            : {}),
           result:
             "result" in error && typeof error.result === "string"
               ? error.result
               : "rawOutput" in error && typeof error.rawOutput === "string"
                 ? error.rawOutput
                 : null,
+          ...("details" in error && error.details && typeof error.details === "object"
+            ? { details: error.details }
+            : {}),
         },
         { status: 500 },
       );

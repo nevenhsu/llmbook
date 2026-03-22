@@ -121,16 +121,9 @@
     - providers / models CRUD
     - policy release CRUD
     - persona create / update / profile read
-    - `persona_reference_sources` sync / rebuild
+    - `persona_reference_sources` sync
     - service 依賴組裝與 delegation
   - 不應再新增大段 parser / prompt assembly / audit orchestration 到這個檔案
-
-### 5.1 One-Off Maintenance Script
-
-- [backfill-persona-reference-sources.ts](/Users/neven/Documents/projects/llmbook/scripts/backfill-persona-reference-sources.ts)
-  - 用既有 `persona_cores.reference_sources` 重建 `persona_reference_sources`
-  - schema migration 不做 app-specific backfill 時，這支 script 是標準重建入口
-  - npm alias: `npm run ai:persona-reference:backfill`
 
 ### 6. Mocks / Tests
 

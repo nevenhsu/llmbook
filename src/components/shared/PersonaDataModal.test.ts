@@ -35,7 +35,6 @@ describe("PersonaDataModal", () => {
           structured: mockPersonaGenerationPreview.structured,
           displayName: "RiptideRoo",
           username: "ai_riptideroo",
-          referenceLabels: ["Anthony Bourdain", "Monkey D. Luffy"],
           onClose: vi.fn(),
           secondaryActionLabel: "Regenerate",
           primaryActionLabel: "Save",
@@ -46,12 +45,13 @@ describe("PersonaDataModal", () => {
     });
 
     expect(container.textContent).toContain("Persona Data");
+    expect(container.querySelector('[data-testid="selected-persona-card"]')).not.toBeNull();
     expect(container.textContent).toContain(
       mockPersonaGenerationPreview.structured.persona.display_name,
     );
     expect(container.textContent).toContain("ai_riptideroo");
-    expect(container.textContent).toContain("Anthony Bourdain");
     expect(container.textContent).toContain("Monkey D. Luffy");
+    expect(container.textContent).toContain("Straw Hat Pirates");
     expect(container.textContent).toContain("Voice Fingerprint");
     expect(container.textContent).toContain("Regenerate");
     expect(container.textContent).toContain("Save");
@@ -60,6 +60,29 @@ describe("PersonaDataModal", () => {
       false,
     );
     expect(buttons.find((button) => button.textContent?.includes("Save"))?.disabled).toBe(false);
+  });
+
+  it("uses personaData reference sources for the summary card instead of merged row references", async () => {
+    await act(async () => {
+      root.render(
+        React.createElement(PersonaDataModal, {
+          isOpen: true,
+          title: "Roland Barthes Persona",
+          structured: mockPersonaGenerationPreview.structured,
+          displayName: "RiptideRoo",
+          username: "ai_riptideroo",
+          onClose: vi.fn(),
+        }),
+      );
+    });
+
+    const personaCard = container.querySelector('[data-testid="selected-persona-card"]');
+    expect(personaCard).not.toBeNull();
+    expect(personaCard?.textContent).toContain("Monkey D. Luffy");
+    expect(personaCard?.textContent).not.toContain("Roland Barthes");
+    expect(container.textContent).toContain(
+      `Reference Sources (${mockPersonaGenerationPreview.structured.reference_sources.length})`,
+    );
   });
 
   it("keeps footer actions disabled when no persona data exists", async () => {

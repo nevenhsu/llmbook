@@ -14,6 +14,9 @@ type Props = {
   bulkPauseRequested: boolean;
   bulkLastCompletedTask: "check" | "prompt" | "generate" | "save" | null;
   bulkLastElapsedSeconds: number;
+  canBulkPrompt: boolean;
+  canBulkGenerate: boolean;
+  canBulkSave: boolean;
   anyApiActive: boolean;
   bulkActionsDisabled: boolean;
   canReset: boolean;
@@ -69,6 +72,10 @@ function formatElapsed(elapsedSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatRowCount(count: number): string {
+  return count === 1 ? "1 row" : `${count} rows`;
+}
+
 export function PersonaBatchTable({
   rows,
   chunkSize,
@@ -79,6 +86,9 @@ export function PersonaBatchTable({
   bulkPauseRequested,
   bulkLastCompletedTask,
   bulkLastElapsedSeconds,
+  canBulkPrompt,
+  canBulkGenerate,
+  canBulkSave,
   anyApiActive,
   bulkActionsDisabled,
   canReset,
@@ -120,7 +130,9 @@ export function PersonaBatchTable({
         >
           <div>
             <h2 className="text-lg font-semibold">Batch Rows</h2>
-            <p className="text-sm opacity-60">Manage row-level and bulk persona actions here.</p>
+            <p className="text-sm opacity-60">
+              {formatRowCount(rows.length)}. Manage row-level and bulk persona actions here.
+            </p>
           </div>
           <div
             data-testid="batch-rows-header-controls"
@@ -138,7 +150,7 @@ export function PersonaBatchTable({
               <button
                 type="button"
                 className="btn btn-outline btn-sm gap-2"
-                disabled={bulkActionsDisabled}
+                disabled={bulkActionsDisabled || !canBulkPrompt}
                 onClick={onBulkPrompt}
               >
                 {bulkTask === "prompt" ? (
@@ -152,7 +164,7 @@ export function PersonaBatchTable({
               <button
                 type="button"
                 className="btn btn-outline btn-sm gap-2"
-                disabled={bulkActionsDisabled}
+                disabled={bulkActionsDisabled || !canBulkGenerate}
                 onClick={onBulkGenerate}
               >
                 {bulkTask === "generate" ? (
@@ -166,7 +178,7 @@ export function PersonaBatchTable({
               <button
                 type="button"
                 className="btn btn-outline btn-sm gap-2"
-                disabled={bulkActionsDisabled}
+                disabled={bulkActionsDisabled || !canBulkSave}
                 onClick={onBulkSave}
               >
                 {bulkTask === "save" ? (
@@ -249,7 +261,9 @@ export function PersonaBatchTable({
       >
         <div>
           <h2 className="text-lg font-semibold">Batch Rows</h2>
-          <p className="text-sm opacity-60">Manage row-level and bulk persona actions here.</p>
+          <p className="text-sm opacity-60">
+            {formatRowCount(rows.length)}. Manage row-level and bulk persona actions here.
+          </p>
         </div>
         <div
           data-testid="batch-rows-header-controls"
@@ -267,7 +281,7 @@ export function PersonaBatchTable({
             <button
               type="button"
               className="btn btn-outline btn-sm gap-2"
-              disabled={bulkActionsDisabled}
+              disabled={bulkActionsDisabled || !canBulkPrompt}
               onClick={onBulkPrompt}
             >
               {bulkTask === "prompt" ? (
@@ -281,7 +295,7 @@ export function PersonaBatchTable({
             <button
               type="button"
               className="btn btn-outline btn-sm gap-2"
-              disabled={bulkActionsDisabled}
+              disabled={bulkActionsDisabled || !canBulkGenerate}
               onClick={onBulkGenerate}
             >
               {bulkTask === "generate" ? (
@@ -295,7 +309,7 @@ export function PersonaBatchTable({
             <button
               type="button"
               className="btn btn-outline btn-sm gap-2"
-              disabled={bulkActionsDisabled}
+              disabled={bulkActionsDisabled || !canBulkSave}
               onClick={onBulkSave}
             >
               {bulkTask === "save" ? (

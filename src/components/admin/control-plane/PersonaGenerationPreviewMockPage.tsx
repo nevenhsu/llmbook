@@ -12,6 +12,7 @@ import type {
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
 import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
+import { formatGeneratedPersonaDisplayName } from "@/lib/ai/admin/persona-display-name";
 import type { PersonaGenerationModalPhase } from "./persona-generation-modal-utils";
 import { buildPersonaUpdateExtraPrompt, derivePersonaUsername } from "./control-plane-utils";
 import { PersonaGenerationSection } from "./sections/PersonaGenerationSection";
@@ -93,6 +94,9 @@ const mockPersonaProfile: PersonaProfile = {
 };
 
 export function PersonaGenerationPreviewMockPage() {
+  const generatedDisplayName = formatGeneratedPersonaDisplayName(
+    mockPersonaGenerationPreview.structured.persona.display_name,
+  );
   const [personaGeneration, setPersonaGeneration] = useState({
     modelId: mockModel.id,
     extraPrompt: mockPersonaGenerationSeedPrompt,
@@ -121,8 +125,8 @@ export function PersonaGenerationPreviewMockPage() {
   const [personaSaveLoading, setPersonaSaveLoading] = useState(false);
   const [personaGenerationMode, setPersonaGenerationMode] = useState<"create" | "update">("create");
   const [personaSaveForm, setPersonaSaveForm] = useState({
-    displayName: mockPersonaGenerationPreview.structured.persona.display_name,
-    username: derivePersonaUsername(mockPersonaGenerationPreview.structured.persona.display_name),
+    displayName: generatedDisplayName,
+    username: derivePersonaUsername(generatedDisplayName),
   });
   const [personaGenerationPreview, setPersonaGenerationPreview] = useState<
     (PreviewResult & { structured: PersonaGenerationStructured }) | null
@@ -206,10 +210,9 @@ export function PersonaGenerationPreviewMockPage() {
     try {
       await new Promise((resolve) => window.setTimeout(resolve, PREVIEW_GENERATE_DELAY_MS));
       setPersonaGenerationPreview(mockPersonaGenerationPreview);
-      const displayName = mockPersonaGenerationPreview.structured.persona.display_name;
       setPersonaSaveForm({
-        displayName,
-        username: derivePersonaUsername(displayName),
+        displayName: generatedDisplayName,
+        username: derivePersonaUsername(generatedDisplayName),
       });
       setPersonaPreviewRunCount((prev) => prev + 1);
       setPersonaGenerationElapsedSeconds(

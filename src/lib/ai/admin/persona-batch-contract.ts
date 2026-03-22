@@ -25,6 +25,7 @@ export type PersonaBatchErrorRecord = {
 export type PersonaBatchRow = {
   rowId: string;
   referenceName: string;
+  dbReferenceExists: boolean;
   contextPrompt: string;
   displayName: string;
   username: string;

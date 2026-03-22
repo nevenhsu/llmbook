@@ -162,5 +162,9 @@ describe("AiControlPlanePanel", () => {
     expect(personaSection).not.toBeNull();
     expect(personaSection?.dataset.promptCompleted).toBe("true");
     expect(personaSection?.dataset.updatePromptCompleted).toBe("true");
+
+    const refreshButton = container.querySelector("button");
+    expect(refreshButton?.className).toContain("btn-ghost");
+    expect(refreshButton?.className).not.toContain("btn-outline");
   });
 });

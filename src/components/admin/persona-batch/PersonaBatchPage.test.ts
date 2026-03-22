@@ -70,6 +70,7 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
     {
       rowId: "row-1",
       referenceName: "Anthony Bourdain",
+      dbReferenceExists: false,
       contextPrompt: "A globe-trotting storyteller with knife-edge taste.",
       displayName: mockPersonaGenerationPreview.structured.persona.display_name,
       username: "ai_riptideroo",
@@ -100,16 +101,21 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       referenceInput: "Anthony Bourdain, Hayao Miyazaki",
       setReferenceInput,
       rows,
-      chunkSize: 5,
+      chunkSize: 10,
       setChunkSize,
       bulkTask: null,
       bulkElapsedSeconds: 0,
       addLastCompletedElapsedSeconds: null,
+      addLastCompletedAddedCount: null,
+      addLastCompletedDuplicateCount: null,
       bulkPausedTask: null,
       bulkPausedElapsedSeconds: 0,
       bulkPauseRequested: false,
       bulkLastCompletedTask: "generate",
       bulkLastElapsedSeconds: 24,
+      canBulkPrompt: true,
+      canBulkGenerate: false,
+      canBulkSave: false,
       anyApiActive: false,
       addLoading: false,
       addElapsedSeconds: 0,
@@ -181,10 +187,10 @@ describe("PersonaBatchPage", () => {
 
     expect(container.textContent).toContain("Model Selection");
     expect(container.textContent).toContain("Reference Sources");
-    expect(container.textContent).toContain("Chunk Size: 5");
+    expect(container.textContent).toContain("Chunk Size: 10");
 
     const chunkButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Chunk Size: 5"),
+      button.textContent?.includes("Chunk Size: 10"),
     );
     expect(chunkButton).toBeDefined();
 

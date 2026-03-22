@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import toast from "react-hot-toast";
 import type {
   AiModelConfig,
   AiProviderConfig,
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-contract";
+import { formatGeneratedPersonaDisplayName } from "@/lib/ai/admin/persona-display-name";
 import type { PersonaBatchGenerationController } from "@/hooks/admin/usePersonaBatchGeneration";
 import { derivePersonaUsername } from "@/lib/username-validation";
 import { mockPersonaGenerationPreview } from "@/lib/ai/admin/persona-generation-preview-mock";
@@ -61,14 +63,18 @@ function cloneStructured(structured: PersonaGenerationStructured): PersonaGenera
 }
 
 function buildInitialRows(): PersonaBatchGenerationController["rows"] {
+  const generatedDisplayName = formatGeneratedPersonaDisplayName(
+    mockPersonaGenerationPreview.structured.persona.display_name,
+  );
   return [
     {
       rowId: "row-1",
       referenceName: "Anthony Bourdain",
+      dbReferenceExists: false,
       contextPrompt:
         "A globe-trotting storyteller who opens with sensory snapshots and attacks shallow taste with lived authority.",
-      displayName: mockPersonaGenerationPreview.structured.persona.display_name,
-      username: derivePersonaUsername(mockPersonaGenerationPreview.structured.persona.display_name),
+      displayName: generatedDisplayName,
+      username: derivePersonaUsername(generatedDisplayName),
       personaData: cloneStructured(mockPersonaGenerationPreview.structured),
       saved: true,
       savedPersonaId: "persona-1",
@@ -83,6 +89,7 @@ function buildInitialRows(): PersonaBatchGenerationController["rows"] {
     {
       rowId: "row-2",
       referenceName: "Hayao Miyazaki",
+      dbReferenceExists: true,
       contextPrompt: "",
       displayName: "",
       username: "",
@@ -113,6 +120,25 @@ function buildInitialRows(): PersonaBatchGenerationController["rows"] {
         createdAt: "2026-03-22T00:00:00.000Z",
       },
     },
+    {
+      rowId: "row-3",
+      referenceName: "Ursula K. Le Guin",
+      dbReferenceExists: false,
+      contextPrompt:
+        "A speculative voice that treats social systems as worlds to be pressure-tested.",
+      displayName: "",
+      username: "",
+      personaData: null,
+      saved: false,
+      savedPersonaId: null,
+      promptChangedSinceGenerate: false,
+      referenceCheckStatus: "new",
+      activeTask: null,
+      activeElapsedSeconds: 0,
+      lastCompletedTask: null,
+      lastCompletedElapsedSeconds: 0,
+      latestError: null,
+    },
   ];
 }
 
@@ -125,6 +151,10 @@ export function PersonaBatchPreviewMockPage() {
   const [addLastCompletedElapsedSeconds, setAddLastCompletedElapsedSeconds] = useState<
     number | null
   >(null);
+  const [addLastCompletedAddedCount, setAddLastCompletedAddedCount] = useState<number | null>(null);
+  const [addLastCompletedDuplicateCount, setAddLastCompletedDuplicateCount] = useState<
+    number | null
+  >(null);
   const [bulkTask, setBulkTask] = useState<PersonaBatchGenerationController["bulkTask"]>(null);
   const [bulkElapsedSeconds, setBulkElapsedSeconds] = useState(0);
   const [bulkPausedTask, setBulkPausedTask] =
@@ -135,6 +165,7 @@ export function PersonaBatchPreviewMockPage() {
     useState<PersonaBatchGenerationController["bulkLastCompletedTask"]>("generate");
   const [bulkLastElapsedSeconds, setBulkLastElapsedSeconds] = useState(31);
   const [rows, setRows] = useState<PersonaBatchGenerationController["rows"]>(buildInitialRows);
+  const rowCounterRef = useRef(4);
   const addFinishTimerRef = useRef<number | null>(null);
   const addStartedAtRef = useRef<number | null>(null);
   const bulkTimerRef = useRef<number | null>(null);
@@ -229,10 +260,12 @@ export function PersonaBatchPreviewMockPage() {
     bulkPauseRequestedRef.current = false;
     setModelId("model-1");
     setReferenceInput("Octavia Butler");
-    setChunkSize(5);
+    setChunkSize(10);
     setAddLoading(false);
     setAddElapsedSeconds(0);
     setAddLastCompletedElapsedSeconds(null);
+    setAddLastCompletedAddedCount(null);
+    setAddLastCompletedDuplicateCount(null);
     setBulkTask(null);
     setBulkElapsedSeconds(0);
     setBulkPausedTask(null);
@@ -241,6 +274,7 @@ export function PersonaBatchPreviewMockPage() {
     setBulkLastCompletedTask("generate");
     setBulkLastElapsedSeconds(31);
     setRows(buildInitialRows());
+    rowCounterRef.current = 4;
   }, [clearAddTimer, clearBulkTimer, clearRowTaskTimers]);
 
   const controller = useMemo<PersonaBatchGenerationController>(
@@ -253,6 +287,8 @@ export function PersonaBatchPreviewMockPage() {
       addLoading,
       addElapsedSeconds,
       addLastCompletedElapsedSeconds,
+      addLastCompletedAddedCount,
+      addLastCompletedDuplicateCount,
       chunkSize,
       setChunkSize,
       bulkTask,
@@ -262,8 +298,20 @@ export function PersonaBatchPreviewMockPage() {
       bulkPauseRequested,
       bulkLastCompletedTask,
       bulkLastElapsedSeconds,
+      canBulkPrompt: rows.some(
+        (row) => row.referenceCheckStatus === "new" && row.contextPrompt.trim().length === 0,
+      ),
+      canBulkGenerate: rows.some(
+        (row) =>
+          row.referenceCheckStatus === "new" &&
+          row.contextPrompt.trim().length > 0 &&
+          row.personaData === null,
+      ),
+      canBulkSave: rows.some(
+        (row) => row.referenceCheckStatus === "new" && row.personaData !== null && !row.saved,
+      ),
       anyApiActive: addLoading || bulkTask !== null || rows.some((row) => row.activeTask !== null),
-      bulkActionsDisabled: addLoading || bulkTask !== null || bulkPausedTask !== null,
+      bulkActionsDisabled: addLoading || bulkTask !== null,
       canReset: true,
       canRemoveDuplicates: rows.some((row) => row.referenceCheckStatus === "duplicate"),
       personaGenerationModels: previewModels,
@@ -275,6 +323,7 @@ export function PersonaBatchPreviewMockPage() {
         const existingNames = new Set(
           rows.map((row) => buildPersonaReferenceMatchKey(row.referenceName)),
         );
+        let skippedDuplicateCount = 0;
         const nextNames = value
           .split(/[\n,]/u)
           .map((item) => item.trim())
@@ -282,12 +331,19 @@ export function PersonaBatchPreviewMockPage() {
           .filter((item) => {
             const normalized = buildPersonaReferenceMatchKey(item);
             if (existingNames.has(normalized)) {
+              skippedDuplicateCount += 1;
               return false;
             }
             existingNames.add(normalized);
             return true;
           });
         if (nextNames.length === 0) {
+          setReferenceInput("");
+          setAddLoading(false);
+          setAddElapsedSeconds(0);
+          setAddLastCompletedElapsedSeconds(0);
+          setAddLastCompletedAddedCount(0);
+          setAddLastCompletedDuplicateCount(skippedDuplicateCount);
           return;
         }
         clearAddTimer();
@@ -295,10 +351,12 @@ export function PersonaBatchPreviewMockPage() {
         setAddLoading(true);
         setAddElapsedSeconds(0);
         setAddLastCompletedElapsedSeconds(null);
+        setAddLastCompletedAddedCount(null);
+        setAddLastCompletedDuplicateCount(null);
         setRows((current) => [
           ...current,
-          ...nextNames.map((referenceName, index) => ({
-            rowId: `row-${current.length + index + 1}`,
+          ...nextNames.map((referenceName) => ({
+            rowId: `row-${rowCounterRef.current++}`,
             referenceName,
             contextPrompt: "",
             displayName: "",
@@ -319,6 +377,8 @@ export function PersonaBatchPreviewMockPage() {
           setAddLoading(false);
           setAddElapsedSeconds(0);
           setAddLastCompletedElapsedSeconds(1);
+          setAddLastCompletedAddedCount(nextNames.length);
+          setAddLastCompletedDuplicateCount(0);
           addFinishTimerRef.current = null;
           addStartedAtRef.current = null;
         }, 1000);
@@ -326,9 +386,11 @@ export function PersonaBatchPreviewMockPage() {
       },
       removeDuplicateRows: async () => {
         setRows((current) => current.filter((row) => row.referenceCheckStatus !== "duplicate"));
+        toast.success("Duplicate rows cleared");
       },
       clearRow: async (rowId) => {
         setRows((current) => current.filter((row) => row.rowId !== rowId));
+        toast.success("Row cleared");
       },
       updateContextPrompt: (rowId, contextPrompt) => {
         setRows((current) =>
@@ -394,16 +456,17 @@ export function PersonaBatchPreviewMockPage() {
         }, 1000);
       },
       runRowGenerate: async (rowId) => {
+        const generatedDisplayName = formatGeneratedPersonaDisplayName(
+          mockPersonaGenerationPreview.structured.persona.display_name,
+        );
         setRows((current) =>
           current.map((row) =>
             row.rowId === rowId
               ? {
                   ...row,
                   personaData: cloneStructured(mockPersonaGenerationPreview.structured),
-                  displayName: mockPersonaGenerationPreview.structured.persona.display_name,
-                  username: derivePersonaUsername(
-                    mockPersonaGenerationPreview.structured.persona.display_name,
-                  ),
+                  displayName: generatedDisplayName,
+                  username: derivePersonaUsername(generatedDisplayName),
                   saved: false,
                   promptChangedSinceGenerate: false,
                   lastCompletedTask: "generate",
@@ -431,13 +494,22 @@ export function PersonaBatchPreviewMockPage() {
         );
       },
       runBulkPromptAssist: async () => {
-        finishBulkTask("prompt");
+        finishBulkTask(
+          "prompt",
+          bulkPausedTask === "prompt" ? { elapsedOffset: bulkPausedElapsedSeconds } : undefined,
+        );
       },
       runBulkGenerate: async () => {
-        finishBulkTask("generate");
+        finishBulkTask(
+          "generate",
+          bulkPausedTask === "generate" ? { elapsedOffset: bulkPausedElapsedSeconds } : undefined,
+        );
       },
       runBulkSave: async () => {
-        finishBulkTask("save");
+        finishBulkTask(
+          "save",
+          bulkPausedTask === "save" ? { elapsedOffset: bulkPausedElapsedSeconds } : undefined,
+        );
       },
       requestBulkPause: () => {
         if (bulkTask === null || bulkPauseRequestedRef.current) {

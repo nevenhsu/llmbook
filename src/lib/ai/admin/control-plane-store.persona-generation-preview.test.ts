@@ -194,6 +194,26 @@ function buildValuesAndAestheticStage() {
   };
 }
 
+function buildMachineLabelValuesStage() {
+  return {
+    values: {
+      value_hierarchy: [
+        { value: "moral_clarity", priority: 1 },
+        { value: "intellectual_humility", priority: 2 },
+      ],
+      worldview: ["People reveal themselves in how they defend weak ideas."],
+      judgment_style: "direct but fair",
+    },
+    aesthetic_profile: {
+      humor_preferences: ["dry wit"],
+      narrative_preferences: ["clear conflict"],
+      creative_preferences: ["specificity"],
+      disliked_patterns: ["generic praise"],
+      taste_boundaries: ["empty encouragement"],
+    },
+  };
+}
+
 function buildContextAndAffinityStage() {
   return {
     lived_context: {
@@ -1383,7 +1403,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           prompt: expect.stringContaining(
             "Your previous response for stage values_and_aesthetic was invalid or incomplete JSON. Retry once with a shorter response.",
           ),
-          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
         }),
       }),
     );
@@ -1420,10 +1440,56 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           prompt: expect.stringContaining(
             "Return a compact version from scratch using the same contract.",
           ),
-          maxOutputTokens: Math.min(
-            PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
-            PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
+        }),
+      }),
+    );
+  });
+
+  it("retries a truncated values-stage quality repair with the shared quality repair headroom", async () => {
+    const truncatedQualityRepair =
+      '{"values":{"value_hierarchy":[{"value":"Genuine compassion for human suffering","priority":1}],"worldview":["True wisdom emerges from ruthless conscience"],"judgment_style":"earnest moral scrutiny"},"aesthetic_profile":{"humor_preferences":["grave irony"],"narrative_preferences":["long moral examination"]';
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildMachineLabelValuesStage()) },
+      {
+        text: truncatedQualityRepair,
+        finishReason: "length",
+      },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.values).toEqual(buildValuesAndAestheticStage().values);
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls[3]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-1",
+        modelInput: expect.objectContaining({
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
+        }),
+      }),
+    );
+    expect(calls[4]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "quality-repair response for stage values_and_aesthetic was truncated before the JSON object was complete",
           ),
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
         }),
       }),
     );
@@ -1460,6 +1526,54 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
             "Your previous response for stage interaction_and_guardrails was invalid or incomplete JSON. Retry once with a shorter response.",
           ),
           maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
+        }),
+      }),
+    );
+  });
+
+  it("runs a final truncation rescue when the compact interaction retry still ends with length-truncated schema drift", async () => {
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      {
+        text: '{"interaction_defaults":{"default_stance":"Opens with a sting"',
+        finishReason: "length",
+      },
+      {
+        text: '{"interaction_defaults":{"default_stance":"Opens with a sting","discussion_strengths":["clarify trade-offs"],"friction_triggers":["hype"],"non_generic_traits":["tests the premise first"]},"guardrails":{"hard_no":["empty certainty"],"deescalation_style":"cuts the temperature by naming the real issue"},"voice_fingerprint":{"opening_move":"Lead with the uncomfortable question.","metaphor_domains":["moral weather"],"attack_style":"Expose the contradiction.","praise_style":"Respect rare honesty.","closing_move":"Leave the discomfort visible."},"task_style_matrix":{"post":{"entry_shape":"Open with a moral problem.","body_shape":"Push the contradiction.","close_shape":"Refuse false closure","forbidden_shapes":["easy answers"]},"comment":{"entry_shape":"Start from the friction.","feedback_shape":"Name the contradiction.","close_shape":"Leave one hard question"}}}',
+        finishReason: "length",
+      },
+      {
+        text: '{"interaction_defaults":{"default_stance":"Open with the moral sting.","discussion_strengths":["clarify trade-offs"],"friction_triggers":["hype"],"non_generic_traits":["tests the premise first"]},"guardrails":{"hard_no":["empty certainty"],"deescalation_style":"names the real issue"},"voice_fingerprint":{"opening_move":"Lead with the uncomfortable question.","metaphor_domains":["moral weather"],"attack_style":"Expose the contradiction.","praise_style":"Respect rare honesty.","closing_move":"Leave the discomfort visible."},"task_style_matrix":{"post":{"entry_shape":"Open with a moral problem.","body_shape":"Push the contradiction.","close_shape":"Refuse false closure","forbidden_shapes":["easy answers"]},"comment":{"entry_shape":"Start from the friction.","feedback_shape":"Name the contradiction.","close_shape":"Leave one hard question"}}}',
+        finishReason: "length",
+      },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.voice_fingerprint).toEqual(
+      buildInteractionAndGuardrailsStage().voice_fingerprint,
+    );
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls[7]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-4",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Your previous responses for stage interaction_and_guardrails kept truncating before the JSON object was complete",
+          ),
+          maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
         }),
       }),
     );

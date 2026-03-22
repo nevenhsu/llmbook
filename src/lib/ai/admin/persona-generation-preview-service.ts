@@ -299,7 +299,7 @@ export async function previewPersonaGeneration(input: {
       outputMaxTokens: stageInput.outputMaxTokens,
     });
 
-    const invokeStageAttempt = async (prompt: string, attempt: 1 | 2 | 3) =>
+    const invokeStageAttempt = async (prompt: string, attempt: 1 | 2 | 3 | 4) =>
       invokeLLM({
         registry,
         taskType: "generic",
@@ -310,16 +310,16 @@ export async function previewPersonaGeneration(input: {
             attempt === 1
               ? Math.min(stageInput.outputMaxTokens, maxOutputTokens)
               : attempt === 2
-                ? Math.min(
-                    PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap,
-                    stageInput.outputMaxTokens,
-                    maxOutputTokens,
-                  )
-                : Math.min(
-                    PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
-                    stageInput.outputMaxTokens,
-                    maxOutputTokens,
-                  ),
+                ? Math.min(PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap, maxOutputTokens)
+                : attempt === 3
+                  ? Math.min(
+                      PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
+                      maxOutputTokens,
+                    )
+                  : Math.min(
+                      PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
+                      maxOutputTokens,
+                    ),
           temperature: attempt === 1 ? 0.4 : attempt === 2 ? 0.2 : 0.1,
         },
         entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:attempt-${attempt}`,
@@ -335,7 +335,7 @@ export async function previewPersonaGeneration(input: {
         },
       });
 
-    const invokeQualityRepairAttempt = async (prompt: string) =>
+    const invokeQualityRepairAttempt = async (prompt: string, attempt: 1 | 2) =>
       invokeLLM({
         registry,
         taskType: "generic",
@@ -344,12 +344,11 @@ export async function previewPersonaGeneration(input: {
           prompt,
           maxOutputTokens: Math.min(
             PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
-            stageInput.outputMaxTokens,
             maxOutputTokens,
           ),
-          temperature: 0.2,
+          temperature: attempt === 1 ? 0.2 : 0.1,
         },
-        entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:quality-repair-1`,
+        entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:quality-repair-${attempt}`,
         timeoutMs: invocationConfig.timeoutMs,
         retries: previewProviderRetries,
         onProviderError: async (event) => {
@@ -364,6 +363,33 @@ export async function previewPersonaGeneration(input: {
 
     const isLengthTruncated = (result: { text: string; finishReason?: string | null }) =>
       result.finishReason === "length" && result.text.trim().length > 0;
+
+    const buildStageAttemptDetails = (input: {
+      attemptStage: string;
+      llmResult: {
+        text: string;
+        finishReason?: string | null;
+        providerId?: string | null;
+        modelId?: string | null;
+        attempts?: number | null;
+        usedFallback?: boolean | null;
+        error?: string | null;
+        errorDetails?: unknown;
+      };
+    }): Record<string, unknown> => {
+      const trimmedText = input.llmResult.text.trim();
+      return {
+        attemptStage: input.attemptStage,
+        providerId: input.llmResult.providerId ?? null,
+        modelId: input.llmResult.modelId ?? null,
+        finishReason: input.llmResult.finishReason ?? null,
+        hadText: trimmedText.length > 0,
+        attempts: input.llmResult.attempts ?? null,
+        usedFallback: input.llmResult.usedFallback ?? false,
+        ...(input.llmResult.error ? { providerError: input.llmResult.error } : {}),
+        ...(input.llmResult.errorDetails ? { errorDetails: input.llmResult.errorDetails } : {}),
+      };
+    };
 
     const formatTruncatedOutputForRepair = (rawText: string) => {
       const text = rawText.trim();
@@ -396,15 +422,25 @@ export async function previewPersonaGeneration(input: {
     };
 
     const buildStageSpecificTruncationGuidance = () => {
-      if (stageInput.stageName !== "interaction_and_guardrails") {
-        return "";
+      if (stageInput.stageName === "values_and_aesthetic") {
+        return [
+          "For values_and_aesthetic, keep value_hierarchy to at most 4 items.",
+          "Each values.value_hierarchy[*].value must be a short natural-language phrase, not an identifier label.",
+          "Keep worldview to 1 short item.",
+          "Keep every aesthetic_profile field to at most 1 short item.",
+        ].join("\n");
       }
-      return [
-        "For interaction_and_guardrails, keep every array as short as possible.",
-        "Use at most 2 items for discussion_strengths, friction_triggers, non_generic_traits, metaphor_domains, and forbidden_shapes.",
-        "Keep voice_fingerprint.closing_move as one short string, not an array.",
-        "Keep post/comment entry_shape, body_shape, feedback_shape, and close_shape to one short clause each.",
-      ].join("\n");
+      if (stageInput.stageName === "interaction_and_guardrails") {
+        return [
+          "For interaction_and_guardrails, keep every array as short as possible.",
+          "Use at most 2 items for discussion_strengths, friction_triggers, non_generic_traits, metaphor_domains, and forbidden_shapes.",
+          "Keep voice_fingerprint.closing_move as one short string, not an array.",
+          "Keep post/comment entry_shape, body_shape, feedback_shape, and close_shape to one short clause each.",
+          "voice_fingerprint must still include opening_move, metaphor_domains, attack_style, praise_style, closing_move, and forbidden_shapes.",
+          "task_style_matrix.post and task_style_matrix.comment must each include every required shape field and forbidden_shapes.",
+        ].join("\n");
+      }
+      return "";
     };
 
     const buildRetryRepairPrompt = (repairInput: {
@@ -423,21 +459,107 @@ export async function previewPersonaGeneration(input: {
         ? `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${stageInput.stageName} were truncated before the JSON object was complete.\nReturn a much shorter version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string extremely short.\nUse only 1 item in arrays unless the schema requires more.\nPrefer the shortest valid phrasing for every field.\nPrioritize closing the full JSON object.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`
         : `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${stageInput.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
 
-    const attemptParse = (result: { text: string; error?: string | null }) => {
+    const buildFinalTruncationRescuePrompt = (repairInput: {
+      previousTruncatedOutput?: string | null;
+    }) =>
+      `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${stageInput.stageName} kept truncating before the JSON object was complete.\nReturn the shortest valid JSON object that still satisfies the exact schema.\nReturn strictly valid JSON only.\nBefore finishing, verify that every required key from stage_contract is present exactly once.\nKeep every string to one short clause.\nUse only 1 item in arrays unless the schema requires more.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`;
+
+    const buildQualityRepairPrompt = (repairInput: {
+      qualityIssues: string[];
+      previousParsedOutput: T;
+      repairGuidance?: string[];
+      mode: "initial" | "truncated";
+      previousTruncatedOutput?: string | null;
+    }) =>
+      [
+        basePrompt,
+        "",
+        "[quality_repair]",
+        repairInput.mode === "truncated"
+          ? `Your previous quality-repair response for stage ${stageInput.stageName} was truncated before the JSON object was complete.`
+          : `Your previous response for stage ${stageInput.stageName} was valid JSON but failed the quality contract.`,
+        repairInput.mode === "truncated"
+          ? "Rewrite this stage from scratch in a shorter form while preserving the quality fixes."
+          : "Rewrite this stage from scratch using the same JSON schema.",
+        "Use natural-language behavioral descriptions, not enum labels, taxonomy tokens, or snake_case identifiers.",
+        "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
+        ...(repairInput.mode === "truncated"
+          ? [
+              "Keep every string to one short sentence.",
+              "Limit arrays to at most 2 items unless the schema requires more.",
+              "Prioritize finishing the full JSON object over richness.",
+              buildStageSpecificTruncationGuidance(),
+            ]
+          : []),
+        "Quality issues:",
+        ...repairInput.qualityIssues.map((issue) => `- ${issue}`),
+        ...(repairInput.repairGuidance?.length
+          ? [
+              "",
+              "Additional repair guidance:",
+              ...repairInput.repairGuidance.map((item) => `- ${item}`),
+            ]
+          : []),
+        "",
+        "Previous parsed output:",
+        JSON.stringify(repairInput.previousParsedOutput, null, 2),
+        ...(repairInput.mode === "truncated"
+          ? ["", buildTruncatedOutputContext(repairInput.previousTruncatedOutput)]
+          : []),
+        "",
+        "Return strictly valid JSON only.",
+        "Do not add commentary.",
+      ]
+        .filter((value) => value !== "")
+        .join("\n");
+
+    const attemptParse = (
+      result: {
+        text: string;
+        error?: string | null;
+        finishReason?: string | null;
+        providerId?: string | null;
+        modelId?: string | null;
+        attempts?: number | null;
+        usedFallback?: boolean | null;
+        errorDetails?: unknown;
+      },
+      attemptStage: string,
+    ) => {
       if (!result.text.trim()) {
         throw new PersonaGenerationParseError(
           result.error ?? "persona generation model returned empty output",
           result.text,
+          {
+            stageName: stageInput.stageName,
+            details: buildStageAttemptDetails({
+              attemptStage,
+              llmResult: result,
+            }),
+          },
         );
       }
-      return stageInput.parse(result.text);
+      try {
+        return stageInput.parse(result.text);
+      } catch (error) {
+        if (error instanceof PersonaGenerationParseError) {
+          throw new PersonaGenerationParseError(error.message, error.rawOutput, {
+            stageName: stageInput.stageName,
+            details: buildStageAttemptDetails({
+              attemptStage,
+              llmResult: result,
+            }),
+          });
+        }
+        throw error;
+      }
     };
 
     const resolveParsedStage = async (): Promise<T> => {
       const first = await invokeStageAttempt(basePrompt, 1);
       const firstWasTruncated = isLengthTruncated(first);
       try {
-        return attemptParse(first);
+        return attemptParse(first, "attempt-1");
       } catch (error) {
         if (!(error instanceof PersonaGenerationParseError)) {
           throw error;
@@ -449,7 +571,7 @@ export async function previewPersonaGeneration(input: {
         const second = await invokeStageAttempt(repairPrompt, 2);
         const secondWasTruncated = isLengthTruncated(second);
         try {
-          return attemptParse(second);
+          return attemptParse(second, "attempt-2");
         } catch (secondParseError) {
           if (!(secondParseError instanceof PersonaGenerationParseError)) {
             throw secondParseError;
@@ -464,10 +586,20 @@ export async function previewPersonaGeneration(input: {
             previousTruncatedOutput: latestTruncatedOutput,
           });
           const third = await invokeStageAttempt(compactRepairPrompt, 3);
+          const thirdWasTruncated = isLengthTruncated(third);
           try {
-            return attemptParse(third);
+            return attemptParse(third, "attempt-3");
           } catch (compactError) {
             if (compactError instanceof PersonaGenerationParseError) {
+              if (thirdWasTruncated) {
+                const fourth = await invokeStageAttempt(
+                  buildFinalTruncationRescuePrompt({
+                    previousTruncatedOutput: third.text,
+                  }),
+                  4,
+                );
+                return attemptParse(fourth, "attempt-4");
+              }
               throw compactError;
             }
             throw secondParseError;
@@ -492,45 +624,55 @@ export async function previewPersonaGeneration(input: {
       return parsedStage;
     }
 
-    const qualityRepairPrompt = [
-      basePrompt,
-      "",
-      "[quality_repair]",
-      `Your previous response for stage ${stageInput.stageName} was valid JSON but failed the quality contract.`,
-      "Rewrite this stage from scratch using the same JSON schema.",
-      "Use natural-language behavioral descriptions, not enum labels, taxonomy tokens, or snake_case identifiers.",
-      "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
-      "Quality issues:",
-      ...qualityIssues.map((issue) => `- ${issue}`),
-      ...(semanticQualityResult?.repairGuidance?.length
-        ? [
-            "",
-            "Additional repair guidance:",
-            ...semanticQualityResult.repairGuidance.map((item) => `- ${item}`),
-          ]
-        : []),
-      "",
-      "Previous parsed output:",
-      JSON.stringify(parsedStage, null, 2),
-      "",
-      "Return strictly valid JSON only.",
-      "Do not add commentary.",
-    ].join("\n");
+    const qualityRepairPrompt = buildQualityRepairPrompt({
+      qualityIssues,
+      previousParsedOutput: parsedStage,
+      repairGuidance: semanticQualityResult?.repairGuidance,
+      mode: "initial",
+    });
 
-    const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt);
+    const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt, 1);
     let repairedStage: T;
+    let finalQualityRepairResult = qualityRepaired;
     try {
-      repairedStage = attemptParse(qualityRepaired);
+      repairedStage = attemptParse(qualityRepaired, "quality-repair-1");
     } catch (error) {
       if (!(error instanceof PersonaGenerationParseError)) {
         throw error;
       }
-      throw new PersonaGenerationQualityError({
-        stageName: stageInput.stageName,
-        message: `persona generation stage ${stageInput.stageName} quality repair returned invalid JSON`,
-        rawOutput: error.rawOutput,
-        issues: qualityIssues,
-      });
+      if (isLengthTruncated(qualityRepaired)) {
+        const qualityRepairRetryPrompt = buildQualityRepairPrompt({
+          qualityIssues,
+          previousParsedOutput: parsedStage,
+          repairGuidance: semanticQualityResult?.repairGuidance,
+          mode: "truncated",
+          previousTruncatedOutput: qualityRepaired.text,
+        });
+        const qualityRepairedRetry = await invokeQualityRepairAttempt(qualityRepairRetryPrompt, 2);
+        finalQualityRepairResult = qualityRepairedRetry;
+        try {
+          repairedStage = attemptParse(qualityRepairedRetry, "quality-repair-2");
+        } catch (retryError) {
+          if (!(retryError instanceof PersonaGenerationParseError)) {
+            throw retryError;
+          }
+          throw new PersonaGenerationQualityError({
+            stageName: stageInput.stageName,
+            message: `persona generation stage ${stageInput.stageName} quality repair returned invalid JSON`,
+            rawOutput: retryError.rawOutput,
+            issues: qualityIssues,
+            details: retryError.details,
+          });
+        }
+      } else {
+        throw new PersonaGenerationQualityError({
+          stageName: stageInput.stageName,
+          message: `persona generation stage ${stageInput.stageName} quality repair returned invalid JSON`,
+          rawOutput: error.rawOutput,
+          issues: qualityIssues,
+          details: error.details,
+        });
+      }
     }
 
     const repairedDeterministicQualityIssues = [
@@ -551,8 +693,13 @@ export async function previewPersonaGeneration(input: {
       throw new PersonaGenerationQualityError({
         stageName: stageInput.stageName,
         message: `persona generation stage ${stageInput.stageName} quality repair failed`,
-        rawOutput: qualityRepaired.text,
+        rawOutput: finalQualityRepairResult.text,
         issues: repairedQualityIssues,
+        details: buildStageAttemptDetails({
+          attemptStage:
+            finalQualityRepairResult === qualityRepaired ? "quality-repair-1" : "quality-repair-2",
+          llmResult: finalQualityRepairResult,
+        }),
       });
     }
 

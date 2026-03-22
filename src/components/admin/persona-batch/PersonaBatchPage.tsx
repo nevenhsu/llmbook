@@ -80,6 +80,8 @@ export function PersonaBatchPage({
         addLoading={resolved.addLoading}
         addElapsedSeconds={resolved.addElapsedSeconds}
         addLastCompletedElapsedSeconds={resolved.addLastCompletedElapsedSeconds}
+        addLastCompletedAddedCount={resolved.addLastCompletedAddedCount}
+        addLastCompletedDuplicateCount={resolved.addLastCompletedDuplicateCount}
         onModelChange={resolved.setModelId}
         onReferenceInputChange={resolved.setReferenceInput}
         onAdd={() => void resolved.addReferenceRowsFromInput()}
@@ -95,6 +97,9 @@ export function PersonaBatchPage({
         bulkPauseRequested={resolved.bulkPauseRequested}
         bulkLastCompletedTask={resolved.bulkLastCompletedTask}
         bulkLastElapsedSeconds={resolved.bulkLastElapsedSeconds}
+        canBulkPrompt={resolved.canBulkPrompt}
+        canBulkGenerate={resolved.canBulkGenerate}
+        canBulkSave={resolved.canBulkSave}
         anyApiActive={resolved.anyApiActive}
         bulkActionsDisabled={resolved.bulkActionsDisabled}
         canReset={resolved.canReset}
@@ -174,15 +179,6 @@ export function PersonaBatchPage({
         title={viewingPersonaRow ? `${viewingPersonaRow.referenceName} Persona` : "Persona Data"}
         displayName={viewingPersonaRow?.displayName ?? undefined}
         username={viewingPersonaRow?.username ?? undefined}
-        referenceLabels={
-          viewingPersonaRow
-            ? [
-                viewingPersonaRow.referenceName,
-                ...(viewingPersonaRow.personaData?.reference_sources.map((item) => item.name) ??
-                  []),
-              ]
-            : []
-        }
         structured={viewingPersonaRow?.personaData ?? null}
         onClose={() => setViewingPersonaRowId(null)}
         secondaryActionLabel="Regenerate"

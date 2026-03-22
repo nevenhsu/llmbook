@@ -83,6 +83,7 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
           modelId: "grok-4-1-fast-reasoning",
           finishReason: "length",
           hadText: false,
+          rawText: null,
         },
       ),
     );
@@ -98,12 +99,51 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
     expect(await res.json()).toEqual({
       error: "prompt assist repair returned empty output",
       code: "prompt_assist_repair_output_empty",
+      result: null,
       details: {
         attemptStage: "empty_output_repair",
         providerId: "xai",
         modelId: "grok-4-1-fast-reasoning",
         finishReason: "length",
         hadText: false,
+      },
+    });
+  });
+
+  it("includes the failing llm output when prompt-assist validation rejects a non-empty result", async () => {
+    assistPersonaPrompt.mockRejectedValue(
+      new PromptAssistError(
+        "prompt assist output must include at least 1 explicit real reference name",
+        "prompt_assist_missing_reference",
+        {
+          attemptStage: "main_rewrite",
+          providerId: "minimax",
+          modelId: "MiniMax-M2.5",
+          finishReason: "stop",
+          hadText: true,
+          rawText: "A globe-trotting storyteller who turns every meal into a social map.",
+        },
+      ),
+    );
+
+    const req = new Request("http://localhost/api/admin/ai/persona-generation/prompt-assist", {
+      method: "POST",
+      body: JSON.stringify({ modelId: "model-1", inputPrompt: "Roland Barthes" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "prompt assist output must include at least 1 explicit real reference name",
+      code: "prompt_assist_missing_reference",
+      result: "A globe-trotting storyteller who turns every meal into a social map.",
+      details: {
+        attemptStage: "main_rewrite",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+        finishReason: "stop",
+        hadText: true,
       },
     });
   });

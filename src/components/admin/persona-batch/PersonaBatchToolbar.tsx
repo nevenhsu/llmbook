@@ -10,6 +10,8 @@ type Props = {
   addLoading: boolean;
   addElapsedSeconds?: number;
   addLastCompletedElapsedSeconds?: number | null;
+  addLastCompletedAddedCount?: number | null;
+  addLastCompletedDuplicateCount?: number | null;
   onModelChange: (value: string) => void;
   onReferenceInputChange: (value: string) => void;
   onAdd: () => void;
@@ -30,14 +32,30 @@ export function PersonaBatchToolbar({
   addLoading,
   addElapsedSeconds = 0,
   addLastCompletedElapsedSeconds = null,
+  addLastCompletedAddedCount = null,
+  addLastCompletedDuplicateCount = null,
   onModelChange,
   onReferenceInputChange,
   onAdd,
 }: Props) {
-  const addStatusText = addLoading
-    ? `Adding ${formatElapsed(addElapsedSeconds)}`
-    : typeof addLastCompletedElapsedSeconds === "number"
-      ? `Added ${formatElapsed(addLastCompletedElapsedSeconds)}`
+  const completedSummary =
+    typeof addLastCompletedAddedCount === "number" &&
+    typeof addLastCompletedDuplicateCount === "number"
+      ? `${addLastCompletedAddedCount} ${
+          addLastCompletedAddedCount === 1 ? "row" : "rows"
+        }, ${addLastCompletedDuplicateCount} ${
+          addLastCompletedDuplicateCount === 1 ? "duplicate" : "duplicates"
+        }`
+      : null;
+  const addStatusSummaryText = addLoading
+    ? "Adding"
+    : completedSummary
+      ? `Added ${completedSummary}`
+      : null;
+  const addStatusElapsedText = addLoading
+    ? formatElapsed(addElapsedSeconds)
+    : typeof addLastCompletedElapsedSeconds === "number" && completedSummary
+      ? formatElapsed(addLastCompletedElapsedSeconds)
       : null;
 
   return (
@@ -60,37 +78,50 @@ export function PersonaBatchToolbar({
         </label>
 
         <label className="form-control">
-          <span className="label-text text-sm font-medium">
-            Reference Sources (comma or newline separated)
-          </span>
+          <span className="label-text text-sm font-medium">Reference Sources</span>
           <textarea
             className="textarea textarea-bordered mt-2 min-h-[7rem] w-full"
             value={referenceInput}
             disabled={disableInputs}
             onChange={(event) => onReferenceInputChange(event.target.value)}
-            placeholder="Anthony Bourdain, Hayao Miyazaki, Ursula K. Le Guin"
+            placeholder=""
           />
+          <span className="mt-2 text-xs opacity-60">
+            comma or newline separated, ex: Anthony Bourdain, Hayao Miyazaki, Ursula K. Le Guin
+          </span>
         </label>
 
-        <div className="flex flex-col items-end gap-2 xl:justify-end">
-          <div className="flex items-center justify-end gap-3">
-            {addStatusText ? (
-              <div
-                data-testid="reference-input-add-status"
-                className="text-xs whitespace-nowrap opacity-60"
-              >
-                {addStatusText}
+        <div className="xl:col-span-3">
+          <div className="flex items-center justify-between gap-3">
+            {addStatusSummaryText ? (
+              <div data-testid="reference-input-add-status" className="text-xs opacity-60">
+                <span
+                  data-testid="reference-input-add-status-summary"
+                  className="whitespace-nowrap"
+                >
+                  {addStatusSummaryText}
+                </span>
               </div>
             ) : null}
-            <button
-              type="button"
-              className="btn btn-primary gap-2 self-end"
-              disabled={disableInputs || referenceInput.trim().length === 0}
-              onClick={onAdd}
-            >
-              {addLoading ? <span className="loading loading-spinner loading-xs" /> : null}
-              Add
-            </button>
+            <div className="ml-auto flex items-center gap-3">
+              {addStatusElapsedText ? (
+                <span
+                  data-testid="reference-input-add-status-elapsed"
+                  className="text-xs whitespace-nowrap opacity-60"
+                >
+                  {addStatusElapsedText}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-primary shrink-0 gap-2"
+                disabled={disableInputs || referenceInput.trim().length === 0}
+                onClick={onAdd}
+              >
+                {addLoading ? <span className="loading loading-spinner loading-xs" /> : null}
+                Add
+              </button>
+            </div>
           </div>
         </div>
       </div>

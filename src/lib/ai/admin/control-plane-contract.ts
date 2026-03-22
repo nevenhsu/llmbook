@@ -125,11 +125,22 @@ export type PersonaGenerationSemanticAuditResult = {
 
 export class PersonaGenerationParseError extends Error {
   public readonly rawOutput: string;
+  public readonly stageName: string | null;
+  public readonly details: Record<string, unknown> | null;
 
-  public constructor(message: string, rawOutput: string) {
+  public constructor(
+    message: string,
+    rawOutput: string,
+    options?: {
+      stageName?: string | null;
+      details?: Record<string, unknown> | null;
+    },
+  ) {
     super(message);
     this.name = "PersonaGenerationParseError";
     this.rawOutput = rawOutput;
+    this.stageName = options?.stageName ?? null;
+    this.details = options?.details ?? null;
   }
 }
 
@@ -142,8 +153,12 @@ export class PersonaGenerationQualityError extends PersonaGenerationParseError {
     message: string;
     rawOutput: string;
     issues: string[];
+    details?: Record<string, unknown> | null;
   }) {
-    super(input.message, input.rawOutput);
+    super(input.message, input.rawOutput, {
+      stageName: input.stageName,
+      details: input.details,
+    });
     this.name = "PersonaGenerationQualityError";
     this.stageName = input.stageName;
     this.issues = input.issues;
@@ -165,6 +180,7 @@ export type PromptAssistAttemptStage =
   | "empty_output_repair"
   | "weak_output_repair"
   | "reference_name_repair"
+  | "reference_presence_audit"
   | "truncated_output_repair";
 
 export class PromptAssistError extends Error {

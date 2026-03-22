@@ -115,7 +115,7 @@ export default function AiControlPlanePanel(props: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn btn-outline btn-sm gap-1" onClick={() => void refreshAll()}>
+          <button className="btn btn-ghost btn-sm gap-1" onClick={() => void refreshAll()}>
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
         </div>

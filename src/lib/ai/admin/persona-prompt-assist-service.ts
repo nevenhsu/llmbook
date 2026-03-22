@@ -4,9 +4,11 @@ import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider
 import {
   ADMIN_UI_LLM_PROVIDER_RETRIES,
   PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
+  PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
 } from "@/lib/ai/admin/persona-generation-token-budgets";
 import {
   PromptAssistError,
+  type PersonaGenerationSemanticAuditResult,
   type AiModelConfig,
   type AiProviderConfig,
   type PromptAssistAttemptStage,
@@ -20,6 +22,7 @@ import {
   hasLikelyNamedReference,
   isLikelyTruncatedPromptAssistText,
   isWeakPromptAssistRewrite,
+  parsePersonaGenerationSemanticAuditResult,
   parseResolvedReferenceNames,
   validatePromptAssistResult,
 } from "@/lib/ai/admin/persona-generation-contract";
@@ -123,6 +126,7 @@ export async function assistPersonaPrompt(input: {
     promptText: string,
     temperature: number,
     stage: PromptAssistAttemptStage,
+    maxOutputTokens = PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
   ): Promise<{ text: string; details: Record<string, unknown> }> => {
     const llmResult = await invokeLLM({
       registry,
@@ -130,10 +134,7 @@ export async function assistPersonaPrompt(input: {
       routeOverride: invocationConfig.route,
       modelInput: {
         prompt: promptText,
-        maxOutputTokens: Math.min(
-          model.maxOutputTokens ?? PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
-          PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
-        ),
+        maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
         temperature,
       },
       entityId: `persona-prompt-assist:${model.id}`,
@@ -163,6 +164,45 @@ export async function assistPersonaPrompt(input: {
       });
     }
     return { text, details };
+  };
+
+  const runReferencePresenceAudit = async (
+    candidateText: string,
+  ): Promise<PersonaGenerationSemanticAuditResult> => {
+    const auditPrompt = [
+      "[prompt_assist_reference_audit]",
+      "You are judging whether the persona brief below includes at least 1 explicit real reference name in visible text.",
+      "Judge semantics, not regex.",
+      "A single explicit proper name such as Plato counts.",
+      "A phrase like Plato-inspired or inspired by Plato counts.",
+      "Anonymous style description without a visible real name does not count.",
+      "Return exactly one JSON object.",
+      "Return raw JSON only. Do not use markdown fences.",
+      "passes: boolean",
+      "issues: string[]",
+      "repairGuidance: string[]",
+      "Keep every issue and repairGuidance item short and functional.",
+      "",
+      "[persona_brief]",
+      candidateText,
+    ].join("\n");
+
+    const auditAttempt = await invokePromptAssist(
+      auditPrompt,
+      0,
+      "reference_presence_audit",
+      PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
+    );
+
+    if (!auditAttempt.text) {
+      return { passes: true, issues: [], repairGuidance: [] };
+    }
+
+    try {
+      return parsePersonaGenerationSemanticAuditResult(auditAttempt.text);
+    } catch {
+      return { passes: true, issues: [], repairGuidance: [] };
+    }
   };
 
   const hasExplicitReference = trimmedInput.length > 0 && hasLikelyNamedReference(trimmedInput);
@@ -323,29 +363,6 @@ export async function assistPersonaPrompt(input: {
     }
   }
 
-  if (mode === "optimize" && sourceReferenceNames.length > 0 && !hasLikelyNamedReference(text)) {
-    const referenceRepairPrompt = [
-      systemPrompt,
-      explicitSourceReferenceInstruction,
-      userPrompt,
-      "",
-      "[retry_repair]",
-      "The previous rewrite paraphrased away explicit reference names.",
-      "Rewrite from scratch and keep at least one original source reference name explicit in the final brief whenever possible.",
-      "If you switch to a closely related reference, keep that related name explicit in the final brief.",
-      "Return only one complete persona brief.",
-    ].join("\n\n");
-    const repairedAttempt = await invokePromptAssist(
-      referenceRepairPrompt,
-      0.25,
-      "reference_name_repair",
-    );
-    if (repairedAttempt.text) {
-      text = repairedAttempt.text;
-      textDetails = repairedAttempt.details;
-    }
-  }
-
   if (isLikelyTruncatedPromptAssistText({ text, details: textDetails })) {
     const truncatedRepairPrompt = [
       systemPrompt,
@@ -382,6 +399,49 @@ export async function assistPersonaPrompt(input: {
       code: "prompt_assist_truncated_output",
       message: "prompt assist output was truncated or incomplete",
       details: textDetails,
+    });
+  }
+
+  let referenceAudit = await runReferencePresenceAudit(text);
+  if (!referenceAudit.passes) {
+    const referenceRepairPrompt = [
+      systemPrompt,
+      explicitSourceReferenceInstruction,
+      resolvedReferenceInstruction,
+      userPrompt,
+      "",
+      "[retry_repair]",
+      "The previous rewrite did not keep at least one explicit real reference name visible in the final brief.",
+      ...referenceAudit.repairGuidance,
+      mode === "optimize" && sourceReferenceNames.length > 0
+        ? "Keep at least one original source reference name explicit in the final brief whenever possible."
+        : "Keep at least one explicit real reference name visible in the final brief.",
+      "If you switch to a closely related reference, keep that related name explicit in the final brief.",
+      "Rewrite from scratch and return one complete persona brief only.",
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join("\n\n");
+    const repairedAttempt = await invokePromptAssist(
+      referenceRepairPrompt,
+      mode === "random" ? 0.55 : 0.25,
+      "reference_name_repair",
+    );
+    if (repairedAttempt.text) {
+      text = repairedAttempt.text;
+      textDetails = repairedAttempt.details;
+      referenceAudit = await runReferencePresenceAudit(text);
+    }
+  }
+
+  if (!referenceAudit.passes) {
+    throw new PromptAssistError({
+      code: "prompt_assist_missing_reference",
+      message: "prompt assist output must include at least 1 explicit real reference name",
+      details: {
+        ...(textDetails ?? {}),
+        auditIssues: referenceAudit.issues,
+        auditRepairGuidance: referenceAudit.repairGuidance,
+      },
     });
   }
 

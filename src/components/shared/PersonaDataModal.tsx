@@ -3,6 +3,8 @@
 import { Save, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PersonaGenerationStructured } from "@/lib/ai/admin/control-plane-contract";
+import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
+import { PersonaInfoCard } from "@/components/admin/control-plane/PersonaInfoCard";
 import { PersonaStructuredPreview } from "@/components/admin/control-plane/PersonaStructuredPreview";
 import { ModalShell } from "@/components/ui/ModalShell";
 
@@ -13,7 +15,6 @@ type Props = {
   structured: PersonaGenerationStructured | null;
   displayName?: string;
   username?: string;
-  referenceLabels?: string[];
   onClose: () => void;
   footerMeta?: ReactNode;
   secondaryActionLabel?: string;
@@ -33,7 +34,6 @@ export function PersonaDataModal({
   structured,
   displayName,
   username,
-  referenceLabels = [],
   onClose,
   footerMeta = null,
   secondaryActionLabel,
@@ -54,16 +54,34 @@ export function PersonaDataModal({
     hasStructured && Boolean(onSecondaryAction) && Boolean(secondaryActionLabel);
   const allowPrimary = hasStructured && Boolean(onPrimaryAction) && Boolean(primaryActionLabel);
   const resolvedDisplayName = displayName?.trim() || structured?.persona.display_name || null;
-  const resolvedReferenceLabels = Array.from(
-    new Set(
-      (referenceLabels.length > 0
-        ? referenceLabels
-        : (structured?.reference_sources.map((item) => item.name) ?? [])
-      )
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
-    ),
-  );
+  const resolvedUsername = username?.trim() || "ai_generated_persona";
+  const summaryPersona: PersonaItem | null = structured
+    ? {
+        id: "generated-persona",
+        username: resolvedUsername,
+        display_name: resolvedDisplayName ?? structured.persona.display_name,
+        avatar_url: null,
+        bio: structured.persona.bio,
+        status: structured.persona.status,
+      }
+    : null;
+  const summaryProfile = structured
+    ? {
+        persona: {
+          id: "generated-persona",
+          username: resolvedUsername,
+          display_name: resolvedDisplayName ?? structured.persona.display_name,
+          bio: structured.persona.bio,
+          status: structured.persona.status,
+        },
+        personaCore: {
+          ...structured.persona_core,
+          reference_sources: structured.reference_sources,
+          reference_derivation: structured.reference_derivation,
+        },
+        personaMemories: [],
+      }
+    : null;
 
   return (
     <dialog className="modal modal-open" open>
@@ -111,37 +129,8 @@ export function PersonaDataModal({
       >
         {structured ? (
           <div className="space-y-4">
-            {resolvedDisplayName || username || resolvedReferenceLabels.length > 0 ? (
-              <section className="from-base-200 via-base-100 to-base-200 border-base-300/70 rounded-2xl border bg-gradient-to-br p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
-                      Persona Identity
-                    </div>
-                    <div className="text-xl font-semibold">{resolvedDisplayName ?? "—"}</div>
-                    {username ? (
-                      <div className="font-mono text-xs opacity-65">{username}</div>
-                    ) : null}
-                  </div>
-                  {resolvedReferenceLabels.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
-                        References
-                      </div>
-                      <div className="flex max-w-2xl flex-wrap gap-2">
-                        {resolvedReferenceLabels.map((label) => (
-                          <span
-                            key={label}
-                            className="badge badge-outline border-base-300/70 px-3 py-3 text-xs"
-                          >
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
+            {summaryPersona && summaryProfile ? (
+              <PersonaInfoCard persona={summaryPersona} profile={summaryProfile} />
             ) : null}
             <PersonaStructuredPreview structured={structured} />
           </div>

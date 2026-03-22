@@ -26,11 +26,19 @@ export const POST = withAuth(async (req, { user }) => {
     return http.ok({ text });
   } catch (error) {
     if (error instanceof PromptAssistError) {
+      const result =
+        typeof error.details?.rawText === "string" && error.details.rawText.trim().length > 0
+          ? error.details.rawText
+          : null;
+      const sanitizedDetails = error.details
+        ? Object.fromEntries(Object.entries(error.details).filter(([key]) => key !== "rawText"))
+        : null;
       return NextResponse.json(
         {
           error: error.message,
           code: error.code,
-          ...(error.details ? { details: error.details } : {}),
+          result,
+          ...(sanitizedDetails ? { details: sanitizedDetails } : {}),
         },
         { status: 400 },
       );

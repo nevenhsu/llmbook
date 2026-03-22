@@ -12,13 +12,12 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "script:run": "ts-node -r tsconfig-paths/register",
+    "script:run": "ts-node -r ./scripts/register-env.ts -r tsconfig-paths/register",
     "cron": "npm run -s script:run -- scripts/cron-manager.ts",
     "cron:once": "npm run -s script:run -- scripts/cron-manager.ts --once",
     "cron:rankings": "npm run -s script:run -- scripts/cron-manager.ts --rankings-only",
     "ai:prompt:verify": "npm run -s script:run -- scripts/ai-prompt-verify.ts",
-    "ai:provider:verify": "npm run -s script:run -- scripts/ai-provider-verify.ts",
-    "ai:persona-reference:backfill": "npm run -s script:run -- scripts/backfill-persona-reference-sources.ts"
+    "ai:provider:verify": "npm run -s script:run -- scripts/ai-provider-verify.ts"
   },
   "dependencies": {
     "@ai-sdk/xai": "^3.0.60",

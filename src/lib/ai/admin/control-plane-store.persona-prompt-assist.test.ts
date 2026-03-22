@@ -46,6 +46,34 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     vi.restoreAllMocks();
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM).mockReset();
+    vi.mocked(invokeLLM).mockImplementation(async (input: any) => {
+      const prompt = String(input?.modelInput?.prompt ?? "");
+      if (prompt.includes("[prompt_assist_reference_audit]")) {
+        const candidateText = prompt.split("[persona_brief]\n")[1]?.trim() ?? "";
+        const passes =
+          /(Anthony Bourdain|Nora Ephron|James Baldwin|Joan Didion|Plato(?:-inspired|'s)?|伊坂幸太郎|Fleabag|王家衛)/u.test(
+            candidateText,
+          );
+        return {
+          text: JSON.stringify({
+            passes,
+            issues: passes
+              ? []
+              : [
+                  "The brief still needs at least one explicit real reference name in visible text.",
+                ],
+            repairGuidance: passes
+              ? []
+              : ["Name at least one real reference explicitly in the final brief."],
+          }),
+          error: null,
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "audit-model",
+        } as never;
+      }
+      throw new Error(`Unexpected invokeLLM call without explicit mock: ${prompt.slice(0, 80)}`);
+    });
   });
 
   it("uses random English instructions when input is empty", async () => {
@@ -291,7 +319,31 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "MiniMax-M2.5",
       } as never)
       .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: [
+            "The brief still needs at least one explicit real reference name in visible text.",
+          ],
+          repairGuidance: ["Name at least one real reference explicitly in the final brief."],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
         text: "A forum persona modeled on Anthony Bourdain: a globe-trotting storyteller who treats every meal as a portal to a culture's soul, opens posts with sensory snapshots from forgotten alleyways, attacks elitist food snobbery with line-cook contempt, and praises kitchens only with quiet reverence earned through labor.",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+        }),
         error: null,
         finishReason: "stop",
         providerId: "minimax",
@@ -343,7 +395,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       }),
     ).resolves.toContain("Anthony Bourdain");
 
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -355,7 +407,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       }),
     );
     expect(invokeLLM).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.objectContaining({
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
@@ -429,7 +481,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       }),
     ).resolves.toContain("Anthony Bourdain");
 
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
+    expect(invokeLLM).toHaveBeenCalledTimes(3);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -440,6 +492,62 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         }),
       }),
     );
+  });
+
+  it("treats a single explicit proper name like Plato as a valid source reference", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM).mockResolvedValueOnce({
+      text: "Plato-inspired forum persona: speaks in Socratic questions that dismantle shallow arguments, opens with demands for definition, and praises strong reasoning only by pushing it deeper.",
+      error: null,
+      finishReason: "stop",
+      providerId: "minimax",
+      modelId: "MiniMax-M2.5",
+    } as never);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
+      release: null,
+      document: {
+        globalPolicyDraft: {
+          systemBaseline: "baseline",
+          globalPolicy: "policy",
+          styleGuide: "style",
+          forbiddenRules: "forbidden",
+        },
+      },
+      providers: [
+        {
+          id: "provider-1",
+          providerKey: "minimax",
+          displayName: "Minimax",
+          sdkPackage: "vercel-minimax-ai-provider",
+          status: "active",
+          testStatus: "success",
+          keyLast4: "1234",
+          hasKey: true,
+          lastApiErrorCode: null,
+          lastApiErrorMessage: null,
+          lastApiErrorAt: null,
+          createdAt: "2026-03-06T00:00:00.000Z",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+        },
+      ],
+      models: [
+        {
+          ...sampleModel(),
+          providerId: "provider-1",
+          modelKey: "MiniMax-M2.5",
+          displayName: "MiniMax M2.5",
+        },
+      ],
+    });
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "Plato",
+      }),
+    ).resolves.toContain("Plato-inspired");
   });
 
   it("does not reject prompt assist solely because provider status is disabled", async () => {
@@ -621,7 +729,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       }),
     ).resolves.toContain("Nora Ephron");
 
-    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
@@ -755,7 +863,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       "A blunt cultural critic shaped by James Baldwin who opens with hard-earned clarity, distrusts hype, attacks vague claims head-on, and only praises work after it proves itself.",
     );
 
-    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
   });
 
   it("throws when the model omits an explicit reference name in the final optimize output", async () => {
@@ -767,6 +875,30 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       } as never)
       .mockResolvedValueOnce({
         text: "用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧的論壇人格。",
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: [
+            "The brief still needs at least one explicit real reference name in visible text.",
+          ],
+          repairGuidance: ["Name at least one real reference explicitly in the final brief."],
+        }),
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        text: "用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧的論壇人格。",
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: [
+            "The brief still needs at least one explicit real reference name in visible text.",
+          ],
+          repairGuidance: ["Name at least one real reference explicitly in the final brief."],
+        }),
         error: null,
       } as never);
 
@@ -934,7 +1066,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       "A witty but respectful creator persona who values craft over hype, gives specific but considerate feedback, and engages others with dry confidence. Reference Joan Didion.",
     );
 
-    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
@@ -1024,7 +1156,7 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       }),
     ).resolves.toContain("attacks weak claims with lived-detail skepticism");
 
-    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
@@ -1201,6 +1333,14 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       } as never)
       .mockResolvedValueOnce({
         text: "A persona inspired by a One Piece anime character, with bold optimism, chaotic loyalty, and impulsive warmth. Reference Monkey D. Luffy.",
+        error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+        }),
         error: null,
       } as never);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import toast from "react-hot-toast";
 import type {
   PersonaBatchActionType,
   PersonaBatchRow,
@@ -122,6 +123,19 @@ export function PersonaBatchRow({
   const lastBorderedCellClass = "border-base-content/20 border-b align-top";
   const smallOutlineButtonClass = "btn btn-outline btn-xs";
   const errorOutlineButtonClass = "btn btn-outline btn-error btn-xs";
+  const canCopyContextPrompt = row.contextPrompt.trim().length > 0;
+
+  const handleCopyContextPrompt = async () => {
+    if (!canCopyContextPrompt) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(row.contextPrompt);
+      toast.success("Context prompt copied");
+    } catch {
+      toast.error("Failed to copy context prompt");
+    }
+  };
 
   return (
     <tr className="align-top">
@@ -141,6 +155,14 @@ export function PersonaBatchRow({
           {row.promptChangedSinceGenerate ? (
             <span className="badge badge-warning badge-outline text-xs">Prompt changed</span>
           ) : null}
+          <button
+            type="button"
+            className={smallOutlineButtonClass}
+            disabled={!canCopyContextPrompt}
+            onClick={handleCopyContextPrompt}
+          >
+            Copy
+          </button>
           <button
             type="button"
             className={smallOutlineButtonClass}

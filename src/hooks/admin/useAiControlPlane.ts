@@ -29,6 +29,7 @@ import {
   buildCreatePersonaPayload,
   buildUpdatePersonaPayload,
 } from "@/lib/ai/admin/persona-save-payload";
+import { formatGeneratedPersonaDisplayName } from "@/lib/ai/admin/persona-display-name";
 import {
   isPersonaGenerationAbortError,
   type PersonaGenerationModalPhase,
@@ -832,8 +833,9 @@ export function useAiControlPlane({
         return;
       }
       setPersonaGenerationPreview(res.preview);
-      const generatedDisplayName =
-        res.preview.structured.persona.display_name || "AI Persona Draft";
+      const generatedDisplayName = res.preview.structured.persona.display_name
+        ? formatGeneratedPersonaDisplayName(res.preview.structured.persona.display_name)
+        : "AI Persona Draft";
       setPersonaSaveForm({
         displayName: generatedDisplayName,
         username: derivePersonaUsername(generatedDisplayName),

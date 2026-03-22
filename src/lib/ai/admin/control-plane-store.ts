@@ -1255,47 +1255,6 @@ export class AdminAiControlPlaneStore {
     }));
   }
 
-  public async rebuildPersonaReferenceSourceIndex(
-    input: {
-      personaId?: string;
-    } = {},
-  ): Promise<{ personaCount: number; referenceCount: number }> {
-    let query = this.supabase.from("persona_cores").select("persona_id, core_profile");
-    if (input.personaId?.trim()) {
-      query = query.eq("persona_id", input.personaId.trim());
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      throw new Error(`load persona core references failed: ${error.message}`);
-    }
-
-    const rows = (data ?? []) as Array<{ persona_id?: string | null; core_profile?: unknown }>;
-    let referenceCount = 0;
-
-    for (const row of rows) {
-      const personaId = readString(row.persona_id).trim();
-      if (!personaId) {
-        continue;
-      }
-
-      const referenceSources = this.readStoredReferenceSourceNames(row.core_profile).map(
-        (name) => ({
-          name,
-          type: "",
-          contribution: [],
-        }),
-      );
-      referenceCount += referenceSources.length;
-      await this.replacePersonaReferenceSources(personaId, referenceSources);
-    }
-
-    return {
-      personaCount: rows.length,
-      referenceCount,
-    };
-  }
-
   public async createPersona(input: {
     username?: string;
     persona: PersonaGenerationStructured["persona"];

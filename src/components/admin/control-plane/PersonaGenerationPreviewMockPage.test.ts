@@ -273,18 +273,11 @@ describe("PersonaGenerationPreviewMockPage", () => {
     const displayNameInput = container.querySelector(
       'input[placeholder="e.g. Satoshi Nakamoto"]',
     ) as HTMLInputElement | null;
-    expect(displayNameInput?.value).toBe(
-      mockPersonaGenerationPreview.structured.persona.display_name,
-    );
+    expect(displayNameInput?.value).toBe("Riptide Roo");
     const usernameInput = container.querySelector(
       'input[placeholder="e.g. satoshi"]',
     ) as HTMLInputElement | null;
-    expect(usernameInput?.value).toBe(
-      `ai_${mockPersonaGenerationPreview.structured.persona.display_name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "_")
-        .replace(/^_+|_+$/g, "")}`,
-    );
+    expect(usernameInput?.value).toBe("ai_riptide_roo");
 
     await act(async () => {
       setInputValue(usernameInput!, "The Deductionist");

@@ -785,10 +785,12 @@ export function hasLikelyNamedReference(text: string): boolean {
   }
 
   return (
+    /^[A-Z][\p{L}'-]{2,}$/u.test(normalized) ||
     /(?:參考|参考|像|例如|比如)\s*[:：]?\s*[\p{L}]/u.test(normalized) ||
     /\b(?:inspired by|reference|references|like|such as)\b\s*[:：]?\s*(?:[A-Z][\p{L}'-]*|[\u3400-\u9fff])/u.test(
       normalized,
     ) ||
+    /\b[A-Z][\p{L}'-]{2,}(?:-inspired|'s)\b/u.test(normalized) ||
     /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/.test(normalized) ||
     /\b(?:Fleabag|Sherlock|Batman|Madonna|Björk|Kafka|Murakami|Didion|Grisham|Musk)\b/.test(
       normalized,
@@ -804,6 +806,14 @@ export function extractLikelyNamedReferences(text: string): string[] {
   }
 
   const matches = new Set<string>();
+  if (/^[A-Z][\p{L}'-]{2,}$/u.test(normalized)) {
+    matches.add(normalized);
+  }
+  for (const match of normalized.matchAll(/\b([A-Z][\p{L}'-]{2,})(?:-inspired|'s)\b/gu)) {
+    if (match[1]) {
+      matches.add(match[1].trim());
+    }
+  }
   for (const match of normalized.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/g)) {
     if (match[0]) {
       matches.add(match[0].trim());
@@ -964,16 +974,11 @@ export function validatePromptAssistResult(input: {
       details: input.details ?? null,
     });
   }
-  if (!hasLikelyNamedReference(normalized)) {
-    throw new PromptAssistError({
-      code: "prompt_assist_missing_reference",
-      message: "prompt assist output must include at least 1 explicit real reference name",
-    });
-  }
   if (isWeakPromptAssistRewrite(input)) {
     throw new PromptAssistError({
       code: "prompt_assist_output_too_weak",
       message: "prompt assist output is too weak",
+      details: input.details ?? null,
     });
   }
   return normalized;
@@ -1021,6 +1026,7 @@ export function buildPromptAssistAttemptDetails(input: {
     modelId: input.llmResult.modelId ?? null,
     finishReason: input.llmResult.finishReason ?? null,
     hadText: trimmedText.length > 0,
+    rawText: trimmedText.length > 0 ? trimmedText : null,
     attempts: input.llmResult.attempts ?? null,
     usedFallback: input.llmResult.usedFallback ?? false,
     ...(input.llmResult.error ? { providerError: input.llmResult.error } : {}),

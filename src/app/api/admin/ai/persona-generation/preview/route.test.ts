@@ -48,6 +48,18 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
       new PersonaGenerationParseError(
         "persona generation output must be valid JSON",
         "Name: sharp critic\nBio: hates fluff",
+        {
+          stageName: "interaction_and_guardrails",
+          details: {
+            attemptStage: "attempt-3",
+            finishReason: "length",
+            providerId: "minimax",
+            modelId: "MiniMax-M2.5",
+            hadText: true,
+            attempts: 1,
+            usedFallback: false,
+          },
+        },
       ),
     );
 
@@ -61,7 +73,17 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({
       error: "persona generation output must be valid JSON",
+      stageName: "interaction_and_guardrails",
       result: "Name: sharp critic\nBio: hates fluff",
+      details: {
+        attemptStage: "attempt-3",
+        finishReason: "length",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+        hadText: true,
+        attempts: 1,
+        usedFallback: false,
+      },
     });
   });
 
@@ -97,6 +119,15 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
         issues: [
           "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
         ],
+        details: {
+          attemptStage: "quality-repair-2",
+          finishReason: "length",
+          providerId: "minimax",
+          modelId: "MiniMax-M2.5",
+          hadText: true,
+          attempts: 1,
+          usedFallback: false,
+        },
       }),
     );
 
@@ -116,6 +147,15 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
         "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
       ],
       result: '{"interaction_defaults":{"default_stance":"impulsive_challenge"}}',
+      details: {
+        attemptStage: "quality-repair-2",
+        finishReason: "length",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+        hadText: true,
+        attempts: 1,
+        usedFallback: false,
+      },
     });
   });
 

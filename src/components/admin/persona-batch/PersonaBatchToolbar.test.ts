@@ -51,7 +51,7 @@ describe("PersonaBatchToolbar", () => {
     container.remove();
   });
 
-  it("keeps the add action right-aligned without stretching it full width", async () => {
+  it("keeps the add result on the far left and groups elapsed time with the add button on the right", async () => {
     await act(async () => {
       root.render(
         React.createElement(PersonaBatchToolbar, {
@@ -60,6 +60,8 @@ describe("PersonaBatchToolbar", () => {
           referenceInput: "Anthony Bourdain",
           disableInputs: false,
           addLoading: false,
+          addLastCompletedAddedCount: null,
+          addLastCompletedDuplicateCount: null,
           onModelChange: vi.fn(),
           onReferenceInputChange: vi.fn(),
           onAdd: vi.fn(),
@@ -71,11 +73,42 @@ describe("PersonaBatchToolbar", () => {
       (button) => button.textContent?.trim() === "Add",
     );
     expect(addButton).toBeDefined();
-    expect(addButton?.className).toContain("self-end");
+    expect(addButton?.className).toContain("shrink-0");
 
     const actionContainer = addButton?.parentElement;
-    expect(actionContainer?.className).toContain("justify-end");
+    expect(actionContainer?.className).toContain("ml-auto");
     expect(actionContainer?.className).toContain("items-center");
+
+    const wrapper = actionContainer?.parentElement?.parentElement;
+    expect(wrapper?.className).toContain("xl:col-span-3");
+  });
+
+  it("renders a short reference label with helper text below the input", async () => {
+    await act(async () => {
+      root.render(
+        React.createElement(PersonaBatchToolbar, {
+          modelId: "model-1",
+          models,
+          referenceInput: "",
+          disableInputs: false,
+          addLoading: false,
+          addLastCompletedAddedCount: null,
+          addLastCompletedDuplicateCount: null,
+          onModelChange: vi.fn(),
+          onReferenceInputChange: vi.fn(),
+          onAdd: vi.fn(),
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Reference Sources");
+    expect(container.textContent).toContain(
+      "comma or newline separated, ex: Anthony Bourdain, Hayao Miyazaki, Ursula K. Le Guin",
+    );
+    expect(container.textContent).not.toContain("Reference Sources (comma or newline separated)");
+
+    const textarea = container.querySelector("textarea");
+    expect(textarea?.getAttribute("placeholder")).toBe("");
   });
 
   it("shows add elapsed time inline with the add button while running and after completion", async () => {
@@ -89,6 +122,8 @@ describe("PersonaBatchToolbar", () => {
           addLoading: true,
           addElapsedSeconds: 7,
           addLastCompletedElapsedSeconds: null,
+          addLastCompletedAddedCount: null,
+          addLastCompletedDuplicateCount: null,
           onModelChange: vi.fn(),
           onReferenceInputChange: vi.fn(),
           onAdd: vi.fn(),
@@ -97,10 +132,22 @@ describe("PersonaBatchToolbar", () => {
     });
 
     const status = container.querySelector('[data-testid="reference-input-add-status"]');
-    expect(status?.textContent).toContain("Adding 00:07");
+    const statusSummary = container.querySelector(
+      '[data-testid="reference-input-add-status-summary"]',
+    );
+    const statusElapsed = container.querySelector(
+      '[data-testid="reference-input-add-status-elapsed"]',
+    );
+    expect(status).not.toBeNull();
+    expect(statusSummary?.textContent).toBe("Adding");
+    expect(statusElapsed?.textContent).toBe("00:07");
 
-    const actionContainer = status?.parentElement;
-    expect(actionContainer?.className).toContain("items-center");
+    const outerRow = status?.parentElement;
+    expect(outerRow?.className).toContain("justify-between");
+
+    const actionContainer = addButtonFrom(container)?.parentElement;
+    expect(actionContainer?.className).toContain("ml-auto");
+    expect(actionContainer?.textContent).toContain("00:07");
     expect(actionContainer?.textContent).toContain("Add");
 
     await act(async () => {
@@ -113,6 +160,8 @@ describe("PersonaBatchToolbar", () => {
           addLoading: false,
           addElapsedSeconds: 0,
           addLastCompletedElapsedSeconds: 7,
+          addLastCompletedAddedCount: 2,
+          addLastCompletedDuplicateCount: 1,
           onModelChange: vi.fn(),
           onReferenceInputChange: vi.fn(),
           onAdd: vi.fn(),
@@ -120,7 +169,19 @@ describe("PersonaBatchToolbar", () => {
       );
     });
 
-    const completedStatus = container.querySelector('[data-testid="reference-input-add-status"]');
-    expect(completedStatus?.textContent).toContain("Added 00:07");
+    const completedSummary = container.querySelector(
+      '[data-testid="reference-input-add-status-summary"]',
+    );
+    const completedElapsed = container.querySelector(
+      '[data-testid="reference-input-add-status-elapsed"]',
+    );
+    expect(completedSummary?.textContent).toBe("Added 2 rows, 1 duplicate");
+    expect(completedElapsed?.textContent).toBe("00:07");
   });
 });
+
+function addButtonFrom(container: HTMLDivElement): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === "Add",
+  ) as HTMLButtonElement | undefined;
+}

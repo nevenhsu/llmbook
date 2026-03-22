@@ -8,6 +8,12 @@ import { PersonaBatchPreviewMockPage } from "./PersonaBatchPreviewMockPage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+  descriptor?.set?.call(textarea, value);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("PersonaBatchPreviewMockPage", () => {
   let container: HTMLDivElement;
   let root: ReactDOMClient.Root;
@@ -144,17 +150,113 @@ describe("PersonaBatchPreviewMockPage", () => {
       addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const addStatus = container.querySelector('[data-testid="reference-input-add-status"]');
-    expect(addStatus?.textContent).toContain("Adding 00:00");
+    const addSummary = container.querySelector(
+      '[data-testid="reference-input-add-status-summary"]',
+    );
+    const addElapsed = container.querySelector(
+      '[data-testid="reference-input-add-status-elapsed"]',
+    );
+    expect(addSummary?.textContent).toBe("Adding");
+    expect(addElapsed?.textContent).toBe("00:00");
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
     });
 
     expect(
-      container.querySelector('[data-testid="reference-input-add-status"]')?.textContent,
-    ).toContain("Added 00:01");
+      container.querySelector('[data-testid="reference-input-add-status-summary"]')?.textContent,
+    ).toBe("Added 1 row, 0 duplicates");
+    expect(
+      container.querySelector('[data-testid="reference-input-add-status-elapsed"]')?.textContent,
+    ).toBe("00:01");
     expect(container.querySelector("tbody")?.textContent).toContain("Octavia Butler");
+  });
+
+  it("clears the input and shows zero added rows when preview add only contains duplicates", async () => {
+    await act(async () => {
+      root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      if (textarea) {
+        setTextareaValue(textarea, "Anthony Bourdain");
+      }
+    });
+
+    expect((container.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe(
+      "Anthony Bourdain",
+    );
+
+    const addButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(addButton).toBeDefined();
+
+    await act(async () => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(
+      container.querySelector('[data-testid="reference-input-add-status-summary"]')?.textContent,
+    ).toBe("Added 0 rows, 1 duplicate");
+    expect(
+      container.querySelector('[data-testid="reference-input-add-status-elapsed"]')?.textContent,
+    ).toBe("00:00");
+    expect((container.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("");
+  });
+
+  it("does not reuse row ids after clearing a row and adding another reference", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await act(async () => {
+      root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const addButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(addButton).toBeDefined();
+
+    await act(async () => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      vi.advanceTimersByTime(1000);
+    });
+
+    const secondRow = container.querySelectorAll("tbody tr")[1];
+    const clearRowButton = Array.from(secondRow?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.trim() === "Clear",
+    );
+    expect(clearRowButton).toBeDefined();
+
+    await act(async () => {
+      clearRowButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const textarea = container.querySelector("textarea");
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      setTextareaValue(textarea as HTMLTextAreaElement, "Leiji Matsumoto");
+    });
+
+    await act(async () => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(
+      consoleErrorSpy.mock.calls.some((call) =>
+        call.some(
+          (arg) =>
+            typeof arg === "string" && arg.includes("Encountered two children with the same key"),
+        ),
+      ),
+    ).toBe(false);
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("pauses after the current bulk preview chunk and resumes from the next chunk", async () => {

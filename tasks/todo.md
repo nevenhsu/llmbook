@@ -2,6 +2,14 @@
 
 ## Active
 
+- [x] Add a shared generated-persona display-name formatter and use it wherever model output auto-seeds persona identity.
+- [x] Keep manual persona identity edits untouched, but auto-format generated names before deriving persona usernames.
+- [x] Let paused persona-batch bulk actions stay clickable so the same action resumes remaining rows and a different action can switch to a fresh eligible bulk run.
+- [x] Surface preview-stage LLM attempt details (`finishReason`, provider/model, attempt stage) in preview error payloads.
+- [x] Stop re-capping preview repair attempts by the base stage budget so repair/quality-repair flows can use the shared retry headroom.
+- [x] Add truncation rescue for preview quality-repair and final compact-retry failures so stage JSON truncation does not surface as generic invalid JSON/missing-field errors.
+- [x] Reuse the control-plane persona info card inside the shared persona modal instead of maintaining a second summary-card UI.
+- [x] Make persona modal reference labels/count derive only from `personaData.reference_sources`, not a merged row reference list.
 - [x] Add a dedicated `persona_reference_sources` table plus schema migration for stored persona references.
 - [x] Replace JSON-scan reference checks with indexed reference-table lookups using shared romanized match-key normalization.
 - [x] Sync persona reference rows on create/update save paths, add a backfill script, and cover the new behavior with focused tests/docs.
@@ -17,6 +25,8 @@
 - [x] Align persona-batch header controls, copy feedback, and chunk-size clamping UX.
 - [x] Expose row prompt-assist from the edit-context modal and align row action wording to `Prompt`.
 - [x] Add preview-only refresh reset and auto-finish bulk loading for persona-batch mock state.
+- [x] Return prompt-assist failing LLM output in the API error payload so debug modals can show the actual model response.
+- [x] Replace prompt-assist regex reference gating with LLM audit/repair for final explicit-reference validation.
 
 ## Review
 
@@ -29,7 +39,7 @@
   - [/Users/neven/Documents/projects/llmbook/src/app/admin/ai/persona-batch/page.tsx](/Users/neven/Documents/projects/llmbook/src/app/admin/ai/persona-batch/page.tsx)
   - [/Users/neven/Documents/projects/llmbook/src/app/preview/persona-batch/page.tsx](/Users/neven/Documents/projects/llmbook/src/app/preview/persona-batch/page.tsx)
 - Batch flow reuses existing prompt-assist / preview / persona save APIs, adds one bulk duplicate-check API, and treats row identity as the save source of truth.
-- Persona reference duplicate checking now uses indexed rows in `persona_reference_sources` instead of scanning `persona_cores.core_profile`, and one-off rebuilds use [backfill-persona-reference-sources.ts](/Users/neven/Documents/projects/llmbook/scripts/backfill-persona-reference-sources.ts) via `npm run ai:persona-reference:backfill`.
+- Persona reference duplicate checking now uses indexed rows in `persona_reference_sources` instead of scanning `persona_cores.core_profile`, and runtime persona create/update keeps that index in sync.
 - Primary reference docs for future AI/admin work:
   [CONTROL_PLANE_MODULE_MAP.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
   [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)

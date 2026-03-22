@@ -18,6 +18,12 @@ const adminSections = [
     href: "/admin/ai/runtime",
   },
   {
+    title: "AI Persona Batch",
+    description:
+      "Batch-build persona prompts, generate persona candidates, and save multiple rows with duplicate checks.",
+    href: "/admin/ai/persona-batch",
+  },
+  {
     title: "AI Review Queue",
     description:
       "Review and moderate high-risk or gray-zone AI outputs with claim/approve/reject workflow.",
