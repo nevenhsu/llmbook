@@ -26,6 +26,10 @@ import {
   optionLabelForModel,
 } from "@/components/admin/control-plane/control-plane-utils";
 import {
+  buildCreatePersonaPayload,
+  buildUpdatePersonaPayload,
+} from "@/lib/ai/admin/persona-save-payload";
+import {
   isPersonaGenerationAbortError,
   type PersonaGenerationModalPhase,
 } from "@/components/admin/control-plane/persona-generation-modal-utils";
@@ -178,6 +182,8 @@ export function useAiControlPlane({
   const [selectedPersonaProfile, setSelectedPersonaProfile] = useState<PersonaProfile | null>(null);
   const [selectedUpdatePersonaProfile, setSelectedUpdatePersonaProfile] =
     useState<PersonaProfile | null>(null);
+  const [selectedUpdatePersonaProfileLoading, setSelectedUpdatePersonaProfileLoading] =
+    useState(false);
   const [interactionTaskAssistLoading, setInteractionTaskAssistLoading] = useState(false);
   const [interactionTaskAssistError, setInteractionTaskAssistError] = useState<string | null>(null);
   const [interactionTaskAssistElapsedSeconds, setInteractionTaskAssistElapsedSeconds] = useState(0);
@@ -240,6 +246,7 @@ export function useAiControlPlane({
   useEffect(() => {
     if (!personaUpdate.personaId) {
       setSelectedUpdatePersonaProfile(null);
+      setSelectedUpdatePersonaProfileLoading(false);
       setPersonaUpdate((prev) => ({
         ...prev,
         extraPrompt: "",
@@ -248,6 +255,7 @@ export function useAiControlPlane({
     }
 
     setSelectedUpdatePersonaProfile(null);
+    setSelectedUpdatePersonaProfileLoading(true);
     setPersonaUpdate((prev) =>
       prev.personaId === personaUpdate.personaId
         ? {
@@ -264,6 +272,7 @@ export function useAiControlPlane({
         );
         if (!cancelled) {
           setSelectedUpdatePersonaProfile(profile);
+          setSelectedUpdatePersonaProfileLoading(false);
           setPersonaUpdate((prev) =>
             prev.personaId === personaUpdate.personaId
               ? {
@@ -276,6 +285,7 @@ export function useAiControlPlane({
       } catch {
         if (!cancelled) {
           setSelectedUpdatePersonaProfile(null);
+          setSelectedUpdatePersonaProfileLoading(false);
         }
       }
     })();
@@ -874,6 +884,14 @@ export function useAiControlPlane({
       toast.error("Target persona is unavailable");
       return;
     }
+    if (selectedUpdatePersonaProfileLoading) {
+      toast.error("Target persona references are still loading");
+      return;
+    }
+    if (!selectedUpdatePersonaProfile) {
+      toast.error("Target persona profile is unavailable");
+      return;
+    }
     setPersonaSaveForm((prev) =>
       personaGenerationMode === "update" && personaGenerationModalOpen
         ? prev
@@ -949,20 +967,6 @@ export function useAiControlPlane({
       return;
     }
 
-    const username = `ai_${Date.now().toString().slice(-6)}`;
-    const canonicalMemories = personaGenerationPreview.structured.persona_memories.map((item) => ({
-      memoryType: item.memory_type,
-      scope: item.scope,
-      memoryKey: item.memory_key,
-      content: item.content,
-      metadata: item.metadata,
-      expiresAt:
-        item.expires_in_hours && item.expires_in_hours > 0
-          ? new Date(Date.now() + item.expires_in_hours * 3600_000).toISOString()
-          : null,
-      isCanonical: item.is_canonical,
-      importance: item.importance,
-    }));
     setPersonaSaveLoading(true);
     try {
       if (personaGenerationMode === "update") {
@@ -970,17 +974,15 @@ export function useAiControlPlane({
           toast.error("Target persona is required");
           return;
         }
-        await apiPatch(`/api/admin/ai/personas/${personaUpdate.personaId}`, {
-          displayName:
-            personaSaveForm.displayName || personaGenerationPreview.structured.persona.display_name,
-          username: personaSaveForm.username || username,
-          bio: personaGenerationPreview.structured.persona.bio,
-          personaCore: personaGenerationPreview.structured.persona_core,
-          referenceSources: personaGenerationPreview.structured.reference_sources,
-          referenceDerivation: personaGenerationPreview.structured.reference_derivation,
-          originalizationNote: personaGenerationPreview.structured.originalization_note,
-          personaMemories: canonicalMemories,
-        });
+        await apiPatch(
+          `/api/admin/ai/personas/${personaUpdate.personaId}`,
+          buildUpdatePersonaPayload({
+            structured: personaGenerationPreview.structured,
+            displayName: personaSaveForm.displayName,
+            username: personaSaveForm.username,
+            now: new Date(),
+          }),
+        );
         toast.success("Persona updated");
         const refreshedProfile = await apiFetchJson<PersonaProfile>(
           `/api/admin/ai/personas/${personaUpdate.personaId}`,
@@ -994,20 +996,15 @@ export function useAiControlPlane({
           extraPrompt: buildPersonaUpdateExtraPrompt(refreshedProfile),
         }));
       } else {
-        await apiPost("/api/admin/ai/personas", {
-          username: personaSaveForm.username || username,
-          persona: {
-            ...personaGenerationPreview.structured.persona,
-            display_name:
-              personaSaveForm.displayName ||
-              personaGenerationPreview.structured.persona.display_name,
-          },
-          personaCore: personaGenerationPreview.structured.persona_core,
-          referenceSources: personaGenerationPreview.structured.reference_sources,
-          referenceDerivation: personaGenerationPreview.structured.reference_derivation,
-          originalizationNote: personaGenerationPreview.structured.originalization_note,
-          personaMemories: canonicalMemories,
-        });
+        await apiPost(
+          "/api/admin/ai/personas",
+          buildCreatePersonaPayload({
+            structured: personaGenerationPreview.structured,
+            displayName: personaSaveForm.displayName,
+            username: personaSaveForm.username,
+            now: new Date(),
+          }),
+        );
         toast.success("Persona saved");
       }
       setPersonaLastSavedAt(new Date().toISOString());
@@ -1056,6 +1053,14 @@ export function useAiControlPlane({
     }
     if (!modelId) {
       toast.error("model is required");
+      return;
+    }
+    if (isUpdate && selectedUpdatePersonaProfileLoading) {
+      toast.error("Target persona references are still loading");
+      return;
+    }
+    if (isUpdate && !selectedUpdatePersonaProfile) {
+      toast.error("Target persona profile is unavailable");
       return;
     }
     if (!personaGenerationModels.some((item) => item.id === modelId)) {
@@ -1286,6 +1291,7 @@ export function useAiControlPlane({
     selectedPersonaProfile,
     selectedUpdatePersona,
     selectedUpdatePersonaProfile,
+    selectedUpdatePersonaProfileLoading,
     interactionTaskAssistLoading,
     interactionTaskAssistError,
     interactionTaskAssistElapsedSeconds,

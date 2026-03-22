@@ -103,6 +103,7 @@ describe("AiControlPlanePanel", () => {
       selectedPersonaProfile: null,
       selectedUpdatePersona: null,
       selectedUpdatePersonaProfile: null,
+      selectedUpdatePersonaProfileLoading: false,
       interactionTaskAssistLoading: false,
       interactionTaskAssistError: null,
       interactionTaskAssistElapsedSeconds: 0,

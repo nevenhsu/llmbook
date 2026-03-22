@@ -45,6 +45,7 @@ export interface PersonaGenerationSectionProps {
   personas: PersonaItem[];
   selectedUpdatePersona: PersonaItem | null;
   selectedUpdatePersonaProfile: PersonaProfile | null;
+  selectedUpdatePersonaProfileLoading: boolean;
   personaGenerationModels: AiModelConfig[];
   providers: AiProviderConfig[];
   personaGenerationLoading: boolean;
@@ -98,6 +99,7 @@ export function PersonaGenerationSection({
   personas,
   selectedUpdatePersona,
   selectedUpdatePersonaProfile,
+  selectedUpdatePersonaProfileLoading,
   personaGenerationModels,
   providers,
   personaGenerationLoading,
@@ -152,7 +154,13 @@ export function PersonaGenerationSection({
     [personaGeneration.extraPrompt, promptAssemblyGlobalPolicyContent],
   );
   const canRunUpdate =
-    Boolean(personaUpdate.personaId) && !personaUpdateLoading && personaGenerationModels.length > 0;
+    Boolean(personaUpdate.personaId) &&
+    Boolean(personaUpdate.modelId) &&
+    Boolean(selectedUpdatePersona) &&
+    Boolean(selectedUpdatePersonaProfile) &&
+    !selectedUpdatePersonaProfileLoading &&
+    !personaUpdateLoading &&
+    personaGenerationModels.length > 0;
 
   return (
     <>
@@ -222,6 +230,11 @@ export function PersonaGenerationSection({
           assistCompleted={personaUpdatePromptAssistCompleted}
           assistElapsedSeconds={personaUpdatePromptAssistElapsedSeconds}
           assistIdleDescription="Starts from current bio and references, then refines with AI."
+          assistDisabled={
+            selectedUpdatePersonaProfileLoading ||
+            !selectedUpdatePersonaProfile ||
+            !personaUpdate.personaId
+          }
           onAssist={assistPersonaUpdatePrompt}
           footerActions={
             <button

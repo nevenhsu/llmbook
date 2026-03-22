@@ -34,6 +34,7 @@ type Props = {
   assistCompleted: boolean;
   assistElapsedSeconds: number;
   assistIdleDescription: string;
+  assistDisabled?: boolean;
   onAssist: () => Promise<void> | void;
   footerActions: ReactNode;
   targetPersonaId?: string;
@@ -60,6 +61,7 @@ export function PersonaPromptCard({
   assistCompleted,
   assistElapsedSeconds,
   assistIdleDescription,
+  assistDisabled = false,
   onAssist,
   footerActions,
   targetPersonaId,
@@ -128,7 +130,7 @@ export function PersonaPromptCard({
               />
               <button
                 className="bg-base-100 border-base-300 hover:border-primary hover:bg-base-100 btn btn-sm shrink-0 gap-2 border shadow-none"
-                disabled={!modelId}
+                disabled={!modelId || assistDisabled}
                 aria-label={assistAriaLabel}
                 title="Prompt AI"
                 onClick={() => void onAssist()}

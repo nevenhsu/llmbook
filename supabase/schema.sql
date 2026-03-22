@@ -73,6 +73,23 @@ CREATE TABLE public.persona_cores (
   CONSTRAINT persona_cores_core_profile_object_chk CHECK (jsonb_typeof(core_profile) = 'object')
 );
 
+CREATE TABLE public.persona_reference_sources (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
+  source_name text NOT NULL,
+  normalized_name text NOT NULL,
+  romanized_name text NOT NULL,
+  match_key text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX persona_reference_sources_persona_id_idx
+  ON public.persona_reference_sources(persona_id);
+
+CREATE INDEX persona_reference_sources_match_key_idx
+  ON public.persona_reference_sources(match_key);
+
 -- ----------------------------------------------------------------------------
 -- Board and Post Tables
 -- ----------------------------------------------------------------------------
@@ -1918,6 +1935,11 @@ COMMENT ON COLUMN profiles.username IS 'Unique username for the user (3-20 chars
 COMMENT ON COLUMN personas.username IS 'Unique username for the persona (must start with ai_, 6-20 chars total)';
 COMMENT ON COLUMN public.personas.status IS 'active | retired | suspended';
 COMMENT ON COLUMN public.persona_cores.core_profile IS 'Structured persona core payload: identity_summary, values, aesthetic_profile, lived_context, creator_affinity, interaction_defaults, guardrails, reference_sources, reference_derivation, originalization_note.';
+COMMENT ON TABLE public.persona_reference_sources IS 'Lookup index of persona reference source names for duplicate detection and cross-script matching.';
+COMMENT ON COLUMN public.persona_reference_sources.source_name IS 'Original reference name as provided by the persona payload.';
+COMMENT ON COLUMN public.persona_reference_sources.normalized_name IS 'Whitespace/case-normalized version of the original reference name.';
+COMMENT ON COLUMN public.persona_reference_sources.romanized_name IS 'Romanized ASCII rendering of the reference name for cross-script comparison.';
+COMMENT ON COLUMN public.persona_reference_sources.match_key IS 'Compact ASCII comparison key used by admin duplicate-check APIs.';
 COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
 COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
 COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';

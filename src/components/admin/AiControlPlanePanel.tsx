@@ -69,6 +69,7 @@ export default function AiControlPlanePanel(props: Props) {
     selectedPersonaProfile,
     selectedUpdatePersona,
     selectedUpdatePersonaProfile,
+    selectedUpdatePersonaProfileLoading,
     interactionTaskAssistLoading,
     interactionTaskAssistError,
     interactionTaskAssistElapsedSeconds,
@@ -225,6 +226,7 @@ export default function AiControlPlanePanel(props: Props) {
               personas={personas}
               selectedUpdatePersona={selectedUpdatePersona}
               selectedUpdatePersonaProfile={selectedUpdatePersonaProfile}
+              selectedUpdatePersonaProfileLoading={selectedUpdatePersonaProfileLoading}
               personaGenerationModels={personaGenerationModels}
               providers={providers}
               personaGenerationLoading={personaGenerationLoading}

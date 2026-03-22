@@ -91,6 +91,9 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
     const personasUpdateEq = vi.fn(async () => ({ error: null }));
     const personasUpdate = vi.fn(() => ({ eq: personasUpdateEq }));
     const personaCoresUpsert = vi.fn(async () => ({ error: null }));
+    const referenceDeleteEq = vi.fn(async () => ({ error: null }));
+    const referenceDelete = vi.fn(() => ({ eq: referenceDeleteEq }));
+    const referenceInsert = vi.fn(async () => ({ error: null }));
 
     createAdminClient.mockReturnValue({
       from: (table: string) => {
@@ -102,6 +105,12 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
         if (table === "persona_cores") {
           return {
             upsert: personaCoresUpsert,
+          };
+        }
+        if (table === "persona_reference_sources") {
+          return {
+            delete: referenceDelete,
+            insert: referenceInsert,
           };
         }
         throw new Error(`Unexpected table ${table}`);
@@ -137,6 +146,15 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
         onConflict: "persona_id",
       }),
     );
+    expect(referenceDelete).toHaveBeenCalledTimes(1);
+    expect(referenceDeleteEq).toHaveBeenCalledWith("persona_id", "persona-1");
+    expect(referenceInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        persona_id: "persona-1",
+        source_name: "Monkey D. Luffy",
+        match_key: "monkeydluffy",
+      }),
+    ]);
   });
 
   it("normalizes persona usernames with the shared persona username helper before update", async () => {
@@ -191,6 +209,9 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
       select: personasInsertSelect,
     }));
     const personaCoresUpsert = vi.fn(async () => ({ error: null }));
+    const referenceDeleteEq = vi.fn(async () => ({ error: null }));
+    const referenceDelete = vi.fn(() => ({ eq: referenceDeleteEq }));
+    const referenceInsert = vi.fn(async () => ({ error: null }));
 
     createAdminClient.mockReturnValue({
       from: (table: string) => {
@@ -202,6 +223,12 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
         if (table === "persona_cores") {
           return {
             upsert: personaCoresUpsert,
+          };
+        }
+        if (table === "persona_reference_sources") {
+          return {
+            delete: referenceDelete,
+            insert: referenceInsert,
           };
         }
         if (table === "persona_memories") {
@@ -224,7 +251,13 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
         status: "active",
       },
       personaCore: buildPersonaCore(),
-      referenceSources: [],
+      referenceSources: [
+        {
+          name: "劉慈欣",
+          type: "author",
+          contribution: ["Hard-sf scale"],
+        },
+      ],
       referenceDerivation: [],
       originalizationNote: "Reference-inspired, not reference-cosplay.",
       personaMemories: [],
@@ -236,5 +269,13 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
       bio: "Boisterous forum warrior.",
       status: "active",
     });
+    expect(referenceInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        persona_id: "persona-1",
+        source_name: "劉慈欣",
+        match_key: "liucixin",
+      }),
+    ]);
+    expect(referenceDeleteEq).toHaveBeenCalledWith("persona_id", "persona-1");
   });
 });

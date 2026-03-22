@@ -315,6 +315,7 @@ export function PersonaGenerationPreviewMockPage() {
         personas={[mockPersona]}
         selectedUpdatePersona={mockPersona}
         selectedUpdatePersonaProfile={mockPersonaProfile}
+        selectedUpdatePersonaProfileLoading={false}
         personaGenerationModels={[mockModel]}
         providers={[mockProvider]}
         personaGenerationLoading={personaGenerationLoading}

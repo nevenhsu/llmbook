@@ -66,6 +66,7 @@ import {
   type ProviderTestStatus,
 } from "@/lib/ai/admin/control-plane-contract";
 import { assistInteractionTaskContext } from "@/lib/ai/admin/interaction-context-assist-service";
+import type { PersonaReferenceCheckResult } from "@/lib/ai/admin/persona-batch-contract";
 import { assistPersonaPrompt } from "@/lib/ai/admin/persona-prompt-assist-service";
 import { previewPersonaGeneration } from "@/lib/ai/admin/persona-generation-preview-service";
 import { previewPersonaInteraction } from "@/lib/ai/admin/interaction-preview-service";
@@ -94,6 +95,11 @@ import {
   parsePersonaCore,
   parseStoredPersonaCoreProfile,
 } from "@/lib/ai/admin/persona-generation-contract";
+import {
+  buildPersonaReferenceRomanizedName,
+  buildPersonaReferenceMatchKey,
+  buildPersonaReferenceRow,
+} from "@/lib/ai/admin/persona-reference-normalization";
 
 export {
   PromptAssistError,
@@ -176,6 +182,51 @@ function nowIso(): string {
 
 export class AdminAiControlPlaneStore {
   private readonly supabase = createAdminClient();
+
+  private async replacePersonaReferenceSources(
+    personaId: string,
+    referenceSources: PersonaGenerationStructured["reference_sources"],
+  ): Promise<void> {
+    const { error: deleteError } = await this.supabase
+      .from("persona_reference_sources")
+      .delete()
+      .eq("persona_id", personaId);
+    if (deleteError) {
+      throw new Error(`clear persona reference sources failed: ${deleteError.message}`);
+    }
+
+    const referenceRows = referenceSources
+      .map((source) =>
+        buildPersonaReferenceRow({
+          personaId,
+          sourceName: source.name,
+        }),
+      )
+      .filter((row) => row.source_name.length > 0 && row.match_key.length > 0);
+
+    if (referenceRows.length === 0) {
+      return;
+    }
+
+    const { error: insertError } = await this.supabase
+      .from("persona_reference_sources")
+      .insert(referenceRows);
+    if (insertError) {
+      throw new Error(`save persona reference sources failed: ${insertError.message}`);
+    }
+  }
+
+  private readStoredReferenceSourceNames(coreProfile: unknown): string[] {
+    const profile = asRecord(coreProfile);
+    const referenceSources = Array.isArray(profile?.reference_sources)
+      ? (profile.reference_sources as unknown[])
+      : [];
+
+    return referenceSources
+      .map((source) => readString(asRecord(source)?.name))
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+  }
 
   private toProviderConfig(row: ProviderRow): AiProviderConfig {
     return {
@@ -1160,6 +1211,91 @@ export class AdminAiControlPlaneStore {
     return (data ?? []) as PersonaSummary[];
   }
 
+  public async checkPersonaReferenceSources(
+    names: string[],
+  ): Promise<PersonaReferenceCheckResult[]> {
+    const normalizedInputs = names.map((input) => ({
+      input,
+      normalized: buildPersonaReferenceMatchKey(input),
+    }));
+
+    const matchKeys = Array.from(
+      new Set(normalizedInputs.map((item) => item.normalized).filter((item) => item.length > 0)),
+    );
+
+    if (matchKeys.length === 0) {
+      return normalizedInputs.map((item) => ({
+        input: item.input,
+        matchKey: item.normalized,
+        romanizedName: buildPersonaReferenceRomanizedName(item.input),
+        exists: false,
+      }));
+    }
+
+    const { data, error } = await this.supabase
+      .from("persona_reference_sources")
+      .select("match_key")
+      .in("match_key", matchKeys);
+
+    if (error) {
+      throw new Error(`check persona references failed: ${error.message}`);
+    }
+
+    const existingNames = new Set(
+      ((data ?? []) as Array<{ match_key?: string | null }>)
+        .map((row) => readString(row.match_key).trim().toLowerCase())
+        .filter((item) => item.length > 0),
+    );
+
+    return normalizedInputs.map((item) => ({
+      input: item.input,
+      matchKey: item.normalized,
+      romanizedName: buildPersonaReferenceRomanizedName(item.input),
+      exists: item.normalized.length > 0 && existingNames.has(item.normalized),
+    }));
+  }
+
+  public async rebuildPersonaReferenceSourceIndex(
+    input: {
+      personaId?: string;
+    } = {},
+  ): Promise<{ personaCount: number; referenceCount: number }> {
+    let query = this.supabase.from("persona_cores").select("persona_id, core_profile");
+    if (input.personaId?.trim()) {
+      query = query.eq("persona_id", input.personaId.trim());
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`load persona core references failed: ${error.message}`);
+    }
+
+    const rows = (data ?? []) as Array<{ persona_id?: string | null; core_profile?: unknown }>;
+    let referenceCount = 0;
+
+    for (const row of rows) {
+      const personaId = readString(row.persona_id).trim();
+      if (!personaId) {
+        continue;
+      }
+
+      const referenceSources = this.readStoredReferenceSourceNames(row.core_profile).map(
+        (name) => ({
+          name,
+          type: "",
+          contribution: [],
+        }),
+      );
+      referenceCount += referenceSources.length;
+      await this.replacePersonaReferenceSources(personaId, referenceSources);
+    }
+
+    return {
+      personaCount: rows.length,
+      referenceCount,
+    };
+  }
+
   public async createPersona(input: {
     username?: string;
     persona: PersonaGenerationStructured["persona"];
@@ -1218,6 +1354,8 @@ export class AdminAiControlPlaneStore {
     if (personaCoreError) {
       throw new Error(`save persona core failed: ${personaCoreError.message}`);
     }
+
+    await this.replacePersonaReferenceSources(personaId, input.referenceSources);
 
     if (input.personaMemories && input.personaMemories.length > 0) {
       const memoryRows = input.personaMemories
@@ -1437,6 +1575,8 @@ export class AdminAiControlPlaneStore {
       if (error) {
         throw new Error(`update persona core failed: ${error.message}`);
       }
+
+      await this.replacePersonaReferenceSources(input.personaId, input.referenceSources);
     }
 
     if (input.personaMemories) {

@@ -84,6 +84,15 @@ export default function PreviewIndexPage() {
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
     },
+    {
+      title: "Persona Batch",
+      description:
+        "Preview the batch persona generation table, modals, and row actions with mock data",
+      href: "/preview/persona-batch",
+      icon: Sparkles,
+      color: "text-sky-500",
+      bgColor: "bg-sky-500/10",
+    },
   ];
 
   return (

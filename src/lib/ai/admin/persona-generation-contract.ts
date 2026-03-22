@@ -412,14 +412,15 @@ function normalizePersonaValueHierarchy(
 ): Array<{ value: string; priority: number }> {
   const arrayRows = Array.isArray(value)
     ? value
-        .map((item) => {
+        .map((item, index) => {
           const row = asRecord(item);
           if (!row) {
             return null;
           }
           const label = readString(row.value).trim();
-          const priority = readPositiveInt(row.priority, 0);
-          if (!label || priority < 1) {
+          const explicitPriority = readPositiveInt(row.priority, 0);
+          const priority = explicitPriority >= 1 ? explicitPriority : index + 1;
+          if (!label) {
             return null;
           }
           return { value: label, priority };
@@ -1115,7 +1116,7 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
         bio: requirePersonaText(persona.bio, "persona.bio"),
         status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
       },
-      identity_summary: parsePersonaIdentitySummary(record.identity_summary),
+      identity_summary: parsePersonaIdentitySummary(record.identity_summary, "identity_summary"),
       reference_sources: parseReferenceSources(record.reference_sources),
       reference_derivation: normalizePersonaStringArray(
         record.reference_derivation,
@@ -1137,8 +1138,11 @@ export function parsePersonaValuesAndAestheticOutput(
   const record = parsePersonaStageObject(rawText);
   try {
     return {
-      values: parsePersonaValues(record.values),
-      aesthetic_profile: parsePersonaAestheticProfile(record.aesthetic_profile),
+      values: parsePersonaValues(record.values, "values"),
+      aesthetic_profile: parsePersonaAestheticProfile(
+        record.aesthetic_profile,
+        "aesthetic_profile",
+      ),
     };
   } catch (error) {
     throw new PersonaGenerationParseError(
@@ -1154,8 +1158,8 @@ export function parsePersonaContextAndAffinityOutput(
   const record = parsePersonaStageObject(rawText);
   try {
     return {
-      lived_context: parsePersonaLivedContext(record.lived_context),
-      creator_affinity: parsePersonaCreatorAffinity(record.creator_affinity),
+      lived_context: parsePersonaLivedContext(record.lived_context, "lived_context"),
+      creator_affinity: parsePersonaCreatorAffinity(record.creator_affinity, "creator_affinity"),
     };
   } catch (error) {
     throw new PersonaGenerationParseError(
@@ -1169,10 +1173,16 @@ export function parsePersonaInteractionOutput(rawText: string): PersonaGeneratio
   const record = parsePersonaStageObject(rawText);
   try {
     return {
-      interaction_defaults: parsePersonaInteractionDefaults(record.interaction_defaults),
-      guardrails: parsePersonaGuardrails(record.guardrails),
-      voice_fingerprint: parsePersonaVoiceFingerprint(record.voice_fingerprint),
-      task_style_matrix: parsePersonaTaskStyleMatrix(record.task_style_matrix),
+      interaction_defaults: parsePersonaInteractionDefaults(
+        record.interaction_defaults,
+        "interaction_defaults",
+      ),
+      guardrails: parsePersonaGuardrails(record.guardrails, "guardrails"),
+      voice_fingerprint: parsePersonaVoiceFingerprint(
+        record.voice_fingerprint,
+        "voice_fingerprint",
+      ),
+      task_style_matrix: parsePersonaTaskStyleMatrix(record.task_style_matrix, "task_style_matrix"),
     };
   } catch (error) {
     throw new PersonaGenerationParseError(

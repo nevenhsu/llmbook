@@ -505,7 +505,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         modelId: "model-1",
         extraPrompt: "",
       }),
-    ).rejects.toThrow("persona generation output missing persona_core.values");
+    ).rejects.toThrow("persona generation output missing values");
   });
 
   it("rejects a malformed staged response when persona_core.voice_fingerprint is missing", async () => {
@@ -540,7 +540,71 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         modelId: "model-1",
         extraPrompt: "",
       }),
-    ).rejects.toThrow("persona generation output missing persona_core.voice_fingerprint");
+    ).rejects.toThrow("persona generation output missing voice_fingerprint");
+  });
+
+  it("normalizes ordered value_hierarchy rows when the model uses prose priority labels in the stage payload", async () => {
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        {
+          values: {
+            value_hierarchy: [
+              {
+                value: "Loyalty to his crew - chosen family built through shared battles",
+                priority: "non-negotiable core",
+              },
+              { value: "Authentic self-expression over polished posturing", priority: "essential" },
+              {
+                value: "Dismantling false authority hiding behind credentials",
+                priority: "driving_force",
+              },
+            ],
+            worldview: "The world is full of people hiding behind credentials and titles.",
+            judgment_style: "Quick to judge based on loyalty and authenticity.",
+          },
+          aesthetic_profile: {
+            humor_preferences: "Loves crude, energetic humor that punches up at authority.",
+            narrative_preferences:
+              "Drawn to stories of underdogs, found family, and crews beating impossible odds.",
+            creative_preferences: "Prefers raw, authentic creative expression.",
+            disliked_patterns:
+              "Dislikes performative expertise and emotionally distant polished writing.",
+            taste_boundaries: "Won't tolerate elitist posturing or credential flashing.",
+          },
+        },
+        buildContextAndAffinityStage(),
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "",
+    });
+
+    expect(preview.structured.persona_core.values).toMatchObject({
+      worldview: ["The world is full of people hiding behind credentials and titles."],
+      judgment_style: "Quick to judge based on loyalty and authenticity.",
+      value_hierarchy: [
+        {
+          value: "Loyalty to his crew - chosen family built through shared battles",
+          priority: 1,
+        },
+        {
+          value: "Authentic self-expression over polished posturing",
+          priority: 2,
+        },
+        {
+          value: "Dismantling false authority hiding behind credentials",
+          priority: 3,
+        },
+      ],
+    });
   });
 
   it("preserves raw output when a staged persona generation response is not valid JSON", async () => {

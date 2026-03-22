@@ -31,6 +31,7 @@ type HarnessProps = {
     updatePersonaId: string;
     updateExtraPrompt: string;
     updateReferenceNames: string[];
+    updateProfileLoading: boolean;
   }) => void;
 };
 
@@ -149,11 +150,13 @@ function Harness({ onSnapshot }: HarnessProps) {
       updatePersonaId: hook.personaUpdate.personaId,
       updateExtraPrompt: hook.personaUpdate.extraPrompt,
       updateReferenceNames: referenceNames,
+      updateProfileLoading: hook.selectedUpdatePersonaProfileLoading,
     });
   }, [
     hook.personaUpdate.personaId,
     hook.personaUpdate.extraPrompt,
     hook.selectedUpdatePersonaProfile,
+    hook.selectedUpdatePersonaProfileLoading,
     onSnapshot,
   ]);
 
@@ -194,6 +197,7 @@ describe("useAiControlPlane persona switching", () => {
       updatePersonaId: string;
       updateExtraPrompt: string;
       updateReferenceNames: string[];
+      updateProfileLoading: boolean;
     }> = [];
     let resolvePersonaTwo: ((value: unknown) => void) | null = null;
 
@@ -228,6 +232,7 @@ describe("useAiControlPlane persona switching", () => {
     expect(
       snapshots.some((snapshot) => snapshot.updateExtraPrompt.includes("Reference roles: Ref One")),
     ).toBe(true);
+    expect(snapshots.at(-1)?.updateProfileLoading).toBe(false);
 
     const switchButton = container.querySelector("#switch-update-persona") as HTMLButtonElement;
 
@@ -239,6 +244,7 @@ describe("useAiControlPlane persona switching", () => {
     expect(latestBeforeResolve?.updatePersonaId).toBe("persona-2");
     expect(latestBeforeResolve?.updateReferenceNames).toEqual([]);
     expect(latestBeforeResolve?.updateExtraPrompt).toBe("");
+    expect(latestBeforeResolve?.updateProfileLoading).toBe(true);
 
     await act(async () => {
       resolvePersonaTwo?.(
@@ -251,5 +257,6 @@ describe("useAiControlPlane persona switching", () => {
     const latestAfterResolve = snapshots.at(-1);
     expect(latestAfterResolve?.updateReferenceNames).toEqual(["Ref Three", "Ref Four"]);
     expect(latestAfterResolve?.updateExtraPrompt).toContain("Reference roles: Ref Three");
+    expect(latestAfterResolve?.updateProfileLoading).toBe(false);
   });
 });

@@ -167,6 +167,74 @@ persona-generation stage output 另外還有一條 shared language rule：
 - 不把 canon scene、in-universe role identity、literal reference roleplay 寫回 canonical memories
 - 這條判斷與 seed originalization 一樣走 compact semantic audit，而不是靠 hardcoded roleplay keyword regex 當最終 gate
 
+### 2.3.1 Persona Batch Generation
+
+用途：讓 Admin 針對多個 reference names 批次執行 prompt-assist、persona generation、以及 save。
+
+路徑：
+
+- `/admin/ai/persona-batch`
+- preview sandbox: `/preview/persona-batch`
+
+重用的既有 API：
+
+- `POST /api/admin/ai/persona-generation/prompt-assist`
+- `POST /api/admin/ai/persona-generation/preview`
+- `POST /api/admin/ai/personas`
+- `PATCH /api/admin/ai/personas/[id]`
+
+新增的 batch-only API：
+
+- `POST /api/admin/ai/persona-references/check`
+  - response item shape:
+    - `input`
+    - `matchKey`
+    - `romanizedName`
+    - `exists`
+
+reference lookup storage：
+
+- duplicate/reference check 不再全掃 `persona_cores.core_profile.reference_sources`
+- canonical lookup source 改為 `public.persona_reference_sources`
+- row lookup key 使用 shared romanized `match_key`
+- schema migration 只負責建 table / index；既有 persona data 需用 one-off script 重建 index：
+  - script: [backfill-persona-reference-sources.ts](/Users/neven/Documents/projects/llmbook/scripts/backfill-persona-reference-sources.ts)
+  - command: `npm run ai:persona-reference:backfill`
+  - single persona: `npm run ai:persona-reference:backfill -- --persona-id <persona-id>`
+
+batch row contract 重點：
+
+- `referenceName` 是 immutable source name；進 table 後不可編輯，只能 `Clear` 後重加
+- row identity (`displayName`, `username`) 才是 save source of truth；不要相信 `personaData` 內的名字可直接拿去存
+- `personaData` 是最新 generate/regenerate 產物；`Generate` 成功後同步覆蓋 row identity
+- `savedPersonaId` 用來支援第一次 create、之後 identity 變更走 update，而不是重複 create
+- `Edit Context Prompt` 不會清掉現有 `personaData` / `saved`，但 row 會標 `Prompt changed`，提醒需要 regenerate 才能同步
+- `Edit Persona Identity` 不會清掉 `personaData`，但會把 `saved=false`
+
+duplicate/reference check 規則：
+
+- 必須先完成 check，row 才能 `Generate` / `Regenerate`
+- duplicate 判斷同時包含：
+  - DB 內已存在於 `persona_reference_sources.match_key`
+  - 同一張 batch table 內重複
+- duplicate row 不可執行 `AI` / `Generate` / `Regenerate` / `Save`
+- `Check Error` 與其他 API 錯誤一樣，統一顯示在 `Error` cell，不另做底部 error list
+- shared normalization 會把非英文 reference name 轉成 romanized ASCII `match_key` 再比對，可合併大小寫、空白、標點，以及簡繁差異；但不同語言的歷史譯名 / 完全不同 exonym 仍需 reference source 本身提供可對齊的名稱
+
+bulk queue 規則：
+
+- bulk `AI`：只處理 `contextPrompt` 為空且 reference check 通過的 rows
+- bulk `Generate`：只處理 `contextPrompt` 非空、`personaData` 為空、且 reference check 通過的 rows
+- bulk `Save`：只處理 `personaData` 存在、尚未 `saved`、且 reference check 通過的 rows
+- bulk 以 chunked `Promise.allSettled` 執行，預設 `5`，可由 UI 調整為 `1..20`
+- bulk 執行中禁止其他 bulk action；row-level action 只在沒有 bulk 時可執行
+
+shared UI 規則：
+
+- API error inspection modal 是 shared component，不限 admin 才能重用
+- persona-data modal 也是 shared component，可用於 admin batch 與 preview sandbox
+- row/bulk time count 應用 shared status badge，不要再各頁各自格式化
+
 ### 2.4 Interaction Preview
 
 用途：對既有 persona 執行一次與 production 對齊的 interaction generation preview。
