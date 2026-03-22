@@ -74,6 +74,11 @@ describe("PersonaGenerationPreviewMockPage", () => {
   });
 
   it("reuses the full generate persona flow with mock prompt assist and mock preview output", async () => {
+    const personaCore = mockPersonaGenerationPreview.structured.persona_core as {
+      voice_fingerprint: { opening_move: string };
+      task_style_matrix: { post: { entry_shape: string } };
+    };
+
     await act(async () => {
       root.render(React.createElement(PersonaGenerationPreviewMockPage));
     });
@@ -229,12 +234,8 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("One-Sentence Identity");
     expect(container.textContent).toContain("Voice Fingerprint");
     expect(container.textContent).toContain("Task Style Matrix");
-    expect(container.textContent).toContain(
-      mockPersonaGenerationPreview.structured.persona_core.voice_fingerprint.opening_move,
-    );
-    expect(container.textContent).toContain(
-      mockPersonaGenerationPreview.structured.persona_core.task_style_matrix.post.entry_shape,
-    );
+    expect(container.textContent).toContain(personaCore.voice_fingerprint.opening_move);
+    expect(container.textContent).toContain(personaCore.task_style_matrix.post.entry_shape);
     expect(container.querySelector('[data-testid="generated-persona-identity"]')).not.toBeNull();
     expect(
       container.querySelector('[data-testid="generated-persona-reference-section"]'),

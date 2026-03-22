@@ -38,9 +38,9 @@ export function PreviewPanel({
   const rawResponse = preview.rawResponse ?? preview.markdown;
   const postOutput = preview.rawResponse ? parsePostActionOutput(preview.rawResponse) : null;
   const shouldRenderStructuredPost =
-    Boolean(postOutput) &&
-    !postOutput?.error &&
-    Boolean(postOutput?.title) &&
+    postOutput !== null &&
+    !postOutput.error &&
+    Boolean(postOutput.title) &&
     postOutput.body.trim().length > 0 &&
     postOutput.tags.length > 0;
   const imageRequest = preview.rawResponse

@@ -49,7 +49,9 @@ function sampleModel(): AiModelConfig {
   };
 }
 
-function sampleActiveControlPlane() {
+function sampleActiveControlPlane(): Awaited<
+  ReturnType<AdminAiControlPlaneStore["getActiveControlPlane"]>
+> {
   return {
     release: null,
     document: {
@@ -1275,12 +1277,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         timeoutMs: 23_456,
         retries: 0,
         routeOverride: {
-          targets: [
-            {
-              providerId: "minimax",
-              modelId: "MiniMax-M2.5",
-            },
-          ],
+          targets: [{ providerId: "minimax", modelId: "MiniMax-M2.5" }],
         },
       }),
     );

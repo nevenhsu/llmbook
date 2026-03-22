@@ -1,0 +1,1242 @@
+import {
+  PersonaGenerationParseError,
+  PromptAssistError,
+  type PersonaGenerationContextStage,
+  type PersonaGenerationInteractionStage,
+  type PersonaGenerationMemoriesStage,
+  type PersonaGenerationSeedStage,
+  type PersonaGenerationSemanticAuditResult,
+  type PersonaGenerationStructured,
+  type PersonaGenerationValuesStage,
+  type PromptAssistAttemptStage,
+} from "@/lib/ai/admin/control-plane-contract";
+import {
+  asRecord,
+  buildLlmErrorDetailsSuffix,
+  readBoolean,
+  readNullableString,
+  readNumberOrNull,
+  readPositiveInt,
+  readString,
+} from "@/lib/ai/admin/control-plane-shared";
+
+function requirePersonaRecord(value: unknown, fieldPath: string): Record<string, unknown> {
+  const record = asRecord(value);
+  if (!record) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return record;
+}
+
+function unwrapPersonaStageRoot(
+  root: Record<string, unknown>,
+  requiredFieldGroups: string[][],
+): Record<string, unknown> {
+  const satisfiesGroups = (record: Record<string, unknown>) =>
+    requiredFieldGroups.every((group) => group.some((field) => field in record));
+
+  if (satisfiesGroups(root)) {
+    return root;
+  }
+
+  for (const value of Object.values(root)) {
+    const nested = asRecord(value);
+    if (nested && satisfiesGroups(nested)) {
+      return nested;
+    }
+  }
+
+  return root;
+}
+
+function requirePersonaText(value: unknown, fieldPath: string): string {
+  const text = readString(value).trim();
+  if (!text) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return text;
+}
+
+function normalizePersonaStringArray(value: unknown, fieldPath: string): string[] {
+  const items =
+    typeof value === "string"
+      ? [value]
+      : Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === "string")
+        : null;
+  if (!items) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  const normalized = items.map((item) => item.trim()).filter((item) => item.length > 0);
+  if (normalized.length === 0) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return normalized;
+}
+
+function normalizeSingleLineText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function countWords(text: string): number {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return 0;
+  }
+  if (containsCjk(normalized)) {
+    return Math.max(1, Math.ceil(normalized.length / 4));
+  }
+  return normalized.split(/\s+/u).filter(Boolean).length;
+}
+
+function looksLikeIdentifierLabel(text: string): boolean {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return false;
+  }
+  return /^[a-z0-9]+(?:_[a-z0-9]+)+$/u.test(normalized);
+}
+
+function maybeAddIdentifierIssue(issues: string[], fieldPath: string, text: string) {
+  if (looksLikeIdentifierLabel(text)) {
+    issues.push(
+      `${fieldPath} must be a natural-language description, not an identifier-style label.`,
+    );
+  }
+}
+
+function maybeAddInstructionIssue(issues: string[], fieldPath: string, text: string) {
+  maybeAddIdentifierIssue(issues, fieldPath, text);
+  if (countWords(text) < 3) {
+    issues.push(
+      `${fieldPath} must be a reusable natural-language instruction, not a compressed label.`,
+    );
+  }
+}
+
+function hasMixedScriptArtifact(text: string): boolean {
+  return /[A-Za-z][\u3400-\u9fff]|[\u3400-\u9fff][A-Za-z]/u.test(text);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripAllowedReferenceNames(text: string, allowedReferenceNames: string[]): string {
+  if (allowedReferenceNames.length === 0) {
+    return text;
+  }
+
+  let normalized = text;
+  for (const name of allowedReferenceNames) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      continue;
+    }
+    normalized = normalized.replace(new RegExp(escapeRegExp(trimmed), "gu"), " ");
+  }
+  return normalized;
+}
+
+function collectAllowedReferenceNameVariants(referenceNames: string[]): string[] {
+  const variants = new Set<string>();
+
+  for (const name of referenceNames) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      continue;
+    }
+    variants.add(trimmed);
+
+    for (const part of trimmed.split(/[\s/_-]+/u)) {
+      const token = part.trim();
+      if (token.length < 4) {
+        continue;
+      }
+      variants.add(token);
+    }
+  }
+
+  return Array.from(variants).sort((left, right) => right.length - left.length);
+}
+
+function collectReferenceSourceNames(value: unknown): string[] {
+  const record = asRecord(value);
+  if (!record || !Array.isArray(record.reference_sources)) {
+    return [];
+  }
+
+  return record.reference_sources
+    .map((item) => readString(asRecord(item)?.name).trim())
+    .filter((item) => item.length > 0);
+}
+
+export function collectEnglishOnlyIssues(
+  value: unknown,
+  input?: {
+    fieldPath?: string;
+    allowedReferenceNames?: string[];
+  },
+): string[] {
+  const fieldPath = input?.fieldPath ?? "";
+  const allowedReferenceNamesRaw = collectAllowedReferenceNameVariants([
+    ...(input?.allowedReferenceNames ?? []),
+    ...collectReferenceSourceNames(value),
+  ]);
+  const issues: string[] = [];
+
+  const visit = (current: unknown, currentPath: string) => {
+    if (typeof current === "string") {
+      if (containsCjk(stripAllowedReferenceNames(current, allowedReferenceNamesRaw))) {
+        issues.push(`${currentPath} must be English-only.`);
+      }
+      return;
+    }
+
+    if (Array.isArray(current)) {
+      current.forEach((item, index) => {
+        visit(item, `${currentPath}[${index}]`);
+      });
+      return;
+    }
+
+    const record = asRecord(current);
+    if (!record) {
+      return;
+    }
+
+    for (const [key, item] of Object.entries(record)) {
+      visit(item, currentPath ? `${currentPath}.${key}` : key);
+    }
+  };
+
+  visit(value, fieldPath);
+  return issues;
+}
+
+export function validateSeedStageQuality(stage: PersonaGenerationSeedStage): string[] {
+  const issues: string[] = [];
+  const allowedReferenceNamesRaw = collectAllowedReferenceNameVariants(
+    stage.reference_sources.map((item) => item.name).filter(Boolean),
+  );
+  const seedTexts: Array<[string, string]> = [
+    ["persona.bio", stage.persona.bio],
+    ["identity_summary.core_motivation", readString(stage.identity_summary.core_motivation)],
+    [
+      "identity_summary.one_sentence_identity",
+      readString(stage.identity_summary.one_sentence_identity),
+    ],
+    ["originalization_note", stage.originalization_note],
+    ...stage.reference_derivation.map(
+      (item, index) => [`reference_derivation[${index}]`, item] as [string, string],
+    ),
+  ];
+
+  for (const [fieldPath, text] of seedTexts) {
+    if (hasMixedScriptArtifact(stripAllowedReferenceNames(text, allowedReferenceNamesRaw))) {
+      issues.push(
+        `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
+      );
+    }
+  }
+
+  return issues;
+}
+
+export function validateValuesStageQuality(stage: PersonaGenerationValuesStage): string[] {
+  const issues: string[] = [];
+  for (const [index, item] of (
+    stage.values.value_hierarchy as Array<{ value: string; priority: number }>
+  ).entries()) {
+    maybeAddIdentifierIssue(issues, `values.value_hierarchy[${index}].value`, item.value);
+  }
+  maybeAddIdentifierIssue(issues, "values.judgment_style", readString(stage.values.judgment_style));
+  for (const fieldName of [
+    "humor_preferences",
+    "narrative_preferences",
+    "creative_preferences",
+    "disliked_patterns",
+    "taste_boundaries",
+  ] as const) {
+    const items = stage.aesthetic_profile[fieldName];
+    if (!Array.isArray(items)) {
+      continue;
+    }
+    for (const [index, item] of items.entries()) {
+      maybeAddIdentifierIssue(issues, `aesthetic_profile.${fieldName}[${index}]`, readString(item));
+    }
+  }
+  return issues;
+}
+
+export function validateInteractionStageQuality(
+  stage: PersonaGenerationInteractionStage,
+): string[] {
+  const issues: string[] = [];
+  const taskStyleMatrix = stage.task_style_matrix as {
+    post: Record<string, unknown>;
+    comment: Record<string, unknown>;
+  };
+  const post = asRecord(taskStyleMatrix.post) ?? {};
+  const comment = asRecord(taskStyleMatrix.comment) ?? {};
+  maybeAddInstructionIssue(
+    issues,
+    "interaction_defaults.default_stance",
+    readString(stage.interaction_defaults.default_stance),
+  );
+  for (const fieldName of [
+    "discussion_strengths",
+    "friction_triggers",
+    "non_generic_traits",
+  ] as const) {
+    const items = stage.interaction_defaults[fieldName];
+    if (!Array.isArray(items)) {
+      continue;
+    }
+    for (const [index, item] of items.entries()) {
+      maybeAddIdentifierIssue(
+        issues,
+        `interaction_defaults.${fieldName}[${index}]`,
+        readString(item),
+      );
+    }
+  }
+
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.opening_move",
+    readString(stage.voice_fingerprint.opening_move),
+  );
+  for (const [index, item] of (stage.voice_fingerprint.metaphor_domains as unknown[]).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `voice_fingerprint.metaphor_domains[${index}]`,
+      readString(item),
+    );
+  }
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.attack_style",
+    readString(stage.voice_fingerprint.attack_style),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.praise_style",
+    readString(stage.voice_fingerprint.praise_style),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "voice_fingerprint.closing_move",
+    readString(stage.voice_fingerprint.closing_move),
+  );
+  for (const [index, item] of (stage.voice_fingerprint.forbidden_shapes as unknown[]).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `voice_fingerprint.forbidden_shapes[${index}]`,
+      readString(item),
+    );
+  }
+
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.post.entry_shape",
+    readString(post.entry_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.post.body_shape",
+    readString(post.body_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.post.close_shape",
+    readString(post.close_shape),
+  );
+  for (const [index, item] of ((post.forbidden_shapes as unknown[]) ?? []).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `task_style_matrix.post.forbidden_shapes[${index}]`,
+      readString(item),
+    );
+  }
+
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.comment.entry_shape",
+    readString(comment.entry_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.comment.feedback_shape",
+    readString(comment.feedback_shape),
+  );
+  maybeAddInstructionIssue(
+    issues,
+    "task_style_matrix.comment.close_shape",
+    readString(comment.close_shape),
+  );
+  for (const [index, item] of ((comment.forbidden_shapes as unknown[]) ?? []).entries()) {
+    maybeAddIdentifierIssue(
+      issues,
+      `task_style_matrix.comment.forbidden_shapes[${index}]`,
+      readString(item),
+    );
+  }
+
+  return issues;
+}
+
+export function validateMemoriesStageQuality(stage: PersonaGenerationMemoriesStage): string[] {
+  const issues: string[] = [];
+
+  for (const [index, memory] of stage.persona_memories.entries()) {
+    const fieldPath = `persona_memories[${index}].content`;
+    const content = readString(memory.content);
+    if (!content) {
+      continue;
+    }
+
+    if (hasMixedScriptArtifact(content)) {
+      issues.push(
+        `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
+      );
+    }
+  }
+
+  return issues;
+}
+
+function normalizePersonaValueHierarchy(
+  value: unknown,
+  fieldPath: string,
+): Array<{ value: string; priority: number }> {
+  const arrayRows = Array.isArray(value)
+    ? value
+        .map((item) => {
+          const row = asRecord(item);
+          if (!row) {
+            return null;
+          }
+          const label = readString(row.value).trim();
+          const priority = readPositiveInt(row.priority, 0);
+          if (!label || priority < 1) {
+            return null;
+          }
+          return { value: label, priority };
+        })
+        .filter((item): item is { value: string; priority: number } => item !== null)
+    : [];
+
+  if (arrayRows.length > 0) {
+    return arrayRows.sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
+  }
+
+  const recordRows = asRecord(value);
+  if (!recordRows) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  const normalized = Object.entries(recordRows)
+    .map(([priorityRaw, labelValue]) => {
+      const label = readString(labelValue).trim();
+      const priority = readPositiveInt(priorityRaw, 0);
+      if (!label || priority < 1) {
+        return null;
+      }
+      return { value: label, priority };
+    })
+    .filter((item): item is { value: string; priority: number } => item !== null)
+    .sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
+
+  if (normalized.length === 0) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return normalized;
+}
+
+function parsePersonaIdentitySummary(
+  value: unknown,
+  fieldPath = "persona_core.identity_summary",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    archetype: requirePersonaText(root.archetype, `${fieldPath}.archetype`),
+    core_motivation: requirePersonaText(root.core_motivation, `${fieldPath}.core_motivation`),
+    one_sentence_identity: requirePersonaText(
+      root.one_sentence_identity,
+      `${fieldPath}.one_sentence_identity`,
+    ),
+  };
+}
+
+function parsePersonaValues(
+  value: unknown,
+  fieldPath = "persona_core.values",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    value_hierarchy: normalizePersonaValueHierarchy(
+      root.value_hierarchy,
+      `${fieldPath}.value_hierarchy`,
+    ),
+    worldview: normalizePersonaStringArray(root.worldview, `${fieldPath}.worldview`),
+    judgment_style: requirePersonaText(root.judgment_style, `${fieldPath}.judgment_style`),
+  };
+}
+
+function parsePersonaAestheticProfile(
+  value: unknown,
+  fieldPath = "persona_core.aesthetic_profile",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    humor_preferences: normalizePersonaStringArray(
+      root.humor_preferences,
+      `${fieldPath}.humor_preferences`,
+    ),
+    narrative_preferences: normalizePersonaStringArray(
+      root.narrative_preferences,
+      `${fieldPath}.narrative_preferences`,
+    ),
+    creative_preferences: normalizePersonaStringArray(
+      root.creative_preferences,
+      `${fieldPath}.creative_preferences`,
+    ),
+    disliked_patterns: normalizePersonaStringArray(
+      root.disliked_patterns,
+      `${fieldPath}.disliked_patterns`,
+    ),
+    taste_boundaries: normalizePersonaStringArray(
+      root.taste_boundaries,
+      `${fieldPath}.taste_boundaries`,
+    ),
+  };
+}
+
+function parsePersonaLivedContext(
+  value: unknown,
+  fieldPath = "persona_core.lived_context",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    familiar_scenes_of_life: normalizePersonaStringArray(
+      root.familiar_scenes_of_life,
+      `${fieldPath}.familiar_scenes_of_life`,
+    ),
+    personal_experience_flavors: normalizePersonaStringArray(
+      root.personal_experience_flavors,
+      `${fieldPath}.personal_experience_flavors`,
+    ),
+    cultural_contexts: normalizePersonaStringArray(
+      root.cultural_contexts,
+      `${fieldPath}.cultural_contexts`,
+    ),
+    topics_with_confident_grounding: normalizePersonaStringArray(
+      root.topics_with_confident_grounding,
+      `${fieldPath}.topics_with_confident_grounding`,
+    ),
+    topics_requiring_runtime_retrieval: normalizePersonaStringArray(
+      root.topics_requiring_runtime_retrieval,
+      `${fieldPath}.topics_requiring_runtime_retrieval`,
+    ),
+  };
+}
+
+function parsePersonaCreatorAffinity(
+  value: unknown,
+  fieldPath = "persona_core.creator_affinity",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    admired_creator_types: normalizePersonaStringArray(
+      root.admired_creator_types,
+      `${fieldPath}.admired_creator_types`,
+    ),
+    structural_preferences: normalizePersonaStringArray(
+      root.structural_preferences,
+      `${fieldPath}.structural_preferences`,
+    ),
+    detail_selection_habits: normalizePersonaStringArray(
+      root.detail_selection_habits,
+      `${fieldPath}.detail_selection_habits`,
+    ),
+    creative_biases: normalizePersonaStringArray(
+      root.creative_biases,
+      `${fieldPath}.creative_biases`,
+    ),
+  };
+}
+
+function parsePersonaInteractionDefaults(
+  value: unknown,
+  fieldPath = "persona_core.interaction_defaults",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    default_stance: requirePersonaText(root.default_stance, `${fieldPath}.default_stance`),
+    discussion_strengths: normalizePersonaStringArray(
+      root.discussion_strengths,
+      `${fieldPath}.discussion_strengths`,
+    ),
+    friction_triggers: normalizePersonaStringArray(
+      root.friction_triggers,
+      `${fieldPath}.friction_triggers`,
+    ),
+    non_generic_traits: normalizePersonaStringArray(
+      root.non_generic_traits,
+      `${fieldPath}.non_generic_traits`,
+    ),
+  };
+}
+
+function parsePersonaGuardrails(
+  value: unknown,
+  fieldPath = "persona_core.guardrails",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    hard_no: normalizePersonaStringArray(root.hard_no, `${fieldPath}.hard_no`),
+    deescalation_style: normalizePersonaStringArray(
+      root.deescalation_style,
+      `${fieldPath}.deescalation_style`,
+    ),
+  };
+}
+
+function parsePersonaVoiceFingerprint(
+  value: unknown,
+  fieldPath = "persona_core.voice_fingerprint",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  return {
+    ...root,
+    opening_move: requirePersonaText(root.opening_move, `${fieldPath}.opening_move`),
+    metaphor_domains: normalizePersonaStringArray(
+      root.metaphor_domains,
+      `${fieldPath}.metaphor_domains`,
+    ),
+    attack_style: requirePersonaText(root.attack_style, `${fieldPath}.attack_style`),
+    praise_style: requirePersonaText(root.praise_style, `${fieldPath}.praise_style`),
+    closing_move: requirePersonaText(root.closing_move, `${fieldPath}.closing_move`),
+    forbidden_shapes: normalizePersonaStringArray(
+      root.forbidden_shapes,
+      `${fieldPath}.forbidden_shapes`,
+    ),
+  };
+}
+
+function parsePersonaTaskStyleMatrix(
+  value: unknown,
+  fieldPath = "persona_core.task_style_matrix",
+): Record<string, unknown> {
+  const root = requirePersonaRecord(value, fieldPath);
+  const post = requirePersonaRecord(root.post, `${fieldPath}.post`);
+  const comment = requirePersonaRecord(root.comment, `${fieldPath}.comment`);
+  return {
+    ...root,
+    post: {
+      ...post,
+      entry_shape: requirePersonaText(post.entry_shape, `${fieldPath}.post.entry_shape`),
+      body_shape: requirePersonaText(post.body_shape, `${fieldPath}.post.body_shape`),
+      close_shape: requirePersonaText(post.close_shape, `${fieldPath}.post.close_shape`),
+      forbidden_shapes: normalizePersonaStringArray(
+        post.forbidden_shapes,
+        `${fieldPath}.post.forbidden_shapes`,
+      ),
+    },
+    comment: {
+      ...comment,
+      entry_shape: requirePersonaText(comment.entry_shape, `${fieldPath}.comment.entry_shape`),
+      feedback_shape: requirePersonaText(
+        comment.feedback_shape,
+        `${fieldPath}.comment.feedback_shape`,
+      ),
+      close_shape: requirePersonaText(comment.close_shape, `${fieldPath}.comment.close_shape`),
+      forbidden_shapes: normalizePersonaStringArray(
+        comment.forbidden_shapes,
+        `${fieldPath}.comment.forbidden_shapes`,
+      ),
+    },
+  };
+}
+
+export function parsePersonaCore(value: unknown): Record<string, unknown> {
+  const root = requirePersonaRecord(value, "persona_core");
+  return {
+    ...root,
+    identity_summary: parsePersonaIdentitySummary(root.identity_summary),
+    values: parsePersonaValues(root.values),
+    aesthetic_profile: parsePersonaAestheticProfile(root.aesthetic_profile),
+    lived_context: parsePersonaLivedContext(root.lived_context),
+    creator_affinity: parsePersonaCreatorAffinity(root.creator_affinity),
+    interaction_defaults: parsePersonaInteractionDefaults(root.interaction_defaults),
+    guardrails: parsePersonaGuardrails(root.guardrails),
+    voice_fingerprint: parsePersonaVoiceFingerprint(root.voice_fingerprint),
+    task_style_matrix: parsePersonaTaskStyleMatrix(root.task_style_matrix),
+  };
+}
+
+export function parseStoredPersonaCoreProfile(value: unknown): Record<string, unknown> {
+  const root = requirePersonaRecord(value, "persona_core");
+  return {
+    ...parsePersonaCore(root),
+    reference_sources: parseReferenceSources(root.reference_sources),
+    reference_derivation: normalizePersonaStringArray(
+      root.reference_derivation,
+      "persona_core.reference_derivation",
+    ),
+    originalization_note: requirePersonaText(
+      root.originalization_note,
+      "persona_core.originalization_note",
+    ),
+  };
+}
+
+export function parseReferenceSources(
+  value: unknown,
+): PersonaGenerationStructured["reference_sources"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("persona generation output missing reference_sources");
+  }
+  const normalized = value
+    .map((item) => {
+      const row = requirePersonaRecord(item, "reference_sources");
+      const name = requirePersonaText(row.name, "reference_sources.name");
+      const type = requirePersonaText(row.type, "reference_sources.type");
+      const contribution = normalizePersonaStringArray(
+        row.contribution,
+        "reference_sources.contribution",
+      );
+      return { name, type, contribution };
+    })
+    .filter((item) => item.name.length > 0);
+  if (normalized.length === 0) {
+    throw new Error("persona generation output missing reference_sources");
+  }
+  return normalized;
+}
+
+export function parsePersonaMemories(
+  value: unknown,
+): PersonaGenerationStructured["persona_memories"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      const row = asRecord(item);
+      if (!row) {
+        return null;
+      }
+      const memoryType =
+        readString(row.memory_type).trim() === "long_memory" ? "long_memory" : "memory";
+      const scopeRaw = readString(row.scope).trim();
+      const scope: "persona" | "thread" | "task" =
+        scopeRaw === "thread" || scopeRaw === "task" ? scopeRaw : "persona";
+      const content = readString(row.content).trim();
+      if (!content) {
+        return null;
+      }
+      const memoryKey = readNullableString(row.memory_key);
+      return {
+        memory_type: memoryType,
+        scope,
+        memory_key: memoryKey,
+        content,
+        metadata: asRecord(row.metadata) ?? {},
+        expires_in_hours: readNumberOrNull(row.expires_in_hours),
+        is_canonical: readBoolean(row.is_canonical, false),
+        importance: readNumberOrNull(row.importance),
+      };
+    })
+    .filter(
+      (item): item is PersonaGenerationStructured["persona_memories"][number] => item !== null,
+    );
+}
+
+export function extractJsonFromText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const fenced = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  return trimmed;
+}
+
+export function containsCjk(text: string): boolean {
+  return /[\u3400-\u9fff]/u.test(text);
+}
+
+export function hasLikelyNamedReference(text: string): boolean {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /(?:參考|参考|像|例如|比如)\s*[:：]?\s*[\p{L}]/u.test(normalized) ||
+    /\b(?:inspired by|reference|references|like|such as)\b\s*[:：]?\s*(?:[A-Z][\p{L}'-]*|[\u3400-\u9fff])/u.test(
+      normalized,
+    ) ||
+    /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/.test(normalized) ||
+    /\b(?:Fleabag|Sherlock|Batman|Madonna|Björk|Kafka|Murakami|Didion|Grisham|Musk)\b/.test(
+      normalized,
+    ) ||
+    /(?:伊坂幸太郎|村上春樹|宮藤官九郎|是枝裕和|昆汀|王家衛|芙莉貝格)/u.test(normalized)
+  );
+}
+
+export function extractLikelyNamedReferences(text: string): string[] {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  const matches = new Set<string>();
+  for (const match of normalized.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/g)) {
+    if (match[0]) {
+      matches.add(match[0].trim());
+    }
+  }
+  for (const match of normalized.matchAll(
+    /\b(?:Fleabag|Sherlock|Batman|Madonna|Björk|Kafka|Murakami|Didion|Grisham|Musk)\b/g,
+  )) {
+    if (match[0]) {
+      matches.add(match[0].trim());
+    }
+  }
+  for (const match of normalized.matchAll(
+    /(?:伊坂幸太郎|村上春樹|宮藤官九郎|是枝裕和|昆汀|王家衛|芙莉貝格)/gu,
+  )) {
+    if (match[0]) {
+      matches.add(match[0].trim());
+    }
+  }
+
+  return Array.from(matches);
+}
+
+export function buildExplicitSourceReferenceInstruction(
+  sourceReferenceNames: string[],
+): string | null {
+  if (sourceReferenceNames.length === 0) {
+    return null;
+  }
+
+  return [
+    `The user explicitly referenced these names: ${sourceReferenceNames.join(", ")}.`,
+    "Keep at least 1 of those exact names explicit in the final brief whenever possible.",
+    "If the user's input is only a name or short list of names, still write a full persona brief around those names instead of replacing them with anonymous description.",
+    "If you swap to a closely related reference, keep that related name explicit in the final brief.",
+  ].join(" ");
+}
+
+export function parseResolvedReferenceNames(text: string): string[] {
+  const normalized = normalizeSingleLineText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .split(/\s*(?:\||,|;|\/|、|，|；|\n)\s*/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2)
+    .filter((item, index, list) => list.indexOf(item) === index)
+    .slice(0, 3);
+}
+
+function normalizePromptAssistComparisonText(text: string): string {
+  return normalizeSingleLineText(text)
+    .toLowerCase()
+    .replace(/[“”"'`.,!?;:(){}\[\]<>，。！？；：「」『』（）【】]/gu, "")
+    .trim();
+}
+
+function stripTrailingReferenceAppendix(text: string): string {
+  return normalizeSingleLineText(text)
+    .replace(
+      /\s*\b(?:reference|references|inspired by|like|such as)\b\s+(?:[A-Z][^.?!]*|[\u3400-\u9fff][^.?!]*)[.?!]?$/u,
+      "",
+    )
+    .replace(/\s*(?:參考|参考|像|例如|比如)\s*[^。！？」]+[。！？]?$/u, "")
+    .trim();
+}
+
+function looksLikeImperativePersonaRequest(text: string): boolean {
+  const normalized = normalizeSingleLineText(text);
+  return (
+    /^(?:generate|create|write|craft|build)\b/i.test(normalized) ||
+    /^(?:請)?(?:生成|產生|建立|打造|寫出)/u.test(normalized)
+  );
+}
+
+export function isWeakPromptAssistRewrite(input: {
+  text: string;
+  mode: "random" | "optimize";
+  sourceText: string;
+}): boolean {
+  if (input.mode !== "optimize") {
+    return false;
+  }
+
+  const normalizedOutput = normalizeSingleLineText(input.text);
+  const normalizedSource = normalizeSingleLineText(input.sourceText);
+  if (!normalizedOutput) {
+    return true;
+  }
+
+  if (looksLikeImperativePersonaRequest(normalizedOutput)) {
+    return true;
+  }
+
+  const outputWithoutReference = stripTrailingReferenceAppendix(normalizedOutput);
+  if (
+    normalizePromptAssistComparisonText(outputWithoutReference) ===
+    normalizePromptAssistComparisonText(normalizedSource)
+  ) {
+    return true;
+  }
+
+  const sourceHasReference = hasLikelyNamedReference(normalizedSource);
+  const outputHasReference = hasLikelyNamedReference(normalizedOutput);
+  if (!sourceHasReference && outputHasReference) {
+    const sourceComparable = normalizePromptAssistComparisonText(normalizedSource);
+    const outputComparable = normalizePromptAssistComparisonText(outputWithoutReference);
+    if (outputComparable === sourceComparable) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function isLikelyTruncatedPromptAssistText(input: {
+  text: string;
+  details?: Record<string, unknown> | null;
+}): boolean {
+  const normalized = normalizeSingleLineText(input.text);
+  if (!normalized) {
+    return false;
+  }
+
+  const finishReason = readString(input.details?.finishReason).trim().toLowerCase();
+  if (finishReason === "length") {
+    return true;
+  }
+
+  if (/[,:;\/\-(]$/.test(normalized)) {
+    return true;
+  }
+
+  if (
+    /\b(?:and|or|with|to|for|of|in|on|by|but|as|than|that|which|who|when|while|if|because)$/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function validatePromptAssistResult(input: {
+  text: string;
+  mode: "random" | "optimize";
+  sourceText: string;
+  details?: Record<string, unknown> | null;
+}): string {
+  const normalized = normalizeSingleLineText(input.text);
+  if (!normalized) {
+    throw new PromptAssistError({
+      code: "prompt_assist_final_output_empty",
+      message: "prompt assist final output was empty",
+      details: input.details ?? null,
+    });
+  }
+  if (!hasLikelyNamedReference(normalized)) {
+    throw new PromptAssistError({
+      code: "prompt_assist_missing_reference",
+      message: "prompt assist output must include at least 1 explicit real reference name",
+    });
+  }
+  if (isWeakPromptAssistRewrite(input)) {
+    throw new PromptAssistError({
+      code: "prompt_assist_output_too_weak",
+      message: "prompt assist output is too weak",
+    });
+  }
+  return normalized;
+}
+
+export function buildPromptAssistProviderError(input: {
+  stage: PromptAssistAttemptStage;
+  error: string;
+  details: Record<string, unknown>;
+  errorDetails?: unknown;
+}): PromptAssistError {
+  const suffix = buildLlmErrorDetailsSuffix(input.errorDetails);
+  if (input.error.startsWith("LLM_TIMEOUT_")) {
+    return new PromptAssistError({
+      code: "prompt_assist_provider_timeout",
+      message: `prompt assist provider timed out during ${input.stage} before returning text${suffix}`,
+      details: input.details,
+    });
+  }
+
+  return new PromptAssistError({
+    code: "prompt_assist_provider_failed",
+    message: `prompt assist provider failed during ${input.stage} before returning text: ${input.error}${suffix}`,
+    details: input.details,
+  });
+}
+
+export function buildPromptAssistAttemptDetails(input: {
+  stage: PromptAssistAttemptStage;
+  llmResult: {
+    text: string;
+    finishReason?: string | null;
+    providerId?: string | null;
+    modelId?: string | null;
+    attempts?: number | null;
+    usedFallback?: boolean | null;
+    error?: string | null;
+    errorDetails?: unknown;
+  };
+}): Record<string, unknown> {
+  const trimmedText = input.llmResult.text.trim();
+  return {
+    attemptStage: input.stage,
+    providerId: input.llmResult.providerId ?? null,
+    modelId: input.llmResult.modelId ?? null,
+    finishReason: input.llmResult.finishReason ?? null,
+    hadText: trimmedText.length > 0,
+    attempts: input.llmResult.attempts ?? null,
+    usedFallback: input.llmResult.usedFallback ?? false,
+    ...(input.llmResult.error ? { providerError: input.llmResult.error } : {}),
+    ...(input.llmResult.errorDetails ? { errorDetails: input.llmResult.errorDetails } : {}),
+  };
+}
+
+function parsePersonaStageObject(rawText: string): Record<string, unknown> {
+  const jsonText = extractJsonFromText(rawText);
+  if (!jsonText) {
+    throw new PersonaGenerationParseError("persona generation output is empty", rawText);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new PersonaGenerationParseError("persona generation output must be valid JSON", rawText);
+  }
+
+  const record = asRecord(parsed);
+  if (!record) {
+    throw new PersonaGenerationParseError(
+      "persona generation output must be a JSON object",
+      rawText,
+    );
+  }
+  return record;
+}
+
+export function parsePersonaGenerationSemanticAuditResult(
+  rawText: string,
+): PersonaGenerationSemanticAuditResult {
+  const jsonText = extractJsonFromText(rawText);
+  if (!jsonText) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit returned empty output",
+      rawText,
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit returned invalid JSON",
+      rawText,
+    );
+  }
+
+  const record = asRecord(parsed);
+  if (!record) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit must return a JSON object",
+      rawText,
+    );
+  }
+
+  const issuesRaw = Array.isArray(record.issues) ? record.issues : null;
+  const repairGuidanceRaw = Array.isArray(record.repairGuidance) ? record.repairGuidance : null;
+  if (typeof record.passes !== "boolean" || issuesRaw === null || repairGuidanceRaw === null) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit must include boolean passes and string-array issues/repairGuidance",
+      rawText,
+    );
+  }
+
+  return {
+    passes: record.passes,
+    issues: issuesRaw
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter((item) => item.length > 0),
+    repairGuidance: repairGuidanceRaw
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter((item) => item.length > 0),
+  };
+}
+
+export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedStage {
+  try {
+    const record = unwrapPersonaStageRoot(parsePersonaStageObject(rawText), [
+      ["persona"],
+      ["identity_summary"],
+      ["reference_sources"],
+      ["reference_derivation"],
+      ["originalization_note"],
+    ]);
+    const persona = requirePersonaRecord(record.persona, "persona");
+    return {
+      persona: {
+        display_name: requirePersonaText(persona.display_name, "persona.display_name"),
+        bio: requirePersonaText(persona.bio, "persona.bio"),
+        status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
+      },
+      identity_summary: parsePersonaIdentitySummary(record.identity_summary),
+      reference_sources: parseReferenceSources(record.reference_sources),
+      reference_derivation: normalizePersonaStringArray(
+        record.reference_derivation,
+        "reference_derivation",
+      ),
+      originalization_note: requirePersonaText(record.originalization_note, "originalization_note"),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+export function parsePersonaValuesAndAestheticOutput(
+  rawText: string,
+): PersonaGenerationValuesStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      values: parsePersonaValues(record.values),
+      aesthetic_profile: parsePersonaAestheticProfile(record.aesthetic_profile),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+export function parsePersonaContextAndAffinityOutput(
+  rawText: string,
+): PersonaGenerationContextStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      lived_context: parsePersonaLivedContext(record.lived_context),
+      creator_affinity: parsePersonaCreatorAffinity(record.creator_affinity),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+export function parsePersonaInteractionOutput(rawText: string): PersonaGenerationInteractionStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      interaction_defaults: parsePersonaInteractionDefaults(record.interaction_defaults),
+      guardrails: parsePersonaGuardrails(record.guardrails),
+      voice_fingerprint: parsePersonaVoiceFingerprint(record.voice_fingerprint),
+      task_style_matrix: parsePersonaTaskStyleMatrix(record.task_style_matrix),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+export function parsePersonaMemoriesOutput(rawText: string): PersonaGenerationMemoriesStage {
+  const record = parsePersonaStageObject(rawText);
+  try {
+    return {
+      persona_memories: parsePersonaMemories(record.persona_memories),
+    };
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}
+
+export function parsePersonaGenerationOutput(rawText: string): {
+  structured: PersonaGenerationStructured;
+} {
+  const record = unwrapPersonaStageRoot(parsePersonaStageObject(rawText), [
+    ["persona"],
+    ["persona_core"],
+    ["reference_sources"],
+    ["reference_derivation"],
+    ["originalization_note"],
+    ["persona_memories"],
+  ]);
+  try {
+    const persona = requirePersonaRecord(record.persona, "persona");
+    const personaCore = requirePersonaRecord(record.persona_core, "persona_core");
+    return {
+      structured: {
+        persona: {
+          display_name: requirePersonaText(persona.display_name, "persona.display_name"),
+          bio: requirePersonaText(persona.bio, "persona.bio"),
+          status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
+        },
+        persona_core: parsePersonaCore(personaCore),
+        reference_sources: parseReferenceSources(record.reference_sources),
+        reference_derivation: normalizePersonaStringArray(
+          record.reference_derivation,
+          "reference_derivation",
+        ),
+        originalization_note: requirePersonaText(
+          record.originalization_note,
+          "originalization_note",
+        ),
+        persona_memories: parsePersonaMemories(record.persona_memories),
+      },
+    };
+  } catch (error) {
+    if (error instanceof PersonaGenerationParseError) {
+      throw error;
+    }
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation output is invalid",
+      rawText,
+    );
+  }
+}

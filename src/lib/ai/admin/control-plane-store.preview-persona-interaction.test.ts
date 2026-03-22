@@ -14,7 +14,7 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
       timeoutMs: 30_000,
       retries: 0,
     })),
-    invokeLLM: vi.fn(async () => ({
+    invokeLLM: vi.fn(async (_input?: unknown) => ({
       text: JSON.stringify({ markdown: "Preview response" }),
       finishReason: "stop",
       error: null,
@@ -91,6 +91,14 @@ function sampleProvider() {
     createdAt: "2026-03-06T00:00:00.000Z",
     updatedAt: "2026-03-06T00:00:00.000Z",
   };
+}
+
+function getInvokeCallInput(
+  index: number,
+): { modelInput?: { prompt?: string; maxOutputTokens?: number } } | undefined {
+  return vi.mocked(invokeLLM).mock.calls[index]?.[0] as
+    | { modelInput?: { prompt?: string; maxOutputTokens?: number } }
+    | undefined;
 }
 
 function mockPersona(store: AdminAiControlPlaneStore) {
@@ -228,8 +236,10 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       timeoutMs: 30_000,
       retries: 0,
     });
-    invokeLLM.mockImplementation(async (input) => {
-      const prompt = String(input?.modelInput?.prompt ?? "");
+    invokeLLM.mockImplementation(async (input?: unknown) => {
+      const prompt = String(
+        (input as { modelInput?: { prompt?: string } } | undefined)?.modelInput?.prompt ?? "",
+      );
       if (prompt.includes("[persona_output_audit]")) {
         return {
           text: JSON.stringify({
@@ -327,7 +337,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     mockControlPlane(store);
     mockPersona(store);
     resolveLlmInvocationConfig.mockResolvedValue({
-      route: { targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }] },
+      route: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
       timeoutMs: 23_456,
       retries: 4,
     });
@@ -343,7 +353,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       expect.objectContaining({
         timeoutMs: 23_456,
         retries: 0,
-        routeOverride: { targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }] },
+        routeOverride: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
       }),
     );
   });
@@ -402,7 +412,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
         tags: ["#cthulhu", "#lovecraft"],
       }),
     );
-    expect(invokeLLM.mock.calls[0]?.[0]?.modelInput?.maxOutputTokens).toBe(1400);
+    expect(getInvokeCallInput(0)?.modelInput?.maxOutputTokens).toBe(1400);
     expect(preview.auditDiagnostics?.status).toBe("passed");
   });
 
@@ -447,10 +457,10 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
 
     expect(preview.renderOk).toBe(true);
     expect(invokeLLM).toHaveBeenCalledTimes(3);
-    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[audit_mode]");
-    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("compact");
+    expect(getInvokeCallInput(1)?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("[audit_mode]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("compact");
     expect(preview.auditDiagnostics?.auditMode).toBe("compact");
     expect(preview.auditDiagnostics?.compactRetryUsed).toBe(true);
   });
@@ -497,9 +507,9 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
 
     expect(preview.renderOk).toBe(true);
     expect(invokeLLM).toHaveBeenCalledTimes(3);
-    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("compact");
+    expect(getInvokeCallInput(1)?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("compact");
     expect(preview.auditDiagnostics?.auditMode).toBe("compact");
     expect(preview.auditDiagnostics?.compactRetryUsed).toBe(true);
   });
@@ -618,9 +628,9 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     });
 
     expect(invokeLLM).toHaveBeenCalledTimes(4);
-    expect(invokeLLM.mock.calls[1]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(invokeLLM.mock.calls[2]?.[0]?.modelInput?.prompt).toContain("[retry_persona_repair]");
-    expect(invokeLLM.mock.calls[3]?.[0]?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(getInvokeCallInput(1)?.modelInput?.prompt).toContain("[persona_output_audit]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("[retry_persona_repair]");
+    expect(getInvokeCallInput(3)?.modelInput?.prompt).toContain("[persona_output_audit]");
     expect(preview.markdown).toContain("That silhouette finally hits.");
     expect(preview.rawResponse).toContain("That silhouette finally hits.");
     expect(preview.auditDiagnostics).toEqual({
@@ -694,7 +704,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
         taskType: "post",
         taskContext: "Create a new post.",
       }),
-    ).rejects.toMatchObject<Partial<PersonaOutputValidationError>>({
+    ).rejects.toMatchObject({
       code: "persona_repair_failed",
     });
   });

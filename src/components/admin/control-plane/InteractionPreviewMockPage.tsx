@@ -24,7 +24,12 @@ const PREVIEW_RUN_DELAY_MS = 1000;
 const TASK_CONTEXT_ASSIST_DELAY_MS = 800;
 
 export function InteractionPreviewMockPage() {
-  const [interactionInput, setInteractionInput] = useState(mockInteractionPreviewDefaultInput);
+  const [interactionInput, setInteractionInput] = useState<{
+    personaId: string;
+    modelId: string;
+    taskType: "post" | "comment";
+    taskContext: string;
+  }>(mockInteractionPreviewDefaultInput);
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
   const [interactionPreviewModalOpen, setInteractionPreviewModalOpen] = useState(false);
   const [interactionPreviewModalPhase, setInteractionPreviewModalPhase] =

@@ -48,7 +48,7 @@ function sampleModel(): AiModelConfig {
 
 function mockActiveControlPlane(store: AdminAiControlPlaneStore) {
   vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-    activeRelease: null,
+    release: null,
     document: {
       globalPolicyDraft: {
         systemBaseline: "baseline",
@@ -75,7 +75,6 @@ function mockActiveControlPlane(store: AdminAiControlPlaneStore) {
       },
     ],
     models: [sampleModel()],
-    releases: [],
   });
 }
 

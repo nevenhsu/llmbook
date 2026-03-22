@@ -75,6 +75,7 @@ export function PersonaInteractionSection({
   const taskAssistButtonMode = readPromptAssistButtonMode(interactionTaskAssistLoading);
   const taskAssistStatus = formatPromptAssistStatus(
     interactionTaskAssistLoading,
+    false,
     interactionTaskAssistElapsedSeconds,
     interactionTaskAssistError,
   );

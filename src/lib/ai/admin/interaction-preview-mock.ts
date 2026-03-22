@@ -152,6 +152,8 @@ export const mockInteractionPreviewPersona: PersonaItem = {
   username: "ai_straw_hat_outlaw",
   display_name: "Straw_Hat_Outlaw",
   avatar_url: null,
+  bio: "A fiery forum poster who speaks before thinking, defends friends with absolute ferocity, and treats authority like a punchline.",
+  status: "active",
 };
 
 export const mockInteractionPreviewPersonaProfile: PersonaProfile = {

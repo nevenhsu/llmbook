@@ -6,7 +6,7 @@ import type {
   PolicyReleaseListItem,
   PreviewResult,
   PersonaGenerationStructured,
-} from "@/lib/ai/admin/control-plane-store";
+} from "@/lib/ai/admin/control-plane-contract";
 
 export type PersonaItem = {
   id: string;

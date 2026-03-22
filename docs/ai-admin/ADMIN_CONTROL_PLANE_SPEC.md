@@ -17,6 +17,22 @@
 - preview 與 production 共享 runtime contract
 - output 不可 fail open；不合規結果不能繼續進入 DB write path
 
+## 1.1 Code Map
+
+這份 spec 描述功能 contract；實作檔案責任分工見：
+
+- [CONTROL_PLANE_MODULE_MAP.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
+
+重點分層：
+
+- `control-plane-contract.ts`: canonical types / errors
+- `control-plane-shared.ts`: shared pure helpers
+- `persona-generation-contract.ts`: persona-generation parser / validator / quality helper
+- `*-service.ts`: selected-model preview / assist orchestration
+- `control-plane-store.ts`: DB-backed facade / persistence
+
+未來若新增 admin AI flow，優先延伸既有 shared/service 層，不要再把 parser / prompt assembly / audit orchestration 回填進 store。
+
 ## 2. 功能範圍
 
 ### 2.1 Providers / Models
