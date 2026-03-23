@@ -605,7 +605,7 @@ export async function previewPersonaGeneration(input: {
       qualityIssues: string[];
       previousParsedOutput: T;
       repairGuidance?: string[];
-      mode: "initial" | "truncated" | "empty_or_error" | "final_truncated";
+      mode: "initial" | "truncated" | "empty_or_error" | "invalid_json" | "final_truncated";
       previousTruncatedOutput?: string | null;
     }) =>
       [
@@ -618,12 +618,16 @@ export async function previewPersonaGeneration(input: {
             ? `Your previous quality-repair response for stage ${stageInput.stageName} kept truncating before the JSON object was complete.`
             : repairInput.mode === "empty_or_error"
               ? `Your previous quality-repair response for stage ${stageInput.stageName} was empty or failed before returning JSON.`
-              : `Your previous response for stage ${stageInput.stageName} was valid JSON but failed the quality contract.`,
+              : repairInput.mode === "invalid_json"
+                ? `Your previous quality-repair response for stage ${stageInput.stageName} was invalid or incomplete JSON.`
+                : `Your previous response for stage ${stageInput.stageName} was valid JSON but failed the quality contract.`,
         repairInput.mode === "truncated" || repairInput.mode === "final_truncated"
           ? "Rewrite this stage from scratch in a shorter form while preserving the quality fixes."
           : repairInput.mode === "empty_or_error"
             ? "Rewrite this stage from scratch and return the full JSON object without leaving it blank."
-            : "Rewrite this stage from scratch using the same JSON schema.",
+            : repairInput.mode === "invalid_json"
+              ? "Rewrite this stage from scratch and return one complete valid JSON object that satisfies the same quality fixes."
+              : "Rewrite this stage from scratch using the same JSON schema.",
         "Use natural-language behavioral descriptions, not enum labels, taxonomy tokens, or snake_case identifiers.",
         "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
         ...(repairInput.mode === "truncated" || repairInput.mode === "final_truncated"
@@ -641,7 +645,13 @@ export async function previewPersonaGeneration(input: {
                 "Do not return blank output.",
                 "Do not defer, explain, or apologize.",
               ]
-            : []),
+            : repairInput.mode === "invalid_json"
+              ? [
+                  "Return strictly valid JSON in one attempt.",
+                  "Do not leave arrays or objects half-open.",
+                  "Do not add commentary, prefixes, or trailing explanation.",
+                ]
+              : []),
         "Quality issues:",
         ...repairInput.qualityIssues.map((issue) => `- ${issue}`),
         ...(repairInput.repairGuidance?.length
@@ -797,7 +807,12 @@ export async function previewPersonaGeneration(input: {
     let previousParsedOutput = initialQualityResult.normalizedParsedOutput;
     let pendingQualityIssues = initialQualityResult.issues;
     let pendingRepairGuidance = initialQualityResult.repairGuidance;
-    let nextRepairMode: "initial" | "truncated" | "empty_or_error" | "final_truncated" = "initial";
+    let nextRepairMode:
+      | "initial"
+      | "truncated"
+      | "empty_or_error"
+      | "invalid_json"
+      | "final_truncated" = "initial";
     let previousTruncatedOutput: string | null = null;
 
     for (const attempt of [1, 2, 3] as const) {
@@ -840,7 +855,24 @@ export async function previewPersonaGeneration(input: {
         if (!(error instanceof PersonaGenerationParseError)) {
           throw error;
         }
-        if (attempt === 3 || !shouldRetryQualityRepair(qualityRepaired)) {
+        const retryableQualityRepair = shouldRetryQualityRepair(qualityRepaired);
+        const parseFailedWithBody =
+          qualityRepaired.text.trim().length > 0 && !retryableQualityRepair;
+        if (attempt === 3) {
+          throw new PersonaGenerationQualityError({
+            stageName: stageInput.stageName,
+            message: buildQualityRepairFailureMessage(qualityRepaired),
+            rawOutput: error.rawOutput,
+            issues: pendingQualityIssues,
+            details: error.details,
+          });
+        }
+        if (parseFailedWithBody) {
+          nextRepairMode = "invalid_json";
+          previousTruncatedOutput = null;
+          continue;
+        }
+        if (!retryableQualityRepair) {
           throw new PersonaGenerationQualityError({
             stageName: stageInput.stageName,
             message: buildQualityRepairFailureMessage(qualityRepaired),
@@ -855,7 +887,9 @@ export async function previewPersonaGeneration(input: {
           ? attempt === 2
             ? "final_truncated"
             : "truncated"
-          : "empty_or_error";
+          : hasEmptyOutput(qualityRepaired) || Boolean(qualityRepaired.error)
+            ? "empty_or_error"
+            : "invalid_json";
         previousTruncatedOutput = truncated ? qualityRepaired.text : null;
       }
     }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parsePersonaGenerationOutput,
+  parsePersonaInteractionOutput,
   parsePersonaGenerationSemanticAuditResult,
   parsePersonaSeedOutput,
 } from "@/lib/ai/admin/persona-generation-contract";
@@ -170,5 +171,51 @@ describe("persona-generation-contract", () => {
       issues: [],
       repairGuidance: [],
     });
+  });
+
+  it("accepts comment.body_shape as a stage-local alias for comment.feedback_shape", () => {
+    const parsed = parsePersonaInteractionOutput(
+      JSON.stringify({
+        interaction_defaults: {
+          default_stance: "Frames the thread through mythic function before addressing specifics.",
+          discussion_strengths: ["Connects arguments to broader narrative purpose."],
+          friction_triggers: ["Literal plot-hole complaints without thematic framing."],
+          non_generic_traits: ["Pivots into parables about protecting creative vision."],
+        },
+        guardrails: {
+          hard_no: ["Will not flatten stories into spreadsheet logic."],
+          deescalation_style: ["Retreats into archetypal framing instead of direct escalation."],
+        },
+        voice_fingerprint: {
+          opening_move: "Open with a mythic or serial-era framing move.",
+          metaphor_domains: ["Myth cycles", "Vintage adventure serials"],
+          attack_style: "Dismiss shallow critique as noise that misses the archetypal core.",
+          praise_style: "Describe good work as mythically resonant and structurally daring.",
+          closing_move: "Leave behind a parable about creative vision.",
+          forbidden_shapes: ["Technical nitpicking without narrative stakes."],
+        },
+        task_style_matrix: {
+          post: {
+            entry_shape: "Start from mythic framing.",
+            body_shape: "Connect the topic back to narrative design intent.",
+            close_shape: "End with a parable about creative conviction.",
+            forbidden_shapes: ["Plot-summary recap."],
+          },
+          comment: {
+            entry_shape: "Reframe the reply through archetypal purpose.",
+            body_shape: "Deflect the literal objection into a mythic principle.",
+            close_shape: "Close with a lofty statement about vision.",
+            forbidden_shapes: ["Production-schedule detail."],
+          },
+        },
+      }),
+    );
+
+    const commentMatrix = parsed.task_style_matrix.comment as {
+      feedback_shape: string;
+    };
+    expect(commentMatrix.feedback_shape).toBe(
+      "Deflect the literal objection into a mythic principle.",
+    );
   });
 });

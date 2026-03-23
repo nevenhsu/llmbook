@@ -961,6 +961,45 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
   });
 
+  it("retries seed quality repair when the first repair attempt still returns malformed JSON", async () => {
+    const invokeLLM = await mockStageSequence([
+      buildReferenceCosplaySeedStage(),
+      '{"persona":{"display_name":"Viktor Strand"}',
+      buildSeedStage(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStage().reference_sources.map((item) => item.name),
+      ),
+      buildPassingSeedSemanticAudit(),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+      buildPassingMemoriesSemanticAudit(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona.display_name).toBe("AI Critic");
+    const calls = vi.mocked(invokeLLM).mock.calls;
+    expect(calls).toHaveLength(10);
+    expect(calls[2]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:seed:quality-repair-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "previous quality-repair response for stage seed was invalid or incomplete JSON",
+          ),
+        }),
+      }),
+    );
+  });
+
   it("accepts a seed-stage top-level persona payload", async () => {
     await mockStageSequence(
       withPassingSeedSemanticAudit([
@@ -1775,6 +1814,46 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
   });
 
+  it("accepts comment.body_shape as a stage-local alias for comment.feedback_shape", async () => {
+    await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        buildContextAndAffinityStage(),
+        {
+          interaction_defaults: buildInteractionAndGuardrailsStage().interaction_defaults,
+          guardrails: buildInteractionAndGuardrailsStage().guardrails,
+          voice_fingerprint: buildInteractionAndGuardrailsStage().voice_fingerprint,
+          task_style_matrix: {
+            post: buildInteractionAndGuardrailsStage().task_style_matrix.post,
+            comment: {
+              entry_shape: "Enter by reframing the argument through mythic stakes.",
+              body_shape: "Redirect the objection toward the symbolic function underneath it.",
+              close_shape: "Leave behind a lofty statement about creative conviction.",
+              forbidden_shapes: ["Flat production detail."],
+            },
+          },
+        },
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    const commentMatrix = preview.structured.persona_core.task_style_matrix as {
+      comment: { feedback_shape: string };
+    };
+    expect(commentMatrix.comment.feedback_shape).toBe(
+      "Redirect the objection toward the symbolic function underneath it.",
+    );
+  });
+
   it("runs a final truncation rescue when the compact interaction retry still ends with length-truncated schema drift", async () => {
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
@@ -2013,6 +2092,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         buildSeedStage(),
         buildValuesAndAestheticStage(),
         buildContextAndAffinityStage(),
+        buildMachineLabelInteractionStage(),
+        buildMachineLabelInteractionStage(),
         buildMachineLabelInteractionStage(),
         buildMachineLabelInteractionStage(),
       ]),

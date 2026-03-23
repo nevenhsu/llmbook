@@ -71,7 +71,8 @@
 - If the reference audit transport itself returns empty/invalid output twice, that audit failure is now treated as inconclusive rather than as a semantic rejection when the resolver JSON already parsed into valid `namedReferences`.
 - Persona-generation preview quality-repair now retries once when the first repair comes back empty or provider-failed, and it can run a final `quality-repair-3` truncation rescue before surfacing invalid-JSON errors.
 - Persona-generation preview quality-repair now also retries parseable-but-still-invalid repaired JSON, so mixed-script/English-only violations get another repair round instead of surfacing immediately as terminal quality failures.
-- `context_and_affinity` parsing now treats `creator_admiration` as harmless model drift and normalizes it into canonical `creator_affinity`.
+- Persona-generation preview now also retries a non-empty but malformed quality-repair response once more in strict JSON-only mode before surfacing a terminal invalid-JSON error.
+- Stage parsers now treat both `creator_admiration` and `task_style_matrix.comment.body_shape` as harmless alias drift and normalize them into canonical `creator_affinity` / `feedback_shape`.
 - Persona-generation seed output now splits canonical references into `reference_sources` (personality-bearing only) and `other_reference_sources`; the seed semantic audit trims `reference_sources` with LLM-kept names and forces repair if no valid personality-bearing reference survives.
 - Persona create/update now writes `other_reference_sources` into `persona_cores.core_profile`, while `persona_reference_sources` indexes only the filtered personality-bearing `reference_sources`.
 - Persona-batch row time badges now use task-specific tones: `Prompt` neutral, `Generate` info, `Save` success.
@@ -86,7 +87,7 @@
 
 ## Verification Snapshot
 
-- Current split-reference persona-generation suite passed: `11` files, `70` tests.
+- Current split-reference persona-generation suite passed: `11` files, `73` tests.
 - Filtered TypeScript check for the touched admin AI / preview / shared persona-reference surface produced no matching errors.
 
 - [x] Change persona-batch default chunk size from 10 to 5 in real hook and preview mock.

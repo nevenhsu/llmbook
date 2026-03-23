@@ -659,6 +659,7 @@ function parsePersonaTaskStyleMatrix(
   const root = requirePersonaRecord(value, fieldPath);
   const post = requirePersonaRecord(root.post, `${fieldPath}.post`);
   const comment = requirePersonaRecord(root.comment, `${fieldPath}.comment`);
+  const commentFeedbackShape = comment.feedback_shape ?? comment.body_shape;
   return {
     ...root,
     post: {
@@ -675,7 +676,7 @@ function parsePersonaTaskStyleMatrix(
       ...comment,
       entry_shape: requirePersonaText(comment.entry_shape, `${fieldPath}.comment.entry_shape`),
       feedback_shape: requirePersonaText(
-        comment.feedback_shape,
+        commentFeedbackShape,
         `${fieldPath}.comment.feedback_shape`,
       ),
       close_shape: requirePersonaText(comment.close_shape, `${fieldPath}.comment.close_shape`),
