@@ -2,6 +2,9 @@
 
 ## Active
 
+- [x] Split persona-generation references into `reference_sources` (personality-bearing only) and `other_reference_sources` (non-personality references) across prompts, parsers, mocks, UI previews, and docs.
+- [x] Make the seed-stage semantic audit use LLM output to keep only personality-bearing `reference_sources`, trigger repair if none remain, and stop storing non-personality references in `persona_reference_sources`.
+- [x] Update create/update save payloads, admin persona routes, and stored `persona_cores.core_profile` writes to carry `other_reference_sources` while indexing only `reference_sources`.
 - [x] Replace prompt-assist internal `{ text, namedReferences }` rewrite output with a two-stage flow: reference JSON resolution first, text-only rewrite second.
 - [x] Make prompt-assist audit/repair operate only on the reference JSON stage, then assemble the final public text by appending a fixed trailing reference suffix in app code.
 - [x] Update prompt-assist tests/docs and remove stale wording about the old combined structured rewrite contract.
@@ -45,6 +48,7 @@
 - [x] Replace prompt-assist regex reference gating with LLM audit/repair for final explicit-reference validation.
 - [x] Add compact retry for length-truncated prompt-assist reference-resolution repairs and stop empty audit transport failures from rejecting already-valid namedReferences JSON.
 - [x] Make persona-generation preview quality repair retry on empty/provider-error outputs, add a final quality-repair truncation rescue, and tolerate `creator_admiration` as stage-local context alias drift.
+- [x] Let persona-generation preview run another quality-repair round when the previous repair is valid JSON but still fails deterministic quality checks like English-only enforcement.
 - [x] Refine persona-batch bulk UX so row time badges are task-colored, resume recomputes current eligible rows, and bulk actions auto-loop until no eligible rows remain or progress stops.
 - [x] Add persona-batch auto-next-step bulk sequencing, wire it through the real page plus preview sandbox, and keep the stop condition phrased as a single rule: stop when the eligible set no longer shrinks.
 
@@ -66,7 +70,10 @@
 - If prompt-assist reference-resolution repair comes back empty with `finishReason=length`, the service now runs one smaller compact retry before surfacing `prompt_assist_repair_output_empty`.
 - If the reference audit transport itself returns empty/invalid output twice, that audit failure is now treated as inconclusive rather than as a semantic rejection when the resolver JSON already parsed into valid `namedReferences`.
 - Persona-generation preview quality-repair now retries once when the first repair comes back empty or provider-failed, and it can run a final `quality-repair-3` truncation rescue before surfacing invalid-JSON errors.
+- Persona-generation preview quality-repair now also retries parseable-but-still-invalid repaired JSON, so mixed-script/English-only violations get another repair round instead of surfacing immediately as terminal quality failures.
 - `context_and_affinity` parsing now treats `creator_admiration` as harmless model drift and normalizes it into canonical `creator_affinity`.
+- Persona-generation seed output now splits canonical references into `reference_sources` (personality-bearing only) and `other_reference_sources`; the seed semantic audit trims `reference_sources` with LLM-kept names and forces repair if no valid personality-bearing reference survives.
+- Persona create/update now writes `other_reference_sources` into `persona_cores.core_profile`, while `persona_reference_sources` indexes only the filtered personality-bearing `reference_sources`.
 - Persona-batch row time badges now use task-specific tones: `Prompt` neutral, `Generate` info, `Save` success.
 - Persona-batch bulk actions now recompute eligible rows on resume instead of replaying a stale paused order, and they auto-run additional rounds while the eligible set keeps shrinking.
 - Persona-batch now supports an `Auto next step` header toggle in admin and preview: after `Prompt` finishes it can chain into `Generate`, then `Save`, while still stopping once the eligible set stops shrinking.
@@ -79,14 +86,8 @@
 
 ## Verification Snapshot
 
-- Focused admin AI store/route suite passed: `11` files, `75` tests.
-- Focused admin UI/admin preview suite passed: `7` files, `49` tests.
-- Focused persona-batch suite passed:
-  - shared modal tests
-  - batch queue test
-  - batch hook test
-  - batch table/page/preview tests
-- Filtered TypeScript check for the touched admin AI surface produced no matching errors.
+- Current split-reference persona-generation suite passed: `11` files, `70` tests.
+- Filtered TypeScript check for the touched admin AI / preview / shared persona-reference surface produced no matching errors.
 
 - [x] Change persona-batch default chunk size from 10 to 5 in real hook and preview mock.
 - [x] Update focused persona-batch tests for the new default.

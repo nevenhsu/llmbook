@@ -119,6 +119,7 @@ export type PreviewResult = {
 
 export type PersonaGenerationSemanticAuditResult = {
   passes: boolean;
+  keptReferenceNames?: string[];
   issues: string[];
   repairGuidance: string[];
 };
@@ -228,6 +229,11 @@ export type PersonaGenerationStructured = {
     type: string;
     contribution: string[];
   }>;
+  other_reference_sources: Array<{
+    name: string;
+    type: string;
+    contribution: string[];
+  }>;
   reference_derivation: string[];
   originalization_note: string;
   persona_memories: Array<{
@@ -264,6 +270,7 @@ export type PersonaGenerationSeedStage = {
   persona: PersonaGenerationStructured["persona"];
   identity_summary: Record<string, unknown>;
   reference_sources: PersonaGenerationStructured["reference_sources"];
+  other_reference_sources: PersonaGenerationStructured["other_reference_sources"];
   reference_derivation: string[];
   originalization_note: string;
 };

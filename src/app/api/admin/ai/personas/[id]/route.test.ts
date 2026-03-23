@@ -121,6 +121,13 @@ describe("/api/admin/ai/personas/[id]", () => {
             contribution: ["corporate paranoia"],
           },
         ],
+        otherReferenceSources: [
+          {
+            name: "legal thriller cadence",
+            type: "genre_signal",
+            contribution: ["Suspicion-heavy pacing."],
+          },
+        ],
         referenceDerivation: ["Derived from legal thriller cadence."],
         originalizationNote: "Original critic persona, not a clone.",
         personaMemories: [
@@ -175,6 +182,13 @@ describe("/api/admin/ai/personas/[id]", () => {
           name: "John Grisham",
           type: "author",
           contribution: ["corporate paranoia"],
+        },
+      ],
+      otherReferenceSources: [
+        {
+          name: "legal thriller cadence",
+          type: "genre_signal",
+          contribution: ["Suspicion-heavy pacing."],
         },
       ],
       referenceDerivation: ["Derived from legal thriller cadence."],

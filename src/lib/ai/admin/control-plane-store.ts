@@ -1260,6 +1260,7 @@ export class AdminAiControlPlaneStore {
     persona: PersonaGenerationStructured["persona"];
     personaCore: Record<string, unknown>;
     referenceSources: PersonaGenerationStructured["reference_sources"];
+    otherReferenceSources: PersonaGenerationStructured["other_reference_sources"];
     referenceDerivation: string[];
     originalizationNote: string;
     personaMemories?: Array<{
@@ -1301,6 +1302,7 @@ export class AdminAiControlPlaneStore {
         core_profile: {
           ...canonicalPersonaCore,
           reference_sources: input.referenceSources,
+          other_reference_sources: input.otherReferenceSources,
           reference_derivation: input.referenceDerivation,
           originalization_note: input.originalizationNote,
         },
@@ -1449,6 +1451,7 @@ export class AdminAiControlPlaneStore {
     bio?: string;
     personaCore?: Record<string, unknown>;
     referenceSources?: PersonaGenerationStructured["reference_sources"];
+    otherReferenceSources?: PersonaGenerationStructured["other_reference_sources"];
     referenceDerivation?: string[];
     originalizationNote?: string;
     personaMemories?: Array<{
@@ -1499,6 +1502,7 @@ export class AdminAiControlPlaneStore {
     const hasCanonicalCoreUpdate =
       input.personaCore !== undefined ||
       input.referenceSources !== undefined ||
+      input.otherReferenceSources !== undefined ||
       input.referenceDerivation !== undefined ||
       input.originalizationNote !== undefined;
 
@@ -1512,6 +1516,9 @@ export class AdminAiControlPlaneStore {
       if (!input.referenceDerivation) {
         throw new Error("referenceDerivation is required when updating canonical persona data");
       }
+      if (!input.otherReferenceSources) {
+        throw new Error("otherReferenceSources is required when updating canonical persona data");
+      }
       if (input.originalizationNote === undefined) {
         throw new Error("originalizationNote is required when updating canonical persona data");
       }
@@ -1522,6 +1529,7 @@ export class AdminAiControlPlaneStore {
           core_profile: {
             ...canonicalPersonaCore,
             reference_sources: input.referenceSources,
+            other_reference_sources: input.otherReferenceSources,
             reference_derivation: input.referenceDerivation,
             originalization_note: input.originalizationNote,
           },

@@ -16,6 +16,7 @@ type PersonaSavePayloadBase = {
   bio: string;
   personaCore: Record<string, unknown>;
   referenceSources: PersonaGenerationStructured["reference_sources"];
+  otherReferenceSources: PersonaGenerationStructured["other_reference_sources"];
   referenceDerivation: string[];
   originalizationNote: string;
   personaMemories: PersonaMemoryApiPayload[];
@@ -65,6 +66,7 @@ function buildPersonaSavePayloadBase(input: {
     bio: input.structured.persona.bio,
     personaCore: input.structured.persona_core,
     referenceSources: input.structured.reference_sources,
+    otherReferenceSources: input.structured.other_reference_sources,
     referenceDerivation: input.structured.reference_derivation,
     originalizationNote: input.structured.originalization_note,
     personaMemories: mapStructuredPersonaMemoriesToApiMemories(input.structured.persona_memories, {

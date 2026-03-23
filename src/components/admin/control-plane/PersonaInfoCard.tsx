@@ -17,6 +17,9 @@ export function PersonaInfoCard({ persona, profile, testIdPrefix = "selected-per
   const referenceDerivation = Array.isArray(profile?.personaCore?.reference_derivation)
     ? (profile?.personaCore.reference_derivation as string[])
     : [];
+  const otherReferenceSources = Array.isArray(profile?.personaCore?.other_reference_sources)
+    ? (profile?.personaCore.other_reference_sources as Array<Record<string, unknown>>)
+    : [];
   const copyPayload = JSON.stringify(
     {
       persona: {
@@ -27,6 +30,7 @@ export function PersonaInfoCard({ persona, profile, testIdPrefix = "selected-per
         status: profile?.persona.status ?? null,
       },
       reference_sources: referenceSources,
+      other_reference_sources: otherReferenceSources,
       reference_derivation: referenceDerivation,
     },
     null,

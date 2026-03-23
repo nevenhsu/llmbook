@@ -74,6 +74,13 @@ function buildProfile(): PersonaProfile {
           contribution: ["Impulsive crew-first energy"],
         },
       ],
+      other_reference_sources: [
+        {
+          name: "pirate crew loyalty",
+          type: "group_dynamic",
+          contribution: ["Crew-as-family logic."],
+        },
+      ],
       reference_derivation: ["Crew loyalty over credentials"],
       originalization_note: "note",
     },
@@ -105,6 +112,7 @@ function buildPreview(): PreviewResult & { structured: PersonaGenerationStructur
       },
       persona_core: {},
       reference_sources: [],
+      other_reference_sources: [],
       reference_derivation: [],
       originalization_note: "note",
       persona_memories: [],

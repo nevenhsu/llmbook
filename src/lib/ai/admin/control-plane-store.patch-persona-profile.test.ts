@@ -133,6 +133,13 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
           contribution: ["Impulsive crew-first energy"],
         },
       ],
+      otherReferenceSources: [
+        {
+          name: "pirate crew loyalty",
+          type: "group_dynamic",
+          contribution: ["Crew-as-family emotional logic."],
+        },
+      ],
       referenceDerivation: ["Impulsive first-reaction posting style"],
       originalizationNote: "Reference-inspired, not reference-cosplay.",
     });
@@ -141,6 +148,13 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
     expect(personaCoresUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         persona_id: "persona-1",
+        core_profile: expect.objectContaining({
+          other_reference_sources: [
+            expect.objectContaining({
+              name: "pirate crew loyalty",
+            }),
+          ],
+        }),
       }),
       expect.objectContaining({
         onConflict: "persona_id",
@@ -258,6 +272,13 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
           contribution: ["Hard-sf scale"],
         },
       ],
+      otherReferenceSources: [
+        {
+          name: "dark forest theory",
+          type: "concept",
+          contribution: ["Cosmic paranoia under scarcity."],
+        },
+      ],
       referenceDerivation: [],
       originalizationNote: "Reference-inspired, not reference-cosplay.",
       personaMemories: [],
@@ -276,6 +297,18 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
         match_key: "liucixin",
       }),
     ]);
+    expect(personaCoresUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        core_profile: expect.objectContaining({
+          other_reference_sources: [
+            expect.objectContaining({
+              name: "dark forest theory",
+            }),
+          ],
+        }),
+      }),
+      expect.any(Object),
+    );
     expect(referenceDeleteEq).toHaveBeenCalledWith("persona_id", "persona-1");
   });
 });

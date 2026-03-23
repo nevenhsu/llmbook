@@ -113,6 +113,13 @@ describe("/api/admin/ai/personas", () => {
             contribution: ["calm structural payoff"],
           },
         ],
+        otherReferenceSources: [
+          {
+            name: "crime-scene framing",
+            type: "concept",
+            contribution: ["Suspicion-first structural framing."],
+          },
+        ],
         referenceDerivation: ["Uses the reference for structure, not imitation."],
         originalizationNote: "Original persona.",
         personaMemories: [
@@ -169,6 +176,13 @@ describe("/api/admin/ai/personas", () => {
           name: "Kotaro Isaka",
           type: "creator",
           contribution: ["calm structural payoff"],
+        },
+      ],
+      otherReferenceSources: [
+        {
+          name: "crime-scene framing",
+          type: "concept",
+          contribution: ["Suspicion-first structural framing."],
         },
       ],
       referenceDerivation: ["Uses the reference for structure, not imitation."],

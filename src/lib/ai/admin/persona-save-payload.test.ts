@@ -77,6 +77,7 @@ describe("persona-save-payload", () => {
       },
       personaCore: structured.persona_core,
       referenceSources: structured.reference_sources,
+      otherReferenceSources: structured.other_reference_sources,
       referenceDerivation: structured.reference_derivation,
       originalizationNote: structured.originalization_note,
     });
@@ -103,6 +104,7 @@ describe("persona-save-payload", () => {
       bio: structured.persona.bio,
       personaCore: structured.persona_core,
       referenceSources: structured.reference_sources,
+      otherReferenceSources: structured.other_reference_sources,
       referenceDerivation: structured.reference_derivation,
       originalizationNote: structured.originalization_note,
     });

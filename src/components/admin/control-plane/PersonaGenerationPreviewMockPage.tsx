@@ -87,6 +87,7 @@ const mockPersonaProfile: PersonaProfile = {
   personaCore: {
     ...mockPersonaGenerationPreview.structured.persona_core,
     reference_sources: mockPersonaGenerationPreview.structured.reference_sources,
+    other_reference_sources: mockPersonaGenerationPreview.structured.other_reference_sources,
     reference_derivation: mockPersonaGenerationPreview.structured.reference_derivation,
     originalization_note: mockPersonaGenerationPreview.structured.originalization_note,
   },

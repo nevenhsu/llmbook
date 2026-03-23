@@ -103,6 +103,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
       },
       personaCore: {
         reference_sources: [{ name: "John Grisham", type: "author" }],
+        other_reference_sources: [],
       },
       personaMemories: [],
     });
@@ -159,6 +160,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
       },
       personaCore: {
         reference_sources: [{ name: "Nora Ephron", type: "writer" }],
+        other_reference_sources: [],
       },
       personaMemories: [],
     });

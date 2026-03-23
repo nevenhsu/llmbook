@@ -102,6 +102,7 @@ function buildSeedStage() {
         contribution: ["connects scattered details into payoff"],
       },
     ],
+    other_reference_sources: [],
     reference_derivation: [
       "Uses the reference for structural taste rather than direct prose imitation.",
     ],
@@ -109,9 +110,22 @@ function buildSeedStage() {
   };
 }
 
-function buildPassingSeedSemanticAudit() {
+function buildPassingSeedSemanticAudit(input?: { keptReferenceNames?: string[] }) {
   return {
     passes: true,
+    ...(input?.keptReferenceNames ? { keptReferenceNames: input.keptReferenceNames } : {}),
+    issues: [],
+    repairGuidance: [],
+  };
+}
+
+function buildPassingSeedReferenceClassificationAudit(
+  referenceNames: string[],
+  input?: { keptReferenceNames?: string[] },
+) {
+  return {
+    passes: true,
+    keptReferenceNames: input?.keptReferenceNames ?? referenceNames,
     issues: [],
     repairGuidance: [],
   };
@@ -171,9 +185,48 @@ function buildReferenceCosplaySeedStage() {
         contribution: ["pirate culture and crew-as-family dynamics"],
       },
     ],
+    other_reference_sources: [],
     reference_derivation: ["Translated Luffy's verbal tics into forum-compatible表达"],
     originalization_note:
       "Persona designed for forum environments where anti-elitist pirate energy drives engagement.",
+  };
+}
+
+function buildSeedStageWithOtherReferences() {
+  return {
+    persona: {
+      display_name: "Joyful Tinkerer",
+      bio: "Veteran game designer who trusts prototype joy over abstract theory.",
+      status: "active",
+    },
+    identity_summary: {
+      archetype: "Play-first builder",
+      core_motivation: "Protect delight from over-designed process.",
+      one_sentence_identity:
+        "A hands-on design mentor who judges ideas by player delight before polish.",
+    },
+    reference_sources: [
+      {
+        name: "Shigeru Miyamoto",
+        type: "philosophical_influence",
+        contribution: ["Champion of intuitive play and everyday wonder."],
+      },
+      {
+        name: "prototyping philosophy",
+        type: "design_approach",
+        contribution: ["Messy prototypes reveal joy faster than abstract specs."],
+      },
+    ],
+    other_reference_sources: [
+      {
+        name: "player reaction focus",
+        type: "design_principle",
+        contribution: ["Moments of laughter and surprise matter more than polish."],
+      },
+    ],
+    reference_derivation: ["Turned play-first intuition into forum-native coaching voice."],
+    originalization_note:
+      "Built as a forum-native design mentor, not as direct roleplay of the references.",
   };
 }
 
@@ -214,11 +267,48 @@ function buildMachineLabelValuesStage() {
   };
 }
 
+function buildMixedScriptValuesAndAestheticStage() {
+  return {
+    values: {
+      value_hierarchy: [{ value: "clarity", priority: 1 }],
+      worldview: [
+        "People reveal themselves in how they defend weak ideas; these motivations穿越千年仍是政治的燃料.",
+      ],
+      judgment_style: "direct but fair",
+    },
+    aesthetic_profile: {
+      humor_preferences: ["dry wit with power's运作 in full view"],
+      narrative_preferences: ["clear conflict 他们呈现事件为一系列选择的后果"],
+      creative_preferences: ["specificity"],
+      disliked_patterns: ["generic praise"],
+      taste_boundaries: ["avoid any claim packaged as崇高 virtue"],
+    },
+  };
+}
+
 function buildContextAndAffinityStage() {
   return {
     lived_context: {
       familiar_scenes_of_life: ["forum critique threads"],
       personal_experience_flavors: ["editing drafts"],
+      cultural_contexts: ["internet discussion culture"],
+      topics_with_confident_grounding: ["story critique"],
+      topics_requiring_runtime_retrieval: ["time-sensitive references"],
+    },
+    creator_affinity: {
+      admired_creator_types: ["sharp structural critics"],
+      structural_preferences: ["clear payoff"],
+      detail_selection_habits: ["notice weak assumptions"],
+      creative_biases: ["prefer precision over warmth"],
+    },
+  };
+}
+
+function buildMixedScriptContextAndAffinityStage() {
+  return {
+    lived_context: {
+      familiar_scenes_of_life: ["forum critique threads"],
+      personal_experience_flavors: ["Tokyo studio hierarchy—表面的尊敬掩盖着创意的地下抵抗"],
       cultural_contexts: ["internet discussion culture"],
       topics_with_confident_grounding: ["story critique"],
       topics_requiring_runtime_retrieval: ["time-sensitive references"],
@@ -339,9 +429,58 @@ function mockStageResults(
   });
 }
 
+function buildPassingSeedAuditResults(
+  referenceNames: string[],
+  input?: {
+    keptReferenceNames?: string[];
+  },
+) {
+  return [
+    {
+      text: JSON.stringify(buildPassingSeedReferenceClassificationAudit(referenceNames, input)),
+    },
+    {
+      text: JSON.stringify(buildPassingSeedSemanticAudit()),
+    },
+  ];
+}
+
+function extractSeedReferenceNames(seedStage: unknown): string[] {
+  let candidate = seedStage;
+
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return [];
+    }
+  }
+
+  if (candidate && typeof candidate === "object" && "result" in candidate) {
+    candidate = (candidate as { result?: unknown }).result;
+  }
+
+  if (!candidate || typeof candidate !== "object") {
+    return [];
+  }
+
+  const referenceSources = (candidate as { reference_sources?: unknown }).reference_sources;
+  if (!Array.isArray(referenceSources)) {
+    return [];
+  }
+
+  return referenceSources
+    .map((item) =>
+      item && typeof item === "object" && "name" in item ? String(item.name ?? "") : "",
+    )
+    .filter(Boolean);
+}
+
 function withPassingSeedSemanticAudit(sequence: unknown[]) {
+  const referenceNames = extractSeedReferenceNames(sequence[0]);
   return [
     sequence[0],
+    buildPassingSeedReferenceClassificationAudit(referenceNames),
     buildPassingSeedSemanticAudit(),
     ...sequence.slice(1),
     buildPassingMemoriesSemanticAudit(),
@@ -445,7 +584,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(7);
+    expect(calls).toHaveLength(8);
     expect(calls[0]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:seed:attempt-1",
@@ -453,17 +592,25 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
     expect(calls[1]?.[0]).toEqual(
       expect.objectContaining({
-        entityId: "persona-generation-preview:model-1:seed:semantic-audit-1",
+        entityId:
+          "persona-generation-preview:model-1:seed:seed_reference_source_audit:semantic-audit-1",
       }),
     );
     expect(calls[2]?.[0]).toEqual(
       expect.objectContaining({
+        entityId:
+          "persona-generation-preview:model-1:seed:seed_originalization_audit:semantic-audit-1",
+      }),
+    );
+    expect(calls[3]?.[0]).toEqual(
+      expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:attempt-1",
       }),
     );
-    expect(calls[6]?.[0]).toEqual(
+    expect(calls[7]?.[0]).toEqual(
       expect.objectContaining({
-        entityId: "persona-generation-preview:model-1:memories:semantic-audit-1",
+        entityId:
+          "persona-generation-preview:model-1:memories:memories_originalization_audit:semantic-audit-1",
       }),
     );
   });
@@ -490,7 +637,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(preview.assembledPrompt).toContain('"persona": {');
     expect(preview.assembledPrompt).toContain('\n  "persona": {');
     expect(invokeLLM).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.objectContaining({
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
@@ -650,7 +797,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
   it("wraps seed-stage missing persona as a parse error with the original result attached", async () => {
     const missingPersonasRaw =
-      '{"identity_summary":{"archetype":"critic"},"reference_sources":[{"name":"Anthony Bourdain","type":"creator","contribution":["observational candor"]}],"reference_derivation":["Observational candor adapted into forum voice."],"originalization_note":"This persona is an original identity, not roleplay."}';
+      '{"identity_summary":{"archetype":"critic"},"reference_sources":[{"name":"Anthony Bourdain","type":"creator","contribution":["observational candor"]}],"other_reference_sources":[],"reference_derivation":["Observational candor adapted into forum voice."],"originalization_note":"This persona is an original identity, not roleplay."}';
     await mockStageSequence([missingPersonasRaw, missingPersonasRaw, missingPersonasRaw]);
 
     const store = new AdminAiControlPlaneStore();
@@ -673,7 +820,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("uses a truncation-aware repair prompt when a stage response is cut off by length", async () => {
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildValuesAndAestheticStage()) },
       { text: JSON.stringify(buildContextAndAffinityStage()) },
       {
@@ -696,7 +843,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(preview.structured.persona_core.voice_fingerprint).toEqual(
       buildInteractionAndGuardrailsStage().voice_fingerprint,
     );
-    expect(vi.mocked(invokeLLM).mock.calls[5]?.[0]).toEqual(
+    expect(vi.mocked(invokeLLM).mock.calls[6]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-2",
         modelInput: expect.objectContaining({
@@ -704,7 +851,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       }),
     );
-    expect(String(vi.mocked(invokeLLM).mock.calls[5]?.[0]?.modelInput?.prompt ?? "")).toContain(
+    expect(String(vi.mocked(invokeLLM).mock.calls[6]?.[0]?.modelInput?.prompt ?? "")).toContain(
       "Keep voice_fingerprint.closing_move as one short string, not an array.",
     );
   });
@@ -713,7 +860,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     const truncatedInteraction = `{"interaction_defaults":{"default_stance":"Enters discussions as an unyielding force","discussion_strengths":["Shatters surface-level reasoning"],"friction_triggers":["Surface analyses"],"non_generic_traits":["Fuses artistic deconstruction with imperial presence"]},"guardrails":{"hard_no":["Never engages with shallow arguments"],"deescalation_style":"Withdraws presence entirely rather than descend to shallow bickering."},"voice_fingerprint":{"opening_move":"I find your lack of depth disturbing","metaphor_domains":["Artistic revelation","Imperial command"],"attack_style":"Dismantles with cold precision.","praise_style":"The Force is strong with this one.","closing_move":["Leaves the shattered geometry visible"],"forbidden_shapes":["Safe conventional takes"]},"task_style_matrix":{"post":{"entry_shape":"Commands immediate attention","body_shape":"Deconstructs the subject","close_shape":"Asserts the multidimensional truth","forbidden_shapes":["Recycling accepted conclusions"]},"comment":{"entry_shape":"Cuts straight to the hidden angle","feedback_shape":"Reveals the fracture line","close_shape":"Leaves the weakness exposed","forbidden_shapes":["Soft consensus"]}`;
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildValuesAndAestheticStage()) },
       { text: JSON.stringify(buildContextAndAffinityStage()) },
       {
@@ -733,7 +880,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       extraPrompt: "Make the persona opinionated.",
     });
 
-    const repairPrompt = String(vi.mocked(invokeLLM).mock.calls[5]?.[0]?.modelInput?.prompt ?? "");
+    const repairPrompt = String(vi.mocked(invokeLLM).mock.calls[6]?.[0]?.modelInput?.prompt ?? "");
     expect(repairPrompt).toContain("[previous_truncated_output]");
     expect(repairPrompt).toContain(`"opening_move":"I find your lack of depth disturbing"`);
     expect(repairPrompt).toContain("Do not continue token-by-token.");
@@ -744,7 +891,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     const secondTruncatedInteraction = `{"interaction_defaults":{"default_stance":"Short blunt entry.","discussion_strengths":["Expose weak framing"],"friction_triggers":["Consensus fog"],"non_generic_traits":["Cuts to the hidden angle fast"]},"guardrails":{"hard_no":["Empty swagger"],"deescalation_style":"Leaves once the point is obvious."},"voice_fingerprint":{"opening_move":"Depth first.","metaphor_domains":["fractured canvas"],"attack_style":"Calm, cold dismantling.","praise_style":"Rare gravitational respect.","closing_move":"Leaves the fracture visible.","forbidden_shapes":["soft balance"]},"task_style_matrix":{"post":{"entry_shape":"Name the deception early","body_shape":"Break the claim apart"}`;
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildValuesAndAestheticStage()) },
       { text: JSON.stringify(buildContextAndAffinityStage()) },
       {
@@ -769,7 +916,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     const compactRepairPrompt = String(
-      vi.mocked(invokeLLM).mock.calls[6]?.[0]?.modelInput?.prompt ?? "",
+      vi.mocked(invokeLLM).mock.calls[7]?.[0]?.modelInput?.prompt ?? "",
     );
     expect(compactRepairPrompt).toContain("[previous_truncated_output]");
     expect(compactRepairPrompt).toContain(`"default_stance":"Short blunt entry."`);
@@ -782,6 +929,9 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     const invokeLLM = await mockStageSequence([
       buildReferenceCosplaySeedStage(),
       buildSeedStage(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStage().reference_sources.map((item) => item.name),
+      ),
       buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
@@ -800,7 +950,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
     expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(8);
+    expect(calls).toHaveLength(9);
     expect(calls[1]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:seed:quality-repair-1",
@@ -832,6 +982,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
               contribution: ["Observational candor and lived-detail framing."],
             },
           ],
+          other_reference_sources: [],
           reference_derivation: ["Turned observational candor into forum-native voice."],
           originalization_note: "Built as a forum-native critic, not literal roleplay.",
         }),
@@ -874,6 +1025,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           contribution: ["Observational candor and lived-detail framing."],
         },
       ],
+      other_reference_sources: [],
       reference_derivation: ["Turned observational candor into forum-native voice."],
       originalization_note: "Built as a forum-native critic, not literal roleplay.",
     });
@@ -915,6 +1067,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
                 contribution: ["connects scattered details into payoff"],
               },
             ],
+            other_reference_sources: [],
             reference_derivation: [
               "Uses the reference for structural taste rather than direct prose imitation.",
             ],
@@ -997,6 +1150,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
             contribution: ["commanding presence 轉化為壓迫性的討論氣場。"],
           },
         ],
+        other_reference_sources: [],
         reference_derivation: [
           "Cubist deconstruction → 將對象解構為多視角並置的分析方法",
           "Empire's rejection of weakness → 對邏輯脆弱性的不接受",
@@ -1005,6 +1159,9 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           "此人格並非直接扮演任何角色，而是萃取其核心特質並轉化為論壇上的原創身份。Picasso與Vader的特質只作為靈感來源，最後呈現的是論壇原生的批評者形象。",
       }),
       buildSeedStage(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStage().reference_sources.map((item) => item.name),
+      ),
       buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
@@ -1023,7 +1180,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     expect(preview.structured.persona.display_name).toBe("AI Critic");
-    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(8);
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(9);
     expect(
       vi
         .mocked(invokeLLM)
@@ -1050,16 +1207,17 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           },
           reference_sources: [
             {
-              name: "三體",
-              type: "work",
+              name: "劉慈欣",
+              type: "author",
               contribution: ["Cold scale and existential pressure."],
             },
           ],
+          other_reference_sources: [],
           reference_derivation: [
-            "Takes the scale and dread of 三體 as a tonal reference without copying its plot or characters.",
+            "Takes the scale and dread associated with 劉慈欣 into an English forum voice without copying plot or canon world details.",
           ],
           originalization_note:
-            "This persona is an original identity, not literal roleplay. It adapts the scale associated with 三體 into an English forum voice built around pressure, scrutiny, and restraint.",
+            "This persona is an original identity, not literal roleplay. It adapts the scale associated with 劉慈欣 into an English forum voice built around pressure, scrutiny, and restraint.",
         }),
         buildValuesAndAestheticStage(),
         buildContextAndAffinityStage(),
@@ -1077,7 +1235,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     expect(preview.structured.persona.display_name).toBe("Signal Cut");
-    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(7);
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(8);
     expect(
       vi
         .mocked(invokeLLM)
@@ -1089,7 +1247,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       vi
         .mocked(invokeLLM)
         .mock.calls.some((call) =>
-          String(call[0]?.entityId ?? "").includes("seed:semantic-audit-1"),
+          String(call[0]?.entityId ?? "").includes("seed_reference_source_audit:semantic-audit-1"),
         ),
     ).toBe(true);
   });
@@ -1126,6 +1284,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
               ],
             },
           ],
+          other_reference_sources: [],
           reference_derivation: [
             "The analytical precision of an artist who sees beneath surface presentation to structural truth",
             "The commanding weight of presence that doesn't need to raise its voice because the space itself responds",
@@ -1150,7 +1309,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     expect(preview.structured.persona.display_name).toBe("Cataract");
-    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(7);
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(8);
     expect(
       vi
         .mocked(invokeLLM)
@@ -1162,7 +1321,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       vi
         .mocked(invokeLLM)
         .mock.calls.some((call) =>
-          String(call[0]?.entityId ?? "").includes("seed:semantic-audit-1"),
+          String(call[0]?.entityId ?? "").includes("seed_originalization_audit:semantic-audit-1"),
         ),
     ).toBe(true);
   });
@@ -1195,6 +1354,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
               contribution: ["Commanding presence that shifts dynamics of any room without volume"],
             },
           ],
+          other_reference_sources: [],
           reference_derivation: [
             "Extracted Picasso's deconstructive methodology without borrowing his artistic persona.",
             "Drew from Vader's commanding presence without borrowing domination or villainy.",
@@ -1219,7 +1379,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     expect(preview.structured.persona.display_name).toBe("Apex Construct");
-    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(7);
+    expect(vi.mocked(invokeLLM).mock.calls).toHaveLength(8);
     expect(
       vi
         .mocked(invokeLLM)
@@ -1231,7 +1391,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       vi
         .mocked(invokeLLM)
         .mock.calls.some((call) =>
-          String(call[0]?.entityId ?? "").includes("seed:semantic-audit-1"),
+          String(call[0]?.entityId ?? "").includes("seed_originalization_audit:semantic-audit-1"),
         ),
     ).toBe(true);
   });
@@ -1262,6 +1422,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
             contribution: ["Applies pressure through control and certainty."],
           },
         ],
+        other_reference_sources: [],
         reference_derivation: [
           "Takes structural deconstruction from Picasso.",
           "Takes pressure and command from Vader.",
@@ -1269,10 +1430,14 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         originalization_note:
           "This persona is original and adapted from the references, but it keeps the same role and simply moves that energy into forum form.",
       }),
+      buildPassingSeedReferenceClassificationAudit(["Pablo Picasso", "Darth Vader"]),
       buildFailingSeedSemanticAudit(
         "originalization_note still reads like a direct forum transfer of the references instead of a newly adapted persona identity.",
       ),
       buildSeedStage(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStage().reference_sources.map((item) => item.name),
+      ),
       buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
@@ -1292,13 +1457,20 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
     expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(9);
+    expect(calls).toHaveLength(11);
     expect(calls[1]?.[0]).toEqual(
       expect.objectContaining({
-        entityId: "persona-generation-preview:model-1:seed:semantic-audit-1",
+        entityId:
+          "persona-generation-preview:model-1:seed:seed_reference_source_audit:semantic-audit-1",
       }),
     );
     expect(calls[2]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId:
+          "persona-generation-preview:model-1:seed:seed_originalization_audit:semantic-audit-1",
+      }),
+    );
+    expect(calls[3]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:seed:quality-repair-1",
         modelInput: expect.objectContaining({
@@ -1308,6 +1480,46 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       }),
     );
+  });
+
+  it("keeps only the personality-bearing reference_sources after the seed semantic audit and preserves other_reference_sources", async () => {
+    await mockStageSequence([
+      buildSeedStageWithOtherReferences(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStageWithOtherReferences().reference_sources.map((item) => item.name),
+        {
+          keptReferenceNames: ["Shigeru Miyamoto"],
+        },
+      ),
+      buildPassingSeedSemanticAudit({
+        keptReferenceNames: ["Shigeru Miyamoto"],
+      }),
+      buildValuesAndAestheticStage(),
+      buildContextAndAffinityStage(),
+      buildInteractionAndGuardrailsStage(),
+      buildMemoriesStage(),
+      buildPassingMemoriesSemanticAudit(),
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt:
+        "Generate a game-design mentor persona inspired by Shigeru Miyamoto, prototyping philosophy, and player reaction focus.",
+    });
+
+    expect(preview.structured.reference_sources).toEqual([
+      expect.objectContaining({
+        name: "Shigeru Miyamoto",
+      }),
+    ]);
+    expect(preview.structured.other_reference_sources).toEqual([
+      expect.objectContaining({
+        name: "player reaction focus",
+      }),
+    ]);
   });
 
   it("keeps staged preview pinned to the selected model but disables provider retries for low-latency preview runs", async () => {
@@ -1389,14 +1601,14 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
     expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(8);
+    expect(calls).toHaveLength(9);
     expect(
       calls.filter(
         (call) =>
           typeof call[0]?.entityId === "string" && call[0].entityId.includes(":seed:attempt-1"),
       ),
     ).toHaveLength(1);
-    expect(calls[3]?.[0]).toEqual(
+    expect(calls[4]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:attempt-2",
         modelInput: expect.objectContaining({
@@ -1432,8 +1644,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
     expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(9);
-    expect(calls[4]?.[0]).toEqual(
+    expect(calls).toHaveLength(10);
+    expect(calls[5]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:attempt-3",
         modelInput: expect.objectContaining({
@@ -1451,7 +1663,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       '{"values":{"value_hierarchy":[{"value":"Genuine compassion for human suffering","priority":1}],"worldview":["True wisdom emerges from ruthless conscience"],"judgment_style":"earnest moral scrutiny"},"aesthetic_profile":{"humor_preferences":["grave irony"],"narrative_preferences":["long moral examination"]';
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildMachineLabelValuesStage()) },
       {
         text: truncatedQualityRepair,
@@ -1474,7 +1686,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
     expect(preview.structured.persona_core.values).toEqual(buildValuesAndAestheticStage().values);
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls[3]?.[0]).toEqual(
+    expect(calls[4]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-1",
         modelInput: expect.objectContaining({
@@ -1482,7 +1694,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       }),
     );
-    expect(calls[4]?.[0]).toEqual(
+    expect(calls[5]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-2",
         modelInput: expect.objectContaining({
@@ -1517,8 +1729,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
 
     expect(preview.structured.persona.display_name).toBe("AI Critic");
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(8);
-    expect(calls[5]?.[0]).toEqual(
+    expect(calls).toHaveLength(9);
+    expect(calls[6]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-2",
         modelInput: expect.objectContaining({
@@ -1556,7 +1768,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(preview.structured.persona_core.creator_affinity).toEqual(
       buildContextAndAffinityStage().creator_affinity,
     );
-    expect(vi.mocked(invokeLLM).mock.calls[4]?.[0]).toEqual(
+    expect(vi.mocked(invokeLLM).mock.calls[5]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-1",
       }),
@@ -1566,7 +1778,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("runs a final truncation rescue when the compact interaction retry still ends with length-truncated schema drift", async () => {
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildValuesAndAestheticStage()) },
       { text: JSON.stringify(buildContextAndAffinityStage()) },
       {
@@ -1598,7 +1810,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       buildInteractionAndGuardrailsStage().voice_fingerprint,
     );
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls[7]?.[0]).toEqual(
+    expect(calls[8]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-4",
         modelInput: expect.objectContaining({
@@ -1635,8 +1847,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       opening_move: "Lead with suspicion, not neutral setup.",
     });
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(8);
-    expect(calls[5]?.[0]).toEqual(
+    expect(calls).toHaveLength(9);
+    expect(calls[6]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:quality-repair-1",
         modelInput: expect.objectContaining({
@@ -1650,7 +1862,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("runs a final quality-repair truncation rescue when interaction quality-repair-2 is still length-truncated", async () => {
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildValuesAndAestheticStage()) },
       { text: JSON.stringify(buildContextAndAffinityStage()) },
       { text: JSON.stringify(buildMachineLabelInteractionStage()) },
@@ -1678,7 +1890,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(preview.structured.persona_core.voice_fingerprint).toEqual(
       buildInteractionAndGuardrailsStage().voice_fingerprint,
     );
-    expect(vi.mocked(invokeLLM).mock.calls[7]?.[0]).toEqual(
+    expect(vi.mocked(invokeLLM).mock.calls[8]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:interaction_and_guardrails:quality-repair-3",
         modelInput: expect.objectContaining({
@@ -1693,7 +1905,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("retries quality repair once when the first values-stage quality repair returns empty provider-error output", async () => {
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
-      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
       { text: JSON.stringify(buildMachineLabelValuesStage()) },
       {
         text: "",
@@ -1717,13 +1929,79 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     });
 
     expect(preview.structured.persona_core.values).toEqual(buildValuesAndAestheticStage().values);
-    expect(vi.mocked(invokeLLM).mock.calls[4]?.[0]).toEqual(
+    expect(vi.mocked(invokeLLM).mock.calls[5]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-2",
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
             "previous quality-repair response for stage values_and_aesthetic was empty or failed before returning JSON",
           ),
+        }),
+      }),
+    );
+  });
+
+  it("runs another values-stage quality repair when the first repaired JSON still contains English-only violations", async () => {
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
+      { text: JSON.stringify(buildMixedScriptValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildMixedScriptValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.values).toEqual(buildValuesAndAestheticStage().values);
+    expect(vi.mocked(invokeLLM).mock.calls[5]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("failed the quality contract"),
+        }),
+      }),
+    );
+  });
+
+  it("runs another context-and-affinity quality repair when the first repaired JSON still contains English-only violations", async () => {
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      ...buildPassingSeedAuditResults(buildSeedStage().reference_sources.map((item) => item.name)),
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildMixedScriptContextAndAffinityStage()) },
+      { text: JSON.stringify(buildMixedScriptContextAndAffinityStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.creator_affinity).toEqual(
+      buildContextAndAffinityStage().creator_affinity,
+    );
+    expect(vi.mocked(invokeLLM).mock.calls[6]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:context_and_affinity:quality-repair-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("failed the quality contract"),
         }),
       }),
     );
@@ -1759,7 +2037,12 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("fails with a typed quality error when seed-stage quality repair still returns reference cosplay", async () => {
-    await mockStageSequence([buildReferenceCosplaySeedStage(), buildReferenceCosplaySeedStage()]);
+    await mockStageSequence([
+      buildReferenceCosplaySeedStage(),
+      buildReferenceCosplaySeedStage(),
+      buildReferenceCosplaySeedStage(),
+      buildReferenceCosplaySeedStage(),
+    ]);
 
     const store = new AdminAiControlPlaneStore();
     vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
@@ -1782,6 +2065,9 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("runs a stage-local quality repair when persona_memories drift into literal reference roleplay", async () => {
     const invokeLLM = await mockStageSequence([
       buildSeedStage(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStage().reference_sources.map((item) => item.name),
+      ),
       buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
@@ -1806,8 +2092,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       "Has a long-running bias toward precision over hype.",
     );
     const calls = vi.mocked(invokeLLM).mock.calls;
-    expect(calls).toHaveLength(9);
-    expect(calls[7]?.[0]).toEqual(
+    expect(calls).toHaveLength(10);
+    expect(calls[8]?.[0]).toEqual(
       expect.objectContaining({
         entityId: "persona-generation-preview:model-1:memories:quality-repair-1",
         modelInput: expect.objectContaining({
@@ -1820,6 +2106,9 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   it("fails with a typed quality error when memories-stage quality repair still returns literal reference roleplay", async () => {
     await mockStageSequence([
       buildSeedStage(),
+      buildPassingSeedReferenceClassificationAudit(
+        buildSeedStage().reference_sources.map((item) => item.name),
+      ),
       buildPassingSeedSemanticAudit(),
       buildValuesAndAestheticStage(),
       buildContextAndAffinityStage(),
@@ -1827,6 +2116,14 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       buildReferenceCosplayMemoriesStage(),
       buildFailingMemoriesSemanticAudit(
         "persona_memories[0].content drifts into literal reference roleplay instead of a forum-native memory.",
+      ),
+      buildReferenceCosplayMemoriesStage(),
+      buildFailingMemoriesSemanticAudit(
+        "persona_memories[0].content still reads like literal reference roleplay after repair.",
+      ),
+      buildReferenceCosplayMemoriesStage(),
+      buildFailingMemoriesSemanticAudit(
+        "persona_memories[0].content still reads like literal reference roleplay after repair.",
       ),
       buildReferenceCosplayMemoriesStage(),
       buildFailingMemoriesSemanticAudit(

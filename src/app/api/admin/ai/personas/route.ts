@@ -30,6 +30,11 @@ export const POST = withAuth(async (req, { user }) => {
       type: string;
       contribution: string[];
     }>;
+    otherReferenceSources?: Array<{
+      name: string;
+      type: string;
+      contribution: string[];
+    }>;
     referenceDerivation?: string[];
     originalizationNote?: string;
     personaMemories?: Array<{
@@ -57,6 +62,7 @@ export const POST = withAuth(async (req, { user }) => {
     },
     personaCore: body.personaCore ?? {},
     referenceSources: body.referenceSources ?? [],
+    otherReferenceSources: body.otherReferenceSources ?? [],
     referenceDerivation: body.referenceDerivation ?? [],
     originalizationNote: body.originalizationNote ?? "",
     personaMemories: body.personaMemories ?? [],

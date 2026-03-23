@@ -36,6 +36,11 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
       type: string;
       contribution: string[];
     }>;
+    otherReferenceSources?: Array<{
+      name: string;
+      type: string;
+      contribution: string[];
+    }>;
     referenceDerivation?: string[];
     originalizationNote?: string;
     personaMemories?: Array<{
@@ -57,6 +62,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
     bio: body.bio,
     personaCore: body.personaCore,
     referenceSources: body.referenceSources,
+    otherReferenceSources: body.otherReferenceSources,
     referenceDerivation: body.referenceDerivation,
     originalizationNote: body.originalizationNote,
     personaMemories: body.personaMemories,

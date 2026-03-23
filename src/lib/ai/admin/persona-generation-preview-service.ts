@@ -158,7 +158,11 @@ export async function previewPersonaGeneration(input: {
     instructions: string[];
     parsedOutput: Record<string, unknown>;
     defaultIssue: string;
+    failClosedOnTransport?: boolean;
+    fallbackRepairGuidance?: string[];
   }): Promise<{
+    passes: boolean;
+    keptReferenceNames?: string[];
     issues: string[];
     repairGuidance: string[];
   }> => {
@@ -190,7 +194,7 @@ export async function previewPersonaGeneration(input: {
         ),
         temperature: 0,
       },
-      entityId: `persona-generation-preview:${model.id}:${auditInput.stageName}:semantic-audit-1`,
+      entityId: `persona-generation-preview:${model.id}:${auditInput.stageName}:${auditInput.auditLabel}:semantic-audit-1`,
       timeoutMs: invocationConfig.timeoutMs,
       retries: previewProviderRetries,
       onProviderError: async (event) => {
@@ -204,20 +208,41 @@ export async function previewPersonaGeneration(input: {
     });
 
     if (!auditResult.text.trim()) {
-      return { issues: [], repairGuidance: [] };
+      if (!auditInput.failClosedOnTransport) {
+        return { passes: true, issues: [], repairGuidance: [] };
+      }
+      return {
+        passes: false,
+        issues: [auditInput.defaultIssue],
+        repairGuidance: auditInput.fallbackRepairGuidance ?? [],
+      };
     }
 
     try {
       const parsed = parsePersonaGenerationSemanticAuditResult(auditResult.text);
       if (parsed.passes) {
-        return { issues: [], repairGuidance: [] };
+        return {
+          passes: true,
+          keptReferenceNames: parsed.keptReferenceNames,
+          issues: [],
+          repairGuidance: [],
+        };
       }
       return {
+        passes: false,
+        keptReferenceNames: parsed.keptReferenceNames,
         issues: parsed.issues.length > 0 ? parsed.issues : [auditInput.defaultIssue],
         repairGuidance: parsed.repairGuidance,
       };
     } catch {
-      return { issues: [], repairGuidance: [] };
+      if (!auditInput.failClosedOnTransport) {
+        return { passes: true, issues: [], repairGuidance: [] };
+      }
+      return {
+        passes: false,
+        issues: [auditInput.defaultIssue],
+        repairGuidance: auditInput.fallbackRepairGuidance ?? [],
+      };
     }
   };
 
@@ -240,12 +265,110 @@ export async function previewPersonaGeneration(input: {
         persona: stage.persona,
         identity_summary: stage.identity_summary,
         reference_sources: stage.reference_sources,
+        other_reference_sources: stage.other_reference_sources,
         reference_derivation: stage.reference_derivation,
         originalization_note: stage.originalization_note,
       },
       defaultIssue:
         "originalization_note must explain how the persona is adapted into an original forum-native identity.",
     });
+
+  const auditSeedReferenceClassification = async (
+    stage: PersonaGenerationSeedStage,
+  ): Promise<{
+    issues: string[];
+    repairGuidance: string[];
+    normalizedParsedOutput?: PersonaGenerationSeedStage;
+  }> => {
+    const auditResult = await runPersonaGenerationSemanticAudit({
+      stageName: "seed",
+      auditLabel: "seed_reference_source_audit",
+      instructions: [
+        "You are judging whether reference_sources contains only personality-bearing named references.",
+        "A personality-bearing reference must be a person-like entity with a distinct persona, such as a real person, historical figure, fictional character, mythic figure, or iconic persona.",
+        "Concepts, methods, principles, works, films, movements, groups, locations, and abstract nouns do not belong in reference_sources.",
+        "If some entries are valid personality-bearing references and others are not, set passes=true and return keptReferenceNames containing only the valid reference_sources names to keep.",
+        "If none of the entries are valid personality-bearing references, set passes=false.",
+        "Do not invent new names. Only keep names that already exist in parsed_stage.reference_sources.",
+        "Ignore other_reference_sources except as context; you are only filtering reference_sources.",
+      ],
+      parsedOutput: {
+        reference_sources: stage.reference_sources,
+        other_reference_sources: stage.other_reference_sources,
+      },
+      defaultIssue:
+        "reference_sources must contain at least one personality-bearing named reference.",
+      failClosedOnTransport: true,
+      fallbackRepairGuidance: [
+        "Return valid audit JSON.",
+        "Keep only personality-bearing named references inside reference_sources.",
+        "Move concepts, works, principles, groups, and other non-personality references into other_reference_sources.",
+        "Ensure at least one personality-bearing named reference remains in reference_sources.",
+      ],
+    });
+
+    const keptReferenceNames =
+      auditResult.keptReferenceNames && auditResult.keptReferenceNames.length > 0
+        ? new Set(auditResult.keptReferenceNames)
+        : null;
+    const filteredReferenceSources = keptReferenceNames
+      ? stage.reference_sources.filter((item) => keptReferenceNames.has(item.name))
+      : stage.reference_sources;
+
+    if (filteredReferenceSources.length === 0) {
+      return {
+        issues:
+          auditResult.issues.length > 0
+            ? auditResult.issues
+            : ["reference_sources must contain at least one personality-bearing named reference."],
+        repairGuidance:
+          auditResult.repairGuidance.length > 0
+            ? auditResult.repairGuidance
+            : [
+                "Keep only personality-bearing named references in reference_sources.",
+                "Add at least one real person, historical figure, fictional character, mythic figure, or iconic persona to reference_sources.",
+              ],
+      };
+    }
+
+    return {
+      issues: [],
+      repairGuidance: [],
+      normalizedParsedOutput: {
+        ...stage,
+        reference_sources: filteredReferenceSources,
+      },
+    };
+  };
+
+  const auditSeedStageSemantics = async (
+    stage: PersonaGenerationSeedStage,
+  ): Promise<{
+    issues: string[];
+    repairGuidance: string[];
+    normalizedParsedOutput?: PersonaGenerationSeedStage;
+  }> => {
+    const referenceAudit = await auditSeedReferenceClassification(stage);
+    if (referenceAudit.issues.length > 0) {
+      return referenceAudit;
+    }
+
+    const normalizedStage = referenceAudit.normalizedParsedOutput ?? stage;
+    const originalizationAudit = await auditSeedOriginalizationSemantics(normalizedStage);
+    if (originalizationAudit.issues.length > 0) {
+      return {
+        issues: originalizationAudit.issues,
+        repairGuidance: originalizationAudit.repairGuidance,
+        normalizedParsedOutput: normalizedStage,
+      };
+    }
+
+    return {
+      issues: [],
+      repairGuidance: [],
+      normalizedParsedOutput: normalizedStage,
+    };
+  };
 
   const auditMemoriesOriginalizationSemantics = async (
     stage: PersonaGenerationMemoriesStage,
@@ -279,6 +402,7 @@ export async function previewPersonaGeneration(input: {
     validateQualityAsync?: (parsed: T) => Promise<{
       issues: string[];
       repairGuidance?: string[];
+      normalizedParsedOutput?: T;
     }>;
     validatedContext?: Record<string, unknown> | null;
     allowedReferenceNames?: string[];
@@ -635,136 +759,113 @@ export async function previewPersonaGeneration(input: {
       }
     };
 
-    const parsedStage = await resolveParsedStage();
-    const deterministicQualityIssues = [
-      ...collectEnglishOnlyIssues(parsedStage, {
-        allowedReferenceNames: stageInput.allowedReferenceNames,
-      }),
-      ...(stageInput.validateQuality?.(parsedStage) ?? []),
-    ];
-    const semanticQualityResult =
-      deterministicQualityIssues.length === 0 && stageInput.validateQualityAsync
-        ? await stageInput.validateQualityAsync(parsedStage)
-        : null;
-    const qualityIssues = [...deterministicQualityIssues, ...(semanticQualityResult?.issues ?? [])];
-    if (qualityIssues.length === 0) {
-      return parsedStage;
-    }
-
-    const qualityRepairPrompt = buildQualityRepairPrompt({
-      qualityIssues,
-      previousParsedOutput: parsedStage,
-      repairGuidance: semanticQualityResult?.repairGuidance,
-      mode: "initial",
-    });
-
-    const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt, 1);
-    let repairedStage: T;
-    let finalQualityRepairResult = qualityRepaired;
-    let finalQualityRepairAttemptStage:
-      | "quality-repair-1"
-      | "quality-repair-2"
-      | "quality-repair-3" = "quality-repair-1";
-    try {
-      repairedStage = attemptParse(qualityRepaired, "quality-repair-1");
-    } catch (error) {
-      if (!(error instanceof PersonaGenerationParseError)) {
-        throw error;
-      }
-      if (shouldRetryQualityRepair(qualityRepaired)) {
-        const qualityRepairRetryPrompt = buildQualityRepairPrompt({
-          qualityIssues,
-          previousParsedOutput: parsedStage,
-          repairGuidance: semanticQualityResult?.repairGuidance,
-          mode: isLengthTruncated(qualityRepaired) ? "truncated" : "empty_or_error",
-          previousTruncatedOutput: isLengthTruncated(qualityRepaired) ? qualityRepaired.text : null,
-        });
-        const qualityRepairedRetry = await invokeQualityRepairAttempt(qualityRepairRetryPrompt, 2);
-        finalQualityRepairResult = qualityRepairedRetry;
-        finalQualityRepairAttemptStage = "quality-repair-2";
-        try {
-          repairedStage = attemptParse(qualityRepairedRetry, "quality-repair-2");
-        } catch (retryError) {
-          if (!(retryError instanceof PersonaGenerationParseError)) {
-            throw retryError;
-          }
-          if (isLengthTruncated(qualityRepairedRetry)) {
-            const qualityRepairRescuePrompt = buildQualityRepairPrompt({
-              qualityIssues,
-              previousParsedOutput: parsedStage,
-              repairGuidance: semanticQualityResult?.repairGuidance,
-              mode: "final_truncated",
-              previousTruncatedOutput: qualityRepairedRetry.text,
-            });
-            const qualityRepairedRescue = await invokeQualityRepairAttempt(
-              qualityRepairRescuePrompt,
-              3,
-            );
-            finalQualityRepairResult = qualityRepairedRescue;
-            finalQualityRepairAttemptStage = "quality-repair-3";
-            try {
-              repairedStage = attemptParse(qualityRepairedRescue, "quality-repair-3");
-            } catch (rescueError) {
-              if (!(rescueError instanceof PersonaGenerationParseError)) {
-                throw rescueError;
-              }
-              throw new PersonaGenerationQualityError({
-                stageName: stageInput.stageName,
-                message: buildQualityRepairFailureMessage(qualityRepairedRescue),
-                rawOutput: rescueError.rawOutput,
-                issues: qualityIssues,
-                details: rescueError.details,
-              });
-            }
-          } else {
-            throw new PersonaGenerationQualityError({
-              stageName: stageInput.stageName,
-              message: buildQualityRepairFailureMessage(qualityRepairedRetry),
-              rawOutput: retryError.rawOutput,
-              issues: qualityIssues,
-              details: retryError.details,
-            });
-          }
-        }
-      } else {
-        throw new PersonaGenerationQualityError({
-          stageName: stageInput.stageName,
-          message: buildQualityRepairFailureMessage(qualityRepaired),
-          rawOutput: error.rawOutput,
-          issues: qualityIssues,
-          details: error.details,
-        });
-      }
-    }
-
-    const repairedDeterministicQualityIssues = [
-      ...collectEnglishOnlyIssues(repairedStage, {
-        allowedReferenceNames: stageInput.allowedReferenceNames,
-      }),
-      ...(stageInput.validateQuality?.(repairedStage) ?? []),
-    ];
-    const repairedSemanticQualityResult =
-      repairedDeterministicQualityIssues.length === 0 && stageInput.validateQualityAsync
-        ? await stageInput.validateQualityAsync(repairedStage)
-        : null;
-    const repairedQualityIssues = [
-      ...repairedDeterministicQualityIssues,
-      ...(repairedSemanticQualityResult?.issues ?? []),
-    ];
-    if (repairedQualityIssues.length > 0) {
-      throw new PersonaGenerationQualityError({
-        stageName: stageInput.stageName,
-        message: `persona generation stage ${stageInput.stageName} quality repair failed`,
-        rawOutput: finalQualityRepairResult.text,
-        issues: repairedQualityIssues,
-        details: buildStageAttemptDetails({
-          attemptStage: finalQualityRepairAttemptStage,
-          llmResult: finalQualityRepairResult,
+    const collectStageQualityResult = async (candidateStage: T) => {
+      const baseDeterministicQualityIssues = [
+        ...collectEnglishOnlyIssues(candidateStage, {
+          allowedReferenceNames: stageInput.allowedReferenceNames,
         }),
-      });
+        ...(stageInput.validateQuality?.(candidateStage) ?? []),
+      ];
+      const semanticQualityResult =
+        baseDeterministicQualityIssues.length === 0 && stageInput.validateQualityAsync
+          ? await stageInput.validateQualityAsync(candidateStage)
+          : null;
+      const normalizedParsedOutput =
+        semanticQualityResult?.normalizedParsedOutput ?? candidateStage;
+      const deterministicQualityIssues =
+        normalizedParsedOutput === candidateStage
+          ? baseDeterministicQualityIssues
+          : [
+              ...collectEnglishOnlyIssues(normalizedParsedOutput, {
+                allowedReferenceNames: stageInput.allowedReferenceNames,
+              }),
+              ...(stageInput.validateQuality?.(normalizedParsedOutput) ?? []),
+            ];
+      return {
+        normalizedParsedOutput,
+        issues: [...deterministicQualityIssues, ...(semanticQualityResult?.issues ?? [])],
+        repairGuidance: semanticQualityResult?.repairGuidance,
+      };
+    };
+
+    const parsedStage = (await resolveParsedStage()) as T;
+    const initialQualityResult = await collectStageQualityResult(parsedStage);
+    if (initialQualityResult.issues.length === 0) {
+      return initialQualityResult.normalizedParsedOutput;
     }
 
-    return repairedStage;
+    let previousParsedOutput = initialQualityResult.normalizedParsedOutput;
+    let pendingQualityIssues = initialQualityResult.issues;
+    let pendingRepairGuidance = initialQualityResult.repairGuidance;
+    let nextRepairMode: "initial" | "truncated" | "empty_or_error" | "final_truncated" = "initial";
+    let previousTruncatedOutput: string | null = null;
+
+    for (const attempt of [1, 2, 3] as const) {
+      const qualityRepairPrompt = buildQualityRepairPrompt({
+        qualityIssues: pendingQualityIssues,
+        previousParsedOutput: previousParsedOutput,
+        repairGuidance: pendingRepairGuidance,
+        mode: nextRepairMode,
+        previousTruncatedOutput,
+      });
+
+      const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt, attempt);
+      const attemptStage = `quality-repair-${attempt}` as const;
+
+      try {
+        const repairedStage = attemptParse(qualityRepaired, attemptStage) as T;
+        const repairedQualityResult = await collectStageQualityResult(repairedStage);
+        if (repairedQualityResult.issues.length === 0) {
+          return repairedQualityResult.normalizedParsedOutput;
+        }
+        if (attempt === 3) {
+          throw new PersonaGenerationQualityError({
+            stageName: stageInput.stageName,
+            message: `persona generation stage ${stageInput.stageName} quality repair failed`,
+            rawOutput: qualityRepaired.text,
+            issues: repairedQualityResult.issues,
+            details: buildStageAttemptDetails({
+              attemptStage,
+              llmResult: qualityRepaired,
+            }),
+          });
+        }
+
+        previousParsedOutput = repairedQualityResult.normalizedParsedOutput;
+        pendingQualityIssues = repairedQualityResult.issues;
+        pendingRepairGuidance = repairedQualityResult.repairGuidance;
+        nextRepairMode = "initial";
+        previousTruncatedOutput = null;
+      } catch (error) {
+        if (!(error instanceof PersonaGenerationParseError)) {
+          throw error;
+        }
+        if (attempt === 3 || !shouldRetryQualityRepair(qualityRepaired)) {
+          throw new PersonaGenerationQualityError({
+            stageName: stageInput.stageName,
+            message: buildQualityRepairFailureMessage(qualityRepaired),
+            rawOutput: error.rawOutput,
+            issues: pendingQualityIssues,
+            details: error.details,
+          });
+        }
+
+        const truncated = isLengthTruncated(qualityRepaired);
+        nextRepairMode = truncated
+          ? attempt === 2
+            ? "final_truncated"
+            : "truncated"
+          : "empty_or_error";
+        previousTruncatedOutput = truncated ? qualityRepaired.text : null;
+      }
+    }
+
+    throw new PersonaGenerationQualityError({
+      stageName: stageInput.stageName,
+      message: `persona generation stage ${stageInput.stageName} quality repair failed`,
+      rawOutput: "",
+      issues: pendingQualityIssues,
+    });
   };
 
   const seedStage = await runPersonaGenerationStage({
@@ -775,16 +876,19 @@ export async function previewPersonaGeneration(input: {
       "persona{display_name,bio,status},",
       "identity_summary{archetype,core_motivation,one_sentence_identity},",
       "reference_sources[{name,type,contribution}],",
+      "other_reference_sources[{name,type,contribution}],",
       "reference_derivation:string[],",
       "originalization_note:string.",
       "status should be active or inactive.",
       "The final persona must be reference-inspired, not reference-cosplay.",
-      "Keep named references inside reference_sources and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
+      "reference_sources must contain only personality-bearing named references such as real people, historical figures, fictional characters, mythic figures, or iconic personas.",
+      "Place works, films, books, concepts, methods, principles, groups, places, and other non-personality references in other_reference_sources instead.",
+      "Keep named references inside reference_sources, other_reference_sources, and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
       "Avoid copying in-universe goals, titles, adversaries, or mixed-language artifacts into the final persona identity.",
     ].join("\n"),
     parse: parsePersonaSeedOutput,
     validateQuality: validateSeedStageQuality,
-    validateQualityAsync: auditSeedOriginalizationSemantics,
+    validateQualityAsync: auditSeedStageSemantics,
     allowedReferenceNames: [],
     outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
   });
@@ -802,7 +906,10 @@ export async function previewPersonaGeneration(input: {
     parse: parsePersonaValuesAndAestheticOutput,
     validateQuality: validateValuesStageQuality,
     validatedContext: seedStage,
-    allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
+    allowedReferenceNames: [
+      ...seedStage.reference_sources.map((item) => item.name),
+      ...seedStage.other_reference_sources.map((item) => item.name),
+    ],
     outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
   });
 
@@ -819,7 +926,10 @@ export async function previewPersonaGeneration(input: {
       ...seedStage,
       ...valuesStage,
     },
-    allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
+    allowedReferenceNames: [
+      ...seedStage.reference_sources.map((item) => item.name),
+      ...seedStage.other_reference_sources.map((item) => item.name),
+    ],
     outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.context_and_affinity,
   });
 
@@ -843,7 +953,10 @@ export async function previewPersonaGeneration(input: {
       ...valuesStage,
       ...contextStage,
     },
-    allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
+    allowedReferenceNames: [
+      ...seedStage.reference_sources.map((item) => item.name),
+      ...seedStage.other_reference_sources.map((item) => item.name),
+    ],
     outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails,
   });
 
@@ -879,8 +992,12 @@ export async function previewPersonaGeneration(input: {
       persona: seedStage.persona,
       persona_core: personaCore,
       reference_sources: seedStage.reference_sources,
+      other_reference_sources: seedStage.other_reference_sources,
     },
-    allowedReferenceNames: seedStage.reference_sources.map((item) => item.name),
+    allowedReferenceNames: [
+      ...seedStage.reference_sources.map((item) => item.name),
+      ...seedStage.other_reference_sources.map((item) => item.name),
+    ],
     outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.memories,
   });
 
@@ -889,6 +1006,7 @@ export async function previewPersonaGeneration(input: {
       persona: seedStage.persona,
       persona_core: personaCore,
       reference_sources: seedStage.reference_sources,
+      other_reference_sources: seedStage.other_reference_sources,
       reference_derivation: seedStage.reference_derivation,
       originalization_note: seedStage.originalization_note,
       persona_memories: memoriesStage.persona_memories,
@@ -920,6 +1038,11 @@ export async function previewPersonaGeneration(input: {
     `### reference_sources (${structured.reference_sources.length})`,
     "```json",
     JSON.stringify(structured.reference_sources, null, 2),
+    "```",
+    "",
+    `### other_reference_sources (${structured.other_reference_sources.length})`,
+    "```json",
+    JSON.stringify(structured.other_reference_sources, null, 2),
     "```",
     "",
     `### reference_derivation`,

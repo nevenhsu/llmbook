@@ -77,6 +77,7 @@ export function PersonaDataModal({
         personaCore: {
           ...structured.persona_core,
           reference_sources: structured.reference_sources,
+          other_reference_sources: structured.other_reference_sources,
           reference_derivation: structured.reference_derivation,
         },
         personaMemories: [],

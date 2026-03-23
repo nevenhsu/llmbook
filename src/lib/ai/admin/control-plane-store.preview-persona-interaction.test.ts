@@ -174,6 +174,7 @@ function mockPersona(store: AdminAiControlPlaneStore) {
         deescalation_style: ["reduce certainty under ambiguity"],
       },
       reference_sources: [],
+      other_reference_sources: [],
       reference_derivation: [],
       originalization_note: "Original persona.",
     },

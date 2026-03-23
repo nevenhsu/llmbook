@@ -52,6 +52,7 @@
   - persona generation 專用 parser / validator / prompt-assist validation helper
   - 例如：
     - stage output parsing
+    - `reference_sources` / `other_reference_sources` canonical parsing
     - `persona_core` canonical parsing
     - English-only / mixed-script quality checks
     - prompt-assist truncation / weak-output validation
@@ -111,7 +112,7 @@
 
 - [persona-reference-normalization.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-reference-normalization.ts)
   - reference source 的 shared normalize / romanize / match-key helper
-  - `persona-references/check`、persona save/update sync、以及 backfill script 都應重用這裡
+  - `persona-references/check` 與 persona save/update reference sync 都應重用這裡
 
 ### 5. Store Facade / Persistence
 
@@ -121,7 +122,7 @@
     - providers / models CRUD
     - policy release CRUD
     - persona create / update / profile read
-    - `persona_reference_sources` sync
+    - `persona_reference_sources` sync（只索引 personality-bearing `reference_sources`）
     - service 依賴組裝與 delegation
   - 不應再新增大段 parser / prompt assembly / audit orchestration 到這個檔案
 

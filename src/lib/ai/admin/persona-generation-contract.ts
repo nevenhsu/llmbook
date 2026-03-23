@@ -181,11 +181,12 @@ function collectAllowedReferenceNameVariants(referenceNames: string[]): string[]
 
 function collectReferenceSourceNames(value: unknown): string[] {
   const record = asRecord(value);
-  if (!record || !Array.isArray(record.reference_sources)) {
+  if (!record) {
     return [];
   }
 
-  return record.reference_sources
+  return [record.reference_sources, record.other_reference_sources]
+    .flatMap((collection) => (Array.isArray(collection) ? collection : []))
     .map((item) => readString(asRecord(item)?.name).trim())
     .filter((item) => item.length > 0);
 }
@@ -706,7 +707,13 @@ export function parseStoredPersonaCoreProfile(value: unknown): Record<string, un
   const root = requirePersonaRecord(value, "persona_core");
   return {
     ...parsePersonaCore(root),
-    reference_sources: parseReferenceSources(root.reference_sources),
+    reference_sources: parseReferenceSources(root.reference_sources, {
+      allowEmpty: true,
+      fieldPath: "persona_core.reference_sources",
+    }),
+    other_reference_sources: parseOtherReferenceSources(root.other_reference_sources, {
+      fieldPath: "persona_core.other_reference_sources",
+    }),
     reference_derivation: normalizePersonaStringArray(
       root.reference_derivation,
       "persona_core.reference_derivation",
@@ -718,28 +725,57 @@ export function parseStoredPersonaCoreProfile(value: unknown): Record<string, un
   };
 }
 
-export function parseReferenceSources(
+function parseReferenceSourceArray(
   value: unknown,
+  input: {
+    fieldPath: string;
+    allowEmpty?: boolean;
+  },
 ): PersonaGenerationStructured["reference_sources"] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("persona generation output missing reference_sources");
+  if (!Array.isArray(value)) {
+    throw new Error(`persona generation output missing ${input.fieldPath}`);
   }
   const normalized = value
     .map((item) => {
-      const row = requirePersonaRecord(item, "reference_sources");
-      const name = requirePersonaText(row.name, "reference_sources.name");
-      const type = requirePersonaText(row.type, "reference_sources.type");
+      const row = requirePersonaRecord(item, input.fieldPath);
+      const name = requirePersonaText(row.name, `${input.fieldPath}.name`);
+      const type = requirePersonaText(row.type, `${input.fieldPath}.type`);
       const contribution = normalizePersonaStringArray(
         row.contribution,
-        "reference_sources.contribution",
+        `${input.fieldPath}.contribution`,
       );
       return { name, type, contribution };
     })
     .filter((item) => item.name.length > 0);
-  if (normalized.length === 0) {
-    throw new Error("persona generation output missing reference_sources");
+  if (normalized.length === 0 && !input.allowEmpty) {
+    throw new Error(`persona generation output missing ${input.fieldPath}`);
   }
   return normalized;
+}
+
+export function parseReferenceSources(
+  value: unknown,
+  options?: {
+    fieldPath?: string;
+    allowEmpty?: boolean;
+  },
+): PersonaGenerationStructured["reference_sources"] {
+  return parseReferenceSourceArray(value, {
+    fieldPath: options?.fieldPath ?? "reference_sources",
+    allowEmpty: options?.allowEmpty ?? false,
+  });
+}
+
+export function parseOtherReferenceSources(
+  value: unknown,
+  options?: {
+    fieldPath?: string;
+  },
+): PersonaGenerationStructured["other_reference_sources"] {
+  return parseReferenceSourceArray(value, {
+    fieldPath: options?.fieldPath ?? "other_reference_sources",
+    allowEmpty: true,
+  });
 }
 
 export function parsePersonaMemories(
@@ -1166,6 +1202,9 @@ export function parsePersonaGenerationSemanticAuditResult(
 
   const issuesRaw = Array.isArray(record.issues) ? record.issues : null;
   const repairGuidanceRaw = Array.isArray(record.repairGuidance) ? record.repairGuidance : null;
+  const keptReferenceNamesRaw = Array.isArray(record.keptReferenceNames)
+    ? record.keptReferenceNames
+    : null;
   if (typeof record.passes !== "boolean" || issuesRaw === null || repairGuidanceRaw === null) {
     throw new PersonaGenerationParseError(
       "persona generation semantic audit must include boolean passes and string-array issues/repairGuidance",
@@ -1175,6 +1214,13 @@ export function parsePersonaGenerationSemanticAuditResult(
 
   return {
     passes: record.passes,
+    ...(keptReferenceNamesRaw
+      ? {
+          keptReferenceNames: keptReferenceNamesRaw
+            .map((item) => (typeof item === "string" ? item.trim() : ""))
+            .filter((item) => item.length > 0),
+        }
+      : {}),
     issues: issuesRaw
       .map((item) => (typeof item === "string" ? item.trim() : ""))
       .filter((item) => item.length > 0),
@@ -1190,6 +1236,7 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
       ["persona"],
       ["identity_summary"],
       ["reference_sources"],
+      ["other_reference_sources"],
       ["reference_derivation"],
       ["originalization_note"],
     ]);
@@ -1201,7 +1248,10 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
         status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
       },
       identity_summary: parsePersonaIdentitySummary(record.identity_summary, "identity_summary"),
-      reference_sources: parseReferenceSources(record.reference_sources),
+      reference_sources: parseReferenceSources(record.reference_sources, {
+        allowEmpty: true,
+      }),
+      other_reference_sources: parseOtherReferenceSources(record.other_reference_sources),
       reference_derivation: normalizePersonaStringArray(
         record.reference_derivation,
         "reference_derivation",
@@ -1298,6 +1348,7 @@ export function parsePersonaGenerationOutput(rawText: string): {
     ["persona"],
     ["persona_core"],
     ["reference_sources"],
+    ["other_reference_sources"],
     ["reference_derivation"],
     ["originalization_note"],
     ["persona_memories"],
@@ -1313,7 +1364,10 @@ export function parsePersonaGenerationOutput(rawText: string): {
           status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
         },
         persona_core: parsePersonaCore(personaCore),
-        reference_sources: parseReferenceSources(record.reference_sources),
+        reference_sources: parseReferenceSources(record.reference_sources, {
+          allowEmpty: true,
+        }),
+        other_reference_sources: parseOtherReferenceSources(record.other_reference_sources),
         reference_derivation: normalizePersonaStringArray(
           record.reference_derivation,
           "reference_derivation",

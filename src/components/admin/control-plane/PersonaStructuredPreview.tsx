@@ -389,6 +389,37 @@ export function PersonaStructuredPreview({ structured }: Props) {
       </SectionCard>
 
       <SectionCard
+        title={`Other Reference Sources (${structured.other_reference_sources.length})`}
+        description="Non-personality references such as works, concepts, methods, or principles."
+      >
+        {structured.other_reference_sources.length > 0 ? (
+          <div className="space-y-3">
+            {structured.other_reference_sources.map((source) => (
+              <div key={`${source.type}-${source.name}`} className="bg-base-200/50 rounded-xl p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="font-medium">{source.name}</div>
+                  <span className="badge badge-outline border-base-300/70 text-[11px]">
+                    {source.type}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <ul className="w-full space-y-2">
+                    {source.contribution.map((item) => (
+                      <li key={`${source.name}-${item}`} className="text-sm leading-6 opacity-85">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm opacity-60">No additional non-personality references.</div>
+        )}
+      </SectionCard>
+
+      <SectionCard
         title="Reference Derivation"
         description="How the named references were transformed into this persona."
       >

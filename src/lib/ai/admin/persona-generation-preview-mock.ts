@@ -54,6 +54,7 @@ const seedContext = {
   persona: fixture.structured.persona,
   identity_summary: fixture.structured.persona_core.identity_summary,
   reference_sources: fixture.structured.reference_sources,
+  other_reference_sources: fixture.structured.other_reference_sources,
   reference_derivation: fixture.structured.reference_derivation,
   originalization_note: fixture.structured.originalization_note,
 };
@@ -74,6 +75,7 @@ const memoriesContext = {
   persona: fixture.structured.persona,
   persona_core: fixture.structured.persona_core,
   reference_sources: fixture.structured.reference_sources,
+  other_reference_sources: fixture.structured.other_reference_sources,
 };
 
 function buildStageSection(input: {
@@ -122,11 +124,14 @@ const assembledPrompt = [
       "persona{display_name,bio,status},",
       "identity_summary{archetype,core_motivation,one_sentence_identity},",
       "reference_sources[{name,type,contribution}],",
+      "other_reference_sources[{name,type,contribution}],",
       "reference_derivation:string[],",
       "originalization_note:string.",
       "status should be active or inactive.",
       "The final persona must be reference-inspired, not reference-cosplay.",
-      "Keep named references inside reference_sources and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
+      "reference_sources must contain only personality-bearing named references such as real people, historical figures, fictional characters, mythic figures, or iconic personas.",
+      "Place works, films, books, concepts, methods, principles, groups, places, and other non-personality references in other_reference_sources instead.",
+      "Keep named references inside reference_sources, other_reference_sources, and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
       "Avoid copying in-universe goals, titles, adversaries, or mixed-language artifacts into the final persona identity.",
     ],
   }),
@@ -201,6 +206,11 @@ const markdown = [
   `### reference_sources (${fixture.structured.reference_sources.length})`,
   `${codeFence}json`,
   JSON.stringify(fixture.structured.reference_sources, null, 2),
+  codeFence,
+  "",
+  `### other_reference_sources (${fixture.structured.other_reference_sources.length})`,
+  `${codeFence}json`,
+  JSON.stringify(fixture.structured.other_reference_sources, null, 2),
   codeFence,
   "",
   "### reference_derivation",
