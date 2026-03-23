@@ -128,6 +128,7 @@ export function PersonaBatchPage({
         canBulkPrompt={resolved.canBulkPrompt}
         canBulkGenerate={resolved.canBulkGenerate}
         canBulkSave={resolved.canBulkSave}
+        autoAdvanceBulkActions={resolved.autoAdvanceBulkActions}
         anyApiActive={resolved.anyApiActive}
         bulkActionsDisabled={resolved.bulkActionsDisabled}
         canReset={resolved.canReset}
@@ -136,6 +137,7 @@ export function PersonaBatchPage({
         onBulkPrompt={() => void resolved.runBulkPromptAssist()}
         onBulkGenerate={() => void resolved.runBulkGenerate()}
         onBulkSave={() => void resolved.runBulkSave()}
+        onToggleAutoAdvanceBulkActions={resolved.setAutoAdvanceBulkActions}
         onRequestBulkPause={resolved.requestBulkPause}
         onResumeBulkTask={() => void resolved.resumeBulkTask()}
         onClearBatchRows={() => void resolved.clearBatchRows()}

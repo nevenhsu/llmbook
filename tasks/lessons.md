@@ -85,5 +85,9 @@
 - If a compact stage retry still ends with `finishReason=length`, add one final truncation-rescue rewrite before surfacing the failure; otherwise the operator only sees misleading invalid-JSON or missing-field errors.
 - When model output auto-seeds persona identity, normalize the generated display name in one shared helper before deriving persona usernames, but never mutate manual identity edits through that formatter.
 - If a preview sandbox reimplements a batch state machine locally, it must mirror the production hook's eligibility, pause/resume, and auto-rerun semantics; otherwise the preview becomes a misleading debug surface.
+- For chunked batch loops, describe the stop rule only once: "stop when the eligible set no longer shrinks" already implies a zero-success round, so do not maintain two equivalent conditions in code comments, plans, or UI explanations.
+- In persona-batch auto-next flow, `Prompt -> Generate -> Save` is strictly linear; if the operator starts from `Generate`, the next automatic step is only `Save`, never a jump back to `Prompt`.
+- If a card-level toggle is described as "top-right next to the title", render it in the same header row as the title block rather than burying it inside the action-controls column below.
+- If a UI toggle needs to affect an async sequence immediately after the same click/render cycle, update the backing ref synchronously in the setter instead of waiting for a `useEffect` mirror pass.
 - If a shared destructive header action expands beyond its old scope, rename the backing controller method and update the tooltip text at the same time; leaving duplicate-only names after adding saved-row removal creates misleading UI and test drift.
 - If a page and its preview sandbox share an operational default like batch chunk size, lock that default in focused tests on both surfaces; otherwise one side silently drifts when the constant changes.

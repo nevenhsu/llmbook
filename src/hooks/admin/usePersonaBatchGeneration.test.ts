@@ -1214,6 +1214,193 @@ describe("usePersonaBatchGeneration", () => {
     expect(latestHook?.bulkLastCompletedTask).toBe("prompt");
   });
 
+  it("stops a bulk prompt run after one failed round when no rows succeed", async () => {
+    const promptAttempts = new Map<string, number>();
+
+    apiPostMock.mockImplementation(
+      (url: string, payload: { names?: string[]; inputPrompt?: string }) => {
+        if (url === "/api/admin/ai/persona-references/check") {
+          return Promise.resolve({
+            items: (payload.names ?? []).map((name) => ({
+              input: name,
+              matchKey: name
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ""),
+              romanizedName: name.trim(),
+              exists: false,
+            })),
+          });
+        }
+        if (url === "/api/admin/ai/persona-generation/prompt-assist") {
+          const inputPrompt = payload.inputPrompt ?? "";
+          promptAttempts.set(inputPrompt, (promptAttempts.get(inputPrompt) ?? 0) + 1);
+          return Promise.reject(
+            new ApiError("temporary prompt failure", 500, { error: "temporary failure" }),
+          );
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      },
+    );
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki");
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await latestHook?.runBulkPromptAssist();
+      await flushPromises();
+    });
+
+    expect(promptAttempts.get("Anthony Bourdain")).toBe(1);
+    expect(promptAttempts.get("Hayao Miyazaki")).toBe(1);
+    expect(latestHook?.rows[0]?.contextPrompt).toBe("");
+    expect(latestHook?.rows[1]?.contextPrompt).toBe("");
+    expect(latestHook?.bulkLastCompletedTask).toBe("prompt");
+  });
+
+  it("auto-advances bulk prompt into generate and save when enabled", async () => {
+    apiPostMock.mockImplementation((url: string, payload: Record<string, unknown>) => {
+      if (url === "/api/admin/ai/persona-references/check") {
+        return Promise.resolve({
+          items: (payload.names as string[]).map((name) => ({
+            input: name,
+            matchKey: name
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, ""),
+            romanizedName: name.trim(),
+            exists: false,
+          })),
+        });
+      }
+      if (url === "/api/admin/ai/persona-generation/prompt-assist") {
+        return Promise.resolve({
+          text: `Prompt for ${payload.inputPrompt as string}`,
+        });
+      }
+      if (url === "/api/admin/ai/persona-generation/preview") {
+        return Promise.resolve({
+          preview: {
+            structured: mockPersonaGenerationPreview.structured,
+          },
+        });
+      }
+      if (url === "/api/admin/ai/personas") {
+        return Promise.resolve({ personaId: "persona-1" });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Anthony Bourdain");
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    act(() => {
+      latestHook?.setAutoAdvanceBulkActions(true);
+    });
+
+    await act(async () => {
+      await latestHook?.runBulkPromptAssist();
+      await flushPromises(8);
+    });
+
+    expect(apiPostMock).toHaveBeenCalledWith("/api/admin/ai/persona-generation/prompt-assist", {
+      modelId: "model-1",
+      inputPrompt: "Anthony Bourdain",
+    });
+    expect(apiPostMock).toHaveBeenCalledWith("/api/admin/ai/persona-generation/preview", {
+      modelId: "model-1",
+      extraPrompt: "Prompt for Anthony Bourdain",
+    });
+    expect(apiPostMock).toHaveBeenCalledWith("/api/admin/ai/personas", expect.any(Object));
+    expect(latestHook?.rows[0]?.personaData).not.toBeNull();
+    expect(latestHook?.rows[0]?.saved).toBe(true);
+    expect(latestHook?.bulkLastCompletedTask).toBe("save");
+  });
+
+  it("auto-advances bulk generate directly into save when enabled", async () => {
+    apiPostMock.mockImplementation((url: string, payload: Record<string, unknown>) => {
+      if (url === "/api/admin/ai/persona-references/check") {
+        return Promise.resolve({
+          items: (payload.names as string[]).map((name) => ({
+            input: name,
+            matchKey: name
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, ""),
+            romanizedName: name.trim(),
+            exists: false,
+          })),
+        });
+      }
+      if (url === "/api/admin/ai/persona-generation/preview") {
+        return Promise.resolve({
+          preview: {
+            structured: mockPersonaGenerationPreview.structured,
+          },
+        });
+      }
+      if (url === "/api/admin/ai/personas") {
+        return Promise.resolve({ personaId: "persona-1" });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Anthony Bourdain");
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    act(() => {
+      latestHook?.updateContextPrompt(latestHook!.rows[0]!.rowId, "Prompt for Anthony Bourdain");
+      latestHook?.setAutoAdvanceBulkActions(true);
+    });
+
+    await act(async () => {
+      await latestHook?.runBulkGenerate();
+      await flushPromises(8);
+    });
+
+    expect(apiPostMock).toHaveBeenCalledWith("/api/admin/ai/persona-generation/preview", {
+      modelId: "model-1",
+      extraPrompt: "Prompt for Anthony Bourdain",
+    });
+    expect(apiPostMock).toHaveBeenCalledWith("/api/admin/ai/personas", expect.any(Object));
+    expect(apiPostMock).not.toHaveBeenCalledWith(
+      "/api/admin/ai/persona-generation/prompt-assist",
+      expect.anything(),
+    );
+    expect(latestHook?.rows[0]?.saved).toBe(true);
+    expect(latestHook?.bulkLastCompletedTask).toBe("save");
+  });
+
   it("recomputes eligible rows on resume instead of resuming only the previously remaining paused queue", async () => {
     const promptDeferreds = new Map<string, Array<ReturnType<typeof createDeferred>>>();
 

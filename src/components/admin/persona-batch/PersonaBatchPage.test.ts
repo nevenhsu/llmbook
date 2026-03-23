@@ -66,6 +66,7 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
   const updatePersonaIdentity = vi.fn();
   const requestBulkPause = vi.fn();
   const resumeBulkTask = vi.fn();
+  const setAutoAdvanceBulkActions = vi.fn();
   const rows: PersonaBatchGenerationController["rows"] = [
     {
       rowId: "row-1",
@@ -116,6 +117,8 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       canBulkPrompt: true,
       canBulkGenerate: false,
       canBulkSave: false,
+      autoAdvanceBulkActions: false,
+      setAutoAdvanceBulkActions,
       anyApiActive: false,
       addLoading: false,
       addElapsedSeconds: 0,
@@ -151,6 +154,7 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       updatePersonaIdentity,
       requestBulkPause,
       resumeBulkTask,
+      setAutoAdvanceBulkActions,
     },
   };
 }
@@ -236,6 +240,17 @@ describe("PersonaBatchPage", () => {
     });
 
     expect(spies.runRowPromptAssist).toHaveBeenCalledWith("row-1");
+
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox).not.toBeNull();
+
+    await act(async () => {
+      autoNextCheckbox?.click();
+    });
+
+    expect(spies.setAutoAdvanceBulkActions).toHaveBeenCalledWith(true);
 
     const contextSaveButton = Array.from(contextModal?.querySelectorAll("button") ?? []).find(
       (button) => button.textContent?.trim() === "Save",

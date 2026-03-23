@@ -46,6 +46,7 @@
 - [x] Add compact retry for length-truncated prompt-assist reference-resolution repairs and stop empty audit transport failures from rejecting already-valid namedReferences JSON.
 - [x] Make persona-generation preview quality repair retry on empty/provider-error outputs, add a final quality-repair truncation rescue, and tolerate `creator_admiration` as stage-local context alias drift.
 - [x] Refine persona-batch bulk UX so row time badges are task-colored, resume recomputes current eligible rows, and bulk actions auto-loop until no eligible rows remain or progress stops.
+- [x] Add persona-batch auto-next-step bulk sequencing, wire it through the real page plus preview sandbox, and keep the stop condition phrased as a single rule: stop when the eligible set no longer shrinks.
 
 ## Review
 
@@ -68,6 +69,7 @@
 - `context_and_affinity` parsing now treats `creator_admiration` as harmless model drift and normalizes it into canonical `creator_affinity`.
 - Persona-batch row time badges now use task-specific tones: `Prompt` neutral, `Generate` info, `Save` success.
 - Persona-batch bulk actions now recompute eligible rows on resume instead of replaying a stale paused order, and they auto-run additional rounds while the eligible set keeps shrinking.
+- Persona-batch now supports an `Auto next step` header toggle in admin and preview: after `Prompt` finishes it can chain into `Generate`, then `Save`, while still stopping once the eligible set stops shrinking.
 - `/preview/persona-batch` now mirrors the same bulk semantics as the real hook: chunked bulk tasks auto-run additional rounds, and resume recomputes the current eligible rows instead of continuing a stale paused order.
 - Persona-batch header `Clear` now removes both duplicate and saved rows, and the shared tooltip text explicitly matches that broader destructive scope in admin and preview.
 - Persona-batch `Reference Sources` entry is now modal-driven: the toolbar only shows a one-line header plus `Add`, while the shared modal owns the textarea, row count, add timer, and add/close controls in both admin and preview.

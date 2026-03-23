@@ -6,6 +6,7 @@ type Props = {
   label: string;
   elapsedSeconds?: number | null;
   tone?: TaskStatusBadgeTone;
+  elapsedCompleted?: boolean;
   className?: string;
 };
 
@@ -35,6 +36,7 @@ export function TaskStatusBadge({
   label,
   elapsedSeconds = null,
   tone = "neutral",
+  elapsedCompleted = false,
   className = "",
 }: Props) {
   const hasElapsed = typeof elapsedSeconds === "number";
@@ -43,7 +45,11 @@ export function TaskStatusBadge({
     <div className={`flex flex-wrap items-center gap-2 ${className}`.trim()}>
       <span className={`badge ${toneClassName(tone)} border-base-300/70 text-xs`}>{label}</span>
       {hasElapsed ? (
-        <span className="badge badge-outline border-base-300/70 font-mono text-xs">
+        <span
+          className={`badge badge-outline font-mono text-xs ${
+            elapsedCompleted ? "border-white" : "border-base-300/70"
+          }`}
+        >
           {formatElapsed(elapsedSeconds)}
         </span>
       ) : null}

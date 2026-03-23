@@ -181,6 +181,7 @@ export function PersonaBatchPreviewMockPage() {
   const [bulkLastCompletedTask, setBulkLastCompletedTask] =
     useState<PersonaBatchGenerationController["bulkLastCompletedTask"]>("generate");
   const [bulkLastElapsedSeconds, setBulkLastElapsedSeconds] = useState(31);
+  const [autoAdvanceBulkActions, setAutoAdvanceBulkActions] = useState(false);
   const [rows, setRows] = useState<PersonaBatchGenerationController["rows"]>(buildInitialRows);
 
   const rowCounterRef = useRef(4);
@@ -196,6 +197,7 @@ export function PersonaBatchPreviewMockPage() {
   const bulkPausedQueueRef = useRef<{
     task: Exclude<PersonaBatchActionType, "check">;
   } | null>(null);
+  const autoAdvanceBulkActionsRef = useRef(false);
   const previewRunIdRef = useRef(0);
   const addFinishTimerRef = useRef<number | null>(null);
   const addStartedAtRef = useRef<number | null>(null);
@@ -218,6 +220,11 @@ export function PersonaBatchPreviewMockPage() {
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  const setAutoAdvanceBulkActionsValue = useCallback((checked: boolean) => {
+    autoAdvanceBulkActionsRef.current = checked;
+    setAutoAdvanceBulkActions(checked);
+  }, []);
 
   const clearAddTimer = useCallback(() => {
     if (addFinishTimerRef.current !== null) {
@@ -465,8 +472,10 @@ export function PersonaBatchPreviewMockPage() {
     async (
       task: Exclude<PersonaBatchActionType, "check">,
       options: { elapsedOffset?: number } = {},
-    ) => {
+    ): Promise<{ paused: boolean; elapsedSeconds: number }> => {
       const elapsedOffset = options.elapsedOffset ?? 0;
+      let paused = false;
+      let finalElapsedSeconds = elapsedOffset;
       bulkTaskMetaRef.current = { task, startedAt: Date.now() - elapsedOffset * 1000 };
       setBulkTask(task);
       setBulkElapsedSeconds(elapsedOffset);
@@ -482,6 +491,7 @@ export function PersonaBatchPreviewMockPage() {
           const elapsedSeconds = bulkTaskMetaRef.current
             ? Math.max(0, Math.floor((Date.now() - bulkTaskMetaRef.current.startedAt) / 1000))
             : elapsedOffset;
+          finalElapsedSeconds = elapsedSeconds;
 
           if (targetRowIds.length === 0) {
             bulkPausedQueueRef.current = null;
@@ -516,6 +526,7 @@ export function PersonaBatchPreviewMockPage() {
           );
 
           if (!result.completedAll) {
+            paused = true;
             bulkPausedQueueRef.current = { task };
             setBulkPausedTask(task);
             setBulkPausedElapsedSeconds(
@@ -533,8 +544,54 @@ export function PersonaBatchPreviewMockPage() {
         setBulkTask(null);
         setBulkElapsedSeconds(0);
       }
+      return {
+        paused,
+        elapsedSeconds: finalElapsedSeconds,
+      };
     },
     [chunkSize, clearBulkPausedState, executeBulkRowAction],
+  );
+
+  const nextBulkTask = useCallback(
+    (
+      task: Exclude<PersonaBatchActionType, "check">,
+    ): Exclude<PersonaBatchActionType, "check"> | null => {
+      if (task === "prompt") {
+        return "generate";
+      }
+      if (task === "generate") {
+        return "save";
+      }
+      return null;
+    },
+    [],
+  );
+
+  const runBulkTaskSequence = useCallback(
+    async (
+      task: Exclude<PersonaBatchActionType, "check">,
+      options: { elapsedOffset?: number } = {},
+    ) => {
+      let currentTask: Exclude<PersonaBatchActionType, "check"> | null = task;
+      let currentOptions = options;
+
+      while (currentTask) {
+        const result = await runBulkTaskLoop(currentTask, currentOptions);
+        if (result.paused) {
+          return;
+        }
+        if (!autoAdvanceBulkActionsRef.current) {
+          return;
+        }
+        const upcomingTask = nextBulkTask(currentTask);
+        if (!upcomingTask) {
+          return;
+        }
+        currentTask = upcomingTask;
+        currentOptions = {};
+      }
+    },
+    [nextBulkTask, runBulkTaskLoop],
   );
 
   const resumeBulkTask = useCallback(async () => {
@@ -567,10 +624,10 @@ export function PersonaBatchPreviewMockPage() {
       return;
     }
 
-    await runBulkTaskLoop(pausedQueue.task, {
+    await runBulkTaskSequence(pausedQueue.task, {
       elapsedOffset,
     });
-  }, [bulkPausedElapsedSeconds, bulkTask, hasAnyRowTask, runBulkTaskLoop]);
+  }, [bulkPausedElapsedSeconds, bulkTask, hasAnyRowTask, runBulkTaskSequence]);
 
   const startOrResumeBulkTask = useCallback(
     async (task: Exclude<PersonaBatchActionType, "check">) => {
@@ -592,7 +649,7 @@ export function PersonaBatchPreviewMockPage() {
       if (bulkPausedTask !== null) {
         clearBulkPausedState();
       }
-      await runBulkTaskLoop(task);
+      await runBulkTaskSequence(task);
     },
     [
       bulkPausedTask,
@@ -600,7 +657,7 @@ export function PersonaBatchPreviewMockPage() {
       clearBulkPausedState,
       hasAnyRowTask,
       resumeBulkTask,
-      runBulkTaskLoop,
+      runBulkTaskSequence,
     ],
   );
 
@@ -626,10 +683,11 @@ export function PersonaBatchPreviewMockPage() {
     setBulkPauseRequested(false);
     setBulkLastCompletedTask("generate");
     setBulkLastElapsedSeconds(31);
+    setAutoAdvanceBulkActionsValue(false);
     commitRows(buildInitialRows());
     rowCounterRef.current = 4;
     setResetSignal((current) => current + 1);
-  }, [clearAddTimer, clearBulkPausedState, commitRows]);
+  }, [clearAddTimer, clearBulkPausedState, commitRows, setAutoAdvanceBulkActionsValue]);
 
   const controller = useMemo<PersonaBatchGenerationController>(
     () => ({
@@ -655,6 +713,8 @@ export function PersonaBatchPreviewMockPage() {
       canBulkPrompt: rows.some((row) => isEligibleForBulkAction(row, "prompt")),
       canBulkGenerate: rows.some((row) => isEligibleForBulkAction(row, "generate")),
       canBulkSave: rows.some((row) => isEligibleForBulkAction(row, "save")),
+      autoAdvanceBulkActions,
+      setAutoAdvanceBulkActions: setAutoAdvanceBulkActionsValue,
       anyApiActive,
       bulkActionsDisabled: addLoading || bulkTask !== null || hasAnyRowTask,
       canReset: !anyApiActive,
@@ -819,6 +879,7 @@ export function PersonaBatchPreviewMockPage() {
       bulkPausedTask,
       bulkTask,
       chunkSize,
+      autoAdvanceBulkActions,
       clearAddTimer,
       commitRows,
       hasAnyRowTask,
@@ -830,6 +891,7 @@ export function PersonaBatchPreviewMockPage() {
       runRowGenerate,
       runRowPromptAssist,
       runRowSave,
+      setAutoAdvanceBulkActionsValue,
       startOrResumeBulkTask,
     ],
   );

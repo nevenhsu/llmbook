@@ -17,6 +17,7 @@ type Props = {
   canBulkPrompt: boolean;
   canBulkGenerate: boolean;
   canBulkSave: boolean;
+  autoAdvanceBulkActions: boolean;
   anyApiActive: boolean;
   bulkActionsDisabled: boolean;
   canReset: boolean;
@@ -25,6 +26,7 @@ type Props = {
   onBulkPrompt: () => void;
   onBulkGenerate: () => void;
   onBulkSave: () => void;
+  onToggleAutoAdvanceBulkActions: (checked: boolean) => void;
   onRequestBulkPause: () => void;
   onResumeBulkTask: () => void;
   onClearBatchRows: () => void;
@@ -89,6 +91,7 @@ export function PersonaBatchTable({
   canBulkPrompt,
   canBulkGenerate,
   canBulkSave,
+  autoAdvanceBulkActions,
   anyApiActive,
   bulkActionsDisabled,
   canReset,
@@ -97,6 +100,7 @@ export function PersonaBatchTable({
   onBulkPrompt,
   onBulkGenerate,
   onBulkSave,
+  onToggleAutoAdvanceBulkActions,
   onRequestBulkPause,
   onResumeBulkTask,
   onClearBatchRows,
@@ -128,11 +132,26 @@ export function PersonaBatchTable({
           data-testid="batch-rows-header"
           className="bg-base-100 border-base-content/20 flex flex-col gap-3 rounded-2xl border p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between"
         >
-          <div>
-            <h2 className="text-lg font-semibold">Batch Rows</h2>
-            <p className="text-sm opacity-60">
-              {formatRowCount(rows.length)}. Manage row-level and bulk persona actions here.
-            </p>
+          <div
+            data-testid="batch-rows-header-top"
+            className="flex items-start justify-between gap-4 xl:min-w-[18rem]"
+          >
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">Batch Rows</h2>
+              <p className="text-sm opacity-60">
+                {formatRowCount(rows.length)}. Manage row-level and bulk persona actions here.
+              </p>
+            </div>
+            <label className="label w-fit shrink-0 cursor-pointer gap-2 self-start py-0">
+              <span className="label-text text-xs opacity-70">Auto next step</span>
+              <input
+                type="checkbox"
+                aria-label="Auto next step"
+                className="checkbox checkbox-sm"
+                checked={autoAdvanceBulkActions}
+                onChange={(event) => onToggleAutoAdvanceBulkActions(event.currentTarget.checked)}
+              />
+            </label>
           </div>
           <div
             data-testid="batch-rows-header-controls"
@@ -262,11 +281,26 @@ export function PersonaBatchTable({
         data-testid="batch-rows-header"
         className="bg-base-100 border-base-content/20 flex flex-col gap-3 rounded-2xl border p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between"
       >
-        <div>
-          <h2 className="text-lg font-semibold">Batch Rows</h2>
-          <p className="text-sm opacity-60">
-            {formatRowCount(rows.length)}. Manage row-level and bulk persona actions here.
-          </p>
+        <div
+          data-testid="batch-rows-header-top"
+          className="flex items-start justify-between gap-4 xl:min-w-[18rem]"
+        >
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">Batch Rows</h2>
+            <p className="text-sm opacity-60">
+              {formatRowCount(rows.length)}. Manage row-level and bulk persona actions here.
+            </p>
+          </div>
+          <label className="label w-fit shrink-0 cursor-pointer gap-2 self-start py-0">
+            <span className="label-text text-xs opacity-70">Auto next step</span>
+            <input
+              type="checkbox"
+              aria-label="Auto next step"
+              className="checkbox checkbox-sm"
+              checked={autoAdvanceBulkActions}
+              onChange={(event) => onToggleAutoAdvanceBulkActions(event.currentTarget.checked)}
+            />
+          </label>
         </div>
         <div
           data-testid="batch-rows-header-controls"

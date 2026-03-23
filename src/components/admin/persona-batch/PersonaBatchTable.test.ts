@@ -103,6 +103,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: true,
           canBulkGenerate: false,
           canBulkSave: false,
+          autoAdvanceBulkActions: false,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -111,6 +112,7 @@ describe("PersonaBatchTable", () => {
           onBulkPrompt: vi.fn(),
           onBulkGenerate: vi.fn(),
           onBulkSave: vi.fn(),
+          onToggleAutoAdvanceBulkActions: vi.fn(),
           onRequestBulkPause: vi.fn(),
           onResumeBulkTask: vi.fn(),
           onClearBatchRows: vi.fn(),
@@ -173,6 +175,9 @@ describe("PersonaBatchTable", () => {
     expect(contextPromptCell?.className).toContain("w-[180px]");
     const contextPromptText = contextPromptCell?.querySelector("div");
     expect(contextPromptText?.className).toContain("truncate");
+    const contextButtons = Array.from(contextPromptCell?.querySelectorAll("button") ?? []);
+    expect(contextButtons[0]?.textContent?.trim()).toBe("Edit");
+    expect(contextButtons[1]?.textContent?.trim()).toBe("Copy");
 
     const clearButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Clear",
@@ -224,6 +229,16 @@ describe("PersonaBatchTable", () => {
       (button) => button.textContent?.trim() === "View check error",
     );
     expect(errorButton?.className).toContain("btn-error");
+
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox).not.toBeNull();
+    expect(autoNextCheckbox?.checked).toBe(false);
+    const headerTop = container.querySelector('[data-testid="batch-rows-header-top"]');
+    expect(headerTop).not.toBeNull();
+    expect(headerTop?.textContent).toContain("Batch Rows");
+    expect(headerTop?.textContent).toContain("Auto next step");
   });
 
   it("shows pause while a bulk task is running and keeps eligible bulk actions clickable once the batch is paused", async () => {
@@ -251,6 +266,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: true,
           canBulkSave: false,
+          autoAdvanceBulkActions: false,
           anyApiActive: true,
           bulkActionsDisabled: true,
           canReset: false,
@@ -259,6 +275,7 @@ describe("PersonaBatchTable", () => {
           onBulkPrompt: noop,
           onBulkGenerate,
           onBulkSave: noop,
+          onToggleAutoAdvanceBulkActions: noop,
           onRequestBulkPause: noop,
           onResumeBulkTask: noop,
           onClearBatchRows: noop,
@@ -301,6 +318,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: true,
           canBulkSave: false,
+          autoAdvanceBulkActions: false,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -309,6 +327,7 @@ describe("PersonaBatchTable", () => {
           onBulkPrompt: noop,
           onBulkGenerate,
           onBulkSave: noop,
+          onToggleAutoAdvanceBulkActions: noop,
           onRequestBulkPause: noop,
           onResumeBulkTask: noop,
           onClearBatchRows: noop,
@@ -367,6 +386,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: true,
           canBulkSave: false,
+          autoAdvanceBulkActions: false,
           anyApiActive: true,
           bulkActionsDisabled: true,
           canReset: false,
@@ -375,6 +395,7 @@ describe("PersonaBatchTable", () => {
           onBulkPrompt: noop,
           onBulkGenerate: noop,
           onBulkSave: noop,
+          onToggleAutoAdvanceBulkActions: noop,
           onRequestBulkPause: noop,
           onResumeBulkTask,
           onClearBatchRows: noop,
@@ -426,6 +447,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: false,
           canBulkSave: false,
+          autoAdvanceBulkActions: false,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -434,6 +456,7 @@ describe("PersonaBatchTable", () => {
           onBulkPrompt: vi.fn(),
           onBulkGenerate: vi.fn(),
           onBulkSave: vi.fn(),
+          onToggleAutoAdvanceBulkActions: vi.fn(),
           onRequestBulkPause: vi.fn(),
           onResumeBulkTask: vi.fn(),
           onClearBatchRows: vi.fn(),
@@ -503,6 +526,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: false,
           canBulkSave: false,
+          autoAdvanceBulkActions: false,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -511,6 +535,7 @@ describe("PersonaBatchTable", () => {
           onBulkPrompt: vi.fn(),
           onBulkGenerate: vi.fn(),
           onBulkSave: vi.fn(),
+          onToggleAutoAdvanceBulkActions: vi.fn(),
           onRequestBulkPause: vi.fn(),
           onResumeBulkTask: vi.fn(),
           onClearBatchRows: vi.fn(),
@@ -531,9 +556,72 @@ describe("PersonaBatchTable", () => {
     const promptBadge = rows[0]?.querySelector("td:nth-child(4) .badge");
     const generateBadge = rows[1]?.querySelector("td:nth-child(4) .badge");
     const saveBadge = rows[2]?.querySelector("td:nth-child(4) .badge");
+    const promptElapsedBadge = rows[0]?.querySelector("td:nth-child(4) .badge-outline");
+    const generateElapsedBadge = rows[1]?.querySelector("td:nth-child(4) .badge-outline");
+    const saveElapsedBadge = rows[2]?.querySelector("td:nth-child(4) .badge-outline");
 
     expect(promptBadge?.className).toContain("badge-ghost");
     expect(generateBadge?.className).toContain("badge-info");
     expect(saveBadge?.className).toContain("badge-success");
+    expect(promptElapsedBadge?.className).toContain("border-white");
+    expect(generateElapsedBadge?.className).not.toContain("border-white");
+    expect(saveElapsedBadge?.className).toContain("border-white");
+  });
+
+  it("toggles the auto-next-step checkbox from the header row", async () => {
+    const noop = vi.fn();
+    const onToggleAutoAdvanceBulkActions = vi.fn();
+
+    await act(async () => {
+      root.render(
+        React.createElement(PersonaBatchTable, {
+          rows: [buildRow({ rowId: "row-1", referenceName: "Anthony Bourdain" })],
+          chunkSize: 5,
+          bulkTask: null,
+          bulkElapsedSeconds: 0,
+          bulkPausedTask: null,
+          bulkPausedElapsedSeconds: 0,
+          bulkPauseRequested: false,
+          bulkLastCompletedTask: null,
+          bulkLastElapsedSeconds: 0,
+          canBulkPrompt: false,
+          canBulkGenerate: false,
+          canBulkSave: false,
+          autoAdvanceBulkActions: true,
+          anyApiActive: false,
+          bulkActionsDisabled: false,
+          canReset: true,
+          canClearBatchRows: false,
+          onOpenChunkSize: noop,
+          onBulkPrompt: noop,
+          onBulkGenerate: noop,
+          onBulkSave: noop,
+          onToggleAutoAdvanceBulkActions,
+          onRequestBulkPause: noop,
+          onResumeBulkTask: noop,
+          onClearBatchRows: noop,
+          onReset: noop,
+          onEditContextPrompt: noop,
+          onEditIdentity: noop,
+          onViewPersona: noop,
+          onViewError: noop,
+          onRunPromptAssist: noop,
+          onRunGenerate: noop,
+          onRunSave: noop,
+          onClear: noop,
+        }),
+      );
+    });
+
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox?.checked).toBe(true);
+
+    await act(async () => {
+      autoNextCheckbox?.click();
+    });
+
+    expect(onToggleAutoAdvanceBulkActions).toHaveBeenCalledWith(false);
   });
 });

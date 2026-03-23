@@ -171,6 +171,7 @@ export function usePersonaBatchGeneration({
     null,
   );
   const [bulkLastElapsedSeconds, setBulkLastElapsedSeconds] = useState(0);
+  const [autoAdvanceBulkActions, setAutoAdvanceBulkActions] = useState(false);
   const rowCounterRef = useRef(1);
   const rowsRef = useRef<PersonaBatchRow[]>([]);
   const rowTaskRef = useRef<Record<string, { task: PersonaBatchRowTask; startedAt: number }>>({});
@@ -179,6 +180,7 @@ export function usePersonaBatchGeneration({
   const bulkPausedQueueRef = useRef<{
     task: Exclude<PersonaBatchActionType, "check">;
   } | null>(null);
+  const autoAdvanceBulkActionsRef = useRef(false);
   const referenceCheckRunIdRef = useRef(0);
   const addTaskRef = useRef<{ startedAt: number } | null>(null);
 
@@ -194,6 +196,11 @@ export function usePersonaBatchGeneration({
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  const setAutoAdvanceBulkActionsValue = useCallback((checked: boolean) => {
+    autoAdvanceBulkActionsRef.current = checked;
+    setAutoAdvanceBulkActions(checked);
+  }, []);
 
   useEffect(() => {
     if (!personaGenerationModels.some((item) => item.id === modelId)) {
@@ -796,8 +803,10 @@ export function usePersonaBatchGeneration({
     async (
       task: Exclude<PersonaBatchActionType, "check">,
       options: { elapsedOffset?: number } = {},
-    ) => {
+    ): Promise<{ paused: boolean; elapsedSeconds: number }> => {
       const elapsedOffset = options.elapsedOffset ?? 0;
+      let paused = false;
+      let finalElapsedSeconds = elapsedOffset;
       bulkPauseRequestedRef.current = false;
       setBulkPauseRequested(false);
       setBulkPausedTask(null);
@@ -820,6 +829,7 @@ export function usePersonaBatchGeneration({
           const elapsedSeconds = bulkTaskRef.current
             ? Math.max(0, Math.floor((Date.now() - bulkTaskRef.current.startedAt) / 1000))
             : elapsedOffset;
+          finalElapsedSeconds = elapsedSeconds;
 
           if (targetRowIds.length === 0) {
             bulkPausedQueueRef.current = null;
@@ -854,6 +864,7 @@ export function usePersonaBatchGeneration({
           );
 
           if (!result.completedAll) {
+            paused = true;
             bulkPausedQueueRef.current = { task };
             setBulkPausedTask(task);
             setBulkPausedElapsedSeconds(
@@ -871,8 +882,54 @@ export function usePersonaBatchGeneration({
         setBulkTask(null);
         setBulkElapsedSeconds(0);
       }
+      return {
+        paused,
+        elapsedSeconds: finalElapsedSeconds,
+      };
     },
     [chunkSize, executeBulkRowAction, isEligibleForBulkAction],
+  );
+
+  const nextBulkTask = useCallback(
+    (
+      task: Exclude<PersonaBatchActionType, "check">,
+    ): Exclude<PersonaBatchActionType, "check"> | null => {
+      if (task === "prompt") {
+        return "generate";
+      }
+      if (task === "generate") {
+        return "save";
+      }
+      return null;
+    },
+    [],
+  );
+
+  const runBulkTaskSequence = useCallback(
+    async (
+      task: Exclude<PersonaBatchActionType, "check">,
+      options: { elapsedOffset?: number } = {},
+    ) => {
+      let currentTask: Exclude<PersonaBatchActionType, "check"> | null = task;
+      let currentOptions = options;
+
+      while (currentTask) {
+        const result = await runBulkTaskByIds(currentTask, currentOptions);
+        if (result.paused) {
+          return;
+        }
+        if (!autoAdvanceBulkActionsRef.current) {
+          return;
+        }
+        const upcomingTask = nextBulkTask(currentTask);
+        if (!upcomingTask) {
+          return;
+        }
+        currentTask = upcomingTask;
+        currentOptions = {};
+      }
+    },
+    [nextBulkTask, runBulkTaskByIds],
   );
 
   const requestBulkPause = useCallback(() => {
@@ -900,29 +957,10 @@ export function usePersonaBatchGeneration({
     }
 
     const elapsedOffset = bulkPausedElapsedSeconds;
-    const targetRowIds = rowsRef.current
-      .filter((row) => isEligibleForBulkAction(row, pausedQueue.task))
-      .map((row) => row.rowId);
-
-    if (targetRowIds.length === 0) {
-      bulkPausedQueueRef.current = null;
-      setBulkPausedTask(null);
-      setBulkPausedElapsedSeconds(0);
-      setBulkLastCompletedTask(pausedQueue.task);
-      setBulkLastElapsedSeconds(elapsedOffset);
-      return;
-    }
-
-    await runBulkTaskByIds(pausedQueue.task, {
+    await runBulkTaskSequence(pausedQueue.task, {
       elapsedOffset,
     });
-  }, [
-    bulkPausedElapsedSeconds,
-    bulkTask,
-    hasAnyRowTask,
-    isEligibleForBulkAction,
-    runBulkTaskByIds,
-  ]);
+  }, [bulkPausedElapsedSeconds, bulkTask, hasAnyRowTask, runBulkTaskSequence]);
 
   const startOrResumeBulkTask = useCallback(
     async (task: Exclude<PersonaBatchActionType, "check">) => {
@@ -944,7 +982,7 @@ export function usePersonaBatchGeneration({
       if (bulkPausedTask !== null) {
         clearBulkPausedState();
       }
-      await runBulkTaskByIds(task);
+      await runBulkTaskSequence(task);
     },
     [
       bulkPausedTask,
@@ -953,7 +991,7 @@ export function usePersonaBatchGeneration({
       hasAnyRowTask,
       isEligibleForBulkAction,
       resumeBulkTask,
-      runBulkTaskByIds,
+      runBulkTaskSequence,
     ],
   );
 
@@ -989,8 +1027,9 @@ export function usePersonaBatchGeneration({
     setBulkElapsedSeconds(0);
     setBulkLastCompletedTask(null);
     setBulkLastElapsedSeconds(0);
+    setAutoAdvanceBulkActionsValue(false);
     setChunkSize(DEFAULT_CHUNK_SIZE);
-  }, [anyApiActive, clearBulkPausedState, commitRows]);
+  }, [anyApiActive, clearBulkPausedState, commitRows, setAutoAdvanceBulkActionsValue]);
 
   return {
     modelId,
@@ -1015,6 +1054,8 @@ export function usePersonaBatchGeneration({
     canBulkPrompt,
     canBulkGenerate,
     canBulkSave,
+    autoAdvanceBulkActions,
+    setAutoAdvanceBulkActions: setAutoAdvanceBulkActionsValue,
     anyApiActive,
     bulkActionsDisabled:
       bulkTask !== null || hasAnyRowTask || hasReferenceCheckInFlight || addLoading,

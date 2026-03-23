@@ -170,18 +170,18 @@ export function PersonaBatchRow({
           <button
             type="button"
             className={smallOutlineButtonClass}
-            disabled={!canCopyContextPrompt}
-            onClick={handleCopyContextPrompt}
-          >
-            Copy
-          </button>
-          <button
-            type="button"
-            className={smallOutlineButtonClass}
             disabled={!canEditContextPrompt}
             onClick={onEditContextPrompt}
           >
             Edit
+          </button>
+          <button
+            type="button"
+            className={smallOutlineButtonClass}
+            disabled={!canCopyContextPrompt}
+            onClick={handleCopyContextPrompt}
+          >
+            Copy
           </button>
         </div>
       </td>
@@ -221,6 +221,7 @@ export function PersonaBatchRow({
             label={completedTaskLabel}
             elapsedSeconds={row.lastCompletedElapsedSeconds}
             tone={taskTone(row.lastCompletedTask)}
+            elapsedCompleted
           />
         ) : (
           <span className="text-sm opacity-45">—</span>

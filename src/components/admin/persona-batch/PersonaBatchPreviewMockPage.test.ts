@@ -393,6 +393,68 @@ describe("PersonaBatchPreviewMockPage", () => {
     expect(container.textContent).toContain("Mock AI prompt for Margaret Atwood");
   });
 
+  it("auto-advances preview batch actions from prompt to generate to save when enabled", async () => {
+    await act(async () => {
+      root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(openAddModalButton).toBeDefined();
+
+    await act(async () => {
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const modalAddButton = Array.from(container.querySelectorAll("dialog button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(modalAddButton).toBeDefined();
+
+    await act(async () => {
+      modalAddButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      vi.advanceTimersByTime(1000);
+    });
+
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox).not.toBeNull();
+
+    await act(async () => {
+      autoNextCheckbox?.click();
+    });
+
+    const headerControls = container.querySelector('[data-testid="batch-rows-header-controls"]');
+    const bulkPromptButton = Array.from(headerControls?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.includes("Prompt"),
+    );
+    expect(bulkPromptButton).toBeDefined();
+
+    await act(async () => {
+      bulkPromptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const secondRow = Array.from(container.querySelectorAll("tbody tr")).find((row) =>
+      row.textContent?.includes("Octavia Butler"),
+    );
+    expect(secondRow?.textContent).toContain("Saved");
+    expect(container.textContent).toContain("Saved 00:01");
+  });
+
   it("recomputes preview bulk eligibility on resume instead of continuing the old paused order", async () => {
     await act(async () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
