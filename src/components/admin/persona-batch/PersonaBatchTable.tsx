@@ -20,14 +20,14 @@ type Props = {
   anyApiActive: boolean;
   bulkActionsDisabled: boolean;
   canReset: boolean;
-  canRemoveDuplicates: boolean;
+  canClearBatchRows: boolean;
   onOpenChunkSize: () => void;
   onBulkPrompt: () => void;
   onBulkGenerate: () => void;
   onBulkSave: () => void;
   onRequestBulkPause: () => void;
   onResumeBulkTask: () => void;
-  onRemoveDuplicates: () => void;
+  onClearBatchRows: () => void;
   onReset: () => void;
   onEditContextPrompt: (rowId: string) => void;
   onEditIdentity: (rowId: string) => void;
@@ -92,14 +92,14 @@ export function PersonaBatchTable({
   anyApiActive,
   bulkActionsDisabled,
   canReset,
-  canRemoveDuplicates,
+  canClearBatchRows,
   onOpenChunkSize,
   onBulkPrompt,
   onBulkGenerate,
   onBulkSave,
   onRequestBulkPause,
   onResumeBulkTask,
-  onRemoveDuplicates,
+  onClearBatchRows,
   onReset,
   onEditContextPrompt,
   onEditIdentity,
@@ -193,17 +193,20 @@ export function PersonaBatchTable({
                 <div
                   className="tooltip tooltip-top"
                   data-tip={
-                    bulkPauseRequested ? "pausing after current batch" : "pause after current batch"
+                    bulkPauseRequested ? "resume current batch" : "pause after current batch"
                   }
                 >
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm btn-circle"
-                    aria-label="Pause bulk task"
-                    disabled={bulkPauseRequested}
-                    onClick={onRequestBulkPause}
+                    aria-label={bulkPauseRequested ? "Resume bulk task" : "Pause bulk task"}
+                    onClick={bulkPauseRequested ? onResumeBulkTask : onRequestBulkPause}
                   >
-                    <Pause className="h-4 w-4" />
+                    {bulkPauseRequested ? (
+                      <Play className="h-4 w-4" />
+                    ) : (
+                      <Pause className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               ) : null}
@@ -223,12 +226,12 @@ export function PersonaBatchTable({
                 data-testid="batch-rows-header-trailing"
                 className="ml-auto flex items-center gap-2"
               >
-                <div className="tooltip tooltip-top" data-tip="remove duplicate names">
+                <div className="tooltip tooltip-top" data-tip="clear duplicate and saved rows">
                   <button
                     type="button"
                     className="btn btn-outline btn-error btn-sm"
-                    disabled={!canRemoveDuplicates}
-                    onClick={onRemoveDuplicates}
+                    disabled={!canClearBatchRows}
+                    onClick={onClearBatchRows}
                   >
                     Clear
                   </button>
@@ -323,18 +326,19 @@ export function PersonaBatchTable({
             {bulkTask !== null ? (
               <div
                 className="tooltip tooltip-top"
-                data-tip={
-                  bulkPauseRequested ? "pausing after current batch" : "pause after current batch"
-                }
+                data-tip={bulkPauseRequested ? "resume current batch" : "pause after current batch"}
               >
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm btn-circle"
-                  aria-label="Pause bulk task"
-                  disabled={bulkPauseRequested}
-                  onClick={onRequestBulkPause}
+                  aria-label={bulkPauseRequested ? "Resume bulk task" : "Pause bulk task"}
+                  onClick={bulkPauseRequested ? onResumeBulkTask : onRequestBulkPause}
                 >
-                  <Pause className="h-4 w-4" />
+                  {bulkPauseRequested ? (
+                    <Play className="h-4 w-4" />
+                  ) : (
+                    <Pause className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             ) : null}
@@ -354,12 +358,12 @@ export function PersonaBatchTable({
               data-testid="batch-rows-header-trailing"
               className="ml-auto flex items-center gap-2"
             >
-              <div className="tooltip tooltip-top" data-tip="remove duplicate names">
+              <div className="tooltip tooltip-top" data-tip="clear duplicate and saved rows">
                 <button
                   type="button"
                   className="btn btn-outline btn-error btn-sm"
-                  disabled={!canRemoveDuplicates}
-                  onClick={onRemoveDuplicates}
+                  disabled={!canClearBatchRows}
+                  onClick={onClearBatchRows}
                 >
                   Clear
                 </button>

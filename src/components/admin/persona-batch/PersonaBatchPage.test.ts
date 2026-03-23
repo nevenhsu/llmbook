@@ -101,7 +101,7 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       referenceInput: "Anthony Bourdain, Hayao Miyazaki",
       setReferenceInput,
       rows,
-      chunkSize: 10,
+      chunkSize: 5,
       setChunkSize,
       bulkTask: null,
       bulkElapsedSeconds: 0,
@@ -121,10 +121,10 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       addElapsedSeconds: 0,
       bulkActionsDisabled: false,
       canReset: true,
-      canRemoveDuplicates: false,
+      canClearBatchRows: false,
       personaGenerationModels: initialModels,
       addReferenceRowsFromInput,
-      removeDuplicateRows: vi.fn(),
+      clearBatchRows: vi.fn(),
       clearRow: vi.fn(),
       updateContextPrompt,
       updatePersonaIdentity,
@@ -187,10 +187,24 @@ describe("PersonaBatchPage", () => {
 
     expect(container.textContent).toContain("Model Selection");
     expect(container.textContent).toContain("Reference Sources");
-    expect(container.textContent).toContain("Chunk Size: 10");
+    expect(container.textContent).toContain("Chunk Size: 5");
+    expect(container.querySelector("textarea")).toBeNull();
+
+    const openReferenceModalButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(openReferenceModalButton).toBeDefined();
+
+    await act(async () => {
+      openReferenceModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain(
+      "comma or newline separated, ex: Anthony Bourdain, Hayao Miyazaki, Ursula K. Le Guin",
+    );
 
     const chunkButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Chunk Size: 10"),
+      button.textContent?.includes("Chunk Size: 5"),
     );
     expect(chunkButton).toBeDefined();
 

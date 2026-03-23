@@ -26,7 +26,7 @@ export const POST = withAuth(async (req, { user }) => {
     return http.ok({ text });
   } catch (error) {
     if (error instanceof PromptAssistError) {
-      const result =
+      const rawText =
         typeof error.details?.rawText === "string" && error.details.rawText.trim().length > 0
           ? error.details.rawText
           : null;
@@ -37,7 +37,7 @@ export const POST = withAuth(async (req, { user }) => {
         {
           error: error.message,
           code: error.code,
-          result,
+          rawText,
           ...(sanitizedDetails ? { details: sanitizedDetails } : {}),
         },
         { status: 400 },

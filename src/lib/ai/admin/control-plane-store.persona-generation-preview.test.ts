@@ -1531,6 +1531,38 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     );
   });
 
+  it("accepts creator_admiration as a stage-local alias for creator_affinity", async () => {
+    const invokeLLM = await mockStageSequence(
+      withPassingSeedSemanticAudit([
+        buildSeedStage(),
+        buildValuesAndAestheticStage(),
+        {
+          lived_context: buildContextAndAffinityStage().lived_context,
+          creator_admiration: buildContextAndAffinityStage().creator_affinity,
+        },
+        buildInteractionAndGuardrailsStage(),
+        buildMemoriesStage(),
+      ]),
+    );
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.creator_affinity).toEqual(
+      buildContextAndAffinityStage().creator_affinity,
+    );
+    expect(vi.mocked(invokeLLM).mock.calls[4]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:interaction_and_guardrails:attempt-1",
+      }),
+    );
+  });
+
   it("runs a final truncation rescue when the compact interaction retry still ends with length-truncated schema drift", async () => {
     const invokeLLM = await mockStageResults([
       { text: JSON.stringify(buildSeedStage()) },
@@ -1610,6 +1642,88 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining("failed the quality contract"),
           maxOutputTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails,
+        }),
+      }),
+    );
+  });
+
+  it("runs a final quality-repair truncation rescue when interaction quality-repair-2 is still length-truncated", async () => {
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      { text: JSON.stringify(buildMachineLabelInteractionStage()) },
+      {
+        text: '{"interaction_defaults":{"default_stance":"Open with the sting."}',
+        finishReason: "length",
+      },
+      {
+        text: '{"interaction_defaults":{"default_stance":"Open with the sting.","discussion_strengths":["clarify trade-offs"],"friction_triggers":["hype"],"non_generic_traits":["tests the premise first"]},"guardrails":{"hard_no":["manipulation"],"deescalation_style":["reduce certainty under ambiguity"]},"voice_fingerprint":{"opening_move":"Lead with suspicion.","metaphor_domains":["crime scene"],"attack_style":"evidence-first","praise_style":"grudging respect","closing_move":"leave the sting visible","forbidden_shapes":["balanced explainer"]},"task_style_matrix":{"post":{"entry_shape":"Plant the angle.","body_shape":"Push the contradiction.","close_shape":"End with a sting.","forbidden_shapes":["advice list"]},"comment":{"entry_shape":"Thread-native reply","feedback_shape":"reaction then note"',
+        finishReason: "length",
+      },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.voice_fingerprint).toEqual(
+      buildInteractionAndGuardrailsStage().voice_fingerprint,
+    );
+    expect(vi.mocked(invokeLLM).mock.calls[7]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:interaction_and_guardrails:quality-repair-3",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "quality-repair response for stage interaction_and_guardrails kept truncating before the JSON object was complete",
+          ),
+        }),
+      }),
+    );
+  });
+
+  it("retries quality repair once when the first values-stage quality repair returns empty provider-error output", async () => {
+    const invokeLLM = await mockStageResults([
+      { text: JSON.stringify(buildSeedStage()) },
+      { text: JSON.stringify(buildPassingSeedSemanticAudit()) },
+      { text: JSON.stringify(buildMachineLabelValuesStage()) },
+      {
+        text: "",
+        error:
+          "Failed after 3 attempts. Last error: current peak-hour rate limit (2062) [baseURL=https://api.minimaxi.com/v1]",
+        finishReason: "error",
+      },
+      { text: JSON.stringify(buildValuesAndAestheticStage()) },
+      { text: JSON.stringify(buildContextAndAffinityStage()) },
+      { text: JSON.stringify(buildInteractionAndGuardrailsStage()) },
+      { text: JSON.stringify(buildMemoriesStage()) },
+      { text: JSON.stringify(buildPassingMemoriesSemanticAudit()) },
+    ]);
+
+    const store = new AdminAiControlPlaneStore();
+    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(sampleActiveControlPlane());
+
+    const preview = await store.previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Make the persona opinionated.",
+    });
+
+    expect(preview.structured.persona_core.values).toEqual(buildValuesAndAestheticStage().values);
+    expect(vi.mocked(invokeLLM).mock.calls[4]?.[0]).toEqual(
+      expect.objectContaining({
+        entityId: "persona-generation-preview:model-1:values_and_aesthetic:quality-repair-2",
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "previous quality-repair response for stage values_and_aesthetic was empty or failed before returning JSON",
+          ),
         }),
       }),
     );

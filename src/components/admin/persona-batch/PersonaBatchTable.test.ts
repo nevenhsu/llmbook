@@ -106,14 +106,14 @@ describe("PersonaBatchTable", () => {
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
-          canRemoveDuplicates: true,
+          canClearBatchRows: true,
           onOpenChunkSize: vi.fn(),
           onBulkPrompt: vi.fn(),
           onBulkGenerate: vi.fn(),
           onBulkSave: vi.fn(),
           onRequestBulkPause: vi.fn(),
           onResumeBulkTask: vi.fn(),
-          onRemoveDuplicates: vi.fn(),
+          onClearBatchRows: vi.fn(),
           onReset: vi.fn(),
           onEditContextPrompt: vi.fn(),
           onEditIdentity: vi.fn(),
@@ -153,7 +153,9 @@ describe("PersonaBatchTable", () => {
     expect(trailingButtons?.[0]?.textContent).toContain("Clear");
     expect(trailingButtons?.[1]?.textContent).toContain("Reset");
     expect(trailingButtons?.[1]?.className).toContain("btn-outline");
-    const removeTooltip = trailingControls?.querySelector('[data-tip="remove duplicate names"]');
+    const removeTooltip = trailingControls?.querySelector(
+      '[data-tip="clear duplicate and saved rows"]',
+    );
     expect(removeTooltip).not.toBeNull();
     expect(removeTooltip?.className).toContain("tooltip-top");
     expect(trailingButtons?.[0]?.className).toContain("btn-error");
@@ -252,14 +254,14 @@ describe("PersonaBatchTable", () => {
           anyApiActive: true,
           bulkActionsDisabled: true,
           canReset: false,
-          canRemoveDuplicates: false,
+          canClearBatchRows: false,
           onOpenChunkSize: noop,
           onBulkPrompt: noop,
           onBulkGenerate,
           onBulkSave: noop,
           onRequestBulkPause: noop,
           onResumeBulkTask: noop,
-          onRemoveDuplicates: noop,
+          onClearBatchRows: noop,
           onReset: noop,
           onEditContextPrompt: noop,
           onEditIdentity: noop,
@@ -302,14 +304,14 @@ describe("PersonaBatchTable", () => {
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
-          canRemoveDuplicates: false,
+          canClearBatchRows: false,
           onOpenChunkSize: noop,
           onBulkPrompt: noop,
           onBulkGenerate,
           onBulkSave: noop,
           onRequestBulkPause: noop,
           onResumeBulkTask: noop,
-          onRemoveDuplicates: noop,
+          onClearBatchRows: noop,
           onReset: noop,
           onEditContextPrompt: noop,
           onEditIdentity: noop,
@@ -340,6 +342,67 @@ describe("PersonaBatchTable", () => {
     expect(onBulkGenerate).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a clickable resume icon while pause is pending on a running bulk task", async () => {
+    const noop = vi.fn();
+    const onResumeBulkTask = vi.fn();
+
+    await act(async () => {
+      root.render(
+        React.createElement(PersonaBatchTable, {
+          rows: [
+            buildRow({
+              rowId: "row-1",
+              referenceName: "Anthony Bourdain",
+              referenceCheckStatus: "new",
+            }),
+          ],
+          chunkSize: 10,
+          bulkTask: "generate",
+          bulkElapsedSeconds: 12,
+          bulkLastCompletedTask: null,
+          bulkLastElapsedSeconds: 0,
+          bulkPausedTask: null,
+          bulkPausedElapsedSeconds: 0,
+          bulkPauseRequested: true,
+          canBulkPrompt: false,
+          canBulkGenerate: true,
+          canBulkSave: false,
+          anyApiActive: true,
+          bulkActionsDisabled: true,
+          canReset: false,
+          canClearBatchRows: false,
+          onOpenChunkSize: noop,
+          onBulkPrompt: noop,
+          onBulkGenerate: noop,
+          onBulkSave: noop,
+          onRequestBulkPause: noop,
+          onResumeBulkTask,
+          onClearBatchRows: noop,
+          onReset: noop,
+          onEditContextPrompt: noop,
+          onEditIdentity: noop,
+          onViewPersona: noop,
+          onViewError: noop,
+          onRunPromptAssist: noop,
+          onRunGenerate: noop,
+          onRunSave: noop,
+          onClear: noop,
+        }),
+      );
+    });
+
+    const resumeButton = container.querySelector('button[aria-label="Resume bulk task"]');
+    expect(resumeButton).not.toBeNull();
+    expect((resumeButton as HTMLButtonElement | null)?.disabled).toBe(false);
+    expect(container.querySelector('button[aria-label="Pause bulk task"]')).toBeNull();
+
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onResumeBulkTask).toHaveBeenCalledTimes(1);
+  });
+
   it("copies a row context prompt and shows a toast", async () => {
     await act(async () => {
       root.render(
@@ -366,14 +429,14 @@ describe("PersonaBatchTable", () => {
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
-          canRemoveDuplicates: false,
+          canClearBatchRows: false,
           onOpenChunkSize: vi.fn(),
           onBulkPrompt: vi.fn(),
           onBulkGenerate: vi.fn(),
           onBulkSave: vi.fn(),
           onRequestBulkPause: vi.fn(),
           onResumeBulkTask: vi.fn(),
-          onRemoveDuplicates: vi.fn(),
+          onClearBatchRows: vi.fn(),
           onReset: vi.fn(),
           onEditContextPrompt: vi.fn(),
           onEditIdentity: vi.fn(),
@@ -400,5 +463,77 @@ describe("PersonaBatchTable", () => {
       "A globe-trotting storyteller who treats food like a social map.",
     );
     expect(toast.success).toHaveBeenCalledWith("Context prompt copied");
+  });
+
+  it("uses task-specific tones in the time column for prompt, generate, and save", async () => {
+    await act(async () => {
+      root.render(
+        React.createElement(PersonaBatchTable, {
+          rows: [
+            buildRow({
+              rowId: "row-1",
+              referenceName: "Anthony Bourdain",
+              referenceCheckStatus: "new",
+              lastCompletedTask: "prompt",
+              lastCompletedElapsedSeconds: 8,
+            }),
+            buildRow({
+              rowId: "row-2",
+              referenceName: "Hayao Miyazaki",
+              referenceCheckStatus: "new",
+              activeTask: "generate",
+              activeElapsedSeconds: 12,
+            }),
+            buildRow({
+              rowId: "row-3",
+              referenceName: "Octavia Butler",
+              referenceCheckStatus: "new",
+              lastCompletedTask: "save",
+              lastCompletedElapsedSeconds: 4,
+            }),
+          ],
+          chunkSize: 10,
+          bulkTask: null,
+          bulkElapsedSeconds: 0,
+          bulkPausedTask: null,
+          bulkPausedElapsedSeconds: 0,
+          bulkPauseRequested: false,
+          bulkLastCompletedTask: null,
+          bulkLastElapsedSeconds: 0,
+          canBulkPrompt: false,
+          canBulkGenerate: false,
+          canBulkSave: false,
+          anyApiActive: false,
+          bulkActionsDisabled: false,
+          canReset: true,
+          canClearBatchRows: false,
+          onOpenChunkSize: vi.fn(),
+          onBulkPrompt: vi.fn(),
+          onBulkGenerate: vi.fn(),
+          onBulkSave: vi.fn(),
+          onRequestBulkPause: vi.fn(),
+          onResumeBulkTask: vi.fn(),
+          onClearBatchRows: vi.fn(),
+          onReset: vi.fn(),
+          onEditContextPrompt: vi.fn(),
+          onEditIdentity: vi.fn(),
+          onViewPersona: vi.fn(),
+          onViewError: vi.fn(),
+          onRunPromptAssist: vi.fn(),
+          onRunGenerate: vi.fn(),
+          onRunSave: vi.fn(),
+          onClear: vi.fn(),
+        }),
+      );
+    });
+
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    const promptBadge = rows[0]?.querySelector("td:nth-child(4) .badge");
+    const generateBadge = rows[1]?.querySelector("td:nth-child(4) .badge");
+    const saveBadge = rows[2]?.querySelector("td:nth-child(4) .badge");
+
+    expect(promptBadge?.className).toContain("badge-ghost");
+    expect(generateBadge?.className).toContain("badge-info");
+    expect(saveBadge?.className).toContain("badge-success");
   });
 });

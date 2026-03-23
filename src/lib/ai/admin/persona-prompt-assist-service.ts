@@ -12,20 +12,54 @@ import {
   type AiModelConfig,
   type AiProviderConfig,
   type PromptAssistAttemptStage,
+  type PromptAssistNamedReference,
+  type PromptAssistReferenceResolutionOutput,
 } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import {
+  assemblePromptAssistText,
   buildExplicitSourceReferenceInstruction,
   buildPromptAssistAttemptDetails,
   buildPromptAssistProviderError,
   extractLikelyNamedReferences,
-  hasLikelyNamedReference,
   isLikelyTruncatedPromptAssistText,
   isWeakPromptAssistRewrite,
   parsePersonaGenerationSemanticAuditResult,
-  parseResolvedReferenceNames,
+  parsePromptAssistReferenceResolutionOutput,
   validatePromptAssistResult,
 } from "@/lib/ai/admin/persona-generation-contract";
+
+const PROMPT_ASSIST_REFERENCE_REPAIR_MAX_OUTPUT_TOKENS = 320;
+
+type PromptAssistReferenceAuditResult = PersonaGenerationSemanticAuditResult & {
+  inconclusive?: boolean;
+};
+
+function formatResolvedReferenceEntities(
+  namedReferences: PromptAssistNamedReference[],
+): string | null {
+  if (namedReferences.length === 0) {
+    return null;
+  }
+
+  return namedReferences.map((item) => `${item.name} (${item.type})`).join(", ");
+}
+
+function looksLikeJsonObject(text: string): boolean {
+  const normalized = text.trim();
+  return normalized.startsWith("{") || normalized.startsWith("[");
+}
+
+function readAttemptFinishReason(
+  details: Record<string, unknown> | null | undefined,
+): string | null {
+  const finishReason = details?.finishReason;
+  return typeof finishReason === "string" ? finishReason : null;
+}
+
+function isLengthTruncatedAttempt(details: Record<string, unknown> | null | undefined): boolean {
+  return readAttemptFinishReason(details) === "length";
+}
 
 export async function assistPersonaPrompt(input: {
   modelId: string;
@@ -52,58 +86,17 @@ export async function assistPersonaPrompt(input: {
   });
   const trimmedInput = input.inputPrompt.trim();
   const mode = trimmedInput.length === 0 ? "random" : "optimize";
-  const systemPrompt =
-    mode === "random"
-      ? [
-          "You write one concise extra prompt for generating a forum persona.",
-          "Output rules:",
-          "English only.",
-          "Plain text only.",
-          "No markdown, no bullets, no numbering, no labels, no quotes, no JSON.",
-          "Maximum 60 words.",
-          "Exactly 1 paragraph.",
-          "Be precise and concrete.",
-          "Include at least 1 explicit real reference name.",
-          "Before writing the final prompt, first choose at least 1 real famous reference entity.",
-          "Describe the persona's worldview, tone, bias, and interaction style.",
-          "Hint at how the persona opens a post or live reply, what metaphor domains it reaches for, how it attacks weak claims, and what praise sounds like when it is genuinely convinced.",
-          "Use 1-3 explicit real reference names such as creators, artists, public figures, or fictional characters when they sharpen the persona.",
-          "No filler, no explanation, no meta commentary.",
-          "Do not mention schema, JSON, database fields, or implementation details.",
-          "Do not sound like a generic AI assistant.",
-          "Write one fresh prompt only.",
-        ].join("\n")
-      : [
-          "You rewrite an existing extra prompt for generating a forum persona.",
-          "Output rules:",
-          "Keep the same language as the user's input.",
-          "Plain text only.",
-          "No markdown, no bullets, no numbering, no labels, no quotes, no JSON.",
-          "Maximum 75 words.",
-          "Exactly 1 paragraph.",
-          "Preserve the user's core intent.",
-          "Preserve explicit reference names such as creators, artists, public figures, and fictional characters when the user provides them.",
-          "If the user already provided explicit reference names, keep at least 1 of those exact names in the final brief whenever possible; if you swap to a closely related reference, that related name must stay explicit in the final brief.",
-          "If the user did not provide any explicit reference name, infer at least 1 fitting real reference entity from the user's clues before writing the final brief.",
-          "Interpret the user's input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
-          "Make it materially clearer, more specific, and more usable as a persona brief.",
-          "Remove fluff, repetition, vagueness, and filler.",
-          "Use the resolved reference as behavioral source material, not just as a name to mention.",
-          "The final brief must reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
-          "Explicitly sharpen the persona's role or domain, worldview or bias, tone, and interaction style.",
-          "Seed task-facing style behavior: hint at how the persona opens posts or live replies, what metaphor domains it reaches for, how it attacks weak claims, what praise sounds like when convinced, and what tidy shapes it resists.",
-          "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
-          "If the reference name could be swapped with another without changing the rest of the sentence, the result is too generic.",
-          "Do not merely append a reference name to the user's original sentence.",
-          "Do not start with imperative framing like Generate/Create/Write; return the rewritten brief itself.",
-          "Do not mention schema, JSON, database fields, or implementation details.",
-          "Do not explain your edits.",
-          "Return only the rewritten prompt.",
-        ].join("\n");
-  const userPrompt =
-    mode === "random"
-      ? "Create one concise extra prompt for a new forum persona."
-      : `Rewrite this extra prompt to be more precise and concise while preserving intent:\n\n${trimmedInput}`;
+  const referenceOutputRules = [
+    "Return exactly one JSON object.",
+    "Return raw JSON only. Do not use markdown fences.",
+    'Shape: {"namedReferences": [{"name": string, "type": string}]}',
+    "namedReferences must contain 1 to 3 personality-bearing named references.",
+    "Allowed namedReferences.type values: real_person, historical_figure, fictional_character, mythic_figure, iconic_persona.",
+    "Works, titles, places, ideologies, regions, and style labels may be clues, but they must not be the final namedReferences unless they denote a personality-bearing persona.",
+  ].join("\n");
+  const sourceReferenceNames = extractLikelyNamedReferences(trimmedInput);
+  const explicitSourceReferenceInstruction =
+    mode === "optimize" ? buildExplicitSourceReferenceInstruction(sourceReferenceNames) : null;
 
   const invocationConfig = await resolveLlmInvocationConfig({
     taskType: "generic",
@@ -119,9 +112,7 @@ export async function assistPersonaPrompt(input: {
     includeXai: true,
     includeMinimax: true,
   });
-  const sourceReferenceNames = extractLikelyNamedReferences(trimmedInput);
-  const explicitSourceReferenceInstruction =
-    mode === "optimize" ? buildExplicitSourceReferenceInstruction(sourceReferenceNames) : null;
+
   const invokePromptAssist = async (
     promptText: string,
     temperature: number,
@@ -166,121 +157,366 @@ export async function assistPersonaPrompt(input: {
     return { text, details };
   };
 
-  const runReferencePresenceAudit = async (
+  const readReferenceOutput = (
     candidateText: string,
-  ): Promise<PersonaGenerationSemanticAuditResult> => {
-    const auditPrompt = [
-      "[prompt_assist_reference_audit]",
-      "You are judging whether the persona brief below includes at least 1 explicit real reference name in visible text.",
-      "Judge semantics, not regex.",
-      "A single explicit proper name such as Plato counts.",
-      "A phrase like Plato-inspired or inspired by Plato counts.",
-      "Anonymous style description without a visible real name does not count.",
-      "Return exactly one JSON object.",
-      "Return raw JSON only. Do not use markdown fences.",
-      "passes: boolean",
-      "issues: string[]",
-      "repairGuidance: string[]",
-      "Keep every issue and repairGuidance item short and functional.",
-      "",
-      "[persona_brief]",
-      candidateText,
-    ].join("\n");
+  ): {
+    referenceOutput: PromptAssistReferenceResolutionOutput | null;
+    referenceParseError: string | null;
+  } => {
+    try {
+      return {
+        referenceOutput: parsePromptAssistReferenceResolutionOutput(candidateText),
+        referenceParseError: null,
+      };
+    } catch (error) {
+      return {
+        referenceOutput: null,
+        referenceParseError:
+          error instanceof Error
+            ? error.message
+            : "prompt assist reference output did not follow the required JSON contract",
+      };
+    }
+  };
 
-    const auditAttempt = await invokePromptAssist(
-      auditPrompt,
+  const buildRetryPrompt = (inputLines: Array<string | null | false>) =>
+    inputLines.filter((item): item is string => Boolean(item)).join("\n\n");
+
+  const runReferencePresenceAudit = async (
+    candidate: PromptAssistReferenceResolutionOutput,
+    originalInput: string,
+  ): Promise<PromptAssistReferenceAuditResult> => {
+    const buildAuditPrompt = (retryReason?: string) =>
+      [
+        "[prompt_assist_reference_audit]",
+        "You are judging whether the namedReferences JSON below contains at least 1 explicit personality-bearing named reference that fits the original input.",
+        "Judge semantics, not regex.",
+        "namedReferences must contain 1 to 3 personality-bearing references such as real people, historical figures, fictional characters, mythic figures, or iconic personas.",
+        "Works, titles, franchises, regions, ideologies, and style labels are clues, not valid namedReferences by themselves.",
+        "If the original input is only a work or title, infer a personality-bearing figure from it; the title alone is not enough for namedReferences.",
+        "If the namedReferences list keeps only a work title, place name, ideology, or style label, fail.",
+        "Return exactly one JSON object.",
+        "Return raw JSON only. Do not use markdown fences.",
+        "passes: boolean",
+        "issues: string[]",
+        "repairGuidance: string[]",
+        "Keep every issue and repairGuidance item short and functional.",
+        retryReason ? `[retry_reason]\n${retryReason}` : null,
+        "",
+        "[original_input]",
+        originalInput || "(empty)",
+        "",
+        "[named_references_json]",
+        JSON.stringify(candidate),
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("\n");
+
+    const firstAttempt = await invokePromptAssist(
+      buildAuditPrompt(),
       0,
       "reference_presence_audit",
       PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
     );
 
-    if (!auditAttempt.text) {
-      return { passes: true, issues: [], repairGuidance: [] };
+    if (firstAttempt.text) {
+      try {
+        return parsePersonaGenerationSemanticAuditResult(firstAttempt.text);
+      } catch {
+        // fall through
+      }
     }
 
-    try {
-      return parsePersonaGenerationSemanticAuditResult(auditAttempt.text);
-    } catch {
-      return { passes: true, issues: [], repairGuidance: [] };
+    const secondAttempt = await invokePromptAssist(
+      buildAuditPrompt(
+        "Your previous audit output was empty or invalid. Return valid audit JSON only.",
+      ),
+      0,
+      "reference_presence_audit",
+      PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
+    );
+
+    if (secondAttempt.text) {
+      try {
+        return parsePersonaGenerationSemanticAuditResult(secondAttempt.text);
+      } catch {
+        // fall through
+      }
     }
+
+    return {
+      passes: false,
+      inconclusive: true,
+      issues: [
+        secondAttempt.text
+          ? "Reference audit returned invalid JSON."
+          : "Reference audit returned empty output.",
+      ],
+      repairGuidance: [
+        "Return valid audit JSON and verify that namedReferences contains at least one personality-bearing named reference.",
+      ],
+    };
   };
 
-  const hasExplicitReference = trimmedInput.length > 0 && hasLikelyNamedReference(trimmedInput);
-  const resolveReferenceNames = async (): Promise<string[]> => {
-    if (hasExplicitReference) {
-      return [];
-    }
-
-    const resolverPrompt =
-      mode === "random"
-        ? [
-            "Choose 1 to 3 real famous reference entities for a distinct forum persona.",
-            "Return only the names, separated by |.",
-            "No explanation, no prose, no bullets, no numbering.",
-            "Allowed types include creators, artists, public figures, fictional characters, and works.",
-          ].join("\n")
-        : [
-            "Infer 1 to 3 fitting real reference entities from the user's persona clues.",
-            "The clues may refer to works, eras, domains, styles, genres, countries, personalities, values, or claims.",
-            "Return only the names, separated by |.",
-            "No explanation, no prose, no bullets, no numbering.",
-            "",
-            `User input:\n${trimmedInput}`,
-          ].join("\n");
-
-    const firstPass = parseResolvedReferenceNames(
-      (
-        await invokePromptAssist(
-          resolverPrompt,
-          mode === "random" ? 0.9 : 0.35,
-          "reference_resolution",
-        )
-      ).text,
+  const runReferenceResolutionRepair = async (input: {
+    repairPrompt: string;
+    compactRetryReason: string;
+    temperature: number;
+    previousOutput?: string | null;
+  }): Promise<{ text: string; details: Record<string, unknown> }> => {
+    const firstAttempt = await invokePromptAssist(
+      input.repairPrompt,
+      input.temperature,
+      "reference_resolution_repair",
     );
-    if (firstPass.length > 0) {
-      return firstPass;
+
+    if (firstAttempt.text || !isLengthTruncatedAttempt(firstAttempt.details)) {
+      return firstAttempt;
     }
 
-    const repairResolverPrompt =
-      mode === "random"
-        ? [
-            "Your previous answer did not return valid reference names.",
-            "Return 1 to 3 real famous people, characters, or works only.",
-            "Use the format: Name | Name | Name",
-            "No explanation.",
-          ].join("\n")
-        : [
-            "Your previous answer did not return valid reference names.",
-            "Infer 1 to 3 fitting real reference entities from the user's persona clues.",
-            "Return only the names in this format: Name | Name | Name",
-            "No explanation.",
-            "",
-            `User input:\n${trimmedInput}`,
-          ].join("\n");
-
-    return parseResolvedReferenceNames(
-      (
-        await invokePromptAssist(
-          repairResolverPrompt,
-          mode === "random" ? 0.7 : 0.25,
-          "reference_resolution",
-        )
-      ).text,
+    return invokePromptAssist(
+      buildRetryPrompt([
+        "[compact_retry_repair]",
+        input.compactRetryReason,
+        referenceOutputRules,
+        "Use the smallest valid JSON possible.",
+        "If needed, return exactly one named reference.",
+        "Return raw JSON only.",
+        "Do not return explanation or prose.",
+        input.previousOutput ? `[previous_output]\n${input.previousOutput}` : null,
+        trimmedInput ? `[original_input]\n${trimmedInput}` : null,
+      ]),
+      input.temperature,
+      "reference_resolution_repair",
+      PROMPT_ASSIST_REFERENCE_REPAIR_MAX_OUTPUT_TOKENS,
     );
   };
 
-  const resolvedReferenceNames = await resolveReferenceNames();
-  const resolvedReferenceInstruction =
-    resolvedReferenceNames.length > 0
-      ? mode === "random"
-        ? `Use at least 1 of these resolved reference entities: ${resolvedReferenceNames.join(", ")}.`
-        : `Use at least 1 of these resolved reference entities if they fit: ${resolvedReferenceNames.join(", ")}.`
-      : null;
+  const buildReferenceResolutionPrompt = () =>
+    mode === "random"
+      ? [
+          "Choose 1 to 3 real famous reference entities for a distinct forum persona.",
+          referenceOutputRules,
+          "Return personality-bearing figures only, such as real people, historical figures, fictional characters, mythic figures, or iconic personas.",
+          "No explanation, no prose, no bullets, no numbering.",
+        ].join("\n")
+      : [
+          "Infer 1 to 3 fitting personality-bearing reference entities from the user's persona clues.",
+          referenceOutputRules,
+          "The clues may refer to works, eras, domains, styles, genres, countries, personalities, values, or claims, but the final namedReferences must be personality-bearing figures only.",
+          "If the input is only a work or title, treat it as a clue and infer a personality-bearing figure from it rather than returning the title itself.",
+          explicitSourceReferenceInstruction,
+          "No explanation, no prose, no bullets, no numbering.",
+          "",
+          `User input:\n${trimmedInput}`,
+        ]
+          .filter((item): item is string => Boolean(item))
+          .join("\n");
+
+  const referenceResolutionPrompt = buildReferenceResolutionPrompt();
+  let referenceAttempt = await invokePromptAssist(
+    referenceResolutionPrompt,
+    mode === "random" ? 0.8 : 0.3,
+    "reference_resolution",
+  );
+  let referenceRawOutput = referenceAttempt.text;
+  let referenceDetails = referenceAttempt.details;
+
+  if (!referenceRawOutput) {
+    const repairAttempt = await runReferenceResolutionRepair({
+      repairPrompt: buildRetryPrompt([
+        referenceResolutionPrompt,
+        "",
+        "[retry_repair]",
+        "Your previous reference-resolution output was empty.",
+        "Return only the namedReferences JSON object.",
+        "Do not return prose or explanation.",
+      ]),
+      compactRetryReason:
+        "Your previous reference-resolution repair returned empty output and likely hit the token limit. Return only the smallest valid namedReferences JSON object.",
+      temperature: mode === "random" ? 0.55 : 0.25,
+    });
+    referenceRawOutput = repairAttempt.text;
+    referenceDetails = repairAttempt.details;
+  }
+
+  if (!referenceRawOutput) {
+    throw new PromptAssistError({
+      code: "prompt_assist_repair_output_empty",
+      message: "prompt assist reference-resolution repair returned empty output",
+      details: {
+        ...(referenceDetails ?? {}),
+        rawText: null,
+      },
+    });
+  }
+
+  let { referenceOutput, referenceParseError } = readReferenceOutput(referenceRawOutput);
+  if (!referenceOutput) {
+    const repairedAttempt = await runReferenceResolutionRepair({
+      repairPrompt: buildRetryPrompt([
+        referenceResolutionPrompt,
+        "",
+        "[retry_repair]",
+        "Your previous reference-resolution output did not follow the required JSON contract.",
+        referenceParseError ? `Problem: ${referenceParseError}.` : null,
+        "Return only the namedReferences JSON object.",
+        "Do not return prose or explanation.",
+        `[previous_output]\n${referenceRawOutput}`,
+      ]),
+      compactRetryReason:
+        "Your previous reference-resolution repair returned invalid or truncated JSON. Return only the smallest valid namedReferences JSON object.",
+      temperature: mode === "random" ? 0.55 : 0.25,
+      previousOutput: referenceRawOutput,
+    });
+
+    if (!repairedAttempt.text) {
+      throw new PromptAssistError({
+        code: "prompt_assist_repair_output_empty",
+        message: "prompt assist reference-resolution repair returned empty output",
+        details: {
+          ...(repairedAttempt.details ?? {}),
+          rawText: null,
+        },
+      });
+    }
+
+    referenceRawOutput = repairedAttempt.text;
+    referenceDetails = repairedAttempt.details;
+    ({ referenceOutput, referenceParseError } = readReferenceOutput(referenceRawOutput));
+  }
+
+  if (!referenceOutput) {
+    throw new PromptAssistError({
+      code: "prompt_assist_invalid_reference_output",
+      message:
+        referenceParseError ??
+        "prompt assist reference output did not follow the required JSON contract",
+      details: {
+        ...(referenceDetails ?? {}),
+        rawText: referenceRawOutput,
+      },
+    });
+  }
+
+  let referenceAudit = await runReferencePresenceAudit(referenceOutput, trimmedInput);
+  if (!referenceAudit.passes && !referenceAudit.inconclusive) {
+    const repairedAttempt = await runReferenceResolutionRepair({
+      repairPrompt: buildRetryPrompt([
+        referenceResolutionPrompt,
+        "",
+        "[retry_repair]",
+        "The previous namedReferences JSON did not keep at least one valid personality-bearing named reference.",
+        "Review the original input. If it contains people, characters, or other clear personality-bearing clues, preserve or infer at least one fitting personality-bearing figure.",
+        "Works, titles, places, ideologies, and style labels are clues, not final namedReferences.",
+        "Return only the namedReferences JSON object.",
+        `Current namedReferences JSON:\n${JSON.stringify(referenceOutput)}`,
+        ...referenceAudit.repairGuidance,
+      ]),
+      compactRetryReason:
+        "Your previous namedReferences repair did not return usable JSON. Return only the smallest valid namedReferences JSON object with at least one personality-bearing named reference.",
+      temperature: mode === "random" ? 0.55 : 0.25,
+      previousOutput: JSON.stringify(referenceOutput),
+    });
+
+    if (!repairedAttempt.text) {
+      throw new PromptAssistError({
+        code: "prompt_assist_repair_output_empty",
+        message: "prompt assist reference-resolution repair returned empty output",
+        details: {
+          ...(repairedAttempt.details ?? {}),
+          rawText: null,
+        },
+      });
+    }
+
+    referenceRawOutput = repairedAttempt.text;
+    referenceDetails = repairedAttempt.details;
+    ({ referenceOutput, referenceParseError } = readReferenceOutput(referenceRawOutput));
+    if (!referenceOutput) {
+      throw new PromptAssistError({
+        code: "prompt_assist_invalid_reference_output",
+        message:
+          referenceParseError ??
+          "prompt assist reference output did not follow the required JSON contract",
+        details: {
+          ...(referenceDetails ?? {}),
+          rawText: referenceRawOutput,
+        },
+      });
+    }
+
+    referenceAudit = await runReferencePresenceAudit(referenceOutput, trimmedInput);
+  }
+
+  if (!referenceAudit.passes && !referenceAudit.inconclusive) {
+    throw new PromptAssistError({
+      code: "prompt_assist_missing_reference",
+      message:
+        "prompt assist output must include at least 1 explicit personality-bearing named reference",
+      details: {
+        ...(referenceDetails ?? {}),
+        rawText: referenceRawOutput,
+        auditIssues: referenceAudit.issues,
+        auditRepairGuidance: referenceAudit.repairGuidance,
+      },
+    });
+  }
+
+  const resolvedReferences = referenceOutput.namedReferences;
+  const resolvedReferenceInstruction = formatResolvedReferenceEntities(resolvedReferences)
+    ? `Use these resolved reference entities as behavioral source material: ${formatResolvedReferenceEntities(
+        resolvedReferences,
+      )}.`
+    : null;
+
+  const textSystemPrompt =
+    mode === "random"
+      ? [
+          "You write one concise extra prompt for generating a forum persona.",
+          "Output rules:",
+          "English only.",
+          "Return plain text only.",
+          "text must be exactly 1 paragraph and maximum 60 words.",
+          "Be precise and concrete.",
+          "Do not append a separate reference list; the server will append a fixed trailing reference-sources suffix.",
+          "Describe the persona's worldview, tone, bias, and interaction style.",
+          "Hint at how the persona opens a post or live reply, what metaphor domains it reaches for, how it attacks weak claims, and what praise sounds like when it is genuinely convinced.",
+          "No filler, no explanation, no meta commentary.",
+          "Do not mention schema, JSON, database fields, or implementation details.",
+          "Do not sound like a generic AI assistant.",
+        ].join("\n")
+      : [
+          "You rewrite an existing extra prompt for generating a forum persona.",
+          "Output rules:",
+          "Keep the same language as the user's input.",
+          "Return plain text only.",
+          "text must be exactly 1 paragraph and maximum 75 words.",
+          "Preserve the user's core intent.",
+          "Do not append a separate reference list; the server will append a fixed trailing reference-sources suffix.",
+          "Interpret the user's input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
+          "Make it materially clearer, more specific, and more usable as a persona brief.",
+          "Remove fluff, repetition, vagueness, and filler.",
+          "Use the resolved reference as behavioral source material, not just as a name to mention.",
+          "The final brief must reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
+          "Explicitly sharpen the persona's role or domain, worldview or bias, tone, and interaction style.",
+          "Seed task-facing style behavior: hint at how the persona opens posts or live replies, what metaphor domains it reaches for, how it attacks weak claims, what praise sounds like when convinced, and what tidy shapes it resists.",
+          "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
+          "Do not start with imperative framing like Generate/Create/Write; return the rewritten brief itself.",
+          "Do not mention schema, JSON, database fields, or implementation details.",
+          "Do not explain your edits.",
+        ].join("\n");
+
+  const textUserPrompt =
+    mode === "random"
+      ? "Create one concise extra prompt for a new forum persona."
+      : `Rewrite this extra prompt to be more precise and concise while preserving intent:\n\n${trimmedInput}`;
+
   const mainPrompt = [
-    systemPrompt,
+    textSystemPrompt,
     explicitSourceReferenceInstruction,
     resolvedReferenceInstruction,
-    userPrompt,
+    textUserPrompt,
   ]
     .filter((item): item is string => Boolean(item))
     .join("\n\n");
@@ -290,96 +526,81 @@ export async function assistPersonaPrompt(input: {
     mode === "random" ? 0.8 : 0.3,
     "main_rewrite",
   );
-  let text = mainAttempt.text;
+  let rawOutput = mainAttempt.text;
   let textDetails = mainAttempt.details;
-  if (!text) {
-    const emptyRepairPrompt = [
-      systemPrompt,
-      explicitSourceReferenceInstruction,
-      resolvedReferenceInstruction,
-      userPrompt,
-      "",
-      "[retry_repair]",
-      "Your previous prompt-assist output was empty.",
-      "Rewrite from scratch and return one usable persona brief only.",
-      mode === "random"
-        ? "Keep it concise, in English, and explicitly grounded in a real named reference."
-        : "Keep the same language as the user's input and include at least 1 explicit real reference name.",
-      "Do not explain the failure.",
-      "Do not return blank output.",
-    ]
-      .filter((item): item is string => Boolean(item))
-      .join("\n\n");
+
+  if (!rawOutput) {
     const repairAttempt = await invokePromptAssist(
-      emptyRepairPrompt,
+      [
+        textSystemPrompt,
+        explicitSourceReferenceInstruction,
+        resolvedReferenceInstruction,
+        textUserPrompt,
+        "",
+        "[retry_repair]",
+        "Your previous prompt-assist output was empty.",
+        "Rewrite from scratch and return one usable plain-text persona brief only.",
+        "Do not return JSON.",
+        "Do not return blank output.",
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("\n\n"),
       mode === "random" ? 0.65 : 0.25,
       "empty_output_repair",
     );
-    text = repairAttempt.text;
+    rawOutput = repairAttempt.text;
     textDetails = repairAttempt.details;
   }
-  if (!text) {
+
+  if (!rawOutput) {
     throw new PromptAssistError({
       code: "prompt_assist_repair_output_empty",
       message: "prompt assist repair returned empty output",
-      details: textDetails,
+      details: {
+        ...(textDetails ?? {}),
+        rawText: null,
+      },
     });
   }
 
-  if (isWeakPromptAssistRewrite({ text, mode, sourceText: trimmedInput })) {
-    const repairPrompt = [
-      "The previous rewrite was too weak.",
-      "Rewrite the user's persona brief into a meaningfully clearer and more specific version.",
-      "Keep the same language as the user's input.",
-      "Plain text only.",
-      "Exactly 1 paragraph, maximum 75 words.",
-      "Preserve the core intent.",
-      "Include at least 1 explicit real reference name.",
-      explicitSourceReferenceInstruction,
-      resolvedReferenceInstruction,
-      "If there is no explicit reference in the user input, infer one from the clues before writing.",
-      "Treat the input as possible clues about works, eras, domains, styles, genres, countries, personalities, values, or claims.",
-      "Use the resolved reference as behavioral source material, not just as a name to mention.",
-      "Make the final brief reflect the reference's temperament, values, social energy, interaction style, or core contradiction.",
-      "Make the role or domain, worldview or bias, tone, and interaction style obvious in the sentence itself.",
-      "Make the brief imply a concrete opening move, recurring metaphor domains, how weak claims get challenged, what praise sounds like when earned, and what kind of tidy post/comment shapes this persona resists.",
-      "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
-      "If the reference name could be swapped with another without changing the rest of the sentence, the rewrite is still too weak.",
-      "Do not simply append a reference name to the original sentence.",
-      "Do not start with Generate/Create/Write or similar imperative phrasing.",
-      "Return only the rewritten brief.",
-      "",
-      `Original input:\n${trimmedInput}`,
-      "",
-      `Weak rewrite to improve:\n${text}`,
-    ]
-      .filter((item): item is string => Boolean(item))
-      .join("\n");
-
-    const repairedAttempt = await invokePromptAssist(repairPrompt, 0.35, "weak_output_repair");
+  if (looksLikeJsonObject(rawOutput)) {
+    const repairedAttempt = await invokePromptAssist(
+      buildRetryPrompt([
+        textSystemPrompt,
+        explicitSourceReferenceInstruction,
+        resolvedReferenceInstruction,
+        textUserPrompt,
+        "",
+        "[retry_repair]",
+        "The previous output returned JSON or another non-plain-text format.",
+        "Rewrite from scratch and return plain text only.",
+        "Do not return JSON.",
+        `[previous_output]\n${rawOutput}`,
+      ]),
+      mode === "random" ? 0.55 : 0.25,
+      "weak_output_repair",
+    );
     if (repairedAttempt.text) {
-      text = repairedAttempt.text;
+      rawOutput = repairedAttempt.text;
       textDetails = repairedAttempt.details;
     }
   }
 
-  if (isLikelyTruncatedPromptAssistText({ text, details: textDetails })) {
-    const truncatedRepairPrompt = [
-      systemPrompt,
-      explicitSourceReferenceInstruction,
-      resolvedReferenceInstruction,
-      userPrompt,
-      "",
-      "[retry_repair]",
-      "The previous rewrite was truncated or incomplete.",
-      "Rewrite from scratch and return one complete persona brief only.",
-      "Do not end with a dangling conjunction, unfinished clause, or cut-off sentence.",
-      "Return one complete paragraph with a clean ending.",
-    ]
-      .filter((item): item is string => Boolean(item))
-      .join("\n\n");
+  if (isLikelyTruncatedPromptAssistText({ text: rawOutput, details: textDetails })) {
     const repairedAttempt = await invokePromptAssist(
-      truncatedRepairPrompt,
+      buildRetryPrompt([
+        textSystemPrompt,
+        explicitSourceReferenceInstruction,
+        resolvedReferenceInstruction,
+        textUserPrompt,
+        "",
+        "[retry_repair]",
+        "The previous rewrite was truncated or incomplete.",
+        "Rewrite from scratch and return one complete plain-text persona brief only.",
+        "Do not append a separate reference list; the server will append the fixed trailing reference-sources suffix.",
+        "Do not end with a dangling conjunction, unfinished clause, or cut-off sentence.",
+        `[previous_output]\n${rawOutput}`,
+      ]),
       mode === "random" ? 0.55 : 0.25,
       "truncated_output_repair",
     );
@@ -387,68 +608,86 @@ export async function assistPersonaPrompt(input: {
       throw new PromptAssistError({
         code: "prompt_assist_repair_output_empty",
         message: "prompt assist truncation repair returned empty output",
-        details: repairedAttempt.details,
+        details: {
+          ...(repairedAttempt.details ?? {}),
+          rawText: null,
+        },
       });
     }
-    text = repairedAttempt.text;
+    rawOutput = repairedAttempt.text;
     textDetails = repairedAttempt.details;
   }
 
-  if (isLikelyTruncatedPromptAssistText({ text, details: textDetails })) {
-    throw new PromptAssistError({
-      code: "prompt_assist_truncated_output",
-      message: "prompt assist output was truncated or incomplete",
-      details: textDetails,
-    });
-  }
-
-  let referenceAudit = await runReferencePresenceAudit(text);
-  if (!referenceAudit.passes) {
-    const referenceRepairPrompt = [
-      systemPrompt,
-      explicitSourceReferenceInstruction,
-      resolvedReferenceInstruction,
-      userPrompt,
-      "",
-      "[retry_repair]",
-      "The previous rewrite did not keep at least one explicit real reference name visible in the final brief.",
-      ...referenceAudit.repairGuidance,
-      mode === "optimize" && sourceReferenceNames.length > 0
-        ? "Keep at least one original source reference name explicit in the final brief whenever possible."
-        : "Keep at least one explicit real reference name visible in the final brief.",
-      "If you switch to a closely related reference, keep that related name explicit in the final brief.",
-      "Rewrite from scratch and return one complete persona brief only.",
-    ]
-      .filter((item): item is string => Boolean(item))
-      .join("\n\n");
+  if (
+    isWeakPromptAssistRewrite({
+      text: rawOutput,
+      mode,
+      sourceText: trimmedInput,
+    })
+  ) {
     const repairedAttempt = await invokePromptAssist(
-      referenceRepairPrompt,
-      mode === "random" ? 0.55 : 0.25,
-      "reference_name_repair",
+      [
+        "The previous rewrite was too weak.",
+        "Rewrite the user's persona brief into a meaningfully clearer and more specific version.",
+        mode === "random"
+          ? "Keep the result in English."
+          : "Keep the same language as the user's input.",
+        "Return plain text only.",
+        "Do not append a separate reference list; the server will append the fixed trailing reference-sources suffix.",
+        explicitSourceReferenceInstruction,
+        resolvedReferenceInstruction,
+        "Use the resolved reference as behavioral source material, not just as a name to mention.",
+        "Make the role or domain, worldview or bias, tone, and interaction style obvious in the sentence itself.",
+        "Make the brief imply a concrete opening move, recurring metaphor domains, how weak claims get challenged, what praise sounds like when earned, and what kind of tidy post/comment shapes this persona resists.",
+        "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
+        "",
+        `Original input:\n${trimmedInput || "(empty)"}`,
+        "",
+        `Weak output to improve:\n${rawOutput}`,
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("\n"),
+      0.35,
+      "weak_output_repair",
     );
+
     if (repairedAttempt.text) {
-      text = repairedAttempt.text;
+      rawOutput = repairedAttempt.text;
       textDetails = repairedAttempt.details;
-      referenceAudit = await runReferencePresenceAudit(text);
     }
   }
 
-  if (!referenceAudit.passes) {
+  if (looksLikeJsonObject(rawOutput)) {
     throw new PromptAssistError({
-      code: "prompt_assist_missing_reference",
-      message: "prompt assist output must include at least 1 explicit real reference name",
+      code: "prompt_assist_output_too_weak",
+      message: "prompt assist output is too weak",
       details: {
         ...(textDetails ?? {}),
-        auditIssues: referenceAudit.issues,
-        auditRepairGuidance: referenceAudit.repairGuidance,
+        rawText: rawOutput,
       },
     });
   }
 
-  return validatePromptAssistResult({
-    text,
+  if (isLikelyTruncatedPromptAssistText({ text: rawOutput, details: textDetails })) {
+    throw new PromptAssistError({
+      code: "prompt_assist_truncated_output",
+      message: "prompt assist output was truncated or incomplete",
+      details: {
+        ...(textDetails ?? {}),
+        rawText: rawOutput,
+      },
+    });
+  }
+
+  const finalText = validatePromptAssistResult({
+    text: rawOutput,
     mode,
     sourceText: trimmedInput,
-    details: textDetails,
+    details: {
+      ...(textDetails ?? {}),
+      rawText: rawOutput,
+    },
   });
+
+  return assemblePromptAssistText(finalText, resolvedReferences);
 }

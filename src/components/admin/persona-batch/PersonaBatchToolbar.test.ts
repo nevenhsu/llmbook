@@ -51,20 +51,15 @@ describe("PersonaBatchToolbar", () => {
     container.remove();
   });
 
-  it("keeps the add result on the far left and groups elapsed time with the add button on the right", async () => {
+  it("renders a single-row reference header with title on the left and add on the right", async () => {
     await act(async () => {
       root.render(
         React.createElement(PersonaBatchToolbar, {
           modelId: "model-1",
           models,
-          referenceInput: "Anthony Bourdain",
           disableInputs: false,
-          addLoading: false,
-          addLastCompletedAddedCount: null,
-          addLastCompletedDuplicateCount: null,
           onModelChange: vi.fn(),
-          onReferenceInputChange: vi.fn(),
-          onAdd: vi.fn(),
+          onOpenReferenceModal: vi.fn(),
         }),
       );
     });
@@ -74,114 +69,29 @@ describe("PersonaBatchToolbar", () => {
     );
     expect(addButton).toBeDefined();
     expect(addButton?.className).toContain("shrink-0");
+    expect(addButton?.className).toContain("btn-sm");
 
-    const actionContainer = addButton?.parentElement;
-    expect(actionContainer?.className).toContain("ml-auto");
-    expect(actionContainer?.className).toContain("items-center");
-
-    const wrapper = actionContainer?.parentElement?.parentElement;
-    expect(wrapper?.className).toContain("xl:col-span-3");
+    const referenceHeader = container.querySelector('[data-testid="reference-sources-header"]');
+    expect(referenceHeader?.textContent).toContain("Reference Sources");
+    expect(referenceHeader?.className).toContain("justify-between");
+    expect(container.querySelector("textarea")).toBeNull();
   });
 
-  it("renders a short reference label with helper text below the input", async () => {
+  it("renders the short reference label without inline textarea helper UI", async () => {
     await act(async () => {
       root.render(
         React.createElement(PersonaBatchToolbar, {
           modelId: "model-1",
           models,
-          referenceInput: "",
           disableInputs: false,
-          addLoading: false,
-          addLastCompletedAddedCount: null,
-          addLastCompletedDuplicateCount: null,
           onModelChange: vi.fn(),
-          onReferenceInputChange: vi.fn(),
-          onAdd: vi.fn(),
+          onOpenReferenceModal: vi.fn(),
         }),
       );
     });
 
     expect(container.textContent).toContain("Reference Sources");
-    expect(container.textContent).toContain(
-      "comma or newline separated, ex: Anthony Bourdain, Hayao Miyazaki, Ursula K. Le Guin",
-    );
-    expect(container.textContent).not.toContain("Reference Sources (comma or newline separated)");
-
-    const textarea = container.querySelector("textarea");
-    expect(textarea?.getAttribute("placeholder")).toBe("");
-  });
-
-  it("shows add elapsed time inline with the add button while running and after completion", async () => {
-    await act(async () => {
-      root.render(
-        React.createElement(PersonaBatchToolbar, {
-          modelId: "model-1",
-          models,
-          referenceInput: "Anthony Bourdain",
-          disableInputs: false,
-          addLoading: true,
-          addElapsedSeconds: 7,
-          addLastCompletedElapsedSeconds: null,
-          addLastCompletedAddedCount: null,
-          addLastCompletedDuplicateCount: null,
-          onModelChange: vi.fn(),
-          onReferenceInputChange: vi.fn(),
-          onAdd: vi.fn(),
-        }),
-      );
-    });
-
-    const status = container.querySelector('[data-testid="reference-input-add-status"]');
-    const statusSummary = container.querySelector(
-      '[data-testid="reference-input-add-status-summary"]',
-    );
-    const statusElapsed = container.querySelector(
-      '[data-testid="reference-input-add-status-elapsed"]',
-    );
-    expect(status).not.toBeNull();
-    expect(statusSummary?.textContent).toBe("Adding");
-    expect(statusElapsed?.textContent).toBe("00:07");
-
-    const outerRow = status?.parentElement;
-    expect(outerRow?.className).toContain("justify-between");
-
-    const actionContainer = addButtonFrom(container)?.parentElement;
-    expect(actionContainer?.className).toContain("ml-auto");
-    expect(actionContainer?.textContent).toContain("00:07");
-    expect(actionContainer?.textContent).toContain("Add");
-
-    await act(async () => {
-      root.render(
-        React.createElement(PersonaBatchToolbar, {
-          modelId: "model-1",
-          models,
-          referenceInput: "",
-          disableInputs: false,
-          addLoading: false,
-          addElapsedSeconds: 0,
-          addLastCompletedElapsedSeconds: 7,
-          addLastCompletedAddedCount: 2,
-          addLastCompletedDuplicateCount: 1,
-          onModelChange: vi.fn(),
-          onReferenceInputChange: vi.fn(),
-          onAdd: vi.fn(),
-        }),
-      );
-    });
-
-    const completedSummary = container.querySelector(
-      '[data-testid="reference-input-add-status-summary"]',
-    );
-    const completedElapsed = container.querySelector(
-      '[data-testid="reference-input-add-status-elapsed"]',
-    );
-    expect(completedSummary?.textContent).toBe("Added 2 rows, 1 duplicate");
-    expect(completedElapsed?.textContent).toBe("00:07");
+    expect(container.textContent).not.toContain("comma or newline separated");
+    expect(container.querySelector("textarea")).toBeNull();
   });
 });
-
-function addButtonFrom(container: HTMLDivElement): HTMLButtonElement | undefined {
-  return Array.from(container.querySelectorAll("button")).find(
-    (button) => button.textContent?.trim() === "Add",
-  ) as HTMLButtonElement | undefined;
-}

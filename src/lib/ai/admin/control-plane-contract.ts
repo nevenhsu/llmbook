@@ -169,6 +169,7 @@ export type PromptAssistErrorCode =
   | "prompt_assist_provider_failed"
   | "prompt_assist_provider_timeout"
   | "prompt_assist_missing_reference"
+  | "prompt_assist_invalid_reference_output"
   | "prompt_assist_output_too_weak"
   | "prompt_assist_truncated_output"
   | "prompt_assist_repair_output_empty"
@@ -176,12 +177,28 @@ export type PromptAssistErrorCode =
 
 export type PromptAssistAttemptStage =
   | "reference_resolution"
+  | "reference_resolution_repair"
   | "main_rewrite"
   | "empty_output_repair"
   | "weak_output_repair"
-  | "reference_name_repair"
   | "reference_presence_audit"
   | "truncated_output_repair";
+
+export type PromptAssistNamedReferenceType =
+  | "real_person"
+  | "historical_figure"
+  | "fictional_character"
+  | "mythic_figure"
+  | "iconic_persona";
+
+export type PromptAssistNamedReference = {
+  name: string;
+  type: PromptAssistNamedReferenceType;
+};
+
+export type PromptAssistReferenceResolutionOutput = {
+  namedReferences: PromptAssistNamedReference[];
+};
 
 export class PromptAssistError extends Error {
   public readonly code: PromptAssistErrorCode;

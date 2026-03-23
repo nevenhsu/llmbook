@@ -64,6 +64,18 @@ function taskLabel(task: PersonaBatchRow["activeTask"] | PersonaBatchRow["lastCo
   return null;
 }
 
+function taskTone(
+  task: PersonaBatchRow["activeTask"] | PersonaBatchRow["lastCompletedTask"],
+): "neutral" | "info" | "success" {
+  if (task === "generate") {
+    return "info";
+  }
+  if (task === "save") {
+    return "success";
+  }
+  return "neutral";
+}
+
 function errorLabel(type: PersonaBatchActionType) {
   switch (type) {
     case "check":
@@ -202,13 +214,13 @@ export function PersonaBatchRow({
           <TaskStatusBadge
             label={runningTaskLabel}
             elapsedSeconds={row.activeElapsedSeconds}
-            tone="info"
+            tone={taskTone(row.activeTask)}
           />
         ) : completedTaskLabel ? (
           <TaskStatusBadge
             label={completedTaskLabel}
             elapsedSeconds={row.lastCompletedElapsedSeconds}
-            tone="success"
+            tone={taskTone(row.lastCompletedTask)}
           />
         ) : (
           <span className="text-sm opacity-45">—</span>

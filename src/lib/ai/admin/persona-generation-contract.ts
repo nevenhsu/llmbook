@@ -9,6 +9,9 @@ import {
   type PersonaGenerationStructured,
   type PersonaGenerationValuesStage,
   type PromptAssistAttemptStage,
+  type PromptAssistNamedReference,
+  type PromptAssistNamedReferenceType,
+  type PromptAssistReferenceResolutionOutput,
 } from "@/lib/ai/admin/control-plane-contract";
 import {
   asRecord,
@@ -76,6 +79,22 @@ function normalizePersonaStringArray(value: unknown, fieldPath: string): string[
 
 function normalizeSingleLineText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function normalizePromptAssistNamedReferenceType(
+  value: unknown,
+): PromptAssistNamedReferenceType | null {
+  const normalized = readString(value).trim();
+  switch (normalized) {
+    case "real_person":
+    case "historical_figure":
+    case "fictional_character":
+    case "mythic_figure":
+    case "iconic_persona":
+      return normalized;
+    default:
+      return null;
+  }
 }
 
 function countWords(text: string): number {
@@ -852,18 +871,77 @@ export function buildExplicitSourceReferenceInstruction(
   ].join(" ");
 }
 
-export function parseResolvedReferenceNames(text: string): string[] {
-  const normalized = normalizeSingleLineText(text);
-  if (!normalized) {
-    return [];
+export function parsePromptAssistReferenceResolutionOutput(
+  rawText: string,
+): PromptAssistReferenceResolutionOutput {
+  const jsonText = extractJsonFromText(rawText);
+  if (!jsonText) {
+    throw new Error("prompt assist output is empty");
   }
 
-  return normalized
-    .split(/\s*(?:\||,|;|\/|、|，|；|\n)\s*/u)
-    .map((item) => item.trim())
-    .filter((item) => item.length >= 2)
-    .filter((item, index, list) => list.indexOf(item) === index)
-    .slice(0, 3);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error("prompt assist output must be valid JSON");
+  }
+
+  const record = asRecord(parsed);
+  if (!record) {
+    throw new Error("prompt assist output must be a JSON object");
+  }
+
+  const namedReferencesRaw = Array.isArray(record.namedReferences) ? record.namedReferences : null;
+  if (!namedReferencesRaw) {
+    throw new Error("prompt assist output missing namedReferences");
+  }
+
+  const namedReferences = namedReferencesRaw
+    .map((item) => {
+      const reference = asRecord(item);
+      if (!reference) {
+        return null;
+      }
+      const name = normalizeSingleLineText(readString(reference.name));
+      const type = normalizePromptAssistNamedReferenceType(reference.type);
+      if (!name || !type) {
+        return null;
+      }
+      return { name, type };
+    })
+    .filter(
+      (item): item is PromptAssistReferenceResolutionOutput["namedReferences"][number] =>
+        item !== null,
+    );
+
+  if (namedReferences.length === 0) {
+    throw new Error("prompt assist output missing namedReferences");
+  }
+
+  return {
+    namedReferences,
+  };
+}
+
+export function assemblePromptAssistText(
+  text: string,
+  namedReferences: PromptAssistNamedReference[],
+): string {
+  const normalizedText = normalizeSingleLineText(text);
+  const normalizedNames = namedReferences
+    .map((item) => normalizeSingleLineText(item.name))
+    .filter((item) => item.length > 0)
+    .filter((item, index, list) => list.indexOf(item) === index);
+
+  if (normalizedNames.length === 0) {
+    return normalizedText;
+  }
+
+  const textWithTerminalPunctuation = /[.!?。！？]$/.test(normalizedText)
+    ? normalizedText
+    : `${normalizedText}.`;
+
+  return `${textWithTerminalPunctuation} Reference sources: ${normalizedNames.join(", ")}.`;
 }
 
 function normalizePromptAssistComparisonText(text: string): string {
@@ -1163,9 +1241,10 @@ export function parsePersonaContextAndAffinityOutput(
 ): PersonaGenerationContextStage {
   const record = parsePersonaStageObject(rawText);
   try {
+    const creatorAffinitySource = record.creator_affinity ?? record.creator_admiration;
     return {
       lived_context: parsePersonaLivedContext(record.lived_context, "lived_context"),
-      creator_affinity: parsePersonaCreatorAffinity(record.creator_affinity, "creator_affinity"),
+      creator_affinity: parsePersonaCreatorAffinity(creatorAffinitySource, "creator_affinity"),
     };
   } catch (error) {
     throw new PersonaGenerationParseError(

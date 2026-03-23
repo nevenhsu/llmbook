@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AdminAiControlPlaneStore, type AiModelConfig } from "@/lib/ai/admin/control-plane-store";
+import {
+  AdminAiControlPlaneStore,
+  PromptAssistError,
+  type AiModelConfig,
+} from "@/lib/ai/admin/control-plane-store";
 import { CachedLlmRuntimeConfigProvider } from "@/lib/ai/llm/runtime-config-provider";
-import { PROMPT_ASSIST_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/persona-generation-token-budgets";
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({}),
@@ -15,7 +18,7 @@ vi.mock("@/lib/ai/llm/invoke-llm", () => ({
   invokeLLM: vi.fn(),
 }));
 
-function sampleModel(): AiModelConfig {
+function sampleModel(overrides: Partial<AiModelConfig> = {}): AiModelConfig {
   return {
     id: "model-1",
     providerId: "provider-1",
@@ -37,7 +40,84 @@ function sampleModel(): AiModelConfig {
     maxOutputTokens: 4096,
     metadata: {},
     updatedAt: "2026-03-06T00:00:00.000Z",
+    ...overrides,
   };
+}
+
+function promptAssistNamedReference(
+  name: string,
+  type:
+    | "real_person"
+    | "historical_figure"
+    | "fictional_character"
+    | "mythic_figure"
+    | "iconic_persona" = "real_person",
+) {
+  return { name, type };
+}
+
+function promptAssistReferenceOutput(input: {
+  namedReferences: Array<{
+    name: string;
+    type:
+      | "real_person"
+      | "historical_figure"
+      | "fictional_character"
+      | "mythic_figure"
+      | "iconic_persona";
+  }>;
+}) {
+  return JSON.stringify(input);
+}
+
+function auditResult(input: { passes: boolean; issues?: string[]; repairGuidance?: string[] }) {
+  return JSON.stringify({
+    passes: input.passes,
+    issues: input.issues ?? [],
+    repairGuidance: input.repairGuidance ?? [],
+  });
+}
+
+function buildActiveControlPlane(model: AiModelConfig = sampleModel()) {
+  const providerKey = model.modelKey.startsWith("MiniMax") ? "minimax" : "xai";
+  const providerDisplayName = providerKey === "minimax" ? "Minimax" : "xAI";
+  const providerSdkPackage =
+    providerKey === "minimax" ? "vercel-minimax-ai-provider" : "@ai-sdk/xai";
+  return {
+    release: null,
+    document: {
+      globalPolicyDraft: {
+        systemBaseline: "baseline",
+        globalPolicy: "policy",
+        styleGuide: "style",
+        forbiddenRules: "forbidden",
+      },
+    },
+    providers: [
+      {
+        id: model.providerId,
+        providerKey,
+        displayName: providerDisplayName,
+        sdkPackage: providerSdkPackage,
+        status: "active",
+        testStatus: "success",
+        keyLast4: "1234",
+        hasKey: true,
+        lastApiErrorCode: null,
+        lastApiErrorMessage: null,
+        lastApiErrorAt: null,
+        createdAt: "2026-03-06T00:00:00.000Z",
+        updatedAt: "2026-03-06T00:00:00.000Z",
+      },
+    ],
+    models: [model],
+  };
+}
+
+async function buildStore(model: AiModelConfig = sampleModel()) {
+  const store = new AdminAiControlPlaneStore();
+  vi.spyOn(store, "getActiveControlPlane").mockResolvedValue(buildActiveControlPlane(model) as any);
+  return store;
 }
 
 describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
@@ -46,362 +126,52 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     vi.restoreAllMocks();
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM).mockReset();
-    vi.mocked(invokeLLM).mockImplementation(async (input: any) => {
-      const prompt = String(input?.modelInput?.prompt ?? "");
-      if (prompt.includes("[prompt_assist_reference_audit]")) {
-        const candidateText = prompt.split("[persona_brief]\n")[1]?.trim() ?? "";
-        const passes =
-          /(Anthony Bourdain|Nora Ephron|James Baldwin|Joan Didion|Plato(?:-inspired|'s)?|伊坂幸太郎|Fleabag|王家衛)/u.test(
-            candidateText,
-          );
-        return {
-          text: JSON.stringify({
-            passes,
-            issues: passes
-              ? []
-              : [
-                  "The brief still needs at least one explicit real reference name in visible text.",
-                ],
-            repairGuidance: passes
-              ? []
-              : ["Name at least one real reference explicitly in the final brief."],
-          }),
-          error: null,
-          finishReason: "stop",
-          providerId: "xai",
-          modelId: "audit-model",
-        } as never;
-      }
-      throw new Error(`Unexpected invokeLLM call without explicit mock: ${prompt.slice(0, 80)}`);
-    });
-  });
-
-  it("uses random English instructions when input is empty", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "Nora Ephron",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A razor-sharp design critic shaped by Nora Ephron, praising originality, distrusting trend-chasing, and replying with concise, surgical feedback grounded in craft and audience perception.",
-        error: null,
-      } as never);
     vi.spyOn(CachedLlmRuntimeConfigProvider.prototype, "getConfig").mockResolvedValue({
       timeoutMs: 12000,
       retries: 1,
       route: { targets: [{ providerId: "xai", modelId: "fallback-model" }] },
     });
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    const text = await store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" });
-
-    expect(text).toContain("razor-sharp");
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        retries: 0,
-        routeOverride: {
-          targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }],
-        },
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining("Choose 1 to 3 real famous reference entities"),
-        }),
-      }),
-    );
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Use at least 1 of these resolved reference entities: Nora Ephron.",
-          ),
-        }),
-      }),
-    );
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Hint at how the persona opens a post or live reply, what metaphor domains it reaches for, how it attacks weak claims, and what praise sounds like when it is genuinely convinced.",
-          ),
-        }),
-      }),
-    );
   });
 
-  it("uses optimize instructions and preserves same-language guidance when input exists", async () => {
+  it("resolves reference JSON first, generates text second, and appends a fixed trailing reference suffix", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce({
-        text: "王家衛",
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Nora Ephron", "real_person")],
+        }),
         error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
       } as never)
       .mockResolvedValueOnce({
-        text: "以王家衛為參考，用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧，總能快速指出作品核心取捨的論壇人格。",
+        text: auditResult({ passes: true }),
         error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A razor-sharp design critic who rewards originality, distrusts trend-chasing, and replies with concise, surgical feedback grounded in craft and audience perception.",
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "rewrite-model",
       } as never);
 
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
+    const store = await buildStore();
 
-    const text = await store.assistPersonaPrompt({
-      modelId: "model-1",
-      inputPrompt: "想要一個尖銳但不失專業的設計評論人格",
-    });
-
-    expect(text).toContain("用直接");
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Infer 1 to 3 fitting real reference entities from the user's persona clues.",
-          ),
-        }),
-      }),
+    await expect(store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" })).resolves.toBe(
+      "A razor-sharp design critic who rewards originality, distrusts trend-chasing, and replies with concise, surgical feedback grounded in craft and audience perception. Reference sources: Nora Ephron.",
     );
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Use at least 1 of these resolved reference entities if they fit: 王家衛.",
-          ),
-        }),
-      }),
-    );
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Use the resolved reference as behavioral source material, not just as a name to mention.",
-          ),
-        }),
-      }),
-    );
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Seed task-facing style behavior: hint at how the persona opens posts or live replies, what metaphor domains it reaches for, how it attacks weak claims, what praise sounds like when convinced, and what tidy shapes it resists.",
-          ),
-        }),
-      }),
-    );
-  });
 
-  it("explicitly preserves named references in optimized prompts", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM).mockResolvedValue({
-      text: "以伊坂幸太郎、Fleabag 和深夜咖啡店觀察為參考，塑造一位擅長把日常細節串成尖銳角色判斷、口氣輕鬆但觀察很準的論壇人格。",
-      error: null,
-    } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    const text = await store.assistPersonaPrompt({
-      modelId: "model-1",
-      inputPrompt: "請保留伊坂幸太郎、Fleabag 和深夜咖啡店觀察這些參考對象",
-    });
-
-    expect(text).toContain("伊坂幸太郎");
-    expect(text).toContain("Fleabag");
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Preserve explicit reference names such as creators, artists, public figures, and fictional characters when the user provides them.",
-          ),
-        }),
-      }),
-    );
-    expect(invokeLLM).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining("Use this exact added reference name:"),
-        }),
-      }),
-    );
-  });
-
-  it("repairs optimize-mode output when an explicit source reference name is paraphrased away", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "A globe-trotting storyteller who treats every meal as a portal to a culture's soul, opening posts with sensory snapshots from forgotten alleyways. He reaches for travel, labor, and class metaphors, attacking elitist food snobbery with the ferocity of a chef who actually worked the line. Praise sounds like quiet reverence for kitchens where survival happens. He resists polished travel content, foodie posturing, and any tidy conclusion about a place or person, insisting the mystery and mess are the whole point.",
-        error: null,
-        finishReason: "stop",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never)
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: false,
-          issues: [
-            "The brief still needs at least one explicit real reference name in visible text.",
-          ],
-          repairGuidance: ["Name at least one real reference explicitly in the final brief."],
-        }),
-        error: null,
-        finishReason: "stop",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain: a globe-trotting storyteller who treats every meal as a portal to a culture's soul, opens posts with sensory snapshots from forgotten alleyways, attacks elitist food snobbery with line-cook contempt, and praises kitchens only with quiet reverence earned through labor.",
-        error: null,
-        finishReason: "stop",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never)
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: true,
-          issues: [],
-          repairGuidance: [],
-        }),
-        error: null,
-        finishReason: "stop",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Anthony Bourdain",
-      }),
-    ).resolves.toContain("Anthony Bourdain");
-
-    expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
-            "The user explicitly referenced these names: Anthony Bourdain.",
+            'Shape: {"namedReferences": [{"name": string, "type": string}]}',
           ),
         }),
       }),
@@ -411,16 +181,217 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
       expect.objectContaining({
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
-            "The user explicitly referenced these names: Anthony Bourdain.",
+            "Do not append a separate reference list; the server will append a fixed trailing reference-sources suffix.",
           ),
         }),
       }),
     );
   });
 
-  it("injects explicit source reference names into empty-output repair prompts", async () => {
+  it("keeps same-language guidance for the text stage while still appending the fixed English suffix", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("王家衛", "real_person")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "一位以冷靜、疏離、但極度敏銳的語氣回應論壇討論的人格，擅長把情緒縫隙與時間錯位拆成具體觀察。",
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "rewrite-model",
+      } as never);
+
+    const store = await buildStore();
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "想要一個像王家衛一樣疏離又敏銳的論壇人格",
+      }),
+    ).resolves.toBe(
+      "一位以冷靜、疏離、但極度敏銳的語氣回應論壇討論的人格，擅長把情緒縫隙與時間錯位拆成具體觀察。 Reference sources: 王家衛.",
+    );
+
+    expect(invokeLLM).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("Keep the same language as the user's input."),
+        }),
+      }),
+    );
+  });
+
+  it("repairs invalid reference-resolution output into valid namedReferences JSON before generating text", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: "Leo Tolstoy",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Leo Tolstoy", "historical_figure")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A Russian moral philosopher who frames every thread as a test of conscience and exposes shallow certainty by pressing on the soul beneath the argument.",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never);
+
+    const store = await buildStore(
+      sampleModel({
+        providerId: "provider-2",
+        modelKey: "MiniMax-M2.5",
+        displayName: "MiniMax M2.5",
+      }),
+    );
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "Leo Tolstoy",
+      }),
+    ).resolves.toContain("Reference sources: Leo Tolstoy.");
+
+    expect(invokeLLM).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Your previous reference-resolution output did not follow the required JSON contract.",
+          ),
+        }),
+      }),
+    );
+  });
+
+  it("repairs reference audit failures when the resolver returns a work title instead of a personality-bearing figure", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("In the Mood for Love", "iconic_persona")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({
+          passes: false,
+          issues: ["Works and titles are clues, not valid namedReferences by themselves."],
+          repairGuidance: [
+            "Replace the title with a personality-bearing figure inferred from the clue.",
+          ],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Wong Kar-wai", "real_person")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A moody romantic observer who turns every disagreement into a suspended hallway of memory, longing, and missed timing.",
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "rewrite-model",
+      } as never);
+
+    const store = await buildStore();
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "In the Mood for Love",
+      }),
+    ).resolves.toContain("Reference sources: Wong Kar-wai.");
+
+    expect(invokeLLM).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("[original_input]"),
+        }),
+      }),
+    );
+    expect(invokeLLM).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("Return only the namedReferences JSON object."),
+        }),
+      }),
+    );
+  });
+
+  it("repairs empty text output without re-running reference audit", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Anthony Bourdain", "real_person")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
       .mockResolvedValueOnce({
         text: "",
         error: null,
@@ -429,309 +400,33 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "MiniMax-M2.5",
       } as never)
       .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain: a globe-trotting cultural critic who opens with a lived-detail hook, attacks soft foodie posturing with line-cook skepticism, and only praises work when it earns appetite, labor, and risk.",
+        text: "A globe-trotting raconteur who opens with sensory detail, distrusts polished travel posturing, and praises work only when it earns appetite, labor, and risk.",
         error: null,
         finishReason: "stop",
         providerId: "minimax",
         modelId: "MiniMax-M2.5",
       } as never);
 
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
+    const store = await buildStore(
+      sampleModel({
+        providerId: "provider-2",
+        modelKey: "MiniMax-M2.5",
+        displayName: "MiniMax M2.5",
+      }),
+    );
 
     await expect(
       store.assistPersonaPrompt({
         modelId: "model-1",
         inputPrompt: "Anthony Bourdain",
       }),
-    ).resolves.toContain("Anthony Bourdain");
-
-    expect(invokeLLM).toHaveBeenCalledTimes(3);
-    expect(invokeLLM).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "The user explicitly referenced these names: Anthony Bourdain.",
-          ),
-        }),
-      }),
+    ).resolves.toBe(
+      "A globe-trotting raconteur who opens with sensory detail, distrusts polished travel posturing, and praises work only when it earns appetite, labor, and risk. Reference sources: Anthony Bourdain.",
     );
-  });
-
-  it("treats a single explicit proper name like Plato as a valid source reference", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM).mockResolvedValueOnce({
-      text: "Plato-inspired forum persona: speaks in Socratic questions that dismantle shallow arguments, opens with demands for definition, and praises strong reasoning only by pushing it deeper.",
-      error: null,
-      finishReason: "stop",
-      providerId: "minimax",
-      modelId: "MiniMax-M2.5",
-    } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Plato",
-      }),
-    ).resolves.toContain("Plato-inspired");
-  });
-
-  it("does not reject prompt assist solely because provider status is disabled", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "James Baldwin",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A blunt cultural critic shaped by James Baldwin who rewards specificity, distrusts hype, and responds with fast, pointed judgments grounded in taste and incentives.",
-        error: null,
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "disabled",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" }),
-    ).resolves.toContain("critic");
-  });
-
-  it("uses the higher shared prompt-assist output cap", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "James Baldwin",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A blunt cultural critic shaped by James Baldwin who opens with hard-earned clarity, distrusts hype, attacks vague claims head-on, and only praises work after it proves itself.",
-        error: null,
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-          maxOutputTokens: 4096,
-        },
-      ],
-    });
-
-    await store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" });
-
-    expect(invokeLLM).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          maxOutputTokens: PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
-        }),
-      }),
-    );
-    expect(invokeLLM).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          maxOutputTokens: PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
-        }),
-      }),
-    );
-  });
-
-  it("retries optimize mode when the main rewrite returns empty text", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "Nora Ephron",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "   ",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A witty but respectful creator persona sharpened through Nora Ephron, opening with dry candor, trusting lived detail over hype, and praising others only when the work actually earns it.",
-        error: null,
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
-      }),
-    ).resolves.toContain("Nora Ephron");
 
     expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.objectContaining({
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining("Your previous prompt-assist output was empty."),
@@ -740,648 +435,316 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     );
   });
 
-  it("throws when optimize-mode empty-output repair is also empty", async () => {
+  it("repairs truncated text output before assembling the fixed trailing reference suffix", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce({
-        text: "Nora Ephron",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "",
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("James Baldwin", "real_person")],
+        }),
         error: null,
         finishReason: "stop",
         providerId: "xai",
-        modelId: "grok-4-1-fast-reasoning",
+        modelId: "resolver-model",
       } as never)
       .mockResolvedValueOnce({
-        text: "   ",
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A cutting moral witness who turns every thread into a confrontation with complicity and insists on a harder truth than comfort can",
         error: null,
         finishReason: "length",
         providerId: "xai",
-        modelId: "grok-4-1-fast-reasoning",
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
-      }),
-    ).rejects.toMatchObject({
-      name: "PromptAssistError",
-      code: "prompt_assist_repair_output_empty",
-      message: "prompt assist repair returned empty output",
-      details: {
-        attemptStage: "empty_output_repair",
+        modelId: "rewrite-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A cutting moral witness who turns every thread into a confrontation with complicity and insists on a harder truth than comfort can tolerate.",
+        error: null,
+        finishReason: "stop",
         providerId: "xai",
-        modelId: "grok-4-1-fast-reasoning",
-        finishReason: "length",
-        hadText: false,
-      },
-    });
-  });
-
-  it("retries random mode when the main rewrite returns empty text", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "James Baldwin",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A blunt cultural critic shaped by James Baldwin who opens with hard-earned clarity, distrusts hype, attacks vague claims head-on, and only praises work after it proves itself.",
-        error: null,
+        modelId: "rewrite-model",
       } as never);
 
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    await expect(store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" })).resolves.toBe(
-      "A blunt cultural critic shaped by James Baldwin who opens with hard-earned clarity, distrusts hype, attacks vague claims head-on, and only praises work after it proves itself.",
-    );
-
-    expect(invokeLLM).toHaveBeenCalledTimes(4);
-  });
-
-  it("throws when the model omits an explicit reference name in the final optimize output", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "王家衛",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧的論壇人格。",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: false,
-          issues: [
-            "The brief still needs at least one explicit real reference name in visible text.",
-          ],
-          repairGuidance: ["Name at least one real reference explicitly in the final brief."],
-        }),
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "用直接、挑剔但有建設性的語氣，塑造一位偏愛高訊號討論、反感空泛吹捧的論壇人格。",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: false,
-          issues: [
-            "The brief still needs at least one explicit real reference name in visible text.",
-          ],
-          repairGuidance: ["Name at least one real reference explicitly in the final brief."],
-        }),
-        error: null,
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
+    const store = await buildStore();
 
     await expect(
       store.assistPersonaPrompt({
         modelId: "model-1",
-        inputPrompt: "想要一個尖銳但不失專業的設計評論人格",
-      }),
-    ).rejects.toMatchObject({
-      name: "PromptAssistError",
-      code: "prompt_assist_missing_reference",
-      message: "prompt assist output must include at least 1 explicit real reference name",
-    });
-  });
-
-  it("throws a typed timeout error when the provider times out before returning prompt-assist text", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "Nora Ephron",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "",
-        error: "LLM_TIMEOUT_12000MS",
-        errorDetails: { code: "TIMEOUT", statusCode: 504 },
-        finishReason: "error",
-        providerId: "xai",
-        modelId: "grok-4-1-fast-reasoning",
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
-      }),
-    ).rejects.toMatchObject({
-      name: "PromptAssistError",
-      code: "prompt_assist_provider_timeout",
-      details: {
-        attemptStage: "main_rewrite",
-        providerId: "xai",
-        modelId: "grok-4-1-fast-reasoning",
-        finishReason: "error",
-        hadText: false,
-      },
-    });
-  });
-
-  it("retries optimize mode when the first rewrite only appends a reference name", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "Nora Ephron",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "Generate a witty but respectful creator persona. Reference Joan Didion.",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A witty but respectful creator persona who values craft over hype, gives specific but considerate feedback, and engages others with dry confidence. Reference Joan Didion.",
-        error: null,
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
+        inputPrompt: "James Baldwin",
       }),
     ).resolves.toBe(
-      "A witty but respectful creator persona who values craft over hype, gives specific but considerate feedback, and engages others with dry confidence. Reference Joan Didion.",
-    );
-
-    expect(invokeLLM).toHaveBeenCalledTimes(4);
-    expect(invokeLLM).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Make the brief imply a concrete opening move, recurring metaphor domains, how weak claims get challenged, what praise sounds like when earned, and what kind of tidy post/comment shapes this persona resists.",
-          ),
-        }),
-      }),
-    );
-    expect(invokeLLM).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          prompt: expect.stringContaining(
-            "Avoid generic persona language such as witty but respectful, sharp taste, grounded observations, or values craft over hype unless the reference truly supports it.",
-          ),
-        }),
-      }),
+      "A cutting moral witness who turns every thread into a confrontation with complicity and insists on a harder truth than comfort can tolerate. Reference sources: James Baldwin.",
     );
   });
 
-  it("repairs truncated optimize-mode output before returning it", async () => {
+  it("fails with raw reference JSON when audit still cannot recover a valid personality-bearing reference", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce({
-        text: "Anthony Bourdain",
+        text: promptAssistReferenceOutput({
+          namedReferences: [
+            promptAssistNamedReference("One Hundred Years of Solitude", "iconic_persona"),
+          ],
+        }),
         error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
       } as never)
       .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain: a creator who approaches culture through food and travel, opens threads with a provocative question or",
+        text: auditResult({
+          passes: false,
+          issues: ["Works and titles are clues, not valid namedReferences by themselves."],
+          repairGuidance: ["Infer a personality-bearing figure from the title."],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [
+            promptAssistNamedReference("One Hundred Years of Solitude", "iconic_persona"),
+          ],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({
+          passes: false,
+          issues: ["Works and titles are clues, not valid namedReferences by themselves."],
+          repairGuidance: ["Infer a personality-bearing figure from the title."],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "audit-model",
+      } as never);
+
+    const store = await buildStore();
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "One Hundred Years of Solitude",
+      }),
+    ).rejects.toMatchObject({
+      code: "prompt_assist_missing_reference",
+      details: expect.objectContaining({
+        rawText: promptAssistReferenceOutput({
+          namedReferences: [
+            promptAssistNamedReference("One Hundred Years of Solitude", "iconic_persona"),
+          ],
+        }),
+      }),
+    } satisfies Partial<PromptAssistError>);
+  });
+
+  it("fails with a typed invalid-reference error when reference repair still does not return valid JSON", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: "William Shakespeare",
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "still not json",
+        error: null,
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "resolver-model",
+      } as never);
+
+    const store = await buildStore();
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "William Shakespeare",
+      }),
+    ).rejects.toMatchObject({
+      code: "prompt_assist_invalid_reference_output",
+      details: expect.objectContaining({
+        rawText: "still not json",
+      }),
+    } satisfies Partial<PromptAssistError>);
+  });
+
+  it("retries reference-resolution repair with a shorter prompt when the first repair attempt is length-truncated and empty", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: "",
         error: null,
         finishReason: "length",
         providerId: "minimax",
         modelId: "MiniMax-M2.5",
       } as never)
       .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain: a creator who approaches culture through food and travel, opens threads with a provocative question, attacks weak claims with lived-detail skepticism, and praises work only when it earns real appetite and risk.",
+        text: "",
+        error: null,
+        finishReason: "length",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Sigmund Freud", "historical_figure")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A clinical excavator of motive who opens with unsettling questions, treats every thread as a case history, and exposes rationalizations with cool interpretive pressure.",
         error: null,
         finishReason: "stop",
         providerId: "minimax",
         modelId: "MiniMax-M2.5",
       } as never);
 
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
+    const store = await buildStore(
+      sampleModel({
+        providerId: "provider-2",
+        modelKey: "MiniMax-M2.5",
+        displayName: "MiniMax M2.5",
+      }),
+    );
 
     await expect(
       store.assistPersonaPrompt({
         modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
+        inputPrompt: "Sigmund Freud",
       }),
-    ).resolves.toContain("attacks weak claims with lived-detail skepticism");
+    ).resolves.toContain("Reference sources: Sigmund Freud.");
 
-    expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
         modelInput: expect.objectContaining({
-          prompt: expect.stringContaining("The previous rewrite was truncated or incomplete."),
+          maxOutputTokens: 320,
+          prompt: expect.stringContaining("[compact_retry_repair]"),
         }),
       }),
     );
   });
 
-  it("throws a typed error when truncated-output repair is still incomplete", async () => {
+  it("does not fail missing-reference when the first reference audit is empty but the audit retry passes for valid namedReferences", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce({
-        text: "Anthony Bourdain",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain: a creator who approaches culture through food and travel, opens threads with a provocative question or",
-        error: null,
-        finishReason: "length",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain, attacking weak claims with lived-detail skepticism and praising creators only when",
-        error: null,
-        finishReason: "length",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
-      }),
-    ).rejects.toMatchObject({
-      name: "PromptAssistError",
-      code: "prompt_assist_truncated_output",
-      details: {
-        attemptStage: "truncated_output_repair",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-        finishReason: "length",
-        hadText: true,
-      },
-    });
-  });
-
-  it("throws a repair-output-empty error with truncation-repair details when truncated repair returns blank text", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "Anthony Bourdain",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A forum persona modeled on Anthony Bourdain: a creator who approaches culture through food and travel, opens threads with a provocative question or",
-        error: null,
-        finishReason: "length",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never)
-      .mockResolvedValueOnce({
-        text: "   ",
-        error: null,
-        finishReason: "length",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-      } as never);
-
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "minimax",
-          displayName: "Minimax",
-          sdkPackage: "vercel-minimax-ai-provider",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [
-        {
-          ...sampleModel(),
-          providerId: "provider-1",
-          modelKey: "MiniMax-M2.5",
-          displayName: "MiniMax M2.5",
-        },
-      ],
-    });
-
-    await expect(
-      store.assistPersonaPrompt({
-        modelId: "model-1",
-        inputPrompt: "Generate a witty but respectful creator persona.",
-      }),
-    ).rejects.toMatchObject({
-      name: "PromptAssistError",
-      code: "prompt_assist_repair_output_empty",
-      message: "prompt assist truncation repair returned empty output",
-      details: {
-        attemptStage: "truncated_output_repair",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-        finishReason: "length",
-        hadText: false,
-      },
-    });
-  });
-
-  it("uses resolved reference entities to rewrite short work-title inputs into a clearer persona brief", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "Monkey D. Luffy | Eiichiro Oda",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "A persona inspired by a One Piece anime character, with bold optimism, chaotic loyalty, and impulsive warmth. Reference Monkey D. Luffy.",
-        error: null,
-      } as never)
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: true,
-          issues: [],
-          repairGuidance: [],
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Joseph Campbell", "real_person")],
         }),
         error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: auditResult({ passes: true }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A myth-minded guide who frames every argument as a rite of passage, prizes symbolic depth over literal certainty, and praises insight that earns its transformation.",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
       } as never);
 
-    const store = new AdminAiControlPlaneStore();
-    vi.spyOn(store, "getActiveControlPlane").mockResolvedValue({
-      release: null,
-      document: {
-        globalPolicyDraft: {
-          systemBaseline: "baseline",
-          globalPolicy: "policy",
-          styleGuide: "style",
-          forbiddenRules: "forbidden",
-        },
-      },
-      providers: [
-        {
-          id: "provider-1",
-          providerKey: "xai",
-          displayName: "xAI",
-          sdkPackage: "@ai-sdk/xai",
-          status: "active",
-          testStatus: "success",
-          keyLast4: "1234",
-          hasKey: true,
-          lastApiErrorCode: null,
-          lastApiErrorMessage: null,
-          lastApiErrorAt: null,
-          createdAt: "2026-03-06T00:00:00.000Z",
-          updatedAt: "2026-03-06T00:00:00.000Z",
-        },
-      ],
-      models: [sampleModel()],
-    });
+    const store = await buildStore(
+      sampleModel({
+        providerId: "provider-2",
+        modelKey: "MiniMax-M2.5",
+        displayName: "MiniMax M2.5",
+      }),
+    );
 
-    const result = await store.assistPersonaPrompt({
-      modelId: "model-1",
-      inputPrompt: "one piece",
-    });
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "Joseph Campbell",
+      }),
+    ).resolves.toContain("Reference sources: Joseph Campbell.");
+  });
 
-    expect(result).toContain("One Piece anime character");
-    expect(result).toContain("Monkey D. Luffy");
-    expect(result).not.toContain("a one piece");
+  it("treats an empty reference audit as inconclusive instead of failing a structurally valid namedReferences JSON stage", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Joseph Campbell", "real_person")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A myth-minded guide who frames every argument as a rite of passage, prizes symbolic depth over literal certainty, and praises insight that earns its transformation.",
+        error: null,
+        finishReason: "stop",
+        providerId: "minimax",
+        modelId: "MiniMax-M2.5",
+      } as never);
+
+    const store = await buildStore(
+      sampleModel({
+        providerId: "provider-2",
+        modelKey: "MiniMax-M2.5",
+        displayName: "MiniMax M2.5",
+      }),
+    );
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "Joseph Campbell",
+      }),
+    ).resolves.toContain("Reference sources: Joseph Campbell.");
   });
 });

@@ -124,6 +124,14 @@ describe("usePersonaBatchGeneration", () => {
     container.remove();
   });
 
+  it("starts with a default chunk size of 5", async () => {
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    expect(latestHook?.chunkSize).toBe(5);
+  });
+
   it("adds only unique names from the input and marks DB duplicates after the bulk reference check", async () => {
     apiPostMock.mockImplementation((url: string, payload: { names: string[] }) => {
       if (url === "/api/admin/ai/persona-references/check") {
@@ -257,7 +265,7 @@ describe("usePersonaBatchGeneration", () => {
     ]);
     expect(latestHook?.addLastCompletedElapsedSeconds).not.toBeNull();
     expect(latestHook?.addLastCompletedAddedCount).toBe(1);
-    expect(latestHook?.addLastCompletedDuplicateCount).toBe(1);
+    expect(latestHook?.addLastCompletedDuplicateCount).toBe(0);
     expect(latestHook?.referenceInput).toBe("");
     expect(apiPostMock).toHaveBeenLastCalledWith("/api/admin/ai/persona-references/check", {
       names: ["Anthony Bourdain", "Hayao Miyazaki"],
@@ -352,6 +360,116 @@ describe("usePersonaBatchGeneration", () => {
     });
   });
 
+  it("uses the applied reference-check result when reporting duplicate rows after add", async () => {
+    apiPostMock.mockImplementation((url: string, payload: { names: string[] }) => {
+      if (url === "/api/admin/ai/persona-references/check") {
+        return Promise.resolve({
+          items: payload.names.map((name) => ({
+            input: name,
+            matchKey: name
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, ""),
+            romanizedName: name.trim(),
+            exists: name === "Leo Tolstoy",
+          })),
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Leo Tolstoy");
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    expect(latestHook?.rows).toHaveLength(1);
+    expect(latestHook?.rows[0]?.referenceCheckStatus).toBe("duplicate");
+    expect(latestHook?.addLastCompletedAddedCount).toBe(1);
+    expect(latestHook?.addLastCompletedDuplicateCount).toBe(1);
+  });
+
+  it("clears duplicate and saved rows from the batch header action", async () => {
+    apiPostMock.mockImplementation((url: string, payload: { names: string[] }) => {
+      if (url === "/api/admin/ai/persona-references/check") {
+        return Promise.resolve({
+          items: payload.names.map((name) => ({
+            input: name,
+            matchKey: name
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, ""),
+            romanizedName: name.trim(),
+            exists: name.trim().toLowerCase() === "hayao miyazaki",
+          })),
+        });
+      }
+      if (url === "/api/admin/ai/persona-generation/preview") {
+        return Promise.resolve({
+          preview: {
+            structured: mockPersonaGenerationPreview.structured,
+          },
+        });
+      }
+      if (url === "/api/admin/ai/personas") {
+        return Promise.resolve({ personaId: "persona-1" });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Hayao Miyazaki\nUrsula K. Le Guin");
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    const duplicateRow = latestHook?.rows.find((row) => row.referenceName === "Hayao Miyazaki");
+    const newRow = latestHook?.rows.find((row) => row.referenceName === "Ursula K. Le Guin");
+    expect(duplicateRow?.referenceCheckStatus).toBe("duplicate");
+    expect(newRow?.referenceCheckStatus).toBe("new");
+
+    act(() => {
+      latestHook?.updateContextPrompt(newRow!.rowId, "A speculative voice.");
+    });
+
+    await act(async () => {
+      await latestHook?.runRowGenerate(newRow!.rowId);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await latestHook?.runRowSave(newRow!.rowId);
+      await flushPromises();
+    });
+
+    expect(latestHook?.rows.find((row) => row.rowId === newRow!.rowId)?.saved).toBe(true);
+    expect(latestHook?.canClearBatchRows).toBe(true);
+
+    await act(async () => {
+      await latestHook?.clearBatchRows();
+      await flushPromises();
+    });
+
+    expect(latestHook?.rows).toHaveLength(0);
+    expect(latestHook?.canClearBatchRows).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith("Duplicate and saved rows cleared");
+  });
+
   it("clears the input and reports zero added rows when every submitted name is a duplicate", async () => {
     apiPostMock.mockImplementation((url: string, payload: { names: string[] }) => {
       if (url === "/api/admin/ai/persona-references/check") {
@@ -397,7 +515,7 @@ describe("usePersonaBatchGeneration", () => {
     expect(latestHook?.rows).toHaveLength(1);
     expect(latestHook?.referenceInput).toBe("");
     expect(latestHook?.addLastCompletedAddedCount).toBe(0);
-    expect(latestHook?.addLastCompletedDuplicateCount).toBe(1);
+    expect(latestHook?.addLastCompletedDuplicateCount).toBe(0);
     expect(latestHook?.addLastCompletedElapsedSeconds).toBe(0);
   });
 
@@ -588,7 +706,7 @@ describe("usePersonaBatchGeneration", () => {
     expect(latestHook?.rows[0]?.contextPrompt).toContain("Anthony Bourdain");
   });
 
-  it("stores prompt-assist error payloads with the failing llm result for debug modal inspection", async () => {
+  it("stores prompt-assist error payloads with the failing llm raw text for debug modal inspection", async () => {
     apiPostMock.mockImplementation((url: string, payload: { names?: string[] }) => {
       if (url === "/api/admin/ai/persona-references/check") {
         return Promise.resolve({
@@ -605,12 +723,13 @@ describe("usePersonaBatchGeneration", () => {
       if (url === "/api/admin/ai/persona-generation/prompt-assist") {
         return Promise.reject(
           new ApiError(
-            "prompt assist output must include at least 1 explicit real reference name",
+            "prompt assist output must include at least 1 explicit personality-bearing named reference",
             400,
             {
-              error: "prompt assist output must include at least 1 explicit real reference name",
+              error:
+                "prompt assist output must include at least 1 explicit personality-bearing named reference",
               code: "prompt_assist_missing_reference",
-              result: "A globe-trotting storyteller who turns every meal into a social map.",
+              rawText: "A globe-trotting storyteller who turns every meal into a social map.",
             },
           ),
         );
@@ -641,11 +760,13 @@ describe("usePersonaBatchGeneration", () => {
 
     expect(latestHook?.rows[0]?.latestError).toMatchObject({
       type: "prompt",
-      message: "prompt assist output must include at least 1 explicit real reference name",
+      message:
+        "prompt assist output must include at least 1 explicit personality-bearing named reference",
       rawResponse: {
-        error: "prompt assist output must include at least 1 explicit real reference name",
+        error:
+          "prompt assist output must include at least 1 explicit personality-bearing named reference",
         code: "prompt_assist_missing_reference",
-        result: "A globe-trotting storyteller who turns every meal into a social map.",
+        rawText: "A globe-trotting storyteller who turns every meal into a social map.",
       },
     });
   });
@@ -849,6 +970,96 @@ describe("usePersonaBatchGeneration", () => {
     expect(latestHook?.rows[2]?.contextPrompt).toBe("Prompt for Octavia Butler");
   });
 
+  it("cancels a pending bulk pause when resume is clicked before the current chunk settles", async () => {
+    const promptDeferredByName = new Map<string, ReturnType<typeof createDeferred>>();
+
+    apiPostMock.mockImplementation(
+      (url: string, payload: { names?: string[]; inputPrompt?: string }) => {
+        if (url === "/api/admin/ai/persona-references/check") {
+          return Promise.resolve({
+            items: (payload.names ?? []).map((name) => ({
+              input: name,
+              matchKey: name
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ""),
+              romanizedName: name.trim(),
+              exists: false,
+            })),
+          });
+        }
+        if (url === "/api/admin/ai/persona-generation/prompt-assist") {
+          const deferred = createDeferred();
+          promptDeferredByName.set(payload.inputPrompt ?? "", deferred);
+          return deferred.promise.then(() => ({
+            text: `Prompt for ${payload.inputPrompt}`,
+          }));
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      },
+    );
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki\nOctavia Butler");
+      latestHook?.setChunkSize(2);
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    act(() => {
+      void latestHook?.runBulkPromptAssist();
+    });
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(latestHook?.bulkTask).toBe("prompt");
+
+    act(() => {
+      latestHook?.requestBulkPause();
+    });
+
+    expect(latestHook?.bulkPauseRequested).toBe(true);
+
+    await act(async () => {
+      await latestHook?.resumeBulkTask();
+      await flushPromises();
+    });
+
+    expect(latestHook?.bulkPauseRequested).toBe(false);
+    expect(latestHook?.bulkTask).toBe("prompt");
+
+    await act(async () => {
+      promptDeferredByName.get("Anthony Bourdain")?.resolve();
+      promptDeferredByName.get("Hayao Miyazaki")?.resolve();
+      await flushPromises();
+    });
+
+    expect(latestHook?.bulkPausedTask).toBeNull();
+    expect(latestHook?.bulkTask).toBe("prompt");
+    expect(apiPostMock).toHaveBeenCalledWith("/api/admin/ai/persona-generation/prompt-assist", {
+      modelId: "model-1",
+      inputPrompt: "Octavia Butler",
+    });
+
+    await act(async () => {
+      promptDeferredByName.get("Octavia Butler")?.resolve();
+      await flushPromises();
+    });
+
+    expect(latestHook?.bulkTask).toBeNull();
+    expect(latestHook?.bulkPausedTask).toBeNull();
+    expect(latestHook?.bulkLastCompletedTask).toBe("prompt");
+  });
+
   it("switches to a different bulk action while paused instead of forcing the old queue to resume", async () => {
     const promptDeferredByName = new Map<string, ReturnType<typeof createDeferred>>();
 
@@ -941,5 +1152,160 @@ describe("usePersonaBatchGeneration", () => {
       modelId: "model-1",
       inputPrompt: "Octavia Butler",
     });
+  });
+
+  it("auto-runs another bulk prompt round when some rows remain eligible after the first round", async () => {
+    const promptAttempts = new Map<string, number>();
+
+    apiPostMock.mockImplementation(
+      (url: string, payload: { names?: string[]; inputPrompt?: string }) => {
+        if (url === "/api/admin/ai/persona-references/check") {
+          return Promise.resolve({
+            items: (payload.names ?? []).map((name) => ({
+              input: name,
+              matchKey: name
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ""),
+              romanizedName: name.trim(),
+              exists: false,
+            })),
+          });
+        }
+        if (url === "/api/admin/ai/persona-generation/prompt-assist") {
+          const inputPrompt = payload.inputPrompt ?? "";
+          const attempt = (promptAttempts.get(inputPrompt) ?? 0) + 1;
+          promptAttempts.set(inputPrompt, attempt);
+          if (inputPrompt === "Anthony Bourdain" && attempt === 1) {
+            return Promise.reject(
+              new ApiError("temporary prompt failure", 500, { error: "temporary failure" }),
+            );
+          }
+          return Promise.resolve({
+            text: `Prompt for ${inputPrompt}`,
+          });
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      },
+    );
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki");
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await latestHook?.runBulkPromptAssist();
+      await flushPromises();
+    });
+
+    expect(promptAttempts.get("Anthony Bourdain")).toBe(2);
+    expect(promptAttempts.get("Hayao Miyazaki")).toBe(1);
+    expect(latestHook?.rows[0]?.contextPrompt).toBe("Prompt for Anthony Bourdain");
+    expect(latestHook?.rows[1]?.contextPrompt).toBe("Prompt for Hayao Miyazaki");
+    expect(latestHook?.bulkLastCompletedTask).toBe("prompt");
+  });
+
+  it("recomputes eligible rows on resume instead of resuming only the previously remaining paused queue", async () => {
+    const promptDeferreds = new Map<string, Array<ReturnType<typeof createDeferred>>>();
+
+    apiPostMock.mockImplementation(
+      (url: string, payload: { names?: string[]; inputPrompt?: string }) => {
+        if (url === "/api/admin/ai/persona-references/check") {
+          return Promise.resolve({
+            items: (payload.names ?? []).map((name) => ({
+              input: name,
+              matchKey: name
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ""),
+              romanizedName: name.trim(),
+              exists: false,
+            })),
+          });
+        }
+        if (url === "/api/admin/ai/persona-generation/prompt-assist") {
+          const inputPrompt = payload.inputPrompt ?? "";
+          const deferred = createDeferred();
+          const current = promptDeferreds.get(inputPrompt) ?? [];
+          current.push(deferred);
+          promptDeferreds.set(inputPrompt, current);
+          return deferred.promise.then(() => ({
+            text: `Prompt for ${inputPrompt}`,
+          }));
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      },
+    );
+
+    await act(async () => {
+      root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki\nOctavia Butler");
+      latestHook?.setChunkSize(2);
+    });
+
+    await act(async () => {
+      await latestHook?.addReferenceRowsFromInput();
+      await flushPromises();
+    });
+
+    act(() => {
+      void latestHook?.runBulkPromptAssist();
+    });
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    act(() => {
+      latestHook?.requestBulkPause();
+    });
+
+    await act(async () => {
+      promptDeferreds.get("Anthony Bourdain")?.[0]?.resolve();
+      promptDeferreds.get("Hayao Miyazaki")?.[0]?.resolve();
+      await flushPromises();
+    });
+
+    expect(latestHook?.bulkPausedTask).toBe("prompt");
+    expect(latestHook?.rows[0]?.contextPrompt).toBe("Prompt for Anthony Bourdain");
+    expect(latestHook?.rows[2]?.contextPrompt).toBe("");
+
+    await act(async () => {
+      latestHook?.updateContextPrompt("row-1", "");
+    });
+
+    act(() => {
+      void latestHook?.runBulkPromptAssist();
+    });
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(promptDeferreds.get("Anthony Bourdain")?.length).toBe(2);
+    expect(promptDeferreds.get("Octavia Butler")?.length).toBe(1);
+
+    await act(async () => {
+      promptDeferreds.get("Anthony Bourdain")?.[1]?.resolve();
+      promptDeferreds.get("Octavia Butler")?.[0]?.resolve();
+      await flushPromises();
+    });
+
+    expect(latestHook?.bulkTask).toBeNull();
+    expect(latestHook?.bulkPausedTask).toBeNull();
+    expect(latestHook?.rows[0]?.contextPrompt).toBe("Prompt for Anthony Bourdain");
+    expect(latestHook?.rows[2]?.contextPrompt).toBe("Prompt for Octavia Butler");
   });
 });

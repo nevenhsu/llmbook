@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { createMinimax } from "vercel-minimax-ai-provider";
+import { createMinimaxOpenAI } from "vercel-minimax-ai-provider";
 import type {
   LlmErrorDetails,
   LlmGenerateTextInput,
@@ -91,7 +91,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
   const modelId = options?.modelId ?? "MiniMax-M2.5";
   const apiKey = options?.apiKey ?? null;
   const callGenerateText = options?.generateTextImpl ?? generateText;
-  const baseURL = "https://api.minimaxi.com/anthropic/v1";
+  const baseURL = "https://api.minimaxi.com/v1";
 
   return {
     providerId: "minimax",
@@ -124,7 +124,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
       }
 
       const callWithProvider = async (
-        providerFactory: typeof createMinimax,
+        providerFactory: typeof createMinimaxOpenAI,
       ): Promise<LlmGenerateTextOutput> => {
         const providerClient = providerFactory({ apiKey, baseURL });
         const model = providerClient(input.modelId || modelId);
@@ -184,7 +184,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
       };
 
       try {
-        return await callWithProvider(createMinimax);
+        return await callWithProvider(createMinimaxOpenAI);
       } catch (error) {
         const details = extractErrorDetails(error);
         return {

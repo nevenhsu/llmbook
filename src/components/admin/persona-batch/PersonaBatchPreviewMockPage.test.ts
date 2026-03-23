@@ -40,11 +40,37 @@ describe("PersonaBatchPreviewMockPage", () => {
 
     expect(container.textContent).toContain("Persona Batch Preview");
     expect(container.textContent).toContain("No network request or database write happens here.");
+    expect(container.textContent).toContain("Chunk Size: 5");
     expect(container.textContent).toContain("Anthony Bourdain");
     expect(container.textContent).toContain("Hayao Miyazaki");
     expect(container.textContent).toContain("Duplicate");
     expect(container.textContent).toContain("View");
     expect(container.textContent).not.toContain("Row Error");
+  });
+
+  it("clears saved and duplicate rows from the preview header clear action", async () => {
+    await act(async () => {
+      root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    expect(container.querySelector("tbody")?.textContent).toContain("Anthony Bourdain");
+    expect(container.querySelector("tbody")?.textContent).toContain("Hayao Miyazaki");
+    expect(container.querySelector("tbody")?.textContent).toContain("Ursula K. Le Guin");
+
+    const trailingControls = container.querySelector('[data-testid="batch-rows-header-trailing"]');
+    const clearButton = Array.from(trailingControls?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.trim() === "Clear",
+    );
+    expect(clearButton).toBeDefined();
+
+    await act(async () => {
+      clearButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const tbodyText = container.querySelector("tbody")?.textContent ?? "";
+    expect(tbodyText).not.toContain("Anthony Bourdain");
+    expect(tbodyText).not.toContain("Hayao Miyazaki");
+    expect(tbodyText).toContain("Ursula K. Le Guin");
   });
 
   it("resets preview state from the refresh action and auto-stops bulk loading after one second", async () => {
@@ -141,33 +167,34 @@ describe("PersonaBatchPreviewMockPage", () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
     });
 
-    const addButton = Array.from(container.querySelectorAll("button")).find(
+    const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Add",
     );
-    expect(addButton).toBeDefined();
+    expect(openAddModalButton).toBeDefined();
 
     await act(async () => {
-      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const addSummary = container.querySelector(
-      '[data-testid="reference-input-add-status-summary"]',
+    const modalAddButton = Array.from(container.querySelectorAll("dialog button")).find(
+      (button) => button.textContent?.trim() === "Add",
     );
-    const addElapsed = container.querySelector(
-      '[data-testid="reference-input-add-status-elapsed"]',
-    );
-    expect(addSummary?.textContent).toBe("Adding");
-    expect(addElapsed?.textContent).toBe("00:00");
+    expect(modalAddButton).toBeDefined();
+
+    await act(async () => {
+      modalAddButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(
+      container.querySelector('[data-testid="reference-sources-add-elapsed"]')?.textContent,
+    ).toBe("00:00");
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
     });
 
     expect(
-      container.querySelector('[data-testid="reference-input-add-status-summary"]')?.textContent,
-    ).toBe("Added 1 row, 0 duplicates");
-    expect(
-      container.querySelector('[data-testid="reference-input-add-status-elapsed"]')?.textContent,
+      container.querySelector('[data-testid="reference-sources-add-elapsed"]')?.textContent,
     ).toBe("00:01");
     expect(container.querySelector("tbody")?.textContent).toContain("Octavia Butler");
   });
@@ -177,7 +204,16 @@ describe("PersonaBatchPreviewMockPage", () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
     });
 
-    const textarea = container.querySelector("textarea") as HTMLTextAreaElement | null;
+    const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(openAddModalButton).toBeDefined();
+
+    await act(async () => {
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const textarea = container.querySelector("dialog textarea") as HTMLTextAreaElement | null;
     expect(textarea).not.toBeNull();
 
     await act(async () => {
@@ -190,7 +226,7 @@ describe("PersonaBatchPreviewMockPage", () => {
       "Anthony Bourdain",
     );
 
-    const addButton = Array.from(container.querySelectorAll("button")).find(
+    const addButton = Array.from(container.querySelectorAll("dialog button")).find(
       (button) => button.textContent?.trim() === "Add",
     );
     expect(addButton).toBeDefined();
@@ -200,12 +236,11 @@ describe("PersonaBatchPreviewMockPage", () => {
     });
 
     expect(
-      container.querySelector('[data-testid="reference-input-add-status-summary"]')?.textContent,
-    ).toBe("Added 0 rows, 1 duplicate");
-    expect(
-      container.querySelector('[data-testid="reference-input-add-status-elapsed"]')?.textContent,
+      container.querySelector('[data-testid="reference-sources-add-elapsed"]')?.textContent,
     ).toBe("00:00");
-    expect((container.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("");
+    expect((container.querySelector("dialog textarea") as HTMLTextAreaElement | null)?.value).toBe(
+      "",
+    );
   });
 
   it("does not reuse row ids after clearing a row and adding another reference", async () => {
@@ -215,7 +250,16 @@ describe("PersonaBatchPreviewMockPage", () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
     });
 
-    const addButton = Array.from(container.querySelectorAll("button")).find(
+    const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(openAddModalButton).toBeDefined();
+
+    await act(async () => {
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const addButton = Array.from(container.querySelectorAll("dialog button")).find(
       (button) => button.textContent?.trim() === "Add",
     );
     expect(addButton).toBeDefined();
@@ -235,7 +279,11 @@ describe("PersonaBatchPreviewMockPage", () => {
       clearRowButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const textarea = container.querySelector("textarea");
+    await act(async () => {
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const textarea = container.querySelector("dialog textarea");
     expect(textarea).not.toBeNull();
 
     await act(async () => {
@@ -259,7 +307,233 @@ describe("PersonaBatchPreviewMockPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("pauses after the current bulk preview chunk and resumes from the next chunk", async () => {
+  it("auto-runs another preview bulk round when more eligible rows remain after the first chunk", async () => {
+    await act(async () => {
+      root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(openAddModalButton).toBeDefined();
+
+    await act(async () => {
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const textarea = container.querySelector("dialog textarea") as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      if (textarea) {
+        setTextareaValue(
+          textarea,
+          [
+            "Ada Lovelace",
+            "James Baldwin",
+            "Nina Simone",
+            "Leiji Matsumoto",
+            "Toni Morrison",
+            "Octavia E. Butler",
+            "Virginia Woolf",
+            "Mary Shelley",
+            "Akira Kurosawa",
+            "Simone Weil",
+            "Margaret Atwood",
+          ].join("\n"),
+        );
+      }
+    });
+
+    const modalAddButton = Array.from(container.querySelectorAll("dialog button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(modalAddButton).toBeDefined();
+
+    await act(async () => {
+      modalAddButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const headerControls = container.querySelector('[data-testid="batch-rows-header-controls"]');
+    const bulkPromptButton = Array.from(headerControls?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.includes("Prompt"),
+    );
+    expect(bulkPromptButton).toBeDefined();
+
+    await act(async () => {
+      bulkPromptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="bulk-loading-prompt"]')).not.toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container.querySelector('[data-testid="bulk-loading-prompt"]')).not.toBeNull();
+    expect(container.textContent).toContain("Prompting 00:01");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container.querySelector('[data-testid="bulk-loading-prompt"]')).not.toBeNull();
+    expect(container.textContent).toContain("Prompting 00:02");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container.querySelector('[data-testid="bulk-loading-prompt"]')).toBeNull();
+    expect(container.textContent).toContain("Prompted 00:03");
+    expect(container.textContent).toContain("Mock AI prompt for Margaret Atwood");
+  });
+
+  it("recomputes preview bulk eligibility on resume instead of continuing the old paused order", async () => {
+    await act(async () => {
+      root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(openAddModalButton).toBeDefined();
+
+    await act(async () => {
+      openAddModalButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const textarea = container.querySelector("dialog textarea") as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      if (textarea) {
+        setTextareaValue(
+          textarea,
+          [
+            "Ada Lovelace",
+            "James Baldwin",
+            "Nina Simone",
+            "Leiji Matsumoto",
+            "Toni Morrison",
+            "Octavia E. Butler",
+            "Virginia Woolf",
+            "Mary Shelley",
+            "Akira Kurosawa",
+            "Simone Weil",
+            "Margaret Atwood",
+          ].join("\n"),
+        );
+      }
+    });
+
+    const modalAddButton = Array.from(container.querySelectorAll("dialog button")).find(
+      (button) => button.textContent?.trim() === "Add",
+    );
+    expect(modalAddButton).toBeDefined();
+
+    await act(async () => {
+      modalAddButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const headerControls = container.querySelector('[data-testid="batch-rows-header-controls"]');
+    const bulkPromptButton = Array.from(headerControls?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.includes("Prompt"),
+    );
+    expect(bulkPromptButton).toBeDefined();
+
+    await act(async () => {
+      bulkPromptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const pauseButton = container.querySelector('button[aria-label="Pause bulk task"]');
+    expect(pauseButton).toBeDefined();
+
+    await act(async () => {
+      pauseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container.textContent).toContain("Prompting 00:01 paused");
+
+    const adaRow = Array.from(container.querySelectorAll("tbody tr")).find((row) =>
+      row.textContent?.includes("Ada Lovelace"),
+    );
+    expect(adaRow).toBeDefined();
+
+    const adaContextEditButton = Array.from(adaRow?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.trim() === "Edit" && !button.hasAttribute("disabled"),
+    );
+    expect(adaContextEditButton).toBeDefined();
+
+    await act(async () => {
+      adaContextEditButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const editContextModal = Array.from(container.querySelectorAll("dialog")).find((dialog) =>
+      dialog.textContent?.includes("Edit Context Prompt"),
+    );
+    expect(editContextModal).toBeDefined();
+
+    const editTextarea = editContextModal?.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(editTextarea).not.toBeNull();
+
+    await act(async () => {
+      if (editTextarea) {
+        setTextareaValue(editTextarea, "");
+      }
+    });
+
+    const saveContextButton = Array.from(editContextModal?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.trim() === "Save",
+    );
+    expect(saveContextButton).toBeDefined();
+
+    await act(async () => {
+      saveContextButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(adaRow?.textContent).not.toContain("Mock AI prompt for Ada Lovelace");
+
+    const resumeButton = container.querySelector('button[aria-label="Resume bulk task"]');
+    expect(resumeButton).toBeDefined();
+
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    const updatedAdaRow = Array.from(container.querySelectorAll("tbody tr")).find((row) =>
+      row.textContent?.includes("Ada Lovelace"),
+    );
+    expect(updatedAdaRow?.textContent).toContain("Mock AI prompt for Ada Lovelace");
+
+    expect(container.querySelector('[data-testid="bulk-loading-prompt"]')).not.toBeNull();
+    expect(container.textContent).toContain("Prompting 00:04");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container.textContent).toContain("Prompted 00:05");
+    expect(container.querySelector('button[aria-label="Resume bulk task"]')).toBeNull();
+  });
+
+  it("lets resume cancel a pending pause before the running preview batch settles", async () => {
     await act(async () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
     });
@@ -281,12 +555,6 @@ describe("PersonaBatchPreviewMockPage", () => {
       pauseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    await act(async () => {
-      vi.advanceTimersByTime(1000);
-    });
-
-    expect(container.textContent).toContain("Generating 00:01 paused");
-
     const resumeButton = container.querySelector('button[aria-label="Resume bulk task"]');
     expect(resumeButton).toBeDefined();
 
@@ -294,13 +562,13 @@ describe("PersonaBatchPreviewMockPage", () => {
       resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("Generating 00:01");
+    expect(container.querySelector('button[aria-label="Pause bulk task"]')).toBeDefined();
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
     });
 
-    expect(container.textContent).toContain("Generated 00:02");
-    expect(container.querySelector('button[aria-label="Resume bulk task"]')).toBeNull();
+    expect(container.textContent).toContain("Generated 00:01");
+    expect(container.textContent).not.toContain("paused");
   });
 });

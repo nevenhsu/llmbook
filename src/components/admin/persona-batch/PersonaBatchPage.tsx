@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
 import type { PersonaBatchGenerationController } from "@/hooks/admin/usePersonaBatchGeneration";
 import { usePersonaBatchGeneration } from "@/hooks/admin/usePersonaBatchGeneration";
@@ -11,6 +11,7 @@ import { EditContextPromptModal } from "./EditContextPromptModal";
 import { EditPersonaIdentityModal } from "./EditPersonaIdentityModal";
 import { PersonaBatchTable } from "./PersonaBatchTable";
 import { PersonaBatchToolbar } from "./PersonaBatchToolbar";
+import { ReferenceSourcesModal } from "./ReferenceSourcesModal";
 
 type Props = {
   initialModels?: AiModelConfig[];
@@ -20,7 +21,15 @@ type Props = {
   description?: string;
   topNotice?: ReactNode;
   headerActions?: ReactNode;
+  resetSignal?: number;
 };
+
+function countReferenceRows(value: string): number {
+  return value
+    .split(/[\n,]/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0).length;
+}
 
 export function PersonaBatchPage({
   initialModels = [],
@@ -30,6 +39,7 @@ export function PersonaBatchPage({
   description = "Generate and save multiple persona candidates in one batch-oriented workflow.",
   topNotice = null,
   headerActions = null,
+  resetSignal = 0,
 }: Props) {
   const internalController = usePersonaBatchGeneration({
     initialModels,
@@ -37,6 +47,7 @@ export function PersonaBatchPage({
   });
   const resolved = controller ?? internalController;
   const [chunkModalOpen, setChunkModalOpen] = useState(false);
+  const [referenceModalOpen, setReferenceModalOpen] = useState(false);
   const [editingContextRowId, setEditingContextRowId] = useState<string | null>(null);
   const [editingIdentityRowId, setEditingIdentityRowId] = useState<string | null>(null);
   const [viewingPersonaRowId, setViewingPersonaRowId] = useState<string | null>(null);
@@ -59,6 +70,15 @@ export function PersonaBatchPage({
     [resolved.rows, viewingErrorRowId],
   );
 
+  useEffect(() => {
+    setReferenceModalOpen(false);
+    setChunkModalOpen(false);
+    setEditingContextRowId(null);
+    setEditingIdentityRowId(null);
+    setViewingPersonaRowId(null);
+    setViewingErrorRowId(null);
+  }, [resetSignal]);
+
   return (
     <div className="space-y-6">
       <section className="space-y-2">
@@ -75,16 +95,24 @@ export function PersonaBatchPage({
       <PersonaBatchToolbar
         modelId={resolved.modelId}
         models={resolved.personaGenerationModels}
-        referenceInput={resolved.referenceInput}
         disableInputs={resolved.anyApiActive}
+        onModelChange={resolved.setModelId}
+        onOpenReferenceModal={() => setReferenceModalOpen(true)}
+      />
+
+      <ReferenceSourcesModal
+        isOpen={referenceModalOpen}
+        value={resolved.referenceInput}
+        rowCount={countReferenceRows(resolved.referenceInput)}
+        disabled={resolved.anyApiActive}
         addLoading={resolved.addLoading}
         addElapsedSeconds={resolved.addElapsedSeconds}
         addLastCompletedElapsedSeconds={resolved.addLastCompletedElapsedSeconds}
         addLastCompletedAddedCount={resolved.addLastCompletedAddedCount}
         addLastCompletedDuplicateCount={resolved.addLastCompletedDuplicateCount}
-        onModelChange={resolved.setModelId}
-        onReferenceInputChange={resolved.setReferenceInput}
+        onChange={resolved.setReferenceInput}
         onAdd={() => void resolved.addReferenceRowsFromInput()}
+        onClose={() => setReferenceModalOpen(false)}
       />
 
       <PersonaBatchTable
@@ -103,14 +131,14 @@ export function PersonaBatchPage({
         anyApiActive={resolved.anyApiActive}
         bulkActionsDisabled={resolved.bulkActionsDisabled}
         canReset={resolved.canReset}
-        canRemoveDuplicates={resolved.canRemoveDuplicates}
+        canClearBatchRows={resolved.canClearBatchRows}
         onOpenChunkSize={() => setChunkModalOpen(true)}
         onBulkPrompt={() => void resolved.runBulkPromptAssist()}
         onBulkGenerate={() => void resolved.runBulkGenerate()}
         onBulkSave={() => void resolved.runBulkSave()}
         onRequestBulkPause={resolved.requestBulkPause}
         onResumeBulkTask={() => void resolved.resumeBulkTask()}
-        onRemoveDuplicates={() => void resolved.removeDuplicateRows()}
+        onClearBatchRows={() => void resolved.clearBatchRows()}
         onReset={resolved.reset}
         onEditContextPrompt={setEditingContextRowId}
         onEditIdentity={setEditingIdentityRowId}
