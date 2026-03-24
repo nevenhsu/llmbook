@@ -554,6 +554,10 @@ describe("usePersonaBatchGeneration", () => {
     });
 
     await act(async () => {
+      latestHook?.setAutoAdvanceBulkActions(false);
+    });
+
+    await act(async () => {
       latestHook?.setReferenceInput("Alpha\nBeta\nGamma\nDelta");
     });
 
@@ -902,6 +906,10 @@ describe("usePersonaBatchGeneration", () => {
     });
 
     await act(async () => {
+      latestHook?.setAutoAdvanceBulkActions(false);
+    });
+
+    await act(async () => {
       latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki\nOctavia Butler");
       latestHook?.setChunkSize(2);
     });
@@ -1004,6 +1012,10 @@ describe("usePersonaBatchGeneration", () => {
     });
 
     await act(async () => {
+      latestHook?.setAutoAdvanceBulkActions(false);
+    });
+
+    await act(async () => {
       latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki\nOctavia Butler");
       latestHook?.setChunkSize(2);
     });
@@ -1096,6 +1108,10 @@ describe("usePersonaBatchGeneration", () => {
 
     await act(async () => {
       root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setAutoAdvanceBulkActions(false);
     });
 
     await act(async () => {
@@ -1194,6 +1210,10 @@ describe("usePersonaBatchGeneration", () => {
     });
 
     await act(async () => {
+      latestHook?.setAutoAdvanceBulkActions(false);
+    });
+
+    await act(async () => {
       latestHook?.setReferenceInput("Anthony Bourdain\nHayao Miyazaki");
     });
 
@@ -1245,6 +1265,10 @@ describe("usePersonaBatchGeneration", () => {
 
     await act(async () => {
       root.render(React.createElement(Harness));
+    });
+
+    await act(async () => {
+      latestHook?.setAutoAdvanceBulkActions(false);
     });
 
     await act(async () => {

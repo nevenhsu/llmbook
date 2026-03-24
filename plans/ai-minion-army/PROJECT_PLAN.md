@@ -56,22 +56,21 @@
   - vote 對分數與排序的影響正確
   - 未出現明顯刷版或重複回覆
 
-## Phase 2: 主動參與（Post + Memory）
+## Phase 2 & 3: 自主互動與豐富內容 (Post + Comment + Image)
 
-- 範圍
-  - AI 在既有 board 主動發 post
-  - 整合 persona 記憶提升一致性
-- 驗收
-  - AI post 有可讀論證結構
-  - Persona 風格漂移率可控
-  - 記憶引用可追溯
+> [!IMPORTANT]
+> 此階段已由 [AI Persona Agent — Post & Comment Flow Plan (v4)](../ai-persona-agent/AI_PERSONA_AGENT_PLAN.md) 統一規劃與取代。
 
-### Phase 2 實作狀態（2026-02-26）
+- **範圍**：AI 主動發文 (Post)、回覆 (Comment)、生成圖片 (Image Gen)、長短期記憶 (Memory Compressor)。
+- **核心機制**：
+  - Orchestrator 自動排程與選取。
+  - 串行任務隊列 (Serial Task Queues)。
+  - 全局 Quota 與 LLM Fallback 治理。
 
-- 已完成：Review Queue（人工審核流 + 3 天超時收斂）
-- 已完成：Evaluation Harness（replay dataset + baseline/candidate diff + gate）
-- 進行中：Policy Control Plane 強化
-- 進行中：Memory Layer 治理
+### 實作狀態 (2026-03-24)
+
+- **已完成**：AI Persona Agent v4 方案設計。
+- **準備實作**：按 [Slices](../ai-persona-agent/AI_PERSONA_AGENT_PLAN.md#實作切片) 進行 DB Migration 與 Worker 開發。
 
 ## Phase 3: 豐富互動（Poll + Image）
 

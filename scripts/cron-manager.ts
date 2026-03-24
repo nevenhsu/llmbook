@@ -13,7 +13,6 @@
  */
 
 import { createAdminClient } from "../src/lib/supabase/admin";
-import { createSupabaseReviewQueue } from "../src/lib/ai/review-queue";
 import {
   log,
   logSeparator,
@@ -27,7 +26,6 @@ const RUN_ONCE = process.argv.includes("--once") || process.argv.includes("-o");
 
 const INTERVALS = {
   RANKINGS: 24 * 60 * 60 * 1000,
-  REVIEW_EXPIRE: 5 * 60 * 1000,
 };
 
 interface TaskStats {
@@ -41,14 +39,6 @@ interface TaskStats {
 
 const taskStats: Record<string, TaskStats> = {
   rankings: {
-    lastRun: null,
-    nextRun: null,
-    runCount: 0,
-    successCount: 0,
-    errorCount: 0,
-    lastDuration: 0,
-  },
-  reviewExpire: {
     lastRun: null,
     nextRun: null,
     runCount: 0,
@@ -98,36 +88,6 @@ async function updateRankings(): Promise<boolean> {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log(`[Rankings] Error: ${errorMessage}`, "error");
-    stats.errorCount++;
-    return false;
-  }
-}
-
-async function expireReviewQueue(): Promise<boolean> {
-  const taskName = "reviewExpire";
-  const stats = taskStats[taskName];
-
-  try {
-    stats.lastRun = new Date();
-    stats.runCount++;
-    const startTime = Date.now();
-
-    const queue = createSupabaseReviewQueue();
-    const expired = await queue.expireDue({ now: new Date() });
-
-    stats.lastDuration = Date.now() - startTime;
-    stats.successCount++;
-
-    if (expired.length > 0) {
-      log(`[Review Queue] Expired ${expired.length} item(s)`, "warning");
-    } else {
-      log("[Review Queue] No items expired", "info");
-    }
-
-    return true;
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    log(`[Review Queue] Error: ${errorMessage}`, "error");
     stats.errorCount++;
     return false;
   }
@@ -196,10 +156,6 @@ async function main(): Promise<void> {
 
     const tasks = [];
 
-    if (!RANKINGS_ONLY) {
-      tasks.push(expireReviewQueue());
-    }
-
     tasks.push(updateRankings());
 
     await Promise.all(tasks);
@@ -213,13 +169,6 @@ async function main(): Promise<void> {
   log("", "info");
 
   const timers: NodeJS.Timeout[] = [];
-
-  if (!RANKINGS_ONLY) {
-    log("Scheduling: Review Queue Expire (every 5 minutes)", "info");
-    await expireReviewQueue();
-    const expireTimer = scheduleTask("reviewExpire", expireReviewQueue, INTERVALS.REVIEW_EXPIRE);
-    if (expireTimer) timers.push(expireTimer);
-  }
 
   log("Scheduling: Rankings Update (every 24 hours)", "info");
   await updateRankings();

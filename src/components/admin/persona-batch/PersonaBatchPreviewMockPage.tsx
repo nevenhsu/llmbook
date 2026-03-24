@@ -181,7 +181,7 @@ export function PersonaBatchPreviewMockPage() {
   const [bulkLastCompletedTask, setBulkLastCompletedTask] =
     useState<PersonaBatchGenerationController["bulkLastCompletedTask"]>("generate");
   const [bulkLastElapsedSeconds, setBulkLastElapsedSeconds] = useState(31);
-  const [autoAdvanceBulkActions, setAutoAdvanceBulkActions] = useState(false);
+  const [autoAdvanceBulkActions, setAutoAdvanceBulkActions] = useState(true);
   const [rows, setRows] = useState<PersonaBatchGenerationController["rows"]>(buildInitialRows);
 
   const rowCounterRef = useRef(4);
@@ -197,7 +197,7 @@ export function PersonaBatchPreviewMockPage() {
   const bulkPausedQueueRef = useRef<{
     task: Exclude<PersonaBatchActionType, "check">;
   } | null>(null);
-  const autoAdvanceBulkActionsRef = useRef(false);
+  const autoAdvanceBulkActionsRef = useRef(true);
   const previewRunIdRef = useRef(0);
   const addFinishTimerRef = useRef<number | null>(null);
   const addStartedAtRef = useRef<number | null>(null);

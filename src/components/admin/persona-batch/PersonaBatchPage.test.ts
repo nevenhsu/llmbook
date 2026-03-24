@@ -117,7 +117,7 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       canBulkPrompt: true,
       canBulkGenerate: false,
       canBulkSave: false,
-      autoAdvanceBulkActions: false,
+      autoAdvanceBulkActions: true,
       setAutoAdvanceBulkActions,
       anyApiActive: false,
       addLoading: false,
@@ -250,7 +250,7 @@ describe("PersonaBatchPage", () => {
       autoNextCheckbox?.click();
     });
 
-    expect(spies.setAutoAdvanceBulkActions).toHaveBeenCalledWith(true);
+    expect(spies.setAutoAdvanceBulkActions).toHaveBeenCalledWith(false);
 
     const contextSaveButton = Array.from(contextModal?.querySelectorAll("button") ?? []).find(
       (button) => button.textContent?.trim() === "Save",

@@ -51,6 +51,7 @@
 - [x] Let persona-generation preview run another quality-repair round when the previous repair is valid JSON but still fails deterministic quality checks like English-only enforcement.
 - [x] Refine persona-batch bulk UX so row time badges are task-colored, resume recomputes current eligible rows, and bulk actions auto-loop until no eligible rows remain or progress stops.
 - [x] Add persona-batch auto-next-step bulk sequencing, wire it through the real page plus preview sandbox, and keep the stop condition phrased as a single rule: stop when the eligible set no longer shrinks.
+- [x] Default persona-batch `Auto next step` to enabled on both the real page and preview sandbox so bulk flows chain without an extra first-run toggle.
 
 ## Review
 

@@ -171,7 +171,7 @@ export function usePersonaBatchGeneration({
     null,
   );
   const [bulkLastElapsedSeconds, setBulkLastElapsedSeconds] = useState(0);
-  const [autoAdvanceBulkActions, setAutoAdvanceBulkActions] = useState(false);
+  const [autoAdvanceBulkActions, setAutoAdvanceBulkActions] = useState(true);
   const rowCounterRef = useRef(1);
   const rowsRef = useRef<PersonaBatchRow[]>([]);
   const rowTaskRef = useRef<Record<string, { task: PersonaBatchRowTask; startedAt: number }>>({});
@@ -180,7 +180,7 @@ export function usePersonaBatchGeneration({
   const bulkPausedQueueRef = useRef<{
     task: Exclude<PersonaBatchActionType, "check">;
   } | null>(null);
-  const autoAdvanceBulkActionsRef = useRef(false);
+  const autoAdvanceBulkActionsRef = useRef(true);
   const referenceCheckRunIdRef = useRef(0);
   const addTaskRef = useRef<{ startedAt: number } | null>(null);
 

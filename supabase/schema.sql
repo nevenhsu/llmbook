@@ -284,13 +284,24 @@ CREATE TABLE public.board_entity_bans (
 CREATE TABLE public.media (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id uuid REFERENCES public.posts(id) ON DELETE SET NULL,
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  url text NOT NULL,
-  mime_type text NOT NULL,
-  width int NOT NULL,
-  height int NOT NULL,
-  size_bytes int NOT NULL,
-  created_at timestamptz DEFAULT now()
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  persona_id uuid REFERENCES public.personas(id) ON DELETE CASCADE,
+  comment_id uuid REFERENCES public.comments(id) ON DELETE CASCADE,
+  url text,
+  mime_type text,
+  width int,
+  height int,
+  size_bytes int,
+  status text NOT NULL DEFAULT 'DONE',
+  image_prompt text,
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT media_author_check CHECK (
+    (user_id IS NOT NULL AND persona_id IS NULL) OR
+    (user_id IS NULL AND persona_id IS NOT NULL)
+  ),
+  CONSTRAINT media_status_chk CHECK (
+    status IN ('PENDING_GENERATION', 'RUNNING', 'DONE', 'FAILED')
+  )
 );
 
 -- User notifications
@@ -330,7 +341,7 @@ CREATE TABLE public.task_intents (
   selected_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  CONSTRAINT task_intents_type_check CHECK (intent_type IN ('reply', 'vote', 'poll_vote')),
+  CONSTRAINT task_intents_type_check CHECK (intent_type IN ('reply', 'vote', 'poll_vote', 'post', 'comment')),
   CONSTRAINT task_intents_source_table_check CHECK (
     source_table IN ('notifications', 'posts', 'comments', 'votes', 'poll_votes')
   ),
@@ -375,136 +386,28 @@ CREATE TABLE public.persona_tasks (
   )
 );
 
--- Durable idempotency map for task outputs
-CREATE TABLE public.task_idempotency_keys (
-  task_type text NOT NULL, -- reply | vote | post | comment | poll_vote
-  idempotency_key text NOT NULL,
-  result_id uuid NOT NULL,
-  result_type text NOT NULL, -- post | comment | vote | poll_vote
-  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  PRIMARY KEY (task_type, idempotency_key),
-  CONSTRAINT task_idempotency_type_check CHECK (
-    task_type IN ('reply', 'vote', 'post', 'comment', 'poll_vote')
-  ),
-  CONSTRAINT task_idempotency_result_type_check CHECK (
-    result_type IN ('post', 'comment', 'vote', 'poll_vote')
+-- Orchestrator snapshot log
+CREATE TABLE public.orchestrator_run_log (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_at            timestamptz NOT NULL DEFAULT now(),
+  snapshot_from     timestamptz NOT NULL,
+  snapshot_to       timestamptz NOT NULL,
+  comments_injected int NOT NULL DEFAULT 0,
+  posts_injected    int NOT NULL DEFAULT 0,
+  skipped_reason    text,
+  metadata          jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+-- Memory Compressor status
+CREATE TABLE public.persona_memory_compress_status (
+  persona_id       uuid PRIMARY KEY REFERENCES public.personas(id) ON DELETE CASCADE,
+  status           text NOT NULL DEFAULT 'PENDING_CHECK',
+  last_checked_at  timestamptz,
+  last_token_count int,
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT pmcs_status_chk CHECK (
+    status IN ('PENDING_CHECK','NO_COMPRESS_NEEDED','COMPRESSING','COMPRESSED')
   )
-);
-
--- Task state transition audit log
-CREATE TABLE public.task_transition_events (
-  id bigserial PRIMARY KEY,
-  task_id uuid NOT NULL REFERENCES public.persona_tasks(id) ON DELETE CASCADE,
-  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  task_type text NOT NULL,
-  from_status text NOT NULL,
-  to_status text NOT NULL,
-  reason_code text,
-  worker_id text,
-  retry_count int NOT NULL DEFAULT 0,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now(),
-  CONSTRAINT task_transition_task_type_check CHECK (
-    task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post', 'poll_vote')
-  ),
-  CONSTRAINT task_transition_status_check CHECK (
-    from_status IN ('PENDING', 'RUNNING', 'IN_REVIEW', 'DONE', 'FAILED', 'SKIPPED')
-    AND to_status IN ('PENDING', 'RUNNING', 'IN_REVIEW', 'DONE', 'FAILED', 'SKIPPED')
-  )
-);
-
--- Human review queue for high-risk/gray-zone outputs
-CREATE TABLE public.ai_review_queue (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id uuid NOT NULL UNIQUE REFERENCES public.persona_tasks(id) ON DELETE CASCADE,
-  persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  risk_level text NOT NULL DEFAULT 'UNKNOWN',
-  status text NOT NULL DEFAULT 'PENDING',
-  enqueue_reason_code text NOT NULL,
-  decision text,
-  decision_reason_code text,
-  reviewer_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  note text,
-  expires_at timestamptz NOT NULL DEFAULT (now() + interval '3 days'),
-  claimed_at timestamptz,
-  decided_at timestamptz,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  CONSTRAINT ai_review_queue_risk_level_check CHECK (risk_level IN ('HIGH', 'GRAY', 'UNKNOWN')),
-  CONSTRAINT ai_review_queue_status_check CHECK (
-    status IN ('PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'EXPIRED')
-  ),
-  CONSTRAINT ai_review_queue_decision_check CHECK (
-    decision IS NULL OR decision IN ('APPROVE', 'REJECT')
-  ),
-  CONSTRAINT ai_review_queue_decision_consistency CHECK (
-    (
-      status IN ('APPROVED', 'REJECTED')
-      AND decision IS NOT NULL
-      AND decision_reason_code IS NOT NULL
-      AND reviewer_id IS NOT NULL
-      AND decided_at IS NOT NULL
-    )
-    OR (
-      status = 'EXPIRED'
-      AND decision IS NULL
-      AND decision_reason_code = 'review_timeout_expired'
-      AND decided_at IS NOT NULL
-    )
-    OR (
-      status IN ('PENDING', 'IN_REVIEW')
-      AND decision IS NULL
-      AND decision_reason_code IS NULL
-      AND decided_at IS NULL
-    )
-  )
-);
-
--- Review queue audit event stream
-CREATE TABLE public.ai_review_events (
-  id bigserial PRIMARY KEY,
-  review_id uuid NOT NULL REFERENCES public.ai_review_queue(id) ON DELETE CASCADE,
-  task_id uuid NOT NULL REFERENCES public.persona_tasks(id) ON DELETE CASCADE,
-  event_type text NOT NULL,
-  reason_code text,
-  reviewer_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  note text,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now(),
-  CONSTRAINT ai_review_events_event_type_check CHECK (
-    event_type IN ('ENQUEUED', 'CLAIMED', 'APPROVED', 'REJECTED', 'EXPIRED')
-  )
-);
-
--- AI runtime event stream (provider/tool/model/execution/worker)
-CREATE TABLE public.ai_runtime_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  layer text NOT NULL,
-  operation text NOT NULL,
-  reason_code text NOT NULL,
-  entity_id text NOT NULL,
-  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
-  persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
-  worker_id text,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  occurred_at timestamptz NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
--- Per-worker runtime heartbeat + circuit state
-CREATE TABLE public.ai_worker_status (
-  worker_id text PRIMARY KEY,
-  agent_type text NOT NULL,
-  status text NOT NULL,
-  circuit_open boolean NOT NULL DEFAULT false,
-  circuit_reason text,
-  last_heartbeat timestamptz NOT NULL,
-  current_task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Unified persona memories (minimal model)
@@ -528,12 +431,23 @@ CREATE TABLE public.persona_memories (
   CONSTRAINT persona_memories_scope_chk CHECK (scope IN ('persona', 'thread', 'task'))
 );
 
--- Persona Engine Config (global key-value settings)
-CREATE TABLE public.persona_engine_config (
-  key text PRIMARY KEY,
-  value text NOT NULL,
-  encrypted boolean NOT NULL DEFAULT false,
-  updated_at timestamptz DEFAULT now()
+-- AI Agent Config (global key-value settings)
+CREATE TABLE public.ai_agent_config (
+  key         text PRIMARY KEY,
+  value       text NOT NULL,
+  description text,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- AI Global Usage (Cost Tracking)
+CREATE TABLE public.ai_global_usage (
+  id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  window_start           timestamptz NOT NULL,
+  window_end             timestamptz,
+  text_prompt_tokens     bigint NOT NULL DEFAULT 0,
+  text_completion_tokens bigint NOT NULL DEFAULT 0,
+  image_generation_count int    NOT NULL DEFAULT 0,
+  updated_at             timestamptz NOT NULL DEFAULT now()
 );
 
 -- Encrypted AI provider secrets (service role only)
@@ -609,19 +523,7 @@ CREATE TABLE public.ai_policy_releases (
   CONSTRAINT ai_policy_releases_policy_object_chk CHECK (jsonb_typeof(policy) = 'object')
 );
 
--- Persona LLM Usage (cost tracking)
-CREATE TABLE public.persona_llm_usage (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
-  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
-  task_type text NOT NULL,  -- 'comment' | 'post' | 'vote' | 'memory_eval' | 'soul_update'
-  provider text NOT NULL,   -- 'gemini' | 'kimi' | 'deepseek' | 'anthropic' | 'openai'
-  model text NOT NULL,
-  prompt_tokens int NOT NULL DEFAULT 0,
-  completion_tokens int NOT NULL DEFAULT 0,
-  estimated_cost_usd numeric(10, 6) NOT NULL DEFAULT 0,
-  created_at timestamptz DEFAULT now()
-);
+
 
 -- ----------------------------------------------------------------------------
 -- Post Rankings Cache (for Hot and Rising sorts)
@@ -746,21 +648,13 @@ CREATE INDEX idx_persona_tasks_scheduled ON public.persona_tasks(scheduled_at) W
 CREATE INDEX idx_persona_tasks_persona ON public.persona_tasks(persona_id);
 CREATE INDEX idx_persona_tasks_running_lease ON public.persona_tasks(lease_until) WHERE status = 'RUNNING';
 CREATE INDEX idx_persona_tasks_source_intent ON public.persona_tasks(source_intent_id);
-CREATE UNIQUE INDEX uq_persona_tasks_idempotency_key ON public.persona_tasks(task_type, idempotency_key)
-  WHERE idempotency_key IS NOT NULL;
 
--- Task idempotency keys
-CREATE INDEX idx_task_idempotency_task_id ON public.task_idempotency_keys(task_id);
-CREATE INDEX idx_task_idempotency_created_at ON public.task_idempotency_keys(created_at DESC);
 
 -- Task transition events
 CREATE INDEX idx_task_transition_events_task_created ON public.task_transition_events(task_id, created_at DESC);
 CREATE INDEX idx_task_transition_events_persona_created ON public.task_transition_events(persona_id, created_at DESC);
 CREATE INDEX idx_task_transition_events_reason_code ON public.task_transition_events(reason_code);
 
--- AI review queue
-CREATE INDEX idx_ai_review_queue_status_created
-  ON public.ai_review_queue(status, created_at DESC);
 CREATE INDEX idx_ai_review_queue_expire_scan
   ON public.ai_review_queue(expires_at ASC)
   WHERE status IN ('PENDING', 'IN_REVIEW');
@@ -773,17 +667,11 @@ CREATE INDEX idx_ai_models_capability_order
 CREATE INDEX idx_ai_models_provider_id
   ON public.ai_models(provider_id);
 
--- AI review events
-CREATE INDEX idx_ai_review_events_review_created
-  ON public.ai_review_events(review_id, created_at DESC);
 CREATE INDEX idx_ai_review_events_task_created
   ON public.ai_review_events(task_id, created_at DESC);
 CREATE INDEX idx_ai_review_events_event_type_created
   ON public.ai_review_events(event_type, created_at DESC);
 
--- AI runtime events
-CREATE INDEX idx_ai_runtime_events_occurred_at
-  ON public.ai_runtime_events(occurred_at DESC);
 CREATE INDEX idx_ai_runtime_events_layer_occurred_at
   ON public.ai_runtime_events(layer, occurred_at DESC);
 CREATE INDEX idx_ai_runtime_events_reason_code_occurred_at
@@ -791,11 +679,6 @@ CREATE INDEX idx_ai_runtime_events_reason_code_occurred_at
 CREATE INDEX idx_ai_runtime_events_entity_id_occurred_at
   ON public.ai_runtime_events(entity_id, occurred_at DESC);
 
--- AI worker status
-CREATE INDEX idx_ai_worker_status_status_updated_at
-  ON public.ai_worker_status(status, updated_at DESC);
-CREATE INDEX idx_ai_worker_status_circuit_open_updated_at
-  ON public.ai_worker_status(circuit_open, updated_at DESC);
 
 CREATE INDEX idx_persona_memories_persona ON public.persona_memories(persona_id);
 CREATE INDEX idx_persona_memories_persona_type ON public.persona_memories(persona_id, memory_type);
@@ -804,9 +687,6 @@ CREATE INDEX idx_persona_memories_thread ON public.persona_memories(persona_id, 
 CREATE INDEX idx_persona_memories_expire ON public.persona_memories(expires_at)
   WHERE expires_at IS NOT NULL;
 
--- Persona LLM usage
-CREATE INDEX idx_llm_usage_monthly ON public.persona_llm_usage(created_at);
-CREATE INDEX idx_llm_usage_persona ON public.persona_llm_usage(persona_id, created_at DESC);
 
 -- Post rankings
 CREATE INDEX idx_post_rankings_hot ON public.post_rankings(hot_rank ASC) WHERE hot_rank > 0;
@@ -1450,19 +1330,16 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.heartbeat_checkpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_intents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.task_idempotency_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_transition_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_review_queue ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_review_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_runtime_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_worker_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.persona_engine_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_agent_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_global_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orchestrator_run_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.persona_memory_compress_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_provider_secrets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.persona_llm_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_rankings ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
@@ -1942,12 +1819,7 @@ COMMENT ON COLUMN public.persona_reference_sources.romanized_name IS 'Romanized 
 COMMENT ON COLUMN public.persona_reference_sources.match_key IS 'Compact ASCII comparison key used by admin duplicate-check APIs.';
 COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
 COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
-COMMENT ON TABLE public.task_idempotency_keys IS 'Durable idempotency map to prevent duplicate side effects across retries/restarts.';
 COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks state transitions for replay and observability.';
-COMMENT ON TABLE public.ai_review_queue IS 'Manual review queue for high-risk/gray-zone content. 3 days unhandled items expire automatically.';
-COMMENT ON TABLE public.ai_review_events IS 'Audit stream for review queue lifecycle and reviewer decisions.';
-COMMENT ON TABLE public.ai_runtime_events IS 'Best-effort runtime event stream for provider/tool/model/execution/worker observability.';
-COMMENT ON TABLE public.ai_worker_status IS 'Latest heartbeat and circuit breaker status per AI worker.';
 COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
 COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (AES-GCM payload fields). Service role only.';
 COMMENT ON TABLE public.ai_providers IS 'AI provider metadata/status for control plane.';

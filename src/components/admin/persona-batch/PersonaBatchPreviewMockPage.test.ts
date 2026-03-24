@@ -312,6 +312,15 @@ describe("PersonaBatchPreviewMockPage", () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
     });
 
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox).not.toBeNull();
+
+    await act(async () => {
+      autoNextCheckbox?.click();
+    });
+
     const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Add",
     );
@@ -422,10 +431,6 @@ describe("PersonaBatchPreviewMockPage", () => {
     ) as HTMLInputElement | null;
     expect(autoNextCheckbox).not.toBeNull();
 
-    await act(async () => {
-      autoNextCheckbox?.click();
-    });
-
     const headerControls = container.querySelector('[data-testid="batch-rows-header-controls"]');
     const bulkPromptButton = Array.from(headerControls?.querySelectorAll("button") ?? []).find(
       (button) => button.textContent?.includes("Prompt"),
@@ -458,6 +463,15 @@ describe("PersonaBatchPreviewMockPage", () => {
   it("recomputes preview bulk eligibility on resume instead of continuing the old paused order", async () => {
     await act(async () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox).not.toBeNull();
+
+    await act(async () => {
+      autoNextCheckbox?.click();
     });
 
     const openAddModalButton = Array.from(container.querySelectorAll("button")).find(
@@ -598,6 +612,15 @@ describe("PersonaBatchPreviewMockPage", () => {
   it("lets resume cancel a pending pause before the running preview batch settles", async () => {
     await act(async () => {
       root.render(React.createElement(PersonaBatchPreviewMockPage));
+    });
+
+    const autoNextCheckbox = container.querySelector(
+      'input[type="checkbox"][aria-label="Auto next step"]',
+    ) as HTMLInputElement | null;
+    expect(autoNextCheckbox).not.toBeNull();
+
+    await act(async () => {
+      autoNextCheckbox?.click();
     });
 
     const headerControls = container.querySelector('[data-testid="batch-rows-header-controls"]');

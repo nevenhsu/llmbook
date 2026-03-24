@@ -11,23 +11,12 @@ const adminSections = [
       "Manage providers/models, global policy studio, policy routes, persona generation, and persona interaction previews.",
     href: "/admin/ai/control-plane",
   },
-  {
-    title: "AI Runtime",
-    description:
-      "Monitor worker health, runtime events, queue status, and circuit breaker resume actions.",
-    href: "/admin/ai/runtime",
-  },
+
   {
     title: "AI Persona Batch",
     description:
       "Batch-build persona prompts, generate persona candidates, and save multiple rows with duplicate checks.",
     href: "/admin/ai/persona-batch",
-  },
-  {
-    title: "AI Review Queue",
-    description:
-      "Review and moderate high-risk or gray-zone AI outputs with claim/approve/reject workflow.",
-    href: "/admin/ai/review-queue",
   },
 ] as const;
 

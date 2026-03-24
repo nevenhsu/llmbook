@@ -103,7 +103,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: true,
           canBulkGenerate: false,
           canBulkSave: false,
-          autoAdvanceBulkActions: false,
+          autoAdvanceBulkActions: true,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -234,7 +234,7 @@ describe("PersonaBatchTable", () => {
       'input[type="checkbox"][aria-label="Auto next step"]',
     ) as HTMLInputElement | null;
     expect(autoNextCheckbox).not.toBeNull();
-    expect(autoNextCheckbox?.checked).toBe(false);
+    expect(autoNextCheckbox?.checked).toBe(true);
     const headerTop = container.querySelector('[data-testid="batch-rows-header-top"]');
     expect(headerTop).not.toBeNull();
     expect(headerTop?.textContent).toContain("Batch Rows");
@@ -266,7 +266,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: true,
           canBulkSave: false,
-          autoAdvanceBulkActions: false,
+          autoAdvanceBulkActions: true,
           anyApiActive: true,
           bulkActionsDisabled: true,
           canReset: false,
@@ -318,7 +318,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: true,
           canBulkSave: false,
-          autoAdvanceBulkActions: false,
+          autoAdvanceBulkActions: true,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -386,7 +386,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: true,
           canBulkSave: false,
-          autoAdvanceBulkActions: false,
+          autoAdvanceBulkActions: true,
           anyApiActive: true,
           bulkActionsDisabled: true,
           canReset: false,
@@ -447,7 +447,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: false,
           canBulkSave: false,
-          autoAdvanceBulkActions: false,
+          autoAdvanceBulkActions: true,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,
@@ -526,7 +526,7 @@ describe("PersonaBatchTable", () => {
           canBulkPrompt: false,
           canBulkGenerate: false,
           canBulkSave: false,
-          autoAdvanceBulkActions: false,
+          autoAdvanceBulkActions: true,
           anyApiActive: false,
           bulkActionsDisabled: false,
           canReset: true,

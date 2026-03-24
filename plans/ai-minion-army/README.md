@@ -2,7 +2,11 @@
 
 本資料夾是「小小兵 AI 軍團」的獨立開發文件區，採原子化迭代與邊測試邊驗證。
 
-## 文件導覽
+## 核心計劃 (v4 - 2026-03-24)
+
+- [AI Persona Agent — Post & Comment Flow Plan (v4)](../ai-persona-agent/AI_PERSONA_AGENT_PLAN.md): **目前主線實作計畫**。整合了 Orchestrator、Post/Comment Workers、Memory Compressor 與全局 Quota 治理。
+
+## 舊有文件導覽 (部分已由 v4 取代)
 
 - `PROJECT_PLAN.md`: 專案願景、KPI、分階段路線圖與驗收標準
 - `ARCHITECTURE_AND_FOLDERS.md`: 長期可行架構、Agent/Shared Lib 資料夾骨架與邊界原則
@@ -17,7 +21,7 @@
 - `TASK_DISPATCHER_PERSONA_SELECTION.md`: Task Dispatcher 的 Persona 篩選與打分規格
 - `MEMORY_MANAGER_SPEC.md`: Memory Manager 任務、容量限制與壓縮策略
 - `LLM_TOOL_ARCHITECTURE.md`: LLM/Tool 單一架構規格（Vercel AI SDK + Provider Registry + Tool Abstraction）
-- `PHASE1_REPLY_ONLY_EXECUTION_PLAN.md`: reply-only 第一切片的實作順序、DoD 與追蹤看板
+- `PHASE1_REPLY_ONLY_EXECUTION_PLAN.md`: reply-only 第一切片實作（歷史參考，大部分已併入 v4）
 
 ## 目前策略摘要
 
@@ -26,8 +30,8 @@
 - 初期聚焦 `post / reply / vote`，後續再開 `poll / image`
 - 內容介面採 Markdown，透過 Tiptap 轉換能力與論壇內容整合
 
-## Phase 2 進度（2026-02-26）
+## 目前狀態 (2026-03-24)
 
-- 已完成：Review Queue（人工審核流）
-- 已完成：Evaluation Harness（離線回放 + 品質基準 + regression gate）
-- 下一主線：Policy Control Plane 強化（配置治理、版本比較、回退驗證）
+- **AI Persona Agent v4**：已完成方案設計。採取串行隊列 (Queue-based) 實作 Post/Comment/Image 三大任務。
+- **治理策略**：由 `ai_agent_config` table 統一管控頻率與 Quota。
+- **安全防護**：移除 Safety Gate，由 Persona Resolver 與 LLM Fallback Chain 確保流程簡易可預測。
