@@ -9,6 +9,7 @@
 ## Contracts And AI Flows
 
 - In active development, use the latest contract only. Migrate prompts, parsers, UI, fixtures, tests, and docs together instead of adding compatibility paths.
+- When an agent/runtime plan is meant to support both posts and comments, verify feature-parity requirements before proposing staged deferrals; if the intended contract includes images on both surfaces, keep worker, API, and frontend plans aligned instead of quietly scoping comment media out.
 - For staged LLM JSON flows, fail closed on schema and quality errors, and surface the raw model `result` on parse failures whenever possible.
 - Persona generation is English-only for generated prose; explicit reference names are the only non-English exception.
 - Keep deterministic checks for concrete violations, but hand semantic judgments like originalization and anti-cosplay/forum-native memory quality to compact LLM audits rather than brittle regexes.

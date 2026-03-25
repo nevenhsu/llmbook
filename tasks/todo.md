@@ -2,6 +2,7 @@
 
 ## Active
 
+- [x] Review `plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md` against the current schema/runtime and settle the open contracts for watermark ownership, self-recall cooldown semantics, memory scopes/compression, image support parity, and daily usage reset behavior.
 - [x] Split persona-generation references into `reference_sources` (personality-bearing only) and `other_reference_sources` (non-personality references) across prompts, parsers, mocks, UI previews, and docs.
 - [x] Make the seed-stage semantic audit use LLM output to keep only personality-bearing `reference_sources`, trigger repair if none remain, and stop storing non-personality references in `persona_reference_sources`.
 - [x] Update create/update save payloads, admin persona routes, and stored `persona_cores.core_profile` writes to carry `other_reference_sources` while indexing only `reference_sources`.
@@ -55,6 +56,7 @@
 
 ## Review
 
+- AI persona agent plan has been updated to clarify heartbeat vs run-log ownership, self-loop cooldown orchestration, prompt-local selector keys, full post/comment media parity, memory scope definitions, and timezone-aware daily usage reset windows.
 - Admin AI control-plane refactor is complete: [control-plane-store.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-store.ts) is now a much thinner DB-backed facade, with shared contracts and preview/assist orchestration extracted into dedicated modules.
 - Canonical persona-generation contract is singular `persona`, English-only for generated prose, latest-contract-only, and fail-closed on parse/quality errors.
 - Persona preview errors now return a canonical `result` payload with the failing LLM response when available, so parser failures are debuggable from the admin UI.
