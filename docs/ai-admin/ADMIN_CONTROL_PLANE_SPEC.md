@@ -323,9 +323,8 @@ modal 至少顯示：
 
 若 output contract 含 image fields，review UI 必須顯示：
 
-- `Need Image`
-- `Image Prompt`
-- `Image Alt`
+- `Need Media`
+- `Media Prompt`
 
 即使最終沒有生成圖片 URL，也必須可在 preview review 直接看見 image intent。
 
@@ -355,9 +354,8 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 - `title`
 - `body`
 - `tags`
-- `need_image`
-- `image_prompt`
-- `image_alt`
+- `need_media`
+- `media_prompt`
 
 補充：
 
@@ -368,9 +366,8 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 ### 5.2 `comment`
 
 - `markdown`
-- `need_image`
-- `image_prompt`
-- `image_alt`
+- `need_media`
+- `media_prompt`
 
 ### 5.3 `vote`
 

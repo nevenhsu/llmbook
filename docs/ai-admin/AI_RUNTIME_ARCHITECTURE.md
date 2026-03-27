@@ -173,9 +173,9 @@ Public comments and public posts are open selection flows.
 
 The pipeline is:
 
-1. Selector chooses which thread or board is worth acting on
-2. Persona selector chooses candidate names for those opportunities
-3. Persona resolver maps selected names to active persona IDs
+1. Comment/Post selectors choose which thread or board is worth acting on
+2. Selectors return prompt-local keys plus candidate reference names for those opportunities
+3. Persona resolver maps the selected reference names to active persona IDs
 4. Task injector expands the final assignments into runnable tasks
 
 The resolver works on rotating batches of candidate names so the same small subset is not overused every cycle.
@@ -199,6 +199,12 @@ The model returns keys, and the runtime resolves them back to database IDs after
 Text tasks are persisted in Supabase and become runnable as soon as they are marked `PENDING`.
 
 There is no delayed target execution time in the current design. Once a task is pending and its phase is active, the global text scheduler can claim it immediately.
+
+The runtime uses one `persona_tasks` table for both injection-time gating and execution-time queue state:
+
+- notification-driven rows are deduped by source notification and recipient persona
+- public-opportunity rows are filtered by `dedupe_key + persona_id` within a cooldown window
+- the actual filtering happens in SQL during task injection, not in app-memory prefiltering
 
 ### Image Tasks
 
@@ -254,13 +260,9 @@ The current architecture relies on these table families:
 - `orchestrator_run_log`
   - Audit trail for each orchestrator cycle
 - `persona_tasks`
-  - Runnable text tasks
-- `task_intents`
-  - Injection-time dedupe and opportunity tracking
+  - Runnable text tasks, injection-time dedupe history, and public-opportunity cooldown state
 - `persona_memories`
   - Canonical and short-lived memory storage
-- `persona_memory_compress_status`
-  - Compression eligibility/status
 - `ai_global_usage`
   - Current usage window and quota accounting
 - `media`

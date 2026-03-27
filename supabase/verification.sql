@@ -35,17 +35,16 @@ where table_schema = 'public'
     'media',
     'notifications',
     'heartbeat_checkpoints',
-    'task_intents',
     'persona_tasks',
-    'task_idempotency_keys',
-    'task_transition_events',
-    'ai_review_queue',
-    'ai_review_events',
+    'orchestrator_run_log',
     'persona_cores',
     'persona_memories',
-    'persona_engine_config',
+    'ai_agent_config',
+    'ai_global_usage',
+    'ai_provider_secrets',
+    'ai_providers',
+    'ai_models',
     'ai_policy_releases',
-    'persona_llm_usage',
     'post_rankings'
   )
 order by table_name;
@@ -83,7 +82,7 @@ join information_schema.constraint_column_usage ccu
 where tc.table_schema = 'public'
   and tc.constraint_type = 'FOREIGN KEY'
   and (
-    tc.table_name in ('votes', 'admin_users', 'persona_cores', 'persona_memories', 'persona_llm_usage')
+    tc.table_name in ('votes', 'admin_users', 'persona_cores', 'persona_memories', 'persona_tasks', 'ai_models')
     or ccu.table_name in ('comments', 'auth.users')
   )
 order by tc.table_name, tc.constraint_name;
@@ -114,17 +113,16 @@ where schemaname = 'public'
     'media',
     'notifications',
     'heartbeat_checkpoints',
-    'task_intents',
     'persona_tasks',
-    'task_idempotency_keys',
-    'task_transition_events',
-    'ai_review_queue',
-    'ai_review_events',
+    'orchestrator_run_log',
     'persona_cores',
     'persona_memories',
-    'persona_engine_config',
+    'ai_agent_config',
+    'ai_global_usage',
+    'ai_provider_secrets',
+    'ai_providers',
+    'ai_models',
     'ai_policy_releases',
-    'persona_llm_usage',
     'post_rankings'
   )
 order by tablename;
@@ -169,26 +167,29 @@ select 'boards' as item, count(*) as cnt from public.boards
 union all
 select 'tags' as item, count(*) as cnt from public.tags
 union all
-select 'persona_engine_config' as item, count(*) as cnt from public.persona_engine_config
+select 'ai_agent_config' as item, count(*) as cnt from public.ai_agent_config
 union all
 select 'ai_policy_releases' as item, count(*) as cnt from public.ai_policy_releases;
 
--- 10) Expected persona_engine_config keys
+-- 10) Expected ai_agent_config keys
 select key
-from public.persona_engine_config
+from public.ai_agent_config
 where key in (
-  'llm_comment',
-  'llm_post',
-  'llm_long_form',
-  'llm_vote_decision',
-  'llm_image_gen',
-  'llm_memory_eval',
-  'llm_soul_update',
-  'fallback_text_short',
-  'fallback_text_long',
-  'fallback_image',
-  'fallback_system',
-  'monthly_budget_usd'
+  'orchestrator_cooldown_minutes',
+  'max_comments_per_cycle',
+  'max_posts_per_cycle',
+  'selector_reference_batch_size',
+  'llm_daily_token_quota',
+  'llm_daily_image_quota',
+  'usage_reset_timezone',
+  'usage_reset_hour_local',
+  'usage_reset_minute_local',
+  'telegram_bot_token',
+  'telegram_alert_chat_id',
+  'memory_compress_interval_hours',
+  'memory_compress_token_threshold',
+  'comment_opportunity_cooldown_minutes',
+  'post_opportunity_cooldown_minutes'
 )
 order by key;
 

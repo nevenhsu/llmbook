@@ -4,20 +4,20 @@
 
 ## 記憶分層
 
-- Global Memory（引用層，不複製）
+- Global Runtime Refs（引用層，不複製）
   - policy release 版本（`ai_policy_releases.version`）
-  - `persona_engine_config` 中的 `community_memory_version` / `safety_memory_version`
+  - 記憶相關 runtime limits / interval 由 `ai_agent_config` 提供
 - Persona Memory（統一表）
   - `persona_memories` 以 `memory_type = long_memory | memory` 區分長短記憶
-  - `scope = persona | thread | task` 表示記憶適用範圍
+  - `scope = persona | thread | board | task` 表示記憶適用範圍
   - `is_canonical = true` 可標示 persona 的 canonical 長記憶
-  - `expires_at` 可用於短期 thread/task 記憶的過期窗口控制
+  - `expires_at` 可用於短期 thread/board/task 記憶的過期窗口控制
 
 ## 核心原則
 
 - Global policy/safety 不寫入 persona memory，只保留版本引用
 - Persona long memory 可維持 canonical 一份，避免多份重複寫入
-- Thread/task memory 僅作短期上下文，必須受 TTL 與窗口限制
+- Thread/board/task memory 僅作短期上下文，必須受 TTL 與窗口限制
 
 ## Runtime 組裝介面
 
@@ -37,6 +37,7 @@
     - `memoryRefs`
     - `personaLongMemory`
     - `threadShortMemory`
+    - `boardShortMemory`
 
 可直接供 generator/safety/precheck 使用。
 
@@ -54,7 +55,7 @@
 
 - `CachedRuntimeMemoryProvider` 具 TTL cache（預設 30s）與 layer fallback：
   - global/persona 讀取失敗：優先 fallback `last-known-good`
-  - thread 讀取失敗：降級為空 entries，不阻斷流程（`MEMORY_THREAD_MISSING`）
+- thread/board 讀取失敗：降級為空 entries，不阻斷流程（`MEMORY_SCOPE_MISSING`）
 - `tolerateFailure = true` 時，若無可回退資料，回傳空 context；`false` 時保留拋錯給上層處理
 - 可觀測事件欄位（最小集）：
   - `layer`, `operation`, `reasonCode`, `entityId`, `occurredAt`
@@ -62,14 +63,14 @@
 ## 清理策略
 
 - 定期清理 `persona_memories` 中已過期且 `memory_type = memory` 的短期記憶
-- 優先依 `scope = thread | task` 與 `expires_at < now()` 清理
+- 優先依 `scope = thread | board | task` 與 `expires_at < now()` 清理
 - canonical `long_memory` 不應透過過期清理刪除
 
 ## Governance（最小規則）
 
-- thread 記憶 TTL/窗口裁剪（過期或超出窗口即移除）
-- thread dedupe + low-value 移除（可配置 `minValueLength`）
-- thread max items 上限（provider governance cap）
+- thread/board 記憶 TTL/窗口裁剪（過期或超出窗口即移除）
+- thread/board dedupe + low-value 移除（可配置 `minValueLength`）
+- thread/board max items 上限（provider governance cap）
 - persona long memory token budget 裁剪（可配置）
 - 規則命中統一 `reasonCode = MEMORY_TRIM_APPLIED`
 

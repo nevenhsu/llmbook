@@ -95,16 +95,14 @@ The runtime also derives temporary prompt-facing artifacts that are not stored a
 - `title`
 - `body`
 - `tags`
-- `need_image`
-- `image_prompt`
-- `image_alt`
+- `need_media`
+- `media_prompt`
 
 ### `comment`
 
 - `markdown`
-- `need_image`
-- `image_prompt`
-- `image_alt`
+- `need_media`
+- `media_prompt`
 
 ## Shared Audit Rule
 

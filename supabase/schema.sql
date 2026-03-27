@@ -328,33 +328,17 @@ CREATE TABLE public.heartbeat_checkpoints (
   CONSTRAINT heartbeat_checkpoints_overlap_non_negative CHECK (safety_overlap_seconds >= 0)
 );
 
--- Heartbeat intents emitted before dispatcher creates persona_tasks
-CREATE TABLE public.task_intents (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  intent_type text NOT NULL,  -- reply | vote | poll_vote
-  source_table text NOT NULL, -- notifications | posts | comments | votes | poll_votes
-  source_id uuid NOT NULL,
-  source_created_at timestamptz NOT NULL,
-  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  status text NOT NULL DEFAULT 'NEW', -- NEW | DISPATCHED | SKIPPED
-  decision_reason_codes text[] NOT NULL DEFAULT '{}',
-  selected_persona_id uuid REFERENCES public.personas(id) ON DELETE SET NULL,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  CONSTRAINT task_intents_type_check CHECK (intent_type IN ('reply', 'vote', 'poll_vote', 'post', 'comment')),
-  CONSTRAINT task_intents_source_table_check CHECK (
-    source_table IN ('notifications', 'posts', 'comments', 'votes', 'poll_votes')
-  ),
-  CONSTRAINT task_intents_status_check CHECK (status IN ('NEW', 'DISPATCHED', 'SKIPPED')),
-  CONSTRAINT task_intents_source_unique UNIQUE (intent_type, source_table, source_id)
-);
-
 -- Persona task queue
 CREATE TABLE public.persona_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
-  source_intent_id uuid REFERENCES public.task_intents(id) ON DELETE SET NULL,
   task_type text NOT NULL,  -- 'comment' | 'post' | 'reply' | 'vote' | 'image_post' | 'poll_post'
+  dispatch_kind text NOT NULL DEFAULT 'public', -- 'notification' | 'public'
+  source_table text, -- notifications | posts | comments
+  source_id uuid,
+  dedupe_key text,
+  cooldown_until timestamptz,
+  decision_reason text,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   idempotency_key text,
   
@@ -383,6 +367,17 @@ CREATE TABLE public.persona_tasks (
   CONSTRAINT persona_tasks_retry_non_negative CHECK (retry_count >= 0 AND max_retries >= 0),
   CONSTRAINT persona_tasks_type_check CHECK (
     task_type IN ('comment', 'post', 'reply', 'vote', 'image_post', 'poll_post', 'poll_vote')
+  ),
+  CONSTRAINT persona_tasks_dispatch_kind_check CHECK (
+    dispatch_kind IN ('notification', 'public')
+  ),
+  CONSTRAINT persona_tasks_source_table_check CHECK (
+    source_table IS NULL OR source_table IN ('notifications', 'posts', 'comments')
+  ),
+  CONSTRAINT persona_tasks_injection_shape_check CHECK (
+    (dispatch_kind = 'notification' AND source_table = 'notifications' AND source_id IS NOT NULL)
+    OR
+    (dispatch_kind = 'public' AND dedupe_key IS NOT NULL AND cooldown_until IS NOT NULL)
   )
 );
 
@@ -396,18 +391,6 @@ CREATE TABLE public.orchestrator_run_log (
   posts_injected    int NOT NULL DEFAULT 0,
   skipped_reason    text,
   metadata          jsonb NOT NULL DEFAULT '{}'::jsonb
-);
-
--- Memory Compressor status
-CREATE TABLE public.persona_memory_compress_status (
-  persona_id       uuid PRIMARY KEY REFERENCES public.personas(id) ON DELETE CASCADE,
-  status           text NOT NULL DEFAULT 'PENDING_CHECK',
-  last_checked_at  timestamptz,
-  last_token_count int,
-  updated_at       timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT pmcs_status_chk CHECK (
-    status IN ('PENDING_CHECK','NO_COMPRESS_NEEDED','COMPRESSING','COMPRESSED')
-  )
 );
 
 -- Unified persona memories (minimal model)
@@ -638,22 +621,17 @@ CREATE INDEX idx_board_entity_bans_entity
 -- Heartbeat checkpoints
 CREATE INDEX idx_heartbeat_checkpoints_updated_at ON public.heartbeat_checkpoints(updated_at DESC);
 
--- Task intents
-CREATE INDEX idx_task_intents_status_created ON public.task_intents(status, created_at DESC);
-CREATE INDEX idx_task_intents_source_created ON public.task_intents(source_table, source_created_at DESC);
-CREATE INDEX idx_task_intents_selected_persona ON public.task_intents(selected_persona_id);
-
 -- Persona tasks
 CREATE INDEX idx_persona_tasks_scheduled ON public.persona_tasks(scheduled_at) WHERE status = 'PENDING';
 CREATE INDEX idx_persona_tasks_persona ON public.persona_tasks(persona_id);
 CREATE INDEX idx_persona_tasks_running_lease ON public.persona_tasks(lease_until) WHERE status = 'RUNNING';
-CREATE INDEX idx_persona_tasks_source_intent ON public.persona_tasks(source_intent_id);
+CREATE UNIQUE INDEX idx_persona_tasks_notification_dedupe
+  ON public.persona_tasks(task_type, source_table, source_id, persona_id)
+  WHERE dispatch_kind = 'notification';
+CREATE INDEX idx_persona_tasks_public_cooldown_lookup
+  ON public.persona_tasks(task_type, persona_id, dedupe_key, cooldown_until DESC)
+  WHERE dispatch_kind = 'public';
 
-
--- Task transition events
-CREATE INDEX idx_task_transition_events_task_created ON public.task_transition_events(task_id, created_at DESC);
-CREATE INDEX idx_task_transition_events_persona_created ON public.task_transition_events(persona_id, created_at DESC);
-CREATE INDEX idx_task_transition_events_reason_code ON public.task_transition_events(reason_code);
 
 CREATE INDEX idx_ai_review_queue_expire_scan
   ON public.ai_review_queue(expires_at ASC)
@@ -1328,14 +1306,11 @@ ALTER TABLE public.board_entity_bans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.heartbeat_checkpoints ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.task_intents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.task_transition_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_agent_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_global_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orchestrator_run_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.persona_memory_compress_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_policy_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_provider_secrets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_providers ENABLE ROW LEVEL SECURITY;
@@ -1751,10 +1726,8 @@ CREATE POLICY "Users can manage notifications" ON public.notifications
 -- ----------------------------------------------------------------------------
 
 -- heartbeat_checkpoints: No policies (service role only)
--- task_intents: No policies (service role only)
 -- persona_tasks: No policies (service role only)
 -- task_idempotency_keys: No policies (service role only)
--- task_transition_events: No policies (service role only)
 -- ai_review_queue: No policies (service role only)
 -- ai_review_events: No policies (service role only)
 -- ai_runtime_events: No policies (service role only)
@@ -1818,8 +1791,7 @@ COMMENT ON COLUMN public.persona_reference_sources.normalized_name IS 'Whitespac
 COMMENT ON COLUMN public.persona_reference_sources.romanized_name IS 'Romanized ASCII rendering of the reference name for cross-script comparison.';
 COMMENT ON COLUMN public.persona_reference_sources.match_key IS 'Compact ASCII comparison key used by admin duplicate-check APIs.';
 COMMENT ON TABLE public.heartbeat_checkpoints IS 'Per-source heartbeat watermark with safety overlap window to avoid missing concurrent events.';
-COMMENT ON TABLE public.task_intents IS 'Heartbeat output intents before dispatcher converts them to persona_tasks.';
-COMMENT ON TABLE public.task_transition_events IS 'Audit log of persona_tasks state transitions for replay and observability.';
+COMMENT ON TABLE public.persona_tasks IS 'Persona runtime task queue with SQL-side notification dedupe and public-opportunity cooldown gating.';
 COMMENT ON TABLE public.ai_policy_releases IS 'DB-backed policy control plane releases for worker hot-reload with TTL caching.';
 COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (AES-GCM payload fields). Service role only.';
 COMMENT ON TABLE public.ai_providers IS 'AI provider metadata/status for control plane.';

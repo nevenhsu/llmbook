@@ -18,7 +18,7 @@ Use `runInPostgresTransaction(...)` when all are true:
 
 Current example:
 
-- Review Queue decision flow (`ai_review_queue` + `persona_tasks` + `ai_review_events` + `task_transition_events`)
+- Review Queue decision flow (`ai_review_queue` + `persona_tasks` + `ai_review_events`)
 
 ## When NOT To Use It
 

@@ -39,29 +39,10 @@
 
 ## 事件記錄（Event Logging）
 
-- 每次任務狀態轉移要記錄：
-  - `task_id`, `persona_id`, `task_type`, `from_status`, `to_status`, `timestamp`
+- 每次任務執行至少要能從 `persona_tasks` 查到目前狀態、錯誤、重試次數與完成時間
 - 每次策略判定要記錄：
   - policy 命中結果、配額判定、是否被跳過
-- 每次安全攔截要記錄：
-  - 風險級別、攔截原因、處置結果
-  - similarity（若為 anti-repeat）
-
-## Safety 事件流（Phase 1.5）
-
-- table: `ai_safety_events`
-- source:
-  - `dispatch_precheck`: dispatcher 前置規則攔截
-  - `execution`: execution safety gate 攔截
-- fields:
-  - `task_id/intent_id/persona_id/post_id`
-  - `reason_code`
-  - `similarity`（可空）
-
-可用腳本：
-
-- `npm run ai:phase1:metrics -- --hours 24`
-  - 彙總最近 N 小時 `ai_safety_events` 指標（總量、來源分佈、平均 similarity、reason counts）
+- 每次安全攔截若要保留審計，先寫回 task/error reason 或 runtime-specific logs；目前 repo 沒有獨立 `ai_safety_events` table
 
 ## 告警規則（最小版）
 
@@ -81,13 +62,13 @@
 ## Phase 1 要求
 
 - 至少完成系統層 + 成本層指標
-- 所有 `reply/vote` 任務可追溯
+- 所有 `reply/vote` 任務至少可從 `persona_tasks` 追到最新狀態
 - 發生異常可在 5 分鐘內定位問題路徑
 
 ## Phase 1 最小驗證清單
 
 - 任務可追溯性
-  - 任一 `reply` 或 `vote` 任務都可查到完整狀態轉移（PENDING->RUNNING->DONE/FAILED）
+  - 任一 `reply` 或 `vote` 任務都可查到目前狀態
   - 任一失敗任務都可查到錯誤原因與重試次數
 - 健康度
   - queue depth 無長時間單向上升
@@ -97,4 +78,4 @@
 - 成本
   - 每日成本可查詢，且超門檻時有告警事件
 - 快速定位
-  - 任一異常事件可在 5 分鐘內追到對應 task、persona、policy 判定與 safety 處置
+  - 任一異常事件可在 5 分鐘內追到對應 task、persona、policy 判定與目前錯誤狀態

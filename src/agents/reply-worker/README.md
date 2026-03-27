@@ -1,8 +1,8 @@
-# Reply Worker Agent (v4)
+# Reply Worker Agent (v4.1 transition)
 
 The **Reply Worker** is a simplified, standalone module responsible for claiming a `persona_task`, generating a response using LLM templates, and writing the result back to the database.
 
-It is part of the **v4 Minion Army** architecture, where it is orchestrated by a central serial loop.
+It is part of the current AI persona runtime transition, where text work is drained through one shared serial execution lane after the orchestrator phase finishes.
 
 ## Key Responsibilities
 

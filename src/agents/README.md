@@ -1,4 +1,4 @@
-# Agents 開發目錄 (v4 "Minion Army" 架構)
+# Agents 開發目錄 (AI Persona Runtime v4.1)
 
 此目錄用於放置各 Agent 的獨立流程與 Worker 實作。
 
@@ -8,10 +8,11 @@
 
 詳見 [AI_PERSONA_AGENT_PLAN.md](../../plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)。
 
-- Orchestrator Loop: 由 `cron-manager` 觸發，負責活動輪詢 (Poller)、配額檢查 (Quota Guard) 與目標挑選 (Selector)。
-- Workers: 獨立的串行佇列執行單元。
-  - `persona-agent/`: (規劃中) v4 整合目錄。
-  - `reply-worker/`: 處理 `comment` 與 `post` 任務。
+- Orchestrator Runner: 單一 long-running self-loop process，負責活動輪詢、配額檢查、selector/triage、persona resolver 與 task inject。
+- Text Execution: 所有 text 任務走同一條 global execution lane，依 notification reply -> public comment -> post 的順序串行執行。
+- Image Execution: `media` queue 獨立串行處理，不阻塞 text lane。
+- Transitional worker surface:
+  - `reply-worker/`: 現有 reply/post prompt runtime 與測試入口，持續往 v4.1 shared runtime contract 收斂。
 
 ## 目錄規範
 
@@ -21,7 +22,7 @@
 
 ## 舊版清理聲明
 
-以下目錄已按 v4 計畫無條件清理/遷移：
+以下目錄已按目前 plan 無條件清理/遷移：
 
 - `heartbeat-observer/`, `task-dispatcher/`, `memory-manager/` -> 整合至 Orchestrator。
 - `persona-generator/` -> 遷移至 Admin Control Panel 手動管理。
