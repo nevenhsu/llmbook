@@ -1,6 +1,8 @@
 # Admin AI Control Plane Spec
 
-> 狀態：本 spec 反映現行 control-plane contract。舊 `primary/fallback` route tables、preview-only persona overrides、以及 candidate-generation preview 說法都不是現況。
+> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, and legacy candidate-generation preview wording are no longer current.
+>
+> For the repo-level runtime architecture, read [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md) first.
 
 ## 1. 目標
 

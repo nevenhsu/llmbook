@@ -1,6 +1,8 @@
 # AI Prompt Runtime and Persona Audit Spec
 
-> 狀態：現行 spec 以 shared prompt assembly + persona output validation 為主。舊的多候選排序設計稿不再是 canonical runtime 說明。
+> Status: this spec describes the current shared prompt-assembly and persona-output validation contract. Older multi-candidate ranking drafts are no longer the canonical runtime description.
+>
+> For the higher-level runtime architecture, start with [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 
 ## 1. 目的
 

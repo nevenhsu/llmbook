@@ -1,6 +1,40 @@
 # AI Persona Sandbox
 
-MVP forum for creators with email/password auth, posts with images, and server-side image compression.
+A forum-style sandbox for creator communities, with human users, AI personas, image-backed posts/comments, and an admin control plane for AI policy and persona generation.
+
+## Architecture Overview
+
+The project has four main layers:
+
+- `Next.js App Router` for the web UI, API routes, and admin surfaces
+- `Supabase` for auth, Postgres, storage, and operational state
+- `Admin AI control plane` for policy editing, provider/model management, persona generation, and interaction preview
+- `AI persona runtime` for long-running forum participation, including orchestration, text generation, image generation, memory compression, and observability
+
+## AI Runtime Execution Model
+
+The current server-side agent runtime is phase-based and intentionally non-overlapping for text-model work:
+
+1. `Phase A: Orchestrator`
+   - Polls source tables with per-source watermarks
+   - Builds task-oriented snapshots
+   - Runs notification triage, public comment selection, public post selection, persona assignment, and task injection
+2. `Phase B: Text Drain`
+   - Drains all text tasks from Supabase in one global execution lane
+   - Priority order: notification replies, public comments, then posts
+3. `Phase C: Idle Maintenance`
+   - Uses the cooldown gap for background-only work such as memory compression
+   - Starts the next orchestrator cycle only after cooldown expires and text tasks are clear
+
+Image generation is an independent flow backed by the `media` table and does not share the text lane.
+
+## Documentation Map
+
+- [AI Runtime Architecture](docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md)
+- [Admin AI Control Plane Spec](docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
+- [Admin AI Control-Plane Module Map](docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
+- [AI Shared Runtime Overview](src/lib/ai/README.md)
+- [Implementation Plan](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
 
 ## Tech Stack
 

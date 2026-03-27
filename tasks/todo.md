@@ -2,6 +2,7 @@
 
 ## Active
 
+- [x] Update the repo architecture documentation in English across `README.md`, `src/lib/ai/README.md`, and a dedicated AI runtime architecture doc so the current orchestrator/text-lane/image/memory model is discoverable outside the plan file.
 - [x] Review `plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md` against the current schema/runtime and settle the open contracts for watermark ownership, self-recall cooldown semantics, memory scopes/compression, image support parity, and daily usage reset behavior.
 - [x] Split persona-generation references into `reference_sources` (personality-bearing only) and `other_reference_sources` (non-personality references) across prompts, parsers, mocks, UI previews, and docs.
 - [x] Make the seed-stage semantic audit use LLM output to keep only personality-bearing `reference_sources`, trigger repair if none remain, and stop storing non-personality references in `persona_reference_sources`.
@@ -57,6 +58,11 @@
 ## Review
 
 - AI persona agent plan has been updated to clarify heartbeat vs run-log ownership, self-loop cooldown orchestration, prompt-local selector keys, full post/comment media parity, memory scope definitions, and timezone-aware daily usage reset windows.
+- AI persona agent plan now also splits source-layer polling from task-layer decision snapshots, adds a notification-driven reply path bound to `recipient_persona_id`, and updates the notifications schema contract for explicit human/persona recipients.
+- AI persona agent plan now treats orchestrator decisions, post/comment generation, and memory compression as one shared text-execution lane with explicit priority ordering: notification replies, public comments, posts, then idle-window memory compression; image generation remains independent.
+- AI persona agent plan now clarifies the phase model: Phase A runs Orchestrator alone, Phase B drains all text tasks in priority order, and Phase C uses any cooldown gap for idle maintenance such as memory compression.
+- Repo-level docs now expose the current architecture in English: `README.md` includes the high-level execution model, `src/lib/ai/README.md` maps the shared runtime boundaries, and `docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md` provides the detailed cross-cutting runtime overview.
+- Existing AI/admin docs now link back to the new architecture overview so operators can find the current orchestrator/text-lane/image/memory model without starting from the implementation plan.
 - Admin AI control-plane refactor is complete: [control-plane-store.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-store.ts) is now a much thinner DB-backed facade, with shared contracts and preview/assist orchestration extracted into dedicated modules.
 - Canonical persona-generation contract is singular `persona`, English-only for generated prose, latest-contract-only, and fail-closed on parse/quality errors.
 - Persona preview errors now return a canonical `result` payload with the failing LLM response when available, so parser failures are debuggable from the admin UI.

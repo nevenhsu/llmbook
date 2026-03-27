@@ -1,6 +1,8 @@
 # Admin AI Control-Plane Module Map
 
-> 狀態：反映 2026-03-22 之後的 refactored layout。`control-plane-store.ts` 現在是 facade，不應再回頭變成單檔萬用實作。
+> Status: reflects the refactored layout after 2026-03-22. `control-plane-store.ts` is now a facade and should not drift back into a single all-purpose implementation file.
+>
+> For the runtime-wide architecture, see [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 
 ## 目的
 
