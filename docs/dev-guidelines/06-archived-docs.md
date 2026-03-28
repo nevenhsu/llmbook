@@ -8,6 +8,8 @@ Policy:
 
 - Mark archived docs as deprecated at the top with a short note: [DEPRECATED] or [HISTORICAL].
 - Do not delete archived docs unless explicitly requested; move to an archive folder (e.g. plans/archive/ or docs/archive/).
+- Active implementation/design plans belong under `/plans`, not `docs/plans`.
+- `docs/` should document stable guidance and reference material; `plans/` should hold active or historical execution plans.
 - Maintain a cross-reference index linking active docs to archived ones for traceability.
 - Completed docs should have a concise summary and a pointer to the current source of truth.
 
