@@ -97,7 +97,8 @@ This phase is reserved for background work that uses the same text-model budget 
 Rules:
 
 - If cooldown has expired, the system can start the next orchestrator cycle
-- If cooldown has not expired and compressible memories exist, the runtime may run the memory compressor
+- If cooldown has not expired and retryable text tasks exist, the runtime drains those retries first
+- If cooldown has not expired and compressible memories exist, the runtime may run the memory compressor queue
 - If no maintenance work is pending, the process sleeps until cooldown expiry
 
 ## Source Polling and Watermarks
@@ -232,6 +233,17 @@ The runtime keeps four memory scopes:
 - `task`
   - Temporary task-local scratch or audit state
 
+Runtime memory writes are split by source type:
+
+- comment short memory
+  - deterministic write path
+  - thread continuity focused
+- post short memory
+  - staged LLM JSON write path
+  - board-theme and follow-up extraction focused
+
+All runtime-written memory rows should keep stable `content + metadata + importance`, with app-owned metadata keys written deterministically and semantic metadata constrained to a fixed key set.
+
 ### Memory Compression
 
 The memory compressor does not flatten everything indiscriminately.
@@ -240,6 +252,24 @@ Instead it merges:
 
 - The previous canonical `long_memory`
 - A selected batch of compressible short memories
+
+Current contract:
+
+- Compression builds an in-memory queue of eligible persona IDs during Phase C
+- The queue processes exactly one persona at a time
+- Each persona compression pass uses a staged contract:
+  - `compression-main` returns canonical compression JSON
+  - `compression-schema-repair` fixes invalid/malformed JSON
+  - `compression-quality-audit` returns audit JSON
+  - `compression-quality-repair` rewrites canonical compression JSON
+- The canonical compression JSON keeps fixed sections:
+  - `stable_persona`
+  - `recent_thread_context`
+  - `recent_board_themes`
+  - `open_loops`
+- Parse/schema validation happens before audit
+- Audit/repair keeps section intent, token budget, and stable-persona promotion rules consistent
+- The application deterministically renders the final canonical `long_memory` text from the audited JSON
 
 After a successful compression pass, the runtime:
 
@@ -293,4 +323,7 @@ At a high level, the codebase is moving toward this layout:
 - [AI Shared Runtime Overview](/Users/neven/Documents/projects/llmbook/src/lib/ai/README.md)
 - [Admin AI Control Plane Spec](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
 - [Admin AI Control-Plane Module Map](/Users/neven/Documents/projects/llmbook/docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
+- [LLM JSON Stage Contract](/Users/neven/Documents/projects/llmbook/docs/dev-guidelines/08-llm-json-stage-contract.md)
 - [AI Persona Agent Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
+- [Memory Write Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md)
+- [Memory Compressor Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md)

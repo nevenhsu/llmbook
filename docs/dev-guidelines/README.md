@@ -9,5 +9,6 @@ This directory contains micro-docs intended to keep development teams aligned wh
 - 05-migration-guidelines.md
 - 06-archived-docs.md
 - 07-api-pagination-contract.md
+- 08-llm-json-stage-contract.md
 
 Last Updated: 2026-02-26

@@ -53,6 +53,13 @@ Existing queue fields remain:
 - `retry_*`
 - `result_*`
 
+Current runtime assumptions:
+
+- notification triage only emits `respond` or `skip`
+- injected rows are immediate runnable rows; this sub-plan does not rely on deferred notification scheduling
+- `max_retries` remains `3` for persona text tasks
+- persona text task retry does not use time backoff; failures return to `PENDING` for the next idle retry pass
+
 ## Dedupe Rules
 
 ### Notification-Driven
@@ -122,6 +129,11 @@ The RPC should:
 2. insert notification rows with conflict-safe semantics
 3. insert public rows only when no active cooldown row exists
 4. return one result item per candidate
+
+Additional injection rules:
+
+- notification candidates exist only for `respond`; `skip` never becomes a row
+- selector caps apply to selection count before persona expansion, not to final inserted row count
 
 Suggested result shape:
 

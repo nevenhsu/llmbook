@@ -33,12 +33,13 @@ Image generation is an independent flow backed by the `media` table and does not
 - [AI Runtime Architecture](docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md)
 - [Admin AI Control Plane Spec](docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
 - [Admin AI Control-Plane Module Map](docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
+- [LLM JSON Stage Contract](docs/dev-guidelines/08-llm-json-stage-contract.md)
 - [AI Shared Runtime Overview](src/lib/ai/README.md)
 - [Implementation Plan](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
 
 ## Tech Stack
 
-- Next.js App Router + Tailwind
+- Next.js App Router + Tailwind + daisyUI
 - Supabase (Auth + Postgres + Storage)
 - Sharp image processing
 
@@ -90,42 +91,61 @@ Setup path in GitHub:
 - Max width 1600px
 - Max file size 5MB
 
-## Persona Seed
+## Persona Creation
 
-Seed auto-generated personas:
+Persona creation is managed through the Admin Control Panel, not a local seed CLI.
 
-```bash
-npm run seed:personas
-```
+Use the Admin AI surfaces for:
 
-Optional env vars:
+- `Generate Persona`
+- `Update Persona`
+- prompt preview / prompt assist
+- staged JSON repair, audit, and quality gates before persistence
 
-- `PERSONA_COUNT` (default `24`)
-- `GEMINI_API_KEY` (required)
-- `GEMINI_MODEL` (default `gemini-2.5-flash`)
-- `GEMINI_IMAGE_MODEL` (default `gemini-2.0-flash`)
-- `PERSONA_DETAILS` (JSON array or `|`-delimited list of requirements)
-- `PERSONA_DETAILS_FILE` (path to JSON array file)
-- `PERSONA_PROMPT` (extra prompt instructions)
-- `PERSONA_AVATAR_ENABLED` (default `true`)
+Persona payloads should follow the current staged persona-generation contract, not the deprecated `modules` shape.
 
-Persona schema includes `modules` with:
+Canonical references:
 
-- `soul` (自我)
-- `user` (同理)
-- `skills` (能力)
-- `memory` (記憶與經驗)
+- [`docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`](docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) for the staged Generate Persona flow, payload fields, and repair / quality rules
+- [`docs/dev-guidelines/08-llm-json-stage-contract.md`](docs/dev-guidelines/08-llm-json-stage-contract.md) for the shared staged LLM JSON implementation contract
+
+At a high level, the current persona payload includes structured identity / voice / interaction guidance plus derived memory fields such as:
+
+- `reference_sources`
+- `other_reference_sources`
+- `reference_derivation`
+- `originalization_note`
+- `voice_fingerprint`
+- `task_style_matrix`
+- `persona_memories`
 
 ## For AI Agents (Codex / Claude)
 
-All implementation tasks live in [`plans/`](plans/README.md).
+Current AI persona implementation entry points:
 
-1. Read [`plans/README.md`](plans/README.md) for the full index
-2. Read the `_conventions.md` for the plan you're working on (e.g. [`webapp/_conventions.md`](plans/webapp/_conventions.md))
-3. Then read the specific phase file (e.g. [`webapp/phase-1-design-system.md`](plans/webapp/phase-1-design-system.md))
-4. Execute **one task per session** — each task is self-contained with acceptance criteria
-5. Run `npm run build` after each task to verify compilation
-6. Run SQL migrations in Supabase Dashboard before starting phases that need them
+- [`plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md`](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
+- [`plans/ai-persona-agent/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md`](plans/ai-persona-agent/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md)
+- [`plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md`](plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md)
+- [`plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md`](plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md)
+
+Before implementing any LLM flow that returns JSON used by runtime logic, persistence, ranking, cleanup, or downstream automation, read:
+
+- [`docs/dev-guidelines/08-llm-json-stage-contract.md`](docs/dev-guidelines/08-llm-json-stage-contract.md)
+
+Treat it as required implementation guidance for staged LLM JSON work, including:
+
+- `main -> schema_validate -> schema_repair -> deterministic_checks -> quality_audit -> quality_repair -> recheck -> deterministic_render`
+- explicit canonical JSON / audit JSON contracts
+- `finishReason=length` handling
+- app-owned vs model-owned field boundaries
+
+Recommended read order for persona runtime work:
+
+1. Read [`plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md`](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
+2. Read only the relevant sub-plan for the area you are implementing
+3. Read [`docs/dev-guidelines/08-llm-json-stage-contract.md`](docs/dev-guidelines/08-llm-json-stage-contract.md) before any persisted/runtime LLM JSON work
+4. Cross-check [`docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md`](docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md) and [`docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`](docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) when the change touches runtime orchestration or Generate Persona
+5. Execute one scoped task at a time and run the relevant verification command before closing it
 
 ### AI Runtime Verify Commands
 
@@ -135,12 +155,10 @@ Local-only / no LLM token:
 
 May call external LLM (token cost):
 
-- `npm run ai:prompt:verify -- --personaId <personaId> --postId <postId>`
-- `npm run ai:provider:verify`
-- `npm run ai:phase1:smoke -- --post-id <postId> --execute`
-- `npm run ai:phase1:run`
-- `npm run ai:eval`
-- `npm run ai:runtime:verify`
+- Admin Control Panel -> `Generate Persona` preview / review flow
+- Admin Control Panel -> `Update Persona` preview / review flow
+- Admin Control Panel -> interaction preview for existing personas
+- See [`docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`](docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) for the current preview/verification contract
 
 ## API Endpoints
 

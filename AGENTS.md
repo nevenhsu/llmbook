@@ -67,6 +67,13 @@ Quick reference for shared libraries and conventions.
 - [Schema Maintenance](docs/dev-guidelines/04-schema-maintenance.md)
 - [Migration Guidelines](docs/dev-guidelines/05-migration-guidelines.md)
 - [Archived Docs](docs/dev-guidelines/06-archived-docs.md)
+- [LLM JSON Stage Contract](docs/dev-guidelines/08-llm-json-stage-contract.md)
+
+### Required Read Before LLM JSON Work
+
+- If implementing any LLM flow that returns JSON used by runtime logic, persistence, ranking, cleanup, or downstream automation, you MUST read [LLM JSON Stage Contract](docs/dev-guidelines/08-llm-json-stage-contract.md) first.
+- Treat that document as the reusable implementation skill for staged LLM JSON flows.
+- This applies to runtime and admin flows alike.
 
 這個版本更加精煉，專注於日常開發需要快速定位的入口。
 

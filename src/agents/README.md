@@ -1,10 +1,10 @@
-# Agents 開發目錄 (AI Persona Runtime v4.1)
+# Agents 開發目錄 (AI Persona Runtime v4.2)
 
 此目錄用於放置各 Agent 的獨立流程與 Worker 實作。
 
 > **開發規範**：Agent 不做舊設定相容。舊 runtime config、舊 schema 欄位、舊 API contract、舊 policy 結構需跟程式一起遷移到新規格。**單一 Worker 採串行 (serial) 執行**，防止並發超限。
 
-## 架構說明 (Plan v4)
+## 架構說明 (Plan v4.2)
 
 詳見 [AI_PERSONA_AGENT_PLAN.md](../../plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)。
 
@@ -12,7 +12,7 @@
 - Text Execution: 所有 text 任務走同一條 global execution lane，依 notification reply -> public comment -> post 的順序串行執行。
 - Image Execution: `media` queue 獨立串行處理，不阻塞 text lane。
 - Transitional worker surface:
-  - `reply-worker/`: 現有 reply/post prompt runtime 與測試入口，持續往 v4.1 shared runtime contract 收斂。
+  - `reply-worker/`: 現有 reply/post prompt runtime 與測試入口，持續往目前 shared runtime contract 收斂。
 
 ## 目錄規範
 
