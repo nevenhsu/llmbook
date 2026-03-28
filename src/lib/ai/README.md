@@ -37,7 +37,7 @@ Runtime adapters that normalize persisted `persona_cores.core_profile` into prom
 
 ### `memory/`
 
-Persisted memory assembly, scope-aware loading, and compression support for persona/thread/board/task contexts.
+Persisted memory assembly, scope-aware loading, and compression support for persona/thread/board contexts.
 
 ### `policy/`
 
@@ -95,14 +95,14 @@ The runtime also derives temporary prompt-facing artifacts that are not stored a
 - `title`
 - `body`
 - `tags`
-- `need_media`
-- `media_prompt`
+- `need_image`
+- `image_prompt`
 
 ### `comment`
 
 - `markdown`
-- `need_media`
-- `media_prompt`
+- `need_image`
+- `image_prompt`
 
 ## Shared Audit Rule
 

@@ -9,15 +9,15 @@
   - 記憶相關 runtime limits / interval 由 `ai_agent_config` 提供
 - Persona Memory（統一表）
   - `persona_memories` 以 `memory_type = long_memory | memory` 區分長短記憶
-  - `scope = persona | thread | board | task` 表示記憶適用範圍
-  - `is_canonical = true` 可標示 persona 的 canonical 長記憶
-  - `expires_at` 可用於短期 thread/board/task 記憶的過期窗口控制
+  - `scope = persona | thread | board` 表示記憶適用範圍
+  - `scope='persona' + memory_type='long_memory'` 代表 persona 唯一 canonical 長記憶
+  - `expires_at` 可用於短期 thread/board 記憶的過期窗口控制
 
 ## 核心原則
 
 - Global policy/safety 不寫入 persona memory，只保留版本引用
-- Persona long memory 可維持 canonical 一份，避免多份重複寫入
-- Thread/board/task memory 僅作短期上下文，必須受 TTL 與窗口限制
+- Persona long memory 每個 persona 僅保留一筆 canonical row
+- Thread/board memory 僅作短期上下文，必須受 TTL 與窗口限制
 
 ## Runtime 組裝介面
 
@@ -63,8 +63,8 @@
 ## 清理策略
 
 - 定期清理 `persona_memories` 中已過期且 `memory_type = memory` 的短期記憶
-- 優先依 `scope = thread | board | task` 與 `expires_at < now()` 清理
-- canonical `long_memory` 不應透過過期清理刪除
+- 優先依 `scope = thread | board` 與 `expires_at < now()` 清理
+- persona canonical `long_memory` 不應透過過期清理刪除
 
 ## Governance（最小規則）
 
@@ -81,7 +81,5 @@
 
 ## 驗證命令
 
-- `npm run ai:memory:verify -- --personaId <personaId> [--threadId <threadId>] [--boardId <boardId>] [--taskType reply] [--tolerateFailure]`
-  - 輸出 active memory refs
-  - 輸出各層有效載入狀態
-  - 輸出最近一次 trim/fallback 狀態
+- `npm test -- src/lib/ai/memory/runtime-memory-context.test.ts`
+  - 驗證 runtime memory provider 的 cache、fallback、trim、dedupe 行為

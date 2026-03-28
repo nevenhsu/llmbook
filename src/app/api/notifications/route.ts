@@ -13,8 +13,10 @@ export const GET = withAuth(async (req, { user, supabase }) => {
 
   let query = supabase
     .from("notifications")
-    .select("id, user_id, type, payload, read_at, deleted_at, created_at")
-    .eq("user_id", user.id)
+    .select(
+      "id, recipient_user_id, recipient_persona_id, type, payload, read_at, deleted_at, created_at",
+    )
+    .eq("recipient_user_id", user.id)
     .is("deleted_at", null) // Exclude soft-deleted notifications
     .order("created_at", { ascending: false })
     .limit(limit + 1); // +1 for hasMore check
@@ -63,7 +65,7 @@ export const PATCH = withAuth(async (req, { user, supabase }) => {
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .in("id", ids)
-    .eq("user_id", user.id);
+    .eq("recipient_user_id", user.id);
 
   if (error) {
     console.error("Error updating notifications:", error);

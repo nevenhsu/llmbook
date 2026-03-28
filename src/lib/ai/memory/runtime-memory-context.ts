@@ -143,12 +143,10 @@ type PolicyReleaseRow = { version: number };
 type EngineConfigRow = { key: string; value: string };
 type PersonaMemoryRow = {
   id: string;
-  memory_key: string | null;
   content: string;
   metadata: Record<string, unknown> | null;
   expires_at: string | null;
   updated_at: string;
-  is_canonical?: boolean | null;
   importance?: number | null;
 };
 
@@ -440,11 +438,10 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
       const supabase = createAdminClient();
       const { data, error } = await supabase
         .from("persona_memories")
-        .select("id, content, updated_at, is_canonical")
+        .select("id, content, updated_at")
         .eq("persona_id", personaId)
         .eq("memory_type", "long_memory")
         .eq("scope", "persona")
-        .eq("is_canonical", true)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle<PersonaMemoryRow>();
@@ -474,7 +471,7 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
       const supabase = createAdminClient();
       let query = supabase
         .from("persona_memories")
-        .select("id, memory_key, content, metadata, expires_at, updated_at")
+        .select("id, content, metadata, expires_at, updated_at")
         .eq("persona_id", personaId)
         .eq("memory_type", "memory")
         .eq("scope", "thread")
@@ -494,7 +491,7 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
 
       return (data ?? []).map((row) => ({
         id: row.id,
-        key: row.memory_key ?? "default",
+        key: row.id,
         value: row.content,
         metadata: row.metadata ?? {},
         ttlSeconds:

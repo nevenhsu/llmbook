@@ -126,12 +126,10 @@ describe("/api/admin/ai/personas", () => {
           {
             memoryType: "long_memory",
             scope: "persona",
-            memoryKey: null,
             content: "Prefers specific critique.",
             metadata: { memoryCategory: "knowledge" },
             expiresAt: null,
-            isCanonical: true,
-            importance: 0.9,
+            importance: 9,
           },
         ],
       }),
@@ -191,12 +189,10 @@ describe("/api/admin/ai/personas", () => {
         {
           memoryType: "long_memory",
           scope: "persona",
-          memoryKey: null,
           content: "Prefers specific critique.",
           metadata: { memoryCategory: "knowledge" },
           expiresAt: null,
-          isCanonical: true,
-          importance: 0.9,
+          importance: 9,
         },
       ],
     });

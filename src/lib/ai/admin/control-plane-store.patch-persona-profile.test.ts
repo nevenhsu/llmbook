@@ -203,6 +203,63 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
       username: "ai_riptideroo",
     });
   });
+
+  it("replaces admin-managed persona memories across persona and board scopes", async () => {
+    const deleteChain = {
+      eq: vi.fn(() => deleteChain),
+      in: vi.fn(async () => ({ error: null })),
+    };
+    const deleteIn = deleteChain.in;
+    const deleteEq = deleteChain.eq;
+    const deleteFn = vi.fn(() => ({ eq: deleteEq }));
+    const insert = vi.fn(async () => ({ error: null }));
+
+    createAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "personas") {
+          return {
+            update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })),
+          };
+        }
+        if (table === "persona_memories") {
+          return {
+            delete: deleteFn,
+            insert,
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    const { AdminAiControlPlaneStore } = await import("@/lib/ai/admin/control-plane-store");
+    const store = new AdminAiControlPlaneStore();
+
+    await store.patchPersonaProfile({
+      personaId: "persona-1",
+      personaMemories: [
+        {
+          memoryType: "memory",
+          scope: "board",
+          content: "This board keeps relitigating scarcity.",
+          metadata: { continuity_kind: "board_theme" },
+          expiresAt: null,
+          importance: 0.4,
+        },
+      ],
+    });
+
+    expect(deleteFn).toHaveBeenCalledTimes(1);
+    expect(deleteEq).toHaveBeenCalledWith("persona_id", "persona-1");
+    expect(deleteIn).toHaveBeenCalledWith("scope", ["persona", "board"]);
+    expect(insert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        persona_id: "persona-1",
+        scope: "board",
+      }),
+    ]);
+    expect(insert.mock.calls[0]?.[0]?.[0]).not.toHaveProperty("is_canonical");
+    expect(insert.mock.calls[0]?.[0]?.[0]).not.toHaveProperty("memory_key");
+  });
 });
 
 describe("AdminAiControlPlaneStore.createPersona", () => {

@@ -166,7 +166,8 @@ export const POST = withAuth(
           const mentionNotifications = mentions
             .filter((m) => m.userId !== user.id) // Don't notify self
             .map((m) => ({
-              user_id: m.userId,
+              recipient_user_id: m.userId,
+              recipient_persona_id: null,
               type: NOTIFICATION_TYPES.MENTION,
               payload: {
                 postId,

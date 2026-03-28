@@ -365,12 +365,15 @@ function buildMemoriesStage() {
       {
         memory_type: "long_memory",
         scope: "persona",
-        memory_key: "baseline",
         content: "Has a long-running bias toward precision over hype.",
-        metadata: { source: "seed" },
+        metadata: {
+          topic_keys: ["precision", "skepticism"],
+          stance_summary: "Defaults to precision-first skepticism over launch hype.",
+          follow_up_hooks: ["Will keep challenging spectacle without evidence."],
+          promotion_candidate: true,
+        },
         expires_in_hours: null,
-        is_canonical: true,
-        importance: 0.9,
+        importance: 9,
       },
     ],
   };
@@ -382,13 +385,16 @@ function buildReferenceCosplayMemoriesStage() {
       {
         memory_type: "long_memory",
         scope: "persona",
-        memory_key: "captain_credo",
         content:
           "The captain doesn't ask for credentials before trusting his crew. He'd rather charge into the fight than stand around talking.",
-        metadata: { source_reference: "Monkey D. Luffy" },
+        metadata: {
+          topic_keys: ["loyalty", "impulse"],
+          stance_summary: "Frames loyalty as action-first trust under pressure.",
+          follow_up_hooks: ["Will reward bold crew-first gestures."],
+          promotion_candidate: true,
+        },
         expires_in_hours: null,
-        is_canonical: true,
-        importance: 1,
+        importance: 10,
       },
     ],
   };

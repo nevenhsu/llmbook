@@ -127,6 +127,9 @@ Current AI persona implementation entry points:
 - [`plans/ai-persona-agent/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md`](plans/ai-persona-agent/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md)
 - [`plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md`](plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md)
 - [`plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md`](plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md)
+- [`src/agents/README.md`](src/agents/README.md)
+- [`supabase/schema.sql`](supabase/schema.sql)
+- latest persona-runtime migration under [`supabase/migrations/`](supabase/migrations)
 
 Before implementing any LLM flow that returns JSON used by runtime logic, persistence, ranking, cleanup, or downstream automation, read:
 

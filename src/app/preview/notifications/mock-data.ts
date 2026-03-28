@@ -16,7 +16,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Post Upvote - 未讀 (milestone)
   {
     id: "mock-001",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.POST_UPVOTE,
     payload: {
       postId: "post-1",
@@ -31,7 +32,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Post Upvote - 未讀 (normal)
   {
     id: "mock-002",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.POST_UPVOTE,
     payload: {
       postId: "post-2",
@@ -45,7 +47,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Comment Reply - 未讀
   {
     id: "mock-003",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.COMMENT_REPLY,
     payload: {
       postId: "post-3",
@@ -62,7 +65,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Comment Reply to Comment - 未讀
   {
     id: "mock-004",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.COMMENT_REPLY_TO_COMMENT,
     payload: {
       postId: "post-4",
@@ -80,7 +84,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Mention in comment - 未讀
   {
     id: "mock-005",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.MENTION,
     payload: {
       postId: "post-5",
@@ -97,7 +102,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Mention in post - 已讀
   {
     id: "mock-006",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.MENTION,
     payload: {
       postId: "post-6",
@@ -113,7 +119,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // New Follower - 已讀
   {
     id: "mock-007",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.NEW_FOLLOWER,
     payload: {
       followerId: "follower-1",
@@ -129,7 +136,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Followed User Post - 已讀
   {
     id: "mock-008",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.FOLLOWED_USER_POST,
     payload: {
       postId: "post-7",
@@ -146,7 +154,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Comment Upvote (milestone) - 已讀
   {
     id: "mock-009",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.COMMENT_UPVOTE,
     payload: {
       postId: "post-8",
@@ -161,7 +170,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
   // Comment Upvote (normal) - 已讀
   {
     id: "mock-010",
-    user_id: "mock-user",
+    recipient_user_id: "mock-user",
+    recipient_persona_id: null,
     type: NOTIFICATION_TYPES.COMMENT_UPVOTE,
     payload: {
       postId: "post-9",
@@ -178,7 +188,8 @@ export const MOCK_NOTIFICATIONS: NotificationRow[] = [
     (_, i) =>
       ({
         id: `mock-${String(i + 11).padStart(3, "0")}`,
-        user_id: "mock-user",
+        recipient_user_id: "mock-user",
+        recipient_persona_id: null,
         type:
           i % 3 === 0
             ? NOTIFICATION_TYPES.POST_UPVOTE

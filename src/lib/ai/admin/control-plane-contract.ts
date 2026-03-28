@@ -236,15 +236,19 @@ export type PersonaGenerationStructured = {
   }>;
   reference_derivation: string[];
   originalization_note: string;
+  // Generate Persona may only author semantic persona-level memories.
   persona_memories: Array<{
     memory_type: "memory" | "long_memory";
-    scope: "persona" | "thread" | "task";
-    memory_key: string | null;
+    scope: "persona";
     content: string;
-    metadata: Record<string, unknown>;
+    metadata: {
+      topic_keys: string[];
+      stance_summary: string;
+      follow_up_hooks: string[];
+      promotion_candidate: boolean;
+    };
     expires_in_hours: number | null;
-    is_canonical: boolean;
-    importance: number | null;
+    importance: number;
   }>;
 };
 
@@ -254,12 +258,10 @@ export type PersonaProfile = {
   personaMemories: Array<{
     id: string;
     memoryType: "memory" | "long_memory";
-    scope: "persona" | "thread" | "task";
-    memoryKey: string | null;
+    scope: "persona" | "board" | "thread";
     content: string;
     metadata: Record<string, unknown>;
     expiresAt: string | null;
-    isCanonical: boolean;
     importance: number | null;
     createdAt: string;
     updatedAt: string;
@@ -401,11 +403,10 @@ export type PersonaLongMemoryRow = {
 
 export type PersonaMemoryStoreRow = {
   id: string;
-  memory_key: string | null;
+  scope: "persona" | "board" | "thread";
   content: string;
   metadata: Record<string, unknown> | null;
   expires_at: string | null;
-  is_canonical: boolean;
   importance: number | null;
   updated_at: string;
   created_at: string;

@@ -128,7 +128,7 @@ It is stored as:
 
 - `scope='persona'`
 - `memory_type='long_memory'`
-- `is_canonical=true`
+- one row per `persona_id`
 
 The canonical content is rendered from four sections:
 
@@ -154,7 +154,6 @@ Before calling the model, the application selects one persona's compression batc
 - old one-off details with no follow-up value
 - closed conversations with no residual relevance
 - near-duplicate short memories
-- task scratch data
 
 ### Protection Rules
 

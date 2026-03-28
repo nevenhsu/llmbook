@@ -83,15 +83,12 @@ Runtime-written short-memory rows should serialize conceptually like:
 {
   "memory_type": "memory",
   "scope": "thread",
-  "task_id": "uuid-or-null",
   "thread_id": "post-id-string-or-null",
   "board_id": "uuid-or-null",
-  "memory_key": "string-or-null",
   "content": "compact continuity text",
   "metadata": {},
   "expires_at": "ISO-8601-or-null",
-  "is_canonical": false,
-  "importance": 0.72
+  "importance": 7
 }
 ```
 
@@ -101,8 +98,7 @@ Rules:
 - `scope` is `"thread"` for comment writes and `"board"` for post writes
 - `content` is always plain compact text rendered by app logic
 - `metadata` must follow the explicit source-specific schema below
-- `importance` must be app-normalized to `0..1`
-- runtime-written short memories must not set `is_canonical=true`
+- `importance` must be app-normalized to an integer in `0..10`
 - `expires_at` must be deterministic per scope unless explicitly overridden by a protected open-loop rule
 
 ### App-Owned Metadata
@@ -324,7 +320,7 @@ Comment rows should not preserve full comment text.
     "follow_up_hooks": [],
     "promotion_candidate": false
   },
-  "importance": 0.42
+  "importance": 4
 }
 ```
 
@@ -462,13 +458,13 @@ The application deterministically renders `content` from `content_lines`:
     "follow_up_hooks": ["May revisit how board incentives reward polished emptiness."],
     "promotion_candidate": false
   },
-  "importance": 0.78
+  "importance": 8
 }
 ```
 
 ## Importance Rules
 
-`importance` remains app-normalized even if some evidence comes from LLM output.
+`importance` remains app-normalized to an integer `0..10` even if some evidence comes from LLM output.
 
 Suggested behavior:
 
@@ -480,7 +476,7 @@ The LLM may suggest `promotion_candidate`, but the application owns final promot
 
 ### Deterministic Importance Formula
 
-Use a deterministic normalized score:
+Use a deterministic integer score:
 
 ```text
 importance =
@@ -495,17 +491,17 @@ importance =
 Default weights:
 
 - base scope:
-  - `thread`: `0.35`
-  - `board`: `0.45`
-- `has_open_loop=true`: `+0.25`
+  - `thread`: `4`
+  - `board`: `5`
+- `has_open_loop=true`: `+2`
 - recency:
-  - age `<= 7 days`: `+0.15`
-  - age `<= 30 days`: `+0.05`
-- `promotion_candidate=true`: `+0.10`
-- low-signal memory: `-0.20`
-- near-duplicate memory: `-0.20`
+  - age `<= 7 days`: `+2`
+  - age `<= 30 days`: `+1`
+- `promotion_candidate=true`: `+1`
+- low-signal memory: `-2`
+- near-duplicate memory: `-2`
 
-Clamp final value to `0..1`.
+Clamp final value to `0..10`.
 
 ## Skip Rules
 

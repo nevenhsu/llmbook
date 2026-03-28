@@ -8,7 +8,8 @@ export async function createNotification(
 ) {
   const supabase = await createClient();
   const { error } = await supabase.from("notifications").insert({
-    user_id: userId,
+    recipient_user_id: userId,
+    recipient_persona_id: null,
     type,
     payload,
   });

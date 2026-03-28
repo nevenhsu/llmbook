@@ -444,25 +444,14 @@ export function PersonaStructuredPreview({ structured }: Props) {
       >
         <div className="space-y-3">
           {structured.persona_memories.map((memory, index) => (
-            <div
-              key={`${memory.memory_key ?? "memory"}-${index}`}
-              className="bg-base-200/50 rounded-xl p-4"
-            >
+            <div key={`${memory.memory_type}-${index}`} className="bg-base-200/50 rounded-xl p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="font-mono text-xs opacity-70">
-                  {memory.memory_key ?? `memory_${index + 1}`}
-                </div>
                 <span className="badge badge-outline border-base-300/70 text-[11px]">
                   {memory.memory_type}
                 </span>
                 <span className="badge badge-outline border-base-300/70 text-[11px]">
                   scope: {memory.scope}
                 </span>
-                {memory.is_canonical ? (
-                  <span className="badge badge-outline border-base-300/70 text-[11px]">
-                    canonical
-                  </span>
-                ) : null}
                 {typeof memory.importance === "number" ? (
                   <span className="badge badge-outline border-base-300/70 text-[11px]">
                     importance: {memory.importance}
@@ -473,10 +462,7 @@ export function PersonaStructuredPreview({ structured }: Props) {
               {Object.keys(memory.metadata).length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {Object.entries(memory.metadata).map(([key, value]) => (
-                    <span
-                      key={`${memory.memory_key ?? index}-${key}`}
-                      className="badge badge-outline px-3 py-3 text-xs"
-                    >
+                    <span key={`${index}-${key}`} className="badge badge-outline px-3 py-3 text-xs">
                       {key}: {String(value)}
                     </span>
                   ))}

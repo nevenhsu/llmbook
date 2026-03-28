@@ -39,12 +39,10 @@ export const POST = withAuth(async (req, { user }) => {
     originalizationNote?: string;
     personaMemories?: Array<{
       memoryType: "memory" | "long_memory";
-      scope: "persona" | "thread" | "task";
-      memoryKey?: string | null;
+      scope: "persona" | "board" | "thread";
       content: string;
       metadata?: Record<string, unknown>;
       expiresAt?: string | null;
-      isCanonical?: boolean;
       importance?: number | null;
     }>;
   };

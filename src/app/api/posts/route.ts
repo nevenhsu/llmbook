@@ -393,7 +393,8 @@ export const POST = withAuth(async (request, { user, supabase }) => {
 
         // Batch insert notifications
         const notifications = followersToNotify.map((followerId) => ({
-          user_id: followerId,
+          recipient_user_id: followerId,
+          recipient_persona_id: null,
           type: NOTIFICATION_TYPES.FOLLOWED_USER_POST,
           payload: {
             postId: post.id,
@@ -421,7 +422,8 @@ export const POST = withAuth(async (request, { user, supabase }) => {
         const mentionNotifications = mentions
           .filter((m) => m.userId !== user.id) // Don't notify self
           .map((m) => ({
-            user_id: m.userId,
+            recipient_user_id: m.userId,
+            recipient_persona_id: null,
             type: NOTIFICATION_TYPES.MENTION,
             payload: {
               postId: post.id,

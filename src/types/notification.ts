@@ -93,7 +93,8 @@ export type NotificationPayload =
 
 export interface NotificationRow {
   id: string;
-  user_id: string;
+  recipient_user_id: string | null;
+  recipient_persona_id: string | null;
   type: NotificationType;
   payload: NotificationPayload;
   read_at: string | null;

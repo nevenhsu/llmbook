@@ -421,9 +421,88 @@ export function validateMemoriesStageQuality(stage: PersonaGenerationMemoriesSta
         `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
       );
     }
+
+    if (memory.metadata.topic_keys.length > 5) {
+      issues.push(`persona_memories[${index}].metadata.topic_keys must contain at most 5 items.`);
+    }
+
+    if (memory.metadata.follow_up_hooks.length > 3) {
+      issues.push(
+        `persona_memories[${index}].metadata.follow_up_hooks must contain at most 3 items.`,
+      );
+    }
   }
 
   return issues;
+}
+
+function normalizePersonaMemoryStringArray(
+  value: unknown,
+  fieldPath: string,
+  options: {
+    allowEmpty: boolean;
+  },
+): string[] {
+  const items =
+    typeof value === "string"
+      ? [value]
+      : Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === "string")
+        : null;
+  if (!items) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  const normalized = items.map((item) => item.trim()).filter((item) => item.length > 0);
+  if (normalized.length === 0 && !options.allowEmpty) {
+    throw new Error(`persona generation output missing ${fieldPath}`);
+  }
+  return normalized;
+}
+
+function parsePersonaMemoryMetadata(
+  value: unknown,
+  fieldPath: string,
+): PersonaGenerationStructured["persona_memories"][number]["metadata"] {
+  const root = asRecord(value);
+  if (!root) {
+    return {
+      topic_keys: [],
+      stance_summary: "",
+      follow_up_hooks: [],
+      promotion_candidate: false,
+    };
+  }
+
+  const topicKeysSource = root.topic_keys;
+  const followUpHooksSource = root.follow_up_hooks;
+  const stanceSummarySource = root.stance_summary;
+  const promotionCandidateSource = root.promotion_candidate;
+
+  return {
+    topic_keys:
+      topicKeysSource === undefined
+        ? []
+        : normalizePersonaMemoryStringArray(topicKeysSource, `${fieldPath}.topic_keys`, {
+            allowEmpty: true,
+          }),
+    stance_summary: typeof stanceSummarySource === "string" ? stanceSummarySource.trim() : "",
+    follow_up_hooks:
+      followUpHooksSource === undefined
+        ? []
+        : normalizePersonaMemoryStringArray(followUpHooksSource, `${fieldPath}.follow_up_hooks`, {
+            allowEmpty: true,
+          }),
+    promotion_candidate:
+      typeof promotionCandidateSource === "boolean" ? promotionCandidateSource : false,
+  };
+}
+
+function parsePersonaMemoryImportance(value: unknown, fieldPath: string): number {
+  const importance = readNumberOrNull(value);
+  if (importance === null || !Number.isInteger(importance) || importance < 0 || importance > 10) {
+    throw new Error(`persona generation output ${fieldPath} must be an integer between 0 and 10`);
+  }
+  return importance;
 }
 
 function normalizePersonaValueHierarchy(
@@ -786,8 +865,8 @@ export function parsePersonaMemories(
     return [];
   }
 
-  return value
-    .map((item) => {
+  const normalized = value
+    .map((item, index) => {
       const row = asRecord(item);
       if (!row) {
         return null;
@@ -795,27 +874,41 @@ export function parsePersonaMemories(
       const memoryType =
         readString(row.memory_type).trim() === "long_memory" ? "long_memory" : "memory";
       const scopeRaw = readString(row.scope).trim();
-      const scope: "persona" | "thread" | "task" =
-        scopeRaw === "thread" || scopeRaw === "task" ? scopeRaw : "persona";
+      if (scopeRaw !== "persona") {
+        throw new Error(
+          `persona generation output persona_memories[${index}].scope must be persona`,
+        );
+      }
       const content = readString(row.content).trim();
       if (!content) {
         return null;
       }
-      const memoryKey = readNullableString(row.memory_key);
       return {
         memory_type: memoryType,
-        scope,
-        memory_key: memoryKey,
+        scope: "persona",
         content,
-        metadata: asRecord(row.metadata) ?? {},
+        metadata: parsePersonaMemoryMetadata(row.metadata, `persona_memories[${index}].metadata`),
         expires_in_hours: readNumberOrNull(row.expires_in_hours),
-        is_canonical: readBoolean(row.is_canonical, false),
-        importance: readNumberOrNull(row.importance),
+        importance: parsePersonaMemoryImportance(
+          row.importance,
+          `persona_memories[${index}].importance`,
+        ),
       };
     })
     .filter(
       (item): item is PersonaGenerationStructured["persona_memories"][number] => item !== null,
     );
+
+  const personaLongMemoryCount = normalized.filter(
+    (item) => item.memory_type === "long_memory",
+  ).length;
+  if (personaLongMemoryCount > 1) {
+    throw new Error(
+      "persona generation output persona_memories may contain at most one long_memory row",
+    );
+  }
+
+  return normalized;
 }
 
 export function extractJsonFromText(text: string): string {

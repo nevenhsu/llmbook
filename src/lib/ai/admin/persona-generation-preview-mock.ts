@@ -182,10 +182,14 @@ const assembledPrompt = [
     validatedContext: memoriesContext,
     stageContract: [
       "Return one JSON object with key:",
-      "persona_memories[{memory_type,scope,memory_key,content,metadata,expires_in_hours,is_canonical,importance}].",
+      "persona_memories[{memory_type,scope,content,metadata,expires_in_hours,importance}].",
       "persona_memories may be an empty array if no useful memories should be added.",
       "memory_type must be memory or long_memory.",
-      "scope must be persona, thread, or task.",
+      "At most one persona_memories row may use memory_type=long_memory.",
+      "scope must always be persona.",
+      "metadata must contain exactly topic_keys:string[], stance_summary:string, follow_up_hooks:string[], and promotion_candidate:boolean.",
+      "Do not include app-owned metadata fields such as schema_version, source_kind, source ids, write_method, or scope markers inside metadata.",
+      "importance must be an integer from 0 to 10.",
     ],
   }),
 ].join("\n\n");

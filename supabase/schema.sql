@@ -307,12 +307,17 @@ CREATE TABLE public.media (
 -- User notifications
 CREATE TABLE public.notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  recipient_user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  recipient_persona_id uuid REFERENCES public.personas(id) ON DELETE CASCADE,
   type text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   read_at timestamptz,
   deleted_at timestamptz,
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT notifications_recipient_check CHECK (
+    (recipient_user_id IS NOT NULL AND recipient_persona_id IS NULL) OR
+    (recipient_user_id IS NULL AND recipient_persona_id IS NOT NULL)
+  )
 );
 
 -- ----------------------------------------------------------------------------
@@ -399,19 +404,16 @@ CREATE TABLE public.persona_memories (
   persona_id uuid NOT NULL REFERENCES public.personas(id) ON DELETE CASCADE,
   memory_type text NOT NULL,
   scope text NOT NULL,
-  task_id uuid REFERENCES public.persona_tasks(id) ON DELETE SET NULL,
   thread_id text,
   board_id uuid REFERENCES public.boards(id) ON DELETE CASCADE,
-  memory_key text,
   content text NOT NULL,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   expires_at timestamptz,
-  is_canonical boolean NOT NULL DEFAULT false,
   importance real,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT persona_memories_memory_type_chk CHECK (memory_type IN ('long_memory', 'memory')),
-  CONSTRAINT persona_memories_scope_chk CHECK (scope IN ('persona', 'thread', 'task'))
+  CONSTRAINT persona_memories_scope_chk CHECK (scope IN ('persona', 'thread', 'board'))
 );
 
 -- AI Agent Config (global key-value settings)
@@ -554,12 +556,12 @@ CREATE INDEX idx_follows_following ON public.follows(following_id);
 
 -- Notifications
 CREATE INDEX idx_notifications_not_deleted 
-  ON public.notifications(user_id, created_at DESC) 
+  ON public.notifications(recipient_user_id, created_at DESC) 
   WHERE deleted_at IS NULL;
 
 CREATE INDEX idx_notifications_throttle 
-  ON public.notifications(user_id, type, created_at DESC)
-  WHERE type = 'followed_user_post';
+  ON public.notifications(recipient_user_id, type, created_at DESC)
+  WHERE type = 'followed_user_post' AND recipient_user_id IS NOT NULL;
 
 -- Admin users
 CREATE INDEX idx_admin_users_role ON public.admin_users(role);
@@ -660,6 +662,8 @@ CREATE INDEX idx_ai_runtime_events_entity_id_occurred_at
 
 CREATE INDEX idx_persona_memories_persona ON public.persona_memories(persona_id);
 CREATE INDEX idx_persona_memories_persona_type ON public.persona_memories(persona_id, memory_type);
+CREATE UNIQUE INDEX idx_persona_memories_persona_long_unique ON public.persona_memories(persona_id)
+  WHERE scope = 'persona' AND memory_type = 'long_memory';
 CREATE INDEX idx_persona_memories_thread ON public.persona_memories(persona_id, thread_id)
   WHERE thread_id IS NOT NULL;
 CREATE INDEX idx_persona_memories_expire ON public.persona_memories(expires_at)
@@ -1715,10 +1719,10 @@ CREATE POLICY "Admins and moderators can delete board bans" ON public.board_enti
 -- ----------------------------------------------------------------------------
 
 CREATE POLICY "Notifications are private" ON public.notifications
-  FOR SELECT USING (auth.uid() = user_id);
+  FOR SELECT USING (auth.uid() = recipient_user_id);
 
 CREATE POLICY "Users can manage notifications" ON public.notifications
-  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  FOR ALL USING (auth.uid() = recipient_user_id) WITH CHECK (auth.uid() = recipient_user_id);
 
 
 -- ----------------------------------------------------------------------------
@@ -1797,7 +1801,7 @@ COMMENT ON TABLE public.ai_provider_secrets IS 'Encrypted AI provider API keys (
 COMMENT ON TABLE public.ai_providers IS 'AI provider metadata/status for control plane.';
 COMMENT ON TABLE public.ai_models IS 'AI model metadata/status/order for control plane.';
 COMMENT ON TABLE public.persona_cores IS 'Reusable structured persona identity replacing legacy persona_souls.';
-COMMENT ON TABLE public.persona_memories IS 'Unified persona memory table covering long_memory and short memory across persona/thread/task scopes.';
+COMMENT ON TABLE public.persona_memories IS 'Unified persona memory table covering long_memory and short memory across persona/thread/board scopes.';
 COMMENT ON TABLE public.admin_users IS 'Site-wide admin users with elevated privileges';
 COMMENT ON COLUMN public.admin_users.role IS 'admin | super_admin';
 

@@ -96,7 +96,7 @@ export async function previewPersonaInteraction(input: {
   const profile = await input.getPersonaProfile(input.personaId);
   const personaMemory = profile.personaMemories
     .filter((item) => item.memoryType === "memory")
-    .map((item) => `${item.memoryKey ?? "memory"}: ${item.content}`)
+    .map((item) => item.content)
     .join("\n");
   const longMemoryText = profile.personaMemories
     .filter((item) => item.memoryType === "long_memory")

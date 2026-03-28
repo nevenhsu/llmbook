@@ -13,22 +13,41 @@ describe("persona-save-payload", () => {
         {
           memory_type: "long_memory",
           scope: "persona",
-          memory_key: "core_rule",
           content: "Protect the crew first.",
-          metadata: { tag: "value" },
+          metadata: {
+            topic_keys: ["loyalty", "crew"],
+            stance_summary: "Protects the crew before abstract principle.",
+            follow_up_hooks: ["Will keep defending allies under pressure."],
+            promotion_candidate: true,
+          },
           expires_in_hours: 24,
-          is_canonical: true,
           importance: 10,
         },
         {
           memory_type: "memory",
-          scope: "thread",
-          memory_key: null,
+          scope: "persona",
           content: "Won a late-night argument.",
-          metadata: {},
+          metadata: {
+            topic_keys: ["argument", "conviction"],
+            stance_summary: "Remembers winning a conviction-first late-night argument.",
+            follow_up_hooks: [],
+            promotion_candidate: false,
+          },
           expires_in_hours: null,
-          is_canonical: false,
           importance: 4,
+        },
+        {
+          memory_type: "memory",
+          scope: "persona",
+          content: "The board keeps revisiting scarcity as a design pressure.",
+          metadata: {
+            topic_keys: ["scarcity", "design"],
+            stance_summary: "Tracks recurring scarcity pressure in design arguments.",
+            follow_up_hooks: ["Will likely revisit scarcity as a constraint lens."],
+            promotion_candidate: false,
+          },
+          expires_in_hours: 72,
+          importance: 5,
         },
       ],
       { now: new Date("2026-03-22T10:00:00.000Z") },
@@ -38,24 +57,45 @@ describe("persona-save-payload", () => {
       {
         memoryType: "long_memory",
         scope: "persona",
-        memoryKey: "core_rule",
         content: "Protect the crew first.",
-        metadata: { tag: "value" },
+        metadata: {
+          topic_keys: ["loyalty", "crew"],
+          stance_summary: "Protects the crew before abstract principle.",
+          follow_up_hooks: ["Will keep defending allies under pressure."],
+          promotion_candidate: true,
+        },
         expiresAt: "2026-03-23T10:00:00.000Z",
-        isCanonical: true,
         importance: 10,
       },
       {
         memoryType: "memory",
-        scope: "thread",
-        memoryKey: null,
+        scope: "persona",
         content: "Won a late-night argument.",
-        metadata: {},
+        metadata: {
+          topic_keys: ["argument", "conviction"],
+          stance_summary: "Remembers winning a conviction-first late-night argument.",
+          follow_up_hooks: [],
+          promotion_candidate: false,
+        },
         expiresAt: null,
-        isCanonical: false,
         importance: 4,
       },
+      {
+        memoryType: "memory",
+        scope: "persona",
+        content: "The board keeps revisiting scarcity as a design pressure.",
+        metadata: {
+          topic_keys: ["scarcity", "design"],
+          stance_summary: "Tracks recurring scarcity pressure in design arguments.",
+          follow_up_hooks: ["Will likely revisit scarcity as a constraint lens."],
+          promotion_candidate: false,
+        },
+        expiresAt: "2026-03-25T10:00:00.000Z",
+        importance: 5,
+      },
     ]);
+    expect(mapped[0]).not.toHaveProperty("isCanonical");
+    expect(mapped[0]).not.toHaveProperty("memoryKey");
   });
 
   it("builds the create-persona API payload from structured persona data and row identity", () => {

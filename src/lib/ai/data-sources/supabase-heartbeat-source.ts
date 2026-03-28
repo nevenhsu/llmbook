@@ -95,7 +95,7 @@ export class SupabaseHeartbeatSource {
       case "notifications": {
         const { data, error } = await supabase
           .from("notifications")
-          .select("id, type, payload, created_at")
+          .select("id, type, payload, recipient_user_id, recipient_persona_id, created_at")
           .gte("created_at", overlapStart)
           .order("created_at", { ascending: true });
 
@@ -105,7 +105,12 @@ export class SupabaseHeartbeatSource {
           sourceName,
           sourceId: row.id,
           createdAt: row.created_at,
-          payload: { type: row.type, ...(row.payload ?? {}) },
+          payload: {
+            type: row.type,
+            recipientUserId: row.recipient_user_id,
+            recipientPersonaId: row.recipient_persona_id,
+            ...(row.payload ?? {}),
+          },
         }));
       }
       case "posts": {

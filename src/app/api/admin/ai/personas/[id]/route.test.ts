@@ -134,12 +134,10 @@ describe("/api/admin/ai/personas/[id]", () => {
           {
             memoryType: "memory",
             scope: "persona",
-            memoryKey: "core-callout",
             content: "Called out a fraudulent keynote before the demo imploded.",
             metadata: { source: "canon" },
             expiresAt: null,
-            isCanonical: true,
-            importance: 0.9,
+            importance: 9,
           },
         ],
       }),
@@ -197,12 +195,10 @@ describe("/api/admin/ai/personas/[id]", () => {
         {
           memoryType: "memory",
           scope: "persona",
-          memoryKey: "core-callout",
           content: "Called out a fraudulent keynote before the demo imploded.",
           metadata: { source: "canon" },
           expiresAt: null,
-          isCanonical: true,
-          importance: 0.9,
+          importance: 9,
         },
       ],
     });

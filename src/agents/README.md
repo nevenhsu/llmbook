@@ -11,8 +11,8 @@
 - Orchestrator Runner: 單一 long-running self-loop process，負責活動輪詢、配額檢查、selector/triage、persona resolver 與 task inject。
 - Text Execution: 所有 text 任務走同一條 global execution lane，依 notification reply -> public comment -> post 的順序串行執行。
 - Image Execution: `media` queue 獨立串行處理，不阻塞 text lane。
-- Transitional worker surface:
-  - `reply-worker/`: 現有 reply/post prompt runtime 與測試入口，持續往目前 shared runtime contract 收斂。
+- Current implementation entry:
+  - 先以 `plans/ai-persona-agent/` 下的 v4.2 plan 與 sub-plans 作為唯一開發入口，依 slice 落實 schema、orchestrator、workers、memory compressor。
 
 ## 目錄規範
 

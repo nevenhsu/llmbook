@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parsePersonaGenerationOutput,
   parsePersonaInteractionOutput,
+  parsePersonaMemoriesOutput,
   parsePersonaGenerationSemanticAuditResult,
   parsePersonaSeedOutput,
 } from "@/lib/ai/admin/persona-generation-contract";
@@ -153,6 +154,150 @@ describe("persona-generation-contract", () => {
         name: "prototyping philosophy",
       }),
     ]);
+  });
+
+  it("drops the legacy canonical flag from generate-persona memories output", () => {
+    const parsed = parsePersonaMemoriesOutput(
+      JSON.stringify({
+        persona_memories: [
+          {
+            memory_type: "long_memory",
+            scope: "persona",
+            content: "Protect the crew first.",
+            metadata: {
+              topic_keys: ["loyalty", "crew"],
+              stance_summary: "Protects the crew before abstract principle.",
+              follow_up_hooks: ["Will keep defending allies under pressure."],
+              promotion_candidate: true,
+            },
+            expires_in_hours: null,
+            importance: 10,
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.persona_memories[0]).not.toHaveProperty("is_canonical");
+    expect(parsed.persona_memories[0]).not.toHaveProperty("memory_key");
+  });
+
+  it("rejects multiple persona long-memory rows in generate-persona output", () => {
+    expect(() =>
+      parsePersonaMemoriesOutput(
+        JSON.stringify({
+          persona_memories: [
+            {
+              memory_type: "long_memory",
+              scope: "persona",
+              content: "Protect the crew first.",
+              metadata: null,
+              expires_in_hours: null,
+              importance: 10,
+            },
+            {
+              memory_type: "long_memory",
+              scope: "persona",
+              content: "Mock empty authority claims.",
+              metadata: null,
+              expires_in_hours: null,
+              importance: 8,
+            },
+          ],
+        }),
+      ),
+    ).toThrow("persona_memories may contain at most one long_memory row");
+  });
+
+  it("rejects non-persona scopes in generate-persona memories output", () => {
+    expect(() =>
+      parsePersonaMemoriesOutput(
+        JSON.stringify({
+          persona_memories: [
+            {
+              memory_type: "memory",
+              scope: "board",
+              content: "This board keeps circling back to scarcity and ritual.",
+              metadata: {
+                topic_keys: ["scarcity", "ritual"],
+                stance_summary: "Tracks the board's recurring obsession with scarcity rituals.",
+                follow_up_hooks: ["Will likely notice the same scarcity frame next week."],
+                promotion_candidate: false,
+              },
+              expires_in_hours: 720,
+              importance: 6,
+            },
+          ],
+        }),
+      ),
+    ).toThrow("persona_memories[0].scope must be persona");
+  });
+
+  it("falls back when generate-persona memory metadata is null or legacy-shaped", () => {
+    const parsed = parsePersonaMemoriesOutput(
+      JSON.stringify({
+        persona_memories: [
+          {
+            memory_type: "memory",
+            scope: "persona",
+            content: "Keeps circling back to scarcity and ritual.",
+            metadata: null,
+            expires_in_hours: 720,
+            importance: 6,
+          },
+          {
+            memory_type: "memory",
+            scope: "persona",
+            content: "Remembers mocking title-flashing instead of real courage.",
+            metadata: { continuity_kind: "board_theme" },
+            expires_in_hours: null,
+            importance: 7,
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.persona_memories).toEqual([
+      expect.objectContaining({
+        metadata: {
+          topic_keys: [],
+          stance_summary: "",
+          follow_up_hooks: [],
+          promotion_candidate: false,
+        },
+      }),
+      expect.objectContaining({
+        metadata: {
+          topic_keys: [],
+          stance_summary: "",
+          follow_up_hooks: [],
+          promotion_candidate: false,
+        },
+      }),
+    ]);
+  });
+
+  it("rejects non-integer generate-persona memory importance scores", () => {
+    expect(() =>
+      parsePersonaMemoriesOutput(
+        JSON.stringify({
+          persona_memories: [
+            {
+              memory_type: "memory",
+              scope: "persona",
+              content: "Keeps circling back to scarcity and ritual.",
+              metadata: {
+                topic_keys: ["scarcity", "ritual"],
+                stance_summary: "Tracks the board's recurring obsession with scarcity rituals.",
+                follow_up_hooks: ["Will likely notice the same scarcity frame next week."],
+                promotion_candidate: false,
+              },
+              expires_in_hours: 720,
+              importance: 0.6,
+            },
+          ],
+        }),
+      ),
+    ).toThrow("persona_memories[0].importance must be an integer between 0 and 10");
   });
 
   it("parses semantic audit results that keep only the valid personality-bearing references", () => {

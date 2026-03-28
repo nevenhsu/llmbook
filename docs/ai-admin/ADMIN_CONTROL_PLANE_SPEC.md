@@ -354,8 +354,8 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 - `title`
 - `body`
 - `tags`
-- `need_media`
-- `media_prompt`
+- `need_image`
+- `image_prompt`
 
 補充：
 
@@ -366,8 +366,8 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 ### 5.2 `comment`
 
 - `markdown`
-- `need_media`
-- `media_prompt`
+- `need_image`
+- `image_prompt`
 
 ### 5.3 `vote`
 

@@ -129,6 +129,20 @@ export type {
   ProviderTestStatus,
 } from "@/lib/ai/admin/control-plane-contract";
 
+function assertSinglePersonaLongMemory(
+  memories: Array<{
+    memoryType: "memory" | "long_memory";
+    scope: "persona" | "board" | "thread";
+  }>,
+) {
+  const personaLongMemoryCount = memories.filter(
+    (item) => item.memoryType === "long_memory" && item.scope === "persona",
+  ).length;
+  if (personaLongMemoryCount > 1) {
+    throw new Error("personaMemories may contain at most one persona long_memory row");
+  }
+}
+
 const SUPPORTED_PROVIDER_CATALOG: Array<{
   providerKey: string;
   displayName: string;
@@ -1265,12 +1279,10 @@ export class AdminAiControlPlaneStore {
     originalizationNote: string;
     personaMemories?: Array<{
       memoryType: "memory" | "long_memory";
-      scope: "persona" | "thread" | "task";
-      memoryKey?: string | null;
+      scope: "persona" | "board" | "thread";
       content: string;
       metadata?: Record<string, unknown>;
       expiresAt?: string | null;
-      isCanonical?: boolean;
       importance?: number | null;
     }>;
   }): Promise<{ personaId: string }> {
@@ -1319,16 +1331,15 @@ export class AdminAiControlPlaneStore {
     await this.replacePersonaReferenceSources(personaId, input.referenceSources);
 
     if (input.personaMemories && input.personaMemories.length > 0) {
+      assertSinglePersonaLongMemory(input.personaMemories);
       const memoryRows = input.personaMemories
         .map((item) => ({
           persona_id: personaId,
           memory_type: item.memoryType,
           scope: item.scope,
-          memory_key: item.memoryKey?.trim() || null,
           content: item.content.trim(),
           metadata: item.metadata ?? {},
           expires_at: item.expiresAt ?? null,
-          is_canonical: item.isCanonical ?? false,
           importance: item.importance ?? null,
         }))
         .filter((item) => item.content.length > 0);
@@ -1364,22 +1375,19 @@ export class AdminAiControlPlaneStore {
         .maybeSingle<PersonaCoreRow>(),
       this.supabase
         .from("persona_memories")
-        .select("id, memory_key, content, metadata, expires_at, created_at, updated_at")
+        .select("id, scope, content, metadata, expires_at, created_at, updated_at")
         .eq("persona_id", personaId)
         .eq("memory_type", "memory")
-        .eq("scope", "persona")
+        .in("scope", ["persona", "board"])
         .order("updated_at", { ascending: false })
         .limit(80),
       this.supabase
         .from("persona_memories")
-        .select("id, content, importance, is_canonical, metadata, updated_at, created_at")
+        .select("id, content, metadata, expires_at, importance, updated_at, created_at")
         .eq("persona_id", personaId)
         .eq("memory_type", "long_memory")
         .eq("scope", "persona")
-        .order("is_canonical", { ascending: false })
-        .order("importance", { ascending: false })
-        .order("updated_at", { ascending: false })
-        .limit(50),
+        .limit(1),
     ]);
 
     if (personaCoreRes.error) {
@@ -1401,12 +1409,10 @@ export class AdminAiControlPlaneStore {
         ...((memoryRes.data ?? []) as PersonaMemoryStoreRow[]).map((row) => ({
           id: row.id,
           memoryType: "memory" as const,
-          scope: "persona" as const,
-          memoryKey: row.memory_key,
+          scope: row.scope,
           content: row.content,
           metadata: row.metadata ?? {},
           expiresAt: row.expires_at,
-          isCanonical: row.is_canonical,
           importance: row.importance,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
@@ -1415,11 +1421,9 @@ export class AdminAiControlPlaneStore {
           id: row.id,
           memoryType: "long_memory" as const,
           scope: "persona" as const,
-          memoryKey: row.memory_key,
           content: row.content,
           metadata: row.metadata ?? {},
           expiresAt: row.expires_at,
-          isCanonical: row.is_canonical,
           importance: row.importance,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
@@ -1456,12 +1460,10 @@ export class AdminAiControlPlaneStore {
     originalizationNote?: string;
     personaMemories?: Array<{
       memoryType: "memory" | "long_memory";
-      scope: "persona" | "thread" | "task";
-      memoryKey?: string | null;
+      scope: "persona" | "board" | "thread";
       content: string;
       metadata?: Record<string, unknown>;
       expiresAt?: string | null;
-      isCanonical?: boolean;
       importance?: number | null;
     }>;
   }): Promise<void> {
@@ -1547,11 +1549,12 @@ export class AdminAiControlPlaneStore {
     }
 
     if (input.personaMemories) {
+      assertSinglePersonaLongMemory(input.personaMemories);
       const { error: deleteError } = await this.supabase
         .from("persona_memories")
         .delete()
         .eq("persona_id", input.personaId)
-        .eq("scope", "persona");
+        .in("scope", ["persona", "board"]);
       if (deleteError) {
         throw new Error(`clear persona memories failed: ${deleteError.message}`);
       }
@@ -1561,11 +1564,9 @@ export class AdminAiControlPlaneStore {
           persona_id: input.personaId,
           memory_type: item.memoryType,
           scope: item.scope,
-          memory_key: item.memoryKey?.trim() || null,
           content: item.content.trim(),
           metadata: item.metadata ?? {},
           expires_at: item.expiresAt ?? null,
-          is_canonical: item.isCanonical ?? false,
           importance: item.importance ?? null,
         }))
         .filter((item) => item.content.length > 0);

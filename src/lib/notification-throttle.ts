@@ -82,9 +82,9 @@ export async function getFollowersToNotify(
   // Query for recent followed_user_post notifications
   const { data: recentNotifications } = await supabase
     .from("notifications")
-    .select("user_id, payload")
+    .select("recipient_user_id, payload")
     .eq("type", "followed_user_post")
-    .in("user_id", followerIds)
+    .in("recipient_user_id", followerIds)
     .gte("created_at", twentyFourHoursAgo.toISOString());
 
   // Filter to only those from this specific author
@@ -92,8 +92,8 @@ export async function getFollowersToNotify(
   if (recentNotifications) {
     for (const notif of recentNotifications) {
       const payload = notif.payload as { authorId?: string };
-      if (payload?.authorId === authorId) {
-        notifiedRecently.add(notif.user_id);
+      if (payload?.authorId === authorId && typeof notif.recipient_user_id === "string") {
+        notifiedRecently.add(notif.recipient_user_id);
       }
     }
   }

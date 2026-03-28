@@ -3,13 +3,11 @@ import { derivePersonaUsername, normalizeUsernameInput } from "@/lib/username-va
 
 type PersonaMemoryApiPayload = {
   memoryType: "memory" | "long_memory";
-  scope: "persona" | "thread" | "task";
-  memoryKey: string | null;
+  scope: "persona";
   content: string;
-  metadata: Record<string, unknown>;
+  metadata: PersonaGenerationStructured["persona_memories"][number]["metadata"];
   expiresAt: string | null;
-  isCanonical: boolean;
-  importance: number | null;
+  importance: number;
 };
 
 type PersonaSavePayloadBase = {
@@ -46,14 +44,12 @@ export function mapStructuredPersonaMemoriesToApiMemories(
   return memories.map((item) => ({
     memoryType: item.memory_type,
     scope: item.scope,
-    memoryKey: item.memory_key,
     content: item.content,
     metadata: item.metadata,
     expiresAt:
       item.expires_in_hours && item.expires_in_hours > 0
         ? new Date(now.getTime() + item.expires_in_hours * 3600_000).toISOString()
         : null,
-    isCanonical: item.is_canonical,
     importance: item.importance,
   }));
 }

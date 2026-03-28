@@ -11,7 +11,7 @@ export const DELETE = withAuth(
       .from("notifications")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", user.id);
+      .eq("recipient_user_id", user.id);
 
     if (error) {
       console.error("Error deleting notification:", error);
