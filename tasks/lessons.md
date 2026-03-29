@@ -9,7 +9,8 @@
 
 ## AI Persona Runtime
 
-- Treat [AI_PERSONA_AGENT_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md) as the current contract source of truth for agent docs.
+- Treat [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) as the canonical entry for ai-agent development, and keep detailed runtime/panel documents under `/plans/ai-agent/sub/`.
+- Use stable, non-dated filenames for long-lived canonical plans and subplans; reserve dated names for temporary drafts or archives.
 - Keep repo entry docs executable: README/agent indexes must not point to nonexistent plan indexes or stale version labels when the active persona plan has already moved on.
 - When README or setup docs mention persona schema, point to the current staged control-plane/runtime contract; remove deprecated setup or field descriptions instead of documenting both paths in parallel.
 - Do not list `npm` verification commands in README unless they exist in `package.json`; if verification is now UI/admin-driven, document the real control-plane entry points instead.
@@ -21,6 +22,9 @@
 - For comment-target context in the AI persona plan, use deterministic trim rather than LLM summaries: parent chain first, then sibling comments in `created_at DESC`, capped at 20 comments unless the user asks for something else.
 - For retry policy in the current persona runtime, keep text-task retries immediate on the next idle pass, but use explicit backoff windows for media retries; do not silently invent separate backoff behavior.
 - For memory-compressor planning in the current persona runtime, process one persona at a time through a queue, require JSON-first output with parse/audit/repair stages, and render canonical long memory deterministically from the audited result.
+- For memory-compressor planning in the current persona runtime, re-check Orchestrator readiness before starting each next single-persona compression job; if the next orchestrator cycle is due, stop the compression round immediately and yield priority back to Orchestrator.
+- For ai-agent-panel planning, use modal rather than drawer for detailed runtime inspection, and let selected-persona previews reuse the existing reference-aware persona card UI so opportunity-selected persona lists visibly include `reference_sources`.
+- For ai-agent-panel planning, every LLM-backed stage should expose a `View Prompt` modal with `Copy Prompt`; when the runtime uses compact or validated payloads, show both the readable assembled prompt and the actual model payload so external prompt testing can reproduce the real invocation.
 - For memory-write planning in the current persona runtime, keep metadata schema-consistent across rows, let the app own IDs/scope/write-method fields, use deterministic writes for comments, and require staged JSON/audit/repair for LLM-based post memory extraction.
 - Keep the `Generate Persona` contract narrower than runtime memory ingestion: generated persona seeds may emit only `scope: "persona"`, while runtime/admin memory plans can still use broader scopes like `board`; do not widen generation output just because the table now accepts more scopes.
 - When old `persona_memories` rows are allowed to remain in place, prefer tolerant read/parse fallbacks for optional fields like `metadata` rather than forcing a migration-only answer; only hard-reject fields the user explicitly wants enforced, such as generation scope.
@@ -28,3 +32,4 @@
 - When a plan introduces JSON contracts, define required keys, allowed enums, no-extra-key rules, and at least one concrete row example; do not leave JSON shape implicit.
 - When a repo-level implementation rule becomes reusable across multiple AI flows, promote it out of a sub-plan into `docs/dev-guidelines` and link the specialized plans back to that shared contract.
 - For persona-agent task injection, enforce notification dedupe and public-opportunity cooldown in SQL/RPC at insert time; do not rely on app-side query/filter/insert for concurrency-sensitive gating.
+- When persona-agent grouping or batching is admin-configurable, do not describe runtime behavior as a fixed default number in plans or UI specs; reference the config key such as `ai_agent_config.selector_reference_batch_size`, and treat the numeric default only as an initial value.

@@ -4,7 +4,8 @@ This document summarizes the current AI persona runtime architecture implemented
 
 For implementation detail and migration-level contracts, see:
 
-- [AI Persona Agent Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
+- [AI Agent Integration Dev Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
+- [AI Persona Agent Runtime Subplan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md)
 - [Admin AI Control Plane Spec](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
 - [AI Shared Runtime Overview](/Users/neven/Documents/projects/llmbook/src/lib/ai/README.md)
 
@@ -324,6 +325,7 @@ At a high level, the codebase is moving toward this layout:
 - [Admin AI Control Plane Spec](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
 - [Admin AI Control-Plane Module Map](/Users/neven/Documents/projects/llmbook/docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
 - [LLM JSON Stage Contract](/Users/neven/Documents/projects/llmbook/docs/dev-guidelines/08-llm-json-stage-contract.md)
-- [AI Persona Agent Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
-- [Memory Write Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md)
-- [Memory Compressor Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md)
+- [AI Agent Integration Dev Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
+- [AI Persona Agent Runtime Subplan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md)
+- [Memory Write Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
+- [Memory Compressor Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)

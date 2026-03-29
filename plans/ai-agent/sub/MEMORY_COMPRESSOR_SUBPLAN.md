@@ -10,7 +10,7 @@ Define a low-token, format-stable memory compression flow that:
 - allows old low-value memories to be deleted
 - produces a validated JSON result before writing canonical `long_memory`
 
-This sub-plan applies to the long-running persona runtime described in [AI_PERSONA_AGENT_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md).
+This sub-plan applies to the long-running persona runtime described in [AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md) and governed by [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md).
 
 Follow the repo-level staged JSON rules in [08-llm-json-stage-contract.md](/Users/neven/Documents/projects/llmbook/docs/dev-guidelines/08-llm-json-stage-contract.md) for compressor generation, audit, and repair stages.
 
@@ -30,6 +30,7 @@ For this runtime, memory compression must be predictable and bounded. It should 
 - Compression runs only in **Phase C** and only after text-task retry drain.
 - The compressor handles **exactly one persona per job**.
 - Compressor jobs are fed from an in-memory **persona compression queue** built from DB eligibility scans; do not add a separate compressor status table.
+- Before starting each next persona job, the runtime must re-check whether the next orchestrator cycle should begin; if yes, stop the current compression round immediately and yield back to the orchestrator.
 - Compressor output must be **JSON-first**, not free-form prose.
 - Compressor follows a **staged generation contract** similar to persona generation: schema/JSON repair first, then quality audit/repair.
 - The application renders the final canonical `long_memory` text **deterministically** from the audited JSON result.
@@ -55,7 +56,8 @@ Each queue item represents one persona compression job:
 
 - Only one compressor job may run at a time.
 - The queue runs on the same text lane budget as other text jobs, but only after retry drain and only in idle time.
-- If cooldown expires before the queue is empty, stop compression and return to the next orchestrator cycle.
+- Before each next persona job starts, re-check whether the orchestrator cooldown has expired.
+- If the orchestrator should start before the next persona job begins, stop compression immediately and return to the next orchestrator cycle.
 - If the process restarts, the queue is rebuilt from DB eligibility; it does not require durable queue rows.
 
 ### Queue Priority
@@ -282,18 +284,20 @@ This makes transport errors, schema failures, and semantic quality failures visi
 Compression is a staged flow:
 
 1. select one persona batch
-2. load current canonical `long_memory`
-3. load selected short memories
-4. `compression-main`: LLM generates `compression_result` JSON
-5. `compression-schema-validate`: deterministic parse / schema validate
-6. if schema fails, run `compression-schema-repair` until valid JSON or terminal failure
-7. run deterministic quality checks
-8. `compression-quality-audit`: LLM returns `compression_audit_result` JSON
-9. if audit fails, run `compression-quality-repair`: LLM rewrites `compression_result` JSON
-10. re-run deterministic checks and `compression-quality-audit`
-11. deterministically render canonical text
-12. upsert canonical `long_memory`
-13. delete only eligible compressed short memories
+2. before starting that persona job, re-check whether the orchestrator should begin the next cycle
+3. if the orchestrator is due, stop the compression round immediately and return control without starting the persona job
+4. load current canonical `long_memory`
+5. load selected short memories
+6. `compression-main`: LLM generates `compression_result` JSON
+7. `compression-schema-validate`: deterministic parse / schema validate
+8. if schema fails, run `compression-schema-repair` until valid JSON or terminal failure
+9. run deterministic quality checks
+10. `compression-quality-audit`: LLM returns `compression_audit_result` JSON
+11. if audit fails, run `compression-quality-repair`: LLM rewrites `compression_result` JSON
+12. re-run deterministic checks and `compression-quality-audit`
+13. deterministically render canonical text
+14. upsert canonical `long_memory`
+15. delete only eligible compressed short memories
 
 ### Parse / Schema Validation
 

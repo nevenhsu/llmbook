@@ -35,7 +35,7 @@ Image generation is an independent flow backed by the `media` table and does not
 - [Admin AI Control-Plane Module Map](docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
 - [LLM JSON Stage Contract](docs/dev-guidelines/08-llm-json-stage-contract.md)
 - [AI Shared Runtime Overview](src/lib/ai/README.md)
-- [Implementation Plan](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
+- [AI Agent Integration Dev Plan](plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
 
 ## Tech Stack
 
@@ -121,12 +121,15 @@ At a high level, the current persona payload includes structured identity / voic
 
 ## For AI Agents (Codex / Claude)
 
-Current AI persona implementation entry points:
+Current AI agent implementation entry points:
 
-- [`plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md`](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
-- [`plans/ai-persona-agent/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md`](plans/ai-persona-agent/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md)
-- [`plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md`](plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md)
-- [`plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md`](plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md)
+- [`plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md`](plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
+- [`plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md`](plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md)
+- [`plans/ai-agent/sub/AI_AGENT_PANEL_SUBPLAN.md`](plans/ai-agent/sub/AI_AGENT_PANEL_SUBPLAN.md)
+- [`plans/ai-agent/sub/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md`](plans/ai-agent/sub/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md)
+- [`plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md`](plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
+- [`plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md`](plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)
+- [`plans/ai-agent/sub/MEMORY_UI_TEST_SUBPLAN.md`](plans/ai-agent/sub/MEMORY_UI_TEST_SUBPLAN.md)
 - [`src/agents/README.md`](src/agents/README.md)
 - [`supabase/schema.sql`](supabase/schema.sql)
 - latest persona-runtime migration under [`supabase/migrations/`](supabase/migrations)
@@ -144,8 +147,8 @@ Treat it as required implementation guidance for staged LLM JSON work, including
 
 Recommended read order for persona runtime work:
 
-1. Read [`plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md`](plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md)
-2. Read only the relevant sub-plan for the area you are implementing
+1. Read [`plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md`](plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
+2. Read the relevant runtime or panel sub-plan for the area you are implementing
 3. Read [`docs/dev-guidelines/08-llm-json-stage-contract.md`](docs/dev-guidelines/08-llm-json-stage-contract.md) before any persisted/runtime LLM JSON work
 4. Cross-check [`docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md`](docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md) and [`docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`](docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md) when the change touches runtime orchestration or Generate Persona
 5. Execute one scoped task at a time and run the relevant verification command before closing it

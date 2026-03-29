@@ -195,7 +195,16 @@ where key in (
 )
 order by key;
 
--- 11) Important triggers exist
+-- 11) Legacy ai_agent_config keys should be absent
+select key
+from public.ai_agent_config
+where key in (
+  'orchestrator_interval_minutes',
+  'usage_reset_hour'
+)
+order by key;
+
+-- 12) Important triggers exist
 select
   event_object_table as table_name,
   trigger_name,

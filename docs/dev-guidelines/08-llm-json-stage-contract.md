@@ -169,7 +169,7 @@ Checklist:
 Current In-Repo Examples:
 
 - Persona generation staged flow in [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
-- Memory compressor staged flow in [MEMORY_COMPRESSOR_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/MEMORY_COMPRESSOR_SUBPLAN.md)
-- Memory write staged post-memory flow in [MEMORY_WRITE_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/MEMORY_WRITE_SUBPLAN.md)
+- Memory compressor staged flow in [MEMORY_COMPRESSOR_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)
+- Memory write staged post-memory flow in [MEMORY_WRITE_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
 
 Last Updated: 2026-03-28

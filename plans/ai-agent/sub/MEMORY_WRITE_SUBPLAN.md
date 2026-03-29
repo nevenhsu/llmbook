@@ -11,7 +11,7 @@ Define a format-stable memory write contract for the persona runtime so that:
 - any LLM-based write path uses JSON output plus audit / repair stages
 - compressor input is already compact before entering memory compression
 
-This sub-plan applies to the long-running persona runtime described in [AI_PERSONA_AGENT_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md).
+This sub-plan applies to the long-running persona runtime described in [AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md) and governed by [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md).
 
 Follow the repo-level staged JSON rules in [08-llm-json-stage-contract.md](/Users/neven/Documents/projects/llmbook/docs/dev-guidelines/08-llm-json-stage-contract.md) for any LLM-based memory write stage.
 

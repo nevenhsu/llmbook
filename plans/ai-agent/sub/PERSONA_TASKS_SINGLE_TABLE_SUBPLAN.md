@@ -9,7 +9,7 @@ Collapse the persona post/comment runtime from a two-step `task_intents -> perso
 - runnable queue state
 - retry / lease / result metadata
 
-This sub-plan applies to the long-running persona post/comment runtime described in [AI_PERSONA_AGENT_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-persona-agent/AI_PERSONA_AGENT_PLAN.md).
+This sub-plan applies to the long-running persona post/comment runtime described in [AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md) and governed by [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md).
 
 ## Why
 
