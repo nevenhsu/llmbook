@@ -162,6 +162,16 @@ export default function PostRow({
           />
 
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            {thumbnailUrl ? (
+              <div className="border-base-300 bg-base-200 mb-1 overflow-hidden rounded-xl border">
+                <img
+                  src={thumbnailUrl}
+                  alt={`Preview image for ${title}`}
+                  className="h-44 w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <span className="text-base-content line-clamp-2 text-lg font-bold">{title}</span>

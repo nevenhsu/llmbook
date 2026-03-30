@@ -9,6 +9,17 @@ import {
 import { listProviderSecretStatuses } from "@/lib/ai/llm/provider-secrets";
 
 type InventoryCapability = "text_generation" | "image_generation";
+type InventoryModelSeed = {
+  id: string;
+  providerId: string;
+  modelKey: string;
+  capability: "text_generation" | "image_generation";
+  status: "active" | "disabled";
+  testStatus: "untested" | "success" | "failed";
+  lifecycleStatus: "active" | "retired";
+  displayOrder: number;
+  supportsImageInputPrompt: boolean;
+};
 
 function asString(input: unknown): string | undefined {
   if (typeof input !== "string") {
@@ -82,6 +93,10 @@ export function getOrderedModelIdsFromInventory(input: {
   return getRouteModelIdsFromActiveOrder(input);
 }
 
+function isInventoryModelSeed(value: InventoryModelSeed | null): value is InventoryModelSeed {
+  return value !== null;
+}
+
 export async function loadActiveOrderInventoryFromDb(): Promise<{
   providers: ActiveOrderProvider[];
   models: ActiveOrderModel[];
@@ -134,36 +149,39 @@ export async function loadActiveOrderInventoryFromDb(): Promise<{
     })
     .filter((item): item is ActiveOrderProvider => item !== null);
 
-  const models: ActiveOrderModel[] = (modelsRes.data ?? [])
-    .map((item) => {
-      const id = asString(item.id) ?? "";
-      const providerId = asString(item.provider_id) ?? "";
-      const modelKey = asString(item.model_key) ?? "";
-      if (!id || !providerId || !modelKey) {
-        return null;
-      }
-      return {
-        id,
-        providerId,
-        modelKey,
-        capability:
-          asString(item.capability) === "image_generation"
-            ? ("image_generation" as const)
-            : ("text_generation" as const),
-        status: asString(item.status) === "disabled" ? ("disabled" as const) : ("active" as const),
-        testStatus:
-          asString(item.test_status) === "success" || asString(item.test_status) === "failed"
-            ? (asString(item.test_status) as "success" | "failed")
-            : ("untested" as const),
-        lifecycleStatus:
-          asString(item.lifecycle_status) === "retired"
-            ? ("retired" as const)
-            : ("active" as const),
-        displayOrder: asNumber(item.display_order) ?? 999,
-        supportsImageInputPrompt: item.supports_image_input_prompt === true,
-      };
-    })
-    .filter((item): item is ActiveOrderModel => item !== null);
+  const models = toActiveOrderModels(
+    (modelsRes.data ?? [])
+      .map((item) => {
+        const id = asString(item.id) ?? "";
+        const providerId = asString(item.provider_id) ?? "";
+        const modelKey = asString(item.model_key) ?? "";
+        if (!id || !providerId || !modelKey) {
+          return null;
+        }
+        return {
+          id,
+          providerId,
+          modelKey,
+          capability:
+            asString(item.capability) === "image_generation"
+              ? ("image_generation" as const)
+              : ("text_generation" as const),
+          status:
+            asString(item.status) === "disabled" ? ("disabled" as const) : ("active" as const),
+          testStatus:
+            asString(item.test_status) === "success" || asString(item.test_status) === "failed"
+              ? (asString(item.test_status) as "success" | "failed")
+              : ("untested" as const),
+          lifecycleStatus:
+            asString(item.lifecycle_status) === "retired"
+              ? ("retired" as const)
+              : ("active" as const),
+          displayOrder: asNumber(item.display_order) ?? 999,
+          supportsImageInputPrompt: item.supports_image_input_prompt === true,
+        };
+      })
+      .filter(isInventoryModelSeed),
+  );
 
   return {
     providers,

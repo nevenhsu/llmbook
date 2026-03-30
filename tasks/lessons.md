@@ -10,6 +10,9 @@
 ## AI Persona Runtime
 
 - Treat [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) as the canonical entry for ai-agent development, and keep detailed runtime/panel documents under `/plans/ai-agent/sub/`.
+- Prefer the shorter shared runtime root `src/lib/ai/agent/` for this initiative instead of longer variants like `src/lib/ai/persona-agent/`, unless the user explicitly asks otherwise.
+- Keep `src/agents/` flat for runtime entrypoints and name files by function; do not add an extra `agent/` or `persona-agent/` subfolder unless the user explicitly asks for it.
+- When agent-panel work produces reusable UI primitives, place them under `src/components/ui` rather than `src/components/admin/*`; keep admin-specific composition inside the admin tree.
 - Use stable, non-dated filenames for long-lived canonical plans and subplans; reserve dated names for temporary drafts or archives.
 - Keep repo entry docs executable: README/agent indexes must not point to nonexistent plan indexes or stale version labels when the active persona plan has already moved on.
 - When README or setup docs mention persona schema, point to the current staged control-plane/runtime contract; remove deprecated setup or field descriptions instead of documenting both paths in parallel.
@@ -25,6 +28,9 @@
 - For memory-compressor planning in the current persona runtime, re-check Orchestrator readiness before starting each next single-persona compression job; if the next orchestrator cycle is due, stop the compression round immediately and yield priority back to Orchestrator.
 - For ai-agent-panel planning, use modal rather than drawer for detailed runtime inspection, and let selected-persona previews reuse the existing reference-aware persona card UI so opportunity-selected persona lists visibly include `reference_sources`.
 - For ai-agent-panel planning, every LLM-backed stage should expose a `View Prompt` modal with `Copy Prompt`; when the runtime uses compact or validated payloads, show both the readable assembled prompt and the actual model payload so external prompt testing can reproduce the real invocation.
+- When the user asks to keep progress docs updated, treat it as a standing workflow rule for the rest of the task: update both `tasks/todo.md` and any canonical plan progress table at the end of every completed slice without waiting for another reminder.
+- If a currently active subplan is the document most likely being used to track a surface-specific stream, update its progress snapshot or implementation-status section in the same slice; do not assume the canonical phase board alone is enough.
+- When giving progress reports during an implementation stream, include explicit `current tasks / total tasks` counts instead of only qualitative status.
 - For memory-write planning in the current persona runtime, keep metadata schema-consistent across rows, let the app own IDs/scope/write-method fields, use deterministic writes for comments, and require staged JSON/audit/repair for LLM-based post memory extraction.
 - Keep the `Generate Persona` contract narrower than runtime memory ingestion: generated persona seeds may emit only `scope: "persona"`, while runtime/admin memory plans can still use broader scopes like `board`; do not widen generation output just because the table now accepts more scopes.
 - When old `persona_memories` rows are allowed to remain in place, prefer tolerant read/parse fallbacks for optional fields like `metadata` rather than forcing a migration-only answer; only hard-reject fields the user explicitly wants enforced, such as generation scope.

@@ -92,7 +92,7 @@ export default function PersonaSelector({
   // Search effect
   useEffect(() => {
     const isSelectedDisplayQuery =
-      Boolean(selectedPersona) && normalizedQuery === selectedPersona.username.toLowerCase();
+      selectedPersona !== undefined && normalizedQuery === selectedPersona.username.toLowerCase();
 
     if (!open || normalizedQuery.length === 0 || isSelectedDisplayQuery) {
       setLoading(false);
@@ -146,11 +146,12 @@ export default function PersonaSelector({
     }
   };
 
-  const showAvatar = selectedPersona && (!open || query === displayText);
-  const leftAdornment = showAvatar ? (
+  const avatarPersona =
+    selectedPersona && (!open || query === displayText) ? selectedPersona : null;
+  const leftAdornment = avatarPersona ? (
     <Avatar
-      src={selectedPersona.avatar_url || undefined}
-      fallbackSeed={selectedPersona.username}
+      src={avatarPersona.avatar_url || undefined}
+      fallbackSeed={avatarPersona.username}
       size="xs"
       isPersona
     />

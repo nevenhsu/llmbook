@@ -93,6 +93,22 @@ export default function PreviewIndexPage() {
       color: "text-sky-500",
       bgColor: "bg-sky-500/10",
     },
+    {
+      title: "AI Agent Lab",
+      description: "Preview the first ai-agent panel shell with fixture-backed intake inputs",
+      href: "/preview/ai-agent-lab",
+      icon: Sparkles,
+      color: "text-amber-500",
+      bgColor: "bg-amber-500/10",
+    },
+    {
+      title: "AI Agent Memory",
+      description: "Preview shared memory-write and compression artifacts for ai-agent flows",
+      href: "/preview/ai-agent-memory",
+      icon: Sparkles,
+      color: "text-rose-500",
+      bgColor: "bg-rose-500/10",
+    },
   ];
 
   return (

@@ -257,8 +257,11 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
         scope: "board",
       }),
     ]);
-    expect(insert.mock.calls[0]?.[0]?.[0]).not.toHaveProperty("is_canonical");
-    expect(insert.mock.calls[0]?.[0]?.[0]).not.toHaveProperty("memory_key");
+    const insertedRows = (insert as { mock: { calls: unknown[][] } }).mock.calls[0]?.[0] as
+      | Array<Record<string, unknown>>
+      | undefined;
+    expect(insertedRows?.[0]).not.toHaveProperty("is_canonical");
+    expect(insertedRows?.[0]).not.toHaveProperty("memory_key");
   });
 });
 

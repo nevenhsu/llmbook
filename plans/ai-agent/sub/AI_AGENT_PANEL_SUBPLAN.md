@@ -12,6 +12,82 @@
 
 ---
 
+## Implementation Progress
+
+Current repo status for this subplan:
+
+- `/admin/ai/agent-panel` exists and now includes read-only `Overview`, `Intake`, `Tasks`, `Run`, and `Logs` surfaces backed by shared `src/lib/ai/agent/*` contracts.
+- `/admin/ai/agent-panel` `Intake` now also exposes read-only notification/public injection previews shaped like `inject_persona_tasks` results.
+- `/admin/ai/agent-panel` `Intake` now also supports live notification/public injection through a shared admin route, and successful inject requests append the returned queue rows into the panel `Tasks` state immediately.
+- Notification candidates now carry canonical target linkage (`postId`, `commentId`, `parentCommentId`, `context`, `notificationType`) through the shared intake contract into `persona_tasks.payload.notificationTarget`, so notification execution no longer depends on ad hoc payload guessing.
+- `/admin/ai/agent-panel` `Tasks` now exposes retry/requeue/mark-dead action previews plus live execute controls for the selected queue row, and those controls perform real admin API round-trips against the shared queue-action route.
+- Admin queue actions now support both `preview` and `execute` responses; the panel surfaces the real API payload, and successful execute calls refresh the local task row state immediately.
+- `/admin/ai/agent-panel` `Run` now has shared admin runner routes for `orchestrator_once`, `text_once`, `media_once`, and `compress_once`, so runner cards perform real preview/execute round-trips instead of staying purely local shell buttons.
+- `text_once` now executes a real shared persistence path for public tasks and notification-backed comment/reply/post tasks: comment outputs write to `comments`, post outputs write to `posts`, and the originating queue row is completed with result metadata across both public and notification lanes.
+- `media_once` now executes a real shared generation path for completed image-backed text tasks: it reuses the staged execution preview write-plan, dedupes against matching existing rows, calls the configured image-generation route, uploads the generated artifact to storage, and completes the `media` row with canonical `post_id` or `comment_id` linkage plus URL/metadata.
+- Generated comment media is now consumable in the main product surface: comment APIs carry attached `media(url,width,height)` rows through `FormattedComment`, and `CommentItem` renders those attachments below the body instead of leaving ai-agent-generated comment images invisible.
+- `compress_once` now reuses the shared memory compression service and returns a real execute payload instead of `guarded_execute`, so the `Run` tab now has two live write paths behind the shared runner contract.
+- `orchestrator_once` now executes a minimal real cycle by chaining live notification injection, live public injection, one public text execution when available, optional media dispatch when that text result requests an image, and one compression pass when available, instead of staying fully guarded.
+- `/preview/ai-agent-memory` now exists and is backed by shared `src/lib/ai/agent/memory/*` builders plus an optional runtime-backed memory preview store.
+- The memory page currently covers persona selection, short-memory table inspection, canonical long-memory display, latest write preview, compression batch preview, compression output preview, cleanup preview, and rendered long-memory preview.
+- `/preview/ai-agent-memory` now also performs real admin API round-trips in runtime mode for persona refresh, latest-write preview, compression-batch preview, and compression-preview requests.
+- The first memory admin API surface now exists under `/api/admin/ai/agent/memory/personas/[id]` and related preview endpoints, though persist/compress write paths are still pending.
+- `/api/admin/ai/agent/memory/personas/[id]/compress` now performs a real shared persistence path: it rebuilds canonical `long_memory` for the selected persona, deletes compressible short-memory rows, and returns the refreshed preview snapshot.
+- `/admin/ai/agent-panel` now includes the first `Memory` section backed by shared runtime memory previews plus the same refresh/latest-write/compression/live-compress round-trips used by the dedicated memory lab.
+- `compress_once` in the `Run` tab now reuses the shared memory compression service and returns a real execute payload instead of `guarded_execute`, making it the first runner target with a true ai-agent write path behind the shared admin runner contract.
+- `POST /api/admin/ai/agent/intake/[kind]/inject` now exists and reuses the shared selector/resolver/candidate/write-preview pipeline, making intake injection the second live write path after memory compression.
+- Nearby repo TypeScript blockers that were obscuring this workstream have been cleaned up: the shared reply-policy module was restored for `policy-control-plane`, `PersonaSelector` now narrows selected personas correctly, the active-order inventory mapper uses a typed seed-to-model conversion, and stale `.next/types` validator output referencing deleted routes was removed.
+- `/preview/ai-agent-lab` exists and covers selector input/output, resolved personas, task candidates, task write preview, task injection preview, and staged execution preview artifacts.
+- Shared staged execution artifacts now expose `promptInput`, `actualModelPayload`, `rawOutput`, `parsedOutput`, `deterministicChecks`, `auditedOutput`, and `writePlan`; the older admin `interaction-preview-service` is not treated as the canonical agent execution contract.
+- `Tasks`, `Logs`, and `Run` are no longer inspection-only: queue actions are live, `compress_once` is live, `text_once` is live for public tasks plus notification comment/reply/post tasks, `media_once` is live for completed image-backed text tasks, and `orchestrator_once` now glues the supported live subpaths together.
+- `/admin/ai/agent-panel` `Run` now includes a dedicated media inspect surface, so operators can see the completed media URL, owner linkage, and raw media result payload without relying only on the generic run-response JSON.
+- Shared overview snapshots now also carry `recentMediaJobs`, so generated-media status is available through the same read-model that drives the operator panel instead of only through transient runner responses.
+- `/admin/ai/agent-panel` `Logs` now includes a media-jobs table plus drill-down detail for `PENDING_GENERATION | RUNNING | DONE | FAILED`, with owner linkage, prompt, and URL inspection.
+- Generated post media is now visible in product feed/list surfaces because `PostRow` renders `thumbnailUrl` as a card image instead of leaving that asset hidden in transformed data only.
+- Post detail pages now use a reusable `PostMediaGallery`, so generated post media is rendered through a richer shared gallery component instead of page-local inline image blocks.
+- Admin media-processing visibility now has a dedicated route/service contract under `/api/admin/ai/agent/media/jobs`, and the panel `Logs` surface can refresh recent job state against that live endpoint.
+- Admin media-processing visibility now also has a dedicated detail contract under `/api/admin/ai/agent/media/jobs/[id]`, so the panel can inspect owner-linked post/comment context for a selected media row instead of stopping at job metadata alone.
+- `/admin/ai/agent-panel` `Logs` media detail now supports on-demand owner inspection, including preview image, owner type, title, excerpt, and navigable path for the selected generated-media job.
+- `/admin/ai/agent-panel` `Logs` media detail now also supports preview/execute `retry_generation` through a shared action route, and successful retries refresh the selected media row plus owner-linked detail in place.
+- `/admin/ai/agent-panel` `Logs` media list now supports live status filtering through the shared `/api/admin/ai/agent/media/jobs` query contract, so operators can isolate `FAILED`, `RUNNING`, or `PENDING_GENERATION` rows before loading detail or retry actions.
+- `/admin/ai/agent-panel` `Logs` media list now also supports live query + load-more controls through that same shared route contract, so operators can search prompt/persona/owner text and expand beyond the default 12-row history window without falling back to raw SQL.
+- The shared `retry_generation` action contract now carries canonical `reasonCode` values, and the panel surfaces that code inline so retry blockers are operator-readable without opening raw JSON.
+- `POST /api/admin/ai/agent/media/jobs/[id]/actions` now returns structured `blocked_execute` payloads with the same canonical `reasonCode` contract when retry execution is disallowed, instead of dropping back to plain route errors.
+- `/admin/ai/agent-panel` `Logs` media action UI now keeps showing `reasonCode` for both preview responses and blocked execute responses by reading structured API error payloads, so failed retries stay inspectable in-panel.
+- Memory artifact inspection now has shared modal/detail parity: latest write, compression batch, compression output, rendered long memory, and cleanup consequences are all opened from the same shared artifact-detail builder in both `/admin/ai/agent-panel` and `/preview/ai-agent-memory`.
+- Persisted memory compression now also returns a shared `verificationTrace`, and both `/admin/ai/agent-panel` and `/preview/ai-agent-memory` surface it as `Memory Verification Trace`, so operators can compare the written canonical long-memory row with deleted/protected cleanup outcomes without digging through raw response JSON alone.
+- Latest-write memory persistence is now live through a shared `persistLatestWrite` contract and `/api/admin/ai/agent/memory/personas/[id]/persist-latest-write`, and both memory UIs expose a `Persist latest write` action plus verification trace for the inserted short-memory row.
+- `/admin/ai/agent-panel` `Memory` now also shows a shared `Task Memory Lineage` payload, so the operator can compare the currently selected queue row against latest-write preview and persisted memory traces without manually diffing multiple JSON panels.
+- `/admin/ai/agent-panel` `Run` now also shows that same shared `Task Memory Lineage` payload, and runner-executed compression updates the selected persona preview plus verification trace through the same panel memory state used by the `Memory` tab.
+- `/admin/ai/agent-panel` `Run` now also shows in-place `Run Memory Verification` and raw compression-result JSON, and orchestrator execute responses now merge injected rows plus their text-persisted updates back into the `Tasks` table deterministically instead of leaving stale `PENDING` rows behind.
+- Runner `text_once` and `orchestrator_once` execution now also rebuild touched persona memory previews through the shared memory preview builder, so `Task Memory Lineage` in `Run` immediately follows the newly completed task instead of staying pinned to the previous latest-write candidate.
+- Both `/admin/ai/agent-panel` `Run` and `Memory` now also expose a shared `Task Memory Outcome Trace`, which summarizes whether the selected task has reached latest-write candidate, latest-write persisted, and compression persisted stages without requiring operators to manually correlate multiple verification panels.
+- Persisted latest-write/compression traces are now scoped to the active persona in `/admin/ai/agent-panel`, so switching personas no longer leaks previous personas' `memory-write-*` or `long-memory-*` ids into the current operator view.
+- Both `/admin/ai/agent-panel` `Run` and `Memory` now also expose a shared `Operator Flow Trace`, which summarizes intake injection, runner execution, and memory-stage completion flags in one end-to-end operator contract instead of leaving that walkthrough split across three separate response panels.
+- `/admin/ai/agent-panel` `Run` now exposes `View Prompt`, opening a reusable prompt modal with assembled prompt, model payload, and `Copy Prompt`, so the main operator surface starts satisfying the plan’s worker-stage prompt visibility requirement rather than leaving that capability only in dev/test pages.
+- `/admin/ai/agent-panel` `Notification Injection Preview` and `Public Injection Preview` now also expose `View Prompt`, opening that same reusable prompt modal with selector prompt assembly, selector input, and model payload, so intake-stage prompt visibility is no longer limited to `/preview/ai-agent-lab`.
+- `/admin/ai/agent-panel` `Overview` now exposes a shared `Operator Readiness` summary, so runtime state, backlog, quota headroom, checkpoint coverage, and latest-run safety can be judged from one contract instead of being inferred from several separate cards.
+- `/admin/ai/agent-panel` `Overview` now also exposes `Pause runtime`, `Resume runtime`, and `Force run cycle` through a shared runtime-control route/service contract, and blocked round-trips keep their structured `blocked_execute` payload visible in-panel instead of collapsing to a bare HTTP error.
+- `/admin/ai/agent-panel` `Overview` runtime-state card now also shows pause/lease/cooldown/last-run detail and refreshes from successful runtime-control responses, so operators can see runtime-state changes immediately instead of waiting for a full page reload.
+- `/admin/ai/agent-panel` `Overview` now also renders shared pause/resume/run-cycle guard summaries inline and disables actions that are already semantically blocked by paused/cooldown state, so operator controls better match current runtime readiness before an API call.
+- `AiAgentPanel.test.ts` now includes one explicit Phase 6 walkthrough regression that spans notification intake, public comment/post intake, task execution, and memory verification, so this subplan no longer relies only on many smaller tests to justify operator-flow coverage.
+- `/admin/ai/agent-panel` `Logs` now also exposes first-class structured diagnostics for selector summary, worker summary, parser status/issues, and repair state, with regression coverage for both executed and skipped runs instead of relying only on raw metadata JSON inspection.
+- `/admin/ai/agent-panel` `Overview` now also exposes `Continuous Runtime Checkpoint`, a shared sign-off contract that combines readiness, walkthrough completion, memory persistence, and logs diagnostics into one blocked/attention/ready surface with explicit regression coverage.
+- `/admin/ai/agent-panel` `Overview` now also exposes `PM Walkthrough Checklist`, a shared operator checklist that maps the documented manual validation flow onto live panel evidence and makes PM acceptance status visible without leaving the page.
+- `/admin/ai/agent-panel` `Overview` now also exposes `PM Acceptance Summary`, a shared PM-facing decision card that turns checkpoint + checklist state into explicit completed evidence, outstanding items, and next-action guidance.
+- Main-panel `Memory` is now a true shared/operator-facing read and persist/verification surface, with latest-write persistence, compression persistence, lineage, outcome trace, and modal/detail inspection all live.
+- Remaining panel-side backlog is now concentrated in one area: final PM/sign-off walkthrough execution and any tiny wording cleanup or follow-up it surfaces, because the operator-facing surfaces needed for Phase 6 are already live.
+- `orchestrator_runtime_state` is now real: overview and runtime-control both read/write through the shared runtime-state service instead of placeholder unavailable state.
+- Intake injection now also uses a real `inject_persona_tasks` RPC, so panel/live injection no longer bypasses the planned DB-side dedupe/cooldown contract.
+- `orchestrator_runtime_state` now also has shared DB-backed `claim`, `heartbeat`, and `release` helpers, and the first background runtime entrypoint exists at `src/agents/orchestrator/runner.ts`.
+- Important scope note: this subplan is mostly aligned for operator/manual validation, but it should not be read as proof that continuous runtime is complete. The canonical plan still has open implementation gaps around dedicated background text/media/compression entrypoints and the queue-driven drain phase model.
+
+Interpretation rule:
+
+- Use [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) as the canonical phase board.
+- Current alignment note: the canonical board now treats Phases 1-5 as complete and Phase 6 as the single active phase; this subplan progress snapshot is intentionally more detailed, but should not imply a conflicting phase order.
+- Use this subplan for surface-specific requirements plus the progress snapshot above.
+
 ## Design Summary
 
 This plan covers two related but different surfaces:
@@ -261,7 +337,7 @@ Keep this separate so memory write and compression work can evolve without overl
 **Required content**
 
 - filterable task table
-- status chips: `PENDING | RUNNING | DONE | FAILED | DEAD`
+- status chips: `PENDING | RUNNING | DONE | FAILED | SKIPPED`
 - detail modal with:
   - task payload JSON
   - source linkage

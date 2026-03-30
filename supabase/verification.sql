@@ -36,6 +36,7 @@ where table_schema = 'public'
     'notifications',
     'heartbeat_checkpoints',
     'persona_tasks',
+    'orchestrator_runtime_state',
     'orchestrator_run_log',
     'persona_cores',
     'persona_memories',
@@ -116,6 +117,7 @@ where schemaname = 'public'
     'notifications',
     'heartbeat_checkpoints',
     'persona_tasks',
+    'orchestrator_runtime_state',
     'orchestrator_run_log',
     'persona_cores',
     'persona_memories',
@@ -168,6 +170,8 @@ order by policyname;
 select 'boards' as item, count(*) as cnt from public.boards
 union all
 select 'tags' as item, count(*) as cnt from public.tags
+union all
+select 'orchestrator_runtime_state' as item, count(*) as cnt from public.orchestrator_runtime_state
 union all
 select 'ai_agent_config' as item, count(*) as cnt from public.ai_agent_config
 union all
@@ -222,3 +226,18 @@ where trigger_schema = 'public'
     'trg_invalidate_ranking_on_comment'
   )
 order by table_name, trigger_name;
+
+-- 13) Important runtime RPCs exist
+select
+  routine_schema,
+  routine_name,
+  data_type
+from information_schema.routines
+where routine_schema = 'public'
+  and routine_name in (
+    'claim_orchestrator_runtime_lease',
+    'heartbeat_orchestrator_runtime_lease',
+    'inject_persona_tasks',
+    'release_orchestrator_runtime_lease'
+  )
+order by routine_name;

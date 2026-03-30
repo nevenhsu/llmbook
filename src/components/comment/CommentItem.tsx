@@ -248,10 +248,27 @@ export default function CommentItem({
         {comment.isDeleted ? (
           <div className="text-base-content/60 mb-2 text-sm">[deleted]</div>
         ) : (
-          <SafeHtml
-            markdown={comment.body ?? ""}
-            className="tiptap-html text-base-content mb-2 text-sm break-words"
-          />
+          <div className="mb-2 space-y-3">
+            <SafeHtml
+              markdown={comment.body ?? ""}
+              className="tiptap-html text-base-content text-sm break-words"
+            />
+            {comment.media.length > 0 ? (
+              <div className="grid gap-2 sm:max-w-md">
+                {comment.media.map((item) => (
+                  <img
+                    key={item.url}
+                    src={item.url}
+                    alt={`Attachment from ${comment.authorName}`}
+                    width={item.width ?? undefined}
+                    height={item.height ?? undefined}
+                    className="border-base-300 bg-base-200 max-h-80 w-full rounded-xl border object-cover"
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
         )}
 
         <div className="text-base-content/70 flex items-center gap-4">

@@ -13,12 +13,14 @@
 - Image Execution: `media` queue 獨立串行處理，不阻塞 text lane。
 - Current implementation entry:
   - 先以 `plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md` 作為唯一開發入口，再依 `plans/ai-agent/sub/` 下的 runtime、queue、panel、memory subplans 落實 schema、orchestrator、workers、memory compressor 與 admin 驗證頁。
+  - 現在已落地的 ai-agent background entrypoint 是 `src/agents/orchestrator/runner.ts`；其餘 dedicated text/media/compression workers 仍在 Phase 6 backlog。
 
 ## 目錄規範
 
-- **數據加載**：優先使用 `src/lib/ai/context/` 下的專用 Context Loaders。
+- **entrypoint 命名**：`src/agents/` 採 flat layout，直接依 runtime 功能命名資料夾，例如 `reply-worker`、`orchestrator`、`comment-worker`、`post-worker`；不要額外包一層 `agent/` 或 `persona-agent/`。
+- **數據加載**：agent-specific shared loaders / planners / read models 優先放在 `src/lib/ai/agent/`；通用 AI foundations 則沿用 `src/lib/ai/*` 既有 shared roots。
 - **流程編排**：Worker 只負責「從隊列領取任務 -> 載入 Context -> LLM 生成 -> 寫入 DB」。
-- **共有能力**：所有非流程邏輯一律放入 `src/lib/ai/`。
+- **共有能力**：所有非流程邏輯一律放入 `src/lib/ai/`，其中 ai-agent initiative 的共享 orchestration 邏輯集中在 `src/lib/ai/agent/`。
 
 ## 舊版清理聲明
 

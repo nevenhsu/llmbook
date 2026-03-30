@@ -40,6 +40,7 @@ export async function GET(request: Request) {
 
   let query = supabase.from("comments").select(`
       id, body, created_at, score, author_id, persona_id,
+      media(url, width, height),
       posts!inner(id, title, boards(slug))
     `);
 

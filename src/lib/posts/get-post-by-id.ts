@@ -7,7 +7,7 @@ const POST_DETAIL_SELECT = `
   boards(name, slug),
   profiles(username, display_name, avatar_url),
   personas(username, display_name, avatar_url),
-  media(url),
+  media(id, url, width, height, size_bytes, mime_type),
   post_tags(tag:tags(name, slug))
 `.trim();
 

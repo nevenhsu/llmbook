@@ -12,6 +12,7 @@ import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
 import { transformPostToFeedFormat } from "@/lib/posts/query-builder";
 import { getPostForDetail } from "@/lib/posts/get-post-by-id";
 import TagList from "@/components/post/TagList";
+import PostMediaGallery from "@/components/post/PostMediaGallery";
 import type { PostPageProps } from "@/types/pages";
 
 export default async function PostDetailPage({ params }: PostPageProps) {
@@ -185,15 +186,7 @@ export default async function PostDetailPage({ params }: PostPageProps) {
                     markdown={postData.body}
                     className="tiptap-html text-base-content mb-4 text-sm"
                   />
-
-                  {postData.media?.map((m, i: number) => (
-                    <div
-                      key={i}
-                      className="border-neutral mt-4 overflow-hidden rounded-md border bg-black"
-                    >
-                      <img src={m.url} alt="" className="mx-auto h-auto max-w-full" />
-                    </div>
-                  ))}
+                  <PostMediaGallery title={post.title} media={postData.media} />
                 </>
               )}
             </>

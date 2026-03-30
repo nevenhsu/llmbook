@@ -386,6 +386,19 @@ CREATE TABLE public.persona_tasks (
   )
 );
 
+-- Orchestrator runtime singleton state
+CREATE TABLE public.orchestrator_runtime_state (
+  singleton_key text PRIMARY KEY DEFAULT 'global',
+  paused boolean NOT NULL DEFAULT false,
+  lease_owner text,
+  lease_until timestamptz,
+  cooldown_until timestamptz,
+  last_started_at timestamptz,
+  last_finished_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT orchestrator_runtime_state_singleton_chk CHECK (singleton_key = 'global')
+);
+
 -- Orchestrator snapshot log
 CREATE TABLE public.orchestrator_run_log (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -633,6 +646,288 @@ CREATE UNIQUE INDEX idx_persona_tasks_notification_dedupe
 CREATE INDEX idx_persona_tasks_public_cooldown_lookup
   ON public.persona_tasks(task_type, persona_id, dedupe_key, cooldown_until DESC)
   WHERE dispatch_kind = 'public';
+
+CREATE OR REPLACE FUNCTION public.inject_persona_tasks(candidates jsonb)
+RETURNS TABLE (
+  candidate_index integer,
+  inserted boolean,
+  skip_reason text,
+  task_id uuid
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  candidate jsonb;
+  candidate_position bigint;
+  next_task_id uuid;
+  next_persona_id uuid;
+  next_task_type text;
+  next_dispatch_kind text;
+  next_source_table text;
+  next_source_id uuid;
+  next_dedupe_key text;
+  next_cooldown_until timestamptz;
+  next_payload jsonb;
+  next_decision_reason text;
+BEGIN
+  IF jsonb_typeof(candidates) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'inject_persona_tasks expects a jsonb array';
+  END IF;
+
+  FOR candidate, candidate_position IN
+    SELECT value, ordinality - 1
+    FROM jsonb_array_elements(candidates) WITH ORDINALITY
+  LOOP
+    candidate_index := candidate_position::integer;
+    inserted := false;
+    skip_reason := null;
+    task_id := null;
+    next_task_id := null;
+
+    BEGIN
+      next_persona_id := nullif(candidate->>'persona_id', '')::uuid;
+      next_task_type := nullif(candidate->>'task_type', '');
+      next_dispatch_kind := nullif(candidate->>'dispatch_kind', '');
+      next_source_table := nullif(candidate->>'source_table', '');
+      next_source_id := CASE
+        WHEN nullif(candidate->>'source_id', '') IS NULL THEN null
+        ELSE (candidate->>'source_id')::uuid
+      END;
+      next_dedupe_key := nullif(candidate->>'dedupe_key', '');
+      next_cooldown_until := CASE
+        WHEN nullif(candidate->>'cooldown_until', '') IS NULL THEN null
+        ELSE (candidate->>'cooldown_until')::timestamptz
+      END;
+      next_payload := COALESCE(candidate->'payload', '{}'::jsonb);
+      next_decision_reason := nullif(candidate->>'decision_reason', '');
+    EXCEPTION
+      WHEN OTHERS THEN
+        skip_reason := 'invalid_candidate';
+        RETURN NEXT;
+        CONTINUE;
+    END;
+
+    IF next_persona_id IS NULL
+      OR next_task_type IS NULL
+      OR next_dispatch_kind IS NULL
+      OR next_payload IS NULL THEN
+      skip_reason := 'invalid_candidate';
+      RETURN NEXT;
+      CONTINUE;
+    END IF;
+
+    IF next_dispatch_kind = 'notification' THEN
+      IF next_source_table <> 'notifications' OR next_source_id IS NULL THEN
+        skip_reason := 'invalid_candidate';
+        RETURN NEXT;
+        CONTINUE;
+      END IF;
+
+      INSERT INTO public.persona_tasks (
+        persona_id,
+        task_type,
+        dispatch_kind,
+        source_table,
+        source_id,
+        dedupe_key,
+        cooldown_until,
+        decision_reason,
+        payload,
+        idempotency_key,
+        status,
+        scheduled_at
+      )
+      VALUES (
+        next_persona_id,
+        next_task_type,
+        next_dispatch_kind,
+        next_source_table,
+        next_source_id,
+        next_dedupe_key,
+        next_cooldown_until,
+        next_decision_reason,
+        next_payload,
+        gen_random_uuid()::text,
+        'PENDING',
+        now()
+      )
+      ON CONFLICT DO NOTHING
+      RETURNING id INTO next_task_id;
+
+      IF next_task_id IS NULL THEN
+        skip_reason := 'duplicate_candidate';
+      ELSE
+        inserted := true;
+        task_id := next_task_id;
+      END IF;
+
+      RETURN NEXT;
+      CONTINUE;
+    END IF;
+
+    IF next_dispatch_kind = 'public' THEN
+      IF next_dedupe_key IS NULL OR next_cooldown_until IS NULL THEN
+        skip_reason := 'invalid_candidate';
+        RETURN NEXT;
+        CONTINUE;
+      END IF;
+
+      INSERT INTO public.persona_tasks (
+        persona_id,
+        task_type,
+        dispatch_kind,
+        source_table,
+        source_id,
+        dedupe_key,
+        cooldown_until,
+        decision_reason,
+        payload,
+        idempotency_key,
+        status,
+        scheduled_at
+      )
+      SELECT
+        next_persona_id,
+        next_task_type,
+        next_dispatch_kind,
+        next_source_table,
+        next_source_id,
+        next_dedupe_key,
+        next_cooldown_until,
+        next_decision_reason,
+        next_payload,
+        gen_random_uuid()::text,
+        'PENDING',
+        now()
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.persona_tasks existing_tasks
+        WHERE existing_tasks.dispatch_kind = 'public'
+          AND existing_tasks.task_type = next_task_type
+          AND existing_tasks.persona_id = next_persona_id
+          AND existing_tasks.dedupe_key = next_dedupe_key
+          AND existing_tasks.cooldown_until > now()
+      )
+      RETURNING id INTO next_task_id;
+
+      IF next_task_id IS NULL THEN
+        skip_reason := 'cooldown_active';
+      ELSE
+        inserted := true;
+        task_id := next_task_id;
+      END IF;
+
+      RETURN NEXT;
+      CONTINUE;
+    END IF;
+
+    skip_reason := 'invalid_candidate';
+    RETURN NEXT;
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.claim_orchestrator_runtime_lease(
+  next_lease_owner text,
+  lease_duration_seconds integer,
+  allow_during_cooldown boolean DEFAULT false
+)
+RETURNS public.orchestrator_runtime_state
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  claimed_row public.orchestrator_runtime_state;
+BEGIN
+  UPDATE public.orchestrator_runtime_state
+  SET
+    lease_owner = next_lease_owner,
+    lease_until = now() + make_interval(secs => GREATEST(COALESCE(lease_duration_seconds, 1), 1)),
+    last_started_at = CASE
+      WHEN lease_owner = next_lease_owner
+        AND lease_until IS NOT NULL
+        AND lease_until > now()
+      THEN last_started_at
+      ELSE now()
+    END,
+    updated_at = now()
+  WHERE singleton_key = 'global'
+    AND paused = false
+    AND (
+      lease_owner = next_lease_owner
+      OR lease_until IS NULL
+      OR lease_until <= now()
+    )
+    AND (
+      allow_during_cooldown
+      OR cooldown_until IS NULL
+      OR cooldown_until <= now()
+    )
+  RETURNING * INTO claimed_row;
+
+  RETURN claimed_row;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.heartbeat_orchestrator_runtime_lease(
+  active_lease_owner text,
+  lease_duration_seconds integer
+)
+RETURNS public.orchestrator_runtime_state
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  heartbeated_row public.orchestrator_runtime_state;
+BEGIN
+  UPDATE public.orchestrator_runtime_state
+  SET
+    lease_until = now() + make_interval(secs => GREATEST(COALESCE(lease_duration_seconds, 1), 1)),
+    updated_at = now()
+  WHERE singleton_key = 'global'
+    AND paused = false
+    AND lease_owner = active_lease_owner
+    AND lease_until IS NOT NULL
+    AND lease_until > now()
+  RETURNING * INTO heartbeated_row;
+
+  RETURN heartbeated_row;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.release_orchestrator_runtime_lease(
+  active_lease_owner text,
+  cooldown_minutes integer DEFAULT NULL
+)
+RETURNS public.orchestrator_runtime_state
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  released_row public.orchestrator_runtime_state;
+BEGIN
+  UPDATE public.orchestrator_runtime_state
+  SET
+    lease_owner = null,
+    lease_until = null,
+    cooldown_until = CASE
+      WHEN cooldown_minutes IS NULL THEN cooldown_until
+      ELSE now() + make_interval(mins => GREATEST(cooldown_minutes, 0))
+    END,
+    last_finished_at = now(),
+    updated_at = now()
+  WHERE singleton_key = 'global'
+    AND lease_owner = active_lease_owner
+  RETURNING * INTO released_row;
+
+  RETURN released_row;
+END;
+$$;
 
 
 CREATE INDEX idx_ai_review_queue_expire_scan
@@ -1311,6 +1606,7 @@ ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.heartbeat_checkpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orchestrator_runtime_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_agent_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_global_usage ENABLE ROW LEVEL SECURITY;
@@ -1835,6 +2131,18 @@ ON CONFLICT (key) DO UPDATE
 SET
   description = EXCLUDED.description,
   updated_at = now();
+
+INSERT INTO public.orchestrator_runtime_state (
+  singleton_key,
+  paused,
+  lease_owner,
+  lease_until,
+  cooldown_until,
+  last_started_at,
+  last_finished_at
+)
+VALUES ('global', false, null, null, null, null, null)
+ON CONFLICT (singleton_key) DO NOTHING;
 
 -- ============================================================================
 -- STORAGE

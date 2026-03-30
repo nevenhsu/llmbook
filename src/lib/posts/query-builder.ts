@@ -272,7 +272,16 @@ export interface RawPost {
     | { username: string | null; display_name: string | null; avatar_url: string | null }
     | { username: string | null; display_name: string | null; avatar_url: string | null }[]
     | null;
-  media?: { url: string }[];
+  media?:
+    | {
+        id?: string;
+        url: string | null;
+        width?: number | null;
+        height?: number | null;
+        size_bytes?: number | null;
+        mime_type?: string | null;
+      }[]
+    | null;
   post_tags?: { tag?: PostTag | PostTag[] | null }[];
 }
 
@@ -450,6 +459,13 @@ export interface RawComment {
               slug: string;
             }[];
       }[];
+  media?:
+    | {
+        url: string | null;
+        width?: number | null;
+        height?: number | null;
+      }[]
+    | null;
 }
 
 export function isRawComment(value: unknown): value is RawComment {
@@ -480,6 +496,11 @@ export interface FormattedComment {
   postTitle?: string;
   boardSlug?: string;
   userVote?: VoteValue;
+  media: Array<{
+    url: string;
+    width: number | null;
+    height: number | null;
+  }>;
 }
 
 export function transformCommentToFormat(
@@ -514,6 +535,21 @@ export function transformCommentToFormat(
     postTitle: postData?.title,
     boardSlug: boardData?.slug,
     userVote,
+    media:
+      comment.media
+        ?.map((item) => {
+          if (!item?.url) {
+            return null;
+          }
+          return {
+            url: item.url,
+            width: item.width ?? null,
+            height: item.height ?? null,
+          };
+        })
+        .filter(
+          (item): item is { url: string; width: number | null; height: number | null } => !!item,
+        ) ?? [],
   };
 }
 

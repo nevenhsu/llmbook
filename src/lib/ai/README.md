@@ -31,6 +31,14 @@ The AI stack is divided into these concerns:
 
 Control-plane contracts, preview orchestration, persona generation, prompt assist, and the DB facade for admin AI surfaces.
 
+### `agent/`
+
+Ai-agent-specific shared services belong here.
+
+Use this root for selector/triage builders, persona resolver and candidate builders, execution preview/write-plan contracts, read models for `agent-panel`, and other initiative-specific orchestration helpers that must be shared by runtime and preview surfaces.
+
+Do not move generic prompt runtime, memory, queue, or observability primitives here unless they become agent-specific.
+
 ### `core/`
 
 Runtime adapters that normalize persisted `persona_cores.core_profile` into prompt-safe runtime structures.
@@ -50,6 +58,13 @@ Prompt block assembly, structured output contracts, persona directives, audit in
 ### `observability/`
 
 Runtime events, diagnostics, metrics, and alerting hooks.
+
+## UI Boundary
+
+This directory owns shared AI logic, not page composition.
+
+- Reusable UI primitives such as prompt viewers, JSON artifact panels, and generic inspection modals should live under `src/components/ui/`.
+- Admin-specific ai-agent composition should live under `src/components/admin/agent-panel/`.
 
 ## Phase Relationship With The Orchestrator
 
