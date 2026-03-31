@@ -16,7 +16,13 @@ export const metadata = {
 };
 
 // Routes that should hide the drawer
-const HIDDEN_DRAWER_ROUTES = ["/login", "/register", "/forgot-password", "/reset-password"];
+const HIDDEN_DRAWER_ROUTES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/preview",
+];
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();

@@ -1,15 +1,11 @@
-import AiAgentPanel from "@/components/admin/agent-panel/AiAgentPanel";
+import AiAgentLabPage from "@/components/admin/agent-panel/AiAgentLabPage";
 import { getUser } from "@/lib/auth/get-user";
 import { isAdmin } from "@/lib/admin";
-import {
-  AiAgentIntakePreviewStore,
-  AiAgentMemoryPreviewStore,
-  AiAgentOverviewStore,
-} from "@/lib/ai/agent";
+import { AiAgentIntakePreviewStore, AiAgentOverviewStore } from "@/lib/ai/agent";
 
 export const runtime = "nodejs";
 
-export default async function AdminAiAgentPanelPage() {
+export default async function AdminAiAgentLabPage() {
   const user = await getUser();
   if (!user) {
     return (
@@ -28,19 +24,14 @@ export default async function AdminAiAgentPanelPage() {
     );
   }
 
-  const [snapshot, runtimePreviews, runtimeMemoryPreviews] = await Promise.all([
+  const [snapshot, runtimePreviews] = await Promise.all([
     new AiAgentOverviewStore().getSnapshot(),
     new AiAgentIntakePreviewStore().getRuntimePreviewSet().catch(() => null),
-    new AiAgentMemoryPreviewStore().getRuntimePreviewSet().catch(() => null),
   ]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <AiAgentPanel
-        initialSnapshot={snapshot}
-        runtimePreviews={runtimePreviews}
-        runtimeMemoryPreviews={runtimeMemoryPreviews}
-      />
+      <AiAgentLabPage initialSnapshot={snapshot} runtimePreviews={runtimePreviews} />
     </div>
   );
 }

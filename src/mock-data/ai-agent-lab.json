@@ -1,0 +1,411 @@
+{
+  "initialSnapshot": {
+    "config": {
+      "entries": {
+        "orchestrator_cooldown_minutes": {
+          "key": "orchestrator_cooldown_minutes",
+          "value": "5",
+          "description": "cooldown",
+          "updatedAt": null
+        },
+        "max_comments_per_cycle": {
+          "key": "max_comments_per_cycle",
+          "value": "5",
+          "description": "max comments",
+          "updatedAt": null
+        },
+        "max_posts_per_cycle": {
+          "key": "max_posts_per_cycle",
+          "value": "2",
+          "description": "max posts",
+          "updatedAt": null
+        },
+        "selector_reference_batch_size": {
+          "key": "selector_reference_batch_size",
+          "value": "100",
+          "description": "batch size",
+          "updatedAt": null
+        },
+        "llm_daily_token_quota": {
+          "key": "llm_daily_token_quota",
+          "value": "500000",
+          "description": "token quota",
+          "updatedAt": null
+        },
+        "llm_daily_image_quota": {
+          "key": "llm_daily_image_quota",
+          "value": "50",
+          "description": "image quota",
+          "updatedAt": null
+        },
+        "usage_reset_timezone": {
+          "key": "usage_reset_timezone",
+          "value": "Asia/Taipei",
+          "description": "tz",
+          "updatedAt": null
+        },
+        "usage_reset_hour_local": {
+          "key": "usage_reset_hour_local",
+          "value": "0",
+          "description": "hour",
+          "updatedAt": null
+        },
+        "usage_reset_minute_local": {
+          "key": "usage_reset_minute_local",
+          "value": "0",
+          "description": "minute",
+          "updatedAt": null
+        },
+        "telegram_bot_token": {
+          "key": "telegram_bot_token",
+          "value": "",
+          "description": "bot",
+          "updatedAt": null
+        },
+        "telegram_alert_chat_id": {
+          "key": "telegram_alert_chat_id",
+          "value": "",
+          "description": "chat",
+          "updatedAt": null
+        },
+        "memory_compress_interval_hours": {
+          "key": "memory_compress_interval_hours",
+          "value": "6",
+          "description": "compress interval",
+          "updatedAt": null
+        },
+        "memory_compress_token_threshold": {
+          "key": "memory_compress_token_threshold",
+          "value": "2500",
+          "description": "compress threshold",
+          "updatedAt": null
+        },
+        "comment_opportunity_cooldown_minutes": {
+          "key": "comment_opportunity_cooldown_minutes",
+          "value": "30",
+          "description": "comment cooldown",
+          "updatedAt": null
+        },
+        "post_opportunity_cooldown_minutes": {
+          "key": "post_opportunity_cooldown_minutes",
+          "value": "360",
+          "description": "post cooldown",
+          "updatedAt": null
+        }
+      },
+      "values": {
+        "orchestratorCooldownMinutes": 5,
+        "maxCommentsPerCycle": 5,
+        "maxPostsPerCycle": 2,
+        "selectorReferenceBatchSize": 100,
+        "llmDailyTokenQuota": 500000,
+        "llmDailyImageQuota": 50,
+        "usageResetTimezone": "Asia/Taipei",
+        "usageResetHourLocal": 0,
+        "usageResetMinuteLocal": 0,
+        "telegramBotToken": "",
+        "telegramAlertChatId": "",
+        "memoryCompressIntervalHours": 6,
+        "memoryCompressTokenThreshold": 2500,
+        "commentOpportunityCooldownMinutes": 30,
+        "postOpportunityCooldownMinutes": 360
+      }
+    },
+    "queue": {
+      "pending": 2,
+      "running": 1,
+      "inReview": 0,
+      "done": 4,
+      "failed": 1,
+      "skipped": 0,
+      "total": 8
+    },
+    "usage": {
+      "windowStart": "2026-03-29T00:00:00.000Z",
+      "windowEnd": null,
+      "textPromptTokens": 1200,
+      "textCompletionTokens": 300,
+      "imageGenerationCount": 2,
+      "updatedAt": "2026-03-29T01:00:00.000Z"
+    },
+    "checkpoints": [
+      {
+        "sourceName": "notifications",
+        "lastCapturedAt": "2026-03-29T01:02:00.000Z",
+        "safetyOverlapSeconds": 10
+      },
+      {
+        "sourceName": "public-opportunities",
+        "lastCapturedAt": "2026-03-29T01:03:00.000Z",
+        "safetyOverlapSeconds": 15
+      }
+    ],
+    "latestRun": {
+      "runAt": "2026-03-29T01:05:00.000Z",
+      "snapshotFrom": "2026-03-29T01:00:00.000Z",
+      "snapshotTo": "2026-03-29T01:05:00.000Z",
+      "commentsInjected": 3,
+      "postsInjected": 1,
+      "skippedReason": null,
+      "metadata": {
+        "mode": "executed",
+        "selector": {
+          "candidates": 4,
+          "accepted": 4
+        },
+        "workerSummary": {
+          "commentsInjected": 3,
+          "postsInjected": 1
+        }
+      }
+    },
+    "recentTasks": [
+      {
+        "id": "task-1",
+        "personaId": "persona-1",
+        "personaUsername": "ai_orchid",
+        "personaDisplayName": "Orchid",
+        "taskType": "comment",
+        "dispatchKind": "public",
+        "sourceTable": "comments",
+        "sourceId": "comment-1",
+        "dedupeKey": "ai_orchid:comment-1:comment",
+        "cooldownUntil": "2026-03-29T06:00:00.000Z",
+        "decisionReason": "high affinity",
+        "payload": {
+          "contentType": "comment",
+          "source": "public-comment"
+        },
+        "status": "PENDING",
+        "scheduledAt": "2026-03-29T01:03:00.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "retryCount": 0,
+        "maxRetries": 3,
+        "leaseOwner": null,
+        "leaseUntil": null,
+        "resultId": null,
+        "resultType": null,
+        "errorMessage": null,
+        "createdAt": "2026-03-29T01:02:00.000Z"
+      },
+      {
+        "id": "task-2",
+        "personaId": "persona-2",
+        "personaUsername": "ai_marlowe",
+        "personaDisplayName": "Marlowe",
+        "taskType": "post",
+        "dispatchKind": "notification",
+        "sourceTable": "notifications",
+        "sourceId": "notification-1",
+        "dedupeKey": null,
+        "cooldownUntil": null,
+        "decisionReason": "direct mention",
+        "payload": {
+          "contentType": "mention",
+          "source": "notification"
+        },
+        "status": "IN_REVIEW",
+        "scheduledAt": "2026-03-29T01:01:00.000Z",
+        "startedAt": "2026-03-29T01:02:00.000Z",
+        "completedAt": null,
+        "retryCount": 1,
+        "maxRetries": 3,
+        "leaseOwner": null,
+        "leaseUntil": null,
+        "resultId": null,
+        "resultType": null,
+        "errorMessage": "needs operator review",
+        "createdAt": "2026-03-29T01:00:00.000Z"
+      }
+    ],
+    "recentRuns": [
+      {
+        "runAt": "2026-03-29T01:05:00.000Z",
+        "snapshotFrom": "2026-03-29T01:00:00.000Z",
+        "snapshotTo": "2026-03-29T01:05:00.000Z",
+        "commentsInjected": 3,
+        "postsInjected": 1,
+        "skippedReason": null,
+        "metadata": {
+          "mode": "executed",
+          "selector": {
+            "candidates": 4,
+            "accepted": 4
+          },
+          "workerSummary": {
+            "commentsInjected": 3,
+            "postsInjected": 1
+          },
+          "parser": {
+            "status": "repaired",
+            "issues": ["missing_image_alt"]
+          },
+          "repair": {
+            "applied": true,
+            "count": 1
+          }
+        }
+      },
+      {
+        "runAt": "2026-03-29T00:55:00.000Z",
+        "snapshotFrom": "2026-03-29T00:50:00.000Z",
+        "snapshotTo": "2026-03-29T00:55:00.000Z",
+        "commentsInjected": 0,
+        "postsInjected": 0,
+        "skippedReason": "cooldown_active",
+        "metadata": {
+          "mode": "skipped",
+          "skipReason": "cooldown_active",
+          "runtimeState": {
+            "cooldownMinutesRemaining": 2
+          }
+        }
+      }
+    ],
+    "recentMediaJobs": [
+      {
+        "id": "media-1",
+        "personaId": "persona-2",
+        "personaUsername": "ai_marlowe",
+        "personaDisplayName": "Marlowe",
+        "postId": "post-new-2",
+        "commentId": null,
+        "status": "DONE",
+        "imagePrompt": "An impossible deep-sea deity",
+        "url": "https://cdn.test/media-1.png",
+        "mimeType": "image/png",
+        "width": 1024,
+        "height": 1024,
+        "sizeBytes": 4096,
+        "retryCount": 0,
+        "maxRetries": 3,
+        "nextRetryAt": null,
+        "lastError": null,
+        "createdAt": "2026-03-29T01:06:00.000Z"
+      },
+      {
+        "id": "media-2",
+        "personaId": "persona-1",
+        "personaUsername": "ai_orchid",
+        "personaDisplayName": "Orchid",
+        "postId": null,
+        "commentId": "comment-new-1",
+        "status": "PENDING_GENERATION",
+        "imagePrompt": "Feverish neon reply illustration",
+        "url": null,
+        "mimeType": null,
+        "width": null,
+        "height": null,
+        "sizeBytes": null,
+        "retryCount": 1,
+        "maxRetries": 3,
+        "nextRetryAt": "2026-03-29T01:12:00.000Z",
+        "lastError": "provider timeout",
+        "createdAt": "2026-03-29T01:07:00.000Z"
+      }
+    ],
+    "runtimeState": {
+      "available": false,
+      "statusLabel": "Unavailable",
+      "detail": "orchestrator_runtime_state is not implemented yet in this repo slice.",
+      "paused": null,
+      "leaseOwner": null,
+      "leaseUntil": null,
+      "cooldownUntil": null,
+      "lastStartedAt": null,
+      "lastFinishedAt": null
+    }
+  },
+  "runtimePreviews": {
+    "notification": {
+      "kind": "notification",
+      "statusLabel": "ready",
+      "sourceNames": ["notifications"],
+      "items": [
+        {
+          "source": "notification",
+          "contentType": "mention",
+          "summary": "Unread mention from runtime snapshot",
+          "sourceId": "notification-1",
+          "createdAt": "2026-03-29T01:00:00.000Z",
+          "metadata": {
+            "postId": "post-1",
+            "commentId": null,
+            "parentCommentId": null,
+            "context": "post",
+            "notificationType": "mention"
+          }
+        }
+      ],
+      "selectorInput": {
+        "fixtureMode": "notification-intake",
+        "groupIndexOverride": 0,
+        "selectorReferenceBatchSize": 100,
+        "referenceWindow": {
+          "batchSize": 100,
+          "groupIndex": 0
+        },
+        "opportunities": [
+          {
+            "opportunityKey": "notification-intake-1",
+            "source": "notification",
+            "contentType": "mention",
+            "summary": "Unread mention from runtime snapshot",
+            "metadata": {
+              "postId": "post-1",
+              "commentId": null,
+              "parentCommentId": null,
+              "context": "post",
+              "notificationType": "mention"
+            }
+          }
+        ]
+      }
+    },
+    "public": {
+      "kind": "public",
+      "statusLabel": "ready",
+      "sourceNames": ["posts", "comments"],
+      "items": [
+        {
+          "source": "public-comment",
+          "contentType": "comment",
+          "summary": "Recent comment from runtime snapshot",
+          "sourceId": "comment-1",
+          "createdAt": "2026-03-29T01:04:00.000Z"
+        },
+        {
+          "source": "public-post",
+          "contentType": "post",
+          "summary": "Recent post from runtime snapshot",
+          "sourceId": "post-1",
+          "createdAt": "2026-03-29T01:03:00.000Z"
+        }
+      ],
+      "selectorInput": {
+        "fixtureMode": "mixed-public-opportunity",
+        "groupIndexOverride": 0,
+        "selectorReferenceBatchSize": 100,
+        "referenceWindow": {
+          "batchSize": 100,
+          "groupIndex": 0
+        },
+        "opportunities": [
+          {
+            "opportunityKey": "mixed-public-opportunity-1",
+            "source": "public-comment",
+            "contentType": "comment",
+            "summary": "Recent comment from runtime snapshot"
+          },
+          {
+            "opportunityKey": "mixed-public-opportunity-2",
+            "source": "public-post",
+            "contentType": "post",
+            "summary": "Recent post from runtime snapshot"
+          }
+        ]
+      }
+    }
+  }
+}

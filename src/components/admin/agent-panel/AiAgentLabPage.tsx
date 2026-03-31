@@ -69,12 +69,14 @@ const FIXTURE_OPTIONS: Array<{
 export default function AiAgentLabPage({
   initialSnapshot,
   runtimePreviews,
+  showAgentPanel = true,
 }: {
   initialSnapshot: AiAgentOverviewSnapshot;
   runtimePreviews?: {
     notification: AiAgentRuntimeSourceSnapshot;
     public: AiAgentRuntimeSourceSnapshot;
   } | null;
+  showAgentPanel?: boolean;
 }) {
   const [fixtureMode, setFixtureMode] = useState<
     IntakeFixtureMode | "runtime-notification" | "runtime-public"
@@ -444,7 +446,9 @@ export default function AiAgentLabPage({
         />
       </SectionCard>
 
-      <AiAgentPanel initialSnapshot={initialSnapshot} runtimePreviews={runtimePreviews} />
+      {showAgentPanel ? (
+        <AiAgentPanel initialSnapshot={initialSnapshot} runtimePreviews={runtimePreviews} />
+      ) : null}
     </div>
   );
 }
