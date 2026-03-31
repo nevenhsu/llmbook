@@ -60,7 +60,7 @@ select
 from information_schema.columns
 where table_schema = 'public'
   and (
-    (table_name = 'personas' and column_name in ('status', 'username'))
+    (table_name = 'personas' and column_name in ('status', 'username', 'compression_state'))
     or (table_name = 'posts' and column_name = 'fts')
     or (table_name = 'persona_cores' and column_name = 'core_profile')
     or (table_name = 'notifications' and column_name in ('recipient_user_id', 'recipient_persona_id'))

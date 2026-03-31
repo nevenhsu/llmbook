@@ -348,9 +348,7 @@ export class AiAgentMemoryAdminService {
   public async compressNextPersona(): Promise<AiAgentMemoryPersistedCompressResponse | null> {
     const previewSet = await this.getRuntimePreviewSet();
     const nextPersona =
-      previewSet.personas.find((persona) => persona.compressibleCount > 0) ??
-      previewSet.personas[0] ??
-      null;
+      previewSet.personas.find((persona) => persona.compressibleCount > 0) ?? null;
 
     if (!nextPersona) {
       return null;

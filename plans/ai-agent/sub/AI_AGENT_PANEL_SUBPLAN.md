@@ -75,12 +75,17 @@ Current repo status for this subplan:
 - `/admin/ai/agent-panel` `Overview` now also exposes `Continuous Runtime Checkpoint`, a shared sign-off contract that combines readiness, walkthrough completion, memory persistence, and logs diagnostics into one blocked/attention/ready surface with explicit regression coverage.
 - `/admin/ai/agent-panel` `Overview` now also exposes `PM Walkthrough Checklist`, a shared operator checklist that maps the documented manual validation flow onto live panel evidence and makes PM acceptance status visible without leaving the page.
 - `/admin/ai/agent-panel` `Overview` now also exposes `PM Acceptance Summary`, a shared PM-facing decision card that turns checkpoint + checklist state into explicit completed evidence, outstanding items, and next-action guidance.
+- Phase C compression is now a real background runtime path: `personas.compression_state` stores durable per-persona defer/no-op markers, the shared memory-compressor selector uses deterministic priority plus fingerprint-aware deferral, and `src/agents/memory-compressor/runner.ts` now executes that worker loop outside admin/manual routes.
 - Main-panel `Memory` is now a true shared/operator-facing read and persist/verification surface, with latest-write persistence, compression persistence, lineage, outcome trace, and modal/detail inspection all live.
-- Remaining panel-side backlog is now concentrated in one area: final PM/sign-off walkthrough execution and any tiny wording cleanup or follow-up it surfaces, because the operator-facing surfaces needed for Phase 6 are already live.
+- Remaining panel-side backlog is now concentrated in two areas: final PM/sign-off walkthrough execution, and any tiny wording cleanup or follow-up surfaced while PM runs that acceptance pass.
 - `orchestrator_runtime_state` is now real: overview and runtime-control both read/write through the shared runtime-state service instead of placeholder unavailable state.
 - Intake injection now also uses a real `inject_persona_tasks` RPC, so panel/live injection no longer bypasses the planned DB-side dedupe/cooldown contract.
 - `orchestrator_runtime_state` now also has shared DB-backed `claim`, `heartbeat`, and `release` helpers, and the first background runtime entrypoint exists at `src/agents/orchestrator/runner.ts`.
-- Important scope note: this subplan is mostly aligned for operator/manual validation, but it should not be read as proof that continuous runtime is complete. The canonical plan still has open implementation gaps around dedicated background text/media/compression entrypoints and the queue-driven drain phase model.
+- The background orchestrator is now inject-only through a shared phase service, so it no longer chains `orchestrator_once` inline for text/media/compression work.
+- A queue-driven text lane now exists through shared `src/lib/ai/agent/execution/text-lane-service.ts` plus `src/agents/text-worker/runner.ts`, and it drains `reply -> comment -> post` tasks through the shared queue contract.
+- `media` rows now carry retry/backoff metadata (`retry_count`, `max_retries`, `next_retry_at`, `last_error`), and a shared `media-lane-service` plus `src/agents/media-worker/runner.ts` now drain queued media jobs without depending on admin/manual runner orchestration.
+- Successful background text-lane execution now queues pending media rows for image-backed tasks, so the dedicated media worker consumes the same shared media contract the admin surfaces inspect.
+- Important scope note: this subplan is mostly aligned for operator/manual validation, but it should not be read as PM sign-off by itself. Continuous runtime implementation is now live across orchestrator/text/media/memory-compressor workers, but final acceptance still belongs to the canonical plan and PM walkthrough.
 
 Interpretation rule:
 

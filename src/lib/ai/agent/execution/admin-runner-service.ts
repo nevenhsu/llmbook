@@ -12,7 +12,7 @@ import {
   type AiAgentTaskInjectionExecutedResponse,
 } from "@/lib/ai/agent/intake/task-injection-service";
 import {
-  AiAgentMemoryAdminService,
+  AiAgentMemoryCompressorService,
   type AiAgentMemoryPersistedCompressResponse,
 } from "@/lib/ai/agent/memory";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
@@ -147,7 +147,10 @@ export class AiAgentAdminRunnerService {
       loadTaskById: options?.deps?.loadTaskById ?? ((taskId) => this.readTaskById(taskId)),
       compressNextPersona:
         options?.deps?.compressNextPersona ??
-        (() => new AiAgentMemoryAdminService().compressNextPersona()),
+        (async () => {
+          const result = await new AiAgentMemoryCompressorService().runNext();
+          return result.mode === "executed" ? result.compressionResult : null;
+        }),
       executeTextTask: options?.deps?.executeTextTask ?? ((task) => this.executeTextTask(task)),
       executeMediaTask:
         options?.deps?.executeMediaTask ??
@@ -401,7 +404,7 @@ export class AiAgentAdminRunnerService {
         selectedTaskId: null,
         summary: result
           ? `Persisted compression for ${result.personaId} and removed ${result.deletedShortMemoryIds.length} short-memory rows.`
-          : "No persona currently has compressible short-memory rows.",
+          : "No persona currently needs a compression pass right now.",
         executionPreview: null,
         compressionResult: result,
         textResult: null,

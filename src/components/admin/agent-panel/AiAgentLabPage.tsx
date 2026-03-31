@@ -15,7 +15,6 @@ import {
   buildTaskInjectionPreview,
   buildTaskWritePreview,
   type AiAgentExecutionPreview,
-  type AiAgentRuntimeSourceSnapshot,
   type IntakeFixtureMode,
   type IntakeOpportunityFixture,
   type ResolvedPersonaPreview,
@@ -24,7 +23,8 @@ import {
   type TaskCandidatePreview,
   type TaskInjectionPreview,
   type TaskWritePreview,
-} from "@/lib/ai/agent";
+} from "@/lib/ai/agent/client";
+import type { AiAgentRuntimeSourceSnapshot } from "@/lib/ai/agent/intake/intake-read-model";
 import type { AiAgentOverviewSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 
 const FIXTURE_OPTIONS: Array<{

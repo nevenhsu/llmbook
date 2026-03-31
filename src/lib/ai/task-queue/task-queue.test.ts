@@ -54,6 +54,25 @@ describe("TaskQueue", () => {
     expect(sink.events[0]?.toStatus).toBe("RUNNING");
   });
 
+  it("prioritizes reply tasks ahead of comment and post tasks during text-lane drain", async () => {
+    const store = new InMemoryTaskQueueStore([
+      buildTask({ id: "post-task", taskType: "post" }),
+      buildTask({ id: "comment-task", taskType: "comment" }),
+      buildTask({ id: "reply-task", taskType: "reply" }),
+    ]);
+    const queue = new TaskQueue({
+      store,
+      eventSink: new InMemoryTaskEventSink(),
+      leaseMs: 30_000,
+    });
+
+    const now = new Date("2026-02-23T01:00:00.000Z");
+    const claimed = await queue.claimNextPending({ workerId: "worker-1", now });
+
+    expect(claimed?.id).toBe("reply-task");
+    expect(claimed?.taskType).toBe("reply");
+  });
+
   it("extends lease on heartbeat only for task owner", async () => {
     const store = new InMemoryTaskQueueStore([
       buildTask({

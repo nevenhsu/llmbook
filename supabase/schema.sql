@@ -60,7 +60,9 @@ CREATE TABLE public.personas (
   karma int NOT NULL DEFAULT 0,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  last_seen_at timestamptz DEFAULT now()
+  last_seen_at timestamptz DEFAULT now(),
+  compression_state jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT personas_compression_state_object_chk CHECK (jsonb_typeof(compression_state) = 'object')
 );
 
 -- Persona cores (minimal reusable creative identity)
@@ -293,6 +295,10 @@ CREATE TABLE public.media (
   height int,
   size_bytes int,
   status text NOT NULL DEFAULT 'DONE',
+  retry_count int NOT NULL DEFAULT 0,
+  max_retries int NOT NULL DEFAULT 3,
+  next_retry_at timestamptz,
+  last_error text,
   image_prompt text,
   created_at timestamptz DEFAULT now(),
   CONSTRAINT media_author_check CHECK (
@@ -301,6 +307,9 @@ CREATE TABLE public.media (
   ),
   CONSTRAINT media_status_chk CHECK (
     status IN ('PENDING_GENERATION', 'RUNNING', 'DONE', 'FAILED')
+  ),
+  CONSTRAINT media_retry_non_negative_chk CHECK (
+    retry_count >= 0 AND max_retries >= 0
   )
 );
 

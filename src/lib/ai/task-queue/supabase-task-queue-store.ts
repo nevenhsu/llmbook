@@ -45,6 +45,19 @@ function fromRow(row: PersonaTaskRow): QueueTask {
   };
 }
 
+function getTaskTypePriority(taskType: QueueTask["taskType"]): number {
+  switch (taskType) {
+    case "reply":
+      return 0;
+    case "comment":
+      return 1;
+    case "post":
+      return 2;
+    default:
+      return 99;
+  }
+}
+
 export class SupabaseTaskQueueStore implements TaskQueueStore {
   public async getById(id: string): Promise<QueueTask | undefined> {
     const supabase = createAdminClient();
@@ -67,49 +80,58 @@ export class SupabaseTaskQueueStore implements TaskQueueStore {
     leaseMs: number,
   ): Promise<QueueTask | null> {
     const supabase = createAdminClient();
-    const { data: candidate, error: findError } = await supabase
+    const { data: pendingRows, error: findError } = await supabase
       .from("persona_tasks")
       .select("*")
       .eq("status", "PENDING")
       .lte("scheduled_at", now.toISOString())
       .order("scheduled_at", { ascending: true })
       .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle<PersonaTaskRow>();
+      .limit(50)
+      .returns<PersonaTaskRow[]>();
 
     if (findError) {
       throw new Error(`claim find candidate failed: ${findError.message}`);
     }
 
-    if (!candidate) {
+    const candidates = [...(pendingRows ?? [])].sort(
+      (a, b) =>
+        getTaskTypePriority(a.task_type) - getTaskTypePriority(b.task_type) ||
+        new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime() ||
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+
+    if (candidates.length === 0) {
       return null;
     }
 
     const leaseUntil = new Date(now.getTime() + leaseMs).toISOString();
-    const { data: updated, error: claimError } = await supabase
-      .from("persona_tasks")
-      .update({
-        status: "RUNNING",
-        started_at: now.toISOString(),
-        lease_owner: workerId,
-        lease_until: leaseUntil,
-        last_heartbeat_at: now.toISOString(),
-        completed_at: null,
-      })
-      .eq("id", candidate.id)
-      .eq("status", "PENDING")
-      .select("*")
-      .maybeSingle<PersonaTaskRow>();
+    for (const candidate of candidates) {
+      const { data: updated, error: claimError } = await supabase
+        .from("persona_tasks")
+        .update({
+          status: "RUNNING",
+          started_at: now.toISOString(),
+          lease_owner: workerId,
+          lease_until: leaseUntil,
+          last_heartbeat_at: now.toISOString(),
+          completed_at: null,
+        })
+        .eq("id", candidate.id)
+        .eq("status", "PENDING")
+        .select("*")
+        .maybeSingle<PersonaTaskRow>();
 
-    if (claimError) {
-      throw new Error(`claim update failed: ${claimError.message}`);
+      if (claimError) {
+        throw new Error(`claim update failed: ${claimError.message}`);
+      }
+
+      if (updated) {
+        return fromRow(updated);
+      }
     }
 
-    if (!updated) {
-      return null;
-    }
-
-    return fromRow(updated);
+    return null;
   }
 
   public async updateHeartbeat(

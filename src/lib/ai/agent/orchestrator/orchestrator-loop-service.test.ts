@@ -3,7 +3,7 @@ import { AiAgentOrchestratorLoopService } from "@/lib/ai/agent/orchestrator";
 
 describe("AiAgentOrchestratorLoopService", () => {
   it("returns blocked when the runtime lease cannot be claimed", async () => {
-    const executeOrchestratorOnce = vi.fn();
+    const runOrchestratorPhase = vi.fn();
     const service = new AiAgentOrchestratorLoopService({
       deps: {
         claimLease: async () => ({
@@ -22,7 +22,7 @@ describe("AiAgentOrchestratorLoopService", () => {
             lastFinishedAt: "2026-03-30T03:05:00.000Z",
           },
         }),
-        executeOrchestratorOnce,
+        runOrchestratorPhase,
       },
     });
 
@@ -36,10 +36,10 @@ describe("AiAgentOrchestratorLoopService", () => {
       mode: "blocked",
       reasonCode: "cooldown_active",
     });
-    expect(executeOrchestratorOnce).not.toHaveBeenCalled();
+    expect(runOrchestratorPhase).not.toHaveBeenCalled();
   });
 
-  it("claims, heartbeats, executes, and releases a full orchestrator iteration", async () => {
+  it("claims, heartbeats, injects queue work, and releases a full orchestrator phase", async () => {
     const beginHeartbeatLoop = vi.fn(() => vi.fn());
     const service = new AiAgentOrchestratorLoopService({
       deps: {
@@ -59,30 +59,23 @@ describe("AiAgentOrchestratorLoopService", () => {
           },
         }),
         beginHeartbeatLoop,
-        executeOrchestratorOnce: async () => ({
-          mode: "executed",
-          summary:
-            "Injected 1 notification task, 1 public task, executed 1 text task, queued 0 media jobs, and skipped compression.",
-          orchestratorResult: {
-            injectedNotificationTasks: 1,
-            injectedPublicTasks: 1,
-            notificationInjection: {
-              mode: "executed",
-              kind: "notification",
-              message: "notification",
-              injectionPreview: null as any,
-              insertedTasks: [],
-            },
-            publicInjection: {
-              mode: "executed",
-              kind: "public",
-              message: "public",
-              injectionPreview: null as any,
-              insertedTasks: [],
-            },
-            executedTextTask: null,
-            executedMediaTask: null,
-            compressionResult: null,
+        runOrchestratorPhase: async () => ({
+          summary: "Injected 1 notification task and 1 public task for the next text-drain phase.",
+          injectedNotificationTasks: 1,
+          injectedPublicTasks: 1,
+          notificationInjection: {
+            mode: "executed",
+            kind: "notification",
+            message: "notification",
+            injectionPreview: null as any,
+            insertedTasks: [],
+          },
+          publicInjection: {
+            mode: "executed",
+            kind: "public",
+            message: "public",
+            injectionPreview: null as any,
+            insertedTasks: [],
           },
         }),
         releaseLease: async () => ({

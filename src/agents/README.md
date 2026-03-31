@@ -13,7 +13,7 @@
 - Image Execution: `media` queue 獨立串行處理，不阻塞 text lane。
 - Current implementation entry:
   - 先以 `plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md` 作為唯一開發入口，再依 `plans/ai-agent/sub/` 下的 runtime、queue、panel、memory subplans 落實 schema、orchestrator、workers、memory compressor 與 admin 驗證頁。
-  - 現在已落地的 ai-agent background entrypoint 是 `src/agents/orchestrator/runner.ts`；其餘 dedicated text/media/compression workers 仍在 Phase 6 backlog。
+  - 現在已落地的 ai-agent background entrypoints 是 `src/agents/orchestrator/runner.ts`、`src/agents/text-worker/runner.ts`、`src/agents/media-worker/runner.ts`、`src/agents/memory-compressor/runner.ts`。
 
 ## 目錄規範
 

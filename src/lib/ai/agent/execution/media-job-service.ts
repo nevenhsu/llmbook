@@ -1,3 +1,4 @@
+import "server-only";
 import { generateImage } from "ai";
 import { createXai } from "@ai-sdk/xai";
 import sharp from "sharp";
@@ -8,6 +9,7 @@ import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const DEFAULT_BUCKET = "media";
+const MEDIA_RETRY_BACKOFF_MINUTES = [5, 15, 30] as const;
 
 type MediaOwnerTable = "comments" | "posts";
 type MediaJobStatus = "PENDING_GENERATION" | "RUNNING" | "DONE" | "FAILED";
@@ -17,13 +19,18 @@ type MediaJobRow = {
   persona_id: string | null;
   post_id: string | null;
   comment_id: string | null;
-  status: "PENDING_GENERATION" | "RUNNING" | "DONE" | "FAILED";
+  status: MediaJobStatus;
   image_prompt: string | null;
   url: string | null;
   mime_type: string | null;
   width: number | null;
   height: number | null;
   size_bytes: number | null;
+  retry_count: number;
+  max_retries: number;
+  next_retry_at: string | null;
+  last_error: string | null;
+  created_at: string;
 };
 
 export type AiAgentMediaExecutionPersistedResult = {
@@ -39,6 +46,10 @@ export type AiAgentMediaExecutionPersistedResult = {
   width: number | null;
   height: number | null;
   sizeBytes: number | null;
+  retryCount: number;
+  maxRetries: number;
+  nextRetryAt: string | null;
+  lastError: string | null;
 };
 
 type GeneratedImageArtifact = {
@@ -50,8 +61,17 @@ type GeneratedImageArtifact = {
   extension: string;
 };
 
+type TaskMediaContext = {
+  task: AiAgentRecentTaskSnapshot;
+  ownerTable: MediaOwnerTable;
+  ownerId: string;
+  imagePrompt: string;
+  imageAlt: string | null;
+};
+
 type MediaJobServiceDeps = {
   loadJobById: (mediaId: string) => Promise<MediaJobRow | null>;
+  claimNextReadyJob: () => Promise<MediaJobRow | null>;
   findExistingJob: (input: {
     ownerTable: MediaOwnerTable;
     ownerId: string;
@@ -73,7 +93,7 @@ type MediaJobServiceDeps = {
     height: number | null;
     sizeBytes: number;
   }) => Promise<MediaJobRow>;
-  markJobFailed: (mediaId: string) => Promise<void>;
+  updateFailureState: (input: { row: MediaJobRow; errorMessage: string }) => Promise<MediaJobRow>;
   generateArtifact: (input: { prompt: string }) => Promise<GeneratedImageArtifact>;
   uploadArtifact: (input: {
     mediaId: string;
@@ -97,6 +117,36 @@ function readExtensionFromMimeType(mimeType: string): string {
   }
 }
 
+function readRetryBackoffMinutes(retryCount: number): number | null {
+  return MEDIA_RETRY_BACKOFF_MINUTES[retryCount - 1] ?? null;
+}
+
+function readTaskMediaContext(task: AiAgentRecentTaskSnapshot): TaskMediaContext | null {
+  const executionPreview = buildExecutionPreviewFromTask(task);
+  const mediaWritePayload = executionPreview.writePlan.mediaWrite?.payload as
+    | {
+        image_prompt?: string | null;
+        image_alt?: string | null;
+      }
+    | undefined;
+  const imagePrompt = mediaWritePayload?.image_prompt?.trim() ?? "";
+  if (!imagePrompt) {
+    return null;
+  }
+
+  if (task.status !== "DONE" || !task.resultId || !task.resultType) {
+    throw new Error("media execution requires a completed text task");
+  }
+
+  return {
+    task,
+    ownerTable: task.resultType === "comment" ? "comments" : "posts",
+    ownerId: task.resultId,
+    imagePrompt,
+    imageAlt: mediaWritePayload?.image_alt ?? null,
+  };
+}
+
 function mapRowToResult(input: {
   task: AiAgentRecentTaskSnapshot;
   ownerTable: MediaOwnerTable;
@@ -118,6 +168,10 @@ function mapRowToResult(input: {
     width: input.row.width,
     height: input.row.height,
     sizeBytes: input.row.size_bytes,
+    retryCount: input.row.retry_count,
+    maxRetries: input.row.max_retries,
+    nextRetryAt: input.row.next_retry_at,
+    lastError: input.row.last_error,
   };
 }
 
@@ -127,99 +181,109 @@ export class AiAgentMediaJobService {
   public constructor(options?: { deps?: Partial<MediaJobServiceDeps> }) {
     this.deps = {
       loadJobById: options?.deps?.loadJobById ?? ((mediaId) => this.loadJobById(mediaId)),
+      claimNextReadyJob:
+        options?.deps?.claimNextReadyJob ?? (() => this.readAndClaimNextReadyJob()),
       findExistingJob: options?.deps?.findExistingJob ?? ((input) => this.findExistingJob(input)),
       markJobRunning: options?.deps?.markJobRunning ?? ((mediaId) => this.markJobRunning(mediaId)),
       createPendingJob:
         options?.deps?.createPendingJob ?? ((input) => this.createPendingJob(input)),
       markJobDone: options?.deps?.markJobDone ?? ((input) => this.markJobDone(input)),
-      markJobFailed: options?.deps?.markJobFailed ?? ((mediaId) => this.markJobFailed(mediaId)),
+      updateFailureState:
+        options?.deps?.updateFailureState ?? ((input) => this.updateFailureState(input)),
       generateArtifact:
         options?.deps?.generateArtifact ?? ((input) => this.generateArtifact(input)),
       uploadArtifact: options?.deps?.uploadArtifact ?? ((input) => this.uploadArtifact(input)),
     };
   }
 
-  public async executeForTask(
+  public async ensurePendingJobForTask(
     task: AiAgentRecentTaskSnapshot,
-  ): Promise<AiAgentMediaExecutionPersistedResult> {
-    const executionPreview = buildExecutionPreviewFromTask(task);
-    const mediaWritePayload = executionPreview.writePlan.mediaWrite?.payload as
-      | {
-          image_prompt?: string | null;
-          image_alt?: string | null;
-        }
-      | undefined;
-    const imagePrompt = mediaWritePayload?.image_prompt?.trim() ?? "";
-    if (!imagePrompt) {
-      throw new Error("media execution blocked by missing image prompt");
+  ): Promise<AiAgentMediaExecutionPersistedResult | null> {
+    const context = readTaskMediaContext(task);
+    if (!context) {
+      return null;
     }
-
-    if (task.status !== "DONE" || !task.resultId || !task.resultType) {
-      throw new Error("media execution requires a completed text task");
-    }
-
-    const ownerTable: MediaOwnerTable = task.resultType === "comment" ? "comments" : "posts";
-    const ownerId = task.resultId;
-    const imageAlt = mediaWritePayload?.image_alt ?? null;
 
     const existing = await this.deps.findExistingJob({
-      ownerTable,
-      ownerId,
+      ownerTable: context.ownerTable,
+      ownerId: context.ownerId,
       personaId: task.personaId,
-      imagePrompt,
+      imagePrompt: context.imagePrompt,
     });
 
-    if (existing?.status === "DONE" && existing.url) {
+    if (existing) {
       return mapRowToResult({
         task,
-        ownerTable,
-        ownerId,
-        imagePrompt,
-        imageAlt,
+        ownerTable: context.ownerTable,
+        ownerId: context.ownerId,
+        imagePrompt: context.imagePrompt,
+        imageAlt: context.imageAlt,
         row: existing,
       });
     }
 
-    const pendingJob =
-      existing ??
-      (await this.deps.createPendingJob({
-        ownerTable,
-        ownerId,
-        personaId: task.personaId,
-        imagePrompt,
-      }));
+    const pendingJob = await this.deps.createPendingJob({
+      ownerTable: context.ownerTable,
+      ownerId: context.ownerId,
+      personaId: task.personaId,
+      imagePrompt: context.imagePrompt,
+    });
 
-    try {
-      const artifact = await this.deps.generateArtifact({ prompt: imagePrompt });
-      const uploaded = await this.deps.uploadArtifact({
-        mediaId: pendingJob.id,
-        personaId: task.personaId,
-        buffer: artifact.buffer,
-        mimeType: artifact.mimeType,
-        extension: artifact.extension,
-      });
+    return mapRowToResult({
+      task,
+      ownerTable: context.ownerTable,
+      ownerId: context.ownerId,
+      imagePrompt: context.imagePrompt,
+      imageAlt: context.imageAlt,
+      row: pendingJob,
+    });
+  }
 
-      const completed = await this.deps.markJobDone({
-        mediaId: pendingJob.id,
-        url: uploaded.url,
-        mimeType: artifact.mimeType,
-        width: artifact.width,
-        height: artifact.height,
-        sizeBytes: artifact.sizeBytes,
-      });
-
-      return mapRowToResult({
-        task,
-        ownerTable,
-        ownerId,
-        imagePrompt,
-        imageAlt,
-        row: completed,
-      });
-    } catch (error) {
-      await this.deps.markJobFailed(pendingJob.id);
-      throw error;
+  public async executeForTask(
+    task: AiAgentRecentTaskSnapshot,
+  ): Promise<AiAgentMediaExecutionPersistedResult> {
+    const context = readTaskMediaContext(task);
+    if (!context) {
+      throw new Error("media execution blocked by missing image prompt");
     }
+
+    const pendingJob = await this.ensurePendingJobForTask(task);
+    if (!pendingJob) {
+      throw new Error("media execution blocked by missing image prompt");
+    }
+    if (pendingJob.status === "DONE" && pendingJob.url) {
+      return pendingJob;
+    }
+    if (pendingJob.status === "RUNNING") {
+      return pendingJob;
+    }
+
+    const runningJob = await this.deps.markJobRunning(pendingJob.mediaId);
+    const completed = await this.executeRunningJob(runningJob);
+    return mapRowToResult({
+      task,
+      ownerTable: context.ownerTable,
+      ownerId: context.ownerId,
+      imagePrompt: context.imagePrompt,
+      imageAlt: context.imageAlt,
+      row: completed,
+    });
+  }
+
+  public async claimNextReadyJob(): Promise<MediaJobRow | null> {
+    return this.deps.claimNextReadyJob();
+  }
+
+  public async executeQueuedJobById(mediaId: string): Promise<MediaJobRow> {
+    const existing = await this.deps.loadJobById(mediaId);
+    if (!existing) {
+      throw new Error("media job not found");
+    }
+    if (existing.status !== "RUNNING") {
+      throw new Error("media queue execution requires a RUNNING row");
+    }
+
+    return this.executeRunningJob(existing);
   }
 
   public async rerunJobById(mediaId: string): Promise<MediaJobRow> {
@@ -241,12 +305,22 @@ export class AiAgentMediaJobService {
     }
 
     const runningJob = await this.deps.markJobRunning(existing.id);
+    return this.executeRunningJob(runningJob);
+  }
+
+  private async executeRunningJob(runningJob: MediaJobRow): Promise<MediaJobRow> {
+    if (!runningJob.persona_id) {
+      throw new Error("media execution blocked by missing persona");
+    }
+    if (!runningJob.image_prompt?.trim()) {
+      throw new Error("media execution blocked by missing image prompt");
+    }
 
     try {
-      const artifact = await this.deps.generateArtifact({ prompt: existing.image_prompt });
+      const artifact = await this.deps.generateArtifact({ prompt: runningJob.image_prompt });
       const uploaded = await this.deps.uploadArtifact({
-        mediaId: existing.id,
-        personaId: existing.persona_id,
+        mediaId: runningJob.id,
+        personaId: runningJob.persona_id,
         buffer: artifact.buffer,
         mimeType: artifact.mimeType,
         extension: artifact.extension,
@@ -261,7 +335,10 @@ export class AiAgentMediaJobService {
         sizeBytes: artifact.sizeBytes,
       });
     } catch (error) {
-      await this.deps.markJobFailed(existing.id);
+      await this.deps.updateFailureState({
+        row: runningJob,
+        errorMessage: error instanceof Error ? error.message : "Unknown media generation error",
+      });
       throw error;
     }
   }
@@ -271,7 +348,7 @@ export class AiAgentMediaJobService {
     const { data, error } = await supabase
       .from("media")
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .eq("id", mediaId)
       .maybeSingle<MediaJobRow>();
@@ -281,6 +358,55 @@ export class AiAgentMediaJobService {
     }
 
     return data ?? null;
+  }
+
+  private async readAndClaimNextReadyJob(): Promise<MediaJobRow | null> {
+    const supabase = createAdminClient();
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("media")
+      .select(
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
+      )
+      .eq("status", "PENDING_GENERATION")
+      .or(`next_retry_at.is.null,next_retry_at.lte.${nowIso}`)
+      .order("created_at", { ascending: true })
+      .limit(25)
+      .returns<MediaJobRow[]>();
+
+    if (error) {
+      throw new Error(`claim media job failed: ${error.message}`);
+    }
+
+    for (const candidate of data ?? []) {
+      const { data: claimed, error: claimError } = await supabase
+        .from("media")
+        .update({
+          status: "RUNNING",
+          url: null,
+          mime_type: null,
+          width: null,
+          height: null,
+          size_bytes: null,
+          next_retry_at: null,
+          last_error: null,
+        })
+        .eq("id", candidate.id)
+        .eq("status", "PENDING_GENERATION")
+        .select(
+          "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
+        )
+        .maybeSingle<MediaJobRow>();
+
+      if (claimError) {
+        throw new Error(`claim media job failed: ${claimError.message}`);
+      }
+      if (claimed) {
+        return claimed;
+      }
+    }
+
+    return null;
   }
 
   private async findExistingJob(input: {
@@ -294,7 +420,7 @@ export class AiAgentMediaJobService {
     const { data, error } = await supabase
       .from("media")
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .eq(ownerColumn, input.ownerId)
       .eq("persona_id", input.personaId)
@@ -323,19 +449,27 @@ export class AiAgentMediaJobService {
             comment_id: input.ownerId,
             persona_id: input.personaId,
             status: "PENDING_GENERATION" as const,
+            retry_count: 0,
+            max_retries: 3,
+            next_retry_at: null,
+            last_error: null,
             image_prompt: input.imagePrompt,
           }
         : {
             post_id: input.ownerId,
             persona_id: input.personaId,
             status: "PENDING_GENERATION" as const,
+            retry_count: 0,
+            max_retries: 3,
+            next_retry_at: null,
+            last_error: null,
             image_prompt: input.imagePrompt,
           };
     const { data, error } = await supabase
       .from("media")
       .insert(payload)
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .single<MediaJobRow>();
 
@@ -357,10 +491,12 @@ export class AiAgentMediaJobService {
         width: null,
         height: null,
         size_bytes: null,
+        next_retry_at: null,
+        last_error: null,
       })
       .eq("id", mediaId)
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .single<MediaJobRow>();
 
@@ -389,10 +525,12 @@ export class AiAgentMediaJobService {
         width: input.width,
         height: input.height,
         size_bytes: input.sizeBytes,
+        next_retry_at: null,
+        last_error: null,
       })
       .eq("id", input.mediaId)
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .single<MediaJobRow>();
 
@@ -403,12 +541,39 @@ export class AiAgentMediaJobService {
     return data;
   }
 
-  private async markJobFailed(mediaId: string): Promise<void> {
+  private async updateFailureState(input: {
+    row: MediaJobRow;
+    errorMessage: string;
+  }): Promise<MediaJobRow> {
     const supabase = createAdminClient();
-    const { error } = await supabase.from("media").update({ status: "FAILED" }).eq("id", mediaId);
-    if (error) {
-      throw new Error(`mark media job failed: ${error.message}`);
+    const retryCount = input.row.retry_count + 1;
+    const retryBackoffMinutes = readRetryBackoffMinutes(retryCount);
+    const canRetry = retryCount < input.row.max_retries && retryBackoffMinutes !== null;
+    const nextRetryAt = canRetry
+      ? new Date(Date.now() + retryBackoffMinutes * 60_000).toISOString()
+      : null;
+
+    const { data, error } = await supabase
+      .from("media")
+      .update({
+        status: canRetry ? "PENDING_GENERATION" : "FAILED",
+        retry_count: retryCount,
+        next_retry_at: nextRetryAt,
+        last_error: input.errorMessage,
+      })
+      .eq("id", input.row.id)
+      .select(
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
+      )
+      .single<MediaJobRow>();
+
+    if (error || !data) {
+      throw new Error(
+        `update media failure state failed: ${error?.message ?? "missing updated row"}`,
+      );
     }
+
+    return data;
   }
 
   private async generateArtifact(input: { prompt: string }): Promise<GeneratedImageArtifact> {

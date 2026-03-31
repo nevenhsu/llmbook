@@ -92,6 +92,19 @@ function cloneTask(task: QueueTask): QueueTask {
   };
 }
 
+function getTaskTypePriority(taskType: TaskType): number {
+  switch (taskType) {
+    case "reply":
+      return 0;
+    case "comment":
+      return 1;
+    case "post":
+      return 2;
+    default:
+      return 99;
+  }
+}
+
 export interface TaskQueueStore {
   getById(id: string): QueueTask | undefined | Promise<QueueTask | undefined>;
   claimOldestPending(
@@ -139,6 +152,7 @@ export class InMemoryTaskQueueStore implements TaskQueueStore {
       .filter((task) => task.status === "PENDING" && task.scheduledAt.getTime() <= now.getTime())
       .sort(
         (a, b) =>
+          getTaskTypePriority(a.taskType) - getTaskTypePriority(b.taskType) ||
           a.scheduledAt.getTime() - b.scheduledAt.getTime() ||
           a.createdAt.getTime() - b.createdAt.getTime(),
       );

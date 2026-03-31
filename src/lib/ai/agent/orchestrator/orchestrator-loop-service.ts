@@ -1,9 +1,7 @@
 import {
-  AiAgentAdminRunnerService,
-  type AiAgentRunnerExecutedResponse,
-  type AiAgentRunnerGuardedExecuteResponse,
-  type AiAgentOrchestratorExecutedResult,
-} from "@/lib/ai/agent/execution/admin-runner-service";
+  AiAgentOrchestratorPhaseService,
+  type AiAgentOrchestratorPhaseExecutedResult,
+} from "@/lib/ai/agent/orchestrator/orchestrator-phase-service";
 import {
   AiAgentRuntimeStateService,
   type AiAgentRuntimeLeaseClaimResult,
@@ -28,7 +26,7 @@ export type AiAgentOrchestratorLoopIterationExecutedResult = {
   mode: "executed";
   summary: string;
   runtimeState: AiAgentRuntimeStateSnapshot;
-  orchestratorResult: AiAgentOrchestratorExecutedResult;
+  orchestratorResult: AiAgentOrchestratorPhaseExecutedResult;
 };
 
 export type AiAgentOrchestratorLoopIterationFailedResult = {
@@ -59,10 +57,7 @@ type OrchestratorLoopDeps = {
     runtimeState: AiAgentRuntimeStateSnapshot;
   }>;
   beginHeartbeatLoop: (input: OrchestratorHeartbeatLoopInput) => () => void;
-  executeOrchestratorOnce: () => Promise<
-    | Pick<AiAgentRunnerGuardedExecuteResponse, "mode" | "summary">
-    | Pick<AiAgentRunnerExecutedResponse, "mode" | "summary" | "orchestratorResult">
-  >;
+  runOrchestratorPhase: () => Promise<AiAgentOrchestratorPhaseExecutedResult>;
   sleep: (ms: number) => Promise<void>;
 };
 
@@ -86,7 +81,7 @@ export class AiAgentOrchestratorLoopService {
 
   public constructor(options?: { deps?: Partial<OrchestratorLoopDeps> }) {
     const runtimeStateService = new AiAgentRuntimeStateService();
-    const runnerService = new AiAgentAdminRunnerService();
+    const phaseService = new AiAgentOrchestratorPhaseService();
     this.deps = {
       claimLease:
         options?.deps?.claimLease ??
@@ -99,9 +94,7 @@ export class AiAgentOrchestratorLoopService {
         options?.deps?.releaseLease ?? ((input) => runtimeStateService.releaseLease(input)),
       beginHeartbeatLoop:
         options?.deps?.beginHeartbeatLoop ?? createDefaultHeartbeatLoop(runtimeStateService),
-      executeOrchestratorOnce:
-        options?.deps?.executeOrchestratorOnce ??
-        (() => runnerService.executeTarget({ target: "orchestrator_once" })),
+      runOrchestratorPhase: options?.deps?.runOrchestratorPhase ?? (() => phaseService.runPhase()),
       sleep: options?.deps?.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     };
   }
@@ -117,30 +110,15 @@ export class AiAgentOrchestratorLoopService {
     const stopHeartbeat = this.deps.beginHeartbeatLoop(input);
 
     try {
-      const runnerResult = await this.deps.executeOrchestratorOnce();
-      if (runnerResult.mode !== "executed" || !runnerResult.orchestratorResult) {
-        const releaseResult = await this.deps.releaseLease({
-          leaseOwner: input.leaseOwner,
-          cooldownMinutes: null,
-        });
-        return {
-          mode: "failed",
-          summary: "Background orchestrator iteration did not reach an executed state.",
-          errorMessage: runnerResult.summary,
-          runtimeState:
-            releaseResult.mode === "released"
-              ? releaseResult.runtimeState
-              : claimResult.runtimeState,
-        };
-      }
-
+      const phaseResult = await this.deps.runOrchestratorPhase();
       const releaseResult = await this.deps.releaseLease({
         leaseOwner: input.leaseOwner,
       });
+
       if (releaseResult.mode !== "released") {
         return {
           mode: "failed",
-          summary: "Background orchestrator iteration executed, but lease release failed.",
+          summary: "Background orchestrator phase executed, but lease release failed.",
           errorMessage: releaseResult.summary,
           runtimeState: releaseResult.runtimeState,
         };
@@ -148,9 +126,9 @@ export class AiAgentOrchestratorLoopService {
 
       return {
         mode: "executed",
-        summary: runnerResult.summary,
+        summary: phaseResult.summary,
         runtimeState: releaseResult.runtimeState,
-        orchestratorResult: runnerResult.orchestratorResult,
+        orchestratorResult: phaseResult,
       };
     } catch (error) {
       const releaseResult = await this.deps.releaseLease({
@@ -160,7 +138,7 @@ export class AiAgentOrchestratorLoopService {
 
       return {
         mode: "failed",
-        summary: "Background orchestrator iteration failed.",
+        summary: "Background orchestrator phase failed.",
         errorMessage: error instanceof Error ? error.message : "Unknown orchestrator loop error",
         runtimeState:
           releaseResult.mode === "released" ? releaseResult.runtimeState : claimResult.runtimeState,

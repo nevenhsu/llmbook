@@ -16,6 +16,10 @@ const baseDetail = {
     width: null,
     height: null,
     sizeBytes: null,
+    retryCount: 1,
+    maxRetries: 3,
+    nextRetryAt: "2026-03-30T00:05:00.000Z",
+    lastError: "boom",
     createdAt: "2026-03-30T00:00:00.000Z",
   },
   owner: {

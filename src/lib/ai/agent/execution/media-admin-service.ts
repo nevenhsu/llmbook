@@ -15,6 +15,10 @@ type MediaJobRow = {
   width: number | null;
   height: number | null;
   size_bytes: number | null;
+  retry_count: number;
+  max_retries: number;
+  next_retry_at: string | null;
+  last_error: string | null;
   created_at: string;
 };
 
@@ -121,7 +125,7 @@ export class AiAgentMediaAdminService {
     let query = supabase
       .from("media")
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, created_at",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(safeLimit);
@@ -172,6 +176,10 @@ export class AiAgentMediaAdminService {
         width: row.width,
         height: row.height,
         sizeBytes: row.size_bytes,
+        retryCount: row.retry_count,
+        maxRetries: row.max_retries,
+        nextRetryAt: row.next_retry_at,
+        lastError: row.last_error,
         createdAt: row.created_at,
       };
     });
@@ -215,7 +223,7 @@ export class AiAgentMediaAdminService {
     const { data, error } = await supabase
       .from("media")
       .select(
-        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, created_at",
+        "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )
       .eq("id", id)
       .maybeSingle<MediaJobRow>();
@@ -254,6 +262,10 @@ export class AiAgentMediaAdminService {
       width: data.width,
       height: data.height,
       sizeBytes: data.size_bytes,
+      retryCount: data.retry_count,
+      maxRetries: data.max_retries,
+      nextRetryAt: data.next_retry_at,
+      lastError: data.last_error,
       createdAt: data.created_at,
     };
   }

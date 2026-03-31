@@ -36,3 +36,7 @@ export class InMemoryTaskEventSink implements TaskEventSink {
     this.events.push(event);
   }
 }
+
+export class NoopTaskEventSink implements TaskEventSink {
+  public async record(_event: TaskTransitionEvent): Promise<void> {}
+}

@@ -6,7 +6,8 @@ Long-running ai-agent runtime entrypoint for the singleton orchestrator loop.
 
 - Claim the shared `orchestrator_runtime_state` lease.
 - Heartbeat the lease while a cycle is running.
-- Reuse the live `orchestrator_once` execution path for a full inject -> execute -> compress cycle.
+- Run the inject-only Phase A orchestration pass: notification/public intake, selector/resolver, and task injection.
+- Delegate queue execution to dedicated workers instead of chaining text/media/compression inline.
 - Release the lease and persist cooldown when a cycle completes.
 
 ## Running

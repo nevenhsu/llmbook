@@ -1095,7 +1095,7 @@ export default function AiAgentPanel({
               snapshots.
             </p>
           </div>
-          <div className="border-warning/30 bg-warning/10 text-warning-content rounded-xl border px-4 py-3 text-sm">
+          <div className="border-warning/30 bg-warning/10 text-warning rounded-xl border px-4 py-3 text-sm">
             Write actions stay disabled until shared execute contracts land.
           </div>
         </div>
