@@ -6,12 +6,12 @@ import type {
 } from "@/lib/ai/agent/intake/intake-read-model";
 import {
   buildReferenceWindow,
-  buildResolvedPersonasPreview,
-  buildSelectorOutputPreview,
-  buildTaskCandidatePreview,
-  type SelectorInputPreview,
   type TaskCandidatePreview,
 } from "@/lib/ai/agent/intake/intake-preview";
+import {
+  buildAiAgentIntakeTrace,
+  type AiAgentIntakeTrace,
+} from "@/lib/ai/agent/intake/intake-trace";
 import type { AiModelConfig } from "@/lib/ai/admin/control-plane-contract";
 import type {
   AgentLabCandidateRow,
@@ -22,6 +22,8 @@ import type {
   AgentLabSourceMode,
   AgentLabTaskRow,
 } from "./types";
+
+const DEFAULT_PERSONA_REFERENCE_BATCH_SIZE = 10;
 
 function buildOpportunityLink(source: string, sourceId: string): string | null {
   if (source === "notification") {
@@ -88,7 +90,7 @@ export function buildEmptyModeState(sourceMode: AgentLabSourceMode): AgentLabMod
   return {
     personaGroup: {
       totalReferenceCount: 0,
-      batchSize: 0,
+      batchSize: DEFAULT_PERSONA_REFERENCE_BATCH_SIZE,
       groupIndex: 0,
       maxGroupIndex: 0,
     },
@@ -120,46 +122,48 @@ export function buildEmptyModeState(sourceMode: AgentLabSourceMode): AgentLabMod
   };
 }
 
-export function buildModeStateFromSnapshot(
-  snapshot: AiAgentRuntimeSourceSnapshot | null,
+export function buildModeStateFromTrace(
+  trace: AiAgentIntakeTrace | null,
   sourceMode: AgentLabSourceMode,
 ): AgentLabModeState {
-  if (!snapshot?.selectorInput) {
+  if (!trace?.opportunities.input.selectorInput) {
     return buildEmptyModeState(sourceMode);
   }
 
   const referenceWindow = buildReferenceWindow({
-    batchSize: snapshot.selectorInput.referenceWindow.batchSize,
-    groupIndex: snapshot.selectorInput.referenceWindow.groupIndex,
+    batchSize:
+      trace.opportunities.input.selectorInput.referenceWindow.batchSize > 0
+        ? trace.opportunities.input.selectorInput.referenceWindow.batchSize
+        : DEFAULT_PERSONA_REFERENCE_BATCH_SIZE,
+    groupIndex: trace.opportunities.input.selectorInput.referenceWindow.groupIndex,
   });
+  const resolvedBatchSize =
+    trace.opportunities.input.selectorInput.referenceWindow.batchSize > 0
+      ? trace.opportunities.input.selectorInput.referenceWindow.batchSize
+      : DEFAULT_PERSONA_REFERENCE_BATCH_SIZE;
   const maxGroupIndex =
-    snapshot.selectorInput.referenceWindow.batchSize > 0
-      ? Math.max(
-          0,
-          Math.ceil(
-            referenceWindow.totalReferences / snapshot.selectorInput.referenceWindow.batchSize,
-          ) - 1,
-        )
+    resolvedBatchSize > 0
+      ? Math.max(0, Math.ceil(referenceWindow.totalReferences / resolvedBatchSize) - 1)
       : 0;
 
   return {
     personaGroup: {
       totalReferenceCount: referenceWindow.totalReferences,
-      batchSize: snapshot.selectorInput.referenceWindow.batchSize,
-      groupIndex: snapshot.selectorInput.referenceWindow.groupIndex,
+      batchSize: resolvedBatchSize,
+      groupIndex: trace.opportunities.input.selectorInput.referenceWindow.groupIndex,
       maxGroupIndex,
     },
-    opportunities: snapshot.selectorInput.opportunities.map((opportunity) => ({
-      opportunityKey: opportunity.opportunityKey,
-      source: opportunity.source as "public-post" | "public-comment" | "notification",
-      link: buildOpportunityLink(opportunity.source, opportunity.opportunityKey),
-      content: opportunity.summary,
-      createdAt: null,
+    opportunities: trace.opportunities.input.sourceItems.map((item) => ({
+      opportunityKey: item.sourceId,
+      source: item.source as "public-post" | "public-comment" | "notification",
+      link: buildOpportunityLink(item.source, item.sourceId),
+      content: item.summary,
+      createdAt: item.createdAt,
     })),
     selectorStage: {
       status: "idle",
       prompt: null,
-      inputData: snapshot.selectorInput,
+      inputData: trace.opportunities.input,
       outputData: null,
       rows: [],
     },
@@ -188,35 +192,43 @@ export function buildInitialModes(input: {
   public: AiAgentRuntimeSourceSnapshot | null;
 }) {
   return {
-    public: buildModeStateFromSnapshot(input.public, "public"),
-    notification: buildModeStateFromSnapshot(input.notification, "notification"),
+    public: buildModeStateFromTrace(
+      input.public ? buildAiAgentIntakeTrace(input.public) : null,
+      "public",
+    ),
+    notification: buildModeStateFromTrace(
+      input.notification ? buildAiAgentIntakeTrace(input.notification) : null,
+      "notification",
+    ),
   } satisfies Record<AgentLabSourceMode, AgentLabModeState>;
 }
 
 function buildSelectorRows(
-  selectorInput: SelectorInputPreview,
+  trace: AiAgentIntakeTrace,
   status: AgentLabSelectorStage["status"],
   errorMessage: string | null,
 ): AgentLabSelectorRow[] {
-  const selectorOutput = buildSelectorOutputPreview(selectorInput);
-  const selectedReasons = selectorOutput.selectedReferences.map((item) => item.reason);
+  const selectedReasons =
+    trace.opportunities.result.selectorOutput?.selectedReferences.map((item) => item.reason) ?? [];
 
-  return selectorInput.opportunities.map((opportunity, index) => ({
-    opportunityKey: opportunity.opportunityKey,
-    source: opportunity.source as "public-post" | "public-comment" | "notification",
-    link: buildOpportunityLink(opportunity.source, opportunity.opportunityKey),
-    content: opportunity.summary,
+  return trace.opportunities.input.sourceItems.map((item, index) => ({
+    opportunityKey: item.sourceId,
+    source: item.source as "public-post" | "public-comment" | "notification",
+    link: buildOpportunityLink(item.source, item.sourceId),
+    content: item.summary,
     reason: status === "success" ? (selectedReasons[index % selectedReasons.length] ?? null) : null,
     errorMessage: status === "error" ? errorMessage : null,
   }));
 }
 
-export function buildSelectorStage(input: {
-  snapshot: AiAgentRuntimeSourceSnapshot | null;
-  status?: AgentLabSelectorStage["status"];
-  errorMessage?: string | null;
-}): AgentLabSelectorStage {
-  if (!input.snapshot?.selectorInput) {
+export function buildSelectorStageFromTrace(
+  trace: AiAgentIntakeTrace | null,
+  input?: {
+    status?: AgentLabSelectorStage["status"];
+    errorMessage?: string | null;
+  },
+): AgentLabSelectorStage {
+  if (!trace?.opportunities.input.selectorInput) {
     return {
       status: "error",
       prompt: null,
@@ -228,35 +240,55 @@ export function buildSelectorStage(input: {
     };
   }
 
-  const status = input.status ?? "success";
-  const errorMessage = input.errorMessage ?? "Selector run failed.";
-  const selectorOutput = buildSelectorOutputPreview(input.snapshot.selectorInput);
+  const status = input?.status ?? "success";
+  const errorMessage = input?.errorMessage ?? "Selector run failed.";
 
   return {
     status,
-    prompt: status === "success" ? selectorOutput.promptPreview : null,
-    inputData: input.snapshot.selectorInput,
+    prompt:
+      status === "success"
+        ? (trace.opportunities.result.selectorOutput?.promptPreview ?? null)
+        : null,
+    inputData: trace.opportunities.input,
     outputData:
       status === "success"
-        ? selectorOutput
+        ? trace.opportunities.result
         : {
             error: errorMessage,
-            selectorInput: input.snapshot.selectorInput,
+            opportunitiesInput: trace.opportunities.input,
           },
-    rows: buildSelectorRows(input.snapshot.selectorInput, status, errorMessage),
+    rows: buildSelectorRows(trace, status, errorMessage),
   };
 }
 
-export function buildCandidateStage(input: {
-  kind: AiAgentRuntimeIntakeKind;
+export function buildSelectorStage(input: {
   snapshot: AiAgentRuntimeSourceSnapshot | null;
-  status?: Extract<AgentLabCandidateStage["status"], "success" | "error" | "auto-routed">;
+  status?: AgentLabSelectorStage["status"];
   errorMessage?: string | null;
-}) {
-  if (!input.snapshot?.selectorInput) {
+}): AgentLabSelectorStage {
+  return buildSelectorStageFromTrace(
+    input.snapshot ? buildAiAgentIntakeTrace(input.snapshot) : null,
+    input,
+  );
+}
+
+export function buildCandidateStageFromTrace(
+  trace: AiAgentIntakeTrace | null,
+  input?: {
+    kind: AiAgentRuntimeIntakeKind;
+    status?: Extract<AgentLabCandidateStage["status"], "success" | "error" | "auto-routed">;
+    errorMessage?: string | null;
+  },
+): {
+  candidateStage: AgentLabCandidateStage;
+  taskRows: AgentLabTaskRow[];
+} {
+  const resolvedInput = input ?? { kind: trace?.kind ?? "public" };
+
+  if (!trace?.opportunities.input.selectorInput) {
     return {
       candidateStage: {
-        status: input.kind === "notification" ? "auto-routed" : "error",
+        status: resolvedInput.kind === "notification" ? "auto-routed" : "error",
         prompt: null,
         inputData: null,
         outputData: {
@@ -269,15 +301,11 @@ export function buildCandidateStage(input: {
     };
   }
 
-  const selectorOutput = buildSelectorOutputPreview(input.snapshot.selectorInput);
-  const resolvedPersonas = buildResolvedPersonasPreview(selectorOutput);
-  const candidates = buildTaskCandidatePreview({
-    selectorInput: input.snapshot.selectorInput,
-    resolvedPersonas,
-  });
-
-  const candidateRows = candidates.map((candidate) => {
-    const persona = resolvedPersonas.find((item) => item.personaId === candidate.personaId) ?? null;
+  const candidateRows = trace.candidates.result.taskCandidates.map((candidate) => {
+    const persona =
+      trace.candidates.result.resolvedPersonas.find(
+        (item) => item.personaId === candidate.personaId,
+      ) ?? null;
     return {
       opportunityKey: candidate.sourceId,
       referenceName: persona?.referenceSource ?? candidate.username,
@@ -290,46 +318,60 @@ export function buildCandidateStage(input: {
       reason: candidate.decisionReason,
       dedupeKey: candidate.dedupeKey,
       errorMessage:
-        input.status === "error" ? (input.errorMessage ?? "Candidate run failed.") : null,
+        resolvedInput.status === "error"
+          ? (resolvedInput.errorMessage ?? "Candidate run failed.")
+          : null,
     } satisfies AgentLabCandidateRow;
   });
 
-  const selectedReferences = selectorOutput.selectedReferences.map((reference) => {
-    const persona = resolvedPersonas.find(
-      (item) => item.referenceSource === reference.referenceName,
-    );
-    return {
-      referenceName: reference.referenceName,
-      referenceId: reference.referenceName,
-      personaId: persona?.personaId,
-      personaDisplayName: persona?.displayName,
-    };
-  });
+  const selectedReferences =
+    trace.opportunities.result.selectorOutput?.selectedReferences.map((reference) => {
+      const persona = trace.candidates.result.resolvedPersonas.find(
+        (item) => item.referenceSource === reference.referenceName,
+      );
+      return {
+        referenceName: reference.referenceName,
+        referenceId: reference.referenceName,
+        personaId: persona?.personaId,
+        personaDisplayName: persona?.displayName,
+      };
+    }) ?? [];
 
-  const status = input.status ?? (input.kind === "notification" ? "auto-routed" : "success");
-  const taskRows = status === "error" ? [] : buildTaskRows(candidates, candidateRows);
+  const status =
+    resolvedInput.status ?? (resolvedInput.kind === "notification" ? "auto-routed" : "success");
+  const taskRows =
+    status === "error" ? [] : buildTaskRows(trace.tasks.result.taskCandidates, candidateRows);
 
   return {
     candidateStage: {
       status,
       prompt:
-        input.kind === "notification" || status === "error" ? null : selectorOutput.promptPreview,
-      inputData: {
-        selectorInput: input.snapshot.selectorInput,
-        selectedReferences,
-      },
+        resolvedInput.kind === "notification" || status === "error"
+          ? null
+          : (trace.opportunities.result.selectorOutput?.promptPreview ?? null),
+      inputData: trace.candidates.input,
       outputData:
         status === "error"
           ? {
-              error: input.errorMessage ?? "Candidate run failed.",
+              error: resolvedInput.errorMessage ?? "Candidate run failed.",
+              candidatesInput: trace.candidates.input,
             }
-          : {
-              resolvedPersonas,
-              candidates,
-            },
+          : trace.candidates.result,
       selectedReferences,
       rows: candidateRows,
     } satisfies AgentLabCandidateStage,
     taskRows,
   };
+}
+
+export function buildCandidateStage(input: {
+  kind: AiAgentRuntimeIntakeKind;
+  snapshot: AiAgentRuntimeSourceSnapshot | null;
+  status?: Extract<AgentLabCandidateStage["status"], "success" | "error" | "auto-routed">;
+  errorMessage?: string | null;
+}) {
+  return buildCandidateStageFromTrace(
+    input.snapshot ? buildAiAgentIntakeTrace(input.snapshot) : null,
+    input,
+  );
 }

@@ -26,6 +26,9 @@ type PreviewResults = {
   };
 };
 
+const PREVIEW_TOTAL_PERSONA_REFERENCE_COUNT = 120;
+const PREVIEW_DEFAULT_PERSONA_BATCH_SIZE = 10;
+
 type Props = {
   runtimePreviews: {
     notification: AiAgentRuntimeSourceSnapshot;
@@ -50,6 +53,33 @@ function buildFallbackSaveOutcome(sourceMode: AgentLabSourceMode, candidateIndex
   } satisfies AgentLabSaveTaskOutcome;
 }
 
+function applyPreviewPersonaReferenceCount(
+  modes: ReturnType<typeof buildInitialModes>,
+): ReturnType<typeof buildInitialModes> {
+  const patchMode = (mode: (typeof modes)[AgentLabSourceMode]) => {
+    const maxGroupIndex = Math.max(
+      0,
+      Math.ceil(PREVIEW_TOTAL_PERSONA_REFERENCE_COUNT / PREVIEW_DEFAULT_PERSONA_BATCH_SIZE) - 1,
+    );
+    const nextGroupIndex = Math.min(Math.max(mode.personaGroup.groupIndex, 0), maxGroupIndex);
+    return {
+      ...mode,
+      personaGroup: {
+        ...mode.personaGroup,
+        totalReferenceCount: PREVIEW_TOTAL_PERSONA_REFERENCE_COUNT,
+        batchSize: PREVIEW_DEFAULT_PERSONA_BATCH_SIZE,
+        groupIndex: nextGroupIndex,
+        maxGroupIndex,
+      },
+    };
+  };
+
+  return {
+    public: patchMode(modes.public),
+    notification: patchMode(modes.notification),
+  };
+}
+
 export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, results }: Props) {
   const [mockState, setMockState] = useState<PreviewMockState>("default");
   const labModels = useMemo(() => filterLabModels(models), [models]);
@@ -61,7 +91,7 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
       };
     }
 
-    return buildInitialModes(runtimePreviews);
+    return applyPreviewPersonaReferenceCount(buildInitialModes(runtimePreviews));
   }, [mockState, runtimePreviews]);
 
   return (

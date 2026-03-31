@@ -56,30 +56,8 @@ export function CardLabConfig({
         </div>
         <div className="flex items-end">
           <button className="btn btn-outline btn-sm w-full" onClick={onOpenGroup}>
-            Select Persona Group
+            Group Index: {group.groupIndex}
           </button>
-        </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="border-base-300 rounded-xl border p-4">
-          <div className="text-base-content/60 text-xs font-semibold tracking-wide uppercase">
-            Total References
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{group.totalReferenceCount}</div>
-        </div>
-        <div className="border-base-300 rounded-xl border p-4">
-          <div className="text-base-content/60 text-xs font-semibold tracking-wide uppercase">
-            Batch Size
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{group.batchSize}</div>
-        </div>
-        <div className="border-base-300 rounded-xl border p-4">
-          <div className="text-base-content/60 text-xs font-semibold tracking-wide uppercase">
-            Group Index
-          </div>
-          <div className="mt-2 text-2xl font-semibold">
-            {group.groupIndex} / {group.maxGroupIndex}
-          </div>
         </div>
       </div>
     </SectionCard>

@@ -130,6 +130,7 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         open={runner.groupModalOpen}
         group={runner.modeState.personaGroup}
         onClose={() => runner.setGroupModalOpen(false)}
+        onUpdateGroup={runner.updatePersonaGroup}
       />
     </div>
   );

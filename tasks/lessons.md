@@ -1,48 +1,14 @@
 # Lessons Learned
 
-## Workflow
+## AI Agent Plan
 
-- Keep [tasks/todo.md](/Users/neven/Documents/projects/llmbook/tasks/todo.md) session-scoped. Do not leave long completed backlogs that bury the current task.
-- Put active plan documents under `/plans`, never `docs/plans`; reserve `docs/` for reference/spec material.
-- When a new plan supersedes an older AI runtime contract, update task notes, lessons, repo docs, and internal READMEs in the same cleanup pass.
-- Delete historical lesson noise once the rule has been distilled into a short reusable instruction.
-
-## AI Persona Runtime
-
-- When refining AI-agent UI plans, use the real route paths from the repo and state the surface split explicitly: preview uses mock fixtures, admin uses live runtime DB/API data, and only the shared lab surface should be unified across routes.
-- When a surface is backed by live DB/API data, say `Runtime` in the UI spec instead of `Preview`; reserve `Preview` labels for mock-backed surfaces so the source-of-truth difference is obvious.
-- When a lab/admin flow saves tasks, keep the runtime contract canonical: reuse the existing `inject_persona_tasks` RPC, align mock JSON to the admin/runtime shape, and only add preview-only states such as `saved` or toast feedback as UI state layered on top of that contract.
-- When preview UX is meant to mirror an admin/manual flow, keep parity on the visible controls too: if Admin exposes model selection or save actions, Preview should usually render the same controls with mock-backed behavior rather than hiding them and inventing separate verification paths.
-- For admin/manual task injection UX, prefer explicit operator choice: support table-level `Save All` plus row-level `Save`, and implement each save as serial single-candidate RPC calls so per-row debugging and result visibility stay clear.
-- When serial-saving task rows, treat successful inserts as terminal in the UI: `Save All` should continue past failures, later retries should skip already-saved rows, and row-level `Save` must be disabled once that row has succeeded.
-- Treat [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) as the canonical entry for ai-agent development, and keep detailed runtime/panel documents under `/plans/ai-agent/sub/`.
-- Prefer the shorter shared runtime root `src/lib/ai/agent/` for this initiative instead of longer variants like `src/lib/ai/persona-agent/`, unless the user explicitly asks otherwise.
-- Keep `src/agents/` flat for runtime entrypoints and name files by function; do not add an extra `agent/` or `persona-agent/` subfolder unless the user explicitly asks for it.
-- When agent-panel work produces reusable UI primitives, place them under `src/components/ui` rather than `src/components/admin/*`; keep admin-specific composition inside the admin tree.
-- Use stable, non-dated filenames for long-lived canonical plans and subplans; reserve dated names for temporary drafts or archives.
-- Keep repo entry docs executable: README/agent indexes must not point to nonexistent plan indexes or stale version labels when the active persona plan has already moved on.
-- When README or setup docs mention persona schema, point to the current staged control-plane/runtime contract; remove deprecated setup or field descriptions instead of documenting both paths in parallel.
-- Do not list `npm` verification commands in README unless they exist in `package.json`; if verification is now UI/admin-driven, document the real control-plane entry points instead.
-- The current runtime contract is `ai_agent_config` plus a long-running self-loop orchestrator, not cron-triggered orchestration or deprecated config tables.
-- Keep media field naming aligned with the implemented runtime contract: use `need_image` and `image_prompt` consistently across plans, docs, tests, and prompt/runtime code unless the user explicitly changes the canonical names.
-- When the user narrows persona-agent scope to schema-first work, migrate the affected app touchpoints in the same pass for the latest contract; do not update Supabase columns while leaving notification APIs or helpers on the removed column names.
-- For notification triage in the current persona runtime, default to `respond | skip` only; do not invent a deferred task path unless the user explicitly asks for delayed scheduling.
-- When a notification snapshot may expand beyond replies, use an action-oriented name like `notificationActionSnapshot`; document explicit recipient ownership and any current scope limit such as comment-only handling.
-- For comment-target context in the AI persona plan, use deterministic trim rather than LLM summaries: parent chain first, then sibling comments in `created_at DESC`, capped at 20 comments unless the user asks for something else.
-- For retry policy in the current persona runtime, keep text-task retries immediate on the next idle pass, but use explicit backoff windows for media retries; do not silently invent separate backoff behavior.
-- For memory-compressor planning in the current persona runtime, process one persona at a time through a queue, require JSON-first output with parse/audit/repair stages, and render canonical long memory deterministically from the audited result.
-- For memory-compressor planning in the current persona runtime, re-check Orchestrator readiness before starting each next single-persona compression job; if the next orchestrator cycle is due, stop the compression round immediately and yield priority back to Orchestrator.
-- For memory-compressor runtime selection, persist a persona-level defer/no-op marker after evaluating a persona that does not need compression yet; do not re-judge the same persona every idle pass without a stored `defer_until` or equivalent cooldown marker.
-- For ai-agent-panel planning, use modal rather than drawer for detailed runtime inspection, and let selected-persona previews reuse the existing reference-aware persona card UI so opportunity-selected persona lists visibly include `reference_sources`.
-- For ai-agent-panel planning, every LLM-backed stage should expose a `View Prompt` modal with `Copy Prompt`; when the runtime uses compact or validated payloads, show both the readable assembled prompt and the actual model payload so external prompt testing can reproduce the real invocation.
-- When the user asks to keep progress docs updated, treat it as a standing workflow rule for the rest of the task: update both `tasks/todo.md` and any canonical plan progress table at the end of every completed slice without waiting for another reminder.
-- If a currently active subplan is the document most likely being used to track a surface-specific stream, update its progress snapshot or implementation-status section in the same slice; do not assume the canonical phase board alone is enough.
-- When giving progress reports during an implementation stream, include explicit `current tasks / total tasks` counts instead of only qualitative status.
-- For memory-write planning in the current persona runtime, keep metadata schema-consistent across rows, let the app own IDs/scope/write-method fields, use deterministic writes for comments, and require staged JSON/audit/repair for LLM-based post memory extraction.
-- Keep the `Generate Persona` contract narrower than runtime memory ingestion: generated persona seeds may emit only `scope: "persona"`, while runtime/admin memory plans can still use broader scopes like `board`; do not widen generation output just because the table now accepts more scopes.
-- When old `persona_memories` rows are allowed to remain in place, prefer tolerant read/parse fallbacks for optional fields like `metadata` rather than forcing a migration-only answer; only hard-reject fields the user explicitly wants enforced, such as generation scope.
-- When simplifying a persona-memory contract, remove obsolete fields end-to-end in one slice: schema, migration, runtime queries, admin/API payloads, prompt contracts, fixtures, tests, and plan/docs must all move together.
-- When a plan introduces JSON contracts, define required keys, allowed enums, no-extra-key rules, and at least one concrete row example; do not leave JSON shape implicit.
-- When a repo-level implementation rule becomes reusable across multiple AI flows, promote it out of a sub-plan into `docs/dev-guidelines` and link the specialized plans back to that shared contract.
-- For persona-agent task injection, enforce notification dedupe and public-opportunity cooldown in SQL/RPC at insert time; do not rely on app-side query/filter/insert for concurrency-sensitive gating.
-- When persona-agent grouping or batching is admin-configurable, do not describe runtime behavior as a fixed default number in plans or UI specs; reference the config key such as `ai_agent_config.selector_reference_batch_size`, and treat the numeric default only as an initial value.
+- Use the real repo routes in plans and specs: `/admin/ai/agent-lab` for admin runtime, `/preview/ai-agent-lab` for mock preview.
+- Keep the route split explicit: Preview uses mock fixtures, Admin uses live DB/API runtime data, and only the shared lab surface is unified.
+- Use `Runtime` labels for live admin modes and `Preview` labels for mock modes so source-of-truth differences stay obvious.
+- For manual task injection, keep the runtime contract canonical: reuse `inject_persona_tasks` RPC and do not add a direct insert path.
+- Keep preview/admin control parity for lab UX. If Admin shows model selection or save actions, Preview should usually render the same controls with mock-backed behavior.
+- For task saves, support both table-level `Save All` and row-level `Save`, implemented as serial single-candidate saves for clear per-row debugging.
+- Treat successful task saves as terminal in the UI: `Save All` continues past failures, later retries skip saved rows, and row `Save` is disabled after success.
+- Align mock JSON to the admin/runtime contract first. Preview-only states like toast, `saved`, or button disabled state belong in UI state, not canonical payloads.
+- When a lab is meant to predict runtime behavior, do not rely only on shared helpers; extract a canonical shared trace/service and make runtime plus lab consume it directly.
+- Protect stage format changes with contract tests on the shared trace so `Opportunities / Candidates / Tasks` changes fail in one place instead of drifting between runtime and lab.

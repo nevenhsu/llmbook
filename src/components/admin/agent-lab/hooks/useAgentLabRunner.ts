@@ -54,6 +54,14 @@ function buildToastMessage(rows: AgentLabTaskRow[]) {
   return `${summary.succeeded} task${summary.succeeded === 1 ? "" : "s"} saved.`;
 }
 
+function resolveMaxGroupIndex(totalReferenceCount: number, batchSize: number) {
+  if (batchSize <= 0 || totalReferenceCount <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.ceil(totalReferenceCount / batchSize) - 1);
+}
+
 export function useAgentLabRunner(props: AgentLabPageProps) {
   const [sourceMode, setSourceMode] = useState<AgentLabSourceMode>(props.initialSourceMode);
   const [modelId, setModelId] = useState(props.initialModelId);
@@ -258,6 +266,33 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
     }
   }
 
+  function updatePersonaGroup(input: { batchSize?: number; groupIndex?: number }) {
+    updateModeStates((current) => {
+      const currentState = current[sourceMode];
+      const currentGroup = currentState.personaGroup;
+      const nextBatchSize = Math.max(0, input.batchSize ?? currentGroup.batchSize);
+      const nextMaxGroupIndex = resolveMaxGroupIndex(
+        currentGroup.totalReferenceCount,
+        nextBatchSize,
+      );
+      const preferredGroupIndex = input.groupIndex ?? currentGroup.groupIndex;
+      const nextGroupIndex = Math.min(Math.max(preferredGroupIndex, 0), nextMaxGroupIndex);
+
+      return {
+        ...current,
+        [sourceMode]: {
+          ...currentState,
+          personaGroup: {
+            ...currentGroup,
+            batchSize: nextBatchSize,
+            groupIndex: nextGroupIndex,
+            maxGroupIndex: nextMaxGroupIndex,
+          },
+        },
+      };
+    });
+  }
+
   const api = useMemo(
     () => ({
       sourceMode,
@@ -278,6 +313,7 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
       runCandidate,
       saveTaskRow,
       saveAllTasks,
+      updatePersonaGroup,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [

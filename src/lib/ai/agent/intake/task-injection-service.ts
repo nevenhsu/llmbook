@@ -4,12 +4,10 @@ import {
   type AiAgentRuntimeSourceSnapshot,
 } from "@/lib/ai/agent/intake/intake-read-model";
 import {
-  buildResolvedPersonasPreview,
-  buildSelectorOutputPreview,
-  buildTaskCandidatePreview,
   type TaskCandidatePreview,
   type TaskInjectionPreview,
 } from "@/lib/ai/agent/intake/intake-preview";
+import { buildAiAgentIntakeTrace } from "@/lib/ai/agent/intake/intake-trace";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type { QueueTaskStatus } from "@/lib/ai/task-queue/task-queue";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -262,16 +260,11 @@ export class AiAgentTaskInjectionService {
       throw new Error("runtime intake snapshot is empty");
     }
 
-    const selectorOutput = buildSelectorOutputPreview(snapshot.selectorInput);
-    const resolvedPersonas = buildResolvedPersonasPreview(selectorOutput);
-    const candidates = buildTaskCandidatePreview({
-      selectorInput: snapshot.selectorInput,
-      resolvedPersonas,
-    });
+    const trace = buildAiAgentIntakeTrace(snapshot);
 
     return this.executeCandidates({
       kind: input.kind,
-      candidates,
+      candidates: trace.tasks.result.taskCandidates,
     });
   }
 
