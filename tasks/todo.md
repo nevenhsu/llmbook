@@ -2,12 +2,20 @@
 
 ## Active
 
-- [x] Fix the client/server import boundary so `AiAgentLabPage` no longer pulls `sharp` / `child_process` into the browser build.
-- [x] Add a regression that prevents client components from importing the root ai-agent server barrel again.
-- [x] Re-run targeted tests, `tsc`, and the repo build command before closing the bug.
+- [x] Add failing tests for the new shared agent-lab surface, preview save simulation, and admin save semantics.
+- [x] Replace the legacy `AiAgentLabPage` with the new shared surface/cards and runtime-first state model.
+- [x] Rebuild preview/admin wrappers plus save actions (`Save All` serial single-row saves, row `Save`, skip saved rows).
+- [x] Update mock fixtures to the new base/result contract with row-level save outcomes.
+- [x] Run targeted tests and `tsc`, then record results.
 
 ## Review
 
+- Implemented the ai-agent lab refactor around a shared [AiAgentLabSurface.tsx](/Users/neven/Documents/projects/llmbook/src/components/admin/agent-lab/AiAgentLabSurface.tsx) with four card sections (`Lab Configuration`, `Opportunities`, `Candidates`, `Tasks`) and modal-based prompt/data inspection.
+- Added runtime-first normalization in [lab-data.ts](/Users/neven/Documents/projects/llmbook/src/components/admin/agent-lab/lab-data.ts), so preview fixtures and admin runtime snapshots now map into the same source-mode state contract before rendering.
+- Split route responsibilities correctly: [page.tsx](/Users/neven/Documents/projects/llmbook/src/app/admin/ai/agent-lab/page.tsx) stays server-side for auth/runtime fetch, while [PreviewAiAgentLabClient.tsx](/Users/neven/Documents/projects/llmbook/src/components/admin/agent-lab/PreviewAiAgentLabClient.tsx) provides client-side mock state and preview save simulation.
+- Added single-task save API wiring at [route.ts](/Users/neven/Documents/projects/llmbook/src/app/api/admin/ai/agent/lab/save-task/route.ts) and extended [task-injection-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/intake/task-injection-service.ts) with `executeCandidates()`, so row `Save` and table `Save All` reuse the existing `inject_persona_tasks` RPC without introducing a direct insert path.
+- Updated preview fixtures to the new split contract: [ai-agent-lab.json](/Users/neven/Documents/projects/llmbook/src/mock-data/ai-agent-lab.json) now mirrors runtime snapshot shape, and [ai-agent-lab-results.json](/Users/neven/Documents/projects/llmbook/src/mock-data/ai-agent-lab-results.json) defines mock row-level save outcomes and preview error scenarios.
+- Verified this slice with `npm test -- src/components/admin/agent-panel/AiAgentLabPage.test.ts src/components/admin/agent-panel/AiAgentLabPage.imports.test.ts src/app/api/admin/ai/agent/lab/save-task/route.test.ts` and `npx tsc --noEmit`.
 - Fixed the `child_process` / `detect-libc` browser-build failure by removing `AiAgentLabPage`'s import of the root `@/lib/ai/agent` barrel, adding a client-safe [client.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/client.ts) export surface for preview builders, and keeping `AiAgentRuntimeSourceSnapshot` on its server-safe module path.
 - Added [AiAgentLabPage.imports.test.ts](/Users/neven/Documents/projects/llmbook/src/components/admin/agent-panel/AiAgentLabPage.imports.test.ts) as a regression so client components do not drift back to the root ai-agent server barrel.
 - Marked [media-job-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/media-job-service.ts) as `server-only`, so future accidental client imports of the Sharp-backed media pipeline fail at the boundary instead of leaking Node-only dependencies into browser bundles.

@@ -1,0 +1,75 @@
+{
+  "default": {
+    "saveOutcomes": {
+      "public": {
+        "0": {
+          "inserted": true,
+          "skipReason": null,
+          "taskId": "task-preview-public-1",
+          "errorMessage": null,
+          "status": "PENDING"
+        },
+        "1": {
+          "inserted": false,
+          "skipReason": "cooldown_active",
+          "taskId": null,
+          "errorMessage": "cooldown_active",
+          "status": "FAILED"
+        },
+        "2": {
+          "inserted": true,
+          "skipReason": null,
+          "taskId": "task-preview-public-3",
+          "errorMessage": null,
+          "status": "PENDING"
+        },
+        "3": {
+          "inserted": false,
+          "skipReason": "duplicate_candidate",
+          "taskId": null,
+          "errorMessage": "duplicate_candidate",
+          "status": "FAILED"
+        }
+      },
+      "notification": {
+        "0": {
+          "inserted": true,
+          "skipReason": null,
+          "taskId": "task-preview-notification-1",
+          "errorMessage": null,
+          "status": "PENDING"
+        }
+      }
+    }
+  },
+  "error": {
+    "selectorErrors": {
+      "public": "Mock selector model timeout.",
+      "notification": "Mock selector model timeout."
+    },
+    "candidateErrors": {
+      "public": "Mock candidate generation failed.",
+      "notification": "Mock candidate generation failed."
+    },
+    "saveOutcomes": {
+      "public": {
+        "0": {
+          "inserted": false,
+          "skipReason": "mock_save_failed",
+          "taskId": null,
+          "errorMessage": "Mock save request failed.",
+          "status": "FAILED"
+        }
+      },
+      "notification": {
+        "0": {
+          "inserted": false,
+          "skipReason": "mock_save_failed",
+          "taskId": null,
+          "errorMessage": "Mock save request failed.",
+          "status": "FAILED"
+        }
+      }
+    }
+  }
+}

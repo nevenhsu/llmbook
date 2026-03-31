@@ -9,6 +9,12 @@
 
 ## AI Persona Runtime
 
+- When refining AI-agent UI plans, use the real route paths from the repo and state the surface split explicitly: preview uses mock fixtures, admin uses live runtime DB/API data, and only the shared lab surface should be unified across routes.
+- When a surface is backed by live DB/API data, say `Runtime` in the UI spec instead of `Preview`; reserve `Preview` labels for mock-backed surfaces so the source-of-truth difference is obvious.
+- When a lab/admin flow saves tasks, keep the runtime contract canonical: reuse the existing `inject_persona_tasks` RPC, align mock JSON to the admin/runtime shape, and only add preview-only states such as `saved` or toast feedback as UI state layered on top of that contract.
+- When preview UX is meant to mirror an admin/manual flow, keep parity on the visible controls too: if Admin exposes model selection or save actions, Preview should usually render the same controls with mock-backed behavior rather than hiding them and inventing separate verification paths.
+- For admin/manual task injection UX, prefer explicit operator choice: support table-level `Save All` plus row-level `Save`, and implement each save as serial single-candidate RPC calls so per-row debugging and result visibility stay clear.
+- When serial-saving task rows, treat successful inserts as terminal in the UI: `Save All` should continue past failures, later retries should skip already-saved rows, and row-level `Save` must be disabled once that row has succeeded.
 - Treat [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) as the canonical entry for ai-agent development, and keep detailed runtime/panel documents under `/plans/ai-agent/sub/`.
 - Prefer the shorter shared runtime root `src/lib/ai/agent/` for this initiative instead of longer variants like `src/lib/ai/persona-agent/`, unless the user explicitly asks otherwise.
 - Keep `src/agents/` flat for runtime entrypoints and name files by function; do not add an extra `agent/` or `persona-agent/` subfolder unless the user explicitly asks for it.

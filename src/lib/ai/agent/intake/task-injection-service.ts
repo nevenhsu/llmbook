@@ -79,7 +79,7 @@ type TaskInjectionServiceDeps = {
 
 export type AiAgentTaskInjectionExecutedResponse = {
   mode: "executed";
-  kind: AiAgentRuntimeIntakeKind;
+  kind: AiAgentRuntimeIntakeKind | "manual";
   message: string;
   injectionPreview: TaskInjectionPreview;
   insertedTasks: AiAgentRecentTaskSnapshot[];
@@ -269,11 +269,23 @@ export class AiAgentTaskInjectionService {
       resolvedPersonas,
     });
 
+    return this.executeCandidates({
+      kind: input.kind,
+      candidates,
+    });
+  }
+
+  public async executeCandidates(input: {
+    candidates: TaskCandidatePreview[];
+    kind?: AiAgentRuntimeIntakeKind | "manual";
+  }): Promise<AiAgentTaskInjectionExecutedResponse> {
+    const kind = input.kind ?? "manual";
+
     const rpcResults = await this.deps.injectCandidates(
-      candidates.map((candidate) => toRpcCandidate(candidate)),
+      input.candidates.map((candidate) => toRpcCandidate(candidate)),
     );
     const injectionPreview = buildActualInjectionPreview({
-      candidates,
+      candidates: input.candidates,
       rpcResults,
     });
 
@@ -294,8 +306,11 @@ export class AiAgentTaskInjectionService {
 
     return {
       mode: "executed",
-      kind: input.kind,
-      message: `Inserted ${insertedTasks.length} persona_tasks rows for ${input.kind} intake.`,
+      kind,
+      message:
+        kind === "manual"
+          ? `Inserted ${insertedTasks.length} persona_tasks rows for manual save.`
+          : `Inserted ${insertedTasks.length} persona_tasks rows for ${kind} intake.`,
       injectionPreview,
       insertedTasks,
     };

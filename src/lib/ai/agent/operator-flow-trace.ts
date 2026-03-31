@@ -9,7 +9,7 @@ import type { AiAgentTaskInjectionExecutedResponse } from "@/lib/ai/agent/intake
 
 export type AiAgentOperatorFlowTrace = {
   intake: {
-    kind: "notification" | "public" | null;
+    kind: "notification" | "public" | "manual" | null;
     insertedTaskCount: number;
     insertedTaskIds: string[];
     completed: boolean;

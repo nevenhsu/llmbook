@@ -3,12 +3,312 @@
 import { act } from "react";
 import React from "react";
 import ReactDOMClient from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
 import AiAgentLabPage from "@/components/admin/agent-panel/AiAgentLabPage";
-import { buildMockIntakeRuntimePreviews } from "@/lib/ai/agent/testing/mock-intake-runtime-previews";
-import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
+
+vi.mock("react-hot-toast", () => ({
+  default: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const providers: AiProviderConfig[] = [
+  {
+    id: "provider-openai",
+    providerKey: "openai",
+    displayName: "OpenAI",
+    sdkPackage: "@ai-sdk/openai",
+    status: "active",
+    testStatus: "success",
+    keyLast4: "test",
+    hasKey: true,
+    lastApiErrorCode: null,
+    lastApiErrorMessage: null,
+    lastApiErrorAt: null,
+    createdAt: "2026-03-31T00:00:00.000Z",
+    updatedAt: "2026-03-31T00:00:00.000Z",
+  },
+];
+
+const models: AiModelConfig[] = [
+  {
+    id: "model-gpt-5-4",
+    providerId: "provider-openai",
+    modelKey: "gpt-5.4",
+    displayName: "GPT-5.4",
+    capability: "text_generation",
+    status: "active",
+    testStatus: "success",
+    lifecycleStatus: "active",
+    displayOrder: 1,
+    lastErrorKind: null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
+    lastErrorAt: null,
+    supportsInput: true,
+    supportsImageInputPrompt: false,
+    supportsOutput: true,
+    contextWindow: 128000,
+    maxOutputTokens: 8192,
+    metadata: {},
+    updatedAt: "2026-03-31T00:00:00.000Z",
+  },
+];
+
+function buildProps(overrides?: {
+  onSaveTask?: (input: { rowIndex: number }) => Promise<{
+    inserted: boolean;
+    skipReason: string | null;
+    taskId: string | null;
+    errorMessage: string | null;
+    status: string;
+  }>;
+}) {
+  return {
+    dataSource: "mock" as const,
+    sourceModeOptions: [
+      { value: "public" as const, label: "Public Preview" },
+      { value: "notification" as const, label: "Notification Preview" },
+    ],
+    initialSourceMode: "public" as const,
+    models,
+    providers,
+    initialModelId: models[0].id,
+    initialModes: {
+      public: {
+        personaGroup: {
+          totalReferenceCount: 10,
+          batchSize: 5,
+          groupIndex: 0,
+          maxGroupIndex: 1,
+        },
+        opportunities: [
+          {
+            opportunityKey: "public-1",
+            source: "public-post",
+            link: "/posts/public-1",
+            content: "Public post",
+            createdAt: "2026-03-31T10:00:00.000Z",
+          },
+        ],
+        selectorStage: {
+          status: "success" as const,
+          prompt: "selector prompt",
+          inputData: { items: [] },
+          outputData: { selectedOpportunityKeys: ["public-1"] },
+          rows: [
+            {
+              opportunityKey: "public-1",
+              source: "public-post",
+              link: "/posts/public-1",
+              content: "Public post",
+              reason: "Reason",
+              errorMessage: null,
+            },
+          ],
+        },
+        candidateStage: {
+          status: "success" as const,
+          prompt: "candidate prompt",
+          inputData: { items: [] },
+          outputData: { candidates: [] },
+          selectedReferences: [],
+          rows: [
+            {
+              opportunityKey: "public-1",
+              referenceName: "Orchid Reference",
+              targetPersona: {
+                id: "persona-orchid",
+                displayName: "Orchid",
+                href: "/personas/persona-orchid",
+              },
+              dispatchKind: "public" as const,
+              reason: "Reason",
+              dedupeKey: "dedupe-1",
+              errorMessage: null,
+            },
+          ],
+        },
+        taskStage: {
+          summary: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
+          toastMessage: null,
+          rows: [
+            {
+              taskId: "task-saved",
+              candidateIndex: 0,
+              opportunityKey: "public-1",
+              persona: {
+                id: "persona-orchid",
+                displayName: "Orchid",
+                href: "/personas/persona-orchid",
+              },
+              taskType: "comment" as const,
+              status: "PENDING",
+              saveState: "success" as const,
+              errorMessage: null,
+              saveResult: {
+                candidateIndex: 0,
+                inserted: true,
+                skipReason: null,
+                taskId: "task-saved",
+              },
+              actions: {
+                canSave: false,
+              },
+              candidate: {
+                candidateIndex: 0,
+                personaId: "persona-orchid",
+                username: "ai_orchid",
+                dispatchKind: "public" as const,
+                sourceTable: "posts" as const,
+                sourceId: "public-1",
+                dedupeKey: "dedupe-1",
+                cooldownUntil: "2026-03-31T12:00:00.000Z",
+                decisionReason: "Reason",
+                payload: {
+                  contentType: "comment",
+                  source: "public-post",
+                  summary: "Public post",
+                  fixtureMode: "mixed-public-opportunity",
+                },
+              },
+              data: {},
+            },
+            {
+              taskId: null,
+              candidateIndex: 1,
+              opportunityKey: "public-1",
+              persona: {
+                id: "persona-marlowe",
+                displayName: "Marlowe",
+                href: "/personas/persona-marlowe",
+              },
+              taskType: "comment" as const,
+              status: "PENDING",
+              saveState: "idle" as const,
+              errorMessage: null,
+              saveResult: null,
+              actions: {
+                canSave: true,
+              },
+              candidate: {
+                candidateIndex: 1,
+                personaId: "persona-marlowe",
+                username: "ai_marlowe",
+                dispatchKind: "public" as const,
+                sourceTable: "posts" as const,
+                sourceId: "public-1",
+                dedupeKey: "dedupe-2",
+                cooldownUntil: "2026-03-31T12:00:00.000Z",
+                decisionReason: "Reason",
+                payload: {
+                  contentType: "comment",
+                  source: "public-post",
+                  summary: "Public post",
+                  fixtureMode: "mixed-public-opportunity",
+                },
+              },
+              data: {},
+            },
+            {
+              taskId: null,
+              candidateIndex: 2,
+              opportunityKey: "public-1",
+              persona: {
+                id: "persona-vesper",
+                displayName: "Vesper",
+                href: "/personas/persona-vesper",
+              },
+              taskType: "comment" as const,
+              status: "PENDING",
+              saveState: "failed" as const,
+              errorMessage: "cooldown_active",
+              saveResult: {
+                candidateIndex: 2,
+                inserted: false,
+                skipReason: "cooldown_active",
+                taskId: null,
+              },
+              actions: {
+                canSave: true,
+              },
+              candidate: {
+                candidateIndex: 2,
+                personaId: "persona-vesper",
+                username: "ai_vesper",
+                dispatchKind: "public" as const,
+                sourceTable: "posts" as const,
+                sourceId: "public-1",
+                dedupeKey: "dedupe-3",
+                cooldownUntil: "2026-03-31T12:00:00.000Z",
+                decisionReason: "Reason",
+                payload: {
+                  contentType: "comment",
+                  source: "public-post",
+                  summary: "Public post",
+                  fixtureMode: "mixed-public-opportunity",
+                },
+              },
+              data: {},
+            },
+          ],
+        },
+      },
+      notification: {
+        personaGroup: {
+          totalReferenceCount: 10,
+          batchSize: 5,
+          groupIndex: 0,
+          maxGroupIndex: 1,
+        },
+        opportunities: [],
+        selectorStage: {
+          status: "idle" as const,
+          prompt: null,
+          inputData: null,
+          outputData: null,
+          rows: [],
+        },
+        candidateStage: {
+          status: "auto-routed" as const,
+          prompt: null,
+          inputData: null,
+          outputData: null,
+          selectedReferences: [],
+          rows: [],
+        },
+        taskStage: {
+          summary: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
+          toastMessage: null,
+          rows: [],
+        },
+      },
+    },
+    onRunSelector: vi.fn(),
+    onRunCandidate: vi.fn(),
+    onSaveTask:
+      overrides?.onSaveTask ??
+      vi.fn(async ({ rowIndex }: { rowIndex: number }) => ({
+        inserted: rowIndex === 1,
+        skipReason: rowIndex === 2 ? "cooldown_active" : null,
+        taskId: rowIndex === 1 ? "task-new" : null,
+        errorMessage: rowIndex === 2 ? "cooldown_active" : null,
+        status: "PENDING",
+      })),
+  } satisfies React.ComponentProps<typeof AiAgentLabPage>;
+}
 
 describe("AiAgentLabPage", () => {
   let container: HTMLDivElement;
@@ -27,143 +327,61 @@ describe("AiAgentLabPage", () => {
     container.remove();
   });
 
-  it("renders fixture controls and generates a dev-only intake preview payload", async () => {
+  it("renders the model selector in preview and disables row save for saved rows", async () => {
     await act(async () => {
-      root.render(
-        React.createElement(AiAgentLabPage, {
-          initialSnapshot: buildMockAiAgentOverviewSnapshot(),
-          runtimePreviews: buildMockIntakeRuntimePreviews(),
-        }),
-      );
+      root.render(React.createElement(AiAgentLabPage, buildProps()));
     });
 
     expect(container.textContent).toContain("AI Agent Lab");
-    expect(container.textContent).toContain("Persisted Selector Batch Size");
-    expect(container.textContent).toContain("100");
-    expect(container.textContent).toContain("Generate test input");
+    expect(container.textContent).toContain("GPT-5.4");
+    expect(container.textContent).toContain("Save All");
 
-    const select = container.querySelector("select");
-    const input = container.querySelector('input[type="number"]');
-    const generateButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("Generate test input"),
-    );
-    const selectorButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("Preview selector output"),
-    );
-    const resolvedButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("Preview resolved personas"),
-    );
-    const candidatesButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("Preview task candidates"),
-    );
-    const executionButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("Preview execution artifacts"),
-    );
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const savedRowButton = buttons.find((button) => button.textContent?.trim() === "Saved");
+    const idleRowButton = buttons.find((button) => button.textContent?.trim() === "Save");
 
-    expect(select).not.toBeNull();
-    expect(input).not.toBeNull();
-    expect(generateButton).not.toBeUndefined();
-    expect(selectorButton).not.toBeUndefined();
-    expect(resolvedButton).not.toBeUndefined();
-    expect(candidatesButton).not.toBeUndefined();
-    expect(executionButton).not.toBeUndefined();
-
-    await act(async () => {
-      if (select instanceof HTMLSelectElement) {
-        select.value = "notification-intake";
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
-
-    await act(async () => {
-      if (input instanceof HTMLInputElement) {
-        input.value = "0";
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
-
-    await act(async () => {
-      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    await act(async () => {
-      selectorButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      resolvedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      candidatesButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      executionButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("Selector Input");
-    expect(container.textContent).toContain('"fixtureMode": "notification-intake"');
-    expect(container.textContent).toContain('"groupIndexOverride": 0');
-    expect(container.textContent).toContain('"selectorReferenceBatchSize": 100');
-    expect(container.textContent).toContain("Selector Output");
-    expect(container.textContent).toContain('"selectedReferences"');
-    expect(container.textContent).toContain("Selector Prompt Preview");
-    expect(container.textContent).toContain("[system_baseline]");
-    expect(container.textContent).toContain("Selector Model Payload");
-    expect(container.textContent).toContain('"compactContext"');
-    expect(container.textContent).toContain("Resolved Personas");
-    expect(container.textContent).toContain('"username": "ai_orchid"');
-    expect(container.textContent).toContain("Resolved Persona Cards");
-    expect(container.textContent).toContain("Reference Sources");
-    expect(container.textContent).toContain("Task Candidate Preview");
-    expect(container.textContent).toContain('"dispatchKind": "notification"');
-    expect(container.textContent).toContain(
-      '"dedupeKey": "ai_orchid:notification-intake-1:mention"',
-    );
-    expect(container.textContent).toContain("Task Write Preview");
-    expect(container.textContent).toContain('"dedupeExpectation": "insert"');
-    expect(container.textContent).toContain("Task Injection Preview");
-    expect(container.textContent).toContain('"rpcName": "inject_persona_tasks"');
-    expect(container.textContent).toContain('"insertedCount": 4');
-    expect(container.textContent).toContain("Execution Persona Context");
-    expect(container.textContent).toContain('"referenceSource": "Yayoi Kusama"');
-    expect(container.textContent).toContain("Execution Prompt Input");
-    expect(container.textContent).toContain('"actionType": "comment"');
-    expect(container.textContent).toContain("Execution Model Payload");
-    expect(container.textContent).toContain('"maxOutputTokens"');
-    expect(container.textContent).toContain("Execution Parsed Output");
-    expect(container.textContent).toContain('"schemaValid": true');
-    expect(container.textContent).toContain("Execution Audit Output");
-    expect(container.textContent).toContain('"contract": "persona_output_audit"');
-    expect(container.textContent).toContain("Execution Deterministic Checks");
-    expect(container.textContent).toContain('"stage": "schema_validate"');
-    expect(container.textContent).toContain("Execution Write Plan");
-    expect(container.textContent).toContain('"table": "comments"');
-    expect(container.textContent).toContain("Execution Preview");
-    expect(container.textContent).toContain("Rendered Preview");
-    expect(container.textContent).toContain("Audit Diagnostics");
+    expect(savedRowButton).toBeDefined();
+    expect(savedRowButton).toHaveProperty("disabled", true);
+    expect(idleRowButton).toBeDefined();
+    expect(idleRowButton).toHaveProperty("disabled", false);
   });
 
-  it("can switch to runtime-backed mode and reuse the shared selector input", async () => {
-    await act(async () => {
-      root.render(
-        React.createElement(AiAgentLabPage, {
-          initialSnapshot: buildMockAiAgentOverviewSnapshot(),
-          runtimePreviews: buildMockIntakeRuntimePreviews(),
-        }),
-      );
+  it("save all skips saved rows and continues after row failures", async () => {
+    const onSaveTask = vi.fn(async ({ rowIndex }: { rowIndex: number }) => {
+      if (rowIndex === 1) {
+        return {
+          inserted: true,
+          skipReason: null,
+          taskId: "task-new",
+          errorMessage: null,
+          status: "PENDING",
+        };
+      }
+
+      return {
+        inserted: false,
+        skipReason: "cooldown_active",
+        taskId: null,
+        errorMessage: "cooldown_active",
+        status: "PENDING",
+      };
     });
 
-    const select = container.querySelector("select");
-    const generateButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("Generate test input"),
+    await act(async () => {
+      root.render(React.createElement(AiAgentLabPage, buildProps({ onSaveTask })));
+    });
+
+    const saveAllButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Save All"),
     );
 
     await act(async () => {
-      if (select instanceof HTMLSelectElement) {
-        select.value = "runtime-notification";
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      saveAllButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    await act(async () => {
-      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("notification runtime snapshot");
-    expect(container.textContent).toContain('"sourceId": "notification-1"');
+    expect(onSaveTask.mock.calls.map((call) => call[0].rowIndex)).toEqual([1, 2]);
+    expect(container.textContent).toContain("success");
+    expect(container.textContent).toContain("failed");
+    expect(container.textContent).toContain("cooldown_active");
   });
 });

@@ -1,7 +1,8 @@
-import AiAgentLabPage from "@/components/admin/agent-panel/AiAgentLabPage";
+import { AdminAiAgentLabClient } from "@/components/admin/agent-lab/AdminAiAgentLabClient";
 import { getUser } from "@/lib/auth/get-user";
 import { isAdmin } from "@/lib/admin";
-import { AiAgentIntakePreviewStore, AiAgentOverviewStore } from "@/lib/ai/agent";
+import { AiAgentIntakePreviewStore } from "@/lib/ai/agent/intake/intake-read-model";
+import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 
 export const runtime = "nodejs";
 
@@ -24,14 +25,21 @@ export default async function AdminAiAgentLabPage() {
     );
   }
 
-  const [snapshot, runtimePreviews] = await Promise.all([
-    new AiAgentOverviewStore().getSnapshot(),
-    new AiAgentIntakePreviewStore().getRuntimePreviewSet().catch(() => null),
+  const [runtimePreviews, controlPlane] = await Promise.all([
+    new AiAgentIntakePreviewStore().getRuntimePreviewSet().catch(() => ({
+      notification: null,
+      public: null,
+    })),
+    new AdminAiControlPlaneStore().getActiveControlPlane(),
   ]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <AiAgentLabPage initialSnapshot={snapshot} runtimePreviews={runtimePreviews} />
+      <AdminAiAgentLabClient
+        runtimePreviews={runtimePreviews}
+        models={controlPlane.models}
+        providers={controlPlane.providers}
+      />
     </div>
   );
 }

@@ -9,6 +9,6 @@ describe("AiAgentLabPage imports", () => {
     );
 
     expect(source).not.toContain('from "@/lib/ai/agent"');
-    expect(source).toContain('from "@/lib/ai/agent/client"');
+    expect(source).toContain('from "@/components/admin/agent-lab/AiAgentLabSurface"');
   });
 });
