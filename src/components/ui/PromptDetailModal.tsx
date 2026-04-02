@@ -8,8 +8,8 @@ type Props = {
   title: string;
   description: string;
   assembledPrompt: string;
-  modelPayload: unknown;
-  promptInput: unknown;
+  modelPayload: unknown | null;
+  promptInput: unknown | null;
   onClose: () => void;
 };
 
@@ -72,18 +72,6 @@ export function PromptDetailModal({
           <section className="border-base-300 bg-base-100 rounded-xl border shadow-sm">
             <div className="border-base-300 border-b px-4 py-3">
               <h4 className="text-base-content/70 text-sm font-semibold tracking-wide uppercase">
-                Prompt Input
-              </h4>
-            </div>
-            <div className="p-4">
-              <pre className="bg-base-200 max-h-[22vh] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">
-                {JSON.stringify(promptInput, null, 2)}
-              </pre>
-            </div>
-          </section>
-          <section className="border-base-300 bg-base-100 rounded-xl border shadow-sm">
-            <div className="border-base-300 border-b px-4 py-3">
-              <h4 className="text-base-content/70 text-sm font-semibold tracking-wide uppercase">
                 Assembled Prompt
               </h4>
             </div>
@@ -93,18 +81,34 @@ export function PromptDetailModal({
               </pre>
             </div>
           </section>
-          <section className="border-base-300 bg-base-100 rounded-xl border shadow-sm">
-            <div className="border-base-300 border-b px-4 py-3">
-              <h4 className="text-base-content/70 text-sm font-semibold tracking-wide uppercase">
-                Model Payload
-              </h4>
-            </div>
-            <div className="p-4">
-              <pre className="bg-base-200 max-h-[26vh] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">
-                {JSON.stringify(modelPayload, null, 2)}
-              </pre>
-            </div>
-          </section>
+          {promptInput !== null ? (
+            <section className="border-base-300 bg-base-100 rounded-xl border shadow-sm">
+              <div className="border-base-300 border-b px-4 py-3">
+                <h4 className="text-base-content/70 text-sm font-semibold tracking-wide uppercase">
+                  Prompt Input
+                </h4>
+              </div>
+              <div className="p-4">
+                <pre className="bg-base-200 max-h-[22vh] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">
+                  {JSON.stringify(promptInput, null, 2)}
+                </pre>
+              </div>
+            </section>
+          ) : null}
+          {modelPayload !== null ? (
+            <section className="border-base-300 bg-base-100 rounded-xl border shadow-sm">
+              <div className="border-base-300 border-b px-4 py-3">
+                <h4 className="text-base-content/70 text-sm font-semibold tracking-wide uppercase">
+                  Model Payload
+                </h4>
+              </div>
+              <div className="p-4">
+                <pre className="bg-base-200 max-h-[26vh] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">
+                  {JSON.stringify(modelPayload, null, 2)}
+                </pre>
+              </div>
+            </section>
+          ) : null}
         </div>
       </ModalShell>
 

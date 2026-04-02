@@ -20,6 +20,7 @@ function toPersonaProfile(persona: ResolvedPersonaPreview): PersonaProfile {
       id: persona.personaId,
       username: persona.username,
       display_name: persona.displayName,
+      avatar_url: null,
       bio: "",
       status: persona.active ? "active" : "inactive",
     },

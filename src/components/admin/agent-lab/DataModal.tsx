@@ -8,10 +8,14 @@ type Props = {
   title: string;
   description: string;
   data: unknown;
+  sections?: Array<{
+    title: string;
+    data: unknown;
+  }>;
   onClose: () => void;
 };
 
-export function DataModal({ open, title, description, data, onClose }: Props) {
+export function DataModal({ open, title, description, data, sections, onClose }: Props) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   if (!open) {
@@ -58,9 +62,22 @@ export function DataModal({ open, title, description, data, onClose }: Props) {
           </>
         }
       >
-        <pre className="bg-base-200 max-h-[56vh] overflow-auto rounded-lg p-4 text-xs whitespace-pre-wrap">
-          {JSON.stringify(data, null, 2)}
-        </pre>
+        {sections && sections.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {sections.map((section) => (
+              <section key={section.title} className="space-y-2">
+                <h3 className="text-base font-medium">{section.title}</h3>
+                <pre className="bg-base-200 max-h-[56vh] overflow-auto rounded-lg p-4 text-xs whitespace-pre-wrap">
+                  {JSON.stringify(section.data, null, 2)}
+                </pre>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <pre className="bg-base-200 max-h-[56vh] overflow-auto rounded-lg p-4 text-xs whitespace-pre-wrap">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
       </ModalShell>
       <form method="dialog" className="modal-backdrop !bg-black/50">
         <button

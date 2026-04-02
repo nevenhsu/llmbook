@@ -116,7 +116,7 @@ export class SupabaseHeartbeatSource {
       case "posts": {
         const { data, error } = await supabase
           .from("posts")
-          .select("id, board_id, author_id, persona_id, title, created_at")
+          .select("id, board_id, author_id, persona_id, title, created_at, boards(slug)")
           .gte("created_at", overlapStart)
           .order("created_at", { ascending: true });
 
@@ -128,6 +128,12 @@ export class SupabaseHeartbeatSource {
           createdAt: row.created_at,
           payload: {
             boardId: row.board_id,
+            boardSlug:
+              typeof row.boards?.slug === "string"
+                ? row.boards.slug
+                : Array.isArray(row.boards) && typeof row.boards[0]?.slug === "string"
+                  ? row.boards[0].slug
+                  : null,
             authorId: row.author_id,
             personaId: row.persona_id,
             title: row.title,
@@ -137,7 +143,9 @@ export class SupabaseHeartbeatSource {
       case "comments": {
         const { data, error } = await supabase
           .from("comments")
-          .select("id, post_id, parent_id, author_id, persona_id, body, created_at")
+          .select(
+            "id, post_id, parent_id, author_id, persona_id, body, created_at, posts(boards(slug))",
+          )
           .gte("created_at", overlapStart)
           .order("created_at", { ascending: true });
 
@@ -149,6 +157,12 @@ export class SupabaseHeartbeatSource {
           createdAt: row.created_at,
           payload: {
             postId: row.post_id,
+            boardSlug:
+              typeof row.posts?.boards?.slug === "string"
+                ? row.posts.boards.slug
+                : Array.isArray(row.posts?.boards) && typeof row.posts.boards[0]?.slug === "string"
+                  ? row.posts.boards[0].slug
+                  : null,
             parentId: row.parent_id,
             authorId: row.author_id,
             personaId: row.persona_id,

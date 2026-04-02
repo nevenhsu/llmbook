@@ -3,7 +3,11 @@
 import { apiPost } from "@/lib/api/fetch-json";
 import type { AiAgentTaskInjectionExecutedResponse } from "@/lib/ai/agent/intake/task-injection-service";
 import type { AiAgentRuntimeSourceSnapshot } from "@/lib/ai/agent/intake/intake-read-model";
-import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
+import type {
+  AiModelConfig,
+  AiProviderConfig,
+  PersonaSummary,
+} from "@/lib/ai/admin/control-plane-contract";
 import { AiAgentLabSurface } from "./AiAgentLabSurface";
 import {
   buildCandidateStage,
@@ -19,9 +23,10 @@ type Props = {
   };
   models: AiModelConfig[];
   providers: AiProviderConfig[];
+  personas: PersonaSummary[];
 };
 
-export function AdminAiAgentLabClient({ runtimePreviews, models, providers }: Props) {
+export function AdminAiAgentLabClient({ runtimePreviews, models, providers, personas }: Props) {
   const labModels = filterLabModels(models);
 
   return (
@@ -38,16 +43,22 @@ export function AdminAiAgentLabClient({ runtimePreviews, models, providers }: Pr
       models={labModels}
       providers={providers}
       initialModelId={labModels[0]?.id ?? ""}
-      initialModes={buildInitialModes(runtimePreviews)}
-      onRunSelector={async ({ sourceMode }) =>
+      initialModes={buildInitialModes({
+        ...runtimePreviews,
+        personaSummaries: personas,
+      })}
+      onRunSelector={async ({ sourceMode, personaGroup }) =>
         buildSelectorStage({
           snapshot: sourceMode === "public" ? runtimePreviews.public : runtimePreviews.notification,
+          personaGroup,
         })
       }
-      onRunCandidate={async ({ sourceMode }) =>
+      onRunCandidate={async ({ sourceMode, personaGroup }) =>
         buildCandidateStage({
           kind: sourceMode,
           snapshot: sourceMode === "public" ? runtimePreviews.public : runtimePreviews.notification,
+          personaGroup,
+          personaSummaries: personas,
         })
       }
       onSaveTask={async ({ row }) => {

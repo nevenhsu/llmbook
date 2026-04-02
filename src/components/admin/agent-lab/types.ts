@@ -1,5 +1,10 @@
 import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
-import type { TaskCandidatePreview } from "@/lib/ai/agent/intake/intake-preview";
+import type {
+  CandidateSelectionPreview,
+  OpportunitySelectionPreview,
+  ResolvedCandidatePreview,
+  TaskCandidatePreview,
+} from "@/lib/ai/agent/intake/intake-preview";
 
 export type AgentLabSourceMode = "public" | "notification";
 
@@ -15,34 +20,32 @@ export type AgentLabPersonaGroup = {
   maxGroupIndex: number;
 };
 
+export type AgentLabPersonaGroupInput = Pick<AgentLabPersonaGroup, "batchSize" | "groupIndex">;
+
 export type AgentLabOpportunityRow = {
   opportunityKey: string;
   source: "public-post" | "public-comment" | "notification";
   link: string | null;
   content: string;
   createdAt: string | null;
-};
-
-export type AgentLabSelectorRow = {
-  opportunityKey: string;
-  source: "public-post" | "public-comment" | "notification";
-  link: string | null;
-  content: string;
-  reason: string | null;
+  probability: number | null;
+  selected: boolean;
   errorMessage: string | null;
 };
 
+export type AgentLabPersonaInfo = {
+  id: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  href: string;
+  status: "active" | "inactive";
+};
+
 export type AgentLabCandidateRow = {
-  opportunityKey: string;
+  opportunityKey: string | null;
   referenceName: string;
-  targetPersona: {
-    id: string;
-    displayName: string;
-    href: string;
-  };
-  dispatchKind: "public" | "notification";
-  reason: string;
-  dedupeKey: string;
+  persona: AgentLabPersonaInfo | null;
   errorMessage: string | null;
 };
 
@@ -53,7 +56,7 @@ export type AgentLabSelectorStage = {
   prompt: string | null;
   inputData: unknown;
   outputData: unknown;
-  rows: AgentLabSelectorRow[];
+  rows: AgentLabOpportunityRow[];
 };
 
 export type AgentLabCandidateStage = {
@@ -61,12 +64,6 @@ export type AgentLabCandidateStage = {
   prompt: string | null;
   inputData: unknown;
   outputData: unknown;
-  selectedReferences: Array<{
-    referenceId?: string;
-    referenceName: string;
-    personaId?: string;
-    personaDisplayName?: string;
-  }>;
   rows: AgentLabCandidateRow[];
 };
 
@@ -83,11 +80,7 @@ export type AgentLabTaskRow = {
   taskId: string | null;
   candidateIndex: number | null;
   opportunityKey: string;
-  persona: {
-    id: string;
-    displayName: string;
-    href: string;
-  };
+  persona: AgentLabPersonaInfo;
   taskType: "comment" | "post" | "reply";
   status: string;
   saveState: AgentLabSaveState;
@@ -140,10 +133,12 @@ export type AgentLabPageProps = {
   onRunSelector: (input: {
     sourceMode: AgentLabSourceMode;
     modelId: string;
+    personaGroup: AgentLabPersonaGroupInput;
   }) => Promise<AgentLabSelectorStage>;
   onRunCandidate: (input: {
     sourceMode: AgentLabSourceMode;
     modelId: string;
+    personaGroup: AgentLabPersonaGroupInput;
     selectorStage: AgentLabSelectorStage;
   }) => Promise<{
     candidateStage: AgentLabCandidateStage;
@@ -156,3 +151,7 @@ export type AgentLabPageProps = {
     rowIndex: number;
   }) => Promise<AgentLabSaveTaskOutcome>;
 };
+
+export type AgentLabOpportunitySelectionPreview = OpportunitySelectionPreview;
+export type AgentLabCandidateSelectionPreview = CandidateSelectionPreview;
+export type AgentLabResolvedCandidatePreview = ResolvedCandidatePreview;

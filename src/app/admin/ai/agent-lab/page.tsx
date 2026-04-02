@@ -25,12 +25,13 @@ export default async function AdminAiAgentLabPage() {
     );
   }
 
-  const [runtimePreviews, controlPlane] = await Promise.all([
+  const [runtimePreviews, controlPlane, personas] = await Promise.all([
     new AiAgentIntakePreviewStore().getRuntimePreviewSet().catch(() => ({
       notification: null,
       public: null,
     })),
     new AdminAiControlPlaneStore().getActiveControlPlane(),
+    new AdminAiControlPlaneStore().listPersonas(200),
   ]);
 
   return (
@@ -39,6 +40,7 @@ export default async function AdminAiAgentLabPage() {
         runtimePreviews={runtimePreviews}
         models={controlPlane.models}
         providers={controlPlane.providers}
+        personas={personas}
       />
     </div>
   );

@@ -10,16 +10,19 @@ describe("buildAiAgentIntakeTrace", () => {
     const runtimePreviews = buildMockIntakeRuntimePreviews();
 
     const trace = buildAiAgentIntakeTrace(runtimePreviews.notification);
-    const selectorOutput = trace.opportunities.result.selectorOutput;
+    const selectedOpportunities = trace.opportunities.result.selectedOpportunities;
 
     expect(trace.kind).toBe("notification");
     expect(trace.opportunities.input.sourceItems).toEqual(runtimePreviews.notification.items);
     expect(trace.opportunities.input.selectorInput).toEqual(
       runtimePreviews.notification.selectorInput,
     );
-    expect(selectorOutput).not.toBeNull();
-    expect(selectorOutput?.selectedReferences.length).toBeGreaterThan(0);
-    expect(trace.candidates.result.resolvedPersonas.length).toBeGreaterThan(0);
+    expect(selectedOpportunities).not.toBeNull();
+    expect(selectedOpportunities?.selectedOpportunities.length).toBeGreaterThan(0);
+    expect(selectedOpportunities?.opportunityProbabilities).toHaveLength(
+      runtimePreviews.notification.selectorInput?.opportunities.length ?? 0,
+    );
+    expect(trace.resolvedPersonas.result.resolvedPersonas.length).toBeGreaterThan(0);
     expect(trace.tasks.result.taskCandidates.length).toBeGreaterThan(0);
     expect(
       trace.tasks.result.taskCandidates.every(
@@ -40,7 +43,7 @@ describe("buildAiAgentIntakeTrace", () => {
             taskCandidates: [
               {
                 ...trace.tasks.input.taskCandidates[0],
-                sourceId: "missing-opportunity",
+                opportunityKey: "missing-opportunity",
               },
             ],
           },
@@ -48,12 +51,28 @@ describe("buildAiAgentIntakeTrace", () => {
             taskCandidates: [
               {
                 ...trace.tasks.result.taskCandidates[0],
-                sourceId: "missing-opportunity",
+                opportunityKey: "missing-opportunity",
               },
             ],
           },
         },
       }),
-    ).toThrow("task candidate sourceId is not present");
+    ).toThrow("task candidate opportunityKey is not present");
+  });
+
+  it("applies selector batch/group overrides to the canonical trace input", () => {
+    const runtimePreviews = buildMockIntakeRuntimePreviews();
+    const trace = buildAiAgentIntakeTrace(runtimePreviews.public, {
+      selectorReferenceBatchSize: 2,
+      groupIndexOverride: 1,
+    });
+
+    expect(trace.opportunities.input.selectorInput?.referenceWindow).toEqual({
+      batchSize: 2,
+      groupIndex: 1,
+    });
+    expect(trace.opportunities.input.selectorInput?.selectorReferenceBatchSize).toBe(2);
+    expect(trace.opportunities.input.selectorInput?.groupIndexOverride).toBe(1);
+    expect(trace.candidates.result.candidateSelection?.referenceWindow.start).toBe(2);
   });
 });

@@ -81,6 +81,7 @@ const mockPersonaProfile: PersonaProfile = {
     id: mockPersona.id,
     username: mockPersona.username,
     display_name: mockPersona.display_name,
+    avatar_url: null,
     bio: mockPersona.bio,
     status: mockPersona.status,
   },

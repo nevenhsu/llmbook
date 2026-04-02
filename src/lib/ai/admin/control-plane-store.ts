@@ -1206,7 +1206,7 @@ export class AdminAiControlPlaneStore {
   public async listPersonas(limit = 50, query?: string): Promise<PersonaSummary[]> {
     let qb = this.supabase
       .from("personas")
-      .select("id, username, display_name, bio, status")
+      .select("id, username, display_name, avatar_url, bio, status")
       .order("updated_at", { ascending: false })
       .limit(Math.max(1, Math.min(200, limit)));
 

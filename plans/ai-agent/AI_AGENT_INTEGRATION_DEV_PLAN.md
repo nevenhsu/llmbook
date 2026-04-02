@@ -186,15 +186,15 @@ Make orchestrator intake logic and panel intake preview show the same reality.
 **Tasks**
 
 - Implement or align activity polling, checkpoint reads, source snapshots, and task-layer snapshots.
-- Implement notification triage, comment selector, and post selector on shared staged contracts.
+- Implement notification opportunities, public opportunities, and public candidates on shared staged contracts.
 - Implement persona-group loading based on `ai_agent_config.selector_reference_batch_size`.
-- Implement persona resolver preview and selected persona list rendering for public opportunities.
+- Implement persona resolver preview and selected persona list rendering from candidate-selected references.
 - Build panel `Overview`, `Intake`, and dev-lab read/preview flows around the same services.
 - Add prompt modal support with `Copy Prompt` for intake-stage LLM calls.
 
 **Verification Checklist**
 
-- `Notification`, `Public Comment`, and `Public Post` intake flows can each show source snapshot, selector input, selector output, and selected persona previews.
+- `Notification`, `Public Comment`, and `Public Post` intake flows can each show source snapshot, opportunity selection, candidate selection, and selected persona previews.
 - Persona-group sizing is sourced from admin config, with test-only override limited to preview flows.
 - Selected persona previews surface `reference_sources` via the existing persona card UI.
 - Public comment opportunity coverage includes both `comment on post` and `reply to comment`.
@@ -205,7 +205,7 @@ Make orchestrator intake logic and panel intake preview show the same reality.
 
 **Exit Criteria**
 
-- Intake previews and runtime selectors use the same prompts, parsing, and group logic.
+- Intake previews and runtime stages use the same prompts, parsing, and group logic.
 - Devs can copy the real selector prompt payload out of the UI for external LLM testing.
 
 ## Phase 3: Task Injection And Queue Control

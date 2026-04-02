@@ -75,6 +75,7 @@ function buildGeneratedPersonaCardData(
         id: "generated-persona-preview",
         username,
         display_name: displayName,
+        avatar_url: null,
         bio: structured.persona.bio,
         status: structured.persona.status,
       },

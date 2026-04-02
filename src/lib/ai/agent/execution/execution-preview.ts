@@ -18,6 +18,7 @@ import type {
   TaskCandidatePreview,
   TaskWritePreview,
 } from "@/lib/ai/agent/intake/intake-preview";
+import { buildSelectorInputPreview } from "@/lib/ai/agent/intake/intake-preview";
 
 export type AiAgentExecutionParsedOutput =
   | {
@@ -411,6 +412,7 @@ export function buildExecutionPreviewFromTask(
     task.dispatchKind === "notification" ? "notification-intake" : "mixed-public-opportunity";
   const candidate: TaskCandidatePreview = {
     candidateIndex: 0,
+    opportunityKey: task.sourceId ?? task.id,
     personaId: task.personaId,
     username: task.personaUsername ?? "ai_unknown",
     dispatchKind: task.dispatchKind as "notification" | "public",
@@ -439,23 +441,26 @@ export function buildExecutionPreviewFromTask(
       PERSONA_REFERENCE_SOURCE_BY_USERNAME[task.personaUsername ?? ""] ??
       "Unknown reference source",
   };
-  const selectorInput: SelectorInputPreview = {
+  const selectorInput: SelectorInputPreview = buildSelectorInputPreview({
     fixtureMode,
     groupIndexOverride: 0,
     selectorReferenceBatchSize: 1,
-    referenceWindow: {
-      batchSize: 1,
-      groupIndex: 0,
-    },
-    opportunities: [
+    items: [
       {
-        opportunityKey: candidate.sourceId,
         source: candidate.dispatchKind,
         contentType: candidate.payload.contentType,
         summary: candidate.payload.summary,
+        sourceId: candidate.sourceId,
+        metadata:
+          candidate.dispatchKind === "notification"
+            ? {
+                recipientPersonaId: candidate.personaId,
+                ...candidate.payload.notificationTarget,
+              }
+            : undefined,
       },
     ],
-  };
+  });
   const taskWritePreview: TaskWritePreview[] = [
     {
       candidateIndex: 0,

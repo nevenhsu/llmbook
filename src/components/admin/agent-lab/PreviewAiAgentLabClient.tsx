@@ -26,9 +26,6 @@ type PreviewResults = {
   };
 };
 
-const PREVIEW_TOTAL_PERSONA_REFERENCE_COUNT = 120;
-const PREVIEW_DEFAULT_PERSONA_BATCH_SIZE = 10;
-
 type Props = {
   runtimePreviews: {
     notification: AiAgentRuntimeSourceSnapshot;
@@ -53,33 +50,6 @@ function buildFallbackSaveOutcome(sourceMode: AgentLabSourceMode, candidateIndex
   } satisfies AgentLabSaveTaskOutcome;
 }
 
-function applyPreviewPersonaReferenceCount(
-  modes: ReturnType<typeof buildInitialModes>,
-): ReturnType<typeof buildInitialModes> {
-  const patchMode = (mode: (typeof modes)[AgentLabSourceMode]) => {
-    const maxGroupIndex = Math.max(
-      0,
-      Math.ceil(PREVIEW_TOTAL_PERSONA_REFERENCE_COUNT / PREVIEW_DEFAULT_PERSONA_BATCH_SIZE) - 1,
-    );
-    const nextGroupIndex = Math.min(Math.max(mode.personaGroup.groupIndex, 0), maxGroupIndex);
-    return {
-      ...mode,
-      personaGroup: {
-        ...mode.personaGroup,
-        totalReferenceCount: PREVIEW_TOTAL_PERSONA_REFERENCE_COUNT,
-        batchSize: PREVIEW_DEFAULT_PERSONA_BATCH_SIZE,
-        groupIndex: nextGroupIndex,
-        maxGroupIndex,
-      },
-    };
-  };
-
-  return {
-    public: patchMode(modes.public),
-    notification: patchMode(modes.notification),
-  };
-}
-
 export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, results }: Props) {
   const [mockState, setMockState] = useState<PreviewMockState>("default");
   const labModels = useMemo(() => filterLabModels(models), [models]);
@@ -91,7 +61,7 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
       };
     }
 
-    return applyPreviewPersonaReferenceCount(buildInitialModes(runtimePreviews));
+    return buildInitialModes(runtimePreviews);
   }, [mockState, runtimePreviews]);
 
   return (
@@ -130,13 +100,14 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
         providers={providers}
         initialModelId={labModels[0]?.id ?? ""}
         initialModes={initialModes}
-        onRunSelector={async ({ sourceMode }) => {
+        onRunSelector={async ({ sourceMode, personaGroup }) => {
           await wait(150);
           if (mockState === "empty") {
             return buildSelectorStage({
               snapshot: null,
               status: "error",
               errorMessage: "No opportunities available.",
+              personaGroup,
             });
           }
 
@@ -145,14 +116,16 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
               snapshot: runtimePreviews[sourceMode],
               status: "error",
               errorMessage: results.error.selectorErrors[sourceMode],
+              personaGroup,
             });
           }
 
           return buildSelectorStage({
             snapshot: runtimePreviews[sourceMode],
+            personaGroup,
           });
         }}
-        onRunCandidate={async ({ sourceMode }) => {
+        onRunCandidate={async ({ sourceMode, personaGroup }) => {
           await wait(150);
           if (mockState === "empty") {
             return {
@@ -163,7 +136,6 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
                 outputData: {
                   error: "No selector input available.",
                 },
-                selectedReferences: [],
                 rows: [],
               },
               taskRows: [],
@@ -176,12 +148,14 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
               snapshot: runtimePreviews[sourceMode],
               status: sourceMode === "notification" ? "auto-routed" : "error",
               errorMessage: results.error.candidateErrors[sourceMode],
+              personaGroup,
             });
           }
 
           return buildCandidateStage({
             kind: sourceMode,
             snapshot: runtimePreviews[sourceMode],
+            personaGroup,
           });
         }}
         onSaveTask={async ({ sourceMode, row }) => {

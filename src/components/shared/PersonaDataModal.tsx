@@ -71,6 +71,7 @@ export function PersonaDataModal({
           id: "generated-persona",
           username: resolvedUsername,
           display_name: resolvedDisplayName ?? structured.persona.display_name,
+          avatar_url: null,
           bio: structured.persona.bio,
           status: structured.persona.status,
         },

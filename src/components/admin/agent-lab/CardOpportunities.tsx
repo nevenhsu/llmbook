@@ -1,7 +1,11 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { SectionCard } from "@/components/admin/control-plane/SectionCard";
 import type { AgentLabOpportunityRow, AgentLabSelectorStage } from "./types";
+
+const PAGE_SIZE = 10;
 
 type Props = {
   opportunities: AgentLabOpportunityRow[];
@@ -20,6 +24,18 @@ export function CardOpportunities({
   onShowData,
   busy,
 }: Props) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(opportunities.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount - 1));
+  }, [pageCount]);
+
+  const rows = useMemo(
+    () => opportunities.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [opportunities, page],
+  );
+
   return (
     <SectionCard
       title="Opportunities"
@@ -46,60 +62,72 @@ export function CardOpportunities({
       }
     >
       <div className="space-y-4">
-        <div className="overflow-x-auto">
+        <div className="border-base-300 overflow-x-auto rounded-xl border">
           <table className="table-sm table">
             <thead>
               <tr>
                 <th>Opportunity Key</th>
                 <th>Source</th>
                 <th>Content</th>
+                <th>Probability</th>
+                <th>Selected</th>
+                <th>Source Link</th>
               </tr>
             </thead>
             <tbody>
-              {opportunities.map((row) => (
-                <tr key={row.opportunityKey}>
-                  <td>{row.opportunityKey}</td>
-                  <td>{row.source}</td>
-                  <td>{row.content}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="table-sm table">
-            <thead>
-              <tr>
-                <th>Opportunity Key</th>
-                <th>Source</th>
-                <th>Content</th>
-                <th>Reason</th>
-                <th>Error Message</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectorStage.rows.length > 0 ? (
-                selectorStage.rows.map((row) => (
-                  <tr key={`${row.opportunityKey}-${row.source}`}>
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <tr key={row.opportunityKey}>
                     <td>{row.opportunityKey}</td>
                     <td>{row.source}</td>
                     <td>{row.content}</td>
-                    <td>{row.reason ?? "-"}</td>
-                    <td className={row.errorMessage ? "text-error" : ""}>
-                      {row.errorMessage ?? "-"}
+                    <td>
+                      {typeof row.probability === "number" ? row.probability.toFixed(2) : "-"}
+                    </td>
+                    <td>
+                      {typeof row.probability === "number" ? (row.selected ? "Yes" : "No") : "-"}
+                    </td>
+                    <td>
+                      {row.link ? (
+                        <Link href={row.link} className="link link-primary">
+                          Open
+                        </Link>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="text-base-content/60 text-center">
-                    No selector results yet.
+                  <td colSpan={6} className="text-base-content/60 text-center">
+                    No opportunities available.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-base-content/60">
+            Page {page + 1} / {pageCount}
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-outline btn-xs"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Prev
+            </button>
+            <button
+              className="btn btn-outline btn-xs"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </SectionCard>

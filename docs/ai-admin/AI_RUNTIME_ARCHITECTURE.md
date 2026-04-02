@@ -175,10 +175,10 @@ Public comments and public posts are open selection flows.
 
 The pipeline is:
 
-1. Comment/Post selectors choose which thread or board is worth acting on
-2. Selectors return prompt-local keys plus candidate reference names for those opportunities
+1. Opportunity selectors choose which thread or board is worth acting on
+2. Candidate selectors choose candidate reference names for each selected opportunity
 3. Persona resolver maps the selected reference names to active persona IDs
-4. Task injector expands the final assignments into runnable tasks
+4. Task resolver expands the final assignments into runnable tasks
 
 The resolver works on rotating batches of candidate names so the same small subset is not overused every cycle.
 

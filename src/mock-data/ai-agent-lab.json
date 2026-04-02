@@ -61,28 +61,86 @@
           "summary": "Fresh comment chain asking for workflow examples and follow-up recommendations.",
           "sourceId": "comment-2002",
           "createdAt": "2026-03-31T08:05:00.000Z"
+        },
+        {
+          "source": "public-comment",
+          "contentType": "comment",
+          "summary": "Low-signal side thread with vague reactions and no clear next step.",
+          "sourceId": "comment-2003",
+          "createdAt": "2026-03-31T08:06:00.000Z"
         }
       ],
       "selectorInput": {
         "fixtureMode": "mixed-public-opportunity",
         "groupIndexOverride": 0,
-        "selectorReferenceBatchSize": 4,
+        "selectorReferenceBatchSize": 10,
         "referenceWindow": {
-          "batchSize": 4,
+          "batchSize": 10,
           "groupIndex": 0
         },
         "opportunities": [
           {
-            "opportunityKey": "post-1001",
+            "opportunityKey": "O01",
             "source": "public-post",
             "contentType": "post",
             "summary": "Board thread with dense creative-tool discussion and multiple reply hooks."
           },
           {
-            "opportunityKey": "comment-2002",
+            "opportunityKey": "O02",
             "source": "public-comment",
             "contentType": "comment",
             "summary": "Fresh comment chain asking for workflow examples and follow-up recommendations."
+          },
+          {
+            "opportunityKey": "O03",
+            "source": "public-comment",
+            "contentType": "comment",
+            "summary": "Low-signal side thread with vague reactions and no clear next step."
+          }
+        ],
+        "opportunityLookup": [
+          {
+            "opportunityKey": "O01",
+            "source": "public-post",
+            "contentType": "post",
+            "summary": "Board thread with dense creative-tool discussion and multiple reply hooks.",
+            "sourceTable": "posts",
+            "sourceId": "post-1001",
+            "metadata": {
+              "boardId": "board-100",
+              "boardSlug": "creative-lab",
+              "postId": "post-1001"
+            }
+          },
+          {
+            "opportunityKey": "O02",
+            "source": "public-comment",
+            "contentType": "comment",
+            "summary": "Fresh comment chain asking for workflow examples and follow-up recommendations.",
+            "sourceTable": "comments",
+            "sourceId": "comment-2002",
+            "metadata": {
+              "boardId": "board-100",
+              "boardSlug": "creative-lab",
+              "postId": "post-1001",
+              "commentId": "comment-2002",
+              "parentCommentId": null
+            }
+          },
+          {
+            "opportunityKey": "O03",
+            "source": "public-comment",
+            "contentType": "comment",
+            "summary": "Low-signal side thread with vague reactions and no clear next step.",
+            "sourceTable": "comments",
+            "sourceId": "comment-2003",
+            "metadata": {
+              "boardId": "board-100",
+              "boardSlug": "creative-lab",
+              "postId": "post-1001",
+              "commentId": "comment-2003",
+              "parentCommentId": null
+            }
           }
         ]
       }
@@ -103,30 +161,44 @@
             "commentId": "comment-2002",
             "parentCommentId": null,
             "context": "Can @ai_orchid expand on the workflow piece?",
-            "notificationType": "mention"
+            "notificationType": "mention",
+            "boardSlug": "creative-lab",
+            "recipientPersonaId": "persona-orchid"
           }
         }
       ],
       "selectorInput": {
         "fixtureMode": "notification-intake",
         "groupIndexOverride": 0,
-        "selectorReferenceBatchSize": 4,
+        "selectorReferenceBatchSize": 10,
         "referenceWindow": {
-          "batchSize": 4,
+          "batchSize": 10,
           "groupIndex": 0
         },
         "opportunities": [
           {
-            "opportunityKey": "notification-3003",
+            "opportunityKey": "N01",
+            "source": "notification",
+            "contentType": "mention",
+            "summary": "Unread mention asking a persona to clarify the last thread."
+          }
+        ],
+        "opportunityLookup": [
+          {
+            "opportunityKey": "N01",
             "source": "notification",
             "contentType": "mention",
             "summary": "Unread mention asking a persona to clarify the last thread.",
+            "sourceTable": "notifications",
+            "sourceId": "notification-3003",
             "metadata": {
               "postId": "post-1001",
               "commentId": "comment-2002",
               "parentCommentId": null,
               "context": "Can @ai_orchid expand on the workflow piece?",
-              "notificationType": "mention"
+              "notificationType": "mention",
+              "boardSlug": "creative-lab",
+              "recipientPersonaId": "persona-orchid"
             }
           }
         ]

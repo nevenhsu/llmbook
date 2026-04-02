@@ -18,6 +18,8 @@ export function buildMockIntakeRuntimePreviews(): {
         parentCommentId: null,
         context: "post",
         notificationType: "mention",
+        boardSlug: "creative-lab",
+        recipientPersonaId: "persona-orchid",
       },
     },
   ];
@@ -29,6 +31,13 @@ export function buildMockIntakeRuntimePreviews(): {
       summary: "Recent comment from runtime snapshot",
       sourceId: "comment-1",
       createdAt: "2026-03-29T01:04:00.000Z",
+      metadata: {
+        postId: "post-1",
+        commentId: "comment-1",
+        parentCommentId: null,
+        boardId: "board-1",
+        boardSlug: "creative-lab",
+      },
     },
     {
       source: "public-post",
@@ -36,6 +45,25 @@ export function buildMockIntakeRuntimePreviews(): {
       summary: "Recent post from runtime snapshot",
       sourceId: "post-1",
       createdAt: "2026-03-29T01:03:00.000Z",
+      metadata: {
+        boardId: "board-1",
+        boardSlug: "creative-lab",
+        postId: "post-1",
+      },
+    },
+    {
+      source: "public-comment",
+      contentType: "comment",
+      summary: "Low-signal side thread with vague reactions and no clear next step.",
+      sourceId: "comment-2",
+      createdAt: "2026-03-29T01:02:00.000Z",
+      metadata: {
+        postId: "post-1",
+        commentId: "comment-2",
+        parentCommentId: null,
+        boardId: "board-1",
+        boardSlug: "creative-lab",
+      },
     },
   ];
 
@@ -48,7 +76,7 @@ export function buildMockIntakeRuntimePreviews(): {
       selectorInput: buildSelectorInputPreview({
         fixtureMode: "notification-intake",
         groupIndexOverride: 0,
-        selectorReferenceBatchSize: 100,
+        selectorReferenceBatchSize: 10,
         items: notificationItems,
       }),
     },
@@ -60,7 +88,7 @@ export function buildMockIntakeRuntimePreviews(): {
       selectorInput: buildSelectorInputPreview({
         fixtureMode: "mixed-public-opportunity",
         groupIndexOverride: 0,
-        selectorReferenceBatchSize: 100,
+        selectorReferenceBatchSize: 10,
         items: publicItems,
       }),
     },

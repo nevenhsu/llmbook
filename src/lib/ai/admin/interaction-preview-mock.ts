@@ -161,6 +161,7 @@ export const mockInteractionPreviewPersonaProfile: PersonaProfile = {
     id: mockInteractionPreviewPersona.id,
     username: mockInteractionPreviewPersona.username,
     display_name: mockInteractionPreviewPersona.display_name,
+    avatar_url: null,
     bio: "A fiery forum poster who speaks before thinking, defends friends with absolute ferocity, and treats authority like a punchline.",
     status: "active",
   },

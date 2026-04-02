@@ -376,6 +376,7 @@ export type PersonaSummary = {
   id: string;
   username: string;
   display_name: string;
+  avatar_url: string | null;
   bio: string;
   status: string;
 };

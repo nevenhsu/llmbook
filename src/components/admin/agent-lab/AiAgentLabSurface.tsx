@@ -8,6 +8,7 @@ import { DataModal } from "./DataModal";
 import { PersonaGroupModal } from "./PersonaGroupModal";
 import { PromptModal } from "./PromptModal";
 import { useAgentLabRunner } from "./hooks/useAgentLabRunner";
+import { buildTaskSavePayloadData } from "./lab-data";
 import type { AgentLabPageProps } from "./types";
 
 export function AiAgentLabSurface(props: AgentLabPageProps) {
@@ -49,21 +50,32 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         onRun={runner.runSelector}
         onShowPrompt={() =>
           runner.setPromptModal({
-            title: "Selector Prompt",
-            description: "Prompt and payload for the opportunity selection stage.",
+            title: "Opportunities Prompt",
+            description:
+              "Prompt for the opportunities stage, which must return canonical opportunity_probabilities JSON for every opportunity.",
             prompt: runner.modeState.selectorStage.prompt,
-            modelPayload: runner.modeState.selectorStage.outputData,
-            inputData: runner.modeState.selectorStage.inputData,
+            modelPayload: null,
+            inputData: null,
           })
         }
         onShowData={() =>
           runner.setDataModal({
             title: "Opportunity Data",
-            description: "Current source-mode opportunities and selector result payload.",
+            description: "Current source-mode opportunities and parsed opportunities output data.",
             data: {
-              opportunities: runner.modeState.opportunities,
-              selectorStage: runner.modeState.selectorStage,
+              opportunitiesTableData: runner.modeState.opportunities,
+              selectorOutputData: runner.modeState.selectorStage.outputData,
             },
+            sections: [
+              {
+                title: "Opportunities Table Data",
+                data: runner.modeState.opportunities,
+              },
+              {
+                title: "Output Data",
+                data: runner.modeState.selectorStage.outputData,
+              },
+            ],
           })
         }
       />
@@ -76,8 +88,9 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         onRun={runner.runCandidate}
         onShowPrompt={() =>
           runner.setPromptModal({
-            title: "Candidate Prompt",
-            description: "Prompt and payload for the candidate generation stage.",
+            title: "Candidates Prompt",
+            description:
+              "Prompt and payload for the candidates stage, which must return canonical candidate_selections JSON.",
             prompt: runner.modeState.candidateStage.prompt,
             modelPayload: runner.modeState.candidateStage.outputData,
             inputData: runner.modeState.candidateStage.inputData,
@@ -86,7 +99,7 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         onShowData={() =>
           runner.setDataModal({
             title: "Candidate Data",
-            description: "Selected references, candidate rows, and raw candidate payload.",
+            description: "Merged candidate rows with persona info and raw candidate payload.",
             data: {
               candidateStage: runner.modeState.candidateStage,
             },
@@ -102,10 +115,14 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
           runner.setDataModal({
             title: "Task Data",
             description:
-              "Current task rows including save state, candidate payload, and save results.",
-            data: {
-              taskStage: runner.modeState.taskStage,
-            },
+              "Candidate payloads aligned to the inject_persona_tasks RPC and the persisted persona_tasks task contract.",
+            data: buildTaskSavePayloadData(runner.modeState.taskStage.rows),
+            sections: [
+              {
+                title: "inject_persona_tasks Candidate Data",
+                data: buildTaskSavePayloadData(runner.modeState.taskStage.rows),
+              },
+            ],
           })
         }
       />
@@ -124,10 +141,12 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         title={runner.dataModal?.title ?? ""}
         description={runner.dataModal?.description ?? ""}
         data={runner.dataModal?.data ?? null}
+        sections={runner.dataModal?.sections}
         onClose={() => runner.setDataModal(null)}
       />
       <PersonaGroupModal
         open={runner.groupModalOpen}
+        sourceMode={runner.sourceMode}
         group={runner.modeState.personaGroup}
         onClose={() => runner.setGroupModalOpen(false)}
         onUpdateGroup={runner.updatePersonaGroup}

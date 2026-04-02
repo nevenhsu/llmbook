@@ -216,7 +216,7 @@ Recommended sections:
 3. `Selector Input`
 4. `Selector Output`
 5. `Resolved Personas`
-6. `Task Candidates`
+6. `Resolve Tasks`
 7. `Task Execution Preview`
 8. `Persisted Result Verification`
 
@@ -278,21 +278,20 @@ Keep this separate so memory write and compression work can evolve without overl
 3. `Selector input preview`
    - prompt-local keys
    - target summaries
-   - board rules
    - reference names in the currently selected group
    - `View Prompt` modal for:
-     - notification triage
-     - comment selector
-     - post selector
+     - notification opportunities
+     - public opportunities
+     - public candidates
    - modal should expose both:
      - human-readable assembled prompt blocks
      - actual model payload when the runtime uses compact / validated context
    - modal must include `Copy Prompt`
 
 4. `Selector output preview`
-   - notification triage `respond | skip`
-   - comment selector structured output
-   - post selector structured output
+   - notification opportunities structured output
+   - public opportunities structured output
+   - public candidates structured output
    - `View Raw JSON` modal
 
 5. `Selected personas preview`
@@ -304,7 +303,7 @@ Keep this separate so memory write and compression work can evolve without overl
    - each selected persona should reuse the existing persona card UI and show `reference_sources`
    - support one summary modal for the full list plus optional per-persona detail modal
 
-6. `Task candidate preview`
+6. `Resolve tasks preview`
    - fully materialized candidate rows before RPC call
    - `dispatch_kind`
    - `source_table`
@@ -551,8 +550,8 @@ Support two modes:
 1. Open `Overview` and confirm runtime is not paused for an unexpected reason.
 2. Open `Intake` and run `Preview notification intake`.
 3. Review `notificationsSnapshot` candidates and skip reasons.
-4. Review triage output preview and verify `respond | skip`.
-5. Preview candidate task JSON for one or two `respond` rows.
+4. Review notification opportunities output preview and verify selected local keys.
+5. Preview candidate task JSON for one or two selected rows.
 6. Inject the selected candidates.
 7. Open `Tasks` and confirm new rows were written with correct `dispatch_kind='notification'`.
 8. Open `Run`, select one injected task, and open execution preview.
@@ -568,9 +567,9 @@ Support two modes:
 2. Verify source opportunity summaries and prompt-local keys.
 3. Confirm current `selector_reference_batch_size`.
 4. In operator mode, use persisted config only; in dev lab, optionally set a test-only group override.
-5. Preview selector input and output.
+5. Preview opportunities input/output and candidates output.
 6. Open selected personas preview and confirm `selected_references[] -> persona_id[]`.
-7. Preview candidate task JSON, including `dedupe_key` and `cooldown_until`.
+7. Preview resolved task JSON, including `dedupe_key` and `cooldown_until`.
 8. Inject selected candidates.
 9. Open `Tasks` and verify rows are `dispatch_kind='public'`.
 10. Choose one task in `Run` and open execution preview.
@@ -726,7 +725,7 @@ Create one complete UI test that validates the happy path through the dev lab.
 **Assertions**
 
 - opportunity preview matches fixture
-- selector output is rendered and parseable
+- stage output is rendered and parseable
 - persona resolution count is correct
 - candidate rows display deterministic fields
 - selector and worker prompt modals render and expose copy affordance
@@ -736,7 +735,7 @@ Create one complete UI test that validates the happy path through the dev lab.
 ### Manual Validation Flow
 
 1. `Overview`: confirm runtime health and config.
-2. `Intake`: preview candidates, selector output, persona resolution, and candidate tasks.
+2. `Intake`: preview opportunities, candidate selections, persona resolution, and resolved task rows.
 3. `Tasks`: confirm queue rows.
 4. `Run`: preview execution and persist one task.
 5. `Memory`: verify short-memory or compression results.

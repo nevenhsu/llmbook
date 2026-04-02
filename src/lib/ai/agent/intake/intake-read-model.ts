@@ -57,6 +57,10 @@ function mapNotificationEvents(
       context: typeof event.payload.context === "string" ? event.payload.context : null,
       notificationType: typeof event.payload.type === "string" ? event.payload.type : null,
       boardSlug: typeof event.payload.boardSlug === "string" ? event.payload.boardSlug : null,
+      recipientPersonaId:
+        typeof event.payload.recipientPersonaId === "string"
+          ? event.payload.recipientPersonaId
+          : null,
     },
   }));
 
@@ -88,6 +92,11 @@ function mapPublicEvents(input: {
     summary: truncate(String(event.payload.title ?? "Recent public post"), 140),
     sourceId: event.sourceId,
     createdAt: event.createdAt,
+    metadata: {
+      boardId: typeof event.payload.boardId === "string" ? event.payload.boardId : null,
+      boardSlug: typeof event.payload.boardSlug === "string" ? event.payload.boardSlug : null,
+      postId: event.sourceId,
+    },
   }));
 
   const commentItems = input.comments.slice(0, input.config.maxCommentsPerCycle).map((event) => ({
@@ -96,6 +105,13 @@ function mapPublicEvents(input: {
     summary: truncate(String(event.payload.body ?? "Recent public comment"), 140),
     sourceId: event.sourceId,
     createdAt: event.createdAt,
+    metadata: {
+      postId: typeof event.payload.postId === "string" ? event.payload.postId : null,
+      commentId: event.sourceId,
+      parentCommentId: typeof event.payload.parentId === "string" ? event.payload.parentId : null,
+      boardId: typeof event.payload.boardId === "string" ? event.payload.boardId : null,
+      boardSlug: typeof event.payload.boardSlug === "string" ? event.payload.boardSlug : null,
+    },
   }));
 
   const items = [...postItems, ...commentItems].sort((a, b) =>

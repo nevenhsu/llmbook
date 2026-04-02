@@ -79,6 +79,10 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
     title: string;
     description: string;
     data: unknown;
+    sections?: Array<{
+      title: string;
+      data: unknown;
+    }>;
   } | null>(null);
   const [selectorBusy, setSelectorBusy] = useState(false);
   const [candidateBusy, setCandidateBusy] = useState(false);
@@ -105,29 +109,51 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
       const selectorStage = await props.onRunSelector({
         sourceMode,
         modelId,
+        personaGroup: {
+          batchSize: modeState.personaGroup.batchSize,
+          groupIndex: modeState.personaGroup.groupIndex,
+        },
       });
+      const notificationCandidateResult =
+        sourceMode === "notification"
+          ? await props.onRunCandidate({
+              sourceMode,
+              modelId,
+              personaGroup: {
+                batchSize: modeState.personaGroup.batchSize,
+                groupIndex: modeState.personaGroup.groupIndex,
+              },
+              selectorStage,
+            })
+          : null;
       updateModeStates((current) => ({
         ...current,
         [sourceMode]: {
           ...current[sourceMode],
+          opportunities: selectorStage.rows,
           selectorStage,
-          candidateStage: {
-            status: sourceMode === "notification" ? "auto-routed" : "idle",
-            prompt: null,
-            inputData: null,
-            outputData: null,
-            selectedReferences: [],
-            rows: [],
+          candidateStage: notificationCandidateResult?.candidateStage ?? {
+            ...current[sourceMode].candidateStage,
+            status: "idle",
+            prompt: current[sourceMode].candidateStage.prompt,
+            inputData: current[sourceMode].candidateStage.inputData,
+            outputData: current[sourceMode].candidateStage.outputData,
           },
-          taskStage: {
-            rows: [],
-            summary: {
-              attempted: 0,
-              succeeded: 0,
-              failed: 0,
-            },
-            toastMessage: null,
-          },
+          taskStage: notificationCandidateResult
+            ? {
+                rows: notificationCandidateResult.taskRows,
+                summary: summarizeRows(notificationCandidateResult.taskRows),
+                toastMessage: null,
+              }
+            : {
+                rows: [],
+                summary: {
+                  attempted: 0,
+                  succeeded: 0,
+                  failed: 0,
+                },
+                toastMessage: null,
+              },
         },
       }));
     } finally {
@@ -145,6 +171,10 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
       const result = await props.onRunCandidate({
         sourceMode,
         modelId,
+        personaGroup: {
+          batchSize: modeState.personaGroup.batchSize,
+          groupIndex: modeState.personaGroup.groupIndex,
+        },
         selectorStage: modeState.selectorStage,
       });
 
@@ -266,31 +296,60 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
     }
   }
 
-  function updatePersonaGroup(input: { batchSize?: number; groupIndex?: number }) {
-    updateModeStates((current) => {
-      const currentState = current[sourceMode];
-      const currentGroup = currentState.personaGroup;
-      const nextBatchSize = Math.max(0, input.batchSize ?? currentGroup.batchSize);
-      const nextMaxGroupIndex = resolveMaxGroupIndex(
-        currentGroup.totalReferenceCount,
-        nextBatchSize,
-      );
-      const preferredGroupIndex = input.groupIndex ?? currentGroup.groupIndex;
-      const nextGroupIndex = Math.min(Math.max(preferredGroupIndex, 0), nextMaxGroupIndex);
+  async function updatePersonaGroup(input: { batchSize?: number; groupIndex?: number }) {
+    const currentState = modeStatesRef.current[sourceMode];
+    const currentGroup = currentState.personaGroup;
+    const nextBatchSize = Math.max(0, input.batchSize ?? currentGroup.batchSize);
+    const nextMaxGroupIndex = resolveMaxGroupIndex(currentGroup.totalReferenceCount, nextBatchSize);
+    const preferredGroupIndex = input.groupIndex ?? currentGroup.groupIndex;
+    const nextGroupIndex = Math.min(Math.max(preferredGroupIndex, 0), nextMaxGroupIndex);
+    const nextPersonaGroup = {
+      batchSize: nextBatchSize,
+      groupIndex: nextGroupIndex,
+    };
 
-      return {
-        ...current,
-        [sourceMode]: {
-          ...currentState,
-          personaGroup: {
-            ...currentGroup,
-            batchSize: nextBatchSize,
-            groupIndex: nextGroupIndex,
-            maxGroupIndex: nextMaxGroupIndex,
-          },
+    updateModeStates((current) => ({
+      ...current,
+      [sourceMode]: {
+        ...current[sourceMode],
+        personaGroup: {
+          ...current[sourceMode].personaGroup,
+          ...nextPersonaGroup,
+          maxGroupIndex: nextMaxGroupIndex,
         },
-      };
+      },
+    }));
+
+    if (sourceMode === "notification") {
+      return;
+    }
+
+    const result = await props.onRunCandidate({
+      sourceMode,
+      modelId,
+      personaGroup: nextPersonaGroup,
+      selectorStage: modeStatesRef.current[sourceMode].selectorStage,
     });
+
+    updateModeStates((current) => ({
+      ...current,
+      [sourceMode]: {
+        ...current[sourceMode],
+        candidateStage: {
+          ...result.candidateStage,
+          rows: result.candidateStage.rows,
+        },
+        taskStage: {
+          rows: [],
+          summary: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
+          toastMessage: null,
+        },
+      },
+    }));
   }
 
   const api = useMemo(

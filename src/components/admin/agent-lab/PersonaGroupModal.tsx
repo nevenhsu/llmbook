@@ -1,10 +1,11 @@
 "use client";
 
 import { ModalShell } from "@/components/ui/ModalShell";
-import type { AgentLabPersonaGroup } from "./types";
+import type { AgentLabPersonaGroup, AgentLabSourceMode } from "./types";
 
 type Props = {
   open: boolean;
+  sourceMode: AgentLabSourceMode;
   group: AgentLabPersonaGroup;
   onClose: () => void;
   onUpdateGroup: (input: { batchSize?: number; groupIndex?: number }) => void;
@@ -18,7 +19,14 @@ type NumberControlProps = {
   onIncrease: () => void;
 };
 
-function NumberControl({ label, subLabel, value, onDecrease, onIncrease }: NumberControlProps) {
+function NumberControl({
+  label,
+  subLabel,
+  value,
+  onDecrease,
+  onIncrease,
+  disabled = false,
+}: NumberControlProps & { disabled?: boolean }) {
   return (
     <div className="border-base-300 rounded-xl border p-4">
       <div className="flex items-center justify-between gap-4">
@@ -29,13 +37,23 @@ function NumberControl({ label, subLabel, value, onDecrease, onIncrease }: Numbe
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-sm btn-square btn-outline" onClick={onDecrease}>
+          <button
+            type="button"
+            className="btn btn-sm btn-square btn-outline"
+            onClick={onDecrease}
+            disabled={disabled}
+          >
             -
           </button>
           <div className="border-base-300 bg-base-100 min-w-20 rounded-md border px-3 py-1 text-center text-lg font-semibold">
             {value}
           </div>
-          <button type="button" className="btn btn-sm btn-square btn-outline" onClick={onIncrease}>
+          <button
+            type="button"
+            className="btn btn-sm btn-square btn-outline"
+            onClick={onIncrease}
+            disabled={disabled}
+          >
             +
           </button>
         </div>
@@ -44,7 +62,7 @@ function NumberControl({ label, subLabel, value, onDecrease, onIncrease }: Numbe
   );
 }
 
-export function PersonaGroupModal({ open, group, onClose, onUpdateGroup }: Props) {
+export function PersonaGroupModal({ open, sourceMode, group, onClose, onUpdateGroup }: Props) {
   if (!open) {
     return null;
   }
@@ -83,8 +101,13 @@ export function PersonaGroupModal({ open, group, onClose, onUpdateGroup }: Props
           />
           <NumberControl
             label="Group index"
-            subLabel={`(max ${group.maxGroupIndex})`}
+            subLabel={
+              sourceMode === "notification"
+                ? "Disabled for notification mode"
+                : `(max ${group.maxGroupIndex})`
+            }
             value={group.groupIndex}
+            disabled={sourceMode === "notification"}
             onDecrease={() => onUpdateGroup({ groupIndex: group.groupIndex - 1 })}
             onIncrease={() => onUpdateGroup({ groupIndex: group.groupIndex + 1 })}
           />

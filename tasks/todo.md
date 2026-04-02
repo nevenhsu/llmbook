@@ -2,8 +2,92 @@
 
 ## Active
 
+- [x] Create a canonical intake stage refactor plan under `/plans/ai-agent/sub` covering stage boundaries, data formats, admin/runtime divergence, prompt updates, and verification order.
 - [x] Update `/preview/ai-agent-lab` Lab Configuration UI (remove summary cards, show group index in button text).
 - [x] Rename `Persona Group` modal to `Reference Names Group` and switch rows to vertical layout.
 - [x] Add editable controls for `Persona reference batch size` and `Group index` with `- number +` layout.
 - [x] Adjust preview defaults: `totalReferenceCount=120`, `batchSize=10`, and keep `groupIndex` clamped by recalculated `maxGroupIndex`.
 - [x] Polish modal typography/layout (left title + right value/control, title size 16px, `(max N)` as smaller subtitle).
+- [x] Add table titles to both sections in the `Opportunities` card on `/preview/ai-agent-lab`.
+- [x] Add table titles to both sections in the `Candidates` card on `/preview/ai-agent-lab`.
+- [x] Add explicit `border-base-300` table container styling to `Opportunities` and `Candidates` tables on `/preview/ai-agent-lab`.
+- [x] Tighten internal content spacing in the `Opportunities` and `Candidates` cards on `/preview/ai-agent-lab`.
+- [x] Align the `Tasks` card table spacing and border styling with the other lab cards on `/preview/ai-agent-lab`.
+- [x] Increase internal spacing across `Opportunities`, `Candidates`, and `Tasks` cards after clarifying that the requested margin change should be larger, not tighter.
+- [x] Remove the `Tasks` table title so only multi-table cards render per-table headings.
+- [x] Split the `Opportunity Data` modal into two JSON panels: `Opportunities Table Data` and `Result Table Data`, excluding prompt payloads.
+- [x] Expand the `Opportunity Data` modal to also show `selectorStage.inputData` and `selectorStage.outputData`, while still excluding prompt text.
+- [x] Execute batch 1 of the ai-agent intake stage refactor: align docs, shared intake preview/trace builders, mock fixtures, and lab adapters to the new `selected_opportunities -> candidate_selections -> resolved_candidates -> task candidates` contract.
+- [x] Fix the opportunities/candidates prompt previews so the assembled prompt explicitly requires canonical top-level JSON (`selected_opportunities` / `candidate_selections`) instead of loosely describing key-only output.
+- [x] Fix intake prompt output constraints so `Opportunities` and `Candidates` no longer inherit comment-generation `markdown/need_image` output blocks in the prompt modal.
+- [x] Replace the shared intake prompt scaffold with separate prompt architectures for `Opportunities` and `Candidates`, so each stage reflects its own business logic instead of reusing task-generation or cross-stage selector framing.
+- [x] Keep `AI Agent Lab` prompt previews available on initial render so `Show Prompt` is active immediately from canonical trace data.
+- [x] Rename ambiguous `Result Table` headings in `Opportunities` and `Candidates` to stage-specific table names.
+- [x] Fix duplicate React keys in the `Candidates` selected references table by keying rows with the canonical `referenceId`.
+- [x] Make mock `Candidates` selections use different reference-name combinations across opportunities so preview/debug output is easier to read.
+- [x] Make mock `Candidates` selections prefer non-overlapping reference names across opportunities when the current batch is large enough.
+- [x] Make `group index / batch size` canonical lab inputs that refresh `Candidate Table` data immediately and clear downstream resolved/task rows.
+- [x] Add explicit decision criteria blocks to the `Opportunities` and `Candidates` assembled prompts so admin can inspect the selection standards, not just the JSON schema.
+- [x] Expand `required_output_json` examples to show multi-item array structures for `selected_opportunities` and `candidate_selections`.
+- [x] Reorder the prompt modal so `Assembled Prompt` appears before `Prompt Input` and `Model Payload`.
+- [x] Simplify `Opportunities` modals so `Show Prompt` only shows the assembled prompt and `Show Data` only shows opportunities data plus parsed output data.
+- [x] Refactor `/preview/ai-agent-lab` `Opportunities` into a single paginated table driven by per-opportunity LLM probabilities, with `Selected` derived in code from `probability > 0.5`.
+- [x] Refactor `/preview/ai-agent-lab` `Candidates` into a single paginated merged table ordered by selected opportunity assignment first, then `Opportunity Key + Reference Name`, with persona avatar/display-name/username UI.
+- [x] Disable `Group index` editing for notification mode, auto-populate notification candidates/tasks after `Opportunities` run, and enrich candidate persona rows with fetched persona summary data.
+- [x] Update intake prompt previews so `Opportunities` requires canonical `opportunity_probabilities` JSON for all opportunities and `Candidates` keeps its own independent selection-stage prompt contract.
+- [x] Correct the lab data/save contract so `Opportunities Show Data` exposes parsed `opportunity_probabilities` only, while task save payloads keep real `sourceId` and carry `opportunityKey` separately for UI/debug.
+- [x] Fix three follow-up lab regressions: keep pre-run `Opportunities` probabilities empty, disable the notification-mode group button, and merge persona info onto the full `Candidates` batch instead of only selected rows.
+- [x] Fix source-mode initialization regressions so public idle opportunities show `- / -`, public candidates are prefilled from canonical group data, and notification candidates are prefilled from snapshot-derived rows.
+- [x] Align `/preview/ai-agent-lab` default mock data with the visible batch/group config by seeding a 10-name reference batch for public group 0 and removing the inconsistent synthetic 120-count preview patch.
+- [x] Adjust seeded candidates UX so initial rows show reference/persona data without `Opportunity Key`, and only bind opportunity mapping after the relevant run completes.
+- [x] Add one `Selected: false` public opportunity to the default mock run and keep `Tasks` row ordering aligned with selected `Candidates` rows after run.
+- [x] Show persona active/inactive status directly in the `Candidates` table so preview users can see why some candidate rows do not materialize into tasks.
+- [x] Split `Candidates` persona status into its own table column and change `Tasks Show Data` to display save-task API request payloads instead of UI state or save responses.
+- [x] Make the `Candidates` persona-status column legible in preview by rendering explicit `Active / Inactive` labels instead of a barely visible pill.
+- [x] Make `Tasks` save-state rendering legible by replacing raw state text with a clear visual status indicator.
+- [x] Seed default public `Candidates` mock data with one selected inactive persona row so preview can demonstrate why `Tasks` omits that assignment.
+- [x] Reuse full persona info UI in the `Tasks` table so persona cells match the `Candidates` table layout.
+- [x] Change `Task Data` modal to show `inject_persona_tasks` candidate payloads instead of the wider save-task HTTP wrapper, so the JSON better matches persisted task inputs.
+
+## Review
+
+- Added explicit section headings above both tables in `Opportunities` and `Candidates` to match the lab plan labels and make each table self-describing.
+- Added visible table borders using the repo's `border-base-300` convention so all four lab tables read as distinct sections.
+- Tightened intra-card spacing so section titles and bordered tables sit closer together without changing shared card layout globally.
+- Unified the `Tasks` card with the same bordered table container and tighter internal spacing used by the other lab cards.
+- Increased intra-card spacing across all three lab cards so section blocks and table titles have more breathing room.
+- Removed the redundant `Tasks` table title because that card contains only a single table.
+- Updated `Opportunity Data` modal to render two side-by-side JSON panels and limited the payload to table data only, excluding selector prompt content.
+- Expanded `Opportunity Data` modal to include selector input/output payloads alongside the two table-data panels.
+- Added a dedicated intake-stage refactor plan that codifies the new `Opportunities -> Candidates -> Resolved Personas -> Resolve Tasks` contract and migration order.
+- Executed the first refactor batch by landing the new local-key-first intake contract in shared preview/trace builders, updating mock/admin lab adapters, and aligning plan docs plus mock fixtures so the repo builds against the new stage boundaries.
+- Tightened the lab prompt previews so the opportunities stage now explicitly asks for `{ "selected_opportunities": [...] }` and the candidates stage explicitly asks for `{ "candidate_selections": [...] }`, matching the canonical JSON contract shown in admin.
+- Overrode intake-stage `output_constraints` so the prompt modal now shows selector/candidate JSON contracts instead of the unrelated comment task-generation fields like `markdown` and `need_image`.
+- Replaced the shared prompt scaffold entirely for intake selection stages: `Opportunities` now uses snapshot-selection blocks and `Candidates` now uses selected-opportunities plus reference-batch blocks, so the assembled prompts reflect distinct business logic instead of a shared generic template.
+- Seeded the initial lab mode state with prompt previews from canonical trace data so `Show Prompt` is active on first render without forcing the stage status or result tables into a pre-run success state.
+- Renamed the second table headings so `Opportunities` now says `Selected Opportunities Table` and `Candidates` now says `Resolved Candidates Table`, matching the actual stage data shown.
+- Fixed the `Candidates` selected-references table to use the canonical `referenceId` as the React key so the same reference/persona can appear under multiple opportunities without duplicate-key warnings.
+- Adjusted mock candidate selection generation to rotate reference names across selected opportunities within the same batch, so preview rows do not all show the same reference-name set by default.
+- Tightened mock candidate selection generation to prefer disjoint reference-name slices across selected opportunities when the batch size allows it, so the `Candidate Table` is easier to read at a glance.
+- Wired `group index / batch size` through the canonical lab run path so selector/candidate builds now consume the updated values, and changing them auto-refreshes the `Candidate Table` while clearing resolved candidates and task rows derived from the previous batch.
+- Expanded the intake assembled prompts with explicit `decision_criteria` sections so the lab now shows the actual opportunity-selection and reference-selection standards alongside the required output JSON.
+- Expanded `required_output_json` in the intake prompts to show multi-item array payloads and explicit array/object field rules, so the admin prompt modal makes the full output structure clear.
+- Reordered the shared prompt modal so the assembled prompt is shown first, making the actual LLM-facing text immediately visible before the supporting input/payload data.
+- Split `Opportunities` modal responsibilities more cleanly: `Show Prompt` now shows only the assembled prompt, while `Show Data` is limited to opportunities table data and parsed opportunities output.
+- Refactored `Opportunities` to a single paginated table that shows all opportunities with probability, selection status, and source links, while deriving `Selected` in code from `probability > 0.5` instead of relying on a second result table.
+- Refactored `Candidates` to a single paginated merged table that combines LLM candidate assignments with the full reference batch, sorts selected references first, and reuses persona avatar/display-name/username UI in the merged persona column.
+- Wired notification mode so `Group index` is disabled in the modal, `Opportunities` run auto-builds notification candidate/task rows, and admin runtime persona summaries hydrate candidate persona info with avatar/display-name/username data.
+- Updated the intake prompt contracts so `Opportunities` now asks for `opportunity_probabilities` across every provided opportunity, while `Candidates` remains an independent reference-selection prompt and the prompt modal hides empty `Prompt Input` / `Model Payload` sections when a stage only needs the assembled prompt.
+- Corrected two contract mistakes from the first pass: `Opportunities Show Data` now exposes canonical parsed `opportunity_probabilities` instead of the full trace wrapper, and `TaskCandidatePreview` now carries `opportunityKey` separately so save/injection paths send real `sourceId` values to `persona_tasks`.
+- Fixed three user-reported regressions after the refactor: pre-run `Opportunities` rows no longer show probability/selected state, the lab config group button is disabled in notification mode, and `Candidates` now merges persona info across the full reference batch so the merged table semantics match the approved plan.
+- Fixed source-mode initialization behavior so idle public opportunities now render `Probability` and `Selected` as `-`, while both public and notification candidates tables are prefilled from canonical trace data on first render instead of appearing empty until an explicit run.
+- Cleaned up the preview default mock data so `Source Mode: public` group 0 now genuinely starts with a 10-name reference batch, the reference library is large enough to fill that batch, and the preview no longer advertises a fake total-count/group setup that the underlying mock data cannot satisfy.
+- Adjusted seeded candidates UX so both public and notification modes can show initial reference/persona rows immediately, but `Opportunity Key` stays empty until the stage run produces an actual opportunity-to-candidate assignment.
+- Expanded the default public mock run to include one low-probability `Selected: false` opportunity, and changed `Tasks` row construction to follow the selected `Candidates` row order so the post-run tasks table matches the visible candidate assignments.
+- Added explicit `active` / `inactive` status to `Candidates` persona cells so task-count differences are explained in the table itself instead of looking like inconsistent mock data.
+- Moved persona status into its own `Candidates` column and changed `Tasks Show Data` to expose the actual `{ candidate: ... }` request bodies used by the save API, so preview data matches persistence input instead of response/debug state.
+- Reworked the `Candidates` status cell to use a clear colored dot plus `Active / Inactive` label so preview users can immediately understand the mock persona state.
+- Reworked the `Tasks` save-state cell to use explicit visual status labels for `Idle / Saving / Saved / Failed`, making task outcomes scannable in the table.
+- Adjusted the default public candidate-selection fixture so one selected row carries an inactive persona, making the preview intentionally show `Candidates > Tasks` with a visible status-based explanation.
+- Upgraded `Tasks` rows to carry full persona info and render the same avatar/display-name/username UI as `Candidates`, keeping both tables visually aligned.
+- Tightened `Task Data` modal to show the RPC candidate shape that maps onto `persona_tasks` insertion fields, reducing confusion from wrapper-only keys in the debug JSON.

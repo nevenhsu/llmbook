@@ -1,7 +1,12 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import Avatar from "@/components/ui/Avatar";
 import { SectionCard } from "@/components/admin/control-plane/SectionCard";
 import type { AgentLabCandidateStage, AgentLabSourceMode } from "./types";
+
+const PAGE_SIZE = 10;
 
 type Props = {
   sourceMode: AgentLabSourceMode;
@@ -13,6 +18,48 @@ type Props = {
   canRun: boolean;
 };
 
+function PersonaCell({ persona }: { persona: AgentLabCandidateStage["rows"][number]["persona"] }) {
+  if (!persona) {
+    return <span className="text-base-content/60">-</span>;
+  }
+
+  return (
+    <Link href={persona.href} className="flex min-w-0 items-center gap-3 no-underline">
+      <Avatar src={persona.avatarUrl} fallbackSeed={persona.username} size="sm" isPersona />
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">{persona.displayName}</div>
+        <div className="text-base-content/60 truncate text-xs">@{persona.username}</div>
+      </div>
+    </Link>
+  );
+}
+
+function PersonaStatusCell({
+  persona,
+}: {
+  persona: AgentLabCandidateStage["rows"][number]["persona"];
+}) {
+  if (!persona) {
+    return <span className="text-base-content/60">-</span>;
+  }
+
+  const active = persona.status === "active";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-2 text-sm font-medium ${
+        active ? "text-success" : "text-warning"
+      }`}
+    >
+      <span
+        className={`h-2.5 w-2.5 rounded-full ${active ? "bg-success" : "bg-warning"}`}
+        aria-hidden="true"
+      />
+      {active ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
 export function CardCandidates({
   sourceMode,
   candidateStage,
@@ -23,6 +70,17 @@ export function CardCandidates({
   canRun,
 }: Props) {
   const disabled = sourceMode === "notification";
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(candidateStage.rows.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount - 1));
+  }, [pageCount]);
+
+  const rows = useMemo(
+    () => candidateStage.rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [candidateStage.rows, page],
+  );
 
   return (
     <SectionCard
@@ -49,78 +107,70 @@ export function CardCandidates({
         </div>
       }
     >
-      {disabled ? (
-        <div className="alert">
-          <span>Auto-routed. Notification tasks are already bound to a target persona.</span>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="overflow-x-auto">
-            <table className="table-sm table">
-              <thead>
-                <tr>
-                  <th>Reference Name</th>
-                  <th>Persona</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidateStage.selectedReferences.length > 0 ? (
-                  candidateStage.selectedReferences.map((row) => (
-                    <tr key={`${row.referenceName}-${row.personaId ?? "none"}`}>
-                      <td>{row.referenceName}</td>
-                      <td>{row.personaDisplayName ?? "-"}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={2} className="text-base-content/60 text-center">
-                      No selected references yet.
+      <div className="space-y-4">
+        {disabled ? (
+          <div className="alert">
+            <span>
+              Auto-routed. Notification candidates and tasks are derived from recipient persona.
+            </span>
+          </div>
+        ) : null}
+        <div className="border-base-300 overflow-x-auto rounded-xl border">
+          <table className="table-sm table">
+            <thead>
+              <tr>
+                <th>Opportunity Key</th>
+                <th>Reference Name</th>
+                <th>Persona</th>
+                <th>Persona Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length > 0 ? (
+                rows.map((row, index) => (
+                  <tr key={`${row.opportunityKey ?? "none"}-${row.referenceName}-${index}`}>
+                    <td>{row.opportunityKey ?? "-"}</td>
+                    <td>{row.referenceName}</td>
+                    <td>
+                      <PersonaCell persona={row.persona} />
+                    </td>
+                    <td>
+                      <PersonaStatusCell persona={row.persona} />
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="table-sm table">
-              <thead>
+                ))
+              ) : (
                 <tr>
-                  <th>Opportunity Key</th>
-                  <th>Reference Name</th>
-                  <th>Target Persona</th>
-                  <th>Dispatch Kind</th>
-                  <th>Reason</th>
-                  <th>Dedupe Key</th>
-                  <th>Error Message</th>
+                  <td colSpan={4} className="text-base-content/60 text-center">
+                    No candidate rows yet.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {candidateStage.rows.length > 0 ? (
-                  candidateStage.rows.map((row) => (
-                    <tr key={`${row.opportunityKey}-${row.dedupeKey}`}>
-                      <td>{row.opportunityKey}</td>
-                      <td>{row.referenceName}</td>
-                      <td>{row.targetPersona.displayName}</td>
-                      <td>{row.dispatchKind}</td>
-                      <td>{row.reason}</td>
-                      <td>{row.dedupeKey}</td>
-                      <td className={row.errorMessage ? "text-error" : ""}>
-                        {row.errorMessage ?? "-"}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="text-base-content/60 text-center">
-                      No candidate results yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-base-content/60">
+            Page {page + 1} / {pageCount}
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-outline btn-xs"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Prev
+            </button>
+            <button
+              className="btn btn-outline btn-xs"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </SectionCard>
   );
 }
