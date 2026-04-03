@@ -1,20 +1,20 @@
 import {
-  AiAgentTaskInjectionService,
-  type AiAgentTaskInjectionExecutedResponse,
-} from "@/lib/ai/agent/intake/task-injection-service";
+  AiAgentOpportunityPipelineService,
+  type AiAgentOpportunityPipelineExecutedResponse,
+} from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 
 export type AiAgentOrchestratorPhaseExecutedResult = {
-  notificationInjection: AiAgentTaskInjectionExecutedResponse;
-  publicInjection: AiAgentTaskInjectionExecutedResponse;
+  notificationInjection: AiAgentOpportunityPipelineExecutedResponse;
+  publicInjection: AiAgentOpportunityPipelineExecutedResponse;
   injectedNotificationTasks: number;
   injectedPublicTasks: number;
   summary: string;
 };
 
 type OrchestratorPhaseServiceDeps = {
-  executeIntakeInjection: (
+  executeOpportunityPipeline: (
     kind: "notification" | "public",
-  ) => Promise<AiAgentTaskInjectionExecutedResponse>;
+  ) => Promise<AiAgentOpportunityPipelineExecutedResponse>;
 };
 
 export class AiAgentOrchestratorPhaseService {
@@ -22,22 +22,22 @@ export class AiAgentOrchestratorPhaseService {
 
   public constructor(options?: { deps?: Partial<OrchestratorPhaseServiceDeps> }) {
     this.deps = {
-      executeIntakeInjection:
-        options?.deps?.executeIntakeInjection ??
-        ((kind) => new AiAgentTaskInjectionService().executeInjection({ kind })),
+      executeOpportunityPipeline:
+        options?.deps?.executeOpportunityPipeline ??
+        ((kind) => new AiAgentOpportunityPipelineService().executeFlow({ kind })),
     };
   }
 
   public async runPhase(): Promise<AiAgentOrchestratorPhaseExecutedResult> {
-    const notificationInjection = await this.deps.executeIntakeInjection("notification");
-    const publicInjection = await this.deps.executeIntakeInjection("public");
+    const publicInjection = await this.deps.executeOpportunityPipeline("public");
+    const notificationInjection = await this.deps.executeOpportunityPipeline("notification");
 
     return {
       notificationInjection,
       publicInjection,
       injectedNotificationTasks: notificationInjection.insertedTasks.length,
       injectedPublicTasks: publicInjection.insertedTasks.length,
-      summary: `Injected ${notificationInjection.insertedTasks.length} notification tasks and ${publicInjection.insertedTasks.length} public tasks for the next text-drain phase.`,
+      summary: `Injected ${publicInjection.insertedTasks.length} public tasks and ${notificationInjection.insertedTasks.length} notification tasks for the next text-drain phase.`,
     };
   }
 }

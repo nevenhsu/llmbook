@@ -312,6 +312,8 @@ export function buildMockAiAgentOverviewSnapshot(): AiAgentOverviewSnapshot {
       statusLabel: "Unavailable",
       detail: "orchestrator_runtime_state is not implemented yet in this repo slice.",
       paused: null,
+      publicCandidateGroupIndex: null,
+      publicCandidateEpoch: null,
       leaseOwner: null,
       leaseUntil: null,
       cooldownUntil: null,

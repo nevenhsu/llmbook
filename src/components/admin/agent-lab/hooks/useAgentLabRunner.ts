@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import type {
-  AgentLabCandidateStage,
   AgentLabModeState,
   AgentLabPageProps,
   AgentLabSaveTaskOutcome,
@@ -54,12 +53,35 @@ function buildToastMessage(rows: AgentLabTaskRow[]) {
   return `${summary.succeeded} task${summary.succeeded === 1 ? "" : "s"} saved.`;
 }
 
-function resolveMaxGroupIndex(totalReferenceCount: number, batchSize: number) {
-  if (batchSize <= 0 || totalReferenceCount <= 0) {
-    return 0;
-  }
-
-  return Math.max(0, Math.ceil(totalReferenceCount / batchSize) - 1);
+function buildIdleCandidateStage(input: {
+  currentCandidateStage: AgentLabModeState["candidateStage"];
+  opportunities: AgentLabModeState["opportunities"];
+}) {
+  return {
+    ...input.currentCandidateStage,
+    status: "idle" as const,
+    inputData: {
+      selected_opportunities: input.opportunities
+        .filter((row) => row.selected)
+        .map((row) => ({
+          opportunity_key: row.opportunityKey,
+          content_type:
+            row.source === "public-post"
+              ? "post"
+              : row.source === "notification"
+                ? "mention"
+                : "comment",
+          summary: row.content,
+        })),
+      speaker_batch: input.currentCandidateStage.rows.map((row) => row.referenceName),
+    },
+    outputData: null,
+    rows: input.currentCandidateStage.rows.map((row) => ({
+      ...row,
+      opportunityKey: null,
+      errorMessage: null,
+    })),
+  };
 }
 
 export function useAgentLabRunner(props: AgentLabPageProps) {
@@ -86,6 +108,7 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
   } | null>(null);
   const [selectorBusy, setSelectorBusy] = useState(false);
   const [candidateBusy, setCandidateBusy] = useState(false);
+  const [groupSaveBusy, setGroupSaveBusy] = useState(false);
 
   const modeState = modeStates[sourceMode];
 
@@ -113,6 +136,36 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
           batchSize: modeState.personaGroup.batchSize,
           groupIndex: modeState.personaGroup.groupIndex,
         },
+        currentOpportunities: modeState.opportunities,
+        onProgress: (partial) => {
+          updateModeStates((current) => ({
+            ...current,
+            [sourceMode]: {
+              ...current[sourceMode],
+              opportunities: partial.rows,
+              selectorStage: partial,
+              candidateStage:
+                sourceMode === "notification"
+                  ? current[sourceMode].candidateStage
+                  : buildIdleCandidateStage({
+                      currentCandidateStage: current[sourceMode].candidateStage,
+                      opportunities: partial.rows,
+                    }),
+              taskStage:
+                sourceMode === "notification"
+                  ? current[sourceMode].taskStage
+                  : {
+                      rows: [],
+                      summary: {
+                        attempted: 0,
+                        succeeded: 0,
+                        failed: 0,
+                      },
+                      toastMessage: null,
+                    },
+            },
+          }));
+        },
       });
       const notificationCandidateResult =
         sourceMode === "notification"
@@ -124,6 +177,8 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
                 groupIndex: modeState.personaGroup.groupIndex,
               },
               selectorStage,
+              currentCandidateStage: modeStatesRef.current[sourceMode].candidateStage,
+              currentTaskRows: modeStatesRef.current[sourceMode].taskStage.rows,
             })
           : null;
       updateModeStates((current) => ({
@@ -132,13 +187,12 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
           ...current[sourceMode],
           opportunities: selectorStage.rows,
           selectorStage,
-          candidateStage: notificationCandidateResult?.candidateStage ?? {
-            ...current[sourceMode].candidateStage,
-            status: "idle",
-            prompt: current[sourceMode].candidateStage.prompt,
-            inputData: current[sourceMode].candidateStage.inputData,
-            outputData: current[sourceMode].candidateStage.outputData,
-          },
+          candidateStage:
+            notificationCandidateResult?.candidateStage ??
+            buildIdleCandidateStage({
+              currentCandidateStage: current[sourceMode].candidateStage,
+              opportunities: selectorStage.rows,
+            }),
           taskStage: notificationCandidateResult
             ? {
                 rows: notificationCandidateResult.taskRows,
@@ -176,6 +230,22 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
           groupIndex: modeState.personaGroup.groupIndex,
         },
         selectorStage: modeState.selectorStage,
+        currentCandidateStage: modeState.candidateStage,
+        currentTaskRows: modeState.taskStage.rows,
+        onProgress: (partial) => {
+          updateModeStates((current) => ({
+            ...current,
+            [sourceMode]: {
+              ...current[sourceMode],
+              candidateStage: partial.candidateStage,
+              taskStage: {
+                rows: partial.taskRows,
+                summary: summarizeRows(partial.taskRows),
+                toastMessage: null,
+              },
+            },
+          }));
+        },
       });
 
       updateModeStates((current) => ({
@@ -296,60 +366,38 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
     }
   }
 
-  async function updatePersonaGroup(input: { batchSize?: number; groupIndex?: number }) {
-    const currentState = modeStatesRef.current[sourceMode];
-    const currentGroup = currentState.personaGroup;
-    const nextBatchSize = Math.max(0, input.batchSize ?? currentGroup.batchSize);
-    const nextMaxGroupIndex = resolveMaxGroupIndex(currentGroup.totalReferenceCount, nextBatchSize);
-    const preferredGroupIndex = input.groupIndex ?? currentGroup.groupIndex;
-    const nextGroupIndex = Math.min(Math.max(preferredGroupIndex, 0), nextMaxGroupIndex);
-    const nextPersonaGroup = {
-      batchSize: nextBatchSize,
-      groupIndex: nextGroupIndex,
-    };
+  async function savePersonaGroup(input: { batchSize: number; groupIndex: number }) {
+    setGroupSaveBusy(true);
+    try {
+      const currentState = modeStatesRef.current[sourceMode];
+      const result = await props.onSavePersonaGroup({
+        sourceMode,
+        modelId,
+        personaGroup: input,
+        selectorStage: currentState.selectorStage,
+      });
 
-    updateModeStates((current) => ({
-      ...current,
-      [sourceMode]: {
-        ...current[sourceMode],
-        personaGroup: {
-          ...current[sourceMode].personaGroup,
-          ...nextPersonaGroup,
-          maxGroupIndex: nextMaxGroupIndex,
-        },
-      },
-    }));
-
-    if (sourceMode === "notification") {
-      return;
-    }
-
-    const result = await props.onRunCandidate({
-      sourceMode,
-      modelId,
-      personaGroup: nextPersonaGroup,
-      selectorStage: modeStatesRef.current[sourceMode].selectorStage,
-    });
-
-    updateModeStates((current) => ({
-      ...current,
-      [sourceMode]: {
-        ...current[sourceMode],
-        candidateStage: {
-          ...result.candidateStage,
-          rows: result.candidateStage.rows,
-        },
-        taskStage: {
-          rows: [],
-          summary: {
-            attempted: 0,
-            succeeded: 0,
-            failed: 0,
+      updateModeStates((current) => ({
+        ...current,
+        [sourceMode]: {
+          ...current[sourceMode],
+          personaGroup: result.personaGroup,
+          candidateStage: result.candidateStage,
+          taskStage: {
+            rows: result.taskRows,
+            summary: summarizeRows(result.taskRows),
+            toastMessage: null,
           },
-          toastMessage: null,
         },
-      },
-    }));
+      }));
+      setGroupModalOpen(false);
+      toast.success("Reference group updated.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Reference group update failed.";
+      toast.error(message);
+    } finally {
+      setGroupSaveBusy(false);
+    }
   }
 
   const api = useMemo(
@@ -367,12 +415,13 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
       setDataModal,
       selectorBusy,
       candidateBusy,
+      groupSaveBusy,
       canRunCandidate,
       runSelector,
       runCandidate,
       saveTaskRow,
       saveAllTasks,
-      updatePersonaGroup,
+      savePersonaGroup,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -384,6 +433,7 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
       dataModal,
       selectorBusy,
       candidateBusy,
+      groupSaveBusy,
       canRunCandidate,
     ],
   );

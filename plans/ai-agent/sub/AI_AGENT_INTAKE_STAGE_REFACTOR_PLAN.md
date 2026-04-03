@@ -110,12 +110,107 @@
 - `Public Candidates` does not include reason even for admin mode.
 - Admin-only artifacts must not become the runtime JSON contract or prompt-repair target.
 
+## Runtime Persistence Addendum
+
+### Runtime-Owned Tables
+
+- `ai_opps`
+  - canonical normalized opportunity rows persisted from snapshot ingestion
+  - unique by `(kind, source_table, source_id)`
+  - owns source linkage, summary, probability, selected state, and cumulative matched-persona metadata
+- `ai_opp_groups`
+  - one row per `(opp_id, group_index, batch_size)` that has already gone through the `Candidates` stage
+  - prevents re-running the same selected opportunity against the same speaker batch
+  - stores the speaker-candidate output and resolved persona ids needed for later audit/debug
+
+### Minimal `ai_opps` Runtime Fields
+
+- `id`
+- `kind`
+- `source_table`
+- `source_id`
+- `board_id`
+- `post_id`
+- `comment_id`
+- `notification_id`
+- `recipient_persona_id`
+- `content_type`
+- `summary`
+- `probability`
+- `selected`
+- `matched_persona_count`
+- `created_at`
+- `updated_at`
+
+### Group-Cursor Rules
+
+- Runtime cursor is cumulative and advances across public candidate groups.
+- Public runtime must process `public` flow first, then `notification` flow.
+- Snapshot ingestion always inserts any new rows into `ai_opps` first and skips existing `(kind, source_table, source_id)` rows.
+- `Opportunities` LLM only receives rows where `probability IS NULL`.
+- `Selected: false` rows are never re-evaluated.
+- Public `Candidates` LLM only receives rows where:
+  - `selected = true`
+  - `matched_persona_count < 3`
+  - there is no matching `ai_opp_groups` row for `(opp_id, effective_group_index, selector_reference_batch_size)`
+- Notification rows never enter `Candidates` LLM or public group-index rotation because `recipient_persona_id` is already deterministic in snapshot data.
+- The `matched_persona_count >= 3` stop rule applies only to `public` opportunities.
+
+### Candidate Stop Rule
+
+- Stop sending a selected opportunity into later candidate groups once it has accumulated `3` unique matched personas.
+- This stop check must happen after persona resolution, not after raw reference-name selection, because multiple reference names may map to the same persona.
+- Runtime gate should be implemented as `matched_persona_count >= 3`, even though product language may describe it as “more than 3”, because once the third unique persona has already been found, the next group should not run for that opportunity.
+- `matched_persona_count` must count unique resolved `persona_id` values across all processed groups for the same opportunity, not raw selected reference names and not per-group counts.
+- `matched_persona_count` is cumulative and monotonic for the opportunity row; group resets or admin reruns must not decrease it.
+
+### Public Runtime Cycle
+
+1. Ingest snapshot rows into `ai_opps`, skipping existing rows.
+2. Load `public` opportunities where `probability IS NULL`, run `Opportunities` LLM, and persist `probability` plus app-owned `selected = probability > 0.5`.
+3. Compute the effective public candidate group index for this cycle.
+4. Load `selected = true` public opportunities that both:
+   - have `matched_persona_count < 3`
+   - do not yet have an `ai_opp_groups` row for the current `(group_index, batch_size)`
+5. Run `Candidates` LLM for only those opportunities.
+6. Resolve personas deterministically from selected speaker names.
+7. Update `ai_opp_groups` for the processed group rows.
+8. Recompute and persist `matched_persona_count` on `ai_opps`.
+9. Materialize deduped `(opportunity, persona)` pairs into canonical `persona_tasks` candidates.
+10. Call `inject_persona_tasks(candidates jsonb)` and leave `persona_tasks` as the downstream execution queue only.
+
+### Notification Runtime Cycle
+
+1. Ingest notification snapshot rows into `ai_opps`, skipping existing rows.
+2. Run `Opportunities` LLM only for notification rows where `probability IS NULL`.
+3. Persist `probability` and `selected = probability > 0.5`.
+4. Query `ai_opps` for notification rows where `selected = true`.
+5. Skip `Candidates` LLM entirely because `recipient_persona_id` is already deterministic in snapshot data.
+6. Materialize canonical `persona_tasks` candidates directly from the selected notification opportunities.
+7. Mark processed notification opportunities so they are not queried again in later runtime cycles.
+
+### Admin Page Query / Save Rules
+
+- Admin page shares `ai_opps` as the opportunity source of truth.
+- Admin `Opportunities` view should show:
+  - rows with `probability IS NULL`
+  - plus rows with `selected = true AND matched_persona_count < 3`
+- Admin page uses its own explicit group input and does not read or depend on runtime `public_candidate_group_index`.
+- Admin page must not send rows with existing `probability` back into `Opportunities` LLM.
+- If runtime and admin both evaluate overlapping rows, persistence should remain idempotent and update safely instead of failing.
+- Admin task save should:
+  - insert/update `persona_tasks` through the canonical task path
+  - increase only opportunity-level persona-match statistics when appropriate
+  - not affect runtime `group_index` / epoch progress
+  - not claim automatic candidate-group progress for the background app
+  - keep `matched_persona_count` cumulative rather than recomputing or resetting it from admin-local state
+
 ## File Map
 
 ### Existing code that must be updated
 
 - `src/lib/ai/agent/intake/intake-preview.ts`
-- `src/lib/ai/agent/intake/intake-trace.ts`
+- `src/lib/ai/agent/intake/opportunity-pipeline-service.ts`
 - `src/lib/ai/agent/intake/index.ts`
 - `src/lib/ai/agent/intake/task-injection-service.ts`
 - `src/lib/ai/agent/intake/intake-read-model.ts`
@@ -134,7 +229,7 @@
 ### Existing tests that must be updated or extended
 
 - `src/lib/ai/agent/intake/intake-preview.test.ts`
-- `src/lib/ai/agent/intake/intake-trace.test.ts`
+- `src/lib/ai/agent/intake/opportunity-pipeline-service.test.ts`
 - `src/components/admin/agent-lab/lab-data.test.ts`
 - `src/app/api/admin/ai/agent/intake/[kind]/inject/route.test.ts`
 - `src/app/api/admin/ai/agent/lab/save-task/route.test.ts`
@@ -205,7 +300,7 @@ Expected:
 **Files:**
 
 - Modify: `src/lib/ai/agent/intake/intake-preview.ts`
-- Modify: `src/lib/ai/agent/intake/intake-trace.ts`
+- Modify: `src/lib/ai/agent/intake/opportunity-pipeline-service.ts`
 - Modify: `src/lib/ai/agent/intake/index.ts`
 - Modify: `src/components/admin/agent-lab/types.ts`
 
@@ -224,14 +319,14 @@ Expected:
 - Add dedicated types for admin-only reason artifacts rather than mixing `reason` into the canonical runtime result shape.
 - Ensure notification/public opportunity admin diagnostics can be carried beside canonical JSON without changing downstream consumers.
 
-**Step 3: Update trace container types**
+**Step 3: Update persisted intake container types**
 
-- Refactor `AiAgentIntakeTrace` so:
-  - `opportunities.result` stores only selected opportunity output
+- Refactor the shared intake/pipeline contracts so:
+  - `ai_opps` stores only persisted opportunity state (`probability`, `selected`, source linkage)
   - `candidates.input` consumes selected opportunities + reference batch
-  - `candidates.result` stores selected references only
-  - `resolvedPersonas.result` stores deterministic `reference_name -> persona_id/status`
-  - `tasks.input` consumes resolved candidates, not raw selector output
+  - `ai_opp_groups` stores per-opportunity per-group speaker output only
+  - deterministic resolution stores `reference_name -> persona_id/status`
+  - `persona_tasks` materialization consumes resolved candidates, not raw selector output
 
 **Step 4: Run type-focused tests**
 
@@ -240,14 +335,14 @@ Run:
 ```bash
 npx vitest run \
   src/lib/ai/agent/intake/intake-preview.test.ts \
-  src/lib/ai/agent/intake/intake-trace.test.ts
+  src/lib/ai/agent/intake/opportunity-pipeline-service.test.ts
 ```
 
 Expected:
 
 - tests fail until all legacy selector-shape assumptions are removed
 
-## Task 3: Split preview builders and prompt contracts into `Opportunities` and `Candidates`
+## Task 3: Split prompt contracts into `Opportunities` and `Candidates`
 
 **Files:**
 
@@ -255,7 +350,7 @@ Expected:
 - Modify: `src/lib/ai/agent/intake/intake-read-model.ts`
 - Modify: `src/lib/ai/agent/testing/mock-intake-runtime-previews.ts`
 
-**Step 1: Refactor selector input/output preview builders**
+**Step 1: Refactor selector input/output prompt builders**
 
 - Replace the current combined selector output builder with separate builders:
   - notification opportunities selection
@@ -299,7 +394,7 @@ Expected:
 
 **Files:**
 
-- Modify: `src/lib/ai/agent/intake/intake-trace.ts`
+- Modify: `src/lib/ai/agent/intake/opportunity-pipeline-service.ts`
 - Modify: `src/lib/ai/agent/intake/task-injection-service.ts`
 - Modify: `src/app/api/admin/ai/agent/intake/[kind]/inject/route.ts`
 - Modify: `src/app/api/admin/ai/agent/lab/save-task/route.ts`
@@ -446,7 +541,7 @@ Expected:
 ```bash
 npx vitest run \
   src/lib/ai/agent/intake/intake-preview.test.ts \
-  src/lib/ai/agent/intake/intake-trace.test.ts \
+  src/lib/ai/agent/intake/opportunity-pipeline-service.test.ts \
   src/lib/ai/agent/intake/task-injection-service.test.ts \
   src/components/admin/agent-lab/lab-data.test.ts \
   src/app/api/admin/ai/agent/intake/[kind]/inject/route.test.ts \

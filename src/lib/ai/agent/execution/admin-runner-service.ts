@@ -8,9 +8,9 @@ import {
   type AiAgentMediaExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/media-job-service";
 import {
-  AiAgentTaskInjectionService,
-  type AiAgentTaskInjectionExecutedResponse,
-} from "@/lib/ai/agent/intake/task-injection-service";
+  AiAgentOpportunityPipelineService,
+  type AiAgentOpportunityPipelineExecutedResponse,
+} from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 import {
   AiAgentMemoryCompressorService,
   type AiAgentMemoryPersistedCompressResponse,
@@ -60,7 +60,7 @@ type AdminRunnerServiceDeps = {
   ) => Promise<AiAgentMediaExecutionPersistedResult>;
   executeIntakeInjection: (
     kind: "notification" | "public",
-  ) => Promise<AiAgentTaskInjectionExecutedResponse>;
+  ) => Promise<AiAgentOpportunityPipelineExecutedResponse>;
 };
 
 export type AiAgentRunnerTarget =
@@ -114,8 +114,8 @@ export type AiAgentTextExecutionPersistedResult = {
 export type AiAgentOrchestratorExecutedResult = {
   injectedNotificationTasks: number;
   injectedPublicTasks: number;
-  notificationInjection: AiAgentTaskInjectionExecutedResponse;
-  publicInjection: AiAgentTaskInjectionExecutedResponse;
+  notificationInjection: AiAgentOpportunityPipelineExecutedResponse;
+  publicInjection: AiAgentOpportunityPipelineExecutedResponse;
   executedTextTask: AiAgentTextExecutionPersistedResult | null;
   executedMediaTask: AiAgentMediaExecutionPersistedResult | null;
   compressionResult: AiAgentMemoryPersistedCompressResponse | null;
@@ -157,7 +157,7 @@ export class AiAgentAdminRunnerService {
         ((task) => new AiAgentMediaJobService().executeForTask(task)),
       executeIntakeInjection:
         options?.deps?.executeIntakeInjection ??
-        ((kind) => new AiAgentTaskInjectionService().executeInjection({ kind })),
+        ((kind) => new AiAgentOpportunityPipelineService().executeFlow({ kind })),
     };
   }
 
@@ -319,11 +319,9 @@ export class AiAgentAdminRunnerService {
         throw new Error("task not found");
       }
 
-      const notificationTarget = task.payload.notificationTarget as
-        | {
-            postId?: string | null;
-          }
-        | undefined;
+      const notificationTarget = task.payload as {
+        postId?: string | null;
+      };
       if (
         task.dispatchKind !== "public" &&
         !(
@@ -437,13 +435,11 @@ export class AiAgentAdminRunnerService {
     }
 
     if (executionPreview.parsedOutput.kind === "comment") {
-      const notificationTarget = task.payload.notificationTarget as
-        | {
-            postId?: string | null;
-            commentId?: string | null;
-            parentCommentId?: string | null;
-          }
-        | undefined;
+      const notificationTarget = task.payload as {
+        postId?: string | null;
+        commentId?: string | null;
+        parentCommentId?: string | null;
+      };
       let sourcePost: { id: string } | { id: string; post_id: string } | null = null;
       let sourceError: Error | null = null;
 
@@ -509,11 +505,9 @@ export class AiAgentAdminRunnerService {
       };
     }
 
-    const notificationTarget = task.payload.notificationTarget as
-      | {
-          postId?: string | null;
-        }
-      | undefined;
+    const notificationTarget = task.payload as {
+      postId?: string | null;
+    };
     const sourcePostId =
       task.sourceTable === "notifications"
         ? (notificationTarget?.postId ?? "")

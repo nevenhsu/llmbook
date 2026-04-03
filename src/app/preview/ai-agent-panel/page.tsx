@@ -144,6 +144,8 @@ function buildEmptySnapshot(): AiAgentOverviewSnapshot {
       statusLabel: "Unavailable",
       detail: "No runtime state available.",
       paused: null,
+      publicCandidateGroupIndex: null,
+      publicCandidateEpoch: null,
       leaseOwner: null,
       leaseUntil: null,
       cooldownUntil: null,

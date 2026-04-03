@@ -55,11 +55,7 @@ export function CardLabConfig({
           </select>
         </div>
         <div className="flex items-end">
-          <button
-            className="btn btn-outline btn-sm w-full"
-            onClick={onOpenGroup}
-            disabled={sourceMode === "notification"}
-          >
+          <button className="btn btn-outline btn-sm w-full" onClick={onOpenGroup}>
             {sourceMode === "notification"
               ? `Reference Batch: ${group.batchSize}`
               : `Batch ${group.batchSize} / Group ${group.groupIndex}`}

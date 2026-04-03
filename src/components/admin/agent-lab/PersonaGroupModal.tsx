@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ModalShell } from "@/components/ui/ModalShell";
 import type { AgentLabPersonaGroup, AgentLabSourceMode } from "./types";
 
@@ -8,7 +9,8 @@ type Props = {
   sourceMode: AgentLabSourceMode;
   group: AgentLabPersonaGroup;
   onClose: () => void;
-  onUpdateGroup: (input: { batchSize?: number; groupIndex?: number }) => void;
+  onSave: (input: { batchSize: number; groupIndex: number }) => Promise<void>;
+  busy: boolean;
 };
 
 type NumberControlProps = {
@@ -62,10 +64,25 @@ function NumberControl({
   );
 }
 
-export function PersonaGroupModal({ open, sourceMode, group, onClose, onUpdateGroup }: Props) {
+export function PersonaGroupModal({ open, sourceMode, group, onClose, onSave, busy }: Props) {
+  const [draftBatchSize, setDraftBatchSize] = useState(group.batchSize);
+  const [draftGroupIndex, setDraftGroupIndex] = useState(group.groupIndex);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setDraftBatchSize(group.batchSize);
+    setDraftGroupIndex(group.groupIndex);
+  }, [group.batchSize, group.groupIndex, open]);
+
   if (!open) {
     return null;
   }
+
+  const nextMaxGroupIndex =
+    draftBatchSize > 0 ? Math.max(0, Math.ceil(group.totalReferenceCount / draftBatchSize) - 1) : 0;
+  const clampedGroupIndex = Math.min(Math.max(draftGroupIndex, 0), nextMaxGroupIndex);
 
   return (
     <dialog className="modal modal-open" open>
@@ -77,9 +94,17 @@ export function PersonaGroupModal({ open, sourceMode, group, onClose, onUpdateGr
         minHeightClassName="min-h-[30vh]"
         footer={
           <>
-            <span />
-            <button className="btn btn-primary btn-sm" onClick={onClose}>
+            <button className="btn btn-outline btn-sm" onClick={onClose} disabled={busy}>
               Close
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={busy}
+              onClick={() =>
+                void onSave({ batchSize: draftBatchSize, groupIndex: clampedGroupIndex })
+              }
+            >
+              {busy ? "Saving..." : "Save"}
             </button>
           </>
         }
@@ -95,21 +120,24 @@ export function PersonaGroupModal({ open, sourceMode, group, onClose, onUpdateGr
           </div>
           <NumberControl
             label="Persona reference batch size"
-            value={group.batchSize}
-            onDecrease={() => onUpdateGroup({ batchSize: group.batchSize - 1 })}
-            onIncrease={() => onUpdateGroup({ batchSize: group.batchSize + 1 })}
+            value={draftBatchSize}
+            disabled={busy}
+            onDecrease={() => setDraftBatchSize((current) => Math.max(1, current - 1))}
+            onIncrease={() => setDraftBatchSize((current) => current + 1)}
           />
           <NumberControl
             label="Group index"
             subLabel={
               sourceMode === "notification"
                 ? "Disabled for notification mode"
-                : `(max ${group.maxGroupIndex})`
+                : `(max ${nextMaxGroupIndex})`
             }
-            value={group.groupIndex}
-            disabled={sourceMode === "notification"}
-            onDecrease={() => onUpdateGroup({ groupIndex: group.groupIndex - 1 })}
-            onIncrease={() => onUpdateGroup({ groupIndex: group.groupIndex + 1 })}
+            value={clampedGroupIndex}
+            disabled={sourceMode === "notification" || busy}
+            onDecrease={() => setDraftGroupIndex((current) => Math.max(0, current - 1))}
+            onIncrease={() =>
+              setDraftGroupIndex((current) => Math.min(nextMaxGroupIndex, current + 1))
+            }
           />
         </div>
       </ModalShell>

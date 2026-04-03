@@ -1,34 +1,78 @@
 import { describe, expect, it } from "vitest";
+import { buildExecutionPreview } from "@/lib/ai/agent/execution/execution-preview";
 import {
-  buildExecutionPreview,
-  buildResolvedPersonasPreview,
   buildSelectorInputPreview,
-  buildSelectorOutputPreview,
-  buildTaskCandidatePreview,
-  buildTaskWritePreview,
-} from "@/lib/ai/agent";
+  type ResolvedPersonaPreview,
+  type TaskCandidatePreview,
+  type TaskWritePreview,
+} from "@/lib/ai/agent/intake/intake-preview";
 
 describe("buildExecutionPreview", () => {
-  it("builds a staged execution artifact with parsed, audited, and write-plan data", () => {
+  it("builds a staged execution artifact from the current task-facing contract", () => {
     const selectorInput = buildSelectorInputPreview({
       fixtureMode: "notification-intake",
       groupIndexOverride: 0,
-      selectorReferenceBatchSize: 100,
+      selectorReferenceBatchSize: 1,
       items: [
         {
           source: "notification",
           contentType: "mention",
           summary: "Unread mention that should route through notification triage.",
+          sourceId: "notification-intake-1",
+          metadata: {
+            recipientPersonaId: "persona-orchid",
+            postId: "post-1",
+            notificationType: "mention",
+          },
         },
       ],
     });
-    const selectorOutput = buildSelectorOutputPreview(selectorInput);
-    const resolvedPersonas = buildResolvedPersonasPreview(selectorOutput);
-    const candidates = buildTaskCandidatePreview({
-      selectorInput,
-      resolvedPersonas,
-    });
-    const taskWritePreview = buildTaskWritePreview(candidates);
+    const resolvedPersonas: ResolvedPersonaPreview[] = [
+      {
+        personaId: "persona-orchid",
+        username: "ai_orchid",
+        displayName: "Orchid",
+        active: true,
+        referenceSource: "Yayoi Kusama",
+      },
+    ];
+    const candidates: TaskCandidatePreview[] = [
+      {
+        candidateIndex: 0,
+        opportunityKey: "N01",
+        personaId: "persona-orchid",
+        username: "ai_orchid",
+        dispatchKind: "notification",
+        sourceTable: "notifications",
+        sourceId: "notification-intake-1",
+        dedupeKey: "ai_orchid:notification-intake-1:mention",
+        cooldownUntil: "2026-03-29T06:00:00.000Z",
+        decisionReason: "Notification selected for direct recipient handling.",
+        payload: {
+          contentType: "mention",
+          source: "notification",
+          summary: "Unread mention that should route through notification triage.",
+          fixtureMode: "notification-intake",
+          boardId: null,
+          postId: "post-1",
+          commentId: null,
+          parentCommentId: null,
+          context: "post",
+          notificationType: "mention",
+        },
+      },
+    ];
+    const taskWritePreview: TaskWritePreview[] = [
+      {
+        candidateIndex: 0,
+        inserted: true,
+        skipReason: null,
+        taskId: "task-preview-1",
+        dedupeExpectation: "insert",
+        cooldownExpectation: "eligible",
+        expectationSummary: "Task would insert cleanly.",
+      },
+    ];
 
     const executionPreview = buildExecutionPreview({
       selectorInput,

@@ -16,6 +16,34 @@ type Props = {
   busy: boolean;
 };
 
+function SelectedStateCell({ row }: { row: AgentLabOpportunityRow }) {
+  const ui =
+    typeof row.probability !== "number"
+      ? {
+          label: "Pending",
+          dotClassName: "bg-base-content/30",
+          textClassName: "text-base-content/70",
+        }
+      : row.selected
+        ? {
+            label: "Selected",
+            dotClassName: "bg-success",
+            textClassName: "text-success",
+          }
+        : {
+            label: "Not Selected",
+            dotClassName: "bg-error",
+            textClassName: "text-error",
+          };
+
+  return (
+    <span className={`inline-flex items-center gap-2 text-sm font-medium ${ui.textClassName}`}>
+      <span className={`h-2.5 w-2.5 rounded-full ${ui.dotClassName}`} aria-hidden="true" />
+      {ui.label}
+    </span>
+  );
+}
+
 export function CardOpportunities({
   opportunities,
   selectorStage,
@@ -42,13 +70,6 @@ export function CardOpportunities({
       actions={
         <div className="flex flex-wrap gap-2">
           <button
-            className="btn btn-primary btn-sm"
-            disabled={busy || opportunities.length === 0}
-            onClick={() => void onRun()}
-          >
-            {busy ? "Running..." : "Run"}
-          </button>
-          <button
             className="btn btn-outline btn-sm"
             disabled={!selectorStage.prompt}
             onClick={onShowPrompt}
@@ -57,6 +78,13 @@ export function CardOpportunities({
           </button>
           <button className="btn btn-outline btn-sm" onClick={onShowData}>
             Show Data
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={busy || opportunities.length === 0}
+            onClick={() => void onRun()}
+          >
+            {busy ? "Running..." : "Run"}
           </button>
         </div>
       }
@@ -85,7 +113,7 @@ export function CardOpportunities({
                       {typeof row.probability === "number" ? row.probability.toFixed(2) : "-"}
                     </td>
                     <td>
-                      {typeof row.probability === "number" ? (row.selected ? "Yes" : "No") : "-"}
+                      <SelectedStateCell row={row} />
                     </td>
                     <td>
                       {row.link ? (
@@ -110,7 +138,7 @@ export function CardOpportunities({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-base-content/60">
-            Page {page + 1} / {pageCount}
+            Page {page + 1} / {pageCount} · Total {opportunities.length} rows
           </span>
           <div className="flex gap-2">
             <button

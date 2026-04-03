@@ -1,10 +1,5 @@
 import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
-import type {
-  CandidateSelectionPreview,
-  OpportunitySelectionPreview,
-  ResolvedCandidatePreview,
-  TaskCandidatePreview,
-} from "@/lib/ai/agent/intake/intake-preview";
+import type { TaskCandidatePreview } from "@/lib/ai/agent/intake/intake-preview";
 
 export type AgentLabSourceMode = "public" | "notification";
 
@@ -23,6 +18,7 @@ export type AgentLabPersonaGroup = {
 export type AgentLabPersonaGroupInput = Pick<AgentLabPersonaGroup, "batchSize" | "groupIndex">;
 
 export type AgentLabOpportunityRow = {
+  recordId: string | null;
   opportunityKey: string;
   source: "public-post" | "public-comment" | "notification";
   link: string | null;
@@ -134,13 +130,31 @@ export type AgentLabPageProps = {
     sourceMode: AgentLabSourceMode;
     modelId: string;
     personaGroup: AgentLabPersonaGroupInput;
+    currentOpportunities: AgentLabOpportunityRow[];
+    onProgress?: (partial: AgentLabSelectorStage) => void;
   }) => Promise<AgentLabSelectorStage>;
   onRunCandidate: (input: {
     sourceMode: AgentLabSourceMode;
     modelId: string;
     personaGroup: AgentLabPersonaGroupInput;
     selectorStage: AgentLabSelectorStage;
+    currentCandidateStage: AgentLabCandidateStage;
+    currentTaskRows: AgentLabTaskRow[];
+    onProgress?: (partial: {
+      candidateStage: AgentLabCandidateStage;
+      taskRows: AgentLabTaskRow[];
+    }) => void;
   }) => Promise<{
+    candidateStage: AgentLabCandidateStage;
+    taskRows: AgentLabTaskRow[];
+  }>;
+  onSavePersonaGroup: (input: {
+    sourceMode: AgentLabSourceMode;
+    modelId: string;
+    personaGroup: AgentLabPersonaGroupInput;
+    selectorStage: AgentLabSelectorStage;
+  }) => Promise<{
+    personaGroup: AgentLabPersonaGroup;
     candidateStage: AgentLabCandidateStage;
     taskRows: AgentLabTaskRow[];
   }>;
@@ -151,7 +165,3 @@ export type AgentLabPageProps = {
     rowIndex: number;
   }) => Promise<AgentLabSaveTaskOutcome>;
 };
-
-export type AgentLabOpportunitySelectionPreview = OpportunitySelectionPreview;
-export type AgentLabCandidateSelectionPreview = CandidateSelectionPreview;
-export type AgentLabResolvedCandidatePreview = ResolvedCandidatePreview;

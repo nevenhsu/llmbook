@@ -1,12 +1,12 @@
-"use client";
-
 import { PreviewAiAgentLabClient } from "@/components/admin/agent-lab/PreviewAiAgentLabClient";
+import { loadAiAgentConfig } from "@/lib/ai/agent/config/agent-config";
 import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
 import type { AiAgentRuntimeSourceSnapshot } from "@/lib/ai/agent/intake/intake-read-model";
 import mockData from "@/mock-data/ai-agent-lab.json";
 import mockResults from "@/mock-data/ai-agent-lab-results.json";
 
-export default function PreviewAiAgentLabPage() {
+export default async function PreviewAiAgentLabPage() {
+  const config = await loadAiAgentConfig();
   const typedMockData = mockData as {
     runtimePreviews: {
       notification: AiAgentRuntimeSourceSnapshot;
@@ -22,6 +22,7 @@ export default function PreviewAiAgentLabPage() {
       models={typedMockData.models}
       providers={typedMockData.providers}
       results={mockResults}
+      selectorReferenceBatchSize={config.values.selectorReferenceBatchSize}
     />
   );
 }

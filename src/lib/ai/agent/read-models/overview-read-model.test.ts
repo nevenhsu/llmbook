@@ -278,6 +278,8 @@ describe("AiAgentOverviewStore", () => {
           statusLabel: "Unavailable",
           detail: "orchestrator_runtime_state row is missing.",
           paused: null,
+          publicCandidateGroupIndex: null,
+          publicCandidateEpoch: null,
           leaseOwner: null,
           leaseUntil: null,
           cooldownUntil: null,

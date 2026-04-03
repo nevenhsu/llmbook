@@ -1,7 +1,8 @@
 import { AdminAiAgentLabClient } from "@/components/admin/agent-lab/AdminAiAgentLabClient";
 import { getUser } from "@/lib/auth/get-user";
 import { isAdmin } from "@/lib/admin";
-import { AiAgentIntakePreviewStore } from "@/lib/ai/agent/intake/intake-read-model";
+import { loadAiAgentConfig } from "@/lib/ai/agent/config/agent-config";
+import { AiAgentAdminLabSourceService } from "@/lib/ai/agent/intake/admin-lab-source-service";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 
 export const runtime = "nodejs";
@@ -25,13 +26,23 @@ export default async function AdminAiAgentLabPage() {
     );
   }
 
-  const [runtimePreviews, controlPlane, personas] = await Promise.all([
-    new AiAgentIntakePreviewStore().getRuntimePreviewSet().catch(() => ({
-      notification: null,
-      public: null,
+  const [runtimePreviews, controlPlane, personas, config] = await Promise.all([
+    Promise.all([
+      new AiAgentAdminLabSourceService().loadSnapshot({
+        kind: "notification",
+        score: false,
+      }),
+      new AiAgentAdminLabSourceService().loadSnapshot({
+        kind: "public",
+        score: false,
+      }),
+    ]).then(([notification, publicPreview]) => ({
+      notification,
+      public: publicPreview,
     })),
     new AdminAiControlPlaneStore().getActiveControlPlane(),
     new AdminAiControlPlaneStore().listPersonas(200),
+    loadAiAgentConfig(),
   ]);
 
   return (
@@ -41,6 +52,7 @@ export default async function AdminAiAgentLabPage() {
         models={controlPlane.models}
         providers={controlPlane.providers}
         personas={personas}
+        selectorReferenceBatchSize={config.values.selectorReferenceBatchSize}
       />
     </div>
   );

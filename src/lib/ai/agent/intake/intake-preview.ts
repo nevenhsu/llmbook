@@ -34,97 +34,12 @@ export type SelectorInputPreview = {
   opportunityLookup: OpportunityLookupPreview[];
 };
 
-export type OpportunitySelectionPreview = {
-  opportunityProbabilities: Array<{
-    opportunityKey: string;
-    probability: number;
-  }>;
-  selectedOpportunities: Array<{
-    opportunityKey: string;
-  }>;
-  promptPreview: string;
-  actualModelPayload: {
-    assembledPrompt: string;
-    compactContext: {
-      fixtureMode: IntakeFixtureMode;
-      opportunities: Array<{
-        opportunityKey: string;
-        source: string;
-        contentType: string;
-      }>;
-    };
-  };
-};
-
-export type CandidateSelectionPreview = {
-  referenceWindow: {
-    start: number;
-    endExclusive: number;
-    totalReferences: number;
-  };
-  candidateSelections: Array<{
-    opportunityKey: string;
-    selectedReferences: string[];
-  }>;
-  promptPreview: string;
-  actualModelPayload: {
-    assembledPrompt: string;
-    compactContext: {
-      fixtureMode: IntakeFixtureMode;
-      groupIndex: number;
-      batchSize: number;
-      selectedOpportunities: Array<{
-        opportunityKey: string;
-        source: string;
-        contentType: string;
-      }>;
-      referenceBatch: string[];
-    };
-  };
-};
-
 export type ResolvedPersonaPreview = {
   personaId: string;
   username: string;
   displayName: string;
   active: boolean;
   referenceSource: string;
-};
-
-export type ResolvedCandidatePreview = {
-  opportunityKey: string;
-  personaIds: Array<{
-    referenceName: string;
-    personaId: string;
-    status: "active" | "inactive";
-  }>;
-};
-
-export type SelectorOutputPreview = {
-  referenceWindow: {
-    start: number;
-    endExclusive: number;
-    totalReferences: number;
-  };
-  selectedReferences: Array<{
-    referenceName: string;
-    rank: number;
-    reason: string;
-  }>;
-  promptPreview: string;
-  actualModelPayload: {
-    assembledPrompt: string;
-    compactContext: {
-      fixtureMode: IntakeFixtureMode;
-      groupIndex: number;
-      batchSize: number;
-      opportunities: Array<{
-        opportunityKey: string;
-        source: string;
-        contentType: string;
-      }>;
-    };
-  };
 };
 
 export type TaskCandidatePreview = {
@@ -143,13 +58,12 @@ export type TaskCandidatePreview = {
     source: string;
     summary: string;
     fixtureMode: IntakeFixtureMode;
-    notificationTarget?: {
-      postId: string | null;
-      commentId: string | null;
-      parentCommentId: string | null;
-      context: string | null;
-      notificationType: string | null;
-    } | null;
+    boardId: string | null;
+    postId: string | null;
+    commentId: string | null;
+    parentCommentId: string | null;
+    context: string | null;
+    notificationType: string | null;
   };
 };
 
@@ -185,7 +99,7 @@ export type TaskInjectionPreview = {
   }>;
 };
 
-const REFERENCE_LIBRARY = [
+export const DEFAULT_REFERENCE_LIBRARY = [
   "Yayoi Kusama",
   "David Bowie",
   "Octavia Butler",
@@ -287,6 +201,18 @@ const PERSONA_LIBRARY = [
   },
 ];
 
+const PERSONA_REFERENCE_OVERRIDES: Record<string, ResolvedPersonaPreview[]> = {
+  "Laurie Anderson": [
+    {
+      personaId: "persona-marlowe",
+      username: "ai_marlowe",
+      displayName: "Marlowe",
+      active: true,
+      referenceSource: "Laurie Anderson",
+    },
+  ],
+};
+
 type IntakePromptBlock = {
   name: string;
   content: string;
@@ -296,16 +222,27 @@ function formatIntakePrompt(blocks: IntakePromptBlock[]) {
   return blocks.map((block) => `[${block.name}]\n${block.content || "(empty)"}`).join("\n\n");
 }
 
-function buildOpportunityStagePrompt(input: SelectorInputPreview) {
+export function buildOpportunityStagePrompt(input: SelectorInputPreview) {
   const outputSchema = [
     "{",
-    '  "opportunity_probabilities": [',
+    '  "scores": [',
     '    { "opportunity_key": "O01", "probability": 0.82 },',
     '    { "opportunity_key": "O02", "probability": 0.61 },',
     '    { "opportunity_key": "O03", "probability": 0.24 }',
     "  ]",
     "}",
   ].join("\n");
+
+  const availableOpportunities =
+    input.opportunities
+      .map((opportunity) =>
+        [
+          `- opportunity_key: ${opportunity.opportunityKey}`,
+          `  content_type: ${opportunity.contentType}`,
+          `  summary: ${opportunity.summary}`,
+        ].join("\n"),
+      )
+      .join("\n") || "(empty)";
 
   const blocks: IntakePromptBlock[] = [
     {
@@ -316,10 +253,6 @@ function buildOpportunityStagePrompt(input: SelectorInputPreview) {
       name: "goal",
       content:
         "Review the current source snapshot and assign a probability to every opportunity for whether it should continue into downstream task selection.",
-    },
-    {
-      name: "snapshot_scope",
-      content: `fixture_mode: ${input.fixtureMode}`,
     },
     {
       name: "selection_rules",
@@ -334,21 +267,17 @@ function buildOpportunityStagePrompt(input: SelectorInputPreview) {
     {
       name: "decision_criteria",
       content: [
-        "Prioritize opportunities with a clear reply/posting target or an obvious next action.",
-        "Prioritize opportunities where a persona response is likely to add value, context, or momentum.",
-        "Prefer high-signal public threads over low-context chatter, duplicate noise, or stale items.",
-        "Deprioritize opportunities that are ambiguous, low-value, already handled, or missing enough context to act responsibly.",
+        "Score each opportunity with a probability between 0 and 1 for whether it should move forward.",
+        "Use 0.8 to 1.0 when the opportunity is clearly worth acting on now and has a strong next step.",
+        "Use 0.5 to 0.79 when the opportunity looks promising but still has some uncertainty or weaker upside.",
+        "Use 0.0 to 0.49 when the opportunity is low-value, unclear, stale, repetitive, or not worth acting on now.",
+        "Give higher scores to opportunities with a clear reply/post target and where a persona response would likely add value.",
+        "Give lower scores to opportunities that are ambiguous, low-context, already handled, or unlikely to benefit from a persona response.",
       ].join("\n"),
     },
     {
       name: "available_opportunities",
-      content:
-        input.opportunities
-          .map(
-            (opportunity) =>
-              `${opportunity.opportunityKey}: ${opportunity.source} / ${opportunity.contentType} / ${opportunity.summary}`,
-          )
-          .join("\n") || "(empty)",
+      content: availableOpportunities,
     },
     {
       name: "required_output_json",
@@ -358,7 +287,7 @@ function buildOpportunityStagePrompt(input: SelectorInputPreview) {
         "",
         "Requirements:",
         "- Return exactly one JSON object.",
-        "- `opportunity_probabilities` must be an array with one object for every provided opportunity.",
+        "- `scores` must be an array with one object for every provided opportunity.",
         "- Each object must contain exactly `opportunity_key` and `probability`.",
         "- `probability` must be a number between 0 and 1.",
         "- Each opportunity_key must match one provided prompt-local opportunity key exactly.",
@@ -371,37 +300,41 @@ function buildOpportunityStagePrompt(input: SelectorInputPreview) {
   return formatIntakePrompt(blocks);
 }
 
-function buildCandidateStagePrompt(input: {
-  selectorInput: SelectorInputPreview;
-  opportunitySelection: OpportunitySelectionPreview;
+export function buildCandidateStagePrompt(input: {
+  selectedOpportunities: Array<{
+    opportunityKey: string;
+    contentType: string;
+    summary: string;
+  }>;
   referenceBatch: string[];
 }) {
   const outputSchema = [
     "{",
-    '  "candidate_selections": [',
+    '  "speaker_candidates": [',
     "    {",
     '      "opportunity_key": "O01",',
-    '      "selected_references": ["Yayoi Kusama", "David Bowie"]',
+    '      "selected_speakers": [',
+    '        { "name": "David Bowie", "probability": 0.82 },',
+    '        { "name": "Laurie Anderson", "probability": 0.71 }',
+    "      ]",
     "    },",
     "    {",
     '      "opportunity_key": "O02",',
-    '      "selected_references": ["Octavia Butler", "Grace Jones"]',
+    '      "selected_speakers": [{ "name": "Grace Jones", "probability": 0.64 }]',
     "    }",
     "  ]",
     "}",
   ].join("\n");
 
   const selectedOpportunities =
-    input.opportunitySelection.selectedOpportunities
-      .map((opportunity) => {
-        const sourceOpportunity =
-          input.selectorInput.opportunities.find(
-            (item) => item.opportunityKey === opportunity.opportunityKey,
-          ) ?? null;
-        return sourceOpportunity
-          ? `${sourceOpportunity.opportunityKey}: ${sourceOpportunity.source} / ${sourceOpportunity.contentType} / ${sourceOpportunity.summary}`
-          : opportunity.opportunityKey;
-      })
+    input.selectedOpportunities
+      .map((opportunity) =>
+        [
+          `- opportunity_key: ${opportunity.opportunityKey}`,
+          `  content_type: ${opportunity.contentType}`,
+          `  summary: ${opportunity.summary}`,
+        ].join("\n"),
+      )
       .join("\n") || "(empty)";
 
   const blocks: IntakePromptBlock[] = [
@@ -412,40 +345,33 @@ function buildCandidateStagePrompt(input: {
     {
       name: "goal",
       content:
-        "For each selected opportunity, choose the most suitable reference names to carry that task forward.",
-    },
-    {
-      name: "candidate_scope",
-      content: [
-        `fixture_mode: ${input.selectorInput.fixtureMode}`,
-        `selector_reference_batch_size: ${input.selectorInput.selectorReferenceBatchSize}`,
-        `group_index_override: ${input.selectorInput.groupIndexOverride}`,
-      ].join("\n"),
+        "For each selected opportunity, choose the most suitable speaker candidates to carry that task forward.",
     },
     {
       name: "selected_opportunities",
       content: selectedOpportunities,
     },
     {
-      name: "reference_batch",
+      name: "speaker_batch",
       content: input.referenceBatch.join("\n") || "(empty)",
     },
     {
       name: "selection_rules",
       content: [
-        "Pick only reference names from the provided reference batch.",
-        "Choose the smallest suitable shortlist per selected opportunity.",
+        "Pick speakers only from the provided speaker batch.",
+        "Return only the selected speakers in the output.",
+        "For each selected opportunity, choose at least 1 speaker and at most 3 speakers.",
         "Do not invent names outside the batch.",
-        "Do not resolve personas, statuses, or task payloads in this stage.",
       ].join("\n"),
     },
     {
       name: "decision_criteria",
       content: [
-        "Choose reference names whose known voice, posture, and perspective fit the selected opportunity.",
-        "Prefer references that can respond naturally to the opportunity without forcing the tone.",
-        "Prefer diversity only when multiple references are genuinely plausible for different angles of the same task.",
-        "Deprioritize references that are off-tone, redundant, too generic, or mismatched to the opportunity context.",
+        "Score possible speaker candidates with probabilities between 0 and 1 based on how suitable they are for the opportunity.",
+        "Choose the most suitable speakers whose voice, posture, and perspective fit the opportunity naturally.",
+        "For each selected opportunity, return at least 1 speaker and at most 3 speakers.",
+        "Use higher probabilities for stronger speaking fits and lower probabilities for weaker but still selected fits.",
+        "Deprioritize speakers that are off-tone, redundant, too generic, or mismatched to the opportunity context.",
       ].join("\n"),
     },
     {
@@ -456,11 +382,13 @@ function buildCandidateStagePrompt(input: {
         "",
         "Requirements:",
         "- Return exactly one JSON object.",
-        "- `candidate_selections` must be an array of zero or more objects.",
-        "- Each object must contain exactly `opportunity_key` and `selected_references`.",
-        "- `selected_references` must be an array of zero or more strings.",
+        "- `speaker_candidates` must be an array of zero or more objects.",
+        "- Each object must contain exactly `opportunity_key` and `selected_speakers`.",
+        "- `selected_speakers` must contain at least 1 object and at most 3 objects for each selected opportunity.",
+        "- Each selected speaker object must contain exactly `name` and `probability`.",
+        "- `probability` must be a number between 0 and 1.",
         "- Each opportunity_key must match one provided selected opportunity key exactly.",
-        "- Each selected_references entry must match one provided reference name exactly.",
+        "- Each `name` must match one provided speaker name exactly.",
         "- Do not output prose, markdown, persona ids, reasons, statuses, or any extra fields.",
       ].join("\n"),
     },
@@ -481,12 +409,11 @@ function buildSourceTable(source: string, contentType: string) {
   return contentType === "post" ? "posts" : "comments";
 }
 
-function findPersonaById(personaId: string) {
-  return PERSONA_LIBRARY.find((persona) => persona.personaId === personaId) ?? null;
-}
-
-function findLookupByOpportunityKey(input: SelectorInputPreview, opportunityKey: string) {
-  return input.opportunityLookup.find((item) => item.opportunityKey === opportunityKey) ?? null;
+function resolveReferencePersonas(referenceName: string): ResolvedPersonaPreview[] {
+  return (
+    PERSONA_REFERENCE_OVERRIDES[referenceName] ??
+    PERSONA_LIBRARY.filter((persona) => persona.referenceSource === referenceName)
+  );
 }
 
 export function buildReferenceWindow(input: {
@@ -499,7 +426,7 @@ export function buildReferenceWindow(input: {
   totalReferences: number;
   window: string[];
 } {
-  const references = input.references ?? REFERENCE_LIBRARY;
+  const references = input.references ?? DEFAULT_REFERENCE_LIBRARY;
   const totalReferences = references.length;
 
   if (totalReferences === 0) {
@@ -529,9 +456,12 @@ export function resolvePersonasForReferences(input: {
   selectedReferences: Array<{ referenceName: string }>;
   personas?: ResolvedPersonaPreview[];
 }): ResolvedPersonaPreview[] {
-  const personas = input.personas ?? PERSONA_LIBRARY;
-  const selectedNames = new Set(input.selectedReferences.map((item) => item.referenceName));
-  return personas.filter((persona) => selectedNames.has(persona.referenceSource));
+  if (input.personas) {
+    const selectedNames = new Set(input.selectedReferences.map((item) => item.referenceName));
+    return input.personas.filter((persona) => selectedNames.has(persona.referenceSource));
+  }
+
+  return input.selectedReferences.flatMap((item) => resolveReferencePersonas(item.referenceName));
 }
 
 export function buildSelectorInputPreview(input: {
@@ -569,456 +499,5 @@ export function buildSelectorInputPreview(input: {
       sourceId: item.sourceId ?? `${item.source}-${index + 1}`,
       metadata: item.metadata,
     })),
-  };
-}
-
-export function buildOpportunitySelectionPreview(
-  input: SelectorInputPreview,
-): OpportunitySelectionPreview {
-  const assembledPrompt = buildOpportunityStagePrompt(input);
-  const opportunityProbabilities = input.opportunities.map((opportunity, index) => ({
-    opportunityKey: opportunity.opportunityKey,
-    probability:
-      input.fixtureMode === "notification-intake"
-        ? Number(Math.max(0.65, 0.92 - index * 0.08).toFixed(2))
-        : Number(Math.max(0.35, 0.81 - index * 0.16).toFixed(2)),
-  }));
-  const selectedOpportunities = opportunityProbabilities
-    .filter((opportunity) => opportunity.probability > 0.5)
-    .map((opportunity) => ({
-      opportunityKey: opportunity.opportunityKey,
-    }));
-
-  return {
-    opportunityProbabilities,
-    selectedOpportunities,
-    promptPreview: assembledPrompt,
-    actualModelPayload: {
-      assembledPrompt,
-      compactContext: {
-        fixtureMode: input.fixtureMode,
-        opportunities: input.opportunities.map((opportunity) => ({
-          opportunityKey: opportunity.opportunityKey,
-          source: opportunity.source,
-          contentType: opportunity.contentType,
-        })),
-      },
-    },
-  };
-}
-
-export function buildCandidateSelectionPreview(input: {
-  selectorInput: SelectorInputPreview;
-  opportunitySelection: OpportunitySelectionPreview;
-}): CandidateSelectionPreview {
-  const referenceWindow = buildReferenceWindow({
-    batchSize: input.selectorInput.referenceWindow.batchSize,
-    groupIndex: input.selectorInput.referenceWindow.groupIndex,
-  });
-  const selectableReferences =
-    input.selectorInput.fixtureMode === "notification-intake"
-      ? referenceWindow.window
-      : referenceWindow.window.filter((referenceName) =>
-          PERSONA_LIBRARY.some(
-            (persona) => persona.referenceSource === referenceName && persona.active,
-          ),
-        );
-  const assembledPrompt = buildCandidateStagePrompt({
-    selectorInput: input.selectorInput,
-    opportunitySelection: input.opportunitySelection,
-    referenceBatch: referenceWindow.window,
-  });
-
-  const candidateSelections = input.opportunitySelection.selectedOpportunities.map(
-    (opportunity, index) => {
-      const selectedCount =
-        input.selectorInput.fixtureMode === "notification-intake"
-          ? 0
-          : Math.min(
-              2,
-              selectableReferences.length > 0
-                ? selectableReferences.length
-                : referenceWindow.window.length,
-            );
-      const selectionPool =
-        selectableReferences.length > 0 ? selectableReferences : referenceWindow.window;
-
-      const selectedReferences =
-        selectedCount === 0
-          ? []
-          : Array.from({ length: selectedCount }, (_, offset) => {
-              const batchIndex =
-                selectionPool.length >=
-                input.opportunitySelection.selectedOpportunities.length * selectedCount
-                  ? index * selectedCount + offset
-                  : (index * selectedCount + offset) % selectionPool.length;
-              return selectionPool[batchIndex] ?? selectionPool[0]!;
-            });
-
-      return {
-        opportunityKey: opportunity.opportunityKey,
-        selectedReferences,
-      };
-    },
-  );
-
-  if (input.selectorInput.fixtureMode === "mixed-public-opportunity") {
-    const inactiveReference =
-      referenceWindow.window.find((referenceName) =>
-        PERSONA_LIBRARY.some(
-          (persona) => persona.referenceSource === referenceName && !persona.active,
-        ),
-      ) ?? null;
-
-    if (inactiveReference && candidateSelections.length > 0) {
-      const targetIndex = Math.min(1, candidateSelections.length - 1);
-      const existing = candidateSelections[targetIndex]?.selectedReferences ?? [];
-
-      if (!existing.includes(inactiveReference)) {
-        candidateSelections[targetIndex] = {
-          ...candidateSelections[targetIndex]!,
-          selectedReferences:
-            existing.length > 0
-              ? [...existing.slice(0, Math.max(0, existing.length - 1)), inactiveReference]
-              : [inactiveReference],
-        };
-      }
-    }
-  }
-
-  return {
-    referenceWindow: {
-      start: referenceWindow.start,
-      endExclusive: referenceWindow.endExclusive,
-      totalReferences: referenceWindow.totalReferences,
-    },
-    candidateSelections,
-    promptPreview: assembledPrompt,
-    actualModelPayload: {
-      assembledPrompt,
-      compactContext: {
-        fixtureMode: input.selectorInput.fixtureMode,
-        groupIndex: input.selectorInput.referenceWindow.groupIndex,
-        batchSize: input.selectorInput.referenceWindow.batchSize,
-        selectedOpportunities: input.opportunitySelection.selectedOpportunities.map(
-          (opportunity) => {
-            const sourceOpportunity =
-              input.selectorInput.opportunities.find(
-                (item) => item.opportunityKey === opportunity.opportunityKey,
-              ) ?? null;
-            return {
-              opportunityKey: opportunity.opportunityKey,
-              source: sourceOpportunity?.source ?? "unknown",
-              contentType: sourceOpportunity?.contentType ?? "unknown",
-            };
-          },
-        ),
-        referenceBatch: referenceWindow.window,
-      },
-    },
-  };
-}
-
-export function buildResolvedCandidatesPreview(
-  candidateSelection: CandidateSelectionPreview,
-): ResolvedCandidatePreview[] {
-  return candidateSelection.candidateSelections.map((selection) => ({
-    opportunityKey: selection.opportunityKey,
-    personaIds: selection.selectedReferences.flatMap((referenceName) =>
-      PERSONA_LIBRARY.filter((persona) => persona.referenceSource === referenceName).map(
-        (persona) => ({
-          referenceName,
-          personaId: persona.personaId,
-          status: persona.active ? ("active" as const) : ("inactive" as const),
-        }),
-      ),
-    ),
-  }));
-}
-
-export function buildResolvedPersonasPreview(
-  input: SelectorOutputPreview | CandidateSelectionPreview | ResolvedCandidatePreview[],
-): ResolvedPersonaPreview[] {
-  if (Array.isArray(input)) {
-    const personaIds = new Set(
-      input.flatMap((candidate) => candidate.personaIds.map((item) => item.personaId)),
-    );
-    return PERSONA_LIBRARY.filter((persona) => personaIds.has(persona.personaId));
-  }
-
-  if ("candidateSelections" in input) {
-    return resolvePersonasForReferences({
-      selectedReferences: input.candidateSelections.flatMap((selection) =>
-        selection.selectedReferences.map((referenceName) => ({
-          referenceName,
-        })),
-      ),
-    });
-  }
-
-  return resolvePersonasForReferences({
-    selectedReferences: input.selectedReferences,
-  });
-}
-
-export function buildSelectorOutputPreview(input: SelectorInputPreview): SelectorOutputPreview {
-  const opportunitySelection = buildOpportunitySelectionPreview(input);
-  const candidateSelection = buildCandidateSelectionPreview({
-    selectorInput: input,
-    opportunitySelection,
-  });
-
-  return {
-    referenceWindow: candidateSelection.referenceWindow,
-    selectedReferences: candidateSelection.candidateSelections.flatMap((selection) =>
-      selection.selectedReferences.map((referenceName, index) => ({
-        referenceName,
-        rank: index + 1,
-        reason:
-          input.fixtureMode === "notification-intake"
-            ? "Notification tone and direct-response fit."
-            : "Public opportunity fit and reference diversity.",
-      })),
-    ),
-    promptPreview: candidateSelection.promptPreview,
-    actualModelPayload: {
-      assembledPrompt: candidateSelection.actualModelPayload.assembledPrompt,
-      compactContext: {
-        fixtureMode: candidateSelection.actualModelPayload.compactContext.fixtureMode,
-        groupIndex: candidateSelection.actualModelPayload.compactContext.groupIndex,
-        batchSize: candidateSelection.actualModelPayload.compactContext.batchSize,
-        opportunities: candidateSelection.actualModelPayload.compactContext.selectedOpportunities,
-      },
-    },
-  };
-}
-
-export function buildTaskCandidatePreview(input: {
-  selectorInput: SelectorInputPreview;
-  resolvedPersonas?: ResolvedPersonaPreview[];
-  resolvedCandidates?: ResolvedCandidatePreview[];
-  opportunitySelection?: OpportunitySelectionPreview;
-}): TaskCandidatePreview[] {
-  if (input.selectorInput.fixtureMode === "notification-intake") {
-    const selectedOpportunities =
-      input.opportunitySelection?.selectedOpportunities ?? input.selectorInput.opportunities;
-
-    return selectedOpportunities.flatMap((opportunity, candidateIndex) => {
-      const lookup = findLookupByOpportunityKey(input.selectorInput, opportunity.opportunityKey);
-      const recipientPersonaId =
-        typeof lookup?.metadata?.recipientPersonaId === "string"
-          ? lookup.metadata.recipientPersonaId
-          : null;
-      const persona = recipientPersonaId
-        ? findPersonaById(recipientPersonaId)
-        : (PERSONA_LIBRARY[0] ?? null);
-
-      if (!lookup || !persona) {
-        return [];
-      }
-
-      return [
-        {
-          candidateIndex,
-          opportunityKey: opportunity.opportunityKey,
-          personaId: persona.personaId,
-          username: persona.username,
-          dispatchKind: "notification",
-          sourceTable: "notifications",
-          sourceId: lookup.sourceId,
-          dedupeKey: `${persona.username}:${lookup.sourceId}:${lookup.contentType}`,
-          cooldownUntil: "2026-03-29T06:00:00.000Z",
-          decisionReason: "Notification selected for direct recipient handling.",
-          payload: {
-            contentType: lookup.contentType,
-            source: lookup.source,
-            summary: lookup.summary,
-            fixtureMode: input.selectorInput.fixtureMode,
-            notificationTarget: {
-              postId: typeof lookup.metadata?.postId === "string" ? lookup.metadata.postId : null,
-              commentId:
-                typeof lookup.metadata?.commentId === "string" ? lookup.metadata.commentId : null,
-              parentCommentId:
-                typeof lookup.metadata?.parentCommentId === "string"
-                  ? lookup.metadata.parentCommentId
-                  : null,
-              context:
-                typeof lookup.metadata?.context === "string" ? lookup.metadata.context : null,
-              notificationType:
-                typeof lookup.metadata?.notificationType === "string"
-                  ? lookup.metadata.notificationType
-                  : null,
-            },
-          },
-        } satisfies TaskCandidatePreview,
-      ];
-    });
-  }
-
-  if (input.resolvedCandidates) {
-    const activeAssignments = input.resolvedCandidates.flatMap((candidate) =>
-      candidate.personaIds
-        .filter((persona) => persona.status === "active")
-        .map((persona) => ({
-          opportunityKey: candidate.opportunityKey,
-          referenceName: persona.referenceName,
-          personaId: persona.personaId,
-        })),
-    );
-
-    return activeAssignments.map((assignment, candidateIndex) => {
-      const lookup = findLookupByOpportunityKey(input.selectorInput, assignment.opportunityKey);
-      const persona = findPersonaById(assignment.personaId);
-
-      if (!lookup || !persona) {
-        throw new Error("resolved candidate could not be materialized into a task candidate");
-      }
-
-      return {
-        candidateIndex,
-        opportunityKey: assignment.opportunityKey,
-        personaId: persona.personaId,
-        username: persona.username,
-        dispatchKind: "public",
-        sourceTable: lookup.sourceTable === "notifications" ? "comments" : lookup.sourceTable,
-        sourceId: lookup.sourceId,
-        dedupeKey: `${persona.username}:${lookup.sourceId}:${lookup.contentType}`,
-        cooldownUntil: "2026-03-29T06:00:00.000Z",
-        decisionReason: `${assignment.referenceName} matched ${lookup.contentType} opportunity`,
-        payload: {
-          contentType: lookup.contentType,
-          source: lookup.source,
-          summary: lookup.summary,
-          fixtureMode: input.selectorInput.fixtureMode,
-          notificationTarget: null,
-        },
-      } satisfies TaskCandidatePreview;
-    });
-  }
-
-  const resolvedPersonas = input.resolvedPersonas ?? [];
-
-  return resolvedPersonas
-    .filter((persona) => persona.active)
-    .flatMap((persona, personaIndex) =>
-      input.selectorInput.opportunities.map((opportunity, opportunityIndex) => {
-        const lookup = findLookupByOpportunityKey(input.selectorInput, opportunity.opportunityKey);
-        return {
-          candidateIndex:
-            personaIndex * input.selectorInput.opportunities.length + opportunityIndex,
-          opportunityKey: opportunity.opportunityKey,
-          personaId: persona.personaId,
-          username: persona.username,
-          dispatchKind:
-            input.selectorInput.fixtureMode === "notification-intake" ? "notification" : "public",
-          sourceTable: lookup?.sourceTable ?? "comments",
-          sourceId: lookup?.sourceId ?? opportunity.opportunityKey,
-          dedupeKey: `${persona.username}:${lookup?.sourceId ?? opportunity.opportunityKey}:${opportunity.contentType}`,
-          cooldownUntil: "2026-03-29T06:00:00.000Z",
-          decisionReason: `${persona.referenceSource} matched ${opportunity.contentType} opportunity`,
-          payload: {
-            contentType: opportunity.contentType,
-            source: opportunity.source,
-            summary: opportunity.summary,
-            fixtureMode: input.selectorInput.fixtureMode,
-            notificationTarget:
-              input.selectorInput.fixtureMode === "notification-intake"
-                ? {
-                    postId:
-                      typeof lookup?.metadata?.postId === "string" ? lookup.metadata.postId : null,
-                    commentId:
-                      typeof lookup?.metadata?.commentId === "string"
-                        ? lookup.metadata.commentId
-                        : null,
-                    parentCommentId:
-                      typeof lookup?.metadata?.parentCommentId === "string"
-                        ? lookup.metadata.parentCommentId
-                        : null,
-                    context:
-                      typeof lookup?.metadata?.context === "string"
-                        ? lookup.metadata.context
-                        : null,
-                    notificationType:
-                      typeof lookup?.metadata?.notificationType === "string"
-                        ? lookup.metadata.notificationType
-                        : null,
-                  }
-                : null,
-          },
-        } satisfies TaskCandidatePreview;
-      }),
-    );
-}
-
-export function buildTaskWritePreview(candidates: TaskCandidatePreview[]): TaskWritePreview[] {
-  return candidates.map((candidate) => {
-    const isNotification = candidate.dispatchKind === "notification";
-    const cooldownActive =
-      candidate.username === "ai_vesper" && candidate.dispatchKind === "public";
-    const duplicate = candidate.username === "ai_marlowe" && isNotification;
-
-    const inserted = !cooldownActive && !duplicate;
-    const skipReason = cooldownActive
-      ? "cooldown_active"
-      : duplicate
-        ? "duplicate_candidate"
-        : null;
-
-    return {
-      candidateIndex: candidate.candidateIndex,
-      inserted,
-      skipReason,
-      taskId: inserted ? `task-preview-${candidate.candidateIndex + 1}` : null,
-      dedupeExpectation: duplicate ? "skip_duplicate" : "insert",
-      cooldownExpectation: cooldownActive ? "cooldown_active" : "eligible",
-      expectationSummary: inserted
-        ? "Candidate is expected to insert cleanly."
-        : duplicate
-          ? "Candidate is expected to skip on notification dedupe."
-          : "Candidate is expected to skip on public cooldown.",
-    };
-  });
-}
-
-export function buildTaskInjectionPreview(input: {
-  candidates: TaskCandidatePreview[];
-  taskWritePreview: TaskWritePreview[];
-}): TaskInjectionPreview {
-  const results = input.candidates.map((candidate) => {
-    const writePreview =
-      input.taskWritePreview.find((item) => item.candidateIndex === candidate.candidateIndex) ??
-      null;
-    return {
-      candidateIndex: candidate.candidateIndex,
-      inserted: writePreview?.inserted ?? false,
-      skipReason: writePreview ? writePreview.skipReason : "preview_missing",
-      taskId: writePreview?.taskId ?? null,
-      taskType: candidate.payload.contentType,
-      dispatchKind: candidate.dispatchKind,
-      personaUsername: candidate.username,
-      sourceTable: candidate.sourceTable,
-      sourceId: candidate.sourceId,
-    };
-  });
-
-  const skippedReasonCounts = results.reduce<Record<string, number>>((acc, result) => {
-    if (result.skipReason) {
-      acc[result.skipReason] = (acc[result.skipReason] ?? 0) + 1;
-    }
-    return acc;
-  }, {});
-
-  return {
-    rpcName: "inject_persona_tasks",
-    summary: {
-      candidateCount: results.length,
-      insertedCount: results.filter((result) => result.inserted).length,
-      skippedCount: results.filter((result) => !result.inserted).length,
-      insertedTaskIds: results
-        .map((result) => result.taskId)
-        .filter((taskId): taskId is string => Boolean(taskId)),
-      skippedReasonCounts,
-    },
-    results,
   };
 }

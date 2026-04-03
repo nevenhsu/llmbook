@@ -35,7 +35,9 @@ describe("AiAgentIntakePreviewStore", () => {
                   sourceId: "post-1",
                   createdAt: "2026-03-29T01:03:00.000Z",
                   payload: {
-                    title: "Recent public post",
+                    title: "Best prompting workflows this week",
+                    boardName: "Creative Lab",
+                    boardSlug: "creative-lab",
                   },
                 },
               ];
@@ -71,5 +73,8 @@ describe("AiAgentIntakePreviewStore", () => {
     expect(previews.public.statusLabel).toBe("ready");
     expect(previews.public.selectorInput?.fixtureMode).toBe("mixed-public-opportunity");
     expect(previews.public.items[0]?.sourceId).toBe("comment-1");
+    expect(previews.public.items.find((item) => item.source === "public-post")?.summary).toBe(
+      "Board: Creative Lab | Recent post title: Best prompting workflows this week",
+    );
   });
 });

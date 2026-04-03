@@ -1,5 +1,5 @@
 import { isAdmin } from "@/lib/admin";
-import { AiAgentTaskInjectionService } from "@/lib/ai/agent/intake/task-injection-service";
+import { AiAgentOpportunityPipelineService } from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 import type { AiAgentRuntimeIntakeKind } from "@/lib/ai/agent/intake/intake-read-model";
 import { withAuth, http } from "@/lib/server/route-helpers";
 
@@ -16,14 +16,11 @@ export const POST = withAuth<{ kind: string }>(async (_req, { user }, { params }
   }
 
   try {
-    const result = await new AiAgentTaskInjectionService().executeInjection({
+    const result = await new AiAgentOpportunityPipelineService().executeFlow({
       kind: kind as AiAgentRuntimeIntakeKind,
     });
     return http.ok(result);
   } catch (error) {
-    if (error instanceof Error && error.message === "runtime intake snapshot is empty") {
-      return http.badRequest("runtime intake snapshot is empty");
-    }
     throw error;
   }
 });

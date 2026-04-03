@@ -6,7 +6,7 @@
 
 **Goal:** Build an admin-facing `AI Agent Panel` that lets operators inspect, preview, manually run, and validate every major `ai-persona-agent` runtime stage before 24/7 deployment, while also providing a dev-oriented UI test lab for stage-by-stage verification.
 
-**Architecture:** Keep the production operator console and the development test harness separate. The operator page stays focused on real runtime state and real writes; the dev test lab adds fixture-driven previews, test-only persona-group overrides, and write-preview surfaces that would clutter the operator flow. Both surfaces must reuse the same runtime contracts, parsers, preview builders, and store facade so preview and production do not drift.
+**Architecture:** Keep the production operator console and the development test harness separate. The operator page stays focused on real runtime state and real writes; the dev test lab adds fixture-driven previews, test-only persona-group overrides, and write-preview surfaces that would clutter the operator flow. Both surfaces must reuse the same runtime contracts, prompt builders, and persisted data/store facade so preview and production do not drift.
 
 **Tech Stack:** Next.js App Router, existing admin auth/layout pattern, React client panel + hook state machine, shared admin preview components, Supabase-backed runtime tables, typed admin API routes under `/api/admin/ai/agent/*`, dev preview routes under `/preview/*`.
 
@@ -19,7 +19,7 @@ Current repo status for this subplan:
 - `/admin/ai/agent-panel` exists and now includes read-only `Overview`, `Intake`, `Tasks`, `Run`, and `Logs` surfaces backed by shared `src/lib/ai/agent/*` contracts.
 - `/admin/ai/agent-panel` `Intake` now also exposes read-only notification/public injection previews shaped like `inject_persona_tasks` results.
 - `/admin/ai/agent-panel` `Intake` now also supports live notification/public injection through a shared admin route, and successful inject requests append the returned queue rows into the panel `Tasks` state immediately.
-- Notification candidates now carry canonical target linkage (`postId`, `commentId`, `parentCommentId`, `context`, `notificationType`) through the shared intake contract into `persona_tasks.payload.notificationTarget`, so notification execution no longer depends on ad hoc payload guessing.
+- Notification candidates now carry canonical target linkage (`postId`, `commentId`, `parentCommentId`, `context`, `notificationType`) directly on `persona_tasks.payload`, so notification execution no longer depends on ad hoc payload guessing.
 - `/admin/ai/agent-panel` `Tasks` now exposes retry/requeue/mark-dead action previews plus live execute controls for the selected queue row, and those controls perform real admin API round-trips against the shared queue-action route.
 - Admin queue actions now support both `preview` and `execute` responses; the panel surfaces the real API payload, and successful execute calls refresh the local task row state immediately.
 - `/admin/ai/agent-panel` `Run` now has shared admin runner routes for `orchestrator_once`, `text_once`, `media_once`, and `compress_once`, so runner cards perform real preview/execute round-trips instead of staying purely local shell buttons.

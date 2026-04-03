@@ -88,13 +88,6 @@ export function CardCandidates({
       actions={
         <div className="flex flex-wrap gap-2">
           <button
-            className="btn btn-primary btn-sm"
-            disabled={disabled || busy || !canRun}
-            onClick={() => void onRun()}
-          >
-            {busy ? "Running..." : "Run"}
-          </button>
-          <button
             className="btn btn-outline btn-sm"
             disabled={disabled || !candidateStage.prompt}
             onClick={onShowPrompt}
@@ -103,6 +96,13 @@ export function CardCandidates({
           </button>
           <button className="btn btn-outline btn-sm" onClick={onShowData}>
             Show Data
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={disabled || busy || !canRun}
+            onClick={() => void onRun()}
+          >
+            {busy ? "Running..." : "Run"}
           </button>
         </div>
       }
@@ -151,7 +151,7 @@ export function CardCandidates({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-base-content/60">
-            Page {page + 1} / {pageCount}
+            Page {page + 1} / {pageCount} · Total {candidateStage.rows.length} rows
           </span>
           <div className="flex gap-2">
             <button

@@ -1,13 +1,8 @@
-import {
-  AiAgentIntakePreviewStore,
-  type AiAgentRuntimeIntakeKind,
-  type AiAgentRuntimeSourceSnapshot,
-} from "@/lib/ai/agent/intake/intake-read-model";
+import type { AiAgentRuntimeIntakeKind } from "@/lib/ai/agent/intake/intake-read-model";
 import {
   type TaskCandidatePreview,
   type TaskInjectionPreview,
 } from "@/lib/ai/agent/intake/intake-preview";
-import { buildAiAgentIntakeTrace } from "@/lib/ai/agent/intake/intake-trace";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type { QueueTaskStatus } from "@/lib/ai/task-queue/task-queue";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -64,10 +59,6 @@ type InjectPersonaTasksRpcResult = {
 };
 
 type TaskInjectionServiceDeps = {
-  loadRuntimePreviewSet: () => Promise<{
-    notification: AiAgentRuntimeSourceSnapshot;
-    public: AiAgentRuntimeSourceSnapshot;
-  }>;
   injectCandidates: (
     candidates: InjectPersonaTasksRpcCandidate[],
   ) => Promise<InjectPersonaTasksRpcResult[]>;
@@ -191,10 +182,7 @@ export class AiAgentTaskInjectionService {
   private readonly deps: TaskInjectionServiceDeps;
 
   public constructor(options?: { deps?: Partial<TaskInjectionServiceDeps> }) {
-    const previewStore = new AiAgentIntakePreviewStore();
     this.deps = {
-      loadRuntimePreviewSet:
-        options?.deps?.loadRuntimePreviewSet ?? (() => previewStore.getRuntimePreviewSet()),
       injectCandidates:
         options?.deps?.injectCandidates ??
         (async (candidates) => {
@@ -248,24 +236,6 @@ export class AiAgentTaskInjectionService {
           return data ?? null;
         }),
     };
-  }
-
-  public async executeInjection(input: {
-    kind: AiAgentRuntimeIntakeKind;
-  }): Promise<AiAgentTaskInjectionExecutedResponse> {
-    const previewSet = await this.deps.loadRuntimePreviewSet();
-    const snapshot = input.kind === "notification" ? previewSet.notification : previewSet.public;
-
-    if (!snapshot.selectorInput) {
-      throw new Error("runtime intake snapshot is empty");
-    }
-
-    const trace = buildAiAgentIntakeTrace(snapshot);
-
-    return this.executeCandidates({
-      kind: input.kind,
-      candidates: trace.tasks.result.taskCandidates,
-    });
   }
 
   public async executeCandidates(input: {

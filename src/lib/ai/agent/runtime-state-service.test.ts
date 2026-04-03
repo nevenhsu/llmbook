@@ -10,6 +10,8 @@ describe("runtime-state-service", () => {
       {
         singleton_key: "global",
         paused: false,
+        public_candidate_group_index: 2,
+        public_candidate_epoch: 4,
         lease_owner: null,
         lease_until: null,
         cooldown_until: null,
@@ -24,6 +26,8 @@ describe("runtime-state-service", () => {
       available: true,
       statusLabel: "Ready",
       paused: false,
+      publicCandidateGroupIndex: 2,
+      publicCandidateEpoch: 4,
       lastStartedAt: "2026-03-30T03:00:00.000Z",
       lastFinishedAt: "2026-03-30T03:01:00.000Z",
     });
@@ -36,6 +40,8 @@ describe("runtime-state-service", () => {
         loadRow: async () => ({
           singleton_key: "global",
           paused: false,
+          public_candidate_group_index: 0,
+          public_candidate_epoch: 0,
           lease_owner: null,
           lease_until: null,
           cooldown_until: null,
@@ -53,6 +59,8 @@ describe("runtime-state-service", () => {
           return {
             singleton_key: "global",
             paused: false,
+            public_candidate_group_index: 0,
+            public_candidate_epoch: 0,
             lease_owner: "admin:run_cycle",
             lease_until: input.now.toISOString(),
             cooldown_until: new Date(input.now.getTime() + 5 * 60_000).toISOString(),
@@ -89,6 +97,8 @@ describe("runtime-state-service", () => {
         loadRow: async () => ({
           singleton_key: "global",
           paused: false,
+          public_candidate_group_index: 3,
+          public_candidate_epoch: 1,
           lease_owner: null,
           lease_until: null,
           cooldown_until: "2026-03-30T03:10:00.000Z",
@@ -119,6 +129,8 @@ describe("runtime-state-service", () => {
         loadRow: async () => ({
           singleton_key: "global",
           paused: false,
+          public_candidate_group_index: 1,
+          public_candidate_epoch: 2,
           lease_owner: null,
           lease_until: null,
           cooldown_until: null,
@@ -129,6 +141,8 @@ describe("runtime-state-service", () => {
         claimLeaseRow: async () => ({
           singleton_key: "global",
           paused: false,
+          public_candidate_group_index: 1,
+          public_candidate_epoch: 2,
           lease_owner: "orchestrator:test",
           lease_until: "2026-03-30T03:07:00.000Z",
           cooldown_until: null,
@@ -139,6 +153,8 @@ describe("runtime-state-service", () => {
         heartbeatLeaseRow: async () => ({
           singleton_key: "global",
           paused: false,
+          public_candidate_group_index: 1,
+          public_candidate_epoch: 2,
           lease_owner: "orchestrator:test",
           lease_until: "2026-03-30T03:06:30.000Z",
           cooldown_until: null,
@@ -149,6 +165,8 @@ describe("runtime-state-service", () => {
         releaseLeaseRow: async () => ({
           singleton_key: "global",
           paused: false,
+          public_candidate_group_index: 1,
+          public_candidate_epoch: 2,
           lease_owner: null,
           lease_until: null,
           cooldown_until: "2026-03-30T03:11:00.000Z",
@@ -196,6 +214,31 @@ describe("runtime-state-service", () => {
         statusLabel: "Cooling Down",
         cooldownUntil: "2026-03-30T03:11:00.000Z",
       },
+    });
+  });
+
+  it("includes public candidate rotation fields in the snapshot", async () => {
+    const service = new AiAgentRuntimeStateService({
+      deps: {
+        loadRow: async () => ({
+          singleton_key: "global",
+          paused: false,
+          public_candidate_group_index: 5,
+          public_candidate_epoch: 9,
+          lease_owner: null,
+          lease_until: null,
+          cooldown_until: null,
+          last_started_at: "2026-03-30T03:00:00.000Z",
+          last_finished_at: "2026-03-30T03:01:00.000Z",
+          updated_at: "2026-03-30T03:02:00.000Z",
+        }),
+        now: () => new Date("2026-03-30T03:03:00.000Z"),
+      },
+    });
+
+    await expect(service.loadSnapshot()).resolves.toMatchObject({
+      publicCandidateGroupIndex: 5,
+      publicCandidateEpoch: 9,
     });
   });
 });

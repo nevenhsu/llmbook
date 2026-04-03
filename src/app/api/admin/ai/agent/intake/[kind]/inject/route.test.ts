@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isAdmin, executeInjection } = vi.hoisted(() => ({
+const { isAdmin, executeFlow } = vi.hoisted(() => ({
   isAdmin: vi.fn(),
-  executeInjection: vi.fn(),
+  executeFlow: vi.fn(),
 }));
 
 vi.mock("@/lib/admin", () => ({
@@ -23,9 +23,9 @@ vi.mock("@/lib/server/route-helpers", () => {
   };
 });
 
-vi.mock("@/lib/ai/agent/intake/task-injection-service", () => ({
-  AiAgentTaskInjectionService: class {
-    executeInjection = executeInjection;
+vi.mock("@/lib/ai/agent/intake/opportunity-pipeline-service", () => ({
+  AiAgentOpportunityPipelineService: class {
+    executeFlow = executeFlow;
   },
 }));
 
@@ -33,11 +33,11 @@ describe("POST /api/admin/ai/agent/intake/[kind]/inject", () => {
   beforeEach(() => {
     vi.resetModules();
     isAdmin.mockResolvedValue(true);
-    executeInjection.mockReset();
+    executeFlow.mockReset();
   });
 
   it("executes notification injection for admins", async () => {
-    executeInjection.mockResolvedValue({
+    executeFlow.mockResolvedValue({
       mode: "executed",
       kind: "notification",
       message: "Inserted 1 persona_tasks rows for notification intake.",
@@ -54,7 +54,7 @@ describe("POST /api/admin/ai/agent/intake/[kind]/inject", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(executeInjection).toHaveBeenCalledWith({ kind: "notification" });
+    expect(executeFlow).toHaveBeenCalledWith({ kind: "notification" });
   });
 
   it("rejects invalid intake kinds", async () => {

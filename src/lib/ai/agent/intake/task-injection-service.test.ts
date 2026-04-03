@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { AiAgentTaskInjectionService } from "@/lib/ai/agent/intake/task-injection-service";
-import { buildMockIntakeRuntimePreviews } from "@/lib/ai/agent/testing/mock-intake-runtime-previews";
 
 describe("AiAgentTaskInjectionService", () => {
   it("uses inject_persona_tasks RPC results as the source of truth for inserted rows", async () => {
-    const runtimePreviewSet = buildMockIntakeRuntimePreviews();
     const rpcCandidates: Array<{ persona_id: string; task_type: string }> = [];
 
     const service = new AiAgentTaskInjectionService({
       deps: {
-        loadRuntimePreviewSet: async () => runtimePreviewSet,
         injectCandidates: async (candidates) => {
           rpcCandidates.push(
             ...candidates.map((candidate) => ({
@@ -17,7 +14,7 @@ describe("AiAgentTaskInjectionService", () => {
               task_type: candidate.task_type,
             })),
           );
-          expect(candidates[0]?.payload.notificationTarget).toMatchObject({
+          expect(candidates[0]?.payload).toMatchObject({
             postId: "post-1",
             commentId: null,
             notificationType: "mention",
@@ -95,39 +92,69 @@ describe("AiAgentTaskInjectionService", () => {
       },
     });
 
-    const result = await service.executeInjection({ kind: "notification" });
+    const result = await service.executeCandidates({
+      kind: "notification",
+      candidates: [
+        {
+          candidateIndex: 0,
+          opportunityKey: "opp-1",
+          personaId: "persona-orchid",
+          username: "ai_orchid",
+          dispatchKind: "notification",
+          sourceTable: "notifications",
+          sourceId: "notification-1",
+          dedupeKey: "ai_orchid:notification-intake-1:mention",
+          cooldownUntil: "2026-03-29T06:00:00.000Z",
+          decisionReason: "selected by selector",
+          payload: {
+            contentType: "mention",
+            source: "notification",
+            summary: "Unread mention",
+            fixtureMode: "notification-intake",
+            boardId: "board-1",
+            postId: "post-1",
+            commentId: null,
+            parentCommentId: null,
+            context: "post",
+            notificationType: "mention",
+          },
+        },
+        {
+          candidateIndex: 1,
+          opportunityKey: "opp-2",
+          personaId: "persona-vesper",
+          username: "ai_vesper",
+          dispatchKind: "notification",
+          sourceTable: "notifications",
+          sourceId: "notification-1",
+          dedupeKey: "ai_vesper:notification-intake-1:mention",
+          cooldownUntil: "2026-03-29T06:00:00.000Z",
+          decisionReason: "selected by selector",
+          payload: {
+            contentType: "mention",
+            source: "notification",
+            summary: "Unread mention",
+            fixtureMode: "notification-intake",
+            boardId: "board-1",
+            postId: "post-1",
+            commentId: null,
+            parentCommentId: null,
+            context: "post",
+            notificationType: "mention",
+          },
+        },
+      ],
+    });
 
     expect(result.mode).toBe("executed");
     expect(result.kind).toBe("notification");
     expect(result.injectionPreview.summary.insertedCount).toBe(2);
-    expect(result.injectionPreview.summary.skippedCount).toBe(1);
+    expect(result.injectionPreview.summary.skippedCount).toBe(0);
     expect(result.insertedTasks).toHaveLength(2);
     expect(rpcCandidates).toEqual([
       { persona_id: "persona-orchid", task_type: "comment" },
-      { persona_id: "persona-marlowe", task_type: "comment" },
       { persona_id: "persona-vesper", task_type: "comment" },
     ]);
     expect(result.insertedTasks[0]?.personaUsername).toBe("ai_orchid");
-  });
-
-  it("throws when the selected runtime intake snapshot is empty", async () => {
-    const service = new AiAgentTaskInjectionService({
-      deps: {
-        loadRuntimePreviewSet: async () => ({
-          notification: {
-            kind: "notification",
-            statusLabel: "empty",
-            sourceNames: ["notifications"],
-            items: [],
-            selectorInput: null,
-          },
-          public: buildMockIntakeRuntimePreviews().public,
-        }),
-      },
-    });
-
-    await expect(service.executeInjection({ kind: "notification" })).rejects.toThrow(
-      "runtime intake snapshot is empty",
-    );
   });
 });

@@ -34,6 +34,38 @@ function truncate(value: string, length: number): string {
   return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
+function formatBoardLabel(payload: HeartbeatEvent["payload"]): string | null {
+  if (typeof payload.boardName === "string" && payload.boardName.trim().length > 0) {
+    return payload.boardName.trim();
+  }
+
+  if (typeof payload.boardSlug === "string" && payload.boardSlug.trim().length > 0) {
+    return `r/${payload.boardSlug.trim()}`;
+  }
+
+  return null;
+}
+
+function buildPublicPostSummary(payload: HeartbeatEvent["payload"]): string {
+  const boardLabel = formatBoardLabel(payload);
+  const title =
+    typeof payload.title === "string" && payload.title.trim().length > 0
+      ? payload.title.trim()
+      : "Recent public post";
+
+  return truncate(boardLabel ? `Board: ${boardLabel} | Recent post title: ${title}` : title, 140);
+}
+
+function buildPublicCommentSummary(payload: HeartbeatEvent["payload"]): string {
+  const boardLabel = formatBoardLabel(payload);
+  const body =
+    typeof payload.body === "string" && payload.body.trim().length > 0
+      ? payload.body.trim()
+      : "Recent public comment";
+
+  return truncate(boardLabel ? `Board: ${boardLabel} | Recent comment: ${body}` : body, 140);
+}
+
 function mapNotificationEvents(
   events: HeartbeatEvent[],
   selectorReferenceBatchSize: number,
@@ -89,11 +121,12 @@ function mapPublicEvents(input: {
   const postItems = input.posts.slice(0, input.config.maxPostsPerCycle).map((event) => ({
     source: "public-post",
     contentType: "post",
-    summary: truncate(String(event.payload.title ?? "Recent public post"), 140),
+    summary: buildPublicPostSummary(event.payload),
     sourceId: event.sourceId,
     createdAt: event.createdAt,
     metadata: {
       boardId: typeof event.payload.boardId === "string" ? event.payload.boardId : null,
+      boardName: typeof event.payload.boardName === "string" ? event.payload.boardName : null,
       boardSlug: typeof event.payload.boardSlug === "string" ? event.payload.boardSlug : null,
       postId: event.sourceId,
     },
@@ -102,7 +135,7 @@ function mapPublicEvents(input: {
   const commentItems = input.comments.slice(0, input.config.maxCommentsPerCycle).map((event) => ({
     source: "public-comment",
     contentType: "comment",
-    summary: truncate(String(event.payload.body ?? "Recent public comment"), 140),
+    summary: buildPublicCommentSummary(event.payload),
     sourceId: event.sourceId,
     createdAt: event.createdAt,
     metadata: {
@@ -110,6 +143,7 @@ function mapPublicEvents(input: {
       commentId: event.sourceId,
       parentCommentId: typeof event.payload.parentId === "string" ? event.payload.parentId : null,
       boardId: typeof event.payload.boardId === "string" ? event.payload.boardId : null,
+      boardName: typeof event.payload.boardName === "string" ? event.payload.boardName : null,
       boardSlug: typeof event.payload.boardSlug === "string" ? event.payload.boardSlug : null,
     },
   }));

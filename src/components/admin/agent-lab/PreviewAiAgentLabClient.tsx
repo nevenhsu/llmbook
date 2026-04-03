@@ -7,11 +7,18 @@ import { AiAgentLabSurface } from "./AiAgentLabSurface";
 import {
   buildCandidateStage,
   buildEmptyModeState,
+  buildModeState,
   buildInitialModes,
   buildSelectorStage,
   filterLabModels,
 } from "./lab-data";
-import type { AgentLabSaveTaskOutcome, AgentLabSourceMode } from "./types";
+import type {
+  AgentLabCandidateRow,
+  AgentLabSaveTaskOutcome,
+  AgentLabSelectorStage,
+  AgentLabSourceMode,
+  AgentLabTaskRow,
+} from "./types";
 
 type PreviewMockState = "default" | "empty" | "error";
 
@@ -34,6 +41,7 @@ type Props = {
   models: AiModelConfig[];
   providers: AiProviderConfig[];
   results: PreviewResults;
+  selectorReferenceBatchSize: number;
 };
 
 function wait(ms: number) {
@@ -50,19 +58,150 @@ function buildFallbackSaveOutcome(sourceMode: AgentLabSourceMode, candidateIndex
   } satisfies AgentLabSaveTaskOutcome;
 }
 
-export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, results }: Props) {
+function applySaveOutcomeToRow(
+  row: AgentLabTaskRow,
+  outcome: AgentLabSaveTaskOutcome,
+): AgentLabTaskRow {
+  const inserted = outcome.inserted;
+  return {
+    ...row,
+    taskId: outcome.taskId ?? row.taskId,
+    status: outcome.status,
+    saveState: inserted ? "success" : "failed",
+    errorMessage: outcome.errorMessage ?? outcome.skipReason,
+    saveResult: {
+      candidateIndex: row.candidateIndex,
+      inserted,
+      skipReason: outcome.skipReason,
+      taskId: outcome.taskId,
+    },
+    actions: {
+      canSave: !inserted,
+    },
+  };
+}
+
+function buildMockSavedTaskRows(input: {
+  sourceMode: AgentLabSourceMode;
+  rows: AgentLabTaskRow[];
+  mockState: PreviewMockState;
+  results: PreviewResults;
+}) {
+  return input.rows.map((row) => {
+    if (!row.candidate || !row.actions.canSave) {
+      return row;
+    }
+    const candidateKey = String(row.candidate.candidateIndex);
+    const outcome =
+      (input.mockState === "error"
+        ? input.results.error.saveOutcomes[input.sourceMode][candidateKey]
+        : input.results.default.saveOutcomes[input.sourceMode][candidateKey]) ??
+      buildFallbackSaveOutcome(input.sourceMode, row.candidate.candidateIndex);
+    return applySaveOutcomeToRow(row, outcome);
+  });
+}
+
+function findCompletedOpportunityKeys(input: {
+  selectorStage: AgentLabSelectorStage;
+  currentTaskRows: AgentLabTaskRow[];
+}) {
+  return new Set(
+    input.selectorStage.rows
+      .filter((row) => row.selected)
+      .flatMap((row) => {
+        const taskRows = input.currentTaskRows.filter(
+          (taskRow) => taskRow.opportunityKey === row.opportunityKey,
+        );
+        if (taskRows.length === 0) {
+          return [];
+        }
+        return taskRows.every((taskRow) => taskRow.saveState === "success")
+          ? [row.opportunityKey]
+          : [];
+      }),
+  );
+}
+
+function filterSelectorStageForRetry(input: {
+  selectorStage: AgentLabSelectorStage;
+  completedOpportunityKeys: Set<string>;
+}) {
+  if (input.completedOpportunityKeys.size === 0) {
+    return input.selectorStage;
+  }
+
+  return {
+    ...input.selectorStage,
+    rows: input.selectorStage.rows.map((row) =>
+      input.completedOpportunityKeys.has(row.opportunityKey) ? { ...row, selected: false } : row,
+    ),
+  } satisfies AgentLabSelectorStage;
+}
+
+function mergeCandidateRows(input: {
+  existingRows: AgentLabCandidateRow[];
+  nextRows: AgentLabCandidateRow[];
+  completedOpportunityKeys: Set<string>;
+}) {
+  const preserved = input.existingRows.filter(
+    (row) => row.opportunityKey && input.completedOpportunityKeys.has(row.opportunityKey),
+  );
+  const merged = [...preserved, ...input.nextRows];
+  const seen = new Set<string>();
+  return merged.filter((row) => {
+    const key = `${row.opportunityKey ?? "none"}:${row.referenceName}:${row.persona?.id ?? "none"}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mergeTaskRows(input: {
+  existingRows: AgentLabTaskRow[];
+  nextRows: AgentLabTaskRow[];
+  completedOpportunityKeys: Set<string>;
+}) {
+  const preserved = input.existingRows.filter((row) =>
+    input.completedOpportunityKeys.has(row.opportunityKey),
+  );
+  const merged = [...preserved, ...input.nextRows];
+  const seen = new Set<string>();
+  return merged.filter((row) => {
+    const key = `${row.opportunityKey}:${row.persona.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function PreviewAiAgentLabClient({
+  runtimePreviews,
+  models,
+  providers,
+  results,
+  selectorReferenceBatchSize,
+}: Props) {
   const [mockState, setMockState] = useState<PreviewMockState>("default");
   const labModels = useMemo(() => filterLabModels(models), [models]);
   const initialModes = useMemo(() => {
     if (mockState === "empty") {
       return {
-        public: buildEmptyModeState("public"),
-        notification: buildEmptyModeState("notification"),
+        public: buildEmptyModeState("public", {
+          batchSize: selectorReferenceBatchSize,
+          groupIndex: 0,
+        }),
+        notification: buildEmptyModeState("notification", {
+          batchSize: selectorReferenceBatchSize,
+          groupIndex: 0,
+        }),
       };
     }
 
-    return buildInitialModes(runtimePreviews);
-  }, [mockState, runtimePreviews]);
+    return buildInitialModes({
+      ...runtimePreviews,
+      selectorReferenceBatchSize,
+    });
+  }, [mockState, runtimePreviews, selectorReferenceBatchSize]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -125,8 +264,22 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
             personaGroup,
           });
         }}
-        onRunCandidate={async ({ sourceMode, personaGroup }) => {
+        onRunCandidate={async ({
+          sourceMode,
+          personaGroup,
+          selectorStage,
+          currentCandidateStage,
+          currentTaskRows,
+        }) => {
           await wait(150);
+          const completedOpportunityKeys = findCompletedOpportunityKeys({
+            selectorStage,
+            currentTaskRows,
+          });
+          const retrySelectorStage = filterSelectorStageForRetry({
+            selectorStage,
+            completedOpportunityKeys,
+          });
           if (mockState === "empty") {
             return {
               candidateStage: {
@@ -143,20 +296,116 @@ export function PreviewAiAgentLabClient({ runtimePreviews, models, providers, re
           }
 
           if (mockState === "error") {
-            return buildCandidateStage({
+            const result = buildCandidateStage({
               kind: sourceMode,
               snapshot: runtimePreviews[sourceMode],
+              selectorStage: retrySelectorStage,
               status: sourceMode === "notification" ? "auto-routed" : "error",
               errorMessage: results.error.candidateErrors[sourceMode],
               personaGroup,
             });
+            return {
+              candidateStage: {
+                ...result.candidateStage,
+                rows: mergeCandidateRows({
+                  existingRows: currentCandidateStage.rows,
+                  nextRows: result.candidateStage.rows,
+                  completedOpportunityKeys,
+                }),
+              },
+              taskRows: mergeTaskRows({
+                existingRows: currentTaskRows,
+                nextRows: result.taskRows,
+                completedOpportunityKeys,
+              }),
+            };
           }
 
-          return buildCandidateStage({
+          const result = buildCandidateStage({
             kind: sourceMode,
             snapshot: runtimePreviews[sourceMode],
+            selectorStage: retrySelectorStage,
             personaGroup,
           });
+          const savedTaskRows = buildMockSavedTaskRows({
+            sourceMode,
+            rows: result.taskRows,
+            mockState,
+            results,
+          });
+          return {
+            candidateStage: {
+              ...result.candidateStage,
+              rows: mergeCandidateRows({
+                existingRows: currentCandidateStage.rows,
+                nextRows: result.candidateStage.rows,
+                completedOpportunityKeys,
+              }),
+            },
+            taskRows: mergeTaskRows({
+              existingRows: currentTaskRows,
+              nextRows: savedTaskRows,
+              completedOpportunityKeys,
+            }),
+          };
+        }}
+        onSavePersonaGroup={async ({ sourceMode, personaGroup, selectorStage }) => {
+          const nextModeState = buildModeState({
+            snapshot: mockState === "empty" ? null : runtimePreviews[sourceMode],
+            sourceMode,
+            personaGroup: {
+              batchSize: personaGroup.batchSize,
+              groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
+            },
+          });
+
+          if (mockState === "empty" || selectorStage.status !== "success") {
+            return {
+              personaGroup: nextModeState.personaGroup,
+              candidateStage: nextModeState.candidateStage,
+              taskRows: [],
+            };
+          }
+
+          if (mockState === "error") {
+            const result = buildCandidateStage({
+              kind: sourceMode,
+              snapshot: runtimePreviews[sourceMode],
+              selectorStage,
+              status: sourceMode === "notification" ? "auto-routed" : "error",
+              errorMessage: results.error.candidateErrors[sourceMode],
+              personaGroup: {
+                batchSize: personaGroup.batchSize,
+                groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
+              },
+            });
+            return {
+              personaGroup: nextModeState.personaGroup,
+              candidateStage: result.candidateStage,
+              taskRows: [],
+            };
+          }
+
+          const result = buildCandidateStage({
+            kind: sourceMode,
+            snapshot: runtimePreviews[sourceMode],
+            selectorStage,
+            personaGroup: {
+              batchSize: personaGroup.batchSize,
+              groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
+            },
+          });
+
+          return {
+            personaGroup: nextModeState.personaGroup,
+            candidateStage: result.candidateStage,
+            taskRows: buildMockSavedTaskRows({
+              sourceMode,
+              rows: result.taskRows,
+              mockState,
+              results,
+            }),
+          };
         }}
         onSaveTask={async ({ sourceMode, row }) => {
           await wait(150);

@@ -86,6 +86,8 @@ describe("AiAgentPanel", () => {
           available: false,
           statusLabel: "Unavailable",
           detail: "orchestrator_runtime_state is not implemented yet in this repo slice.",
+          publicCandidateGroupIndex: null,
+          publicCandidateEpoch: null,
         },
       }),
       headers: new Headers({ "Content-Type": "application/json" }),
@@ -277,11 +279,15 @@ describe("AiAgentPanel", () => {
     expect(container.textContent).toContain("Public Intake Snapshot");
     expect(container.textContent).toContain("comment-1");
     expect(container.textContent).toContain("post-1");
-    expect(container.textContent).toContain("Recent comment from runtime snapshot");
-    expect(container.textContent).toContain("Recent post from runtime snapshot");
+    expect(container.textContent).toContain(
+      "Board: Creative Lab | Recent comment: Can anyone share concrete workflow examples for this tool stack?",
+    );
+    expect(container.textContent).toContain(
+      "Board: Creative Lab | Recent post title: Best prompting workflows this week",
+    );
     expect(container.textContent).toContain("Notification Injection Preview");
     expect(container.textContent).toContain("Public Injection Preview");
-    expect(container.textContent).toContain('"rpcName": "inject_persona_tasks"');
+    expect(container.textContent).toContain('"persona_tasks_rows"');
 
     const intakeViewPromptButtons = Array.from(container.querySelectorAll("button")).filter(
       (button) => button.textContent?.includes("View Prompt"),
@@ -296,7 +302,7 @@ describe("AiAgentPanel", () => {
     expect(container.textContent).toContain("Intake Prompt Detail");
     expect(container.textContent).toContain("notification-intake");
     expect(container.textContent).toContain("Assembled Prompt");
-    expect(container.textContent).toContain("Model Payload");
+    expect(container.textContent).toContain("Prompt Input");
 
     const intakeCopyPromptButton = Array.from(container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Copy Prompt"),
@@ -307,9 +313,7 @@ describe("AiAgentPanel", () => {
       intakeCopyPromptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(clipboardWriteTextMock).toHaveBeenCalledWith(
-      expect.stringContaining("[system_baseline]"),
-    );
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith(expect.stringContaining("[stage]"));
 
     fetchMock.mockResolvedValueOnce({
       ok: true,

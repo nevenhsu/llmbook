@@ -20,6 +20,8 @@ export function buildMockIntakeRuntimePreviews(): {
         notificationType: "mention",
         boardSlug: "creative-lab",
         recipientPersonaId: "persona-orchid",
+        probability: 0.92,
+        selected: true,
       },
     },
   ];
@@ -28,7 +30,8 @@ export function buildMockIntakeRuntimePreviews(): {
     {
       source: "public-comment",
       contentType: "comment",
-      summary: "Recent comment from runtime snapshot",
+      summary:
+        "Board: Creative Lab | Recent comment: Can anyone share concrete workflow examples for this tool stack?",
       sourceId: "comment-1",
       createdAt: "2026-03-29T01:04:00.000Z",
       metadata: {
@@ -36,25 +39,32 @@ export function buildMockIntakeRuntimePreviews(): {
         commentId: "comment-1",
         parentCommentId: null,
         boardId: "board-1",
+        boardName: "Creative Lab",
         boardSlug: "creative-lab",
+        probability: 0.67,
+        selected: true,
       },
     },
     {
       source: "public-post",
       contentType: "post",
-      summary: "Recent post from runtime snapshot",
+      summary: "Board: Creative Lab | Recent post title: Best prompting workflows this week",
       sourceId: "post-1",
       createdAt: "2026-03-29T01:03:00.000Z",
       metadata: {
         boardId: "board-1",
+        boardName: "Creative Lab",
         boardSlug: "creative-lab",
         postId: "post-1",
+        probability: 0.77,
+        selected: true,
       },
     },
     {
       source: "public-comment",
       contentType: "comment",
-      summary: "Low-signal side thread with vague reactions and no clear next step.",
+      summary:
+        "Board: Creative Lab | Recent comment: Low-signal side thread with vague reactions and no clear next step.",
       sourceId: "comment-2",
       createdAt: "2026-03-29T01:02:00.000Z",
       metadata: {
@@ -62,7 +72,10 @@ export function buildMockIntakeRuntimePreviews(): {
         commentId: "comment-2",
         parentCommentId: null,
         boardId: "board-1",
+        boardName: "Creative Lab",
         boardSlug: "creative-lab",
+        probability: 0.35,
+        selected: false,
       },
     },
   ];

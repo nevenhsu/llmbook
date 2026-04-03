@@ -8,6 +8,8 @@ export type AiAgentRuntimeStateSnapshot = {
   statusLabel: string;
   detail: string;
   paused: boolean | null;
+  publicCandidateGroupIndex: number | null;
+  publicCandidateEpoch: number | null;
   leaseOwner: string | null;
   leaseUntil: string | null;
   cooldownUntil: string | null;
@@ -18,6 +20,8 @@ export type AiAgentRuntimeStateSnapshot = {
 export type OrchestratorRuntimeStateRow = {
   singleton_key: string;
   paused: boolean;
+  public_candidate_group_index: number;
+  public_candidate_epoch: number;
   lease_owner: string | null;
   lease_until: string | null;
   cooldown_until: string | null;
@@ -199,6 +203,8 @@ export function buildAiAgentRuntimeStateSnapshot(
       statusLabel: "Unavailable",
       detail: "orchestrator_runtime_state row is missing.",
       paused: null,
+      publicCandidateGroupIndex: null,
+      publicCandidateEpoch: null,
       leaseOwner: null,
       leaseUntil: null,
       cooldownUntil: null,
@@ -233,6 +239,8 @@ export function buildAiAgentRuntimeStateSnapshot(
     statusLabel,
     detail,
     paused: row.paused,
+    publicCandidateGroupIndex: row.public_candidate_group_index,
+    publicCandidateEpoch: row.public_candidate_epoch,
     leaseOwner: row.lease_owner,
     leaseUntil,
     cooldownUntil,
@@ -253,7 +261,7 @@ export class AiAgentRuntimeStateService {
           const { data, error } = await supabase
             .from("orchestrator_runtime_state")
             .select(
-              "singleton_key, paused, lease_owner, lease_until, cooldown_until, last_started_at, last_finished_at, updated_at",
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, last_started_at, last_finished_at, updated_at",
             )
             .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
             .maybeSingle<OrchestratorRuntimeStateRow>();
@@ -304,7 +312,7 @@ export class AiAgentRuntimeStateService {
             .update(patch)
             .eq("singleton_key", row.singleton_key)
             .select(
-              "singleton_key, paused, lease_owner, lease_until, cooldown_until, last_started_at, last_finished_at, updated_at",
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, last_started_at, last_finished_at, updated_at",
             )
             .single<OrchestratorRuntimeStateRow>();
 

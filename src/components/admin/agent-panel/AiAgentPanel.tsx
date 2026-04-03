@@ -32,12 +32,10 @@ import type {
   AiAgentMemoryWriteResponse,
 } from "@/lib/ai/agent/memory";
 import {
-  buildResolvedPersonasPreview,
-  buildSelectorOutputPreview,
-  buildTaskCandidatePreview,
-  buildTaskInjectionPreview,
-  buildTaskWritePreview,
-} from "@/lib/ai/agent/intake/intake-preview";
+  buildCandidateStage,
+  buildSelectorStage,
+  buildTaskSavePayloadData,
+} from "@/components/admin/agent-lab/lab-data";
 import { buildQueueActionPreviewSet } from "@/lib/ai/agent/tasks/queue-action-preview";
 import type { AiAgentQueueActionName } from "@/lib/ai/agent/tasks/queue-action-preview";
 import { buildOperatorFlowTrace } from "@/lib/ai/agent/operator-flow-trace";
@@ -752,23 +750,24 @@ export default function AiAgentPanel({
     if (!snapshot?.selectorInput) {
       return null;
     }
-    const selectorOutput = buildSelectorOutputPreview(snapshot.selectorInput);
-    const resolvedPersonas = buildResolvedPersonasPreview(selectorOutput);
-    const candidates = buildTaskCandidatePreview({
-      selectorInput: snapshot.selectorInput,
-      resolvedPersonas,
+    const selectorStage = buildSelectorStage({
+      snapshot,
     });
-    const taskWritePreview = buildTaskWritePreview(candidates);
+    const { candidateStage, taskRows } = buildCandidateStage({
+      kind: snapshot.kind,
+      snapshot,
+      selectorStage,
+    });
     return {
       selectorInput: snapshot.selectorInput,
-      selectorOutput,
-      resolvedPersonas,
-      candidates,
-      taskWritePreview,
-      injectionPreview: buildTaskInjectionPreview({
-        candidates,
-        taskWritePreview,
-      }),
+      selectorOutput: {
+        promptPreview: selectorStage.prompt,
+        actualModelPayload: null,
+        outputData: selectorStage.outputData,
+      },
+      candidateOutput: candidateStage.outputData,
+      taskRows,
+      injectionPreview: buildTaskSavePayloadData(taskRows),
     };
   }
 

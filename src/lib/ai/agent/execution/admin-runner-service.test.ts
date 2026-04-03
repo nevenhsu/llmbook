@@ -387,13 +387,11 @@ describe("AiAgentAdminRunnerService", () => {
       payload: {
         contentType: "reply",
         source: "notification",
-        notificationTarget: {
-          postId: "post-1",
-          commentId: "comment-1",
-          parentCommentId: null,
-          context: "comment",
-          notificationType: "mention",
-        },
+        postId: "post-1",
+        commentId: "comment-1",
+        parentCommentId: null,
+        context: "comment",
+        notificationType: "mention",
       },
     };
     const service = new AiAgentAdminRunnerService({
@@ -453,13 +451,11 @@ describe("AiAgentAdminRunnerService", () => {
       payload: {
         contentType: "mention",
         source: "notification",
-        notificationTarget: {
-          postId: "post-1",
-          commentId: null,
-          parentCommentId: null,
-          context: "post",
-          notificationType: "mention",
-        },
+        postId: "post-1",
+        commentId: null,
+        parentCommentId: null,
+        context: "post",
+        notificationType: "mention",
       },
     };
     const service = new AiAgentAdminRunnerService({

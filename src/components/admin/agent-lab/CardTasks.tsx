@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Avatar from "@/components/ui/Avatar";
 import { SectionCard } from "@/components/admin/control-plane/SectionCard";
 import type { AgentLabTaskStage } from "./types";
+
+const PAGE_SIZE = 10;
 
 type Props = {
   taskStage: AgentLabTaskStage;
@@ -60,21 +63,33 @@ function PersonaCell({ persona }: { persona: AgentLabTaskStage["rows"][number]["
 
 export function CardTasks({ taskStage, onSaveAll, onSaveRow, onShowData }: Props) {
   const hasSavableRows = taskStage.rows.some((row) => row.actions.canSave);
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(taskStage.rows.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount - 1));
+  }, [pageCount]);
+
+  const pageStart = page * PAGE_SIZE;
+  const rows = useMemo(
+    () => taskStage.rows.slice(pageStart, pageStart + PAGE_SIZE),
+    [pageStart, taskStage.rows],
+  );
 
   return (
     <SectionCard
       title="Tasks"
       actions={
         <div className="flex flex-wrap gap-2">
+          <button className="btn btn-outline btn-sm" onClick={onShowData}>
+            Show Data
+          </button>
           <button
             className="btn btn-primary btn-sm"
             disabled={!hasSavableRows}
             onClick={() => void onSaveAll()}
           >
             Save All
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={onShowData}>
-            Show Data
           </button>
         </div>
       }
@@ -99,8 +114,9 @@ export function CardTasks({ taskStage, onSaveAll, onSaveRow, onShowData }: Props
               </tr>
             </thead>
             <tbody>
-              {taskStage.rows.length > 0 ? (
-                taskStage.rows.map((row, rowIndex) => {
+              {rows.length > 0 ? (
+                rows.map((row, rowIndex) => {
+                  const absoluteRowIndex = pageStart + rowIndex;
                   const label =
                     row.saveState === "success"
                       ? "Saved"
@@ -108,7 +124,7 @@ export function CardTasks({ taskStage, onSaveAll, onSaveRow, onShowData }: Props
                         ? "Saving..."
                         : "Save";
                   return (
-                    <tr key={`${row.opportunityKey}-${row.persona.id}-${rowIndex}`}>
+                    <tr key={`${row.opportunityKey}-${row.persona.id}-${absoluteRowIndex}`}>
                       <td>{row.opportunityKey}</td>
                       <td>
                         <PersonaCell persona={row.persona} />
@@ -124,7 +140,7 @@ export function CardTasks({ taskStage, onSaveAll, onSaveRow, onShowData }: Props
                         <button
                           className="btn btn-outline btn-xs"
                           disabled={!row.actions.canSave || row.saveState === "saving"}
-                          onClick={() => void onSaveRow(rowIndex)}
+                          onClick={() => void onSaveRow(absoluteRowIndex)}
                         >
                           {label}
                         </button>
@@ -141,6 +157,27 @@ export function CardTasks({ taskStage, onSaveAll, onSaveRow, onShowData }: Props
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-base-content/60">
+            Page {page + 1} / {pageCount} · Total {taskStage.rows.length} rows
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-outline btn-xs"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Prev
+            </button>
+            <button
+              className="btn btn-outline btn-xs"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </SectionCard>

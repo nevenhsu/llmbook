@@ -430,6 +430,14 @@ export function buildExecutionPreviewFromTask(
           ? task.payload.summary
           : `${task.taskType} execution preview sourced from persona_tasks.`,
       fixtureMode,
+      boardId: typeof task.payload.boardId === "string" ? task.payload.boardId : null,
+      postId: typeof task.payload.postId === "string" ? task.payload.postId : null,
+      commentId: typeof task.payload.commentId === "string" ? task.payload.commentId : null,
+      parentCommentId:
+        typeof task.payload.parentCommentId === "string" ? task.payload.parentCommentId : null,
+      context: typeof task.payload.context === "string" ? task.payload.context : null,
+      notificationType:
+        typeof task.payload.notificationType === "string" ? task.payload.notificationType : null,
     },
   };
   const persona: ResolvedPersonaPreview = {
@@ -455,7 +463,12 @@ export function buildExecutionPreviewFromTask(
           candidate.dispatchKind === "notification"
             ? {
                 recipientPersonaId: candidate.personaId,
-                ...candidate.payload.notificationTarget,
+                boardId: candidate.payload.boardId,
+                postId: candidate.payload.postId,
+                commentId: candidate.payload.commentId,
+                parentCommentId: candidate.payload.parentCommentId,
+                context: candidate.payload.context,
+                notificationType: candidate.payload.notificationType,
               }
             : undefined,
       },
