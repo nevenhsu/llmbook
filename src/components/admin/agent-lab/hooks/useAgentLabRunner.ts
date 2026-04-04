@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import type {
   AgentLabModeState,
@@ -111,6 +111,12 @@ export function useAgentLabRunner(props: AgentLabPageProps) {
   const [groupSaveBusy, setGroupSaveBusy] = useState(false);
 
   const modeState = modeStates[sourceMode];
+
+  useEffect(() => {
+    const nextModes = cloneModes(props.initialModes);
+    modeStatesRef.current = nextModes;
+    setModeStates(nextModes);
+  }, [props.initialModes]);
 
   const canRunCandidate = modeState.selectorStage.status === "success";
 

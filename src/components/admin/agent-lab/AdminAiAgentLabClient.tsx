@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import { apiPost } from "@/lib/api/fetch-json";
 import type { AiAgentTaskInjectionExecutedResponse } from "@/lib/ai/agent/intake/task-injection-service";
 import type { AiAgentRuntimeSourceSnapshot } from "@/lib/ai/agent/intake/intake-read-model";
+import { buildSelectorInputPreview } from "@/lib/ai/agent/intake/intake-preview";
 import type {
   AiModelConfig,
   AiProviderConfig,
@@ -23,9 +25,112 @@ import type {
   AgentLabSelectorStage,
   AgentLabTaskRow,
 } from "./types";
-import type { AdminPublicCandidateBatchResult } from "@/lib/ai/agent/intake/opportunity-pipeline-service";
+import type {
+  AdminOpportunityBatchResult,
+  AdminPublicCandidateBatchResult,
+} from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 
 const STAGE_BATCH_SIZE = 10;
+
+function buildOpportunityOutputData(input: {
+  rows: AgentLabOpportunityRow[];
+  opportunityResults: AdminOpportunityBatchResult["opportunityResults"];
+}) {
+  const opportunityKeyByRecordId = new Map(
+    input.rows.flatMap((row) =>
+      row.recordId ? [[row.recordId, row.opportunityKey] as const] : [],
+    ),
+  );
+
+  return {
+    scores: input.opportunityResults.map((result) => ({
+      opportunity_key: opportunityKeyByRecordId.get(result.opportunityId) ?? result.opportunityId,
+      probability: result.probability,
+    })),
+  };
+}
+
+function mergeOpportunityRowsForResultView(input: {
+  currentRows: AgentLabOpportunityRow[];
+  nextRows: AgentLabOpportunityRow[];
+  opportunityResults: AdminOpportunityBatchResult["opportunityResults"];
+}) {
+  const resultById = new Map(
+    input.opportunityResults.map((result) => [result.opportunityId, result] as const),
+  );
+  const patchRow = (row: AgentLabOpportunityRow) => {
+    if (!row.recordId) {
+      return row;
+    }
+    const result = resultById.get(row.recordId);
+    if (!result) {
+      return row;
+    }
+    return {
+      ...row,
+      probability: result.probability,
+      selected: result.selected,
+      errorMessage: null,
+    } satisfies AgentLabOpportunityRow;
+  };
+
+  const preserved = input.currentRows.filter((row) => row.probability !== null).map(patchRow);
+  const merged = [...preserved, ...input.nextRows.map(patchRow)];
+  const seen = new Set<string>();
+  return merged.filter((row) => {
+    const key = row.recordId ?? row.opportunityKey;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function patchSnapshotWithOpportunityResults(input: {
+  snapshot: AiAgentRuntimeSourceSnapshot | null;
+  opportunityResults: AdminOpportunityBatchResult["opportunityResults"];
+  batchSize: number;
+  groupIndex: number;
+}): AiAgentRuntimeSourceSnapshot | null {
+  if (!input.snapshot || input.opportunityResults.length === 0) {
+    return input.snapshot;
+  }
+
+  const resultById = new Map(
+    input.opportunityResults.map((result) => [result.opportunityId, result] as const),
+  );
+  const items = input.snapshot.items.map((item) => {
+    const opportunityId =
+      item.metadata && typeof item.metadata.opportunityId === "string"
+        ? item.metadata.opportunityId
+        : null;
+    const result = opportunityId ? resultById.get(opportunityId) : null;
+    if (!result) {
+      return item;
+    }
+    return {
+      ...item,
+      metadata: {
+        ...(item.metadata ?? {}),
+        probability: result.probability,
+        selected: result.selected,
+      },
+    };
+  });
+
+  return {
+    ...input.snapshot,
+    items,
+    selectorInput: buildSelectorInputPreview({
+      fixtureMode:
+        input.snapshot.kind === "notification" ? "notification-intake" : "mixed-public-opportunity",
+      groupIndexOverride: input.groupIndex,
+      selectorReferenceBatchSize: input.batchSize,
+      items,
+    }),
+  };
+}
 
 function findCompletedOpportunityKeys(input: {
   selectorStage: AgentLabSelectorStage;
@@ -161,6 +266,17 @@ export function AdminAiAgentLabClient({
   selectorReferenceBatchSize,
 }: Props) {
   const labModels = filterLabModels(models);
+  const initialModes = buildInitialModes({
+    ...runtimePreviews,
+    personaSummaries: personas,
+    selectorReferenceBatchSize,
+    usePersistedOpportunityState: true,
+  });
+  const lastNotificationSelectorSnapshotRef = useRef<AiAgentRuntimeSourceSnapshot | null>(
+    runtimePreviews.notification,
+  );
+  const lastNotificationAutoRouteRef =
+    useRef<AdminOpportunityBatchResult["notificationAutoRoute"]>(null);
 
   return (
     <AiAgentLabSurface
@@ -176,14 +292,28 @@ export function AdminAiAgentLabClient({
       models={labModels}
       providers={providers}
       initialModelId={labModels[0]?.id ?? ""}
-      initialModes={buildInitialModes({
-        ...runtimePreviews,
-        personaSummaries: personas,
-        selectorReferenceBatchSize,
-        usePersistedOpportunityState: true,
-      })}
+      initialModes={{
+        ...initialModes,
+        notification: {
+          ...initialModes.notification,
+          candidateStage: {
+            ...initialModes.notification.candidateStage,
+            rows: [],
+            outputData: null,
+          },
+          taskStage: {
+            rows: [],
+            summary: {
+              attempted: 0,
+              succeeded: 0,
+              failed: 0,
+            },
+            toastMessage: null,
+          },
+        },
+      }}
       onRunSelector={async ({ sourceMode, personaGroup, currentOpportunities, onProgress }) => {
-        await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
+        const sourceResponse = await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
           `/api/admin/ai/agent/lab/source-mode/${sourceMode}`,
           {
             batchSize: personaGroup.batchSize,
@@ -195,10 +325,17 @@ export function AdminAiAgentLabClient({
           (row) => row.recordId && row.probability === null,
         );
         const batch = unscoredRows.slice(0, STAGE_BATCH_SIZE);
+        let batchResult: AdminOpportunityBatchResult = {
+          opportunityResults: [],
+          notificationAutoRoute: null,
+        };
         if (batch.length > 0) {
-          await apiPost<{ ok: true }>(`/api/admin/ai/agent/lab/opportunities/${sourceMode}`, {
-            opportunityIds: batch.flatMap((row) => (row.recordId ? [row.recordId] : [])),
-          });
+          batchResult = await apiPost<AdminOpportunityBatchResult>(
+            `/api/admin/ai/agent/lab/opportunities/${sourceMode}`,
+            {
+              opportunityIds: batch.flatMap((row) => (row.recordId ? [row.recordId] : [])),
+            },
+          );
         }
 
         const refreshed = await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
@@ -210,10 +347,37 @@ export function AdminAiAgentLabClient({
           },
         );
 
-        const nextStage = buildSelectorStage({
+        const refreshedStage = buildSelectorStage({
           snapshot: refreshed.snapshot,
           personaGroup,
         });
+        const mergedRows = mergeOpportunityRowsForResultView({
+          currentRows: currentOpportunities,
+          nextRows: refreshedStage.rows,
+          opportunityResults: batchResult.opportunityResults,
+        });
+        const nextStage = {
+          ...refreshedStage,
+          outputData:
+            batchResult.opportunityResults.length > 0
+              ? buildOpportunityOutputData({
+                  rows: mergedRows,
+                  opportunityResults: batchResult.opportunityResults,
+                })
+              : refreshedStage.outputData,
+          rows: mergedRows,
+        } satisfies AgentLabSelectorStage;
+
+        if (sourceMode === "notification") {
+          lastNotificationSelectorSnapshotRef.current = patchSnapshotWithOpportunityResults({
+            snapshot: sourceResponse.snapshot,
+            opportunityResults: batchResult.opportunityResults,
+            batchSize: personaGroup.batchSize,
+            groupIndex: 0,
+          });
+          lastNotificationAutoRouteRef.current = batchResult.notificationAutoRoute;
+        }
+
         onProgress?.(nextStage);
         return nextStage;
       }}
@@ -225,14 +389,19 @@ export function AdminAiAgentLabClient({
         currentTaskRows,
         onProgress,
       }) => {
-        const response = await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
-          `/api/admin/ai/agent/lab/source-mode/${sourceMode}`,
-          {
-            batchSize: personaGroup.batchSize,
-            groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
-            score: false,
-          },
-        );
+        const response =
+          sourceMode === "notification"
+            ? {
+                snapshot: lastNotificationSelectorSnapshotRef.current,
+              }
+            : await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
+                `/api/admin/ai/agent/lab/source-mode/${sourceMode}`,
+                {
+                  batchSize: personaGroup.batchSize,
+                  groupIndex: personaGroup.groupIndex,
+                  score: false,
+                },
+              );
         const completedOpportunityKeys = findCompletedOpportunityKeys({
           selectorStage,
           currentTaskRows,
@@ -249,7 +418,78 @@ export function AdminAiAgentLabClient({
           personaSummaries: personas,
         });
 
-        if (sourceMode === "notification" || result.taskRows.length === 0) {
+        if (sourceMode === "notification") {
+          const opportunityIds = new Set(
+            (lastNotificationAutoRouteRef.current?.taskOutcomes ?? []).map(
+              (outcome) => outcome.opportunityId,
+            ),
+          );
+          const filteredSelectorStage = {
+            ...retrySelectorStage,
+            rows: retrySelectorStage.rows.filter(
+              (row) => row.recordId && opportunityIds.has(row.recordId),
+            ),
+          } satisfies AgentLabSelectorStage;
+          const notificationResult = buildCandidateStage({
+            kind: sourceMode,
+            snapshot: response.snapshot,
+            selectorStage: filteredSelectorStage,
+            personaGroup,
+            personaSummaries: personas,
+          });
+          const taskOutcomes = new Map<
+            string,
+            {
+              inserted: boolean;
+              taskId: string | null;
+              skipReason: string | null;
+              status: string;
+              errorMessage: string | null;
+            }
+          >();
+          const opportunityKeyByRecordId = new Map(
+            retrySelectorStage.rows.flatMap((row) =>
+              row.recordId ? [[row.recordId, row.opportunityKey] as const] : [],
+            ),
+          );
+          lastNotificationAutoRouteRef.current?.taskOutcomes.forEach((outcome) => {
+            const opportunityKey = opportunityKeyByRecordId.get(outcome.opportunityId);
+            if (!opportunityKey) {
+              return;
+            }
+            taskOutcomes.set(`${opportunityKey}:${outcome.personaId}`, {
+              inserted: outcome.inserted,
+              taskId: outcome.taskId,
+              skipReason: outcome.skipReason,
+              status: outcome.status,
+              errorMessage: outcome.errorMessage,
+            });
+          });
+          const savedTaskRows = notificationResult.taskRows.map((row) =>
+            applyAdminBatchTaskOutcome({
+              row,
+              taskOutcomes,
+            }),
+          );
+          lastNotificationAutoRouteRef.current = null;
+          return {
+            candidateStage: {
+              ...notificationResult.candidateStage,
+              rows: mergeCandidateRows({
+                existingRows: currentCandidateStage.rows,
+                nextRows: notificationResult.candidateStage.rows,
+                completedOpportunityKeys,
+              }),
+            },
+            taskRows: mergeTaskRows({
+              existingRows: currentTaskRows,
+              nextRows: savedTaskRows,
+              completedOpportunityKeys,
+            }),
+          };
+        }
+
+        if (result.taskRows.length === 0) {
           return {
             candidateStage: {
               ...result.candidateStage,

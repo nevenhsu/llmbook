@@ -38,7 +38,21 @@ describe("POST /api/admin/ai/agent/lab/opportunities/[kind]", () => {
   });
 
   it("scores only the requested opportunity ids", async () => {
-    scoreAdminOpportunityBatch.mockResolvedValue(undefined);
+    scoreAdminOpportunityBatch.mockResolvedValue({
+      opportunityResults: [
+        {
+          opportunityId: "opp-1",
+          probability: 0.81,
+          selected: true,
+        },
+        {
+          opportunityId: "opp-2",
+          probability: 0.42,
+          selected: false,
+        },
+      ],
+      notificationAutoRoute: null,
+    });
 
     const { POST } = await import("./route");
     const response = await POST(
@@ -55,6 +69,21 @@ describe("POST /api/admin/ai/agent/lab/opportunities/[kind]", () => {
     expect(scoreAdminOpportunityBatch).toHaveBeenCalledWith({
       kind: "public",
       opportunityIds: ["opp-1", "opp-2"],
+    });
+    await expect(response.json()).resolves.toEqual({
+      opportunityResults: [
+        {
+          opportunityId: "opp-1",
+          probability: 0.81,
+          selected: true,
+        },
+        {
+          opportunityId: "opp-2",
+          probability: 0.42,
+          selected: false,
+        },
+      ],
+      notificationAutoRoute: null,
     });
   });
 });

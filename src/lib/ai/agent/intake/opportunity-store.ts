@@ -91,6 +91,7 @@ type OpportunityStoreDeps = {
   listAdminLabOpportunities: (input: {
     kind: AiOppKind;
     publicPersonaLimit: number;
+    limit: number;
   }) => Promise<AiOppRow[]>;
   updateOpportunityProbabilities: (rows: AiOppProbabilityUpdateInput[]) => Promise<void>;
   listResolvedPersonaIdsByOpportunityIds: (
@@ -130,6 +131,13 @@ function compareOpportunityPriority(a: AiOppRow, b: AiOppRow): number {
   }
 
   return toTimestamp(b.created_at) - toTimestamp(a.created_at);
+}
+
+function compareRecencyDesc(a: AiOppRow, b: AiOppRow): number {
+  return (
+    toTimestamp(b.source_created_at ?? b.created_at) -
+    toTimestamp(a.source_created_at ?? a.created_at)
+  );
 }
 
 function mapUpsertRow(row: AiOppUpsertInput) {
@@ -324,15 +332,20 @@ export class AiOpportunityStore {
             throw new Error(`load admin lab ai_opps failed: ${error.message}`);
           }
 
-          const eligibleRows = (data ?? []).filter((row) =>
-            input.kind === "public"
-              ? row.probability === null ||
-                (row.selected === true && row.matched_persona_count < input.publicPersonaLimit)
-              : row.probability === null ||
-                (row.selected === true && row.notification_processed_at === null),
+          if (input.kind === "notification") {
+            return (data ?? [])
+              .filter((row) => row.probability === null)
+              .sort(compareRecencyDesc)
+              .slice(0, input.limit);
+          }
+
+          const eligibleRows = (data ?? []).filter(
+            (row) =>
+              row.probability === null ||
+              (row.selected === true && row.matched_persona_count < input.publicPersonaLimit),
           );
 
-          return eligibleRows.sort(compareOpportunityPriority);
+          return eligibleRows.sort(compareOpportunityPriority).slice(0, input.limit);
         }),
       updateOpportunityProbabilities:
         options?.deps?.updateOpportunityProbabilities ??
@@ -479,6 +492,7 @@ export class AiOpportunityStore {
   public async listAdminLabOpportunities(input: {
     kind: AiOppKind;
     publicPersonaLimit: number;
+    limit: number;
   }): Promise<AiOppRow[]> {
     return this.deps.listAdminLabOpportunities(input);
   }

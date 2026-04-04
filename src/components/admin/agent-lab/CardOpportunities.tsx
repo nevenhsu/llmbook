@@ -14,27 +14,25 @@ type Props = {
   onShowPrompt: () => void;
   onShowData: () => void;
   busy: boolean;
+  renderMode?: "normal" | "loading" | "running";
 };
 
 function SelectedStateCell({ row }: { row: AgentLabOpportunityRow }) {
-  const ui =
-    typeof row.probability !== "number"
-      ? {
-          label: "Pending",
-          dotClassName: "bg-base-content/30",
-          textClassName: "text-base-content/70",
-        }
-      : row.selected
-        ? {
-            label: "Selected",
-            dotClassName: "bg-success",
-            textClassName: "text-success",
-          }
-        : {
-            label: "Skipped",
-            dotClassName: "bg-error",
-            textClassName: "text-error",
-          };
+  if (typeof row.probability !== "number") {
+    return <span className="text-base-content/60 text-sm font-medium">-</span>;
+  }
+
+  const ui = row.selected
+    ? {
+        label: "Selected",
+        dotClassName: "bg-success",
+        textClassName: "text-success",
+      }
+    : {
+        label: "Skipped",
+        dotClassName: "bg-error",
+        textClassName: "text-error",
+      };
 
   return (
     <span className={`inline-flex items-center gap-2 text-sm font-medium ${ui.textClassName}`}>
@@ -51,7 +49,10 @@ export function CardOpportunities({
   onShowPrompt,
   onShowData,
   busy,
+  renderMode = "normal",
 }: Props) {
+  const loading = renderMode === "loading";
+  const running = renderMode === "running";
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(opportunities.length / PAGE_SIZE));
 
@@ -71,17 +72,21 @@ export function CardOpportunities({
         <div className="flex flex-wrap gap-2">
           <button
             className="btn btn-outline btn-sm"
-            disabled={!selectorStage.prompt}
+            disabled={loading || running || !selectorStage.prompt}
             onClick={onShowPrompt}
           >
             Show Prompt
           </button>
-          <button className="btn btn-outline btn-sm" onClick={onShowData}>
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={loading || running}
+            onClick={onShowData}
+          >
             Show Data
           </button>
           <button
             className="btn btn-primary btn-sm"
-            disabled={busy || opportunities.length === 0}
+            disabled={loading || running || busy || opportunities.length === 0}
             onClick={() => void onRun()}
           >
             {busy ? "Running..." : "Run"}
@@ -103,17 +108,50 @@ export function CardOpportunities({
               </tr>
             </thead>
             <tbody>
-              {rows.length > 0 ? (
+              {loading ? (
+                Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                  <tr key={`loading-${index}`}>
+                    <td>
+                      <div className="skeleton h-4 w-12" />
+                    </td>
+                    <td>
+                      <div className="skeleton h-4 w-24" />
+                    </td>
+                    <td>
+                      <div className="skeleton h-4 w-full max-w-md" />
+                    </td>
+                    <td>
+                      <div className="skeleton h-4 w-12" />
+                    </td>
+                    <td>
+                      <div className="skeleton h-5 w-20" />
+                    </td>
+                    <td>
+                      <div className="skeleton h-4 w-10" />
+                    </td>
+                  </tr>
+                ))
+              ) : rows.length > 0 ? (
                 rows.map((row) => (
                   <tr key={row.opportunityKey}>
                     <td>{row.opportunityKey}</td>
                     <td>{row.source}</td>
                     <td>{row.content}</td>
                     <td>
-                      {typeof row.probability === "number" ? row.probability.toFixed(2) : "-"}
+                      {running && typeof row.probability !== "number" ? (
+                        <div className="skeleton h-4 w-12" />
+                      ) : typeof row.probability === "number" ? (
+                        row.probability.toFixed(2)
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td>
-                      <SelectedStateCell row={row} />
+                      {running && typeof row.probability !== "number" ? (
+                        <div className="skeleton h-5 w-20" />
+                      ) : (
+                        <SelectedStateCell row={row} />
+                      )}
                     </td>
                     <td>
                       {row.link ? (
@@ -138,7 +176,11 @@ export function CardOpportunities({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-base-content/60">
-            Page {page + 1} / {pageCount} · Total {opportunities.length} rows
+            {loading
+              ? "Loading rows..."
+              : running
+                ? "Running..."
+                : `Page ${page + 1} / ${pageCount} · Total ${opportunities.length} rows`}
           </span>
           <div className="flex gap-2">
             <button

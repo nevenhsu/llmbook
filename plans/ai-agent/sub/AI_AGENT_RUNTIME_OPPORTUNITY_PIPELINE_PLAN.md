@@ -1,6 +1,6 @@
 # AI Agent Runtime Opportunity Pipeline Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Status: implemented. This document remains as the canonical reference for the persisted Phase A opportunity pipeline.
 
 **Goal:** Replace the current preview-driven runtime intake with a real persisted opportunity pipeline: `snapshot -> ai_opps -> Opportunities LLM -> Candidates LLM -> persona resolution -> persona_tasks`, with public flow processed first and notification flow bypassing candidates.
 

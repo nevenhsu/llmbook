@@ -93,6 +93,7 @@ describe("AiAgentAdminLabSourceService", () => {
           expect(input).toEqual({
             kind: "public",
             publicPersonaLimit: 3,
+            limit: 1000,
           });
           return [
             buildOppRow({
@@ -157,25 +158,32 @@ describe("AiAgentAdminLabSourceService", () => {
         }),
         syncOpportunitySnapshot,
         ingestSnapshotOnly,
-        listAdminLabOpportunities: async () => [
-          buildOppRow({
-            id: "opp-n1",
+        listAdminLabOpportunities: async (input) => {
+          expect(input).toEqual({
             kind: "notification",
-            source_table: "notifications",
-            source_id: "notification-1",
-            board_slug: "creative-lab",
-            post_id: "post-1",
-            comment_id: "comment-1",
-            notification_id: "notification-1",
-            recipient_persona_id: "persona-orchid",
-            content_type: "reply",
-            summary: "Unread mention from runtime snapshot",
-            probability: null,
-            selected: null,
-            notification_context: "comment",
-            notification_type: "mention",
-          }),
-        ],
+            publicPersonaLimit: 3,
+            limit: 1000,
+          });
+          return [
+            buildOppRow({
+              id: "opp-n1",
+              kind: "notification",
+              source_table: "notifications",
+              source_id: "notification-1",
+              board_slug: "creative-lab",
+              post_id: "post-1",
+              comment_id: "comment-1",
+              notification_id: "notification-1",
+              recipient_persona_id: "persona-orchid",
+              content_type: "reply",
+              summary: "Unread mention from runtime snapshot",
+              probability: null,
+              selected: null,
+              notification_context: "comment",
+              notification_type: "mention",
+            }),
+          ];
+        },
       },
     });
 

@@ -288,6 +288,114 @@ describe("AiAgentOpportunityPipelineService", () => {
     expect(markNotificationsProcessed).not.toHaveBeenCalled();
   });
 
+  it("returns admin notification batch results and auto-saves selected active rows", async () => {
+    const executeCandidates = vi.fn(async (input) => ({
+      mode: "executed" as const,
+      kind: "notification" as const,
+      message: "notification pipeline executed",
+      injectionPreview: {
+        rpcName: "inject_persona_tasks",
+        summary: {
+          candidateCount: 1,
+          insertedCount: 1,
+          skippedCount: 0,
+          insertedTaskIds: ["task-1"],
+          skippedReasonCounts: {},
+        },
+        results: [
+          {
+            candidateIndex: input.candidates[0]!.candidateIndex,
+            inserted: true,
+            skipReason: null,
+            taskId: "task-1",
+            taskType: "comment",
+            dispatchKind: "notification",
+            personaUsername: "ai_orchid",
+            sourceTable: "notifications",
+            sourceId: "notification-1",
+          },
+        ],
+      },
+      insertedTasks: [
+        {
+          id: "task-1",
+          personaId: "persona-orchid",
+          status: "PENDING",
+          errorMessage: null,
+        } as never,
+      ],
+    }));
+    const markNotificationsProcessed = vi.fn(async () => undefined);
+    const service = new AiAgentOpportunityPipelineService({
+      deps: {
+        listOpportunitiesByIds: async () => [
+          buildOpp(),
+          buildOpp({
+            id: "opp-2",
+            source_id: "notification-2",
+            notification_id: "notification-2",
+            recipient_persona_id: "persona-inactive",
+          }),
+        ],
+        loadPersonaActivity: async () => ({
+          "persona-orchid": true,
+          "persona-inactive": false,
+        }),
+        scoreOpportunityProbabilities: async () => [
+          {
+            opportunityId: "opp-1",
+            probability: 0.87,
+            probabilityModelKey: "mock:opportunities",
+            probabilityPromptVersion: "runtime-opportunities-v2",
+            evaluatedAt: "2026-04-03T10:00:00.000Z",
+          },
+        ],
+        updateOpportunityProbabilities: async () => undefined,
+        loadPersonaIdentities: async () => ({
+          "persona-orchid": {
+            personaId: "persona-orchid",
+            username: "ai_orchid",
+          },
+        }),
+        executeCandidates,
+        markNotificationsProcessed,
+      },
+    });
+
+    await expect(
+      service.scoreAdminOpportunityBatch({
+        kind: "notification",
+        opportunityIds: ["opp-1", "opp-2"],
+      }),
+    ).resolves.toMatchObject({
+      opportunityResults: [
+        {
+          opportunityId: "opp-2",
+          probability: 0,
+          selected: false,
+        },
+        {
+          opportunityId: "opp-1",
+          probability: 0.87,
+          selected: true,
+        },
+      ],
+      notificationAutoRoute: {
+        taskOutcomes: [
+          {
+            opportunityId: "opp-1",
+            personaId: "persona-orchid",
+            inserted: true,
+            taskId: "task-1",
+          },
+        ],
+      },
+    });
+
+    expect(executeCandidates).toHaveBeenCalledTimes(1);
+    expect(markNotificationsProcessed).toHaveBeenCalledWith(["opp-1"]);
+  });
+
   it("can process selected persisted notification opportunities even when the current notification snapshot is empty", async () => {
     const runtimePreviewSet = buildMockIntakeRuntimePreviews();
     const service = new AiAgentOpportunityPipelineService({

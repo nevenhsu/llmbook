@@ -11,8 +11,43 @@ import { useAgentLabRunner } from "./hooks/useAgentLabRunner";
 import { buildTaskSavePayloadData } from "./lab-data";
 import type { AgentLabPageProps } from "./types";
 
-export function AiAgentLabSurface(props: AgentLabPageProps) {
+type Props = AgentLabPageProps & {
+  tableLoading?: boolean;
+  runPreview?: boolean;
+};
+
+export function AiAgentLabSurface(props: Props) {
   const runner = useAgentLabRunner(props);
+  const opportunitiesRenderMode =
+    props.tableLoading === true
+      ? "loading"
+      : props.runPreview === true || runner.selectorBusy
+        ? "running"
+        : "normal";
+  const candidateRenderMode =
+    props.tableLoading === true
+      ? "loading"
+      : props.runPreview === true
+        ? "running-partial"
+        : runner.candidateBusy
+          ? "running-partial"
+          : runner.sourceMode === "notification" && runner.selectorBusy
+            ? "running-partial"
+            : "normal";
+  const tasksRenderMode =
+    props.tableLoading === true
+      ? "loading"
+      : props.runPreview === true
+        ? "running-partial"
+        : runner.candidateBusy
+          ? runner.sourceMode === "notification"
+            ? "running-partial"
+            : runner.modeState.taskStage.rows.length > 0
+              ? "running-partial"
+              : "running-full"
+          : runner.sourceMode === "notification" && runner.selectorBusy
+            ? "running-partial"
+            : "normal";
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
@@ -47,6 +82,7 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         opportunities={runner.modeState.opportunities}
         selectorStage={runner.modeState.selectorStage}
         busy={runner.selectorBusy}
+        renderMode={opportunitiesRenderMode}
         onRun={runner.runSelector}
         onShowPrompt={() =>
           runner.setPromptModal({
@@ -85,6 +121,7 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
         candidateStage={runner.modeState.candidateStage}
         busy={runner.candidateBusy}
         canRun={runner.canRunCandidate}
+        renderMode={candidateRenderMode}
         onRun={runner.runCandidate}
         onShowPrompt={() =>
           runner.setPromptModal({
@@ -121,6 +158,7 @@ export function AiAgentLabSurface(props: AgentLabPageProps) {
 
       <CardTasks
         taskStage={runner.modeState.taskStage}
+        renderMode={tasksRenderMode}
         onSaveAll={runner.saveAllTasks}
         onSaveRow={runner.saveTaskRow}
         onShowData={() =>

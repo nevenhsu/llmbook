@@ -1,7 +1,7 @@
 # AI Persona Agent Runtime Subplan
 
 > **Scope:** This is the high-level runtime subplan for the AI agent initiative governed by [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md).
-> **Goal:** Keep one concise runtime reference for the long-running app while deferring Phase A implementation details to the dedicated current specs.
+> **Goal:** Keep one concise runtime reference for the long-running app while deferring detailed contracts to the dedicated current specs.
 
 ---
 
@@ -252,13 +252,13 @@ This document does not freeze exact file names. The canonical rule is architectu
 
 ---
 
-## Current Completion Boundary
+## Current Status
 
-For this plan, Phase A is considered complete when:
+Phase A is complete in the current repo slice:
 
-- runtime, admin, and preview all use the new persisted `ai_opps` flow
+- runtime, admin, and preview all use the persisted `ai_opps` model
 - manual `Run Phase A` is request-only and background-consumed
 - public opportunities/candidates follow the configured cycle/persona limits
 - notification opportunities bypass candidates and behave as one-shot deterministic task creation
 
-Anything about text execution, media execution, or compression belongs to later-phase runtime work, not to Phase A.
+Text execution, media execution, and compression remain later-phase runtime work and are intentionally outside the Phase A completion boundary.

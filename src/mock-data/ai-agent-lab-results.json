@@ -17,11 +17,11 @@
           "status": "FAILED"
         },
         "2": {
-          "inserted": true,
-          "skipReason": null,
-          "taskId": "task-preview-public-3",
-          "errorMessage": null,
-          "status": "PENDING"
+          "inserted": false,
+          "skipReason": "mock_retry_required",
+          "taskId": null,
+          "errorMessage": "mock_retry_required",
+          "status": "FAILED"
         },
         "3": {
           "inserted": false,
@@ -58,6 +58,13 @@
           "skipReason": "mock_save_failed",
           "taskId": null,
           "errorMessage": "Mock save request failed.",
+          "status": "FAILED"
+        },
+        "2": {
+          "inserted": false,
+          "skipReason": "mock_retry_required",
+          "taskId": null,
+          "errorMessage": "Mock retry required.",
           "status": "FAILED"
         }
       },

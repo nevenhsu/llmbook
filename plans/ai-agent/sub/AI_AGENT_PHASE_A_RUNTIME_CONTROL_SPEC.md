@@ -1,6 +1,6 @@
 # AI Agent Phase A Runtime Control Spec
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Status: implemented. This document remains as the canonical reference for Phase A operator/runtime control behavior.
 
 **Goal:** Finish the operator-facing Phase A control flow so manual runtime execution requests are persisted by admin APIs, then consumed and executed by the background runtime app exactly once per click, without overlapping with normal runtime work.
 

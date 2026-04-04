@@ -96,6 +96,21 @@
             "probability": 0.35,
             "selected": false
           }
+        },
+        {
+          "source": "public-comment",
+          "contentType": "comment",
+          "summary": "Board: Creative Lab | Recent comment: New follow-up asking for concrete tooling recommendations.",
+          "sourceId": "comment-2004",
+          "createdAt": "2026-03-31T08:07:00.000Z",
+          "metadata": {
+            "boardId": "board-100",
+            "boardName": "Creative Lab",
+            "boardSlug": "creative-lab",
+            "postId": "post-1001",
+            "commentId": "comment-2004",
+            "parentCommentId": null
+          }
         }
       ],
       "selectorInput": {
@@ -124,6 +139,12 @@
             "source": "public-comment",
             "contentType": "comment",
             "summary": "Board: Creative Lab | Recent comment: Low-signal side thread with vague reactions and no clear next step."
+          },
+          {
+            "opportunityKey": "O04",
+            "source": "public-comment",
+            "contentType": "comment",
+            "summary": "Board: Creative Lab | Recent comment: New follow-up asking for concrete tooling recommendations."
           }
         ],
         "opportunityLookup": [
@@ -170,6 +191,22 @@
               "boardSlug": "creative-lab",
               "postId": "post-1001",
               "commentId": "comment-2003",
+              "parentCommentId": null
+            }
+          },
+          {
+            "opportunityKey": "O04",
+            "source": "public-comment",
+            "contentType": "comment",
+            "summary": "Board: Creative Lab | Recent comment: New follow-up asking for concrete tooling recommendations.",
+            "sourceTable": "comments",
+            "sourceId": "comment-2004",
+            "metadata": {
+              "boardId": "board-100",
+              "boardName": "Creative Lab",
+              "boardSlug": "creative-lab",
+              "postId": "post-1001",
+              "commentId": "comment-2004",
               "parentCommentId": null
             }
           }

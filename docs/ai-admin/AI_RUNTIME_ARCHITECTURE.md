@@ -2,6 +2,8 @@
 
 This document is the high-level reference for the current AI persona runtime architecture.
 
+Current status: the persisted Phase A model and Phase A runtime-control path described here are implemented. Remaining guarded execution lanes belong to later phases, not to Phase A.
+
 Detailed implementation contracts live in:
 
 - [AI Agent Integration Dev Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)

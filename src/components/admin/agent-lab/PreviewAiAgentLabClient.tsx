@@ -20,7 +20,7 @@ import type {
   AgentLabTaskRow,
 } from "./types";
 
-type PreviewMockState = "default" | "empty" | "error";
+type PreviewMockState = "default" | "running" | "loading" | "empty" | "error";
 
 type PreviewResults = {
   default: {
@@ -87,7 +87,7 @@ function buildMockSavedTaskRows(input: {
   mockState: PreviewMockState;
   results: PreviewResults;
 }) {
-  return input.rows.map((row) => {
+  const nextRows = input.rows.map((row) => {
     if (!row.candidate || !row.actions.canSave) {
       return row;
     }
@@ -99,6 +99,24 @@ function buildMockSavedTaskRows(input: {
       buildFallbackSaveOutcome(input.sourceMode, row.candidate.candidateIndex);
     return applySaveOutcomeToRow(row, outcome);
   });
+
+  if (input.mockState === "default" || input.mockState === "running") {
+    const hasFailedRow = nextRows.some((row) => row.saveState === "failed");
+    if (!hasFailedRow) {
+      const fallbackRowIndex = input.rows.findIndex((row) => row.candidate);
+      if (fallbackRowIndex >= 0) {
+        nextRows[fallbackRowIndex] = applySaveOutcomeToRow(nextRows[fallbackRowIndex], {
+          inserted: false,
+          skipReason: "mock_retry_required",
+          taskId: null,
+          errorMessage: "Mock retry required.",
+          status: "FAILED",
+        });
+      }
+    }
+  }
+
+  return nextRows;
 }
 
 function findCompletedOpportunityKeys(input: {
@@ -138,6 +156,16 @@ function filterSelectorStageForRetry(input: {
   } satisfies AgentLabSelectorStage;
 }
 
+function forceSelectedRows(selectorStage: AgentLabSelectorStage): AgentLabSelectorStage {
+  return {
+    ...selectorStage,
+    rows: selectorStage.rows.map((row) => ({
+      ...row,
+      selected: true,
+    })),
+  };
+}
+
 function mergeCandidateRows(input: {
   existingRows: AgentLabCandidateRow[];
   nextRows: AgentLabCandidateRow[];
@@ -174,6 +202,71 @@ function mergeTaskRows(input: {
   });
 }
 
+function applyMockSaveOutcomesToModes(input: {
+  modes: ReturnType<typeof buildInitialModes>;
+  mockState: PreviewMockState;
+  results: PreviewResults;
+}) {
+  if (
+    input.mockState === "empty" ||
+    input.mockState === "loading" ||
+    input.mockState === "running"
+  ) {
+    return {
+      ...input.modes,
+      notification: {
+        ...input.modes.notification,
+        candidateStage: {
+          ...input.modes.notification.candidateStage,
+          rows: [],
+          outputData: null,
+        },
+        taskStage: {
+          rows: [],
+          summary: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
+          toastMessage: null,
+        },
+      },
+    };
+  }
+
+  return {
+    public: {
+      ...input.modes.public,
+      taskStage: {
+        ...input.modes.public.taskStage,
+        rows: buildMockSavedTaskRows({
+          sourceMode: "public",
+          rows: input.modes.public.taskStage.rows,
+          mockState: input.mockState,
+          results: input.results,
+        }),
+      },
+    },
+    notification: {
+      ...input.modes.notification,
+      candidateStage: {
+        ...input.modes.notification.candidateStage,
+        rows: [],
+        outputData: null,
+      },
+      taskStage: {
+        rows: [],
+        summary: {
+          attempted: 0,
+          succeeded: 0,
+          failed: 0,
+        },
+        toastMessage: null,
+      },
+    },
+  };
+}
+
 export function PreviewAiAgentLabClient({
   runtimePreviews,
   models,
@@ -197,11 +290,93 @@ export function PreviewAiAgentLabClient({
       };
     }
 
-    return buildInitialModes({
-      ...runtimePreviews,
-      selectorReferenceBatchSize,
+    const modes = applyMockSaveOutcomesToModes({
+      modes: buildInitialModes({
+        ...runtimePreviews,
+        selectorReferenceBatchSize,
+      }),
+      mockState,
+      results,
     });
-  }, [mockState, runtimePreviews, selectorReferenceBatchSize]);
+    if (mockState !== "running") {
+      return modes;
+    }
+
+    const publicSelectorStage = buildSelectorStage({
+      snapshot: runtimePreviews.public,
+      personaGroup: {
+        batchSize: selectorReferenceBatchSize,
+        groupIndex: 0,
+      },
+    });
+    const publicRunningResult = buildCandidateStage({
+      kind: "public",
+      snapshot: runtimePreviews.public,
+      selectorStage: publicSelectorStage,
+      personaGroup: {
+        batchSize: selectorReferenceBatchSize,
+        groupIndex: 0,
+      },
+    });
+    const notificationSelectorStage = buildSelectorStage({
+      snapshot: runtimePreviews.notification,
+      personaGroup: {
+        batchSize: selectorReferenceBatchSize,
+        groupIndex: 0,
+      },
+    });
+    const notificationRunningResult = buildCandidateStage({
+      kind: "notification",
+      snapshot: runtimePreviews.notification,
+      selectorStage: forceSelectedRows(notificationSelectorStage),
+      personaGroup: {
+        batchSize: selectorReferenceBatchSize,
+        groupIndex: 0,
+      },
+    });
+
+    return {
+      ...modes,
+      public: {
+        ...modes.public,
+        selectorStage: publicSelectorStage,
+        candidateStage: publicRunningResult.candidateStage,
+        taskStage: {
+          rows: buildMockSavedTaskRows({
+            sourceMode: "public",
+            rows: publicRunningResult.taskRows,
+            mockState: "default",
+            results,
+          }),
+          summary: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
+          toastMessage: null,
+        },
+      },
+      notification: {
+        ...modes.notification,
+        selectorStage: notificationSelectorStage,
+        candidateStage: notificationRunningResult.candidateStage,
+        taskStage: {
+          rows: buildMockSavedTaskRows({
+            sourceMode: "notification",
+            rows: notificationRunningResult.taskRows,
+            mockState: "default",
+            results,
+          }),
+          summary: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
+          toastMessage: null,
+        },
+      },
+    };
+  }, [mockState, results, runtimePreviews, selectorReferenceBatchSize]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -210,7 +385,7 @@ export function PreviewAiAgentLabClient({
           Mock State
         </span>
         <div className="flex gap-2">
-          {(["default", "empty", "error"] as const).map((state) => (
+          {(["default", "running", "loading", "empty", "error"] as const).map((state) => (
             <button
               key={state}
               type="button"
@@ -225,7 +400,6 @@ export function PreviewAiAgentLabClient({
       </div>
 
       <AiAgentLabSurface
-        key={mockState}
         dataSource="mock"
         titleEyebrow="Preview"
         title="AI Agent Lab"
@@ -239,8 +413,16 @@ export function PreviewAiAgentLabClient({
         providers={providers}
         initialModelId={labModels[0]?.id ?? ""}
         initialModes={initialModes}
+        tableLoading={mockState === "loading"}
+        runPreview={mockState === "running"}
         onRunSelector={async ({ sourceMode, personaGroup }) => {
           await wait(150);
+          if (mockState === "loading" || mockState === "running") {
+            return buildSelectorStage({
+              snapshot: runtimePreviews[sourceMode],
+              personaGroup,
+            });
+          }
           if (mockState === "empty") {
             return buildSelectorStage({
               snapshot: null,
@@ -271,7 +453,16 @@ export function PreviewAiAgentLabClient({
           currentCandidateStage,
           currentTaskRows,
         }) => {
-          await wait(150);
+          if (mockState === "loading" || mockState === "running") {
+            await wait(150);
+            return {
+              candidateStage: currentCandidateStage,
+              taskRows: currentTaskRows,
+            };
+          }
+          if (sourceMode !== "notification") {
+            await wait(150);
+          }
           const completedOpportunityKeys = findCompletedOpportunityKeys({
             selectorStage,
             currentTaskRows,
@@ -299,7 +490,10 @@ export function PreviewAiAgentLabClient({
             const result = buildCandidateStage({
               kind: sourceMode,
               snapshot: runtimePreviews[sourceMode],
-              selectorStage: retrySelectorStage,
+              selectorStage:
+                sourceMode === "notification"
+                  ? forceSelectedRows(retrySelectorStage)
+                  : retrySelectorStage,
               status: sourceMode === "notification" ? "auto-routed" : "error",
               errorMessage: results.error.candidateErrors[sourceMode],
               personaGroup,
@@ -324,7 +518,10 @@ export function PreviewAiAgentLabClient({
           const result = buildCandidateStage({
             kind: sourceMode,
             snapshot: runtimePreviews[sourceMode],
-            selectorStage: retrySelectorStage,
+            selectorStage:
+              sourceMode === "notification"
+                ? forceSelectedRows(retrySelectorStage)
+                : retrySelectorStage,
             personaGroup,
           });
           const savedTaskRows = buildMockSavedTaskRows({
@@ -409,6 +606,15 @@ export function PreviewAiAgentLabClient({
         }}
         onSaveTask={async ({ sourceMode, row }) => {
           await wait(150);
+          if (mockState === "loading" || mockState === "running") {
+            return {
+              inserted: false,
+              skipReason: "preview_non_interactive_state",
+              taskId: null,
+              errorMessage: "Preview is in a non-interactive mock state.",
+              status: "FAILED",
+            };
+          }
           if (!row.candidate) {
             throw new Error("Task row is missing candidate payload.");
           }

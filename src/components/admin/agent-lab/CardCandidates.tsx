@@ -16,6 +16,7 @@ type Props = {
   onShowData: () => void;
   busy: boolean;
   canRun: boolean;
+  renderMode?: "normal" | "loading" | "running-partial" | "running-full";
 };
 
 function PersonaCell({ persona }: { persona: AgentLabCandidateStage["rows"][number]["persona"] }) {
@@ -68,8 +69,11 @@ export function CardCandidates({
   onShowData,
   busy,
   canRun,
+  renderMode = "normal",
 }: Props) {
   const disabled = sourceMode === "notification";
+  const loading = renderMode === "loading" || renderMode === "running-full";
+  const runningPartial = renderMode === "running-partial";
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(candidateStage.rows.length / PAGE_SIZE));
 
@@ -89,17 +93,21 @@ export function CardCandidates({
         <div className="flex flex-wrap gap-2">
           <button
             className="btn btn-outline btn-sm"
-            disabled={disabled || !candidateStage.prompt}
+            disabled={loading || runningPartial || disabled || !candidateStage.prompt}
             onClick={onShowPrompt}
           >
             Show Prompt
           </button>
-          <button className="btn btn-outline btn-sm" onClick={onShowData}>
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={loading || runningPartial}
+            onClick={onShowData}
+          >
             Show Data
           </button>
           <button
             className="btn btn-primary btn-sm"
-            disabled={disabled || busy || !canRun}
+            disabled={loading || runningPartial || disabled || busy || !canRun}
             onClick={() => void onRun()}
           >
             {busy ? "Running..." : "Run"}
@@ -126,10 +134,39 @@ export function CardCandidates({
               </tr>
             </thead>
             <tbody>
-              {rows.length > 0 ? (
+              {loading ? (
+                Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                  <tr key={`loading-${index}`}>
+                    <td>
+                      <div className="skeleton h-4 w-12" />
+                    </td>
+                    <td>
+                      <div className="skeleton h-4 w-28" />
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="skeleton h-8 w-8 rounded-full" />
+                        <div className="space-y-2">
+                          <div className="skeleton h-4 w-24" />
+                          <div className="skeleton h-3 w-20" />
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="skeleton h-5 w-20" />
+                    </td>
+                  </tr>
+                ))
+              ) : rows.length > 0 ? (
                 rows.map((row, index) => (
                   <tr key={`${row.opportunityKey ?? "none"}-${row.referenceName}-${index}`}>
-                    <td>{row.opportunityKey ?? "-"}</td>
+                    <td>
+                      {runningPartial && !row.opportunityKey ? (
+                        <div className="skeleton h-4 w-12" />
+                      ) : (
+                        (row.opportunityKey ?? "-")
+                      )}
+                    </td>
                     <td>{row.referenceName}</td>
                     <td>
                       <PersonaCell persona={row.persona} />
@@ -151,7 +188,11 @@ export function CardCandidates({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-base-content/60">
-            Page {page + 1} / {pageCount} · Total {candidateStage.rows.length} rows
+            {loading
+              ? "Loading rows..."
+              : runningPartial
+                ? "Running..."
+                : `Page ${page + 1} / ${pageCount} · Total ${candidateStage.rows.length} rows`}
           </span>
           <div className="flex gap-2">
             <button

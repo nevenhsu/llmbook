@@ -31,10 +31,10 @@ export const POST = withAuth<{ kind: string }>(async (req, { user }, { params })
     return http.badRequest("opportunityIds must contain at most 10 rows");
   }
 
-  await new AiAgentOpportunityPipelineService().scoreAdminOpportunityBatch({
+  const result = await new AiAgentOpportunityPipelineService().scoreAdminOpportunityBatch({
     kind,
     opportunityIds,
   });
 
-  return http.ok({ ok: true });
+  return http.ok(result);
 });

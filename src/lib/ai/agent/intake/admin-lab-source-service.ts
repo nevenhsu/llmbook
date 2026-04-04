@@ -27,6 +27,7 @@ type AdminLabSourceServiceDeps = {
   listAdminLabOpportunities: (input: {
     kind: AiAgentRuntimeIntakeKind;
     publicPersonaLimit: number;
+    limit: number;
   }) => Promise<AiOppRow[]>;
 };
 
@@ -136,6 +137,7 @@ export class AiAgentAdminLabSourceService {
     const rows = await this.deps.listAdminLabOpportunities({
       kind: input.kind,
       publicPersonaLimit: config.values.publicOpportunityPersonaLimit,
+      limit: 1000,
     });
     return mapOppRowsToSnapshot({
       kind: input.kind,

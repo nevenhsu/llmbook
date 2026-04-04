@@ -175,6 +175,22 @@ export type AdminPublicCandidateBatchResult = {
   taskOutcomes: AdminPublicCandidateTaskOutcome[];
 };
 
+export type AdminOpportunityResult = {
+  opportunityId: string;
+  probability: number;
+  selected: boolean;
+};
+
+export type AdminNotificationAutoRouteResult = {
+  taskResponse: AiAgentOpportunityPipelineExecutedResponse;
+  taskOutcomes: AdminPublicCandidateTaskOutcome[];
+};
+
+export type AdminOpportunityBatchResult = {
+  opportunityResults: AdminOpportunityResult[];
+  notificationAutoRoute: AdminNotificationAutoRouteResult | null;
+};
+
 const NOTIFICATION_INACTIVE_PROBABILITY_MODEL_KEY = "system:notification-recipient-inactive";
 const NOTIFICATION_INACTIVE_PROBABILITY_PROMPT_VERSION = "notification-recipient-active-v1";
 
@@ -1125,12 +1141,15 @@ export class AiAgentOpportunityPipelineService {
   public async scoreAdminOpportunityBatch(input: {
     kind: AiAgentRuntimeIntakeKind;
     opportunityIds: string[];
-  }): Promise<void> {
+  }): Promise<AdminOpportunityBatchResult> {
     const rows = (await this.deps.listOpportunitiesByIds(input.opportunityIds)).filter(
       (row) => row.kind === input.kind && row.probability === null,
     );
     if (rows.length === 0) {
-      return;
+      return {
+        opportunityResults: [],
+        notificationAutoRoute: null,
+      };
     }
 
     if (input.kind === "notification") {
@@ -1153,24 +1172,102 @@ export class AiAgentOpportunityPipelineService {
           }),
         );
       }
+      const inactiveResults = inactiveRows.map((row) => ({
+        opportunityId: row.id,
+        probability: 0,
+        selected: false,
+      }));
       if (activeRows.length === 0) {
-        return;
+        return {
+          opportunityResults: inactiveResults,
+          notificationAutoRoute: null,
+        };
       }
-      const scoredRows = await this.deps.scoreOpportunityProbabilities({
-        kind: input.kind,
-        rows: activeRows,
+      const allScoredRows: AiOppProbabilityUpdateInput[] = [];
+      for (const batchRows of chunkRows(activeRows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
+        const scoredRows = await this.deps.scoreOpportunityProbabilities({
+          kind: input.kind,
+          rows: batchRows,
+        });
+        await this.deps.updateOpportunityProbabilities(scoredRows);
+        allScoredRows.push(...scoredRows);
+      }
+
+      const activeResults = allScoredRows.map((row) => ({
+        opportunityId: row.opportunityId,
+        probability: row.probability,
+        selected: row.probability > 0.5,
+      }));
+      const selectedActiveRows = activeRows.filter((row) =>
+        activeResults.some((result) => result.opportunityId === row.id && result.selected),
+      );
+
+      if (selectedActiveRows.length === 0) {
+        return {
+          opportunityResults: [...inactiveResults, ...activeResults],
+          notificationAutoRoute: null,
+        };
+      }
+
+      const personaIds = Array.from(
+        new Set(
+          selectedActiveRows.flatMap((row) =>
+            row.recipient_persona_id ? [row.recipient_persona_id] : [],
+          ),
+        ),
+      );
+      const personasById = await this.deps.loadPersonaIdentities(personaIds);
+      const taskCandidates = buildNotificationTaskCandidates({
+        rows: selectedActiveRows,
+        personasById,
       });
-      await this.deps.updateOpportunityProbabilities(scoredRows);
-      return;
+
+      if (taskCandidates.length === 0) {
+        return {
+          opportunityResults: [...inactiveResults, ...activeResults],
+          notificationAutoRoute: null,
+        };
+      }
+
+      const taskResponse = await this.deps.executeCandidates({
+        kind: "notification",
+        candidates: taskCandidates,
+      });
+      const taskOutcomes = buildTaskOutcomes({
+        taskResponse,
+        taskCandidates,
+      });
+      await this.deps.markNotificationsProcessed(selectedActiveRows.map((row) => row.id));
+
+      return {
+        opportunityResults: [...inactiveResults, ...activeResults],
+        notificationAutoRoute: {
+          taskResponse,
+          taskOutcomes,
+        },
+      };
     }
 
+    const opportunityResults: AdminOpportunityResult[] = [];
     for (const batchRows of chunkRows(rows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
       const scoredRows = await this.deps.scoreOpportunityProbabilities({
         kind: input.kind,
         rows: batchRows,
       });
       await this.deps.updateOpportunityProbabilities(scoredRows);
+      opportunityResults.push(
+        ...scoredRows.map((row) => ({
+          opportunityId: row.opportunityId,
+          probability: row.probability,
+          selected: row.probability > 0.5,
+        })),
+      );
     }
+
+    return {
+      opportunityResults,
+      notificationAutoRoute: null,
+    };
   }
 
   public async executeAdminPublicCandidateBatch(input: {
