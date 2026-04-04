@@ -209,6 +209,23 @@ This fallback happens without re-running the LLM.
 
 Admin tables are not constrained by `public_opportunity_cycle_limit`.
 
+### 6.0 Admin preload/query cap
+
+Admin page needs its own payload-size safety cap.
+
+Rule:
+
+- admin preload/query cap = `1000` rows per mode
+- applies separately to:
+  - `public`
+  - `notification`
+- this cap exists only to prevent oversized SSR/client payloads and slow admin page loads
+- this cap does **not** change runtime cycle behavior
+- this cap does **not** change admin click-to-run batch size
+- this cap does **not** change `selector_reference_batch_size`
+
+This cap is applied after eligibility filtering and ordering.
+
 ### 6.1 Admin opportunities table
 
 For `public`, query `ai_opps` where:
@@ -227,6 +244,10 @@ Sort with the same priority as runtime:
 
 Do **not** apply `public_opportunity_cycle_limit`.
 
+Do apply the admin preload/query cap:
+
+- `LIMIT 1000`
+
 ### 6.2 Admin candidates table input domain
 
 Admin candidate-stage source data should follow the same shared eligibility rule:
@@ -235,6 +256,26 @@ Admin candidate-stage source data should follow the same shared eligibility rule
 - `matched_persona_count < public_opportunity_persona_limit`
 
 but the page is still manually batched by the operator, not automatically drained like runtime.
+
+### 6.3 Admin notification table
+
+For `notification`, query `ai_opps` where:
+
+- `kind = 'notification'`
+- `probability IS NULL`
+
+Notification admin ordering:
+
+1. `probability IS NULL`
+2. `source_created_at DESC`
+3. `created_at DESC`
+
+Admin notification table data should not include already-scored rows.
+Rows with existing `probability` must be excluded from the notification admin table.
+
+Apply the admin preload/query cap:
+
+- `LIMIT 1000`
 
 ---
 
@@ -266,6 +307,14 @@ Admin `Opportunities -> Run` behavior:
 - page updates after the request finishes
 - next click processes the next current 10 rows
 
+Only rows with `probability IS NULL` should be sent to `Opportunities LLM`.
+
+Rows that already have `probability` must be skipped.
+
+Exception:
+
+- notification rows deterministically filtered out because `recipient_persona_id` is inactive should be marked in persistence directly and must not be sent to `Opportunities LLM`
+
 ### 7.2 Candidates run
 
 Admin `Candidates -> Run` behavior:
@@ -282,6 +331,25 @@ Admin `Candidates -> Run` behavior:
 Admin must not auto-call the next API batch.
 
 One click equals one 10-row server batch.
+
+### 7.4 Admin source-mode load semantics
+
+On admin page load:
+
+1. ingest latest snapshot into `ai_opps`
+2. query admin table rows from persisted `ai_opps`
+3. render the opportunities/candidates/tasks UI from persisted state
+
+This load path should not auto-run `Opportunities LLM`.
+
+Meaning:
+
+- auto ingest = yes
+- auto query table data = yes
+- auto probability generation = no
+- the only admin action that may invoke `Opportunities LLM` is explicit `Opportunities -> Run`
+
+The opportunities table should expose loading UI while the admin source-mode dataset is being refreshed.
 
 ---
 

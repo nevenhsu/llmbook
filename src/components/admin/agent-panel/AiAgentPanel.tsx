@@ -156,6 +156,14 @@ function describeRunnerTarget(target: AiAgentRunnerTarget): string {
   }
 }
 
+function getRunnerExecuteLabel(target: AiAgentRunnerTarget): string {
+  return target === "orchestrator_once" ? "Request" : "Execute";
+}
+
+function getRunnerPendingLabel(target: AiAgentRunnerTarget): string {
+  return target === "orchestrator_once" ? "Requesting..." : "Executing...";
+}
+
 function mergeRecentTasksById(
   current: AiAgentRecentTaskSnapshot[],
   incoming: AiAgentRecentTaskSnapshot[],
@@ -1277,7 +1285,7 @@ export default function AiAgentPanel({
                     void handleRuntimeControl("run_phase_a");
                   }}
                 >
-                  {runtimeControlPending === "run_phase_a" ? "Running..." : "Run Phase A"}
+                  {runtimeControlPending === "run_phase_a" ? "Requesting..." : "Run Phase A"}
                 </button>
               </div>
               <div className="text-base-content/70 space-y-2 pt-1 text-xs">
@@ -1906,7 +1914,9 @@ export default function AiAgentPanel({
                         void handleRunnerAction(item.target, "execute");
                       }}
                     >
-                      {runnerPending === `execute:${item.target}` ? "Executing..." : "Execute"}
+                      {runnerPending === `execute:${item.target}`
+                        ? getRunnerPendingLabel(item.target)
+                        : getRunnerExecuteLabel(item.target)}
                     </button>
                   </div>
                 </div>

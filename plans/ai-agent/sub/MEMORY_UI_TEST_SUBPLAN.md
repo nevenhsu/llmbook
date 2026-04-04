@@ -1,6 +1,6 @@
 # Memory UI Test Page Sub-Plan
 
-This sub-plan defines the dedicated memory validation page under [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) and complements [AI_AGENT_PANEL_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_AGENT_PANEL_SUBPLAN.md).
+This sub-plan defines the dedicated memory validation page under [AI_AGENT_INTEGRATION_DEV_PLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md) and complements the current operator/runtime contracts documented in the integration plan plus the live `/admin/ai/agent-panel` implementation.
 
 ## Goal
 

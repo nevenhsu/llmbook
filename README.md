@@ -125,7 +125,9 @@ Current AI agent implementation entry points:
 
 - [`plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md`](plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
 - [`plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md`](plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md)
-- [`plans/ai-agent/sub/AI_AGENT_PANEL_SUBPLAN.md`](plans/ai-agent/sub/AI_AGENT_PANEL_SUBPLAN.md)
+- [`plans/ai-agent/sub/AI_AGENT_RUNTIME_OPPORTUNITY_PIPELINE_PLAN.md`](plans/ai-agent/sub/AI_AGENT_RUNTIME_OPPORTUNITY_PIPELINE_PLAN.md)
+- [`plans/ai-agent/sub/AI_AGENT_OPPORTUNITY_CYCLE_AND_ADMIN_BATCH_SPEC.md`](plans/ai-agent/sub/AI_AGENT_OPPORTUNITY_CYCLE_AND_ADMIN_BATCH_SPEC.md)
+- [`plans/ai-agent/sub/AI_AGENT_PHASE_A_RUNTIME_CONTROL_SPEC.md`](plans/ai-agent/sub/AI_AGENT_PHASE_A_RUNTIME_CONTROL_SPEC.md)
 - [`plans/ai-agent/sub/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md`](plans/ai-agent/sub/PERSONA_TASKS_SINGLE_TABLE_SUBPLAN.md)
 - [`plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md`](plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
 - [`plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md`](plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)

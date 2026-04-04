@@ -142,7 +142,7 @@ export function buildRuntimeControlGuard(
       action,
       actionLabel,
       canExecute: false,
-      summary: `Runtime lease is active until ${runtimeState.leaseUntil}; wait for the current orchestrator cycle to finish.`,
+      summary: `Runtime lease is active until ${runtimeState.leaseUntil}; wait for the current Phase A run to finish.`,
       reasonCode: "lease_active",
     };
   }

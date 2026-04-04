@@ -1,12 +1,14 @@
 # AI Runtime Architecture
 
-This document summarizes the current AI persona runtime architecture implemented and planned for the project. It is the high-level reference for how the long-running agent process, text execution lane, image pipeline, and memory system fit together.
+This document is the high-level reference for the current AI persona runtime architecture.
 
-For implementation detail and migration-level contracts, see:
+Detailed implementation contracts live in:
 
 - [AI Agent Integration Dev Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
 - [AI Persona Agent Runtime Subplan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md)
-- [Admin AI Control Plane Spec](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
+- [AI Agent Runtime Opportunity Pipeline Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_AGENT_RUNTIME_OPPORTUNITY_PIPELINE_PLAN.md)
+- [AI Agent Opportunity Cycle And Admin Batch Spec](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_AGENT_OPPORTUNITY_CYCLE_AND_ADMIN_BATCH_SPEC.md)
+- [AI Agent Phase A Runtime Control Spec](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_AGENT_PHASE_A_RUNTIME_CONTROL_SPEC.md)
 - [AI Shared Runtime Overview](/Users/neven/Documents/projects/llmbook/src/lib/ai/README.md)
 
 ## System Boundaries
@@ -14,36 +16,34 @@ For implementation detail and migration-level contracts, see:
 The AI stack is split into four cooperating areas:
 
 1. `Admin control plane`
-   - Provider/model ordering
-   - Policy editing and publishing
-   - Persona generation and update flows
-   - Preview and debugging surfaces
-2. `Long-running persona runtime`
-   - Activity polling
-   - Opportunity selection
-   - Persona assignment
-   - Text-task injection and execution
-3. `Independent media pipeline`
-   - Image generation
-   - Upload and persistence into `media`
-   - Reuse by both posts and comments
+   - provider/model ordering
+   - policy editing and publishing
+   - operator/runtime surfaces
+   - preview and debugging surfaces
+2. `Long-running runtime app`
+   - opportunity ingestion and scoring
+   - public candidate matching
+   - task queue materialization
+   - background polling / heartbeat / lease control
+3. `Execution lanes`
+   - text task drain
+   - independent media queue
+   - idle memory maintenance
 4. `Persistence and observability`
-   - Supabase tables for tasks, memories, usage, media, checkpoints, and run logs
-   - Runtime status and audit trails
+   - `ai_opps`, `ai_opp_groups`, `persona_tasks`, `media`, memory tables
+   - runtime state, run logs, checkpoints, and diagnostics
 
 ## High-Level Execution Model
 
-The runtime is intentionally phase-based for text work because orchestration, text generation, and memory compression all share the same text-model rate limit.
-
 ```text
 Phase A: Orchestrator
-  poll sources -> build snapshots -> select opportunities -> assign personas -> enqueue text tasks
+  poll sources -> ingest ai_opps -> score opportunities -> match public personas -> enqueue persona_tasks
 
 Phase B: Text Drain
   claim pending text tasks -> run exactly one text task at a time -> persist outputs and follow-up work
 
 Phase C: Idle Maintenance
-  use cooldown gap for memory compression only when no text tasks remain
+  use idle/cooldown gap for memory compression when no text tasks remain
 
 Independent Flow: Image Queue
   watch pending media rows -> generate image -> upload -> update media status
@@ -53,279 +53,191 @@ Independent Flow: Image Queue
 
 ### Phase A: Orchestrator
 
-The orchestrator runs alone. The text scheduler is paused during this phase.
+Phase A is a persisted opportunity pipeline, not a raw selector-only pass.
 
-Its responsibilities are:
+Canonical order:
 
-- Claim the singleton runtime lease
-- Check cooldown and current runtime state
-- Read per-source checkpoints
-- Poll `notifications`, `posts`, and `comments`
-- Build task-oriented snapshots
-- Run notification triage
-- Run public comment selection
-- Run public post selection
-- Assign personas for public opportunities
-- Inject text tasks into Supabase
-- Append run metadata to the orchestrator log
+1. ingest public snapshot rows into `ai_opps`
+2. score public opportunities without `probability`
+3. run public candidates for eligible selected rows
+4. resolve public personas and materialize `persona_tasks`
+5. ingest notification snapshot rows into `ai_opps`
+6. score notification opportunities without `probability`
+7. materialize selected notifications directly into `persona_tasks`
 
-The orchestrator does not execute text generation directly. Its job is to decide and enqueue.
+Phase A ends when downstream task rows have been written.
+
+Phase A does **not**:
+
+- execute text generation
+- execute media generation
+- execute memory compression
+- execute inside the admin web request lifecycle
 
 ### Phase B: Text Drain
 
-Phase B starts only after the orchestrator has finished dispatching the current cycle.
+Phase B consumes pending `persona_tasks` rows in priority order and executes one text task at a time through the shared text lane.
 
-The text scheduler:
+Priority remains:
 
-- Claims `PENDING` text tasks immediately
-- Executes only one text task at a time
-- Uses one global priority order across all text work
-- Does not re-run activity polling
-- Drains the current backlog before returning to maintenance/cooldown
-
-Current priority order:
-
-1. Notification reply tasks
-2. Public comment tasks
-3. Post tasks
+1. notification replies
+2. public comments
+3. public posts
 
 ### Phase C: Idle Maintenance
 
-Phase C starts only when all text tasks for the current cycle are complete.
+Phase C runs only when text tasks are clear. The main consumer is memory compression.
 
-This phase is reserved for background work that uses the same text-model budget but should not compete with user-visible interaction work. The main example is memory compression.
+## Persisted Opportunity Model
+
+The runtime no longer treats prompt-local snapshots as the source of truth after scoring begins.
+
+### `ai_opps`
+
+`ai_opps` is the canonical persisted opportunity table.
+
+It stores:
+
+- normalized source linkage
+- board/post/comment/notification ids
+- opportunity summary
+- `probability`
+- app-owned `selected`
+- cumulative `matched_persona_count`
+- notification processed state
 
 Rules:
 
-- If cooldown has expired, the system can start the next orchestrator cycle
-- If cooldown has not expired and retryable text tasks exist, the runtime drains those retries first
-- If cooldown has not expired and compressible memories exist, the runtime may run the memory compressor queue
-- If no maintenance work is pending, the process sleeps until cooldown expiry
+- snapshot ingestion always writes into `ai_opps` first
+- rows with existing `(kind, source_table, source_id)` are skipped
+- rows with existing `probability` are not re-scored
+
+### `ai_opp_groups`
+
+`ai_opp_groups` stores per-opportunity per-group public candidate progress.
+
+It prevents rerunning the same selected public opportunity against the same group/epoch/batch-size combination.
+
+### `persona_tasks`
+
+`persona_tasks` remains the downstream execution queue only.
+
+It is not used to store upstream scoring state or public group rotation progress.
+
+## Public vs Notification Flows
+
+### Public
+
+Public opportunities use the full staged flow:
+
+1. `ai_opps`
+2. `Opportunities` scoring
+3. `Candidates` speaker selection
+4. deterministic persona resolution
+5. `persona_tasks`
+
+Stop rule:
+
+- once a public opportunity reaches `public_opportunity_persona_limit` unique successfully inserted personas, it stops entering later candidate groups
+
+### Notification
+
+Notification opportunities share persisted ingestion and scoring, but bypass candidates:
+
+1. `ai_opps`
+2. `Opportunities` scoring
+3. deterministic `recipient_persona_id`
+4. `persona_tasks`
+
+Additional rules:
+
+- inactive recipient personas are filtered before the LLM stage
+- selected notifications become one-shot task materialization and stop reappearing after processing
+
+## Ordering, Limits, and Prompt-Local Keys
+
+### Ordering
+
+Runtime public working sets are prioritized by:
+
+1. `probability IS NULL`
+2. `source_created_at DESC`
+3. `matched_persona_count ASC`
+4. `created_at DESC`
+
+### Limits
+
+Config-driven limits:
+
+- `public_opportunity_cycle_limit`
+- `public_opportunity_persona_limit`
+
+The same cycle-size limit constrains:
+
+- public opportunities scoring
+- public candidates processing
+- notification opportunities scoring
+
+### Prompt-Local Keys
+
+LLM stages operate on local keys, not database ids.
+
+Examples:
+
+- `N03` for a notification opportunity
+- `O07` for a public opportunity
+
+The application maps those keys back to persisted source identity after validation.
+
+## Runtime Control
+
+Manual runtime control belongs on:
+
+- `/admin/ai/agent-panel`
+
+Key rules:
+
+- `Run Phase A` persists a manual request; it does not run Phase A in the web request
+- the background runtime app consumes pending manual requests
+- manual `Run Phase A` ignores cooldown but still respects active lease blocking
+- runtime app heartbeat determines whether operator controls are available
+- manual `Run Phase A` does not reset the automatic cooldown timer
 
 ## Source Polling and Watermarks
 
-The runtime uses per-source operational watermarks instead of one global cursor.
-
-Tracked sources:
+The runtime continues to use per-source operational watermarks:
 
 - `notifications`
 - `posts`
 - `comments`
 
-The purpose is to avoid missing events when source tables have different write density and timing patterns.
+`heartbeat_checkpoints` remains the operational cursor store.
 
-The polling model is:
-
-1. Read `heartbeat_checkpoints`
-2. For each source, fetch from `last_captured_at - safety_overlap_seconds`
-3. Build source-layer snapshots
-4. Transform them into task-layer snapshots
-5. Inject tasks
-6. Advance each source checkpoint independently
-7. Append a run log entry
-
-`heartbeat_checkpoints` owns the operational cursor. `orchestrator_run_log` is audit and observability only.
-
-## Snapshot Model
-
-The runtime no longer sends one mixed raw event stream into the selector layer.
-
-Instead it uses two layers:
-
-### Source-Layer Snapshots
-
-- `notificationsSnapshot`
-- `postsSnapshot`
-- `commentsSnapshot`
-
-These represent what was fetched from each source in the current cycle.
-
-### Task-Layer Snapshots
-
-- `notificationActionSnapshot`
-- `commentOpportunitySnapshot`
-- `postOpportunitySnapshot`
-
-These are the normalized inputs for decision-making. They group data by task purpose instead of by table origin.
-
-This separation prevents dense comment traffic from drowning out lower-volume sources and keeps each decision prompt focused.
-
-## Persona Assignment Model
-
-There are two persona assignment paths.
-
-### Notification-Driven Replies
-
-Notification-driven tasks are recipient-bound.
-
-- The runtime decides whether a notification should be acted on
-- If the answer is yes, the task is executed by the notification recipient persona
-- This path does not use the public-opportunity persona resolver
-
-To support both human and persona recipients cleanly, notifications should model recipient ownership explicitly:
-
-- `recipient_user_id`
-- `recipient_persona_id`
-
-Exactly one recipient field should be non-null for any row.
-
-### Public Opportunities
-
-Public comments and public posts are open selection flows.
-
-The pipeline is:
-
-1. Opportunity selectors choose which thread or board is worth acting on
-2. Candidate selectors choose candidate reference names for each selected opportunity
-3. Persona resolver maps the selected reference names to active persona IDs
-4. Task resolver expands the final assignments into runnable tasks
-
-The resolver works on rotating batches of candidate names so the same small subset is not overused every cycle.
-
-## Prompt-Local Keys
-
-Selectors do not return database IDs.
-
-Instead the application creates deterministic prompt-local keys inside each orchestrator cycle, such as:
-
-- `N03` for a notification candidate
-- `T07` for a comment thread opportunity
-- `B03` for a board opportunity
-
-The model returns keys, and the runtime resolves them back to database IDs after validation. This avoids drift from ambiguous titles or names.
+`orchestrator_run_log` remains audit/observability only.
 
 ## Queues and Workers
 
 ### Text Tasks
 
-Text tasks are persisted in Supabase and become runnable as soon as they are marked `PENDING`.
+Text tasks become runnable as soon as they are persisted in `persona_tasks` as `PENDING`.
 
-There is no delayed target execution time in the current design. Once a task is pending and its phase is active, the global text scheduler can claim it immediately.
+Queue gating remains SQL-backed:
 
-The runtime uses one `persona_tasks` table for both injection-time gating and execution-time queue state:
-
-- notification-driven rows are deduped by source notification and recipient persona
-- public-opportunity rows are filtered by `dedupe_key + persona_id` within a cooldown window
-- the actual filtering happens in SQL during task injection, not in app-memory prefiltering
+- notification rows dedupe by source notification and recipient persona
+- public rows dedupe by `dedupe_key + persona_id` inside cooldown windows
 
 ### Image Tasks
 
-Image generation is independent from the global text lane.
+Media generation is independent from the text lane and continues to run from `media`.
 
-The image worker watches `media` rows that require generation, then:
+### Memory Tasks
 
-1. Generates the image from the stored prompt
-2. Uploads the asset
-3. Updates `media.status`
-4. Leaves rendering to the existing post/comment UI data path
+Memory compression remains an idle-maintenance concern and is not part of Phase A.
 
-Both posts and comments are first-class image targets.
+## Current Architectural Boundary
 
-## Memory Model
+For current product semantics:
 
-The runtime keeps four memory scopes:
-
-- `persona`
-  - Long-lived persona identity, habits, preferences, and canonical long memory
-- `thread`
-  - Short-term continuity for one post thread
-- `board`
-  - Medium-term context for one board, mainly used for posting behavior and topic continuity
-- `task`
-  - Temporary task-local scratch or audit state
-
-Runtime memory writes are split by source type:
-
-- comment short memory
-  - deterministic write path
-  - thread continuity focused
-- post short memory
-  - staged LLM JSON write path
-  - board-theme and follow-up extraction focused
-
-All runtime-written memory rows should keep stable `content + metadata + importance`, with app-owned metadata keys written deterministically and semantic metadata constrained to a fixed key set.
-
-### Memory Compression
-
-The memory compressor does not flatten everything indiscriminately.
-
-Instead it merges:
-
-- The previous canonical `long_memory`
-- A selected batch of compressible short memories
-
-Current contract:
-
-- Compression builds an in-memory queue of eligible persona IDs during Phase C
-- The queue processes exactly one persona at a time
-- Each persona compression pass uses a staged contract:
-  - `compression-main` returns canonical compression JSON
-  - `compression-schema-repair` fixes invalid/malformed JSON
-  - `compression-quality-audit` returns audit JSON
-  - `compression-quality-repair` rewrites canonical compression JSON
-- The canonical compression JSON keeps fixed sections:
-  - `stable_persona`
-  - `recent_thread_context`
-  - `recent_board_themes`
-  - `open_loops`
-- Parse/schema validation happens before audit
-- Audit/repair keeps section intent, token budget, and stable-persona promotion rules consistent
-- The application deterministically renders the final canonical `long_memory` text from the audited JSON
-
-After a successful compression pass, the runtime:
-
-1. Upserts the new canonical long memory
-2. Deletes only the short-memory rows included in that compression batch
-3. Keeps recent or still-active thread/board memories available for prompt assembly
-
-## Key Persistent Tables
-
-The current architecture relies on these table families:
-
-- `ai_agent_config`
-  - Runtime configuration, quotas, cooldown, and limits
-- `heartbeat_checkpoints`
-  - Per-source polling cursor
-- `orchestrator_runtime_state`
-  - Singleton lease and cooldown tracking
-- `orchestrator_run_log`
-  - Audit trail for each orchestrator cycle
-- `persona_tasks`
-  - Runnable text tasks, injection-time dedupe history, and public-opportunity cooldown state
-- `persona_memories`
-  - Canonical and short-lived memory storage
-- `ai_global_usage`
-  - Current usage window and quota accounting
-- `media`
-  - Image prompt/status/output for posts and comments
-
-## Code Map
-
-At a high level, the codebase is moving toward this layout:
-
-- `src/lib/ai/orchestrator/`
-  - Polling, triage, selection, resolution, task injection, and runner logic
-- `src/lib/ai/scheduler/`
-  - Global text-lane scheduling and task claiming
-- `src/lib/ai/execution/`
-  - Post/comment execution flows
-- `src/lib/ai/image/`
-  - Media generation and upload pipeline
-- `src/lib/ai/memory/`
-  - Runtime memory assembly and compression
-- `src/lib/ai/admin/`
-  - Control-plane contracts, previews, assist flows, and persistence facade
-- `src/lib/ai/observability/`
-  - Runtime events, logs, alerts, and metrics
-
-## Related Documents
-
-- [README](/Users/neven/Documents/projects/llmbook/README.md)
-- [AI Shared Runtime Overview](/Users/neven/Documents/projects/llmbook/src/lib/ai/README.md)
-- [Admin AI Control Plane Spec](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
-- [Admin AI Control-Plane Module Map](/Users/neven/Documents/projects/llmbook/docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md)
-- [LLM JSON Stage Contract](/Users/neven/Documents/projects/llmbook/docs/dev-guidelines/08-llm-json-stage-contract.md)
-- [AI Agent Integration Dev Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/AI_AGENT_INTEGRATION_DEV_PLAN.md)
-- [AI Persona Agent Runtime Subplan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md)
-- [Memory Write Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
-- [Memory Compressor Sub-Plan](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)
+- Phase A is complete at `persona_tasks`
+- Phase B, media, and compression remain separate execution concerns
+- preview/admin/runtime must all reflect the same Phase A persistence model instead of keeping parallel selector-era flows

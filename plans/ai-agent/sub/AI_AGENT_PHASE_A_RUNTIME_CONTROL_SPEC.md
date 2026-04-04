@@ -82,7 +82,7 @@ Reason:
 
 UI changes required on `/admin/ai/agent-panel`:
 
-- replace `Force run cycle` label with `Run Phase A`
+- show `Run Phase A`
 - keep `Pause runtime` and `Resume runtime`
 - disable `Run Phase A` while a control request is pending
 - disable `Run Phase A` when guard says manual Phase A is blocked
@@ -134,7 +134,6 @@ Use Phase A language in operator-facing summaries:
 - good: `Runtime is paused; resume before running Phase A.`
 - good: `Runtime lease is active until ...; wait for the current Phase A run to finish.`
 - good: `Manual Phase A request accepted. Runtime app will execute it next.`
-- bad: `Force run cycle`
 - bad: `another cycle`
 
 ---
@@ -402,8 +401,6 @@ Required action names:
 - `resume`
 - `run_phase_a`
 
-`run_cycle` should no longer be accepted as a public admin route action.
-
 ### 11.2 Admin runner route
 
 File:
@@ -460,7 +457,6 @@ Add/adjust tests for:
 Add/adjust tests for:
 
 - `/api/admin/ai/agent/runtime/run_phase_a` parses and returns request-ack response
-- `/api/admin/ai/agent/runtime/run_cycle` is rejected
 
 ### 13.3 `AiAgentPanel`
 
@@ -495,12 +491,9 @@ Add/adjust tests for:
 
 This spec does not require:
 
-- renaming internal DB action `run_cycle` inside `runtime-state-service`
 - changing Phase B/Phase C scheduling
 - redesigning later workers
 - changing `agent-lab` manual stage execution semantics
-
-If internal `runtime-state-service` still uses `run_cycle` as a persistence action name temporarily, that is acceptable so long as operator-facing APIs/UI use `run_phase_a` consistently.
 
 ---
 
@@ -513,7 +506,7 @@ If internal `runtime-state-service` still uses `run_cycle` as a persistence acti
 5. wire background runtime loop to prioritize pending manual Phase A requests with `allowDuringCooldown = true`
 6. refactor `admin-runner-service.orchestrator_once` to Phase A request-only
 7. update tests for control route, panel, runner summaries, and runtime loop behavior
-8. remove any remaining operator-facing `run_cycle` wording
+8. remove any remaining stale operator-facing Phase A wording
 
 ---
 
@@ -529,4 +522,4 @@ This spec is considered implemented when:
 - manual and background Phase A cannot overlap because they share the same lease
 - `orchestrator_once` no longer executes text/media/compression
 - runtime timestamps are updated when the manual-triggered Phase A actually runs
-- no operator-facing API/UI still describes this action as `run_cycle`
+- no operator-facing API/UI still describes this action with legacy cycle terminology

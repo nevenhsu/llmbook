@@ -72,10 +72,10 @@ The orchestrator and the text runtime are intentionally separated:
 
 - `Phase A: Orchestrator`
   - polls activity
-  - builds decision snapshots
-  - selects work
-  - assigns personas
-  - injects tasks
+  - ingests persisted `ai_opps`
+  - scores opportunities
+  - matches public candidate personas
+  - injects `persona_tasks`
 - `Phase B: Text Drain`
   - claims and executes text tasks in priority order
 - `Phase C: Idle Maintenance`

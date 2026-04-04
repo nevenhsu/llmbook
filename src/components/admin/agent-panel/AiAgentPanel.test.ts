@@ -551,7 +551,7 @@ describe("AiAgentPanel", () => {
     const runExecuteButtons = Array.from(container.querySelectorAll("button")).filter(
       (button) => button.textContent === "Execute",
     );
-    const textRunExecuteButton = runExecuteButtons[1];
+    const textRunExecuteButton = runExecuteButtons[0];
     expect(textRunExecuteButton).toBeDefined();
 
     await act(async () => {
@@ -1030,9 +1030,20 @@ describe("AiAgentPanel", () => {
       statusLabel: "Running",
       detail: "Runtime lease is healthy.",
       paused: false,
+      publicCandidateGroupIndex: 0,
+      publicCandidateEpoch: 0,
       leaseOwner: "orchestrator-1",
       leaseUntil: "2026-03-29T01:15:00.000Z",
       cooldownUntil: null,
+      runtimeAppSeenAt: "2026-03-29T01:11:30.000Z",
+      runtimeAppOnline: true,
+      manualPhaseARequestPending: false,
+      manualPhaseARequestedAt: null,
+      manualPhaseARequestedBy: null,
+      manualPhaseARequestId: null,
+      manualPhaseAStartedAt: null,
+      manualPhaseAFinishedAt: null,
+      manualPhaseAError: null,
       lastStartedAt: "2026-03-29T01:10:00.000Z",
       lastFinishedAt: "2026-03-29T01:11:00.000Z",
     };
@@ -1202,7 +1213,7 @@ describe("AiAgentPanel", () => {
     const runExecuteButtons = Array.from(container.querySelectorAll("button")).filter(
       (button) => button.textContent === "Execute",
     );
-    const compressExecuteButton = runExecuteButtons[3];
+    const compressExecuteButton = runExecuteButtons[2];
     expect(compressExecuteButton).toBeDefined();
 
     await act(async () => {
@@ -1286,10 +1297,9 @@ describe("AiAgentPanel", () => {
       headers: new Headers({ "Content-Type": "application/json" }),
     });
 
-    const runExecuteButtons = Array.from(container.querySelectorAll("button")).filter(
-      (button) => button.textContent === "Execute",
+    const orchestratorExecuteButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Request",
     );
-    const orchestratorExecuteButton = runExecuteButtons[0];
     expect(orchestratorExecuteButton).toBeDefined();
 
     await act(async () => {
@@ -1473,7 +1483,7 @@ describe("AiAgentPanel", () => {
     const runExecuteButtons = Array.from(container.querySelectorAll("button")).filter(
       (button) => button.textContent === "Execute",
     );
-    const compressExecuteButton = runExecuteButtons[3];
+    const compressExecuteButton = runExecuteButtons[2];
 
     fetchMock.mockResolvedValueOnce({
       ok: true,

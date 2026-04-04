@@ -4,7 +4,7 @@
 
 **Goal:** Replace the current preview-driven runtime intake with a real persisted opportunity pipeline: `snapshot -> ai_opps -> Opportunities LLM -> Candidates LLM -> persona resolution -> persona_tasks`, with public flow processed first and notification flow bypassing candidates.
 
-**Architecture:** Introduce a normalized `ai_opps` table as the single persisted snapshot-to-opportunity layer, plus a short `ai_opp_groups` table to track which selected public opportunities have already been processed against which speaker batch group. Runtime keeps one cumulative public group cursor, runs `Opportunities` only for rows without probability, runs `Candidates` only for `selected=true` public rows that still have fewer than 3 unique matched personas and have not been processed for the current group, then materializes deduped `persona_tasks` rows.
+**Architecture:** Introduce a normalized `ai_opps` table as the single persisted snapshot-to-opportunity layer, plus a short `ai_opp_groups` table to track which selected public opportunities have already been processed against which speaker batch group. Runtime keeps one cumulative public group cursor, runs `Opportunities` only for rows without probability, runs `Candidates` only for `selected=true` public rows that still remain below `public_opportunity_persona_limit` and have not been processed for the current group, then materializes deduped `persona_tasks` rows.
 
 **Tech Stack:** Supabase Postgres schema + migrations, Next.js App Router, TypeScript runtime services under `src/lib/ai/agent/*`, shared intake prompt builders, Vitest.
 
@@ -20,7 +20,7 @@ The runtime flow becomes:
 4. Run `Opportunities` LLM only for `ai_opps` rows where `probability IS NULL`.
 5. Persist `probability` and app-owned `selected = probability > 0.5`.
 6. Public flow:
-   - query `ai_opps` where `kind='public' AND selected=true AND matched_persona_count < 3`
+   - query `ai_opps` where `kind='public' AND selected=true AND matched_persona_count < public_opportunity_persona_limit`
    - exclude rows already processed for the current `(candidate_epoch, group_index, batch_size)`
    - run `Candidates` LLM for the remaining opportunities
    - resolve personas from selected speaker names
@@ -67,7 +67,7 @@ The runtime flow becomes:
 - Input source is:
   - `ai_opps.kind='public'`
   - `selected=true`
-  - `matched_persona_count < 3`
+  - `matched_persona_count < public_opportunity_persona_limit`
   - no matching processed row in `ai_opp_groups` for current public group
 - Output is selected speaker names with probabilities.
 - Persona resolution is deterministic and happens after LLM output.
@@ -238,7 +238,7 @@ Used by both `public` and `notification` opportunity scoring.
 
 ```json
 {
-  "opportunity_probabilities": [
+  "scores": [
     {
       "opportunity_key": "O01",
       "probability": 0.82
@@ -358,7 +358,7 @@ select o.*
 from public.ai_opps o
 where o.kind = 'public'
   and o.selected = true
-  and o.matched_persona_count < 3
+  and o.matched_persona_count < public_opportunity_persona_limit
   and not exists (
     select 1
     from public.ai_opp_groups g
@@ -548,7 +548,7 @@ Rules:
   - the operation must not fail just because another flow already wrote probability first
 - Admin `Opportunities` table should query the operational union of:
   - rows where `probability IS NULL`
-  - rows where `selected = true AND matched_persona_count < 3`
+  - rows where `selected = true AND matched_persona_count < public_opportunity_persona_limit`
 - Admin page chooses its own group input explicitly from admin UI state.
 - Admin page does not read `orchestrator_runtime_state.public_candidate_group_index`.
 - Admin page does not depend on app runtime `candidate_epoch` / rotation position when deciding which speaker batch to preview or run.
@@ -623,7 +623,7 @@ rg -n "ai_opps|ai_opp_groups|public_candidate_group_index|public_candidate_epoch
 **Steps:**
 
 1. Reuse shared prompt builder.
-2. Add canonical `opportunity_probabilities` parser and validation.
+2. Add canonical `scores` parser and validation.
 3. Add staged repair/audit flow.
 4. Return canonical parsed output ready to persist.
 
@@ -693,7 +693,7 @@ rg -n "ai_opps|ai_opp_groups|public_candidate_group_index|public_candidate_epoch
 2. Model `ai_opps`-style state explicitly in preview/admin trace adapters.
 3. On admin page, query `Opportunities` from:
    - `probability IS NULL`
-   - plus `selected = true AND matched_persona_count < 3`
+   - plus `selected = true AND matched_persona_count < public_opportunity_persona_limit`
 4. Ensure admin page uses only admin-selected group input and does not read runtime `public_candidate_group_index`.
 5. Ensure admin opportunities reruns skip any row that already has `probability`.
 6. Ensure admin task saves only update `persona_tasks` plus `matched_persona_count`, without advancing runtime group cursor or runtime group-progress state.
@@ -703,8 +703,8 @@ rg -n "ai_opps|ai_opp_groups|public_candidate_group_index|public_candidate_epoch
 
 **Files:**
 
-- Modify: `plans/ai-agent/sub/AI_AGENT_INTAKE_STAGE_REFACTOR_PLAN.md`
 - Modify: `plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md`
+- Modify: `plans/ai-agent/sub/AI_AGENT_OPPORTUNITY_CYCLE_AND_ADMIN_BATCH_SPEC.md`
 - Modify: `docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md`
 - Modify: `docs/dev-guidelines/08-llm-json-stage-contract.md`
 
@@ -735,12 +735,12 @@ rg -n "ai_opps|ai_opp_groups|public_candidate_group_index|public_candidate_epoch
 4. notification selected row bypasses candidates and still produces `persona_tasks`
 5. notification selected row is not re-queried after `notification_processed_at` is written
 6. public selected row with `matched_persona_count = 2` still enters candidates
-7. public selected row reaching 3 unique personas stops entering later groups
+7. public selected row reaching `public_opportunity_persona_limit` unique personas stops entering later groups
 8. two selected speaker names resolving to same persona create only one `persona_tasks` row
 9. new opportunity arriving after cursor advanced still gets processed when each effective group rotates back around
 10. reset-to-zero bumps epoch and allows reprocessing from group 0
 11. public runs before notification in orchestrator phase
-12. admin opportunities view includes both `probability IS NULL` rows and active `selected=true AND matched_persona_count < 3` rows
+12. admin opportunities view includes both `probability IS NULL` rows and active `selected=true AND matched_persona_count < public_opportunity_persona_limit` rows
 13. admin page does not read runtime `public_candidate_group_index` and can still run its own group selection flow
 14. admin opportunity scoring skips rows that already have probability even if runtime wrote them first
 15. admin task save can increase cumulative `matched_persona_count` but does not mutate runtime cursor or runtime group-progress rows
@@ -759,7 +759,7 @@ npx vitest run \
 
 npx prettier --check \
   plans/ai-agent/sub/AI_AGENT_RUNTIME_OPPORTUNITY_PIPELINE_PLAN.md \
-  plans/ai-agent/sub/AI_AGENT_INTAKE_STAGE_REFACTOR_PLAN.md \
+  plans/ai-agent/sub/AI_AGENT_OPPORTUNITY_CYCLE_AND_ADMIN_BATCH_SPEC.md \
   plans/ai-agent/sub/AI_PERSONA_AGENT_RUNTIME_SUBPLAN.md \
   docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md \
   docs/dev-guidelines/08-llm-json-stage-contract.md \
