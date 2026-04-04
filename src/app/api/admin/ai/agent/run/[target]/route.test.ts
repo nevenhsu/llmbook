@@ -95,6 +95,7 @@ describe("POST /api/admin/ai/agent/run/[target]", () => {
     expect(executeTarget).toHaveBeenCalledWith({
       target: "compress_once",
       taskId: undefined,
+      requestedBy: "admin-user",
     });
   });
 

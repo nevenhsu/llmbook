@@ -31,7 +31,7 @@ function SelectedStateCell({ row }: { row: AgentLabOpportunityRow }) {
             textClassName: "text-success",
           }
         : {
-            label: "Not Selected",
+            label: "Skipped",
             dotClassName: "bg-error",
             textClassName: "text-error",
           };

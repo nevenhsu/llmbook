@@ -75,14 +75,23 @@ export type OpportunityMatchedPersonaCountUpdate = {
 type OpportunityStoreDeps = {
   insertIgnoreExisting: (rows: AiOppUpsertInput[]) => Promise<number>;
   listOpportunitiesByIds: (opportunityIds: string[]) => Promise<AiOppRow[]>;
-  listUnscoredOpportunities: (kind: AiOppKind) => Promise<AiOppRow[]>;
+  listRuntimeOpportunityCycleRows: (input: {
+    kind: AiOppKind;
+    cycleLimit: number;
+    publicPersonaLimit: number;
+  }) => Promise<AiOppRow[]>;
   listEligiblePublicCandidateOpportunities: (input: {
     candidateEpoch: number;
     groupIndex: number;
     batchSize: number;
+    cycleLimit: number;
+    publicPersonaLimit: number;
   }) => Promise<AiOppRow[]>;
-  listSelectedNotificationOpportunities: () => Promise<AiOppRow[]>;
-  listAdminLabOpportunities: (kind: AiOppKind) => Promise<AiOppRow[]>;
+  listSelectedNotificationOpportunities: (input: { cycleLimit: number }) => Promise<AiOppRow[]>;
+  listAdminLabOpportunities: (input: {
+    kind: AiOppKind;
+    publicPersonaLimit: number;
+  }) => Promise<AiOppRow[]>;
   updateOpportunityProbabilities: (rows: AiOppProbabilityUpdateInput[]) => Promise<void>;
   listResolvedPersonaIdsByOpportunityIds: (
     opportunityIds: string[],
@@ -95,6 +104,33 @@ type OpportunityStoreDeps = {
 
 const AI_OPP_SELECT =
   "id, kind, source_table, source_id, board_id, board_slug, post_id, comment_id, parent_comment_id, notification_id, recipient_persona_id, content_type, summary, probability, selected, matched_persona_count, notification_context, notification_type, notification_processed_at, probability_model_key, probability_prompt_version, probability_evaluated_at, source_created_at, created_at, updated_at";
+
+function toTimestamp(value: string | null): number {
+  const timestamp = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function compareOpportunityPriority(a: AiOppRow, b: AiOppRow): number {
+  const aMissingProbability = a.probability === null ? 0 : 1;
+  const bMissingProbability = b.probability === null ? 0 : 1;
+  if (aMissingProbability !== bMissingProbability) {
+    return aMissingProbability - bMissingProbability;
+  }
+
+  const sourceCreatedAtDiff =
+    toTimestamp(b.source_created_at ?? b.created_at) -
+    toTimestamp(a.source_created_at ?? a.created_at);
+  if (sourceCreatedAtDiff !== 0) {
+    return sourceCreatedAtDiff;
+  }
+
+  const matchedPersonaDiff = a.matched_persona_count - b.matched_persona_count;
+  if (matchedPersonaDiff !== 0) {
+    return matchedPersonaDiff;
+  }
+
+  return toTimestamp(b.created_at) - toTimestamp(a.created_at);
+}
 
 function mapUpsertRow(row: AiOppUpsertInput) {
   return {
@@ -188,23 +224,31 @@ export class AiOpportunityStore {
 
           return data ?? [];
         }),
-      listUnscoredOpportunities:
-        options?.deps?.listUnscoredOpportunities ??
-        (async (kind) => {
+      listRuntimeOpportunityCycleRows:
+        options?.deps?.listRuntimeOpportunityCycleRows ??
+        (async (input) => {
           const supabase = createAdminClient();
           const { data, error } = await supabase
             .from("ai_opps")
             .select(AI_OPP_SELECT)
-            .eq("kind", kind)
-            .is("probability", null)
+            .eq("kind", input.kind)
+            .order("source_created_at", { ascending: false, nullsFirst: false })
             .order("created_at", { ascending: false })
             .returns<AiOppRow[]>();
 
           if (error) {
-            throw new Error(`load unscored ai_opps failed: ${error.message}`);
+            throw new Error(`load runtime opportunity cycle rows failed: ${error.message}`);
           }
 
-          return data ?? [];
+          const eligibleRows = (data ?? []).filter((row) =>
+            input.kind === "public"
+              ? row.probability === null ||
+                (row.selected === true && row.matched_persona_count < input.publicPersonaLimit)
+              : row.probability === null ||
+                (row.selected === true && row.notification_processed_at === null),
+          );
+
+          return eligibleRows.sort(compareOpportunityPriority).slice(0, input.cycleLimit);
         }),
       listEligiblePublicCandidateOpportunities:
         options?.deps?.listEligiblePublicCandidateOpportunities ??
@@ -215,7 +259,8 @@ export class AiOpportunityStore {
             .select(AI_OPP_SELECT)
             .eq("kind", "public")
             .eq("selected", true)
-            .lt("matched_persona_count", 3)
+            .lt("matched_persona_count", input.publicPersonaLimit)
+            .order("source_created_at", { ascending: false, nullsFirst: false })
             .order("created_at", { ascending: false })
             .returns<AiOppRow[]>();
 
@@ -223,7 +268,7 @@ export class AiOpportunityStore {
             throw new Error(`load public candidate ai_opps failed: ${error.message}`);
           }
 
-          const rows = data ?? [];
+          const rows = (data ?? []).sort(compareOpportunityPriority);
           if (rows.length === 0) {
             return [];
           }
@@ -241,11 +286,11 @@ export class AiOpportunityStore {
           }
 
           const processed = new Set((processedRows ?? []).map((row) => row.opp_id));
-          return rows.filter((row) => !processed.has(row.id));
+          return rows.filter((row) => !processed.has(row.id)).slice(0, input.cycleLimit);
         }),
       listSelectedNotificationOpportunities:
         options?.deps?.listSelectedNotificationOpportunities ??
-        (async () => {
+        (async (input) => {
           const supabase = createAdminClient();
           const { data, error } = await supabase
             .from("ai_opps")
@@ -253,6 +298,7 @@ export class AiOpportunityStore {
             .eq("kind", "notification")
             .eq("selected", true)
             .is("notification_processed_at", null)
+            .order("source_created_at", { ascending: false, nullsFirst: false })
             .order("created_at", { ascending: false })
             .returns<AiOppRow[]>();
 
@@ -260,21 +306,16 @@ export class AiOpportunityStore {
             throw new Error(`load selected notification ai_opps failed: ${error.message}`);
           }
 
-          return data ?? [];
+          return (data ?? []).sort(compareOpportunityPriority).slice(0, input.cycleLimit);
         }),
       listAdminLabOpportunities:
         options?.deps?.listAdminLabOpportunities ??
-        (async (kind) => {
+        (async (input) => {
           const supabase = createAdminClient();
           const { data, error } = await supabase
             .from("ai_opps")
             .select(AI_OPP_SELECT)
-            .eq("kind", kind)
-            .or(
-              kind === "public"
-                ? "probability.is.null,and(selected.eq.true,matched_persona_count.lt.3)"
-                : "probability.is.null,and(selected.eq.true,notification_processed_at.is.null)",
-            )
+            .eq("kind", input.kind)
             .order("source_created_at", { ascending: false, nullsFirst: false })
             .order("created_at", { ascending: false })
             .returns<AiOppRow[]>();
@@ -283,7 +324,15 @@ export class AiOpportunityStore {
             throw new Error(`load admin lab ai_opps failed: ${error.message}`);
           }
 
-          return data ?? [];
+          const eligibleRows = (data ?? []).filter((row) =>
+            input.kind === "public"
+              ? row.probability === null ||
+                (row.selected === true && row.matched_persona_count < input.publicPersonaLimit)
+              : row.probability === null ||
+                (row.selected === true && row.notification_processed_at === null),
+          );
+
+          return eligibleRows.sort(compareOpportunityPriority);
         }),
       updateOpportunityProbabilities:
         options?.deps?.updateOpportunityProbabilities ??
@@ -403,24 +452,35 @@ export class AiOpportunityStore {
     return this.deps.listOpportunitiesByIds(opportunityIds);
   }
 
-  public async listUnscoredOpportunities(kind: AiOppKind): Promise<AiOppRow[]> {
-    return this.deps.listUnscoredOpportunities(kind);
+  public async listRuntimeOpportunityCycleRows(input: {
+    kind: AiOppKind;
+    cycleLimit: number;
+    publicPersonaLimit: number;
+  }): Promise<AiOppRow[]> {
+    return this.deps.listRuntimeOpportunityCycleRows(input);
   }
 
   public async listEligiblePublicCandidateOpportunities(input: {
     candidateEpoch: number;
     groupIndex: number;
     batchSize: number;
+    cycleLimit: number;
+    publicPersonaLimit: number;
   }): Promise<AiOppRow[]> {
     return this.deps.listEligiblePublicCandidateOpportunities(input);
   }
 
-  public async listSelectedNotificationOpportunities(): Promise<AiOppRow[]> {
-    return this.deps.listSelectedNotificationOpportunities();
+  public async listSelectedNotificationOpportunities(input: {
+    cycleLimit: number;
+  }): Promise<AiOppRow[]> {
+    return this.deps.listSelectedNotificationOpportunities(input);
   }
 
-  public async listAdminLabOpportunities(kind: AiOppKind): Promise<AiOppRow[]> {
-    return this.deps.listAdminLabOpportunities(kind);
+  public async listAdminLabOpportunities(input: {
+    kind: AiOppKind;
+    publicPersonaLimit: number;
+  }): Promise<AiOppRow[]> {
+    return this.deps.listAdminLabOpportunities(input);
   }
 
   public async updateOpportunityProbabilities(rows: AiOppProbabilityUpdateInput[]): Promise<void> {

@@ -3,14 +3,15 @@ import {
   type AiAgentRuntimeStateSnapshot,
 } from "@/lib/ai/agent/runtime-state-service";
 
-export type AiAgentRuntimeControlAction = "pause" | "resume" | "run_cycle";
+export type AiAgentRuntimeControlAction = "pause" | "resume" | "run_phase_a";
 export type AiAgentRuntimeControlReasonCode =
   | "runtime_state_unavailable"
   | "already_paused"
   | "not_paused"
   | "runtime_paused"
-  | "cooldown_active"
   | "lease_active"
+  | "manual_phase_a_pending"
+  | "runtime_app_offline"
   | "control_not_wired";
 
 export type AiAgentRuntimeControlGuard = {
@@ -44,9 +45,12 @@ export type AiAgentRuntimeControlResponse =
 
 type RuntimeControlServiceDeps = {
   loadRuntimeState: () => Promise<AiAgentRuntimeStateSnapshot>;
-  executeAction: (
-    action: AiAgentRuntimeControlAction,
+  executeRuntimeStateAction: (
+    action: "pause" | "resume",
   ) => Promise<AiAgentRuntimeStateSnapshot | null>;
+  requestManualPhaseA: (input: {
+    requestedBy: string;
+  }) => Promise<AiAgentRuntimeStateSnapshot | null>;
   now: () => number;
 };
 
@@ -56,8 +60,8 @@ function labelForAction(action: AiAgentRuntimeControlAction): string {
       return "Pause runtime";
     case "resume":
       return "Resume runtime";
-    case "run_cycle":
-      return "Force run cycle";
+    case "run_phase_a":
+      return "Run Phase A";
   }
 }
 
@@ -98,32 +102,39 @@ export function buildRuntimeControlGuard(
     };
   }
 
-  if (action === "run_cycle" && runtimeState.paused === true) {
+  if (action === "run_phase_a" && runtimeState.paused === true) {
     return {
       action,
       actionLabel,
       canExecute: false,
-      summary: "Runtime is paused; resume before forcing another cycle.",
+      summary: "Runtime is paused; resume before running Phase A.",
       reasonCode: "runtime_paused",
     };
   }
 
-  if (
-    action === "run_cycle" &&
-    runtimeState.cooldownUntil &&
-    new Date(runtimeState.cooldownUntil).getTime() > now
-  ) {
+  if (action === "run_phase_a" && runtimeState.manualPhaseARequestPending === true) {
     return {
       action,
       actionLabel,
       canExecute: false,
-      summary: `Runtime cooldown is active until ${runtimeState.cooldownUntil}.`,
-      reasonCode: "cooldown_active",
+      summary: "Manual Phase A request is already pending; wait for the runtime app to start it.",
+      reasonCode: "manual_phase_a_pending",
+    };
+  }
+
+  if (action === "run_phase_a" && runtimeState.runtimeAppOnline !== true) {
+    return {
+      action,
+      actionLabel,
+      canExecute: false,
+      summary:
+        "Runtime app is offline; Run Phase A is unavailable until the background runner heartbeat returns.",
+      reasonCode: "runtime_app_offline",
     };
   }
 
   if (
-    action === "run_cycle" &&
+    action === "run_phase_a" &&
     runtimeState.leaseUntil &&
     new Date(runtimeState.leaseUntil).getTime() > now
   ) {
@@ -153,15 +164,21 @@ export class AiAgentRuntimeControlService {
     this.deps = {
       loadRuntimeState:
         options?.deps?.loadRuntimeState ?? (async () => runtimeStateService.loadSnapshot()),
-      executeAction:
-        options?.deps?.executeAction ??
+      executeRuntimeStateAction:
+        options?.deps?.executeRuntimeStateAction ??
         (async (action) => runtimeStateService.executeAction(action)),
+      requestManualPhaseA:
+        options?.deps?.requestManualPhaseA ??
+        (async (input) => runtimeStateService.requestManualPhaseA(input)),
       now: options?.deps?.now ?? (() => Date.now()),
     };
   }
 
   public async execute(
     action: AiAgentRuntimeControlAction,
+    options?: {
+      requestedBy?: string;
+    },
   ): Promise<AiAgentRuntimeControlResponse> {
     const runtimeState = await this.deps.loadRuntimeState();
     const guard = buildRuntimeControlGuard(action, runtimeState, this.deps.now());
@@ -177,14 +194,22 @@ export class AiAgentRuntimeControlService {
       };
     }
 
-    const updatedRuntimeState = await this.deps.executeAction(action);
+    const updatedRuntimeState =
+      action === "run_phase_a"
+        ? await this.deps.requestManualPhaseA({
+            requestedBy: options?.requestedBy ?? "admin:run_phase_a",
+          })
+        : await this.deps.executeRuntimeStateAction(action);
     if (!updatedRuntimeState) {
       return {
         mode: "blocked_execute",
         action,
         actionLabel: guard.actionLabel,
         reasonCode: "control_not_wired",
-        summary: `${guard.actionLabel} is not wired in this repo slice yet.`,
+        summary:
+          action === "run_phase_a"
+            ? "Manual Phase A request could not be persisted."
+            : `${guard.actionLabel} is not wired in this repo slice yet.`,
         runtimeState,
       };
     }
@@ -193,7 +218,10 @@ export class AiAgentRuntimeControlService {
       mode: "executed",
       action,
       actionLabel: guard.actionLabel,
-      summary: `${guard.actionLabel} executed against orchestrator runtime state.`,
+      summary:
+        action === "run_phase_a"
+          ? "Manual Phase A request accepted. Runtime app will execute it next."
+          : `${guard.actionLabel} executed against orchestrator runtime state.`,
       runtimeState: updatedRuntimeState,
     };
   }

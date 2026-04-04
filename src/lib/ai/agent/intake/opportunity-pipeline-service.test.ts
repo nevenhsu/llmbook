@@ -44,8 +44,37 @@ function buildExecuted(
     mode: "executed",
     kind,
     message: `${kind} pipeline executed`,
-    injectionPreview: null as never,
+    injectionPreview: {
+      rpcName: "inject_persona_tasks",
+      summary: {
+        candidateCount: 0,
+        insertedCount: 0,
+        skippedCount: 0,
+        insertedTaskIds: [],
+        skippedReasonCounts: {},
+      },
+      results: [],
+    },
     insertedTasks: [],
+  };
+}
+
+function buildRuntimeConfig(
+  overrides: Partial<{
+    selectorReferenceBatchSize: number;
+    publicOpportunityCycleLimit: number;
+    publicOpportunityPersonaLimit: number;
+    postOpportunityCooldownMinutes: number;
+    commentOpportunityCooldownMinutes: number;
+  }> = {},
+) {
+  return {
+    selectorReferenceBatchSize: 10,
+    publicOpportunityCycleLimit: 100,
+    publicOpportunityPersonaLimit: 3,
+    postOpportunityCooldownMinutes: 360,
+    commentOpportunityCooldownMinutes: 30,
+    ...overrides,
   };
 }
 
@@ -53,7 +82,7 @@ describe("AiAgentOpportunityPipelineService", () => {
   it("ingests, scores, and materializes selected notification opportunities from ai_opps", async () => {
     const runtimePreviewSet = buildMockIntakeRuntimePreviews();
     const ingestOpportunities = vi.fn(async () => 1);
-    const listUnscoredOpportunities = vi.fn(async () => [buildOpp()]);
+    const listRuntimeOpportunityCycleRows = vi.fn(async () => [buildOpp()]);
     const updateOpportunityProbabilities = vi.fn(async () => undefined);
     const scoreOpportunityProbabilities = vi.fn(async () => [
       {
@@ -105,13 +134,9 @@ describe("AiAgentOpportunityPipelineService", () => {
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities,
-        listUnscoredOpportunities,
+        listRuntimeOpportunityCycleRows,
         updateOpportunityProbabilities,
         loadPersonaActivity: async () => ({
           "persona-orchid": true,
@@ -140,7 +165,11 @@ describe("AiAgentOpportunityPipelineService", () => {
         notificationType: "mention",
       }),
     ]);
-    expect(listUnscoredOpportunities).toHaveBeenCalledWith("notification");
+    expect(listRuntimeOpportunityCycleRows).toHaveBeenCalledWith({
+      kind: "notification",
+      cycleLimit: 100,
+      publicPersonaLimit: 3,
+    });
     expect(scoreOpportunityProbabilities).toHaveBeenCalledWith({
       kind: "notification",
       rows: [buildOpp()],
@@ -175,13 +204,9 @@ describe("AiAgentOpportunityPipelineService", () => {
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 1,
-        listUnscoredOpportunities: async () => [buildOpp()],
+        listRuntimeOpportunityCycleRows: async () => [buildOpp()],
         loadPersonaActivity: async () => ({
           "persona-orchid": false,
         }),
@@ -220,13 +245,9 @@ describe("AiAgentOpportunityPipelineService", () => {
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 0,
-        listUnscoredOpportunities: async () => [],
+        listRuntimeOpportunityCycleRows: async () => [],
         loadPersonaActivity: async () => ({
           "persona-orchid": false,
         }),
@@ -281,13 +302,9 @@ describe("AiAgentOpportunityPipelineService", () => {
             selectorInput: null,
           },
         }),
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 0,
-        listUnscoredOpportunities: async () => [],
+        listRuntimeOpportunityCycleRows: async () => [],
         updateOpportunityProbabilities: async () => undefined,
         loadPersonaActivity: async () => ({
           "persona-orchid": true,
@@ -368,14 +385,14 @@ describe("AiAgentOpportunityPipelineService", () => {
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 12,
-        listUnscoredOpportunities: async (kind) => {
-          expect(kind).toBe("public");
+        listRuntimeOpportunityCycleRows: async (input) => {
+          expect(input).toEqual({
+            kind: "public",
+            cycleLimit: 100,
+            publicPersonaLimit: 3,
+          });
           return unscoredRows;
         },
         scoreOpportunityProbabilities,
@@ -424,8 +441,7 @@ describe("AiAgentOpportunityPipelineService", () => {
   it("ingests, scores, selects speakers, records group progress, and inserts persisted public tasks", async () => {
     const runtimePreviewSet = buildMockIntakeRuntimePreviews();
     const ingestOpportunities = vi.fn(async () => 2);
-    const listUnscoredOpportunities = vi.fn(async (kind: "notification" | "public") => {
-      expect(kind).toBe("public");
+    const listRuntimeOpportunityCycleRows = vi.fn(async () => {
       return [
         buildOpp({
           id: "opp-public-1",
@@ -520,7 +536,11 @@ describe("AiAgentOpportunityPipelineService", () => {
     const executeCandidates = vi.fn(
       async (input: {
         kind?: "notification" | "public" | "manual";
-        candidates: Array<{ personaId: string; payload: Record<string, unknown> }>;
+        candidates: Array<{
+          candidateIndex: number;
+          personaId: string;
+          payload: Record<string, unknown>;
+        }>;
       }) => {
         expect(input.kind).toBe("public");
         expect(input.candidates).toHaveLength(2);
@@ -538,21 +558,50 @@ describe("AiAgentOpportunityPipelineService", () => {
           mode: "executed" as const,
           kind: "public" as const,
           message: "public pipeline executed",
-          injectionPreview: null as never,
-          insertedTasks: [{ id: "task-public-1" } as never, { id: "task-public-2" } as never],
+          injectionPreview: {
+            rpcName: "inject_persona_tasks",
+            summary: {
+              candidateCount: 2,
+              insertedCount: 2,
+              skippedCount: 0,
+              insertedTaskIds: ["task-public-1", "task-public-2"],
+              skippedReasonCounts: {},
+            },
+            results: input.candidates.map((candidate, index) => ({
+              candidateIndex: candidate.candidateIndex,
+              inserted: true,
+              skipReason: null,
+              taskId: `task-public-${index + 1}`,
+              taskType: "post",
+              dispatchKind: "public",
+              personaUsername: candidate.personaId,
+              sourceTable: "posts",
+              sourceId: "post-1",
+            })),
+          },
+          insertedTasks: [
+            {
+              id: "task-public-1",
+              personaId: "persona-marlowe",
+              status: "PENDING",
+              errorMessage: null,
+            } as never,
+            {
+              id: "task-public-2",
+              personaId: "persona-halo",
+              status: "PENDING",
+              errorMessage: null,
+            } as never,
+          ],
         };
       },
     );
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities,
-        listUnscoredOpportunities,
+        listRuntimeOpportunityCycleRows,
         updateOpportunityProbabilities,
         scoreOpportunityProbabilities,
         listSelectedNotificationOpportunities: async () => [],
@@ -610,6 +659,8 @@ describe("AiAgentOpportunityPipelineService", () => {
       candidateEpoch: 0,
       groupIndex: 0,
       batchSize: 10,
+      cycleLimit: 100,
+      publicPersonaLimit: 3,
     });
     expect(listResolvedPersonaIdsByOpportunityIds).toHaveBeenCalledWith(["opp-public-1"]);
     expect(selectPublicSpeakerCandidates).toHaveBeenCalledWith({
@@ -678,21 +729,54 @@ describe("AiAgentOpportunityPipelineService", () => {
       }),
     );
     const recordPublicCandidateResults = vi.fn(async () => undefined);
-    const executeCandidates = vi.fn(async (input: { candidates: Array<{ personaId: string }> }) => {
-      expect(input.candidates).toHaveLength(1);
-      expect(["persona-marlowe", "persona-halo"]).toContain(input.candidates[0]?.personaId);
-      return buildExecuted("public");
-    });
+    const executeCandidates = vi.fn(
+      async (input: { candidates: Array<{ candidateIndex: number; personaId: string }> }) => {
+        expect(input.candidates).toHaveLength(1);
+        expect(["persona-marlowe", "persona-halo"]).toContain(input.candidates[0]?.personaId);
+        return {
+          mode: "executed" as const,
+          kind: "public" as const,
+          message: "public pipeline executed",
+          injectionPreview: {
+            rpcName: "inject_persona_tasks",
+            summary: {
+              candidateCount: 1,
+              insertedCount: 1,
+              skippedCount: 0,
+              insertedTaskIds: ["task-1"],
+              skippedReasonCounts: {},
+            },
+            results: [
+              {
+                candidateIndex: input.candidates[0]!.candidateIndex,
+                inserted: true,
+                skipReason: null,
+                taskId: "task-1",
+                taskType: "post",
+                dispatchKind: "public",
+                personaUsername: input.candidates[0]!.personaId,
+                sourceTable: "posts",
+                sourceId: "post-1",
+              },
+            ],
+          },
+          insertedTasks: [
+            {
+              id: "task-1",
+              personaId: input.candidates[0]!.personaId,
+              status: "PENDING",
+              errorMessage: null,
+            } as never,
+          ],
+        };
+      },
+    );
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 1,
-        listUnscoredOpportunities: async () => [],
+        listRuntimeOpportunityCycleRows: async () => [],
         updateOpportunityProbabilities: async () => undefined,
         scoreOpportunityProbabilities: async () => [],
         listSelectedNotificationOpportunities: async () => [],
@@ -772,18 +856,49 @@ describe("AiAgentOpportunityPipelineService", () => {
     const executeCandidates = vi.fn(async (input: { candidates: Array<{ personaId: string }> }) => {
       expect(input.candidates).toHaveLength(1);
       expect(input.candidates[0]?.personaId).toBe("persona-halo");
-      return buildExecuted("public");
+      return {
+        mode: "executed" as const,
+        kind: "public" as const,
+        message: "public pipeline executed",
+        injectionPreview: {
+          rpcName: "inject_persona_tasks",
+          summary: {
+            candidateCount: 1,
+            insertedCount: 1,
+            skippedCount: 0,
+            insertedTaskIds: ["task-1"],
+            skippedReasonCounts: {},
+          },
+          results: [
+            {
+              candidateIndex: 0,
+              inserted: true,
+              skipReason: null,
+              taskId: "task-1",
+              taskType: "comment",
+              dispatchKind: "public",
+              personaUsername: "persona-halo",
+              sourceTable: "comments",
+              sourceId: "comment-1",
+            },
+          ],
+        },
+        insertedTasks: [
+          {
+            id: "task-1",
+            personaId: "persona-halo",
+            status: "PENDING",
+            errorMessage: null,
+          } as never,
+        ],
+      };
     });
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 1,
-        listUnscoredOpportunities: async () => [],
+        listRuntimeOpportunityCycleRows: async () => [],
         updateOpportunityProbabilities: async () => undefined,
         scoreOpportunityProbabilities: async () => [],
         listSelectedNotificationOpportunities: async () => [],
@@ -917,13 +1032,9 @@ describe("AiAgentOpportunityPipelineService", () => {
     const service = new AiAgentOpportunityPipelineService({
       deps: {
         loadRuntimePreviewSet: async () => runtimePreviewSet,
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         ingestOpportunities: async () => 12,
-        listUnscoredOpportunities: async () => [],
+        listRuntimeOpportunityCycleRows: async () => [],
         updateOpportunityProbabilities: async () => undefined,
         scoreOpportunityProbabilities: async () => [],
         listSelectedNotificationOpportunities: async () => [],
@@ -965,14 +1076,12 @@ describe("AiAgentOpportunityPipelineService", () => {
       "second candidate batch failed",
     );
 
-    expect(recordPublicCandidateResults).toHaveBeenCalledTimes(2);
+    expect(recordPublicCandidateResults).toHaveBeenCalledTimes(1);
     const recordCalls = recordPublicCandidateResults.mock.calls as unknown as Array<
       [{ groups: Array<unknown> }]
     >;
     const firstRecordInput = recordCalls[0]?.[0];
-    const secondRecordInput = recordCalls[1]?.[0];
     expect(firstRecordInput.groups).toHaveLength(10);
-    expect(secondRecordInput.groups).toHaveLength(2);
     expect(executeCandidates).toHaveBeenCalledTimes(2);
   });
 
@@ -992,11 +1101,7 @@ describe("AiAgentOpportunityPipelineService", () => {
     });
     const service = new AiAgentOpportunityPipelineService({
       deps: {
-        loadRuntimeConfig: async () => ({
-          selectorReferenceBatchSize: 10,
-          postOpportunityCooldownMinutes: 360,
-          commentOpportunityCooldownMinutes: 30,
-        }),
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
         listOpportunitiesByIds: async () => [eligibleRow],
         loadReferenceBatch: async () => ({
           referenceNames: ["David Bowie"],

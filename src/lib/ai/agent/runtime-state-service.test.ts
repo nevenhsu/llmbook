@@ -15,6 +15,13 @@ describe("runtime-state-service", () => {
         lease_owner: null,
         lease_until: null,
         cooldown_until: null,
+        runtime_app_seen_at: "2026-03-30T03:01:50.000Z",
+        manual_phase_a_requested_at: null,
+        manual_phase_a_requested_by: null,
+        manual_phase_a_request_id: null,
+        manual_phase_a_started_at: null,
+        manual_phase_a_finished_at: null,
+        manual_phase_a_error: null,
         last_started_at: "2026-03-30T03:00:00.000Z",
         last_finished_at: "2026-03-30T03:01:00.000Z",
         updated_at: "2026-03-30T03:01:00.000Z",
@@ -28,66 +35,83 @@ describe("runtime-state-service", () => {
       paused: false,
       publicCandidateGroupIndex: 2,
       publicCandidateEpoch: 4,
+      runtimeAppSeenAt: "2026-03-30T03:01:50.000Z",
+      runtimeAppOnline: true,
+      manualPhaseARequestPending: false,
       lastStartedAt: "2026-03-30T03:00:00.000Z",
       lastFinishedAt: "2026-03-30T03:01:00.000Z",
     });
   });
 
-  it("persists a run_cycle transition with cooldown from config", async () => {
-    const persistedRows: Array<Record<string, unknown>> = [];
+  it("marks the runtime app offline when the heartbeat is stale", () => {
+    const snapshot = buildAiAgentRuntimeStateSnapshot(
+      {
+        singleton_key: "global",
+        paused: false,
+        public_candidate_group_index: 2,
+        public_candidate_epoch: 4,
+        lease_owner: null,
+        lease_until: null,
+        cooldown_until: null,
+        runtime_app_seen_at: "2026-03-30T03:00:00.000Z",
+        manual_phase_a_requested_at: null,
+        manual_phase_a_requested_by: null,
+        manual_phase_a_request_id: null,
+        manual_phase_a_started_at: null,
+        manual_phase_a_finished_at: null,
+        manual_phase_a_error: null,
+        last_started_at: "2026-03-30T03:00:00.000Z",
+        last_finished_at: "2026-03-30T03:01:00.000Z",
+        updated_at: "2026-03-30T03:01:00.000Z",
+      },
+      new Date("2026-03-30T03:02:00.000Z"),
+    );
+
+    expect(snapshot).toMatchObject({
+      available: true,
+      runtimeAppSeenAt: "2026-03-30T03:00:00.000Z",
+      runtimeAppOnline: false,
+    });
+  });
+
+  it("persists a manual Phase A request instead of executing inline", async () => {
     const service = new AiAgentRuntimeStateService({
       deps: {
-        loadRow: async () => ({
+        persistManualPhaseARequest: async (input) => ({
           singleton_key: "global",
           paused: false,
           public_candidate_group_index: 0,
           public_candidate_epoch: 0,
           lease_owner: null,
           lease_until: null,
-          cooldown_until: null,
+          cooldown_until: "2026-03-30T03:10:00.000Z",
+          runtime_app_seen_at: "2026-03-30T03:04:30.000Z",
+          manual_phase_a_requested_at: input.now.toISOString(),
+          manual_phase_a_requested_by: input.requestedBy,
+          manual_phase_a_request_id: input.requestId ?? "manual-request-1",
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: null,
-          last_finished_at: null,
-          updated_at: "2026-03-30T03:00:00.000Z",
+          last_finished_at: "2026-03-30T03:00:00.000Z",
+          updated_at: input.now.toISOString(),
         }),
-        loadCooldownMinutes: async () => 5,
-        persistAction: async (_action, input) => {
-          persistedRows.push({
-            action: _action,
-            now: input.now.toISOString(),
-            cooldownMinutes: input.cooldownMinutes,
-          });
-          return {
-            singleton_key: "global",
-            paused: false,
-            public_candidate_group_index: 0,
-            public_candidate_epoch: 0,
-            lease_owner: "admin:run_cycle",
-            lease_until: input.now.toISOString(),
-            cooldown_until: new Date(input.now.getTime() + 5 * 60_000).toISOString(),
-            last_started_at: input.now.toISOString(),
-            last_finished_at: input.now.toISOString(),
-            updated_at: input.now.toISOString(),
-          };
-        },
         now: () => new Date("2026-03-30T03:05:00.000Z"),
       },
     });
 
-    const snapshot = await service.executeAction("run_cycle");
+    const snapshot = await service.requestManualPhaseA({
+      requestedBy: "admin-user",
+      requestId: "manual-request-1",
+    });
 
     expect(snapshot).toMatchObject({
       available: true,
-      statusLabel: "Cooling Down",
-      cooldownUntil: "2026-03-30T03:10:00.000Z",
-      lastStartedAt: "2026-03-30T03:05:00.000Z",
+      statusLabel: "Manual Phase A Pending",
+      manualPhaseARequestPending: true,
+      manualPhaseARequestedBy: "admin-user",
+      manualPhaseARequestId: "manual-request-1",
     });
-    expect(persistedRows).toEqual([
-      {
-        action: "run_cycle",
-        now: "2026-03-30T03:05:00.000Z",
-        cooldownMinutes: 5,
-      },
-    ]);
   });
 
   it("blocks lease claim early while cooldown is still active", async () => {
@@ -102,6 +126,13 @@ describe("runtime-state-service", () => {
           lease_owner: null,
           lease_until: null,
           cooldown_until: "2026-03-30T03:10:00.000Z",
+          runtime_app_seen_at: "2026-03-30T03:05:30.000Z",
+          manual_phase_a_requested_at: null,
+          manual_phase_a_requested_by: null,
+          manual_phase_a_request_id: null,
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: "2026-03-30T03:00:00.000Z",
           last_finished_at: "2026-03-30T03:05:00.000Z",
           updated_at: "2026-03-30T03:05:00.000Z",
@@ -134,6 +165,13 @@ describe("runtime-state-service", () => {
           lease_owner: null,
           lease_until: null,
           cooldown_until: null,
+          runtime_app_seen_at: "2026-03-30T03:04:30.000Z",
+          manual_phase_a_requested_at: null,
+          manual_phase_a_requested_by: null,
+          manual_phase_a_request_id: null,
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: null,
           last_finished_at: null,
           updated_at: "2026-03-30T03:00:00.000Z",
@@ -146,6 +184,13 @@ describe("runtime-state-service", () => {
           lease_owner: "orchestrator:test",
           lease_until: "2026-03-30T03:07:00.000Z",
           cooldown_until: null,
+          runtime_app_seen_at: "2026-03-30T03:05:00.000Z",
+          manual_phase_a_requested_at: null,
+          manual_phase_a_requested_by: null,
+          manual_phase_a_request_id: null,
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: "2026-03-30T03:05:00.000Z",
           last_finished_at: null,
           updated_at: "2026-03-30T03:05:00.000Z",
@@ -158,6 +203,13 @@ describe("runtime-state-service", () => {
           lease_owner: "orchestrator:test",
           lease_until: "2026-03-30T03:06:30.000Z",
           cooldown_until: null,
+          runtime_app_seen_at: "2026-03-30T03:05:30.000Z",
+          manual_phase_a_requested_at: null,
+          manual_phase_a_requested_by: null,
+          manual_phase_a_request_id: null,
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: "2026-03-30T03:05:00.000Z",
           last_finished_at: null,
           updated_at: "2026-03-30T03:05:30.000Z",
@@ -170,6 +222,13 @@ describe("runtime-state-service", () => {
           lease_owner: null,
           lease_until: null,
           cooldown_until: "2026-03-30T03:11:00.000Z",
+          runtime_app_seen_at: "2026-03-30T03:06:00.000Z",
+          manual_phase_a_requested_at: null,
+          manual_phase_a_requested_by: null,
+          manual_phase_a_request_id: null,
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: "2026-03-30T03:05:00.000Z",
           last_finished_at: "2026-03-30T03:06:00.000Z",
           updated_at: "2026-03-30T03:06:00.000Z",
@@ -228,6 +287,13 @@ describe("runtime-state-service", () => {
           lease_owner: null,
           lease_until: null,
           cooldown_until: null,
+          runtime_app_seen_at: "2026-03-30T03:02:30.000Z",
+          manual_phase_a_requested_at: null,
+          manual_phase_a_requested_by: null,
+          manual_phase_a_request_id: null,
+          manual_phase_a_started_at: null,
+          manual_phase_a_finished_at: null,
+          manual_phase_a_error: null,
           last_started_at: "2026-03-30T03:00:00.000Z",
           last_finished_at: "2026-03-30T03:01:00.000Z",
           updated_at: "2026-03-30T03:02:00.000Z",
@@ -239,6 +305,7 @@ describe("runtime-state-service", () => {
     await expect(service.loadSnapshot()).resolves.toMatchObject({
       publicCandidateGroupIndex: 5,
       publicCandidateEpoch: 9,
+      runtimeAppOnline: true,
     });
   });
 });

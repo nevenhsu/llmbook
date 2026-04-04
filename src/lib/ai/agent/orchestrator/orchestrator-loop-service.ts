@@ -50,12 +50,22 @@ export type AiAgentOrchestratorLoopRunResult = {
 type OrchestratorHeartbeatLoopInput = AiAgentOrchestratorLoopInput;
 
 type OrchestratorLoopDeps = {
-  claimLease: (input: AiAgentOrchestratorLoopInput) => Promise<AiAgentRuntimeLeaseClaimResult>;
+  touchRuntimeAppHeartbeat: () => Promise<void>;
+  loadRuntimeState: () => Promise<AiAgentRuntimeStateSnapshot>;
+  claimLease: (
+    input: AiAgentOrchestratorLoopInput & { allowDuringCooldown?: boolean },
+  ) => Promise<AiAgentRuntimeLeaseClaimResult>;
   releaseLease: (input: { leaseOwner: string; cooldownMinutes?: number | null }) => Promise<{
     mode: "blocked" | "released";
     summary: string;
     runtimeState: AiAgentRuntimeStateSnapshot;
   }>;
+  markManualPhaseAStarted: (requestId: string) => Promise<AiAgentRuntimeStateSnapshot | null>;
+  completeManualPhaseA: (requestId: string) => Promise<AiAgentRuntimeStateSnapshot | null>;
+  failManualPhaseA: (
+    requestId: string,
+    errorMessage: string,
+  ) => Promise<AiAgentRuntimeStateSnapshot | null>;
   beginHeartbeatLoop: (input: OrchestratorHeartbeatLoopInput) => () => void;
   runOrchestratorPhase: () => Promise<AiAgentOrchestratorPhaseExecutedResult>;
   sleep: (ms: number) => Promise<void>;
@@ -83,15 +93,33 @@ export class AiAgentOrchestratorLoopService {
     const runtimeStateService = new AiAgentRuntimeStateService();
     const phaseService = new AiAgentOrchestratorPhaseService();
     this.deps = {
+      touchRuntimeAppHeartbeat:
+        options?.deps?.touchRuntimeAppHeartbeat ??
+        (async () => {
+          await runtimeStateService.touchRuntimeAppHeartbeat();
+        }),
+      loadRuntimeState:
+        options?.deps?.loadRuntimeState ?? (() => runtimeStateService.loadSnapshot()),
       claimLease:
         options?.deps?.claimLease ??
         ((input) =>
           runtimeStateService.claimLease({
             leaseOwner: input.leaseOwner,
             leaseMs: input.leaseMs,
+            allowDuringCooldown: input.allowDuringCooldown,
           })),
       releaseLease:
         options?.deps?.releaseLease ?? ((input) => runtimeStateService.releaseLease(input)),
+      markManualPhaseAStarted:
+        options?.deps?.markManualPhaseAStarted ??
+        ((requestId) => runtimeStateService.markManualPhaseAStarted(requestId)),
+      completeManualPhaseA:
+        options?.deps?.completeManualPhaseA ??
+        ((requestId) => runtimeStateService.completeManualPhaseA(requestId)),
+      failManualPhaseA:
+        options?.deps?.failManualPhaseA ??
+        ((requestId, errorMessage) =>
+          runtimeStateService.failManualPhaseA(requestId, errorMessage)),
       beginHeartbeatLoop:
         options?.deps?.beginHeartbeatLoop ?? createDefaultHeartbeatLoop(runtimeStateService),
       runOrchestratorPhase: options?.deps?.runOrchestratorPhase ?? (() => phaseService.runPhase()),
@@ -102,7 +130,15 @@ export class AiAgentOrchestratorLoopService {
   public async runSingleIteration(
     input: AiAgentOrchestratorLoopInput,
   ): Promise<AiAgentOrchestratorLoopIterationResult> {
-    const claimResult = await this.deps.claimLease(input);
+    await this.deps.touchRuntimeAppHeartbeat();
+    const runtimeState = await this.deps.loadRuntimeState();
+    const manualPhaseARequestId = runtimeState.manualPhaseARequestPending
+      ? runtimeState.manualPhaseARequestId
+      : null;
+    const claimResult = await this.deps.claimLease({
+      ...input,
+      allowDuringCooldown: manualPhaseARequestId !== null,
+    });
     if (claimResult.mode === "blocked") {
       return claimResult;
     }
@@ -110,10 +146,17 @@ export class AiAgentOrchestratorLoopService {
     const stopHeartbeat = this.deps.beginHeartbeatLoop(input);
 
     try {
+      if (manualPhaseARequestId) {
+        await this.deps.markManualPhaseAStarted(manualPhaseARequestId);
+      }
       const phaseResult = await this.deps.runOrchestratorPhase();
       const releaseResult = await this.deps.releaseLease({
         leaseOwner: input.leaseOwner,
+        cooldownMinutes: manualPhaseARequestId ? null : undefined,
       });
+      if (manualPhaseARequestId) {
+        await this.deps.completeManualPhaseA(manualPhaseARequestId);
+      }
 
       if (releaseResult.mode !== "released") {
         return {
@@ -135,6 +178,12 @@ export class AiAgentOrchestratorLoopService {
         leaseOwner: input.leaseOwner,
         cooldownMinutes: null,
       });
+      if (manualPhaseARequestId) {
+        await this.deps.failManualPhaseA(
+          manualPhaseARequestId,
+          error instanceof Error ? error.message : "Unknown orchestrator loop error",
+        );
+      }
 
       return {
         mode: "failed",

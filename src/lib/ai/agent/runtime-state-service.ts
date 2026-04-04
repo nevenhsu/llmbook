@@ -2,6 +2,7 @@ import { loadAiAgentConfig } from "@/lib/ai/agent/config/agent-config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const ORCHESTRATOR_RUNTIME_SINGLETON_KEY = "global";
+export const ORCHESTRATOR_RUNTIME_APP_ONLINE_WINDOW_MS = 30_000;
 
 export type AiAgentRuntimeStateSnapshot = {
   available: boolean;
@@ -13,6 +14,15 @@ export type AiAgentRuntimeStateSnapshot = {
   leaseOwner: string | null;
   leaseUntil: string | null;
   cooldownUntil: string | null;
+  runtimeAppSeenAt: string | null;
+  runtimeAppOnline: boolean | null;
+  manualPhaseARequestPending: boolean | null;
+  manualPhaseARequestedAt: string | null;
+  manualPhaseARequestedBy: string | null;
+  manualPhaseARequestId: string | null;
+  manualPhaseAStartedAt: string | null;
+  manualPhaseAFinishedAt: string | null;
+  manualPhaseAError: string | null;
   lastStartedAt: string | null;
   lastFinishedAt: string | null;
 };
@@ -25,12 +35,19 @@ export type OrchestratorRuntimeStateRow = {
   lease_owner: string | null;
   lease_until: string | null;
   cooldown_until: string | null;
+  runtime_app_seen_at: string | null;
+  manual_phase_a_requested_at: string | null;
+  manual_phase_a_requested_by: string | null;
+  manual_phase_a_request_id: string | null;
+  manual_phase_a_started_at: string | null;
+  manual_phase_a_finished_at: string | null;
+  manual_phase_a_error: string | null;
   last_started_at: string | null;
   last_finished_at: string | null;
   updated_at: string;
 };
 
-export type RuntimeStateAction = "pause" | "resume" | "run_cycle";
+export type RuntimeStateAction = "pause" | "resume";
 
 export type AiAgentRuntimeLeaseReasonCode =
   | "runtime_state_unavailable"
@@ -90,16 +107,38 @@ export type AiAgentRuntimeLeaseReleaseResult =
   | AiAgentRuntimeLeaseBlockedResult
   | AiAgentRuntimeLeaseReleasedResult;
 
+export type AiAgentManualPhaseARequestInput = {
+  requestedBy: string;
+  requestId?: string;
+};
+
 type RuntimeStateServiceDeps = {
   loadRow: () => Promise<OrchestratorRuntimeStateRow | null>;
   loadCooldownMinutes: () => Promise<number>;
   persistAction: (
     action: RuntimeStateAction,
-    input: { row: OrchestratorRuntimeStateRow; now: Date; cooldownMinutes: number },
+    input: { row: OrchestratorRuntimeStateRow; now: Date },
   ) => Promise<OrchestratorRuntimeStateRow>;
+  persistManualPhaseARequest: (
+    input: AiAgentManualPhaseARequestInput & { now: Date },
+  ) => Promise<OrchestratorRuntimeStateRow | null>;
+  markManualPhaseAStartedRow: (input: {
+    requestId: string;
+    now: Date;
+  }) => Promise<OrchestratorRuntimeStateRow | null>;
+  completeManualPhaseARow: (input: {
+    requestId: string;
+    now: Date;
+  }) => Promise<OrchestratorRuntimeStateRow | null>;
+  failManualPhaseARow: (input: {
+    requestId: string;
+    now: Date;
+    errorMessage: string;
+  }) => Promise<OrchestratorRuntimeStateRow | null>;
   claimLeaseRow: (
     input: AiAgentRuntimeLeaseClaimInput,
   ) => Promise<OrchestratorRuntimeStateRow | null>;
+  touchRuntimeAppHeartbeatRow: () => Promise<OrchestratorRuntimeStateRow | null>;
   heartbeatLeaseRow: (
     input: AiAgentRuntimeLeaseInput,
   ) => Promise<OrchestratorRuntimeStateRow | null>;
@@ -208,6 +247,15 @@ export function buildAiAgentRuntimeStateSnapshot(
       leaseOwner: null,
       leaseUntil: null,
       cooldownUntil: null,
+      runtimeAppSeenAt: null,
+      runtimeAppOnline: null,
+      manualPhaseARequestPending: null,
+      manualPhaseARequestedAt: null,
+      manualPhaseARequestedBy: null,
+      manualPhaseARequestId: null,
+      manualPhaseAStartedAt: null,
+      manualPhaseAFinishedAt: null,
+      manualPhaseAError: null,
       lastStartedAt: null,
       lastFinishedAt: null,
     };
@@ -215,9 +263,17 @@ export function buildAiAgentRuntimeStateSnapshot(
 
   const leaseUntil = normalizeIsoString(row.lease_until);
   const cooldownUntil = normalizeIsoString(row.cooldown_until);
+  const runtimeAppSeenAt = normalizeIsoString(row.runtime_app_seen_at);
+  const manualPhaseARequestedAt = normalizeIsoString(row.manual_phase_a_requested_at);
+  const manualPhaseAStartedAt = normalizeIsoString(row.manual_phase_a_started_at);
+  const manualPhaseAFinishedAt = normalizeIsoString(row.manual_phase_a_finished_at);
+  const manualPhaseARequestPending = manualPhaseARequestedAt !== null;
   const nowMs = now.getTime();
   const leaseActive = leaseUntil ? new Date(leaseUntil).getTime() > nowMs : false;
   const cooldownActive = cooldownUntil ? new Date(cooldownUntil).getTime() > nowMs : false;
+  const runtimeAppOnline = runtimeAppSeenAt
+    ? nowMs - new Date(runtimeAppSeenAt).getTime() <= ORCHESTRATOR_RUNTIME_APP_ONLINE_WINDOW_MS
+    : false;
 
   let statusLabel = "Ready";
   let detail = "Runtime state row is available.";
@@ -233,6 +289,17 @@ export function buildAiAgentRuntimeStateSnapshot(
     statusLabel = "Cooling Down";
     detail = `Runtime cooldown is active until ${cooldownUntil}.`;
   }
+  if (manualPhaseARequestPending && !leaseActive) {
+    statusLabel = "Manual Phase A Pending";
+    detail = row.manual_phase_a_requested_by
+      ? `Manual Phase A request is pending from ${row.manual_phase_a_requested_by}.`
+      : "Manual Phase A request is pending.";
+  }
+  if (!runtimeAppOnline) {
+    detail = runtimeAppSeenAt
+      ? `${detail} Runtime app heartbeat is stale.`
+      : `${detail} Runtime app heartbeat has not been observed yet.`;
+  }
 
   return {
     available: true,
@@ -244,6 +311,15 @@ export function buildAiAgentRuntimeStateSnapshot(
     leaseOwner: row.lease_owner,
     leaseUntil,
     cooldownUntil,
+    runtimeAppSeenAt,
+    runtimeAppOnline,
+    manualPhaseARequestPending,
+    manualPhaseARequestedAt,
+    manualPhaseARequestedBy: row.manual_phase_a_requested_by,
+    manualPhaseARequestId: row.manual_phase_a_request_id,
+    manualPhaseAStartedAt,
+    manualPhaseAFinishedAt,
+    manualPhaseAError: row.manual_phase_a_error,
     lastStartedAt: normalizeIsoString(row.last_started_at),
     lastFinishedAt: normalizeIsoString(row.last_finished_at),
   };
@@ -253,6 +329,7 @@ export class AiAgentRuntimeStateService {
   private readonly deps: RuntimeStateServiceDeps;
 
   public constructor(options?: { deps?: Partial<RuntimeStateServiceDeps> }) {
+    const now = options?.deps?.now ?? (() => new Date());
     this.deps = {
       loadRow:
         options?.deps?.loadRow ??
@@ -261,7 +338,7 @@ export class AiAgentRuntimeStateService {
           const { data, error } = await supabase
             .from("orchestrator_runtime_state")
             .select(
-              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, last_started_at, last_finished_at, updated_at",
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
             )
             .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
             .maybeSingle<OrchestratorRuntimeStateRow>();
@@ -279,11 +356,7 @@ export class AiAgentRuntimeStateService {
         options?.deps?.persistAction ??
         (async (action, input) => {
           const supabase = createAdminClient();
-          const { row, now, cooldownMinutes } = input;
-          const nextCooldownAt =
-            action === "run_cycle"
-              ? new Date(now.getTime() + cooldownMinutes * 60_000).toISOString()
-              : row.cooldown_until;
+          const { row, now } = input;
           const patch =
             action === "pause"
               ? {
@@ -292,27 +365,17 @@ export class AiAgentRuntimeStateService {
                   lease_until: null,
                   updated_at: now.toISOString(),
                 }
-              : action === "resume"
-                ? {
-                    paused: false,
-                    updated_at: now.toISOString(),
-                  }
-                : {
-                    paused: false,
-                    lease_owner: "admin:run_cycle",
-                    lease_until: now.toISOString(),
-                    cooldown_until: nextCooldownAt,
-                    last_started_at: now.toISOString(),
-                    last_finished_at: now.toISOString(),
-                    updated_at: now.toISOString(),
-                  };
+              : {
+                  paused: false,
+                  updated_at: now.toISOString(),
+                };
 
           const { data, error } = await supabase
             .from("orchestrator_runtime_state")
             .update(patch)
             .eq("singleton_key", row.singleton_key)
             .select(
-              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, last_started_at, last_finished_at, updated_at",
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
             )
             .single<OrchestratorRuntimeStateRow>();
 
@@ -321,6 +384,142 @@ export class AiAgentRuntimeStateService {
           }
 
           return data;
+        }),
+      persistManualPhaseARequest:
+        options?.deps?.persistManualPhaseARequest ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const requestId = input.requestId ?? crypto.randomUUID();
+          const nowIso = input.now.toISOString();
+          const { data, error } = await supabase
+            .from("orchestrator_runtime_state")
+            .update({
+              manual_phase_a_requested_at: nowIso,
+              manual_phase_a_requested_by: input.requestedBy,
+              manual_phase_a_request_id: requestId,
+              manual_phase_a_started_at: null,
+              manual_phase_a_finished_at: null,
+              manual_phase_a_error: null,
+              updated_at: nowIso,
+            })
+            .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
+            .is("manual_phase_a_requested_at", null)
+            .select(
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
+            )
+            .maybeSingle<OrchestratorRuntimeStateRow>();
+
+          if (error) {
+            throw new Error(`persist manual Phase A request failed: ${error.message}`);
+          }
+
+          return data ?? null;
+        }),
+      markManualPhaseAStartedRow:
+        options?.deps?.markManualPhaseAStartedRow ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const nowIso = input.now.toISOString();
+          const { data, error } = await supabase
+            .from("orchestrator_runtime_state")
+            .update({
+              manual_phase_a_started_at: nowIso,
+              manual_phase_a_finished_at: null,
+              manual_phase_a_error: null,
+              updated_at: nowIso,
+            })
+            .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
+            .eq("manual_phase_a_request_id", input.requestId)
+            .not("manual_phase_a_requested_at", "is", null)
+            .select(
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
+            )
+            .maybeSingle<OrchestratorRuntimeStateRow>();
+
+          if (error) {
+            throw new Error(`mark manual Phase A started failed: ${error.message}`);
+          }
+
+          return data ?? null;
+        }),
+      completeManualPhaseARow:
+        options?.deps?.completeManualPhaseARow ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const nowIso = input.now.toISOString();
+          const { data, error } = await supabase
+            .from("orchestrator_runtime_state")
+            .update({
+              manual_phase_a_requested_at: null,
+              manual_phase_a_requested_by: null,
+              manual_phase_a_request_id: null,
+              manual_phase_a_finished_at: nowIso,
+              manual_phase_a_error: null,
+              updated_at: nowIso,
+            })
+            .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
+            .eq("manual_phase_a_request_id", input.requestId)
+            .select(
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
+            )
+            .maybeSingle<OrchestratorRuntimeStateRow>();
+
+          if (error) {
+            throw new Error(`complete manual Phase A failed: ${error.message}`);
+          }
+
+          return data ?? null;
+        }),
+      failManualPhaseARow:
+        options?.deps?.failManualPhaseARow ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const nowIso = input.now.toISOString();
+          const { data, error } = await supabase
+            .from("orchestrator_runtime_state")
+            .update({
+              manual_phase_a_requested_at: null,
+              manual_phase_a_requested_by: null,
+              manual_phase_a_request_id: null,
+              manual_phase_a_finished_at: nowIso,
+              manual_phase_a_error: input.errorMessage,
+              updated_at: nowIso,
+            })
+            .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
+            .eq("manual_phase_a_request_id", input.requestId)
+            .select(
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
+            )
+            .maybeSingle<OrchestratorRuntimeStateRow>();
+
+          if (error) {
+            throw new Error(`fail manual Phase A failed: ${error.message}`);
+          }
+
+          return data ?? null;
+        }),
+      touchRuntimeAppHeartbeatRow:
+        options?.deps?.touchRuntimeAppHeartbeatRow ??
+        (async () => {
+          const supabase = createAdminClient();
+          const nowIso = now().toISOString();
+          const { data, error } = await supabase
+            .from("orchestrator_runtime_state")
+            .update({
+              runtime_app_seen_at: nowIso,
+              updated_at: nowIso,
+            })
+            .eq("singleton_key", ORCHESTRATOR_RUNTIME_SINGLETON_KEY)
+            .select(
+              "singleton_key, paused, public_candidate_group_index, public_candidate_epoch, lease_owner, lease_until, cooldown_until, runtime_app_seen_at, manual_phase_a_requested_at, manual_phase_a_requested_by, manual_phase_a_request_id, manual_phase_a_started_at, manual_phase_a_finished_at, manual_phase_a_error, last_started_at, last_finished_at, updated_at",
+            )
+            .maybeSingle<OrchestratorRuntimeStateRow>();
+
+          if (error) {
+            throw new Error(`touch orchestrator_runtime_state heartbeat failed: ${error.message}`);
+          }
+
+          return data ?? null;
         }),
       claimLeaseRow:
         options?.deps?.claimLeaseRow ??
@@ -368,12 +567,20 @@ export class AiAgentRuntimeStateService {
 
           return data ? (data as OrchestratorRuntimeStateRow) : null;
         }),
-      now: options?.deps?.now ?? (() => new Date()),
+      now,
     };
   }
 
   public async loadSnapshot(): Promise<AiAgentRuntimeStateSnapshot> {
     return buildAiAgentRuntimeStateSnapshot(await this.deps.loadRow(), this.deps.now());
+  }
+
+  public async touchRuntimeAppHeartbeat(): Promise<AiAgentRuntimeStateSnapshot | null> {
+    const updatedRow = await this.deps.touchRuntimeAppHeartbeatRow();
+    if (!updatedRow) {
+      return null;
+    }
+    return buildAiAgentRuntimeStateSnapshot(updatedRow, this.deps.now());
   }
 
   public async executeAction(
@@ -387,8 +594,61 @@ export class AiAgentRuntimeStateService {
     const updatedRow = await this.deps.persistAction(action, {
       row,
       now: this.deps.now(),
-      cooldownMinutes: await this.deps.loadCooldownMinutes(),
     });
+    return buildAiAgentRuntimeStateSnapshot(updatedRow, this.deps.now());
+  }
+
+  public async requestManualPhaseA(
+    input: AiAgentManualPhaseARequestInput,
+  ): Promise<AiAgentRuntimeStateSnapshot | null> {
+    const updatedRow = await this.deps.persistManualPhaseARequest({
+      ...input,
+      now: this.deps.now(),
+    });
+    if (!updatedRow) {
+      return null;
+    }
+    return buildAiAgentRuntimeStateSnapshot(updatedRow, this.deps.now());
+  }
+
+  public async markManualPhaseAStarted(
+    requestId: string,
+  ): Promise<AiAgentRuntimeStateSnapshot | null> {
+    const updatedRow = await this.deps.markManualPhaseAStartedRow({
+      requestId,
+      now: this.deps.now(),
+    });
+    if (!updatedRow) {
+      return null;
+    }
+    return buildAiAgentRuntimeStateSnapshot(updatedRow, this.deps.now());
+  }
+
+  public async completeManualPhaseA(
+    requestId: string,
+  ): Promise<AiAgentRuntimeStateSnapshot | null> {
+    const updatedRow = await this.deps.completeManualPhaseARow({
+      requestId,
+      now: this.deps.now(),
+    });
+    if (!updatedRow) {
+      return null;
+    }
+    return buildAiAgentRuntimeStateSnapshot(updatedRow, this.deps.now());
+  }
+
+  public async failManualPhaseA(
+    requestId: string,
+    errorMessage: string,
+  ): Promise<AiAgentRuntimeStateSnapshot | null> {
+    const updatedRow = await this.deps.failManualPhaseARow({
+      requestId,
+      now: this.deps.now(),
+      errorMessage,
+    });
+    if (!updatedRow) {
+      return null;
+    }
     return buildAiAgentRuntimeStateSnapshot(updatedRow, this.deps.now());
   }
 

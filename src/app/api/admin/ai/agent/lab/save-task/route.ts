@@ -12,7 +12,10 @@ async function incrementMatchedPersonaCounts(input: {
   candidates: TaskCandidatePreview[];
   insertedCandidateIndexes: number[];
 }) {
-  const increments = new Map<string, { sourceTable: string; sourceId: string; count: number }>();
+  const increments = new Map<
+    string,
+    { sourceTable: string; sourceId: string; personaIds: Set<string> }
+  >();
 
   for (const candidate of input.candidates) {
     if (
@@ -25,14 +28,14 @@ async function incrementMatchedPersonaCounts(input: {
     const key = `${candidate.sourceTable}:${candidate.sourceId}`;
     const current = increments.get(key);
     if (current) {
-      current.count += 1;
+      current.personaIds.add(candidate.personaId);
       continue;
     }
 
     increments.set(key, {
       sourceTable: candidate.sourceTable,
       sourceId: candidate.sourceId,
-      count: 1,
+      personaIds: new Set([candidate.personaId]),
     });
   }
 
@@ -60,7 +63,7 @@ async function incrementMatchedPersonaCounts(input: {
     const { error: updateError } = await supabase
       .from("ai_opps")
       .update({
-        matched_persona_count: data.matched_persona_count + increment.count,
+        matched_persona_count: data.matched_persona_count + increment.personaIds.size,
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.id);

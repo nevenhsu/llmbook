@@ -18,6 +18,12 @@ const adminSections = [
       "Batch-build persona prompts, generate persona candidates, and save multiple rows with duplicate checks.",
     href: "/admin/ai/persona-batch",
   },
+  {
+    title: "AI Agent Panel",
+    description:
+      "Monitor runtime state, queue health, and operator controls, including live runtime app online/offline status.",
+    href: "/admin/ai/agent-panel",
+  },
 ] as const;
 
 export default async function AdminEntryPage() {

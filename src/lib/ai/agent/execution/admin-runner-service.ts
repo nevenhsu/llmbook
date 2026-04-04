@@ -1,5 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  AiAgentRuntimeControlService,
+  buildRuntimeControlGuard,
+  type AiAgentRuntimeControlResponse,
+} from "@/lib/ai/agent/runtime-control-service";
+import {
+  AiAgentRuntimeStateService,
+  type AiAgentRuntimeStateSnapshot,
+} from "@/lib/ai/agent/runtime-state-service";
+import {
   buildExecutionPreviewFromTask,
   type AiAgentExecutionPreview,
 } from "@/lib/ai/agent/execution/execution-preview";
@@ -7,10 +16,6 @@ import {
   AiAgentMediaJobService,
   type AiAgentMediaExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/media-job-service";
-import {
-  AiAgentOpportunityPipelineService,
-  type AiAgentOpportunityPipelineExecutedResponse,
-} from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 import {
   AiAgentMemoryCompressorService,
   type AiAgentMemoryPersistedCompressResponse,
@@ -58,9 +63,8 @@ type AdminRunnerServiceDeps = {
   executeMediaTask: (
     task: AiAgentRecentTaskSnapshot,
   ) => Promise<AiAgentMediaExecutionPersistedResult>;
-  executeIntakeInjection: (
-    kind: "notification" | "public",
-  ) => Promise<AiAgentOpportunityPipelineExecutedResponse>;
+  loadRuntimeState: () => Promise<AiAgentRuntimeStateSnapshot>;
+  requestManualPhaseA: (input: { requestedBy: string }) => Promise<AiAgentRuntimeControlResponse>;
 };
 
 export type AiAgentRunnerTarget =
@@ -112,13 +116,7 @@ export type AiAgentTextExecutionPersistedResult = {
 };
 
 export type AiAgentOrchestratorExecutedResult = {
-  injectedNotificationTasks: number;
-  injectedPublicTasks: number;
-  notificationInjection: AiAgentOpportunityPipelineExecutedResponse;
-  publicInjection: AiAgentOpportunityPipelineExecutedResponse;
-  executedTextTask: AiAgentTextExecutionPersistedResult | null;
-  executedMediaTask: AiAgentMediaExecutionPersistedResult | null;
-  compressionResult: AiAgentMemoryPersistedCompressResponse | null;
+  runtimeState: AiAgentRuntimeStateSnapshot;
 };
 
 export type AiAgentRunnerResponse =
@@ -129,7 +127,7 @@ export type AiAgentRunnerResponse =
 function getRunnerLabel(target: AiAgentRunnerTarget): string {
   switch (target) {
     case "orchestrator_once":
-      return "Run orchestrator once";
+      return "Request Phase A";
     case "text_once":
       return "Run next text task";
     case "media_once":
@@ -155,9 +153,11 @@ export class AiAgentAdminRunnerService {
       executeMediaTask:
         options?.deps?.executeMediaTask ??
         ((task) => new AiAgentMediaJobService().executeForTask(task)),
-      executeIntakeInjection:
-        options?.deps?.executeIntakeInjection ??
-        ((kind) => new AiAgentOpportunityPipelineService().executeFlow({ kind })),
+      loadRuntimeState:
+        options?.deps?.loadRuntimeState ?? (() => new AiAgentRuntimeStateService().loadSnapshot()),
+      requestManualPhaseA:
+        options?.deps?.requestManualPhaseA ??
+        ((input) => new AiAgentRuntimeControlService().execute("run_phase_a", input)),
     };
   }
 
@@ -252,6 +252,23 @@ export class AiAgentAdminRunnerService {
       };
     }
 
+    if (input.target === "orchestrator_once") {
+      const runtimeState = await this.deps.loadRuntimeState();
+      const guard = buildRuntimeControlGuard("run_phase_a", runtimeState);
+      return {
+        mode: "preview",
+        target: input.target,
+        targetLabel: getRunnerLabel(input.target),
+        available: guard.canExecute,
+        blocker: guard.reasonCode,
+        selectedTaskId: null,
+        summary: guard.canExecute
+          ? "Dispatches a manual Phase A request to the runtime app; the web server does not execute Phase A inline."
+          : guard.summary,
+        executionPreview: null,
+      };
+    }
+
     return {
       mode: "preview",
       target: input.target,
@@ -267,35 +284,37 @@ export class AiAgentAdminRunnerService {
   public async executeTarget(input: {
     target: AiAgentRunnerTarget;
     taskId?: string | null;
+    requestedBy?: string | null;
   }): Promise<AiAgentRunnerGuardedExecuteResponse | AiAgentRunnerExecutedResponse> {
     if (input.target === "orchestrator_once") {
-      const notificationInjection = await this.deps.executeIntakeInjection("notification");
-      const publicInjection = await this.deps.executeIntakeInjection("public");
-      const firstPublicTask = publicInjection.insertedTasks[0] ?? null;
-      const textResult = firstPublicTask ? await this.deps.executeTextTask(firstPublicTask) : null;
-      const mediaResult = textResult
-        ? await this.maybeExecuteMediaForTask(textResult.updatedTask)
-        : null;
-      const compressionResult = await this.deps.compressNextPersona();
+      const result = await this.deps.requestManualPhaseA({
+        requestedBy: input.requestedBy ?? "admin:orchestrator_once",
+      });
+
+      if (result.mode === "blocked_execute") {
+        return {
+          mode: "guarded_execute",
+          target: input.target,
+          targetLabel: getRunnerLabel(input.target),
+          blocker: result.reasonCode,
+          selectedTaskId: null,
+          summary: result.summary,
+          executionPreview: null,
+        };
+      }
 
       return {
         mode: "executed",
         target: input.target,
         targetLabel: getRunnerLabel(input.target),
-        selectedTaskId: textResult?.taskId ?? null,
-        summary: `Injected ${notificationInjection.insertedTasks.length} notification tasks, ${publicInjection.insertedTasks.length} public tasks, executed ${textResult ? "1 text task" : "0 text tasks"}, ${mediaResult ? "queued 1 media job" : "queued 0 media jobs"}, and ${compressionResult ? "persisted compression" : "skipped compression"}.`,
-        executionPreview: textResult ? buildExecutionPreviewFromTask(textResult.updatedTask) : null,
-        compressionResult,
-        textResult,
-        mediaResult,
+        selectedTaskId: null,
+        summary: result.summary,
+        executionPreview: null,
+        compressionResult: null,
+        textResult: null,
+        mediaResult: null,
         orchestratorResult: {
-          injectedNotificationTasks: notificationInjection.insertedTasks.length,
-          injectedPublicTasks: publicInjection.insertedTasks.length,
-          notificationInjection,
-          publicInjection,
-          executedTextTask: textResult,
-          executedMediaTask: mediaResult,
-          compressionResult,
+          runtimeState: result.runtimeState,
         },
       };
     }

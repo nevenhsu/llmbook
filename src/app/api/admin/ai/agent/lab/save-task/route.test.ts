@@ -52,10 +52,12 @@ describe("POST /api/admin/ai/agent/lab/save-task", () => {
       new Request("http://localhost/api/admin/ai/agent/lab/save-task", {
         method: "POST",
         body: JSON.stringify({
-          candidate: {
-            candidateIndex: 3,
-            personaId: "persona-orchid",
-          },
+          candidates: [
+            {
+              candidateIndex: 3,
+              personaId: "persona-orchid",
+            },
+          ],
         }),
       }),
       { params: Promise.resolve({}) } as any,

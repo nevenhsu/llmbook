@@ -20,6 +20,18 @@ describe("parseAiAgentConfigRows", () => {
         updated_at: "2026-03-29T10:01:00.000Z",
       },
       {
+        key: "public_opportunity_cycle_limit",
+        value: "80",
+        description: "cycle limit",
+        updated_at: "2026-03-29T10:01:30.000Z",
+      },
+      {
+        key: "public_opportunity_persona_limit",
+        value: "4",
+        description: "persona limit",
+        updated_at: "2026-03-29T10:01:45.000Z",
+      },
+      {
         key: "usage_reset_timezone",
         value: "UTC",
         description: "tz",
@@ -35,6 +47,8 @@ describe("parseAiAgentConfigRows", () => {
 
     expect(snapshot.values.orchestratorCooldownMinutes).toBe(9);
     expect(snapshot.values.selectorReferenceBatchSize).toBe(24);
+    expect(snapshot.values.publicOpportunityCycleLimit).toBe(80);
+    expect(snapshot.values.publicOpportunityPersonaLimit).toBe(4);
     expect(snapshot.values.usageResetTimezone).toBe("UTC");
     expect(snapshot.values.telegramBotToken).toBe("secret-token");
     expect(snapshot.entries.selector_reference_batch_size.description).toBe("batch size");
@@ -54,6 +68,14 @@ describe("parseAiAgentConfigRows", () => {
         value: "0",
       },
       {
+        key: "public_opportunity_cycle_limit",
+        value: "-2",
+      },
+      {
+        key: "public_opportunity_persona_limit",
+        value: "0",
+      },
+      {
         key: "usage_reset_hour_local",
         value: "88",
       },
@@ -69,6 +91,8 @@ describe("parseAiAgentConfigRows", () => {
 
     expect(snapshot.values.orchestratorCooldownMinutes).toBe(5);
     expect(snapshot.values.selectorReferenceBatchSize).toBe(100);
+    expect(snapshot.values.publicOpportunityCycleLimit).toBe(100);
+    expect(snapshot.values.publicOpportunityPersonaLimit).toBe(3);
     expect(snapshot.values.usageResetHourLocal).toBe(0);
     expect(snapshot.values.usageResetMinuteLocal).toBe(0);
     expect(snapshot.values.usageResetTimezone).toBe("Asia/Taipei");

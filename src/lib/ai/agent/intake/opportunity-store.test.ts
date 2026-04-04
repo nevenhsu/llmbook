@@ -85,17 +85,27 @@ describe("AiOpportunityStore", () => {
     ]);
   });
 
-  it("queries only unscored public opportunities for opportunities llm", async () => {
+  it("queries the runtime public working set using cycle limit and persona limit", async () => {
     const store = new AiOpportunityStore({
       deps: {
-        listUnscoredOpportunities: async (kind) => {
-          expect(kind).toBe("public");
+        listRuntimeOpportunityCycleRows: async (input) => {
+          expect(input).toEqual({
+            kind: "public",
+            cycleLimit: 100,
+            publicPersonaLimit: 3,
+          });
           return [buildOpp()];
         },
       },
     });
 
-    await expect(store.listUnscoredOpportunities("public")).resolves.toEqual([buildOpp()]);
+    await expect(
+      store.listRuntimeOpportunityCycleRows({
+        kind: "public",
+        cycleLimit: 100,
+        publicPersonaLimit: 3,
+      }),
+    ).resolves.toEqual([buildOpp()]);
   });
 
   it("queries only selected public opportunities below the persona cap and not yet processed for the current group", async () => {
@@ -106,6 +116,8 @@ describe("AiOpportunityStore", () => {
             candidateEpoch: 2,
             groupIndex: 1,
             batchSize: 10,
+            cycleLimit: 100,
+            publicPersonaLimit: 3,
           });
           return [
             buildOpp({
@@ -124,6 +136,8 @@ describe("AiOpportunityStore", () => {
         candidateEpoch: 2,
         groupIndex: 1,
         batchSize: 10,
+        cycleLimit: 100,
+        publicPersonaLimit: 3,
       }),
     ).resolves.toEqual([
       buildOpp({
@@ -138,35 +152,42 @@ describe("AiOpportunityStore", () => {
   it("queries only selected unprocessed notification opportunities for direct task materialization", async () => {
     const store = new AiOpportunityStore({
       deps: {
-        listSelectedNotificationOpportunities: async () => [
-          buildOpp({
-            id: "opp-n1",
-            kind: "notification",
-            source_table: "notifications",
-            source_id: "notif-1",
-            notification_id: "notif-1",
-            recipient_persona_id: "persona-1",
-            content_type: "reply",
-            probability: 0.91,
-            selected: true,
-          }),
-        ],
+        listSelectedNotificationOpportunities: async (input) => {
+          expect(input).toEqual({
+            cycleLimit: 100,
+          });
+          return [
+            buildOpp({
+              id: "opp-n1",
+              kind: "notification",
+              source_table: "notifications",
+              source_id: "notif-1",
+              notification_id: "notif-1",
+              recipient_persona_id: "persona-1",
+              content_type: "reply",
+              probability: 0.91,
+              selected: true,
+            }),
+          ];
+        },
       },
     });
 
-    await expect(store.listSelectedNotificationOpportunities()).resolves.toEqual([
-      buildOpp({
-        id: "opp-n1",
-        kind: "notification",
-        source_table: "notifications",
-        source_id: "notif-1",
-        notification_id: "notif-1",
-        recipient_persona_id: "persona-1",
-        content_type: "reply",
-        probability: 0.91,
-        selected: true,
-      }),
-    ]);
+    await expect(store.listSelectedNotificationOpportunities({ cycleLimit: 100 })).resolves.toEqual(
+      [
+        buildOpp({
+          id: "opp-n1",
+          kind: "notification",
+          source_table: "notifications",
+          source_id: "notif-1",
+          notification_id: "notif-1",
+          recipient_persona_id: "persona-1",
+          content_type: "reply",
+          probability: 0.91,
+          selected: true,
+        }),
+      ],
+    );
   });
 
   it("updates probability and derived selected state without failing when overlap writes occur", async () => {

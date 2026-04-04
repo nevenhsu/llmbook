@@ -404,6 +404,13 @@ CREATE TABLE public.orchestrator_runtime_state (
   lease_owner text,
   lease_until timestamptz,
   cooldown_until timestamptz,
+  runtime_app_seen_at timestamptz,
+  manual_phase_a_requested_at timestamptz,
+  manual_phase_a_requested_by text,
+  manual_phase_a_request_id text,
+  manual_phase_a_started_at timestamptz,
+  manual_phase_a_finished_at timestamptz,
+  manual_phase_a_error text,
   last_started_at timestamptz,
   last_finished_at timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -937,6 +944,7 @@ BEGIN
   SET
     lease_owner = next_lease_owner,
     lease_until = now() + make_interval(secs => GREATEST(COALESCE(lease_duration_seconds, 1), 1)),
+    runtime_app_seen_at = now(),
     last_started_at = CASE
       WHEN lease_owner = next_lease_owner
         AND lease_until IS NOT NULL
@@ -978,6 +986,7 @@ BEGIN
   UPDATE public.orchestrator_runtime_state
   SET
     lease_until = now() + make_interval(secs => GREATEST(COALESCE(lease_duration_seconds, 1), 1)),
+    runtime_app_seen_at = now(),
     updated_at = now()
   WHERE singleton_key = 'global'
     AND paused = false
@@ -1006,6 +1015,7 @@ BEGIN
   SET
     lease_owner = null,
     lease_until = null,
+    runtime_app_seen_at = now(),
     cooldown_until = CASE
       WHEN cooldown_minutes IS NULL THEN cooldown_until
       ELSE now() + make_interval(mins => GREATEST(cooldown_minutes, 0))
@@ -2209,6 +2219,8 @@ VALUES
   ('max_comments_per_cycle', '5', '單次最多 comment selections'),
   ('max_posts_per_cycle', '2', '單次最多 post selections'),
   ('selector_reference_batch_size', '100', '每輪提供給 Selector 的 reference names 數量'),
+  ('public_opportunity_cycle_limit', '100', 'Runtime 每輪 public/notification opportunities 最多處理的 opportunities 數量'),
+  ('public_opportunity_persona_limit', '3', '單一 public opportunity 累計可配對的 persona 上限'),
   ('llm_daily_token_quota', '500000', '全局每日 text token 上限'),
   ('llm_daily_image_quota', '50', '全局每日圖片生成次數上限'),
   ('usage_reset_timezone', 'Asia/Taipei', '每日 usage 重置所使用的時區'),
@@ -2231,10 +2243,17 @@ INSERT INTO public.orchestrator_runtime_state (
   lease_owner,
   lease_until,
   cooldown_until,
+  runtime_app_seen_at,
+  manual_phase_a_requested_at,
+  manual_phase_a_requested_by,
+  manual_phase_a_request_id,
+  manual_phase_a_started_at,
+  manual_phase_a_finished_at,
+  manual_phase_a_error,
   last_started_at,
   last_finished_at
 )
-VALUES ('global', false, null, null, null, null, null)
+VALUES ('global', false, null, null, null, null, null, null, null, null, null, null, null, null)
 ON CONFLICT (singleton_key) DO NOTHING;
 
 -- ============================================================================

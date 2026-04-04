@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AiAgentAdminRunnerService,
   type AiAgentRunnerExecutedResponse,
@@ -6,6 +6,14 @@ import {
   type AiAgentRunnerPreviewResponse,
 } from "@/lib/ai/agent/execution/admin-runner-service";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
+
+vi.mock("@/lib/ai/agent/execution/media-job-service", () => ({
+  AiAgentMediaJobService: class {
+    executeForTask() {
+      throw new Error("media job service should be mocked in this test");
+    }
+  },
+}));
 
 describe("AiAgentAdminRunnerService", () => {
   it("returns shared execution preview artifacts for text_once preview", async () => {
@@ -226,156 +234,123 @@ describe("AiAgentAdminRunnerService", () => {
     });
   });
 
-  it("executes orchestrator_once by chaining injection, public text execution, media dispatch, and compression", async () => {
-    const publicTask = {
-      ...buildMockAiAgentOverviewSnapshot().recentTasks[1],
-      id: "task-public-1",
-      dispatchKind: "public" as const,
-      sourceTable: "posts" as const,
-      sourceId: "post-source-1",
-      taskType: "post",
-      payload: {
-        contentType: "post",
-        source: "public-post",
-      },
-    };
+  it("previews orchestrator_once as a runtime Phase A request", async () => {
     const service = new AiAgentAdminRunnerService({
       deps: {
-        executeIntakeInjection: async (kind) => ({
-          mode: "executed",
-          kind,
-          message: `Inserted ${kind} tasks`,
-          injectionPreview: {} as any,
-          insertedTasks: kind === "public" ? [publicTask] : [],
+        loadRuntimeState: async () => ({
+          available: true,
+          statusLabel: "Ready",
+          detail: "Runtime state row is available.",
+          paused: false,
+          publicCandidateGroupIndex: 0,
+          publicCandidateEpoch: 0,
+          leaseOwner: null,
+          leaseUntil: null,
+          cooldownUntil: null,
+          runtimeAppSeenAt: "2026-03-30T01:59:45.000Z",
+          runtimeAppOnline: true,
+          manualPhaseARequestPending: false,
+          manualPhaseARequestedAt: null,
+          manualPhaseARequestedBy: null,
+          manualPhaseARequestId: null,
+          manualPhaseAStartedAt: null,
+          manualPhaseAFinishedAt: null,
+          manualPhaseAError: null,
+          lastStartedAt: "2026-03-30T01:50:00.000Z",
+          lastFinishedAt: "2026-03-30T01:55:00.000Z",
         }),
-        executeTextTask: async () => ({
-          taskId: publicTask.id,
-          persistedTable: "posts",
-          persistedId: "post-new-2",
-          resultType: "post",
-          updatedTask: {
-            ...publicTask,
-            status: "DONE",
-            resultId: "post-new-2",
-            resultType: "post",
-            completedAt: "2026-03-30T01:00:00.000Z",
+      },
+    });
+
+    const result = await service.previewTarget({
+      target: "orchestrator_once",
+    });
+
+    expect(result).toEqual<AiAgentRunnerPreviewResponse>({
+      mode: "preview",
+      target: "orchestrator_once",
+      targetLabel: "Request Phase A",
+      available: true,
+      blocker: null,
+      selectedTaskId: null,
+      summary:
+        "Dispatches a manual Phase A request to the runtime app; the web server does not execute Phase A inline.",
+      executionPreview: null,
+    });
+  });
+
+  it("executes orchestrator_once by dispatching a manual Phase A request", async () => {
+    const service = new AiAgentAdminRunnerService({
+      deps: {
+        requestManualPhaseA: async () => ({
+          mode: "executed",
+          action: "run_phase_a",
+          actionLabel: "Run Phase A",
+          summary: "Manual Phase A request accepted. Runtime app will execute it next.",
+          runtimeState: {
+            available: true,
+            statusLabel: "Manual Phase A Pending",
+            detail: "Manual Phase A request is pending from admin-user.",
+            paused: false,
+            publicCandidateGroupIndex: 0,
+            publicCandidateEpoch: 0,
+            leaseOwner: null,
+            leaseUntil: null,
+            cooldownUntil: "2026-03-30T02:05:00.000Z",
+            runtimeAppSeenAt: "2026-03-30T02:00:00.000Z",
+            runtimeAppOnline: true,
+            manualPhaseARequestPending: true,
+            manualPhaseARequestedAt: "2026-03-30T02:00:00.000Z",
+            manualPhaseARequestedBy: "admin-user",
+            manualPhaseARequestId: "manual-request-1",
+            manualPhaseAStartedAt: null,
+            manualPhaseAFinishedAt: null,
+            manualPhaseAError: null,
+            lastStartedAt: "2026-03-30T01:55:00.000Z",
+            lastFinishedAt: "2026-03-30T02:00:00.000Z",
           },
         }),
-        executeMediaTask: async () => ({
-          taskId: publicTask.id,
-          mediaId: "media-orch-1",
-          ownerTable: "posts" as const,
-          ownerId: "post-new-2",
-          status: "DONE",
-          imagePrompt: "An impossible deep-sea deity",
-          imageAlt: "Deep-sea deity",
-          url: "https://cdn.test/media-orch-1.png",
-          mimeType: "image/png",
-          width: 1024,
-          height: 1024,
-          sizeBytes: 2048,
-          retryCount: 0,
-          maxRetries: 3,
-          nextRetryAt: null,
-          lastError: null,
-        }),
-        compressNextPersona: async () => null,
       },
     });
 
     const result = await service.executeTarget({
       target: "orchestrator_once",
+      requestedBy: "admin-user",
     });
 
     expect(result).toEqual<AiAgentRunnerExecutedResponse>({
       mode: "executed",
       target: "orchestrator_once",
-      targetLabel: "Run orchestrator once",
-      selectedTaskId: "task-public-1",
-      summary:
-        "Injected 0 notification tasks, 1 public tasks, executed 1 text task, queued 1 media job, and skipped compression.",
-      executionPreview: expect.any(Object),
+      targetLabel: "Request Phase A",
+      selectedTaskId: null,
+      summary: "Manual Phase A request accepted. Runtime app will execute it next.",
+      executionPreview: null,
       compressionResult: null,
-      textResult: {
-        taskId: "task-public-1",
-        persistedTable: "posts",
-        persistedId: "post-new-2",
-        resultType: "post",
-        updatedTask: {
-          ...publicTask,
-          status: "DONE",
-          resultId: "post-new-2",
-          resultType: "post",
-          completedAt: "2026-03-30T01:00:00.000Z",
-        },
-      },
-      mediaResult: {
-        taskId: "task-public-1",
-        mediaId: "media-orch-1",
-        ownerTable: "posts",
-        ownerId: "post-new-2",
-        status: "DONE",
-        imagePrompt: "An impossible deep-sea deity",
-        imageAlt: "Deep-sea deity",
-        url: "https://cdn.test/media-orch-1.png",
-        mimeType: "image/png",
-        width: 1024,
-        height: 1024,
-        sizeBytes: 2048,
-        retryCount: 0,
-        maxRetries: 3,
-        nextRetryAt: null,
-        lastError: null,
-      },
+      textResult: null,
+      mediaResult: null,
       orchestratorResult: {
-        injectedNotificationTasks: 0,
-        injectedPublicTasks: 1,
-        notificationInjection: {
-          mode: "executed",
-          kind: "notification",
-          message: "Inserted notification tasks",
-          injectionPreview: {} as any,
-          insertedTasks: [],
+        runtimeState: {
+          available: true,
+          statusLabel: "Manual Phase A Pending",
+          detail: "Manual Phase A request is pending from admin-user.",
+          paused: false,
+          publicCandidateGroupIndex: 0,
+          publicCandidateEpoch: 0,
+          leaseOwner: null,
+          leaseUntil: null,
+          cooldownUntil: "2026-03-30T02:05:00.000Z",
+          runtimeAppSeenAt: "2026-03-30T02:00:00.000Z",
+          runtimeAppOnline: true,
+          manualPhaseARequestPending: true,
+          manualPhaseARequestedAt: "2026-03-30T02:00:00.000Z",
+          manualPhaseARequestedBy: "admin-user",
+          manualPhaseARequestId: "manual-request-1",
+          manualPhaseAStartedAt: null,
+          manualPhaseAFinishedAt: null,
+          manualPhaseAError: null,
+          lastStartedAt: "2026-03-30T01:55:00.000Z",
+          lastFinishedAt: "2026-03-30T02:00:00.000Z",
         },
-        publicInjection: {
-          mode: "executed",
-          kind: "public",
-          message: "Inserted public tasks",
-          injectionPreview: {} as any,
-          insertedTasks: [publicTask],
-        },
-        executedTextTask: {
-          taskId: "task-public-1",
-          persistedTable: "posts",
-          persistedId: "post-new-2",
-          resultType: "post",
-          updatedTask: {
-            ...publicTask,
-            status: "DONE",
-            resultId: "post-new-2",
-            resultType: "post",
-            completedAt: "2026-03-30T01:00:00.000Z",
-          },
-        },
-        executedMediaTask: {
-          taskId: "task-public-1",
-          mediaId: "media-orch-1",
-          ownerTable: "posts",
-          ownerId: "post-new-2",
-          status: "DONE",
-          imagePrompt: "An impossible deep-sea deity",
-          imageAlt: "Deep-sea deity",
-          url: "https://cdn.test/media-orch-1.png",
-          mimeType: "image/png",
-          width: 1024,
-          height: 1024,
-          sizeBytes: 2048,
-          retryCount: 0,
-          maxRetries: 3,
-          nextRetryAt: null,
-          lastError: null,
-        },
-        compressionResult: null,
       },
     });
   });

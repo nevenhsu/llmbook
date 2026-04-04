@@ -5,6 +5,8 @@ export const AI_AGENT_CONFIG_KEYS = [
   "max_comments_per_cycle",
   "max_posts_per_cycle",
   "selector_reference_batch_size",
+  "public_opportunity_cycle_limit",
+  "public_opportunity_persona_limit",
   "llm_daily_token_quota",
   "llm_daily_image_quota",
   "usage_reset_timezone",
@@ -39,6 +41,8 @@ export type AiAgentConfig = {
   maxCommentsPerCycle: number;
   maxPostsPerCycle: number;
   selectorReferenceBatchSize: number;
+  publicOpportunityCycleLimit: number;
+  publicOpportunityPersonaLimit: number;
   llmDailyTokenQuota: number;
   llmDailyImageQuota: number;
   usageResetTimezone: string;
@@ -76,6 +80,14 @@ const DEFAULT_AI_AGENT_CONFIG_ENTRIES: Record<
   selector_reference_batch_size: {
     value: "100",
     description: "每輪提供給 Selector 的 reference names 數量",
+  },
+  public_opportunity_cycle_limit: {
+    value: "100",
+    description: "Runtime 每輪 public/notification opportunities 最多處理的 opportunities 數量",
+  },
+  public_opportunity_persona_limit: {
+    value: "3",
+    description: "單一 public opportunity 累計可配對的 persona 上限",
   },
   llm_daily_token_quota: {
     value: "500000",
@@ -214,6 +226,8 @@ export function parseAiAgentConfigRows(rows: AiAgentConfigRow[]): AiAgentConfigS
     max_comments_per_cycle: buildEntry("max_comments_per_cycle", rowsByKey),
     max_posts_per_cycle: buildEntry("max_posts_per_cycle", rowsByKey),
     selector_reference_batch_size: buildEntry("selector_reference_batch_size", rowsByKey),
+    public_opportunity_cycle_limit: buildEntry("public_opportunity_cycle_limit", rowsByKey),
+    public_opportunity_persona_limit: buildEntry("public_opportunity_persona_limit", rowsByKey),
     llm_daily_token_quota: buildEntry("llm_daily_token_quota", rowsByKey),
     llm_daily_image_quota: buildEntry("llm_daily_image_quota", rowsByKey),
     usage_reset_timezone: buildEntry("usage_reset_timezone", rowsByKey),
@@ -240,6 +254,14 @@ export function parseAiAgentConfigRows(rows: AiAgentConfigRow[]): AiAgentConfigS
       maxCommentsPerCycle: readNonNegativeInt(entries.max_comments_per_cycle.value, 5),
       maxPostsPerCycle: readNonNegativeInt(entries.max_posts_per_cycle.value, 2),
       selectorReferenceBatchSize: readPositiveInt(entries.selector_reference_batch_size.value, 100),
+      publicOpportunityCycleLimit: readPositiveInt(
+        entries.public_opportunity_cycle_limit.value,
+        100,
+      ),
+      publicOpportunityPersonaLimit: readPositiveInt(
+        entries.public_opportunity_persona_limit.value,
+        3,
+      ),
       llmDailyTokenQuota: readNonNegativeInt(entries.llm_daily_token_quota.value, 500_000),
       llmDailyImageQuota: readNonNegativeInt(entries.llm_daily_image_quota.value, 50),
       usageResetTimezone: readText(entries.usage_reset_timezone.value, "Asia/Taipei"),

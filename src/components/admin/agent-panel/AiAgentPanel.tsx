@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SectionCard } from "@/components/admin/control-plane/SectionCard";
 import { PreviewPanel } from "@/components/admin/control-plane/PreviewPanel";
 import { ArtifactDetailModal } from "@/components/ui/ArtifactDetailModal";
@@ -122,6 +122,13 @@ function formatRuntimePaused(value: boolean | null): string {
   return value ? "Yes" : "No";
 }
 
+function formatRuntimeAppOnline(value: boolean | null): string {
+  if (value == null) {
+    return "Unknown";
+  }
+  return value ? "Online" : "Offline";
+}
+
 function getNestedRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -145,7 +152,7 @@ function describeRunnerTarget(target: AiAgentRunnerTarget): string {
     case "compress_once":
       return "Preview and execute now reuse the shared memory compression path.";
     case "orchestrator_once":
-      return "Preview and execute now run the smallest live orchestrator cycle available in this repo slice, including optional media dispatch after text persistence.";
+      return "Preview and execute now only dispatch a manual Phase A request to the runtime app; the web server does not execute intake inline.";
   }
 }
 
@@ -184,6 +191,8 @@ export default function AiAgentPanel({
   initialSnapshot,
   runtimePreviews,
   runtimeMemoryPreviews,
+  enableRuntimeStatePolling = false,
+  runtimeStatePollingIntervalMs = 5_000,
 }: {
   initialSnapshot: AiAgentOverviewSnapshot;
   runtimePreviews?: {
@@ -194,6 +203,8 @@ export default function AiAgentPanel({
     personas: AiAgentMemoryPersonaOption[];
     previews: AiAgentMemoryPersonaPreview[];
   } | null;
+  enableRuntimeStatePolling?: boolean;
+  runtimeStatePollingIntervalMs?: number;
 }) {
   const [activeSection, setActiveSection] = useState<AiAgentPanelSectionId>("overview");
   const [recentTasks, setRecentTasks] = useState(initialSnapshot.recentTasks);
@@ -293,7 +304,7 @@ export default function AiAgentPanel({
   });
   const pauseRuntimeGuard = buildRuntimeControlGuard("pause", runtimeState);
   const resumeRuntimeGuard = buildRuntimeControlGuard("resume", runtimeState);
-  const runCycleRuntimeGuard = buildRuntimeControlGuard("run_cycle", runtimeState);
+  const runPhaseARuntimeGuard = buildRuntimeControlGuard("run_phase_a", runtimeState);
   const selectedTaskQueueActions = selectedTask ? buildQueueActionPreviewSet(selectedTask) : null;
   const activeMemoryPreview =
     memoryPreviewSet?.previews.find(
@@ -359,6 +370,44 @@ export default function AiAgentPanel({
       ? (runnerResponse.compressionResult?.verificationTrace ?? null)
       : null;
 
+  useEffect(() => {
+    if (!enableRuntimeStatePolling) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollRuntimeState = async () => {
+      try {
+        const response = await apiFetchJson<{ runtimeState: typeof runtimeState }>(
+          "/api/admin/ai/agent/runtime/state",
+          {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+            },
+          },
+        );
+
+        if (!cancelled) {
+          setRuntimeState(response.runtimeState);
+        }
+      } catch {
+        // Ignore observer-only polling failures and keep the last known state.
+      }
+    };
+
+    void pollRuntimeState();
+    const interval = window.setInterval(() => {
+      void pollRuntimeState();
+    }, runtimeStatePollingIntervalMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [enableRuntimeStatePolling, runtimeStatePollingIntervalMs]);
+
   function mergeMemoryPreview(personaId: string, patch: Partial<AiAgentMemoryPersonaPreview>) {
     setMemoryPreviewSet((current) => {
       if (!current) {
@@ -398,11 +447,7 @@ export default function AiAgentPanel({
         );
       }
       if (response.mode === "executed") {
-        const runnerTasks = [
-          ...(response.textResult ? [response.textResult.updatedTask] : []),
-          ...(response.orchestratorResult?.notificationInjection.insertedTasks ?? []),
-          ...(response.orchestratorResult?.publicInjection.insertedTasks ?? []),
-        ];
+        const runnerTasks = [...(response.textResult ? [response.textResult.updatedTask] : [])];
 
         if (runnerTasks.length > 0) {
           const mergedTasks = mergeRecentTasksById(recentTasks, runnerTasks).slice(0, 12);
@@ -427,16 +472,6 @@ export default function AiAgentPanel({
         if (response.textResult) {
           setSelectedTaskId(response.textResult.updatedTask.id);
           setSelectedMemoryPersonaId(response.textResult.updatedTask.personaId);
-        } else if (response.orchestratorResult?.publicInjection.insertedTasks[0]?.id) {
-          setSelectedTaskId(response.orchestratorResult.publicInjection.insertedTasks[0].id);
-          setSelectedMemoryPersonaId(
-            response.orchestratorResult.publicInjection.insertedTasks[0].personaId,
-          );
-        } else if (response.orchestratorResult?.notificationInjection.insertedTasks[0]?.id) {
-          setSelectedTaskId(response.orchestratorResult.notificationInjection.insertedTasks[0].id);
-          setSelectedMemoryPersonaId(
-            response.orchestratorResult.notificationInjection.insertedTasks[0].personaId,
-          );
         }
       }
     } catch (error) {
@@ -593,7 +628,7 @@ export default function AiAgentPanel({
     }
   }
 
-  async function handleRuntimeControl(action: "pause" | "resume" | "run_cycle") {
+  async function handleRuntimeControl(action: "pause" | "resume" | "run_phase_a") {
     setRuntimeControlPending(action);
     setRuntimeControlResponse(null);
     setRuntimeControlError(null);
@@ -1146,6 +1181,14 @@ export default function AiAgentPanel({
                 </div>
                 <div>
                   <dt className="text-base-content/50 text-xs tracking-wide uppercase">
+                    Runtime App
+                  </dt>
+                  <dd className="text-base-content mt-1 text-sm font-medium">
+                    {formatRuntimeAppOnline(runtimeState.runtimeAppOnline)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-base-content/50 text-xs tracking-wide uppercase">
                     Lease Owner
                   </dt>
                   <dd className="text-base-content mt-1 text-sm font-medium">
@@ -1166,6 +1209,14 @@ export default function AiAgentPanel({
                   </dt>
                   <dd className="text-base-content mt-1 text-sm font-medium">
                     {formatOptionalDateTime(runtimeState.cooldownUntil)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-base-content/50 text-xs tracking-wide uppercase">
+                    App Seen At
+                  </dt>
+                  <dd className="text-base-content mt-1 text-sm font-medium">
+                    {formatOptionalDateTime(runtimeState.runtimeAppSeenAt)}
                   </dd>
                 </div>
                 <div>
@@ -1219,20 +1270,20 @@ export default function AiAgentPanel({
                   className="btn btn-sm btn-neutral"
                   disabled={
                     runtimeControlPending !== null ||
-                    (runCycleRuntimeGuard.reasonCode !== null &&
-                      runCycleRuntimeGuard.reasonCode !== "runtime_state_unavailable")
+                    (runPhaseARuntimeGuard.reasonCode !== null &&
+                      runPhaseARuntimeGuard.reasonCode !== "runtime_state_unavailable")
                   }
                   onClick={() => {
-                    void handleRuntimeControl("run_cycle");
+                    void handleRuntimeControl("run_phase_a");
                   }}
                 >
-                  {runtimeControlPending === "run_cycle" ? "Running..." : "Force run cycle"}
+                  {runtimeControlPending === "run_phase_a" ? "Running..." : "Run Phase A"}
                 </button>
               </div>
               <div className="text-base-content/70 space-y-2 pt-1 text-xs">
                 <p>{pauseRuntimeGuard.summary}</p>
                 <p>{resumeRuntimeGuard.summary}</p>
-                <p>{runCycleRuntimeGuard.summary}</p>
+                <p>{runPhaseARuntimeGuard.summary}</p>
               </div>
             </div>
           </SectionCard>
@@ -1828,7 +1879,7 @@ export default function AiAgentPanel({
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { label: "Run orchestrator once", target: "orchestrator_once" as const },
+              { label: "Request Phase A", target: "orchestrator_once" as const },
               { label: "Run next text task", target: "text_once" as const },
               { label: "Run next media task", target: "media_once" as const },
               { label: "Run next compression batch", target: "compress_once" as const },

@@ -25,6 +25,18 @@
         "description": "batch size",
         "updatedAt": null
       },
+      "public_opportunity_cycle_limit": {
+        "key": "public_opportunity_cycle_limit",
+        "value": "100",
+        "description": "cycle limit",
+        "updatedAt": null
+      },
+      "public_opportunity_persona_limit": {
+        "key": "public_opportunity_persona_limit",
+        "value": "3",
+        "description": "persona limit",
+        "updatedAt": null
+      },
       "llm_daily_token_quota": {
         "key": "llm_daily_token_quota",
         "value": "500000",
@@ -97,6 +109,8 @@
       "maxCommentsPerCycle": 5,
       "maxPostsPerCycle": 2,
       "selectorReferenceBatchSize": 100,
+      "publicOpportunityCycleLimit": 100,
+      "publicOpportunityPersonaLimit": 3,
       "llmDailyTokenQuota": 500000,
       "llmDailyImageQuota": 50,
       "usageResetTimezone": "Asia/Taipei",
@@ -309,9 +323,20 @@
     "statusLabel": "Unavailable",
     "detail": "orchestrator_runtime_state is not implemented yet in this repo slice.",
     "paused": null,
+    "publicCandidateGroupIndex": null,
+    "publicCandidateEpoch": null,
     "leaseOwner": null,
     "leaseUntil": null,
     "cooldownUntil": null,
+    "runtimeAppSeenAt": null,
+    "runtimeAppOnline": null,
+    "manualPhaseARequestPending": null,
+    "manualPhaseARequestedAt": null,
+    "manualPhaseARequestedBy": null,
+    "manualPhaseARequestId": null,
+    "manualPhaseAStartedAt": null,
+    "manualPhaseAFinishedAt": null,
+    "manualPhaseAError": null,
     "lastStartedAt": null,
     "lastFinishedAt": null
   }

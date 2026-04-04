@@ -28,6 +28,8 @@ export type AiAgentOpportunityPipelineExecutedResponse = AiAgentTaskInjectionExe
 
 type RuntimeConfigSnapshot = {
   selectorReferenceBatchSize: number;
+  publicOpportunityCycleLimit: number;
+  publicOpportunityPersonaLimit: number;
   postOpportunityCooldownMinutes: number;
   commentOpportunityCooldownMinutes: number;
 };
@@ -58,7 +60,6 @@ type PersonaIdentity = {
 
 const OPPORTUNITY_SCORE_BATCH_SIZE = 10;
 const PUBLIC_CANDIDATE_BATCH_SIZE = 10;
-const MAX_PUBLIC_SCORE_ROWS_PER_SYNC = 100;
 
 type PipelineTaskCandidate = {
   candidateIndex: number;
@@ -93,18 +94,24 @@ type OpportunityPipelineServiceDeps = {
   loadRuntimeConfig: () => Promise<RuntimeConfigSnapshot>;
   ingestOpportunities: (rows: AiOppUpsertInput[]) => Promise<number>;
   listOpportunitiesByIds: (opportunityIds: string[]) => Promise<AiOppRow[]>;
-  listUnscoredOpportunities: (kind: AiAgentRuntimeIntakeKind) => Promise<AiOppRow[]>;
+  listRuntimeOpportunityCycleRows: (input: {
+    kind: AiAgentRuntimeIntakeKind;
+    cycleLimit: number;
+    publicPersonaLimit: number;
+  }) => Promise<AiOppRow[]>;
   scoreOpportunityProbabilities: (input: {
     kind: AiAgentRuntimeIntakeKind;
     rows: AiOppRow[];
   }) => Promise<AiOppProbabilityUpdateInput[]>;
   updateOpportunityProbabilities: (rows: AiOppProbabilityUpdateInput[]) => Promise<void>;
   loadPersonaActivity: (personaIds: string[]) => Promise<Record<string, boolean>>;
-  listSelectedNotificationOpportunities: () => Promise<AiOppRow[]>;
+  listSelectedNotificationOpportunities: (input: { cycleLimit: number }) => Promise<AiOppRow[]>;
   listEligiblePublicCandidateOpportunities: (input: {
     candidateEpoch: number;
     groupIndex: number;
     batchSize: number;
+    cycleLimit: number;
+    publicPersonaLimit: number;
   }) => Promise<AiOppRow[]>;
   listResolvedPersonaIdsByOpportunityIds: (
     opportunityIds: string[],
@@ -425,7 +432,6 @@ type PublicSelectionResult = {
   oppId: string;
   selectedSpeakers: Array<{ name: string; probability: number }>;
   resolvedPersonas: Array<ResolvedSpeakerPersona & { active: true }>;
-  matchedPersonaCount: number;
 };
 
 function listAvailableFallbackPersonas(input: {
@@ -522,7 +528,6 @@ function buildPublicSelectionResults(input: {
       oppId: row.id,
       selectedSpeakers,
       resolvedPersonas,
-      matchedPersonaCount: existingPersonaIds.size + selectedPersonaIds.size,
     };
   });
 }
@@ -580,6 +585,78 @@ function buildPublicTaskCandidates(input: {
   return candidates;
 }
 
+function buildTaskOutcomes(input: {
+  taskResponse: AiAgentOpportunityPipelineExecutedResponse;
+  taskCandidates: PipelineTaskCandidate[];
+}): AdminPublicCandidateTaskOutcome[] {
+  const insertedTaskById = new Map(
+    input.taskResponse.insertedTasks.map((task) => [task.id, task] as const),
+  );
+  const candidateByIndex = new Map(
+    input.taskCandidates.map((candidate) => [candidate.candidateIndex, candidate] as const),
+  );
+
+  return input.taskResponse.injectionPreview.results.flatMap((result) => {
+    const candidate = candidateByIndex.get(result.candidateIndex);
+    if (!candidate) {
+      return [];
+    }
+
+    const insertedTask = result.taskId ? insertedTaskById.get(result.taskId) : null;
+    return [
+      {
+        opportunityId: candidate.opportunityKey,
+        personaId: candidate.personaId,
+        inserted: result.inserted,
+        taskId: result.taskId,
+        skipReason: result.skipReason,
+        status: insertedTask?.status ?? (result.inserted ? "PENDING" : "FAILED"),
+        errorMessage: insertedTask?.errorMessage ?? result.skipReason,
+      } satisfies AdminPublicCandidateTaskOutcome,
+    ];
+  });
+}
+
+function buildInsertedPersonaIdsByOpportunityId(input: {
+  taskOutcomes: AdminPublicCandidateTaskOutcome[];
+}): Record<string, string[]> {
+  const personaIdsByOpportunityId: Record<string, Set<string>> = {};
+
+  for (const outcome of input.taskOutcomes) {
+    if (!outcome.inserted) {
+      continue;
+    }
+    const bucket = personaIdsByOpportunityId[outcome.opportunityId] ?? new Set<string>();
+    bucket.add(outcome.personaId);
+    personaIdsByOpportunityId[outcome.opportunityId] = bucket;
+  }
+
+  return Object.fromEntries(
+    Object.entries(personaIdsByOpportunityId).map(([opportunityId, personaIds]) => [
+      opportunityId,
+      Array.from(personaIds),
+    ]),
+  );
+}
+
+function buildMatchedPersonaCountUpdates(input: {
+  selections: PublicSelectionResult[];
+  existingPersonaIdsByOppId: Record<string, string[]>;
+  insertedPersonaIdsByOpportunityId: Record<string, string[]>;
+}) {
+  return input.selections.map((selection) => {
+    const existingPersonaIds = new Set(input.existingPersonaIdsByOppId[selection.oppId] ?? []);
+    const insertedPersonaIds = input.insertedPersonaIdsByOpportunityId[selection.oppId] ?? [];
+    for (const personaId of insertedPersonaIds) {
+      existingPersonaIds.add(personaId);
+    }
+    return {
+      opportunityId: selection.oppId,
+      matchedPersonaCount: existingPersonaIds.size,
+    };
+  });
+}
+
 export class AiAgentOpportunityPipelineService {
   private readonly deps: OpportunityPipelineServiceDeps;
 
@@ -598,6 +675,8 @@ export class AiAgentOpportunityPipelineService {
           const values = (await loadAiAgentConfig()).values;
           return {
             selectorReferenceBatchSize: values.selectorReferenceBatchSize,
+            publicOpportunityCycleLimit: values.publicOpportunityCycleLimit,
+            publicOpportunityPersonaLimit: values.publicOpportunityPersonaLimit,
             postOpportunityCooldownMinutes: values.postOpportunityCooldownMinutes,
             commentOpportunityCooldownMinutes: values.commentOpportunityCooldownMinutes,
           };
@@ -605,9 +684,9 @@ export class AiAgentOpportunityPipelineService {
       ingestOpportunities:
         options?.deps?.ingestOpportunities ??
         ((rows) => opportunityStore.ingestOpportunities(rows)),
-      listUnscoredOpportunities:
-        options?.deps?.listUnscoredOpportunities ??
-        ((kind) => opportunityStore.listUnscoredOpportunities(kind)),
+      listRuntimeOpportunityCycleRows:
+        options?.deps?.listRuntimeOpportunityCycleRows ??
+        ((input) => opportunityStore.listRuntimeOpportunityCycleRows(input)),
       listOpportunitiesByIds:
         options?.deps?.listOpportunitiesByIds ??
         ((opportunityIds) => opportunityStore.listOpportunitiesByIds(opportunityIds)),
@@ -640,7 +719,7 @@ export class AiAgentOpportunityPipelineService {
         }),
       listSelectedNotificationOpportunities:
         options?.deps?.listSelectedNotificationOpportunities ??
-        (() => opportunityStore.listSelectedNotificationOpportunities()),
+        ((input) => opportunityStore.listSelectedNotificationOpportunities(input)),
       listEligiblePublicCandidateOpportunities:
         options?.deps?.listEligiblePublicCandidateOpportunities ??
         ((input) => opportunityStore.listEligiblePublicCandidateOpportunities(input)),
@@ -852,13 +931,19 @@ export class AiAgentOpportunityPipelineService {
   private async ingestAndScore(input: {
     kind: AiAgentRuntimeIntakeKind;
     snapshot: AiAgentRuntimeSourceSnapshot;
+    config: RuntimeConfigSnapshot;
   }): Promise<void> {
     const upsertRows = mapSnapshotToOppRows(input.snapshot);
     if (upsertRows.length > 0) {
       await this.deps.ingestOpportunities(upsertRows);
     }
 
-    const unscoredRows = await this.deps.listUnscoredOpportunities(input.kind);
+    const cycleRows = await this.deps.listRuntimeOpportunityCycleRows({
+      kind: input.kind,
+      cycleLimit: input.config.publicOpportunityCycleLimit,
+      publicPersonaLimit: input.config.publicOpportunityPersonaLimit,
+    });
+    const unscoredRows = cycleRows.filter((row) => row.probability === null);
     if (unscoredRows.length === 0) {
       return;
     }
@@ -901,12 +986,7 @@ export class AiAgentOpportunityPipelineService {
       return;
     }
 
-    const scopedRows =
-      input.kind === "public"
-        ? unscoredRows.slice(0, MAX_PUBLIC_SCORE_ROWS_PER_SYNC)
-        : unscoredRows;
-
-    for (const rows of chunkRows(scopedRows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
+    for (const rows of chunkRows(unscoredRows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
       const scoredRows = await this.deps.scoreOpportunityProbabilities({
         kind: input.kind,
         rows,
@@ -928,7 +1008,13 @@ export class AiAgentOpportunityPipelineService {
       return;
     }
 
-    const unscoredRows = await this.deps.listUnscoredOpportunities("notification");
+    const config = await this.deps.loadRuntimeConfig();
+    const cycleRows = await this.deps.listRuntimeOpportunityCycleRows({
+      kind: "notification",
+      cycleLimit: config.publicOpportunityCycleLimit,
+      publicPersonaLimit: config.publicOpportunityPersonaLimit,
+    });
+    const unscoredRows = cycleRows.filter((row) => row.probability === null);
     if (unscoredRows.length === 0) {
       return;
     }
@@ -958,17 +1044,23 @@ export class AiAgentOpportunityPipelineService {
   }
 
   public async syncOpportunities(input: { kind: AiAgentRuntimeIntakeKind }): Promise<void> {
-    const runtimePreviews = await this.deps.loadRuntimePreviewSet();
+    const [runtimePreviews, config] = await Promise.all([
+      this.deps.loadRuntimePreviewSet(),
+      this.deps.loadRuntimeConfig(),
+    ]);
     const snapshot =
       input.kind === "public" ? runtimePreviews.public : runtimePreviews.notification;
     await this.ingestAndScore({
       kind: input.kind,
       snapshot,
+      config,
     });
   }
 
-  private async executeNotificationFlow() {
-    const selectedRows = await this.deps.listSelectedNotificationOpportunities();
+  private async executeNotificationFlow(input: { config: RuntimeConfigSnapshot }) {
+    const selectedRows = await this.deps.listSelectedNotificationOpportunities({
+      cycleLimit: input.config.publicOpportunityCycleLimit,
+    });
     if (selectedRows.length === 0) {
       return buildEmptyExecutedResponse("notification");
     }
@@ -1072,11 +1164,13 @@ export class AiAgentOpportunityPipelineService {
       return;
     }
 
-    const scoredRows = await this.deps.scoreOpportunityProbabilities({
-      kind: input.kind,
-      rows,
-    });
-    await this.deps.updateOpportunityProbabilities(scoredRows);
+    for (const batchRows of chunkRows(rows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
+      const scoredRows = await this.deps.scoreOpportunityProbabilities({
+        kind: input.kind,
+        rows: batchRows,
+      });
+      await this.deps.updateOpportunityProbabilities(scoredRows);
+    }
   }
 
   public async executeAdminPublicCandidateBatch(input: {
@@ -1090,7 +1184,10 @@ export class AiAgentOpportunityPipelineService {
       this.deps.listOpportunitiesByIds(input.opportunityIds),
     ]);
     const eligibleRows = rows.filter(
-      (row) => row.kind === "public" && row.selected === true && row.matched_persona_count < 3,
+      (row) =>
+        row.kind === "public" &&
+        row.selected === true &&
+        row.matched_persona_count < config.publicOpportunityPersonaLimit,
     );
     if (eligibleRows.length === 0) {
       return {
@@ -1142,21 +1239,6 @@ export class AiAgentOpportunityPipelineService {
       now: this.deps.now(),
     });
 
-    await this.deps.recordPublicCandidateResults({
-      groups: selections.map((selection) => ({
-        oppId: selection.oppId,
-        candidateEpoch: input.candidateEpoch ?? 0,
-        groupIndex: referenceBatch.effectiveGroupIndex,
-        batchSize: referenceBatch.batchSize,
-        selectedSpeakers: selection.selectedSpeakers,
-        resolvedPersonaIds: selection.resolvedPersonas.map((persona) => persona.personaId),
-      })),
-      matchedPersonaCounts: selections.map((selection) => ({
-        opportunityId: selection.oppId,
-        matchedPersonaCount: selection.matchedPersonaCount,
-      })),
-    });
-
     const resolvedRows = selections.flatMap((selection) =>
       selection.resolvedPersonas.map((persona) => ({
         opportunityId: selection.oppId,
@@ -1176,30 +1258,28 @@ export class AiAgentOpportunityPipelineService {
             candidates: taskCandidates,
           })
         : buildEmptyExecutedResponse("public");
-    const insertedTaskById = new Map(
-      taskResponse.insertedTasks.map((task) => [task.id, task] as const),
-    );
-    const candidateByIndex = new Map(
-      taskCandidates.map((candidate) => [candidate.candidateIndex, candidate] as const),
-    );
-    const taskOutcomes = taskResponse.injectionPreview.results.flatMap((result) => {
-      const candidate = candidateByIndex.get(result.candidateIndex);
-      if (!candidate) {
-        return [];
-      }
+    const taskOutcomes = buildTaskOutcomes({
+      taskResponse,
+      taskCandidates,
+    });
+    const insertedPersonaIdsByOpportunityId = buildInsertedPersonaIdsByOpportunityId({
+      taskOutcomes,
+    });
 
-      const insertedTask = result.taskId ? insertedTaskById.get(result.taskId) : null;
-      return [
-        {
-          opportunityId: candidate.opportunityKey,
-          personaId: candidate.personaId,
-          inserted: result.inserted,
-          taskId: result.taskId,
-          skipReason: result.skipReason,
-          status: insertedTask?.status ?? (result.inserted ? "PENDING" : "FAILED"),
-          errorMessage: insertedTask?.errorMessage ?? result.skipReason,
-        } satisfies AdminPublicCandidateTaskOutcome,
-      ];
+    await this.deps.recordPublicCandidateResults({
+      groups: selections.map((selection) => ({
+        oppId: selection.oppId,
+        candidateEpoch: input.candidateEpoch ?? 0,
+        groupIndex: referenceBatch.effectiveGroupIndex,
+        batchSize: referenceBatch.batchSize,
+        selectedSpeakers: selection.selectedSpeakers,
+        resolvedPersonaIds: insertedPersonaIdsByOpportunityId[selection.oppId] ?? [],
+      })),
+      matchedPersonaCounts: buildMatchedPersonaCountUpdates({
+        selections,
+        existingPersonaIdsByOppId,
+        insertedPersonaIdsByOpportunityId,
+      }),
     });
 
     return {
@@ -1222,6 +1302,8 @@ export class AiAgentOpportunityPipelineService {
       candidateEpoch: cursor.candidateEpoch,
       groupIndex: referenceBatch.effectiveGroupIndex,
       batchSize: referenceBatch.batchSize,
+      cycleLimit: input.config.publicOpportunityCycleLimit,
+      publicPersonaLimit: input.config.publicOpportunityPersonaLimit,
     });
 
     if (eligibleRows.length === 0 || referenceBatch.referenceNames.length === 0) {
@@ -1265,6 +1347,21 @@ export class AiAgentOpportunityPipelineService {
       });
       candidateIndexStart += taskCandidates.length;
 
+      const batchResponse =
+        taskCandidates.length > 0
+          ? await this.deps.executeCandidates({
+              kind: "public",
+              candidates: taskCandidates,
+            })
+          : buildEmptyExecutedResponse("public");
+      const taskOutcomes = buildTaskOutcomes({
+        taskResponse: batchResponse,
+        taskCandidates,
+      });
+      const insertedPersonaIdsByOpportunityId = buildInsertedPersonaIdsByOpportunityId({
+        taskOutcomes,
+      });
+
       await this.deps.recordPublicCandidateResults({
         groups: selections.map((selection) => ({
           oppId: selection.oppId,
@@ -1272,21 +1369,17 @@ export class AiAgentOpportunityPipelineService {
           groupIndex: referenceBatch.effectiveGroupIndex,
           batchSize: referenceBatch.batchSize,
           selectedSpeakers: selection.selectedSpeakers,
-          resolvedPersonaIds: selection.resolvedPersonas.map((persona) => persona.personaId),
+          resolvedPersonaIds: insertedPersonaIdsByOpportunityId[selection.oppId] ?? [],
         })),
-        matchedPersonaCounts: selections.map((selection) => ({
-          opportunityId: selection.oppId,
-          matchedPersonaCount: selection.matchedPersonaCount,
-        })),
+        matchedPersonaCounts: buildMatchedPersonaCountUpdates({
+          selections,
+          existingPersonaIdsByOppId,
+          insertedPersonaIdsByOpportunityId,
+        }),
       });
 
       if (taskCandidates.length > 0) {
-        batchResponses.push(
-          await this.deps.executeCandidates({
-            kind: "public",
-            candidates: taskCandidates,
-          }),
-        );
+        batchResponses.push(batchResponse);
       }
     }
 
@@ -1311,10 +1404,11 @@ export class AiAgentOpportunityPipelineService {
     await this.ingestAndScore({
       kind: input.kind,
       snapshot,
+      config,
     });
 
     return input.kind === "notification"
-      ? this.executeNotificationFlow()
+      ? this.executeNotificationFlow({ config })
       : this.executePublicFlow({ config });
   }
 }

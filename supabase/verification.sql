@@ -185,6 +185,8 @@ where key in (
   'max_comments_per_cycle',
   'max_posts_per_cycle',
   'selector_reference_batch_size',
+  'public_opportunity_cycle_limit',
+  'public_opportunity_persona_limit',
   'llm_daily_token_quota',
   'llm_daily_image_quota',
   'usage_reset_timezone',

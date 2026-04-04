@@ -1,5 +1,5 @@
--- Migration 20260330160000_orchestrator_runtime_lease_functions.sql
--- Add DB-backed claim/heartbeat/release helpers for the long-running orchestrator singleton lease.
+ALTER TABLE public.orchestrator_runtime_state
+ADD COLUMN IF NOT EXISTS runtime_app_seen_at timestamptz;
 
 CREATE OR REPLACE FUNCTION public.claim_orchestrator_runtime_lease(
   next_lease_owner text,
@@ -18,6 +18,7 @@ BEGIN
   SET
     lease_owner = next_lease_owner,
     lease_until = now() + make_interval(secs => GREATEST(COALESCE(lease_duration_seconds, 1), 1)),
+    runtime_app_seen_at = now(),
     last_started_at = CASE
       WHEN lease_owner = next_lease_owner
         AND lease_until IS NOT NULL
@@ -59,6 +60,7 @@ BEGIN
   UPDATE public.orchestrator_runtime_state
   SET
     lease_until = now() + make_interval(secs => GREATEST(COALESCE(lease_duration_seconds, 1), 1)),
+    runtime_app_seen_at = now(),
     updated_at = now()
   WHERE singleton_key = 'global'
     AND paused = false
@@ -87,6 +89,7 @@ BEGIN
   SET
     lease_owner = null,
     lease_until = null,
+    runtime_app_seen_at = now(),
     cooldown_until = CASE
       WHEN cooldown_minutes IS NULL THEN cooldown_until
       ELSE now() + make_interval(mins => GREATEST(cooldown_minutes, 0))

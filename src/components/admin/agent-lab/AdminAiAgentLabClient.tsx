@@ -25,16 +25,7 @@ import type {
 } from "./types";
 import type { AdminPublicCandidateBatchResult } from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 
-const SAVE_BATCH_SIZE = 10;
 const STAGE_BATCH_SIZE = 10;
-
-function chunkRows<T>(rows: T[], chunkSize: number) {
-  const chunks: T[][] = [];
-  for (let index = 0; index < rows.length; index += chunkSize) {
-    chunks.push(rows.slice(index, index + chunkSize));
-  }
-  return chunks;
-}
 
 function findCompletedOpportunityKeys(input: {
   selectorStage: AgentLabSelectorStage;
@@ -203,26 +194,11 @@ export function AdminAiAgentLabClient({
         const unscoredRows = currentOpportunities.filter(
           (row) => row.recordId && row.probability === null,
         );
-
-        for (const batch of chunkRows(unscoredRows, STAGE_BATCH_SIZE)) {
+        const batch = unscoredRows.slice(0, STAGE_BATCH_SIZE);
+        if (batch.length > 0) {
           await apiPost<{ ok: true }>(`/api/admin/ai/agent/lab/opportunities/${sourceMode}`, {
             opportunityIds: batch.flatMap((row) => (row.recordId ? [row.recordId] : [])),
           });
-
-          const partial = await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
-            `/api/admin/ai/agent/lab/source-mode/${sourceMode}`,
-            {
-              batchSize: personaGroup.batchSize,
-              groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
-              score: false,
-            },
-          );
-          onProgress?.(
-            buildSelectorStage({
-              snapshot: partial.snapshot,
-              personaGroup,
-            }),
-          );
         }
 
         const refreshed = await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
@@ -234,10 +210,12 @@ export function AdminAiAgentLabClient({
           },
         );
 
-        return buildSelectorStage({
+        const nextStage = buildSelectorStage({
           snapshot: refreshed.snapshot,
           personaGroup,
         });
+        onProgress?.(nextStage);
+        return nextStage;
       }}
       onRunCandidate={async ({
         sourceMode,
@@ -347,7 +325,8 @@ export function AdminAiAgentLabClient({
           };
         };
 
-        for (const batch of chunkRows(selectedRowsToRun, STAGE_BATCH_SIZE)) {
+        const batch = selectedRowsToRun.slice(0, STAGE_BATCH_SIZE);
+        if (batch.length > 0) {
           const batchResponse = await apiPost<AdminPublicCandidateBatchResult>(
             "/api/admin/ai/agent/lab/candidates/public",
             {
@@ -383,23 +362,16 @@ export function AdminAiAgentLabClient({
               errorMessage: outcome.errorMessage,
             });
           });
-
-          onProgress?.(buildProgressState());
         }
-
-        return buildProgressState();
+        const nextState = buildProgressState();
+        onProgress?.(nextState);
+        return nextState;
       }}
       onSavePersonaGroup={async ({ sourceMode, personaGroup, selectorStage }) => {
-        const response = await apiPost<{ selectorReferenceBatchSize: number }>(
-          "/api/admin/ai/agent/lab/reference-group",
-          {
-            selectorReferenceBatchSize: personaGroup.batchSize,
-          },
-        );
         const sourceResponse = await apiPost<{ snapshot: AiAgentRuntimeSourceSnapshot | null }>(
           `/api/admin/ai/agent/lab/source-mode/${sourceMode}`,
           {
-            batchSize: response.selectorReferenceBatchSize,
+            batchSize: personaGroup.batchSize,
             groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
             score: false,
           },
@@ -411,7 +383,7 @@ export function AdminAiAgentLabClient({
           personaSummaries: personas,
           usePersistedOpportunityState: true,
           personaGroup: {
-            batchSize: response.selectorReferenceBatchSize,
+            batchSize: personaGroup.batchSize,
             groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
           },
         });
@@ -429,7 +401,7 @@ export function AdminAiAgentLabClient({
           snapshot,
           selectorStage,
           personaGroup: {
-            batchSize: response.selectorReferenceBatchSize,
+            batchSize: personaGroup.batchSize,
             groupIndex: sourceMode === "notification" ? 0 : personaGroup.groupIndex,
           },
           personaSummaries: personas,

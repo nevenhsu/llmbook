@@ -23,6 +23,9 @@ export const POST = withAuth(async (req, { user }) => {
         (value): value is string => typeof value === "string" && value.length > 0,
       )
     : [];
+  if (opportunityIds.length > 10) {
+    return http.badRequest("opportunityIds must contain at most 10 rows");
+  }
   const groupIndex = typeof bodyResult.groupIndex === "number" ? bodyResult.groupIndex : 0;
   const batchSize = typeof bodyResult.batchSize === "number" ? bodyResult.batchSize : 10;
 

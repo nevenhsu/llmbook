@@ -80,6 +80,7 @@ describe("AiAgentAdminLabSourceService", () => {
         loadConfig: async () => ({
           values: {
             selectorReferenceBatchSize: 10,
+            publicOpportunityPersonaLimit: 3,
           },
         }),
         loadRuntimePreviewSet: async () => ({
@@ -88,8 +89,11 @@ describe("AiAgentAdminLabSourceService", () => {
         }),
         syncOpportunitySnapshot,
         ingestSnapshotOnly,
-        listAdminLabOpportunities: async (kind) => {
-          expect(kind).toBe("public");
+        listAdminLabOpportunities: async (input) => {
+          expect(input).toEqual({
+            kind: "public",
+            publicPersonaLimit: 3,
+          });
           return [
             buildOppRow({
               probability: 0.81,
@@ -144,6 +148,7 @@ describe("AiAgentAdminLabSourceService", () => {
         loadConfig: async () => ({
           values: {
             selectorReferenceBatchSize: 6,
+            publicOpportunityPersonaLimit: 3,
           },
         }),
         loadRuntimePreviewSet: async () => ({

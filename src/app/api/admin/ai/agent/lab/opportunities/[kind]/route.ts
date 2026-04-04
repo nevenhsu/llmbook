@@ -27,6 +27,9 @@ export const POST = withAuth<{ kind: string }>(async (req, { user }, { params })
         (value): value is string => typeof value === "string" && value.length > 0,
       )
     : [];
+  if (opportunityIds.length > 10) {
+    return http.badRequest("opportunityIds must contain at most 10 rows");
+  }
 
   await new AiAgentOpportunityPipelineService().scoreAdminOpportunityBatch({
     kind,

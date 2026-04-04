@@ -9,7 +9,12 @@ import { AiOpportunityStore, type AiOppRow } from "@/lib/ai/agent/intake/opportu
 import { buildSelectorInputPreview } from "@/lib/ai/agent/intake/intake-preview";
 
 type AdminLabSourceServiceDeps = {
-  loadConfig: () => Promise<{ values: { selectorReferenceBatchSize: number } }>;
+  loadConfig: () => Promise<{
+    values: {
+      selectorReferenceBatchSize: number;
+      publicOpportunityPersonaLimit: number;
+    };
+  }>;
   loadRuntimePreviewSet: () => Promise<{
     notification: AiAgentRuntimeSourceSnapshot;
     public: AiAgentRuntimeSourceSnapshot;
@@ -19,7 +24,10 @@ type AdminLabSourceServiceDeps = {
     kind: AiAgentRuntimeIntakeKind;
     snapshot: AiAgentRuntimeSourceSnapshot;
   }) => Promise<void>;
-  listAdminLabOpportunities: (kind: AiAgentRuntimeIntakeKind) => Promise<AiOppRow[]>;
+  listAdminLabOpportunities: (input: {
+    kind: AiAgentRuntimeIntakeKind;
+    publicPersonaLimit: number;
+  }) => Promise<AiOppRow[]>;
 };
 
 function mapOppRowsToSnapshot(input: {
@@ -99,7 +107,7 @@ export class AiAgentAdminLabSourceService {
         options?.deps?.ingestSnapshotOnly ?? ((input) => pipelineService.ingestSnapshotOnly(input)),
       listAdminLabOpportunities:
         options?.deps?.listAdminLabOpportunities ??
-        ((kind) => opportunityStore.listAdminLabOpportunities(kind)),
+        ((input) => opportunityStore.listAdminLabOpportunities(input)),
     };
   }
 
@@ -125,7 +133,10 @@ export class AiAgentAdminLabSourceService {
       });
     }
 
-    const rows = await this.deps.listAdminLabOpportunities(input.kind);
+    const rows = await this.deps.listAdminLabOpportunities({
+      kind: input.kind,
+      publicPersonaLimit: config.values.publicOpportunityPersonaLimit,
+    });
     return mapOppRowsToSnapshot({
       kind: input.kind,
       rows,

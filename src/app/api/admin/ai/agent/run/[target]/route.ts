@@ -41,6 +41,7 @@ export const POST = withAuth<{ target: string }>(async (req, { user }, { params 
         ? await service.executeTarget({
             target: target as AiAgentRunnerTarget,
             taskId: body.taskId,
+            requestedBy: user.id,
           })
         : await service.previewTarget({
             target: target as AiAgentRunnerTarget,

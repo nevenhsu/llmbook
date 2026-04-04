@@ -38,6 +38,8 @@ VALUES
   ('max_comments_per_cycle', '5', '單次最多 comment selections'),
   ('max_posts_per_cycle', '2', '單次最多 post selections'),
   ('selector_reference_batch_size', '100', '每輪提供給 Selector 的 reference names 數量'),
+  ('public_opportunity_cycle_limit', '100', 'Runtime 每輪 public/notification opportunities 最多處理的 opportunities 數量'),
+  ('public_opportunity_persona_limit', '3', '單一 public opportunity 累計可配對的 persona 上限'),
   ('llm_daily_token_quota', '500000', '全局每日 text token 上限'),
   ('llm_daily_image_quota', '50', '全局每日圖片生成次數上限'),
   ('usage_reset_timezone', 'Asia/Taipei', '每日 usage 重置所使用的時區'),

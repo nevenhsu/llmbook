@@ -71,7 +71,7 @@ describe("AiAgentPanel", () => {
     expect(container.textContent).toContain("queue backlog");
     expect(container.textContent).toContain("Pause runtime");
     expect(container.textContent).toContain("Resume runtime");
-    expect(container.textContent).toContain("Force run cycle");
+    expect(container.textContent).toContain("Run Phase A");
 
     fetchMock.mockResolvedValueOnce({
       ok: false,
@@ -446,7 +446,7 @@ describe("AiAgentPanel", () => {
       runButtonAgain?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("Run orchestrator once");
+    expect(container.textContent).toContain("Request Phase A");
     expect(container.textContent).toContain("Selected Task Execution");
     expect(container.textContent).toContain("Execution Preview");
     expect(container.textContent).toContain("Run API Result");
@@ -1121,16 +1121,14 @@ describe("AiAgentPanel", () => {
       button.textContent?.includes("Resume runtime"),
     );
     const forceRunCycleButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Force run cycle"),
+      button.textContent?.includes("Run Phase A"),
     );
 
     expect(pauseRuntimeButton?.hasAttribute("disabled")).toBe(true);
     expect(resumeRuntimeButton?.hasAttribute("disabled")).toBe(false);
     expect(forceRunCycleButton?.hasAttribute("disabled")).toBe(true);
     expect(container.textContent).toContain("Runtime is already paused.");
-    expect(container.textContent).toContain(
-      "Runtime is paused; resume before forcing another cycle.",
-    );
+    expect(container.textContent).toContain("Runtime is paused; resume before running Phase A.");
   });
 
   it("shows memory lineage in the run tab and syncs runner compression results", async () => {
@@ -1248,85 +1246,41 @@ describe("AiAgentPanel", () => {
       runButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const insertedTask = {
-      ...buildMockAiAgentOverviewSnapshot().recentTasks[1],
-      id: "task-run-public-1",
-      personaId: "persona-2",
-      personaUsername: "ai_marlowe",
-      personaDisplayName: "Marlowe",
-      taskType: "post",
-      dispatchKind: "public" as const,
-      sourceTable: "posts" as const,
-      sourceId: "post-source-run-1",
-      decisionReason: "orchestrator injected public task",
-      payload: {
-        contentType: "post",
-        source: "public-post",
-      },
-      status: "PENDING" as const,
-      completedAt: null,
-      resultId: null,
-      resultType: null,
-      errorMessage: null,
-    };
-
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         mode: "executed",
         target: "orchestrator_once",
-        targetLabel: "Run orchestrator once",
-        selectedTaskId: "task-run-public-1",
-        summary:
-          "Injected 0 notification tasks, 1 public tasks, executed 1 text task, queued 0 media jobs, and skipped compression.",
+        targetLabel: "Request Phase A",
+        selectedTaskId: null,
+        summary: "Manual Phase A request accepted. Runtime app will execute it next.",
         executionPreview: null,
         compressionResult: null,
-        textResult: {
-          taskId: "task-run-public-1",
-          persistedTable: "posts",
-          persistedId: "post-run-1",
-          resultType: "post",
-          updatedTask: {
-            ...insertedTask,
-            status: "DONE",
-            resultId: "post-run-1",
-            resultType: "post",
-            completedAt: "2026-03-30T02:00:00.000Z",
-          },
-        },
+        textResult: null,
         mediaResult: null,
         orchestratorResult: {
-          injectedNotificationTasks: 0,
-          injectedPublicTasks: 1,
-          notificationInjection: {
-            mode: "executed",
-            kind: "notification",
-            message: "Inserted 0 persona_tasks rows for notification intake.",
-            injectionPreview: { results: [] },
-            insertedTasks: [],
+          runtimeState: {
+            available: true,
+            statusLabel: "Manual Phase A Pending",
+            detail: "Manual Phase A request is pending from admin-user.",
+            paused: false,
+            publicCandidateGroupIndex: 0,
+            publicCandidateEpoch: 0,
+            leaseOwner: null,
+            leaseUntil: null,
+            cooldownUntil: "2026-03-30T02:05:00.000Z",
+            runtimeAppSeenAt: "2026-03-30T02:00:00.000Z",
+            runtimeAppOnline: true,
+            manualPhaseARequestPending: true,
+            manualPhaseARequestedAt: "2026-03-30T02:00:00.000Z",
+            manualPhaseARequestedBy: "admin-user",
+            manualPhaseARequestId: "manual-request-1",
+            manualPhaseAStartedAt: null,
+            manualPhaseAFinishedAt: null,
+            manualPhaseAError: null,
+            lastStartedAt: "2026-03-30T01:55:00.000Z",
+            lastFinishedAt: "2026-03-30T02:00:00.000Z",
           },
-          publicInjection: {
-            mode: "executed",
-            kind: "public",
-            message: "Inserted 1 persona_tasks rows for public intake.",
-            injectionPreview: { results: [] },
-            insertedTasks: [insertedTask],
-          },
-          executedTextTask: {
-            taskId: "task-run-public-1",
-            persistedTable: "posts",
-            persistedId: "post-run-1",
-            resultType: "post",
-            updatedTask: {
-              ...insertedTask,
-              status: "DONE",
-              resultId: "post-run-1",
-              resultType: "post",
-              completedAt: "2026-03-30T02:00:00.000Z",
-            },
-          },
-          executedMediaTask: null,
-          compressionResult: null,
         },
       }),
       headers: new Headers({ "Content-Type": "application/json" }),
@@ -1350,19 +1304,9 @@ describe("AiAgentPanel", () => {
       }),
     );
     expect(container.textContent).toContain(
-      "Injected 0 notification tasks, 1 public tasks, executed 1 text task, queued 0 media jobs, and skipped compression.",
+      "Manual Phase A request accepted. Runtime app will execute it next.",
     );
-
-    const tasksButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Tasks"),
-    );
-    await act(async () => {
-      tasksButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("orchestrator injected public task");
-    expect(container.textContent).toContain("task-run-public-1");
-    expect(container.textContent).toContain("DONE");
+    expect(container.textContent).toContain('"manualPhaseARequestPending": true');
   });
 
   it("surfaces structured log diagnostics for executed and skipped runs", async () => {
