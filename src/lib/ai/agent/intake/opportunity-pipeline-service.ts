@@ -26,6 +26,92 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AiAgentOpportunityPipelineExecutedResponse = AiAgentTaskInjectionExecutedResponse;
 
+export type AiAgentOpportunityPipelineEvent =
+  | {
+      type: "snapshot_loaded";
+      kind: AiAgentRuntimeIntakeKind;
+      sourceNames: string[];
+      itemCount: number;
+      statusLabel: string;
+    }
+  | {
+      type: "opportunity_ingest_completed";
+      kind: AiAgentRuntimeIntakeKind;
+      snapshotItemCount: number;
+      ingestedCount: number;
+    }
+  | {
+      type: "opportunity_scoring_scope_loaded";
+      kind: AiAgentRuntimeIntakeKind;
+      cycleCount: number;
+      unscoredCount: number;
+    }
+  | {
+      type: "opportunity_scoring_batch_started";
+      kind: AiAgentRuntimeIntakeKind;
+      batchIndex: number;
+      batchCount: number;
+      rowCount: number;
+    }
+  | {
+      type: "opportunity_scoring_batch_completed";
+      kind: AiAgentRuntimeIntakeKind;
+      batchIndex: number;
+      batchCount: number;
+      rowCount: number;
+      updatedCount: number;
+      selectedCount: number;
+      rejectedCount: number;
+    }
+  | {
+      type: "notification_selected_rows_loaded";
+      kind: "notification";
+      selectedCount: number;
+      activeCount: number;
+      inactiveCount: number;
+    }
+  | {
+      type: "notification_task_candidates_built";
+      kind: "notification";
+      candidateCount: number;
+    }
+  | {
+      type: "notification_injection_completed";
+      kind: "notification";
+      candidateCount: number;
+      insertedCount: number;
+      skippedCount: number;
+      processedOpportunityCount: number;
+    }
+  | {
+      type: "public_candidate_scope_loaded";
+      kind: "public";
+      candidateEpoch: number;
+      requestedGroupIndex: number;
+      effectiveGroupIndex: number;
+      referenceCount: number;
+      totalReferences: number;
+      batchSize: number;
+      eligibleCount: number;
+    }
+  | {
+      type: "public_candidate_batch_started";
+      kind: "public";
+      batchIndex: number;
+      batchCount: number;
+      rowCount: number;
+    }
+  | {
+      type: "public_candidate_batch_completed";
+      kind: "public";
+      batchIndex: number;
+      batchCount: number;
+      rowCount: number;
+      candidateCount: number;
+      insertedCount: number;
+      skippedCount: number;
+    };
+
 type RuntimeConfigSnapshot = {
   selectorReferenceBatchSize: number;
   publicOpportunityCycleLimit: number;
@@ -391,6 +477,17 @@ function mergeExecutedResponses(input: {
   };
 }
 
+function readInjectionCounts(response: AiAgentOpportunityPipelineExecutedResponse): {
+  insertedCount: number;
+  skippedCount: number;
+} {
+  return {
+    insertedCount:
+      response.injectionPreview?.summary.insertedCount ?? response.insertedTasks.length,
+    skippedCount: response.injectionPreview?.summary.skippedCount ?? 0,
+  };
+}
+
 function buildPublicCooldownUntil(input: {
   now: Date;
   row: AiOppRow;
@@ -675,12 +772,17 @@ function buildMatchedPersonaCountUpdates(input: {
 
 export class AiAgentOpportunityPipelineService {
   private readonly deps: OpportunityPipelineServiceDeps;
+  private readonly onEvent?: (event: AiAgentOpportunityPipelineEvent) => void;
 
-  public constructor(options?: { deps?: Partial<OpportunityPipelineServiceDeps> }) {
+  public constructor(options?: {
+    deps?: Partial<OpportunityPipelineServiceDeps>;
+    onEvent?: (event: AiAgentOpportunityPipelineEvent) => void;
+  }) {
     const previewStore = new AiAgentIntakePreviewStore();
     const opportunityStore = new AiOpportunityStore();
     const taskInjectionService = new AiAgentTaskInjectionService();
     const intakeStageLlmService = new AiAgentIntakeStageLlmService();
+    this.onEvent = options?.onEvent;
 
     this.deps = {
       loadRuntimePreviewSet:
@@ -944,15 +1046,26 @@ export class AiAgentOpportunityPipelineService {
     };
   }
 
+  private emit(event: AiAgentOpportunityPipelineEvent) {
+    this.onEvent?.(event);
+  }
+
   private async ingestAndScore(input: {
     kind: AiAgentRuntimeIntakeKind;
     snapshot: AiAgentRuntimeSourceSnapshot;
     config: RuntimeConfigSnapshot;
   }): Promise<void> {
     const upsertRows = mapSnapshotToOppRows(input.snapshot);
+    let ingestedCount = 0;
     if (upsertRows.length > 0) {
-      await this.deps.ingestOpportunities(upsertRows);
+      ingestedCount = await this.deps.ingestOpportunities(upsertRows);
     }
+    this.emit({
+      type: "opportunity_ingest_completed",
+      kind: input.kind,
+      snapshotItemCount: input.snapshot.items.length,
+      ingestedCount,
+    });
 
     const cycleRows = await this.deps.listRuntimeOpportunityCycleRows({
       kind: input.kind,
@@ -960,6 +1073,12 @@ export class AiAgentOpportunityPipelineService {
       publicPersonaLimit: input.config.publicOpportunityPersonaLimit,
     });
     const unscoredRows = cycleRows.filter((row) => row.probability === null);
+    this.emit({
+      type: "opportunity_scoring_scope_loaded",
+      kind: input.kind,
+      cycleCount: cycleRows.length,
+      unscoredCount: unscoredRows.length,
+    });
     if (unscoredRows.length === 0) {
       return;
     }
@@ -992,22 +1111,58 @@ export class AiAgentOpportunityPipelineService {
         return;
       }
 
-      for (const rows of chunkRows(activeRows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
+      const batches = chunkRows(activeRows, OPPORTUNITY_SCORE_BATCH_SIZE);
+      for (const [batchIndex, rows] of batches.entries()) {
+        this.emit({
+          type: "opportunity_scoring_batch_started",
+          kind: input.kind,
+          batchIndex: batchIndex + 1,
+          batchCount: batches.length,
+          rowCount: rows.length,
+        });
         const scoredRows = await this.deps.scoreOpportunityProbabilities({
           kind: input.kind,
           rows,
         });
         await this.deps.updateOpportunityProbabilities(scoredRows);
+        this.emit({
+          type: "opportunity_scoring_batch_completed",
+          kind: input.kind,
+          batchIndex: batchIndex + 1,
+          batchCount: batches.length,
+          rowCount: rows.length,
+          updatedCount: scoredRows.length,
+          selectedCount: scoredRows.filter((row) => row.probability > 0.5).length,
+          rejectedCount: scoredRows.filter((row) => row.probability <= 0.5).length,
+        });
       }
       return;
     }
 
-    for (const rows of chunkRows(unscoredRows, OPPORTUNITY_SCORE_BATCH_SIZE)) {
+    const batches = chunkRows(unscoredRows, OPPORTUNITY_SCORE_BATCH_SIZE);
+    for (const [batchIndex, rows] of batches.entries()) {
+      this.emit({
+        type: "opportunity_scoring_batch_started",
+        kind: input.kind,
+        batchIndex: batchIndex + 1,
+        batchCount: batches.length,
+        rowCount: rows.length,
+      });
       const scoredRows = await this.deps.scoreOpportunityProbabilities({
         kind: input.kind,
         rows,
       });
       await this.deps.updateOpportunityProbabilities(scoredRows);
+      this.emit({
+        type: "opportunity_scoring_batch_completed",
+        kind: input.kind,
+        batchIndex: batchIndex + 1,
+        batchCount: batches.length,
+        rowCount: rows.length,
+        updatedCount: scoredRows.length,
+        selectedCount: scoredRows.filter((row) => row.probability > 0.5).length,
+        rejectedCount: scoredRows.filter((row) => row.probability <= 0.5).length,
+      });
     }
   }
 
@@ -1078,6 +1233,13 @@ export class AiAgentOpportunityPipelineService {
       cycleLimit: input.config.publicOpportunityCycleLimit,
     });
     if (selectedRows.length === 0) {
+      this.emit({
+        type: "notification_selected_rows_loaded",
+        kind: "notification",
+        selectedCount: 0,
+        activeCount: 0,
+        inactiveCount: 0,
+      });
       return buildEmptyExecutedResponse("notification");
     }
 
@@ -1093,6 +1255,13 @@ export class AiAgentOpportunityPipelineService {
     const { activeRows, inactiveRows } = partitionNotificationRowsByActiveRecipient({
       rows: selectedRows,
       personaActivityById,
+    });
+    this.emit({
+      type: "notification_selected_rows_loaded",
+      kind: "notification",
+      selectedCount: selectedRows.length,
+      activeCount: activeRows.length,
+      inactiveCount: inactiveRows.length,
     });
 
     if (inactiveRows.length > 0) {
@@ -1118,6 +1287,11 @@ export class AiAgentOpportunityPipelineService {
       rows: activeRows,
       personasById,
     });
+    this.emit({
+      type: "notification_task_candidates_built",
+      kind: "notification",
+      candidateCount: taskCandidates.length,
+    });
 
     if (taskCandidates.length === 0) {
       return buildEmptyExecutedResponse("notification");
@@ -1134,6 +1308,15 @@ export class AiAgentOpportunityPipelineService {
     if (processedOpportunityIds.length > 0) {
       await this.deps.markNotificationsProcessed(processedOpportunityIds);
     }
+    const injectionCounts = readInjectionCounts(result);
+    this.emit({
+      type: "notification_injection_completed",
+      kind: "notification",
+      candidateCount: taskCandidates.length,
+      insertedCount: injectionCounts.insertedCount,
+      skippedCount: injectionCounts.skippedCount,
+      processedOpportunityCount: processedOpportunityIds.length,
+    });
 
     return result;
   }
@@ -1402,6 +1585,17 @@ export class AiAgentOpportunityPipelineService {
       cycleLimit: input.config.publicOpportunityCycleLimit,
       publicPersonaLimit: input.config.publicOpportunityPersonaLimit,
     });
+    this.emit({
+      type: "public_candidate_scope_loaded",
+      kind: "public",
+      candidateEpoch: cursor.candidateEpoch,
+      requestedGroupIndex: cursor.groupIndex,
+      effectiveGroupIndex: referenceBatch.effectiveGroupIndex,
+      referenceCount: referenceBatch.referenceNames.length,
+      totalReferences: referenceBatch.totalReferences,
+      batchSize: referenceBatch.batchSize,
+      eligibleCount: eligibleRows.length,
+    });
 
     if (eligibleRows.length === 0 || referenceBatch.referenceNames.length === 0) {
       await this.deps.advancePublicRuntimeCursor();
@@ -1419,7 +1613,15 @@ export class AiAgentOpportunityPipelineService {
     const batchResponses: AiAgentOpportunityPipelineExecutedResponse[] = [];
     let candidateIndexStart = 0;
 
-    for (const rows of chunkRows(eligibleRows, PUBLIC_CANDIDATE_BATCH_SIZE)) {
+    const batches = chunkRows(eligibleRows, PUBLIC_CANDIDATE_BATCH_SIZE);
+    for (const [batchIndex, rows] of batches.entries()) {
+      this.emit({
+        type: "public_candidate_batch_started",
+        kind: "public",
+        batchIndex: batchIndex + 1,
+        batchCount: batches.length,
+        rowCount: rows.length,
+      });
       const existingPersonaIdsByOppId = await this.deps.listResolvedPersonaIdsByOpportunityIds(
         rows.map((row) => row.id),
       );
@@ -1478,6 +1680,17 @@ export class AiAgentOpportunityPipelineService {
       if (taskCandidates.length > 0) {
         batchResponses.push(batchResponse);
       }
+      const injectionCounts = readInjectionCounts(batchResponse);
+      this.emit({
+        type: "public_candidate_batch_completed",
+        kind: "public",
+        batchIndex: batchIndex + 1,
+        batchCount: batches.length,
+        rowCount: rows.length,
+        candidateCount: taskCandidates.length,
+        insertedCount: injectionCounts.insertedCount,
+        skippedCount: injectionCounts.skippedCount,
+      });
     }
 
     const result = mergeExecutedResponses({
@@ -1497,6 +1710,13 @@ export class AiAgentOpportunityPipelineService {
       this.deps.loadRuntimeConfig(),
     ]);
     const snapshot = input.kind === "notification" ? previewSet.notification : previewSet.public;
+    this.emit({
+      type: "snapshot_loaded",
+      kind: input.kind,
+      sourceNames: snapshot.sourceNames,
+      itemCount: snapshot.items.length,
+      statusLabel: snapshot.statusLabel,
+    });
 
     await this.ingestAndScore({
       kind: input.kind,

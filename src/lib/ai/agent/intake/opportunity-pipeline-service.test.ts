@@ -3,6 +3,7 @@ import type { AiOppRow } from "@/lib/ai/agent/intake/opportunity-store";
 import {
   AiAgentOpportunityPipelineService,
   type AiAgentOpportunityPipelineExecutedResponse,
+  type AiAgentOpportunityPipelineEvent,
 } from "@/lib/ai/agent/intake/opportunity-pipeline-service";
 import { buildMockIntakeRuntimePreviews } from "@/lib/ai/agent/testing/mock-intake-runtime-previews";
 
@@ -1191,6 +1192,174 @@ describe("AiAgentOpportunityPipelineService", () => {
     const firstRecordInput = recordCalls[0]?.[0];
     expect(firstRecordInput.groups).toHaveLength(10);
     expect(executeCandidates).toHaveBeenCalledTimes(2);
+  });
+
+  it("emits structured stage events for public terminal logging", async () => {
+    const runtimePreviewSet = buildMockIntakeRuntimePreviews();
+    const events: AiAgentOpportunityPipelineEvent[] = [];
+    const service = new AiAgentOpportunityPipelineService({
+      onEvent: (event) => events.push(event),
+      deps: {
+        loadRuntimePreviewSet: async () => runtimePreviewSet,
+        loadRuntimeConfig: async () => buildRuntimeConfig(),
+        ingestOpportunities: async () => 2,
+        listRuntimeOpportunityCycleRows: async () => [
+          buildOpp({
+            id: "opp-public-1",
+            kind: "public",
+            source_table: "posts",
+            source_id: "post-1",
+            board_id: "board-1",
+            post_id: "post-1",
+            notification_id: null,
+            recipient_persona_id: null,
+            content_type: "post",
+            summary: "Board: Creative Lab | Recent post title: Best prompting workflows this week",
+            source_created_at: "2026-03-29T01:03:00.000Z",
+          }),
+        ],
+        scoreOpportunityProbabilities: async () => [
+          {
+            opportunityId: "opp-public-1",
+            probability: 0.74,
+            probabilityModelKey: "mock:opportunities",
+            probabilityPromptVersion: "runtime-opportunities-v2",
+            evaluatedAt: "2026-04-03T10:00:00.000Z",
+          },
+        ],
+        updateOpportunityProbabilities: async () => undefined,
+        listSelectedNotificationOpportunities: async () => [],
+        loadPublicRuntimeCursor: async () => ({
+          groupIndex: 2,
+          candidateEpoch: 7,
+        }),
+        loadReferenceBatch: async () => ({
+          referenceNames: ["David Bowie", "Laurie Anderson"],
+          totalReferences: 2,
+          effectiveGroupIndex: 0,
+          batchSize: 10,
+        }),
+        listEligiblePublicCandidateOpportunities: async () => [
+          buildOpp({
+            id: "opp-public-1",
+            kind: "public",
+            source_table: "posts",
+            source_id: "post-1",
+            board_id: "board-1",
+            post_id: "post-1",
+            notification_id: null,
+            recipient_persona_id: null,
+            content_type: "post",
+            summary: "Board: Creative Lab | Recent post title: Best prompting workflows this week",
+            probability: 0.81,
+            selected: true,
+            matched_persona_count: 1,
+            notification_context: null,
+            notification_type: null,
+            source_created_at: "2026-03-29T01:03:00.000Z",
+          }),
+        ],
+        listResolvedPersonaIdsByOpportunityIds: async () => ({
+          "opp-public-1": ["persona-orchid"],
+        }),
+        selectPublicSpeakerCandidates: async () => [
+          {
+            oppId: "opp-public-1",
+            selectedSpeakers: [{ name: "David Bowie", probability: 0.91 }],
+          },
+        ],
+        resolveSpeakerPersonas: async () => [
+          {
+            referenceName: "David Bowie",
+            personaId: "persona-marlowe",
+            username: "ai_marlowe",
+            active: true,
+          },
+        ],
+        executeCandidates: async (input) => ({
+          mode: "executed",
+          kind: "public",
+          message: "public pipeline executed",
+          injectionPreview: {
+            rpcName: "inject_persona_tasks",
+            summary: {
+              candidateCount: input.candidates.length,
+              insertedCount: 1,
+              skippedCount: 0,
+              insertedTaskIds: ["task-public-1"],
+              skippedReasonCounts: {},
+            },
+            results: [
+              {
+                candidateIndex: 0,
+                inserted: true,
+                skipReason: null,
+                taskId: "task-public-1",
+                taskType: "post",
+                dispatchKind: "public",
+                personaUsername: "ai_marlowe",
+                sourceTable: "posts",
+                sourceId: "post-1",
+              },
+            ],
+          },
+          insertedTasks: [
+            {
+              id: "task-public-1",
+              personaId: "persona-marlowe",
+              status: "PENDING",
+              errorMessage: null,
+            } as never,
+          ],
+        }),
+        recordPublicCandidateResults: async () => undefined,
+        markNotificationsProcessed: async () => undefined,
+        advancePublicRuntimeCursor: async () => undefined,
+      },
+    });
+
+    await service.executeFlow({ kind: "public" });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "snapshot_loaded",
+          kind: "public",
+        }),
+        expect.objectContaining({
+          type: "opportunity_ingest_completed",
+          kind: "public",
+          ingestedCount: 2,
+        }),
+        expect.objectContaining({
+          type: "opportunity_scoring_batch_started",
+          kind: "public",
+          batchIndex: 1,
+          batchCount: 1,
+          rowCount: 1,
+        }),
+        expect.objectContaining({
+          type: "opportunity_scoring_batch_completed",
+          kind: "public",
+          selectedCount: 1,
+          rejectedCount: 0,
+        }),
+        expect.objectContaining({
+          type: "public_candidate_scope_loaded",
+          candidateEpoch: 7,
+          requestedGroupIndex: 2,
+          effectiveGroupIndex: 0,
+          eligibleCount: 1,
+        }),
+        expect.objectContaining({
+          type: "public_candidate_batch_completed",
+          kind: "public",
+          candidateCount: 1,
+          insertedCount: 1,
+          skippedCount: 0,
+        }),
+      ]),
+    );
   });
 
   it("returns explicit task outcomes for admin public candidate batches", async () => {

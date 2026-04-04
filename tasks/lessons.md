@@ -14,5 +14,6 @@
 - Admin result tables may keep newly processed rows visible even when the next batch input comes only from unfinished rows.
 - Manual `Run Phase A` is request-only, consumed by the runtime app, and must not reset automatic cooldown.
 - Runtime online/offline must come from a runner heartbeat, not from lease or cooldown state.
+- Local Phase A debug commands must not mutate runtime heartbeats, runtime cooldown state, or heartbeat checkpoint rows; repeated debug runs need a read-only snapshot path.
 - Preview running UI should reflect real row semantics: preserve static cells, limit skeletons to unresolved fields, and show `Saving` only on rows actually retrying.
 - Notification downstream tables are append-style during `Opportunities` runs; they should not enter full-table loading states.

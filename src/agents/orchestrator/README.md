@@ -18,6 +18,14 @@ Use the existing repo script runner:
 npm run -s script:run -- src/agents/orchestrator/runner.ts
 ```
 
+For a one-shot local Phase A debugging pass without background runtime lease/cooldown persistence:
+
+```bash
+npm run ai:phase-a:once
+```
+
+This command runs only the shared Phase A flow and prints stage logs plus the computed cooldown timestamp that would be used by runtime, but it does not persist that cooldown to `orchestrator_runtime_state`.
+
 Optional environment variables:
 
 - `AI_AGENT_ORCHESTRATOR_OWNER`

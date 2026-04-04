@@ -22,24 +22,86 @@ export type HeartbeatCheckpoint = {
 
 const DEFAULT_OVERLAP_SECONDS = 10;
 
-export class SupabaseHeartbeatSource {
-  public async getCheckpoint(sourceName: HeartbeatEventSourceName): Promise<HeartbeatCheckpoint> {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("heartbeat_checkpoints")
-      .select("source_name, last_captured_at, safety_overlap_seconds")
-      .eq("source_name", sourceName)
-      .maybeSingle<{
-        source_name: HeartbeatEventSourceName;
-        last_captured_at: string;
-        safety_overlap_seconds: number;
-      }>();
+type HeartbeatSourceDeps = {
+  loadCheckpointRow: (sourceName: HeartbeatEventSourceName) => Promise<{
+    source_name: HeartbeatEventSourceName;
+    last_captured_at: string;
+    safety_overlap_seconds: number;
+  } | null>;
+  upsertCheckpointRow: (input: HeartbeatCheckpoint) => Promise<{
+    source_name: HeartbeatEventSourceName;
+    last_captured_at: string;
+    safety_overlap_seconds: number;
+  }>;
+};
 
-    if (error) {
-      throw new Error(`get checkpoint failed for ${sourceName}: ${error.message}`);
-    }
+export class SupabaseHeartbeatSource {
+  private readonly deps: HeartbeatSourceDeps;
+
+  public constructor(options?: { deps?: Partial<HeartbeatSourceDeps> }) {
+    this.deps = {
+      loadCheckpointRow:
+        options?.deps?.loadCheckpointRow ??
+        (async (sourceName) => {
+          const supabase = createAdminClient();
+          const { data, error } = await supabase
+            .from("heartbeat_checkpoints")
+            .select("source_name, last_captured_at, safety_overlap_seconds")
+            .eq("source_name", sourceName)
+            .maybeSingle<{
+              source_name: HeartbeatEventSourceName;
+              last_captured_at: string;
+              safety_overlap_seconds: number;
+            }>();
+
+          if (error) {
+            throw new Error(`get checkpoint failed for ${sourceName}: ${error.message}`);
+          }
+
+          return data ?? null;
+        }),
+      upsertCheckpointRow:
+        options?.deps?.upsertCheckpointRow ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const { data, error } = await supabase
+            .from("heartbeat_checkpoints")
+            .upsert({
+              source_name: input.sourceName,
+              last_captured_at: input.lastCapturedAt.toISOString(),
+              safety_overlap_seconds: input.safetyOverlapSeconds,
+              updated_at: new Date().toISOString(),
+            })
+            .select("source_name, last_captured_at, safety_overlap_seconds")
+            .single<{
+              source_name: HeartbeatEventSourceName;
+              last_captured_at: string;
+              safety_overlap_seconds: number;
+            }>();
+
+          if (error) {
+            throw new Error(`upsert checkpoint failed for ${input.sourceName}: ${error.message}`);
+          }
+
+          return data;
+        }),
+    };
+  }
+
+  public async getCheckpoint(
+    sourceName: HeartbeatEventSourceName,
+    options?: { createIfMissing?: boolean },
+  ): Promise<HeartbeatCheckpoint> {
+    const data = await this.deps.loadCheckpointRow(sourceName);
 
     if (!data) {
+      if (options?.createIfMissing === false) {
+        return {
+          sourceName,
+          lastCapturedAt: new Date("1970-01-01T00:00:00.000Z"),
+          safetyOverlapSeconds: DEFAULT_OVERLAP_SECONDS,
+        };
+      }
       const created = await this.upsertCheckpoint({
         sourceName,
         lastCapturedAt: new Date("1970-01-01T00:00:00.000Z"),
@@ -56,25 +118,7 @@ export class SupabaseHeartbeatSource {
   }
 
   public async upsertCheckpoint(input: HeartbeatCheckpoint): Promise<HeartbeatCheckpoint> {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("heartbeat_checkpoints")
-      .upsert({
-        source_name: input.sourceName,
-        last_captured_at: input.lastCapturedAt.toISOString(),
-        safety_overlap_seconds: input.safetyOverlapSeconds,
-        updated_at: new Date().toISOString(),
-      })
-      .select("source_name, last_captured_at, safety_overlap_seconds")
-      .single<{
-        source_name: HeartbeatEventSourceName;
-        last_captured_at: string;
-        safety_overlap_seconds: number;
-      }>();
-
-    if (error) {
-      throw new Error(`upsert checkpoint failed for ${input.sourceName}: ${error.message}`);
-    }
+    const data = await this.deps.upsertCheckpointRow(input);
 
     return {
       sourceName: data.source_name,
@@ -83,8 +127,13 @@ export class SupabaseHeartbeatSource {
     };
   }
 
-  public async fetchRecentEvents(sourceName: HeartbeatEventSourceName): Promise<HeartbeatEvent[]> {
-    const checkpoint = await this.getCheckpoint(sourceName);
+  public async fetchRecentEvents(
+    sourceName: HeartbeatEventSourceName,
+    options?: { createCheckpointIfMissing?: boolean },
+  ): Promise<HeartbeatEvent[]> {
+    const checkpoint = await this.getCheckpoint(sourceName, {
+      createIfMissing: options?.createCheckpointIfMissing,
+    });
     const overlapStart = new Date(
       checkpoint.lastCapturedAt.getTime() - checkpoint.safetyOverlapSeconds * 1000,
     ).toISOString();

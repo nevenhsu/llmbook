@@ -12,6 +12,7 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "test:watch": "vitest",
+    "ai:phase-a:once": "npm run -s script:run -- src/agents/orchestrator/phase-a-once.ts",
     "script:run": "ts-node -r ./scripts/register-env.ts -r tsconfig-paths/register",
     "cron:rankings": "npm run -s script:run -- scripts/cron-manager.ts --rankings-only"
   },
