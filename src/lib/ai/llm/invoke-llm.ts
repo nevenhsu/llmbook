@@ -14,6 +14,7 @@ import {
   getPromptRuntimeRecorder,
   type PromptRuntimeEventRecorder,
 } from "@/lib/ai/prompt-runtime/runtime-events";
+import { dispatchManualLlmQueue } from "./manual-stdio-queue";
 
 function normalizeUsage(usage: LlmGenerateTextOutput["usage"] | undefined): LlmUsage {
   const inputTokens = Number.isFinite(usage?.inputTokens) ? Number(usage?.inputTokens) : 0;
@@ -298,6 +299,26 @@ export async function invokeLLM(input: {
 }): Promise<InvokeLlmOutput> {
   const recorder = input.recorder ?? getPromptRuntimeRecorder();
   const taskType = input.taskType ?? "generic";
+
+  if (process.env.AI_AGENT_MANUAL_LLM === "true") {
+    if (!process.stdin.isTTY) {
+      throw new Error(
+        "AI_AGENT_MANUAL_LLM is true but process.stdin.isTTY is false. Cannot automatically fallback to API.",
+      );
+    }
+    if (input.modelInput.tools && input.modelInput.tools.length > 0) {
+      throw new Error("MANUAL_LLM_TOOLS_NOT_SUPPORTED");
+    }
+
+    const mergedMetadata = {
+      ...input.modelInput.metadata,
+      entityId: input.entityId,
+      taskType,
+    };
+
+    return dispatchManualLlmQueue(input.modelInput, mergedMetadata);
+  }
+
   const timeoutMs = Math.max(1, input.timeoutMs ?? 60_000);
   const retries = Math.max(0, input.retries ?? 1);
   const targets = input.registry.resolveTargets(input.routeOverride?.targets);

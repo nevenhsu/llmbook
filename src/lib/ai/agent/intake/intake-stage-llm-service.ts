@@ -495,6 +495,12 @@ export class AiAgentIntakeStageLlmService {
               prompt: input.prompt,
               maxOutputTokens: input.maxOutputTokens,
               temperature: input.temperature,
+              metadata: {
+                _m: {
+                  stageName: input.stageName,
+                  phase: input.phase,
+                },
+              },
             },
             entityId: input.entityId,
             timeoutMs: invocationConfig.timeoutMs,

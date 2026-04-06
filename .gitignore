@@ -38,3 +38,6 @@ next-env.d.ts
 scripts/archive/
 
 reports/
+
+# manual llm local logs
+/logs/
