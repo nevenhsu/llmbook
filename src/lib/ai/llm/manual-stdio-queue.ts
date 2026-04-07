@@ -1,4 +1,4 @@
-import * as readline from "readline/promises";
+import { editor } from "@inquirer/prompts";
 import path from "path";
 import fs from "fs/promises";
 import type { LlmGenerateTextInput, InvokeLlmOutput } from "./types";
@@ -8,7 +8,7 @@ let invokeCounter = 0;
 
 const RESPONSE_END_MARKER = "<<<AI_AGENT_MANUAL_LLM_RESPONSE_END>>>";
 
-async function writePromptLog(invokeId: number, content: string): Promise<void> {
+async function writePromptLog(invokeId: number, content: string): Promise<string> {
   const now = new Date();
   const pad = (n: number, len = 2) => String(n).padStart(len, "0");
   const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}-${pad(now.getMilliseconds(), 3)}`;
@@ -18,6 +18,7 @@ async function writePromptLog(invokeId: number, content: string): Promise<void> 
 
   const filename = `prompt-${timestamp}-${invokeId}.txt`;
   await fs.writeFile(path.join(dir, filename), content, "utf-8");
+  return filename;
 }
 
 function promptToString(input: LlmGenerateTextInput): string {
@@ -57,44 +58,43 @@ async function performManualTask(
 
   const fullPromptOutput = `<<<AI_AGENT_MANUAL_LLM_PROMPT_BEGIN>>>\n${promptContent}\n<<<AI_AGENT_MANUAL_LLM_PROMPT_END>>>`;
 
+  let logFilename = "unknown";
+  try {
+    logFilename = await writePromptLog(invokeId, fullPromptOutput);
+  } catch (err) {
+    console.error(`[ManualLLM] Failed to write prompt log: ${(err as Error).message}`);
+  }
+
   console.log("\n=======================================================");
   console.log(`[MANUAL LLM TICK: Waiting for human paste | Invoke #${invokeId}]`);
   console.log(JSON.stringify(header, null, 2));
   console.log("-------------------------------------------------------");
   console.log(fullPromptOutput);
   console.log("-------------------------------------------------------");
-  console.log("請將上述 Prompt 複製，並貼到網頁端 LLM (如 ChatGPT / Claude) 中。");
-  console.log("接著，請將從該界面取得的「純文字回覆」貼在下方。");
-  console.log(`貼完後，請在新的一行輸入： ${RESPONSE_END_MARKER}`);
-  console.log("或者在空白行按 Ctrl-D (EOF) 結束輸入。");
+  console.log(
+    `Please copy the Prompt above and paste it into a web-based LLM (e.g. ChatGPT / Claude).`,
+  );
+  console.log(`(A copy of this prompt has been saved to: logs/manual-prompts/${logFilename})`);
+  console.log(
+    `Then, select the editor below to paste the "raw text response" from that interface.`,
+  );
+  console.log(
+    `(The editor will open your default terminal text editor like Vim or Nano. Paste, save, and exit.)`,
+  );
+  console.log(
+    `If you optionally included ${RESPONSE_END_MARKER}, it will be trimmed automatically.`,
+  );
   console.log("=======================================================\n");
 
-  // Write log async
-  await writePromptLog(invokeId, fullPromptOutput).catch((err) => {
-    console.error(`[ManualLLM] Failed to write prompt log: ${(err as Error).message}`);
-  });
+  const collectedText = await editor(
+    { message: "Press Enter to open the editor and paste the response. Save and close to submit." },
+    { input: options?.input ?? process.stdin, output: options?.output ?? process.stdout } as any,
+  );
 
-  const rl = readline.createInterface({
-    input: options?.input ?? process.stdin,
-    output: options?.output ?? process.stdout,
-    terminal: true,
-  });
-
-  let collectedText = "";
-
-  try {
-    for await (const line of rl) {
-      if (line.trim() === RESPONSE_END_MARKER) {
-        break;
-      }
-      collectedText += line + "\n";
-    }
-  } finally {
-    rl.close();
-  }
+  const cleanText = collectedText.replace(new RegExp(`${RESPONSE_END_MARKER}\\s*$`), "").trim();
 
   return {
-    text: collectedText.trim(),
+    text: cleanText,
     finishReason: "stop",
     providerId: "manual",
     modelId: "manual-paste",

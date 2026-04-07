@@ -42,7 +42,7 @@ type JsonAuditResult = {
 };
 
 type OpportunityProbabilityOutput = {
-  opportunityProbabilities: Array<{
+  scores: Array<{
     opportunityKey: string;
     probability: number;
   }>;
@@ -170,7 +170,7 @@ function parseOpportunityProbabilityOutput(rawText: string): OpportunityProbabil
   }
 
   return {
-    opportunityProbabilities: rows.map((row) => {
+    scores: rows.map((row) => {
       const item = asRecord(row);
       if (!item) {
         throw new IntakeStageParseError("scores rows must be objects", rawText);
@@ -307,7 +307,7 @@ function validateOpportunityProbabilities(
   const fatalIssues: string[] = [];
   const missingKeys: string[] = [];
   const seen = new Set<string>();
-  for (const row of parsed.opportunityProbabilities) {
+  for (const row of parsed.scores) {
     if (seen.has(row.opportunityKey)) {
       fatalIssues.push(`Duplicate opportunity_key: ${row.opportunityKey}`);
     }
@@ -517,6 +517,7 @@ export class AiAgentIntakeStageLlmService {
     parse: (rawText: string) => T;
     validateDeterministic: (parsed: T) => string[];
     buildAuditContext: () => { label: string; content: string };
+    skipAuditIfDeterministicPass?: boolean;
   }): Promise<StageRunResult<T>> {
     const mainResult = await this.deps.invokeStage({
       stageName: input.stageName,
@@ -575,11 +576,17 @@ export class AiAgentIntakeStageLlmService {
     }
 
     let deterministicIssues = input.validateDeterministic(parsed);
-    let audit = await this.runQualityAudit({
-      stageName: input.stageName,
-      parsedOutput: parsed,
-      ...input.buildAuditContext(),
-    });
+    let audit: JsonAuditResult;
+
+    if (input.skipAuditIfDeterministicPass && deterministicIssues.length === 0) {
+      audit = { pass: true, issues: [], repairInstructions: [] };
+    } else {
+      audit = await this.runQualityAudit({
+        stageName: input.stageName,
+        parsedOutput: parsed,
+        ...input.buildAuditContext(),
+      });
+    }
 
     for (let attempt = 0; attempt <= MAX_QUALITY_REPAIR_ATTEMPTS; attempt += 1) {
       if (deterministicIssues.length === 0 && audit.pass) {
@@ -611,11 +618,15 @@ export class AiAgentIntakeStageLlmService {
       parsed = input.parse(repairResult.text);
       parsedFrom = repairResult;
       deterministicIssues = input.validateDeterministic(parsed);
-      audit = await this.runQualityAudit({
-        stageName: input.stageName,
-        parsedOutput: parsed,
-        ...input.buildAuditContext(),
-      });
+      if (input.skipAuditIfDeterministicPass && deterministicIssues.length === 0) {
+        audit = { pass: true, issues: [], repairInstructions: [] };
+      } else {
+        audit = await this.runQualityAudit({
+          stageName: input.stageName,
+          parsedOutput: parsed,
+          ...input.buildAuditContext(),
+        });
+      }
     }
 
     throw new Error(
@@ -684,7 +695,7 @@ export class AiAgentIntakeStageLlmService {
     }
 
     return batchResults.flatMap((batch) =>
-      batch.parsed.opportunityProbabilities.map((row) => ({
+      batch.parsed.scores.map((row) => ({
         opportunityId: batch.keyToOppId.get(row.opportunityKey) ?? row.opportunityKey,
         probability: row.probability,
         probabilityModelKey: batch.modelKey,
@@ -756,6 +767,7 @@ export class AiAgentIntakeStageLlmService {
             .map((row) => `${row.opportunityKey}: ${row.contentType} / ${row.summary}`)
             .join("\n") || "(empty)",
       }),
+      skipAuditIfDeterministicPass: true,
     });
 
     const validation = validateOpportunityProbabilities(stage.parsed, expectedKeys);
@@ -779,13 +791,11 @@ export class AiAgentIntakeStageLlmService {
       subsetRetryBudget: input.subsetRetryBudget - 1,
     });
 
-    const merged = new Map(
-      stage.parsed.opportunityProbabilities.map((row) => [row.opportunityKey, row] as const),
-    );
+    const merged = new Map(stage.parsed.scores.map((row) => [row.opportunityKey, row] as const));
     const originalKeyByOppId = new Map(
       Array.from(keyToOppId.entries()).map(([key, oppId]) => [oppId, key] as const),
     );
-    for (const row of missingResult.parsed.opportunityProbabilities) {
+    for (const row of missingResult.parsed.scores) {
       const retryOppId = missingResult.keyToOppId.get(row.opportunityKey);
       const originalKey = retryOppId ? originalKeyByOppId.get(retryOppId) : null;
       if (originalKey) {
@@ -798,7 +808,7 @@ export class AiAgentIntakeStageLlmService {
 
     return {
       parsed: {
-        opportunityProbabilities: expectedKeys
+        scores: expectedKeys
           .map((key) => merged.get(key))
           .filter((row): row is { opportunityKey: string; probability: number } => Boolean(row)),
       },
@@ -850,6 +860,7 @@ export class AiAgentIntakeStageLlmService {
           2,
         ),
       }),
+      skipAuditIfDeterministicPass: true,
     });
 
     const validation = validateSpeakerCandidates(stage.parsed, expectedKeys, input.referenceBatch);

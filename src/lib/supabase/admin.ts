@@ -8,10 +8,25 @@ export function createAdminClient() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   }
 
+  const resilientFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      return await fetch(input, init);
+    } catch (err) {
+      if (err instanceof TypeError && err.message.includes("fetch failed")) {
+        console.warn("[supabase] fetch failed (keep-alive drop?), retrying...", err.message);
+        return await fetch(input, init);
+      }
+      throw err;
+    }
+  };
+
   return createClient(supabaseUrl, secretApiKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    global: {
+      fetch: resilientFetch,
     },
   });
 }

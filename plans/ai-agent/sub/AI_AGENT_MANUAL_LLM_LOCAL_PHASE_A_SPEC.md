@@ -68,7 +68,7 @@
 3. **輸入** 讀取操作者貼上的**純文字**（網頁 LLM 的 response），直到約定結束符或 EOF（§4.2）。  
    **Timeout（決議）：** manual 路徑 **忽略** `invokeLLM` 的 `timeoutMs`（以及對遠端重試語意上的 `retries`）；**無上限等待**貼上，直到管理員完成 copy/paste 並送出結束協定。
 
-**終端互動實作（決議）：** 考量不額外引入新的依賴，直接使用 Node.js 原生的 **`readline / readline/promises`** 處理互動多行讀取流。`invokeLLM` 僅 dispatch，不直接操作 stdin 細節。
+**終端互動實作（決議）：** 採用 `@inquirer/prompts` 處理互動輸入；manual 模組統一封裝 `Inquirer` 讀取流程，`invokeLLM` 僅 dispatch，不直接操作 stdin 細節。
 
 **API 路徑不變：** 未開 env 時，`invokeLLM` 仍使用既有 `timeoutMs` / `retries` / provider 鏈。
 
@@ -153,20 +153,22 @@
 - **內容：** 僅供終端機**人讀**標頭，例如：
   - `stageName`：`opportunities` | `candidates`
   - `phase`：`main` | `schema_repair` | `quality_audit` | `quality_repair`
+  - `scope`：例如 `stage_audit:opportunities`（用於標頭分類與搜尋，不影響模型契約）
+  - `outputKey`：例如 `scores`（與程式內 parsed output key 對齊，便於除錯）
   - 其他字串鍵值可擴充，**不**影響模型契約。
 - **未傳時：** 標頭只印 §4.1（1）既有欄位即可。
 - **flow 回補（決議）：** manual 模組回傳 `InvokeLlmOutput` 時，保留原 metadata 並回補 `_m`、`invokeId`、`mode: "manual"` 等欄位供後續流程讀取。
 
-**（2）Prompt 本文：簡單序列化（決議）**
+**（2）Prompt 本文：統一 `buildLlmPrompt`（決議）**
 
-- 開發原則：**不額外開發 `buildLlmPrompt`**。手動模式下，我們只需要把 `modelInput.prompt` 或 `modelInput.messages` 用最簡單、人眼可讀的方式（例如 `JSON.stringify`，或是簡單的迴圈印出 `[Role]: Content`）打印到終端機。
-- 因為操作者最終是將內容貼到 ChatGPT / Web LLM 介面，這些介面非常聰明，不需要完美的 API 格式拼接，只要語意內容在即可。
+- `BEGIN`/`END` 之間印出的字串必須來自專案內**單一**函式（`buildLlmPrompt(modelInput)`），規則需與 API 路徑實際送進 provider 的拼接一致（避免「貼去網頁的」與「API 真餵的」語意不一致）。
+- **不**另維護第二套「僅供終端列印」的 prompt 字串；呼叫端不需要再傳一份重複的列印專用 prompt。
 
 操作者複製時**只取兩行邊界之間**（含換行與程式碼塊均可）：
 
 ```text
 <<<AI_AGENT_MANUAL_LLM_PROMPT_BEGIN>>>
-（此處為簡單打印出的 system / human messages）
+（此處為 buildLlmPrompt(modelInput) 的完整輸出）
 <<<AI_AGENT_MANUAL_LLM_PROMPT_END>>>
 ```
 
@@ -178,14 +180,21 @@
   - 可選再額外維護一個 `latest.txt` 供快速開啟（非必要）。
   - 目的：保留每次呼叫痕跡，方便回看與複製；終端機仍保留 BEGIN/END 輸出。
 
-**（3）操作提示（緊接 END 之後）**  
-簡短說明下一步：如何貼上模型輸出、如何結束輸入（見 4.2、§0.2 EOF）。
+**（3）操作提示（緊接 END 之後，英文）**
+
+Save location: `/logs/manual-prompts/prompt-YYYYMMDD-HHmmss-SSS-<invokeId>.txt`
+
+Please copy the Prompt above and paste it into a web LLM (e.g., ChatGPT / Claude).
+Then paste the **plain-text response** you get back below.
+When finished, type this on a new line:
+`<<<AI_AGENT_MANUAL_LLM_RESPONSE_END>>>`
+Or press `Ctrl-D` on an empty line to end input (EOF).
 
 ### 4.2 輸入內容（操作者貼回）
 
 - **契約（決議）：** 操作者只貼上**從其他網頁 LLM 取得的 assistant 純文字 response**（可含該頁產生的 markdown、程式碼围栏等）；**不**假設另有二進位或專用格式。下游仍以 **`extractJsonFromText`** 從該字串抽出 JSON（裸 JSON、Markdown json 围栏、或雜訊中的 `{...}` 等）。
 - **結束輸入（與 prompt 邊界區分）**
-  - 貼完 response 後，單獨一行結束字面量（擇一寫死）：例如 `<<<AI_AGENT_MANUAL_LLM_RESPONSE_END>>>` 或 `---STDIN_END---`；並在 §4.1（3）每次提示。
+  - 貼完 response 後，單獨一行結束字面量（寫死）：`<<<AI_AGENT_MANUAL_LLM_RESPONSE_END>>>`；並在 §4.1（3）每次提示。
   - 可另支援 **EOF（§0.2，如 Ctrl-D）** 結束；與結束行並存時優先順序由實作註明。
 - **等待行為：** 在收到結束符或 EOF 之前 **無 timeout**（決議 §2.3），一律等待管理員貼完。
 
@@ -235,26 +244,26 @@
 | **整合**     | `AiAgentIntakeStageLlmService` 仍可對 `invokeStage` 注入 mock；覆實路徑則測 `invokeLLM` + manual queue。        |
 | **E2E 手動** | 互動終端機跑 `ai:phase-a:once:manual`（或等價），小資料集跑通一輪 main+audit。                                  |
 
-`readline` 使用原則：僅用於收集貼上文字與結束動作，不在 manual 流程加入額外多步問答，避免拖慢每輪 LLM 手動回填。
+`Inquirer` 使用原則：僅用於收集貼上文字與結束動作，不在 manual 流程加入額外多步問答，避免拖慢每輪 LLM 手動回填。
 
 ---
 
 ## 8. 實作檢查清單（供開發 PR 對照）
 
-- [x] `AI_AGENT_MANUAL_LLM=true` 控制全域所有 `invokeLLM` 文字呼叫。
-- [x] `invokeLLM` 內不實作重處理，轉發至獨立 manual 模組（內含 FIFO queue 串行化）。
-- [x] manual 路徑忽略 timeout / retries，無上限等貼上。
-- [x] 若 manual 啟用且非 TTY：fail；禁止自動退回 API。
-- [x] 可選 `modelInput.metadata._m` 印於標頭。
-- [x] prompt 區僅簡單序列化，無第二套 prompt 字串。
-- [x] 標頭含 `invokeId`；prompt 包含 BEGIN/END。
-- [x] prompt 寫入 `/logs/manual-prompts/`，採時間戳。
-- [x] 輸入為 readline 純文字 + 結束協定。
-- [x] 正式預設不設 `AI_AGENT_MANUAL_LLM`。
-- [x] 本 PR 不包含 Supabase／Phase A 寫入控制開發。
-- [x] 文件註明預期貼上次數隨 batch 與 repair 倍增。
-- [x] 第一版要求 Recorder／DB 審計擴充；以終端輸出為主。
-- [x] 可選 `usage` 等欄位 placeholder。
+- [ ] `AI_AGENT_MANUAL_LLM=true` 時，**全域**所有 **`invokeLLM`** 文字呼叫走 manual（同一 process）。
+- [ ] **`invokeLLM` 內不**實作厚重終端機邏輯：轉發至**獨立 manual 模組**，內含 **FIFO queue** 串行化。
+- [ ] manual 路徑 **忽略 timeout**（與遠端 `retries` 語意），**無上限**等貼上直至結束符／EOF。
+- [ ] manual 啟用且非 TTY：**fail**；**禁止**自動退回 API。
+- [ ] 可選 **`modelInput.metadata._m`** 印於標頭；可用 `scope` 例如 `stage_audit:opportunities`。
+- [ ] Prompt 區僅用 **`buildLlmPrompt(modelInput)`**，無第二套列印字串。
+- [ ] 標頭含 `invokeId`；prompt 區含 `<<<AI_AGENT_MANUAL_LLM_PROMPT_BEGIN>>>` / `<<<AI_AGENT_MANUAL_LLM_PROMPT_END>>>`。
+- [ ] prompt 檔輸出路徑為 `/logs/manual-prompts/`，採時間戳 + `invokeId` 檔名，不覆蓋既有檔案。
+- [ ] 輸入契約為**網頁 LLM 回傳之純文字** + 結束符 `<<<AI_AGENT_MANUAL_LLM_RESPONSE_END>>>`。
+- [ ] 正式部署／runner **預設不設** `AI_AGENT_MANUAL_LLM`。
+- [ ] **本 PR 不包含** Supabase／Phase A **寫入控制**開發（§2.4）。
+- [ ] 文件註明**預期貼上次數**隨 batch 與 repair 倍增。
+- [ ] 第一版**不**要求 Recorder／DB 審計擴充；以終端輸出為主（§0.1、§1.3）。
+- [ ] （可選）`usage` 等 `InvokeLlmOutput` 欄位 placeholder。
 
 ---
 

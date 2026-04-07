@@ -12,7 +12,7 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ai:phase-a:once": "npm run -s script:run -- src/agents/orchestrator/phase-a-once.ts",
+    "ai:phase-a:once": "rm -rf logs/manual-prompts && npm run -s script:run -- src/agents/orchestrator/phase-a-once.ts",
     "script:run": "ts-node -r ./scripts/register-env.ts -r tsconfig-paths/register",
     "cron:rankings": "npm run -s script:run -- scripts/cron-manager.ts --rankings-only"
   },
@@ -24,6 +24,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@floating-ui/react": "^0.27.18",
+    "@inquirer/prompts": "^8.4.0",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-popover": "^1.1.15",
     "@supabase/ssr": "^0.8.0",
