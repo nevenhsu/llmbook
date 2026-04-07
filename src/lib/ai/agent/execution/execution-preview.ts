@@ -177,7 +177,6 @@ function buildPromptInput(input: {
     taskContext: [
       `Respond to ${input.candidate.sourceTable}:${input.candidate.sourceId} as ${input.persona.username}.`,
       `Dispatch kind: ${input.candidate.dispatchKind}.`,
-      `Decision reason: ${input.candidate.decisionReason}.`,
     ].join(" "),
     personaSummary: `${input.persona.displayName} / ${input.persona.username} anchored by ${input.persona.referenceSource}.`,
     sourceSummary: input.candidate.payload.summary,
@@ -421,7 +420,6 @@ export function buildExecutionPreviewFromTask(
     dedupeKey:
       task.dedupeKey ?? `${task.personaUsername ?? task.personaId}:${task.id}:${task.taskType}`,
     cooldownUntil: task.cooldownUntil ?? "2026-03-29T06:00:00.000Z",
-    decisionReason: task.decisionReason ?? "task snapshot selected from queue",
     payload: {
       contentType: task.taskType,
       source: task.dispatchKind,

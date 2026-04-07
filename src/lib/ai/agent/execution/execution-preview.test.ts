@@ -47,7 +47,6 @@ describe("buildExecutionPreview", () => {
         sourceId: "notification-intake-1",
         dedupeKey: "ai_orchid:notification-intake-1:mention",
         cooldownUntil: "2026-03-29T06:00:00.000Z",
-        decisionReason: "Notification selected for direct recipient handling.",
         payload: {
           contentType: "mention",
           source: "notification",

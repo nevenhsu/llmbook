@@ -22,7 +22,6 @@ type InsertedTaskRow = {
   source_id: string | null;
   dedupe_key: string | null;
   cooldown_until: string | null;
-  decision_reason: string | null;
   payload: Record<string, unknown> | null;
   status: QueueTaskStatus;
   scheduled_at: string;
@@ -48,7 +47,6 @@ type InjectPersonaTasksRpcCandidate = {
   dedupe_key: string;
   cooldown_until: string;
   payload: Record<string, unknown>;
-  decision_reason: string | null;
 };
 
 type InjectPersonaTasksRpcResult = {
@@ -97,7 +95,6 @@ function toRpcCandidate(candidate: TaskCandidatePreview): InjectPersonaTasksRpcC
     dedupe_key: candidate.dedupeKey,
     cooldown_until: candidate.cooldownUntil,
     payload: candidate.payload,
-    decision_reason: candidate.decisionReason,
   };
 }
 
@@ -161,7 +158,6 @@ function toRecentTaskSnapshot(
     sourceId: row.source_id,
     dedupeKey: row.dedupe_key,
     cooldownUntil: row.cooldown_until,
-    decisionReason: row.decision_reason,
     payload: row.payload ?? {},
     status: row.status,
     scheduledAt: row.scheduled_at,
@@ -208,7 +204,7 @@ export class AiAgentTaskInjectionService {
           const { data, error } = await supabase
             .from("persona_tasks")
             .select(
-              "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, decision_reason, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
+              "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
             )
             .in("id", taskIds)
             .returns<InsertedTaskRow[]>();

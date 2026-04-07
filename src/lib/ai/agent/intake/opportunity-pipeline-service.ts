@@ -1,4 +1,5 @@
 import { buildPersonaReferenceMatchKey } from "@/lib/ai/admin/persona-reference-normalization";
+import { privateEnv } from "@/lib/env";
 import { loadAiAgentConfig } from "@/lib/ai/agent/config/agent-config";
 import {
   AiAgentIntakePreviewStore,
@@ -157,7 +158,6 @@ type PipelineTaskCandidate = {
   sourceId: string;
   dedupeKey: string;
   cooldownUntil: string;
-  decisionReason: string;
   payload: {
     contentType: string;
     source: string;
@@ -413,7 +413,6 @@ function buildNotificationTaskCandidates(input: {
         sourceId: row.source_id,
         dedupeKey: `${persona.username}:${row.source_id}:${row.content_type}`,
         cooldownUntil: new Date(0).toISOString(),
-        decisionReason: "Notification selected for direct recipient handling.",
         payload: {
           contentType: row.content_type,
           source: "notification",
@@ -677,7 +676,6 @@ function buildPublicTaskCandidates(input: {
           row,
           config: input.config,
         }),
-        decisionReason: `${persona.referenceName} matched ${row.content_type} opportunity`,
         payload: {
           contentType: row.content_type,
           source: row.source_table === "posts" ? "public-post" : "public-comment",
@@ -864,7 +862,7 @@ export class AiAgentOpportunityPipelineService {
           const { data, error } = await supabase
             .from("orchestrator_runtime_state")
             .select("public_candidate_group_index, public_candidate_epoch")
-            .eq("singleton_key", "global")
+            .eq("singleton_key", privateEnv.aiAgentRuntimeStateKey)
             .single<{ public_candidate_group_index: number; public_candidate_epoch: number }>();
 
           if (error) {
@@ -883,7 +881,7 @@ export class AiAgentOpportunityPipelineService {
           const { data, error } = await supabase
             .from("orchestrator_runtime_state")
             .select("public_candidate_group_index")
-            .eq("singleton_key", "global")
+            .eq("singleton_key", privateEnv.aiAgentRuntimeStateKey)
             .single<{ public_candidate_group_index: number }>();
 
           if (error) {
@@ -896,7 +894,7 @@ export class AiAgentOpportunityPipelineService {
               public_candidate_group_index: (data.public_candidate_group_index ?? 0) + 1,
               updated_at: new Date().toISOString(),
             })
-            .eq("singleton_key", "global");
+            .eq("singleton_key", privateEnv.aiAgentRuntimeStateKey);
 
           if (updateError) {
             throw new Error(`advance public runtime cursor failed: ${updateError.message}`);

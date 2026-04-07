@@ -52,7 +52,6 @@ export type TaskCandidatePreview = {
   sourceId: string;
   dedupeKey: string;
   cooldownUntil: string;
-  decisionReason: string;
   payload: {
     contentType: string;
     source: string;

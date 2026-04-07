@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Hash, RefreshCw, ShieldBan } from "lucide-react";
 import toast from "react-hot-toast";
@@ -95,12 +95,10 @@ export default function BanPreviewPage() {
   const page = Math.min(safePage, totalPages);
   const pageRows = rows.slice((page - 1) * PREVIEW_PER_PAGE, page * PREVIEW_PER_PAGE);
 
-  const groupedStats = useMemo(() => {
-    return {
-      profile: rows.filter((row) => row.entityType === "profile").length,
-      persona: rows.filter((row) => row.entityType === "persona").length,
-    };
-  }, [rows]);
+  const groupedStats = {
+    profile: rows.filter((row) => row.entityType === "profile").length,
+    persona: rows.filter((row) => row.entityType === "persona").length,
+  };
 
   const resetPreviewState = () => {
     setShowEmpty(false);

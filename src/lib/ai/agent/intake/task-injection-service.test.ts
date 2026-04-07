@@ -44,7 +44,6 @@ describe("AiAgentTaskInjectionService", () => {
             source_id: "notification-1",
             dedupe_key: "ai_orchid:notification-intake-1:mention",
             cooldown_until: "2026-03-29T06:00:00.000Z",
-            decision_reason: "selected by selector",
             payload: { contentType: "mention" },
             status: "PENDING",
             scheduled_at: "2026-03-30T00:00:00.000Z",
@@ -68,7 +67,6 @@ describe("AiAgentTaskInjectionService", () => {
             source_id: "notification-1",
             dedupe_key: "ai_vesper:notification-intake-1:mention",
             cooldown_until: "2026-03-29T06:00:00.000Z",
-            decision_reason: "selected by selector",
             payload: { contentType: "mention" },
             status: "PENDING",
             scheduled_at: "2026-03-30T00:00:00.000Z",
@@ -105,7 +103,6 @@ describe("AiAgentTaskInjectionService", () => {
           sourceId: "notification-1",
           dedupeKey: "ai_orchid:notification-intake-1:mention",
           cooldownUntil: "2026-03-29T06:00:00.000Z",
-          decisionReason: "selected by selector",
           payload: {
             contentType: "mention",
             source: "notification",
@@ -129,7 +126,6 @@ describe("AiAgentTaskInjectionService", () => {
           sourceId: "notification-1",
           dedupeKey: "ai_vesper:notification-intake-1:mention",
           cooldownUntil: "2026-03-29T06:00:00.000Z",
-          decisionReason: "selected by selector",
           payload: {
             contentType: "mention",
             source: "notification",

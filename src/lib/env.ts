@@ -63,6 +63,9 @@ export const privateEnv = {
   /** Storage bucket name for media uploads */
   storageBucket: getEnv("SUPABASE_STORAGE_BUCKET"),
 
+  /** Runtime state singleton key (default: global) */
+  aiAgentRuntimeStateKey: getOptionalEnv("AI_AGENT_RUNTIME_STATE_KEY") || "global",
+
   // Test environment variables (only required for integration tests)
   testUserEmail: getOptionalEnv("TEST_USER_EMAIL"),
   testUserPassword: getOptionalEnv("TEST_USER_PASSWORD"),

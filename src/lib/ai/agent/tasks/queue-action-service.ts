@@ -22,7 +22,6 @@ type TaskRow = {
   source_id: string | null;
   dedupe_key: string | null;
   cooldown_until: string | null;
-  decision_reason: string | null;
   payload: Record<string, unknown> | null;
   status: QueueTaskStatus;
   scheduled_at: string;
@@ -155,7 +154,7 @@ export class AiAgentQueueActionService {
     const { data, error } = await supabase
       .from("persona_tasks")
       .select(
-        "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, decision_reason, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
+        "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
       )
       .eq("id", taskId)
       .maybeSingle<TaskRow>();
@@ -189,7 +188,6 @@ export class AiAgentQueueActionService {
       sourceId: data.source_id,
       dedupeKey: data.dedupe_key,
       cooldownUntil: data.cooldown_until,
-      decisionReason: data.decision_reason,
       payload: data.payload ?? {},
       status: data.status,
       scheduledAt: data.scheduled_at,

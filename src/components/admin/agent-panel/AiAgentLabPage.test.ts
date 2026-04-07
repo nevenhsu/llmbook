@@ -6,6 +6,7 @@ import ReactDOMClient from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
 import AiAgentLabPage from "@/components/admin/agent-panel/AiAgentLabPage";
+import type { AgentLabPageProps } from "@/components/admin/agent-lab/types";
 
 vi.mock("react-hot-toast", () => ({
   default: {
@@ -59,15 +60,32 @@ const models: AiModelConfig[] = [
   },
 ];
 
-function buildProps(overrides?: {
-  onSaveTask?: (input: { rowIndex: number }) => Promise<{
-    inserted: boolean;
-    skipReason: string | null;
-    taskId: string | null;
-    errorMessage: string | null;
-    status: string;
-  }>;
-}) {
+function buildProps(overrides?: { onSaveTask?: AgentLabPageProps["onSaveTask"] }) {
+  const orchidPersona = {
+    id: "persona-orchid",
+    displayName: "Orchid",
+    username: "ai_orchid",
+    avatarUrl: null,
+    href: "/personas/persona-orchid",
+    status: "active" as const,
+  };
+  const marlowePersona = {
+    id: "persona-marlowe",
+    displayName: "Marlowe",
+    username: "ai_marlowe",
+    avatarUrl: null,
+    href: "/personas/persona-marlowe",
+    status: "active" as const,
+  };
+  const vesperPersona = {
+    id: "persona-vesper",
+    displayName: "Vesper",
+    username: "ai_vesper",
+    avatarUrl: null,
+    href: "/personas/persona-vesper",
+    status: "inactive" as const,
+  };
+
   return {
     dataSource: "mock" as const,
     sourceModeOptions: [
@@ -88,11 +106,15 @@ function buildProps(overrides?: {
         },
         opportunities: [
           {
+            recordId: "opp-public-1",
             opportunityKey: "public-1",
             source: "public-post",
             link: "/posts/public-1",
             content: "Public post",
             createdAt: "2026-03-31T10:00:00.000Z",
+            probability: 0.8,
+            selected: true,
+            errorMessage: null,
           },
         ],
         selectorStage: {
@@ -102,11 +124,14 @@ function buildProps(overrides?: {
           outputData: { selectedOpportunityKeys: ["public-1"] },
           rows: [
             {
+              recordId: "opp-public-1",
               opportunityKey: "public-1",
               source: "public-post",
               link: "/posts/public-1",
               content: "Public post",
-              reason: "Reason",
+              createdAt: "2026-03-31T10:00:00.000Z",
+              probability: 0.8,
+              selected: true,
               errorMessage: null,
             },
           ],
@@ -116,19 +141,11 @@ function buildProps(overrides?: {
           prompt: "candidate prompt",
           inputData: { items: [] },
           outputData: { candidates: [] },
-          selectedReferences: [],
           rows: [
             {
               opportunityKey: "public-1",
               referenceName: "Orchid Reference",
-              targetPersona: {
-                id: "persona-orchid",
-                displayName: "Orchid",
-                href: "/personas/persona-orchid",
-              },
-              dispatchKind: "public" as const,
-              reason: "Reason",
-              dedupeKey: "dedupe-1",
+              persona: orchidPersona,
               errorMessage: null,
             },
           ],
@@ -145,11 +162,7 @@ function buildProps(overrides?: {
               taskId: "task-saved",
               candidateIndex: 0,
               opportunityKey: "public-1",
-              persona: {
-                id: "persona-orchid",
-                displayName: "Orchid",
-                href: "/personas/persona-orchid",
-              },
+              persona: orchidPersona,
               taskType: "comment" as const,
               status: "PENDING",
               saveState: "success" as const,
@@ -173,12 +186,17 @@ function buildProps(overrides?: {
                 sourceId: "post-1",
                 dedupeKey: "dedupe-1",
                 cooldownUntil: "2026-03-31T12:00:00.000Z",
-                decisionReason: "Reason",
                 payload: {
                   contentType: "comment",
                   source: "public-post",
                   summary: "Public post",
                   fixtureMode: "mixed-public-opportunity",
+                  boardId: null,
+                  postId: "post-1",
+                  commentId: null,
+                  parentCommentId: null,
+                  context: null,
+                  notificationType: null,
                 },
               },
               data: {},
@@ -187,11 +205,7 @@ function buildProps(overrides?: {
               taskId: null,
               candidateIndex: 1,
               opportunityKey: "public-1",
-              persona: {
-                id: "persona-marlowe",
-                displayName: "Marlowe",
-                href: "/personas/persona-marlowe",
-              },
+              persona: marlowePersona,
               taskType: "comment" as const,
               status: "PENDING",
               saveState: "idle" as const,
@@ -210,12 +224,17 @@ function buildProps(overrides?: {
                 sourceId: "post-1",
                 dedupeKey: "dedupe-2",
                 cooldownUntil: "2026-03-31T12:00:00.000Z",
-                decisionReason: "Reason",
                 payload: {
                   contentType: "comment",
                   source: "public-post",
                   summary: "Public post",
                   fixtureMode: "mixed-public-opportunity",
+                  boardId: null,
+                  postId: "post-1",
+                  commentId: null,
+                  parentCommentId: null,
+                  context: null,
+                  notificationType: null,
                 },
               },
               data: {},
@@ -224,11 +243,7 @@ function buildProps(overrides?: {
               taskId: null,
               candidateIndex: 2,
               opportunityKey: "public-1",
-              persona: {
-                id: "persona-vesper",
-                displayName: "Vesper",
-                href: "/personas/persona-vesper",
-              },
+              persona: vesperPersona,
               taskType: "comment" as const,
               status: "PENDING",
               saveState: "failed" as const,
@@ -252,12 +267,17 @@ function buildProps(overrides?: {
                 sourceId: "post-1",
                 dedupeKey: "dedupe-3",
                 cooldownUntil: "2026-03-31T12:00:00.000Z",
-                decisionReason: "Reason",
                 payload: {
                   contentType: "comment",
                   source: "public-post",
                   summary: "Public post",
                   fixtureMode: "mixed-public-opportunity",
+                  boardId: null,
+                  postId: "post-1",
+                  commentId: null,
+                  parentCommentId: null,
+                  context: null,
+                  notificationType: null,
                 },
               },
               data: {},
@@ -285,7 +305,6 @@ function buildProps(overrides?: {
           prompt: null,
           inputData: null,
           outputData: null,
-          selectedReferences: [],
           rows: [],
         },
         taskStage: {
@@ -301,9 +320,25 @@ function buildProps(overrides?: {
     },
     onRunSelector: vi.fn(),
     onRunCandidate: vi.fn(),
+    onSavePersonaGroup: vi.fn(async () => ({
+      personaGroup: {
+        totalReferenceCount: 10,
+        batchSize: 5,
+        groupIndex: 0,
+        maxGroupIndex: 1,
+      },
+      candidateStage: {
+        status: "success" as const,
+        prompt: null,
+        inputData: null,
+        outputData: null,
+        rows: [],
+      },
+      taskRows: [],
+    })),
     onSaveTask:
       overrides?.onSaveTask ??
-      vi.fn(async ({ rowIndex }: { rowIndex: number }) => ({
+      vi.fn(async ({ rowIndex }) => ({
         inserted: rowIndex === 1,
         skipReason: rowIndex === 2 ? "cooldown_active" : null,
         taskId: rowIndex === 1 ? "task-new" : null,
@@ -383,8 +418,8 @@ describe("AiAgentLabPage", () => {
     });
 
     expect(onSaveTask.mock.calls.map((call) => call[0].rowIndex)).toEqual([1, 2]);
-    expect(container.textContent).toContain("success");
-    expect(container.textContent).toContain("failed");
+    expect(container.textContent).toContain("Saved");
+    expect(container.textContent).toContain("Failed");
     expect(container.textContent).toContain("cooldown_active");
   });
 });

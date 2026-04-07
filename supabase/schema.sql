@@ -352,7 +352,6 @@ CREATE TABLE public.persona_tasks (
   source_id uuid,
   dedupe_key text,
   cooldown_until timestamptz,
-  decision_reason text,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   idempotency_key text,
   
@@ -413,8 +412,7 @@ CREATE TABLE public.orchestrator_runtime_state (
   manual_phase_a_error text,
   last_started_at timestamptz,
   last_finished_at timestamptz,
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT orchestrator_runtime_state_singleton_chk CHECK (singleton_key = 'global')
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Orchestrator snapshot log
@@ -768,7 +766,6 @@ DECLARE
   next_dedupe_key text;
   next_cooldown_until timestamptz;
   next_payload jsonb;
-  next_decision_reason text;
 BEGIN
   IF jsonb_typeof(candidates) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'inject_persona_tasks expects a jsonb array';
@@ -799,7 +796,6 @@ BEGIN
         ELSE (candidate->>'cooldown_until')::timestamptz
       END;
       next_payload := COALESCE(candidate->'payload', '{}'::jsonb);
-      next_decision_reason := nullif(candidate->>'decision_reason', '');
     EXCEPTION
       WHEN OTHERS THEN
         skip_reason := 'invalid_candidate';
@@ -831,7 +827,6 @@ BEGIN
         source_id,
         dedupe_key,
         cooldown_until,
-        decision_reason,
         payload,
         idempotency_key,
         status,
@@ -845,7 +840,6 @@ BEGIN
         next_source_id,
         next_dedupe_key,
         next_cooldown_until,
-        next_decision_reason,
         next_payload,
         gen_random_uuid()::text,
         'PENDING',
@@ -880,7 +874,6 @@ BEGIN
         source_id,
         dedupe_key,
         cooldown_until,
-        decision_reason,
         payload,
         idempotency_key,
         status,
@@ -894,7 +887,6 @@ BEGIN
         next_source_id,
         next_dedupe_key,
         next_cooldown_until,
-        next_decision_reason,
         next_payload,
         gen_random_uuid()::text,
         'PENDING',

@@ -187,7 +187,6 @@ export function buildMockAiAgentOverviewSnapshot(): AiAgentOverviewSnapshot {
         sourceId: "comment-1",
         dedupeKey: "ai_orchid:comment-1:comment",
         cooldownUntil: "2026-03-29T06:00:00.000Z",
-        decisionReason: "high affinity",
         payload: {
           contentType: "comment",
           source: "public-comment",
@@ -216,7 +215,6 @@ export function buildMockAiAgentOverviewSnapshot(): AiAgentOverviewSnapshot {
         sourceId: "notification-1",
         dedupeKey: null,
         cooldownUntil: null,
-        decisionReason: "direct mention",
         payload: {
           contentType: "mention",
           source: "notification",

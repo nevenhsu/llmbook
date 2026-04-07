@@ -128,7 +128,6 @@ describe("POST /api/admin/ai/agent/tasks/[id]/actions", () => {
         sourceId: "comment-1",
         dedupeKey: "ai_orchid:comment-1:comment",
         cooldownUntil: null,
-        decisionReason: "high affinity",
         payload: { source: "public-comment" },
         status: "SKIPPED",
         scheduledAt: "2026-03-29T01:03:00.000Z",

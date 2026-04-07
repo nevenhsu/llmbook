@@ -1778,9 +1778,6 @@ export default function AiAgentPanel({
                               </td>
                               <td className="space-y-1">
                                 <div className="text-base-content font-medium">{task.taskType}</div>
-                                <div className="text-base-content/60 text-xs">
-                                  {task.decisionReason ?? "No decision reason"}
-                                </div>
                               </td>
                               <td>{task.status}</td>
                               <td>{task.dispatchKind}</td>

@@ -75,7 +75,6 @@ export type AiAgentRecentTaskSnapshot = {
   sourceId: string | null;
   dedupeKey: string | null;
   cooldownUntil: string | null;
-  decisionReason: string | null;
   payload: Record<string, unknown>;
   status: QueueTaskStatus;
   scheduledAt: string;
@@ -116,7 +115,6 @@ type AiAgentTaskRow = {
   source_id: string | null;
   dedupe_key: string | null;
   cooldown_until: string | null;
-  decision_reason: string | null;
   payload: Record<string, unknown> | null;
   status: QueueTaskStatus;
   scheduled_at: string;
@@ -359,7 +357,7 @@ export class AiAgentOverviewStore {
     const { data, error } = await supabase
       .from("persona_tasks")
       .select(
-        "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, decision_reason, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
+        "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(limit)
@@ -404,7 +402,6 @@ export class AiAgentOverviewStore {
         sourceId: row.source_id,
         dedupeKey: row.dedupe_key,
         cooldownUntil: row.cooldown_until,
-        decisionReason: row.decision_reason,
         payload: row.payload ?? {},
         status: row.status,
         scheduledAt: row.scheduled_at,

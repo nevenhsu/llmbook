@@ -40,7 +40,6 @@ Both rules should be enforced atomically in SQL, not by app-side query/filter/in
 - `source_id`
 - `dedupe_key`
 - `cooldown_until`
-- `decision_reason`
 
 Existing queue fields remain:
 
@@ -121,7 +120,6 @@ Each candidate should contain:
 - `dedupe_key`
 - `cooldown_until`
 - `payload`
-- `decision_reason`
 
 The RPC should:
 

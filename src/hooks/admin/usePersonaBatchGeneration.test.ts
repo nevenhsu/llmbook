@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act } from "react";
+import { act, useEffect } from "react";
 import React from "react";
 import ReactDOMClient from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -102,10 +102,13 @@ describe("usePersonaBatchGeneration", () => {
   let latestHook: ReturnType<typeof usePersonaBatchGeneration> | null;
 
   function Harness() {
-    latestHook = usePersonaBatchGeneration({
+    const hook = usePersonaBatchGeneration({
       initialModels,
       initialProviders,
     });
+    useEffect(() => {
+      latestHook = hook;
+    }, [hook]);
     return null;
   }
 
@@ -814,7 +817,11 @@ describe("usePersonaBatchGeneration", () => {
       await flushPromises();
     });
 
-    const rowId = latestHook?.rows[0]?.rowId!;
+    const rowId = latestHook?.rows[0]?.rowId;
+    expect(rowId).toBeDefined();
+    if (!rowId) {
+      throw new Error("Expected first rowId to be defined");
+    }
 
     await act(async () => {
       latestHook?.updateContextPrompt(

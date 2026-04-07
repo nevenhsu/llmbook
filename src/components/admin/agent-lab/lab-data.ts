@@ -598,10 +598,6 @@ function buildTaskCandidatePayloads(input: {
       sourceId: lookup.sourceId,
       dedupeKey: `${row.persona.username}:${lookup.sourceId}:${contentType}`,
       cooldownUntil: new Date(0).toISOString(),
-      decisionReason:
-        dispatchKind === "notification"
-          ? "Notification selected for direct recipient handling."
-          : `${row.referenceName} matched ${contentType} opportunity`,
       payload: {
         contentType,
         source: lookup.source,
@@ -683,7 +679,6 @@ function toInjectPersonaTasksCandidate(candidate: TaskCandidatePreview) {
     source_id: candidate.sourceId,
     dedupe_key: candidate.dedupeKey,
     cooldown_until: candidate.cooldownUntil,
-    decision_reason: candidate.decisionReason,
     payload: {
       summary: candidate.payload.summary,
       boardId: candidate.payload.boardId,

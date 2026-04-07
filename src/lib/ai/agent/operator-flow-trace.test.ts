@@ -21,7 +21,6 @@ describe("operator-flow-trace", () => {
             sourceId: "notification-1",
             dedupeKey: null,
             cooldownUntil: null,
-            decisionReason: "mention",
             payload: {},
             status: "PENDING",
             scheduledAt: "2026-03-30T00:00:00.000Z",

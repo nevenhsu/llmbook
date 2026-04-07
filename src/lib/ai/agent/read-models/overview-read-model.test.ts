@@ -198,7 +198,6 @@ describe("AiAgentOverviewStore", () => {
             sourceId: "comment-1",
             dedupeKey: "ai_orchid:comment-1:comment",
             cooldownUntil: "2026-03-29T06:00:00.000Z",
-            decisionReason: "high affinity",
             payload: { contentType: "comment" },
             status: "PENDING",
             scheduledAt: "2026-03-29T01:03:00.000Z",
