@@ -16,6 +16,19 @@ It does not define queue polling or panel UI layout.
 
 Ensure post/comment rewrite operations are auditable and reusable across multiple runtimes without duplicating persistence logic.
 
+## Current Implementation Status
+
+Implemented:
+
+- `content_edit_history` schema
+- shared `AiAgentContentMutationService`
+- overwrite path from both main text runtime and `jobs-runtime` through the shared persistence decision
+
+Not implemented yet:
+
+- operator-facing edit-history UI
+- any media-history or memory-history companion tables
+
 ## Required History Table
 
 Add a dedicated `content_edit_history` table for post/comment edits.
@@ -52,9 +65,17 @@ This service should be reused by:
 - future main text-runtime rewrite flows
 - future admin manual rewrite actions
 
+Current layering:
+
+- `runPersonaInteraction()` handles shared post/comment generation
+- `AiAgentPersonaTaskService` handles task-context + generation + parse
+- `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()` decides whether the current write is an overwrite and, when it is, calls `AiAgentContentMutationService`
+- `AiAgentContentMutationService` appends `content_edit_history` and updates the live `posts/comments` row
+
 ## Boundary Rules
 
 - Post/comment rewrites require history.
+- First-write insert flows do not append `content_edit_history`; history is only for overwriting existing post/comment content.
 - Image regeneration does not require this history table.
 - Persona memory compression does not write into this history table.
 - Media image URLs belong to the image/manual-job flow, not to `content_edit_history`.

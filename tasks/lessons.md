@@ -17,6 +17,15 @@
 - 若 operator 明確要求看 queue 執行狀態，應恢復獨立 `Status` 欄，而不是把狀態塞回 `Job` cell。極簡表格不代表隱藏核心執行狀態。
 - 當使用者明確定稿 operator 文案（例如 `Pause / Start`）時，所有設計文檔與後續討論都必須立刻統一；不要在其他模組文檔殘留 `Stop / Restart` 或過渡命名。
 - 若專案已經有現成 lane key env（例如 `AI_AGENT_RUNTIME_STATE_KEY`），新的 queue/runtime 設計應直接綁定同一個 key 來源；不要另外描述成獨立、不相干的 runtime key 機制。
+- `content_edit_history` 必須設計成 append-only timeline，同一個 `post/comment` 可累積多筆覆寫紀錄；shared content mutation/history service 不應綁死在 jobs-runtime，未來 main runtime 只要有 overwrite flow 也必須走同一條 history 寫入路徑。
+- 若 admin/manual flow 本質上是在重跑既有 `persona_task`，不要描述成另一套獨立 executor contract；應明確以 `persona_task.payload/source/result` 為 source of truth，只補共享 rerun + overwrite persistence path。
+- 若同一套 `persona_task` 執行邏輯會被 first run、rerun、與 interaction test 共用，應把共用部分提升成 shared persona-task service：共用 `task -> prompt -> generation -> parse`，再由不同 runtime 決定 insert、overwrite、或 preview-only persistence。
+- 當使用者明確把 persona-task execution mode 收斂成 `runtime/test` 時，就不要再讓 `first_run/rerun` 滲進生成階段；prompt 文案保持 mode-agnostic，只有 `test` 不更新 Supabase，而 runtime persistence 才決定 insert 或 overwrite。
+- 當 mode 或流程語意已經改掉時，對外 persistence API 名稱也要同步收斂；若 runtime 已不再有 `rerun` mode，就不要讓 method/result/dependency 名稱殘留 `rerun`，應改成仍然正確描述現況的 `overwrite` 或更中性的語意。
+- 若 `preview` 與 `test` 的邏輯都只是 shared generation 且不寫 Supabase，就不要維持兩個 mode 名稱；統一成單一 no-write mode，讓 mode 只保留真正有流程差異的分支，例如 `runtime | preview`。
+- 若目標是讓多個 runtime 共用 post/comment LLM flow，`AiAgentPersonaTaskService` 應只負責 task context + shared generation + parse；insert/overwrite 這類 Supabase persistence 要移到獨立的 persistence service，避免 service 名稱與責任再次混濁。
+- 不要把「哪個 runtime 在跑」直接等同於「一定 insert 或一定 overwrite」；shared persistence 應在真正寫 Supabase 前，根據 `persona_tasks.result_id/result_type` 判斷是 first-write insert 還是 overwrite + history。
+- 只更新 `/plans` 不夠；只要核心架構或 canonical flow 改了，`docs/ai-admin/*` 這種 repo-level 設計文檔也要同一輪同步，否則會留下比實作更舊的心智模型。
 - Keep one Phase A source of truth only: `ai_opps -> opportunities -> public candidates / notification direct tasking -> persona_tasks`.
 - Remove old flow code, tests, and docs in the same pass; execute-path migration alone is not enough.
 - Keep preview, admin, and runtime on the same stage contract even when preview stays fixture-backed.

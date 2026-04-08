@@ -69,7 +69,10 @@ import { assistInteractionTaskContext } from "@/lib/ai/admin/interaction-context
 import type { PersonaReferenceCheckResult } from "@/lib/ai/admin/persona-batch-contract";
 import { assistPersonaPrompt } from "@/lib/ai/admin/persona-prompt-assist-service";
 import { previewPersonaGeneration } from "@/lib/ai/admin/persona-generation-preview-service";
-import { previewPersonaInteraction } from "@/lib/ai/admin/interaction-preview-service";
+import {
+  previewPersonaInteraction,
+  runPersonaInteraction,
+} from "@/lib/ai/admin/interaction-preview-service";
 import {
   asRecord,
   buildLlmErrorDetailsSuffix,
@@ -1610,7 +1613,7 @@ export class AdminAiControlPlaneStore {
     });
   }
 
-  public async previewPersonaInteraction(input: {
+  public async runPersonaInteraction(input: {
     personaId: string;
     modelId: string;
     taskType: PromptActionType;
@@ -1619,11 +1622,27 @@ export class AdminAiControlPlaneStore {
     targetContext?: PromptTargetContext;
   }): Promise<PreviewResult> {
     const { document, providers, models } = await this.getActiveControlPlane();
-    return previewPersonaInteraction({
+    return runPersonaInteraction({
       ...input,
       document,
       providers,
       models,
+      getPersonaProfile: (personaId) => this.getPersonaProfile(personaId),
+      recordLlmInvocationError: (event) => this.recordLlmInvocationError(event),
+    });
+  }
+
+  public async previewPersonaInteraction(input: {
+    personaId: string;
+    modelId: string;
+    taskType: PromptActionType;
+    taskContext: string;
+    boardContext?: PromptBoardContext;
+    targetContext?: PromptTargetContext;
+  }): Promise<PreviewResult> {
+    return previewPersonaInteraction({
+      ...input,
+      ...(await this.getActiveControlPlane()),
       getPersonaProfile: (personaId) => this.getPersonaProfile(personaId),
       recordLlmInvocationError: (event) => this.recordLlmInvocationError(event),
     });

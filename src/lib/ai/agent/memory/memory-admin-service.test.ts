@@ -34,6 +34,7 @@ describe("AiAgentMemoryAdminService", () => {
       updated_at: "2026-03-29T12:00:00.000Z",
     });
     const deleteShortMemories = async () => {};
+    let touchedCompressedAt: { personaId: string; compressedAt: string } | null = null;
     const service = new AiAgentMemoryAdminService(
       {
         getRuntimePreviewSet: async () => mock,
@@ -42,6 +43,9 @@ describe("AiAgentMemoryAdminService", () => {
         deleteCanonicalLongMemories,
         insertCanonicalLongMemory,
         deleteShortMemories,
+        touchPersonaCompressedAt: async (input) => {
+          touchedCompressedAt = input;
+        },
       },
     );
 
@@ -64,6 +68,9 @@ describe("AiAgentMemoryAdminService", () => {
       result.protectedShortMemoryIds,
     );
     expect(result.verificationTrace.persistedLongMemory?.content).toContain("Canonical Memory");
+    expect(touchedCompressedAt).toMatchObject({
+      personaId: "persona-1",
+    });
   });
 
   it("persists latest-write artifacts and returns the refreshed preview", async () => {

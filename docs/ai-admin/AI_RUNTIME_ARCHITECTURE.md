@@ -2,7 +2,12 @@
 
 This document is the high-level reference for the current AI persona runtime architecture.
 
-Current status: the persisted Phase A model and Phase A runtime-control path described here are implemented. Remaining guarded execution lanes belong to later phases, not to Phase A.
+Current status:
+
+- the persisted Phase A model and Phase A runtime-control path are implemented
+- the shared post/comment generation core is implemented and reused by admin preview, main text runtime, jobs-runtime, and tests
+- the backend `jobs-runtime` lane is implemented
+- the operator-console UI refactor is still tracked under `/plans`
 
 Detailed implementation contracts live in:
 
@@ -20,19 +25,20 @@ The AI stack is split into four cooperating areas:
 1. `Admin control plane`
    - provider/model ordering
    - policy editing and publishing
-   - operator/runtime surfaces
    - preview and debugging surfaces
+   - no-write review surface over shared generation
 2. `Long-running runtime app`
    - opportunity ingestion and scoring
    - public candidate matching
    - task queue materialization
    - background polling / heartbeat / lease control
 3. `Execution lanes`
-   - text task drain
+   - main text task drain
+   - manual `jobs-runtime`
    - independent media queue
    - idle memory maintenance
 4. `Persistence and observability`
-   - `ai_opps`, `ai_opp_groups`, `persona_tasks`, `media`, memory tables
+   - `ai_opps`, `ai_opp_groups`, `persona_tasks`, `job_tasks`, `media`, memory tables
    - runtime state, run logs, checkpoints, and diagnostics
 
 ## High-Level Execution Model
@@ -42,13 +48,16 @@ Phase A: Orchestrator
   poll sources -> ingest ai_opps -> score opportunities -> match public personas -> enqueue persona_tasks
 
 Phase B: Text Drain
-  claim pending text tasks -> run exactly one text task at a time -> persist outputs and follow-up work
+  claim pending persona_tasks -> generate through shared post/comment core -> persist first-write outputs and follow-up work
 
 Phase C: Idle Maintenance
   use idle/cooldown gap for memory compression when no text tasks remain
 
 Independent Flow: Image Queue
   watch pending media rows -> generate image -> upload -> update media status
+
+Independent Flow: Jobs Runtime
+  poll job_tasks -> claim exactly one manual operator job at a time -> reuse shared execution modules -> decide insert vs overwrite at write time
 ```
 
 ## Phase Responsibilities
@@ -80,6 +89,14 @@ Phase A does **not**:
 
 Phase B consumes pending `persona_tasks` rows in priority order and executes one text task at a time through the shared text lane.
 
+Current write path:
+
+1. `AiAgentPersonaTaskService.generateFromTask()`
+2. `runPersonaInteraction()`
+3. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
+   - insert new `post/comment` when `persona_tasks.result_id/result_type` is empty
+   - overwrite existing `post/comment` and append `content_edit_history` when the task already points at a persisted target
+
 Priority remains:
 
 1. notification replies
@@ -89,6 +106,32 @@ Priority remains:
 ### Phase C: Idle Maintenance
 
 Phase C runs only when text tasks are clear. The main consumer is memory compression.
+
+### Jobs Runtime: Manual Operator Queue
+
+`jobs-runtime` is a separate execution lane for admin-triggered work.
+
+It owns:
+
+- `job_tasks`
+- `job_runtime_state`
+- single-worker polling / lease / pause state
+
+It does **not** share the main runtime queue or lease.
+
+Instead, it reuses shared execution services behind a different queue lane:
+
+- `public_task` / `notification_task`
+  - regenerate content from the latest `persona_task`
+  - call the same shared persistence path as the main text runtime
+  - insert a new `post/comment` when the task has no persisted target
+  - overwrite and append `content_edit_history` when the task already points at a persisted target
+- `image_generation`
+  - reuse media generation/update services
+- `memory_compress`
+  - reuse memory compressor
+
+`job_tasks.runtime_key` and `job_runtime_state.runtime_key` are bound to `AI_AGENT_RUNTIME_STATE_KEY`, so `global` and `local` workers do not claim each other's jobs.
 
 ## Persisted Opportunity Model
 
@@ -205,6 +248,10 @@ Key rules:
 - runtime app heartbeat determines whether operator controls are available
 - manual `Run Phase A` does not reset the automatic cooldown timer
 
+Current backend action names are still `pause`, `resume`, and `run_phase_a`.
+
+The planned operator-console copy is tracked separately under `/plans/ai-agent/operator-console`; do not treat unfinished UI wording as the backend contract.
+
 ## Source Polling and Watermarks
 
 The runtime continues to use per-source operational watermarks:
@@ -228,6 +275,12 @@ Queue gating remains SQL-backed:
 - notification rows dedupe by source notification and recipient persona
 - public rows dedupe by `dedupe_key + persona_id` inside cooldown windows
 
+Execution uses the shared generation/persistence split:
+
+- generation: `AiAgentPersonaTaskService` + `runPersonaInteraction()`
+- persistence: `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
+  - decides insert vs overwrite at write time from `persona_tasks.result_id/result_type`
+
 ### Image Tasks
 
 Media generation is independent from the text lane and continues to run from `media`.
@@ -235,6 +288,19 @@ Media generation is independent from the text lane and continues to run from `me
 ### Memory Tasks
 
 Memory compression remains an idle-maintenance concern and is not part of Phase A.
+
+### Jobs Runtime Tasks
+
+Manual operator jobs live in `job_tasks`.
+
+Current types:
+
+- `public_task`
+- `notification_task`
+- `image_generation`
+- `memory_compress`
+
+`jobs-runtime` is serial and does not process multiple `job_tasks` concurrently.
 
 ## Current Architectural Boundary
 

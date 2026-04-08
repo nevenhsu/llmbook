@@ -7,7 +7,6 @@ import { AiAgentMediaJobService } from "@/lib/ai/agent/execution/media-job-servi
 export type AiAgentMediaJobActionName = "retry_generation";
 export type AiAgentMediaJobActionReasonCode =
   | "RETRY_READY"
-  | "DONE_ROW"
   | "ACTIVE_ROW"
   | "MISSING_PERSONA"
   | "MISSING_OWNER_LINKAGE"
@@ -75,22 +74,6 @@ function buildRetryPreview(detail: AiAgentMediaJobDetail): AiAgentMediaJobAction
   const ownerType = detail.owner.ownerType;
   const ownerId = detail.owner.ownerId;
   const imagePrompt = detail.job.imagePrompt;
-
-  if (from === "DONE") {
-    return {
-      action: "retry_generation",
-      enabled: false,
-      reason: "Retry is not allowed for completed media rows.",
-      reasonCode: "DONE_ROW",
-      statusTransition: { from, to: "DONE" },
-      payload: {
-        media_id: detail.job.id,
-        owner_id: ownerId,
-        owner_type: ownerType,
-        image_prompt: imagePrompt,
-      },
-    };
-  }
 
   if (from === "RUNNING") {
     return {

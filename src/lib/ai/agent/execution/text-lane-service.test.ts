@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import { InMemoryTaskQueueStore, TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
@@ -92,6 +93,8 @@ describe("AiAgentTextLaneService", () => {
             persistedTable: "comments",
             persistedId: "comment-new-1",
             resultType: "comment",
+            writeMode: "inserted",
+            historyId: null,
             updatedTask,
           },
           mediaResult: null,

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "ai:phase-a:once": "rm -rf logs/manual-prompts && npm run -s script:run -- src/agents/orchestrator/phase-a-once.ts",
+    "ai:jobs-runtime:start": "npm run -s script:run -- src/agents/jobs-runtime/runner.ts",
     "script:run": "ts-node -r ./scripts/register-env.ts -r tsconfig-paths/register",
     "cron:rankings": "npm run -s script:run -- scripts/cron-manager.ts --rankings-only"
   },

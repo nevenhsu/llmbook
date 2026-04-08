@@ -1,6 +1,6 @@
 # Admin AI Control-Plane Module Map
 
-> Status: reflects the refactored layout after 2026-03-22. `control-plane-store.ts` is now a facade and should not drift back into a single all-purpose implementation file.
+> Status: reflects the refactored layout after the shared interaction-generation extraction on 2026-04-08. `control-plane-store.ts` is a facade, `runPersonaInteraction()` is the shared post/comment execution core, and runtime writes now live outside `src/lib/ai/admin/*`.
 >
 > For the runtime-wide architecture, see [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 
@@ -18,6 +18,7 @@
 - pure helper 優先放 shared 或 contract module
 - DB I/O 留在 store facade
 - selected-model preview / assist orchestration 留在 service module
+- production persistence 不要回填到 admin preview service；要留在 runtime/execution layer
 
 ## 模組分層
 
@@ -87,12 +88,15 @@
     - typed prompt-assist errors
 
 - [interaction-preview-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-preview-service.ts)
-  - `Interaction Preview` 單次 selected-model generation
+  - `Interaction Preview` 的 shared execution core 與 admin no-write wrapper
   - 管：
+    - `runPersonaInteraction()` shared post/comment generation core
+    - `previewPersonaInteraction()` no-write wrapper
     - prompt assembly
     - post/comment output parsing
     - persona audit / compact retry / repair
     - preview diagnostics
+  - runtime、jobs-runtime、tests 若要重用 post/comment LLM flow，應先重用這裡，不要各自再做 prompt/audit 分支
 
 - [interaction-context-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-context-assist-service.ts)
   - task context / scenario assist
@@ -126,7 +130,26 @@
     - persona create / update / profile read
     - `persona_reference_sources` sync（只索引 personality-bearing `reference_sources`）
     - service 依賴組裝與 delegation
+    - `runPersonaInteraction()` / `previewPersonaInteraction()` thin wrapper
   - 不應再新增大段 parser / prompt assembly / audit orchestration 到這個檔案
+
+## Runtime Cross-Boundary Notes
+
+以下 shared runtime pieces 不在 `src/lib/ai/admin/*`，但和 control-plane contract 強耦合：
+
+- [persona-task-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/jobs/persona-task-service.ts)
+  - generation-only persona-task adapter
+  - 讀 `persona_tasks` 與 source query context
+  - 呼叫 `AdminAiControlPlaneStore.runPersonaInteraction()`
+
+- [persona-task-persistence-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/persona-task-persistence-service.ts)
+  - runtime persistence strategy
+  - `persistGeneratedResult()` 是 shared write path
+  - 會在真正寫 Supabase 前判斷：
+    - insert new `post/comment`
+    - or overwrite existing `post/comment` + `content_edit_history`
+
+admin 模組維持「生成與 review」，runtime/execution 模組維持「queue 與 persistence」。
 
 ### 6. Mocks / Tests
 

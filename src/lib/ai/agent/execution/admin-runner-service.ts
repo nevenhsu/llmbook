@@ -17,11 +17,18 @@ import {
   type AiAgentMediaExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/media-job-service";
 import {
+  AiAgentPersonaTaskPersistenceService,
+  type AiAgentTextExecutionPersistedResult,
+} from "@/lib/ai/agent/execution/persona-task-persistence-service";
+import {
+  AiAgentPersonaTaskService,
+  type AiAgentPersonaTaskGenerationResult,
+} from "@/lib/ai/agent/jobs/persona-task-service";
+import {
   AiAgentMemoryCompressorService,
   type AiAgentMemoryPersistedCompressResponse,
 } from "@/lib/ai/agent/memory";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
-import type { QueueTaskStatus } from "@/lib/ai/task-queue/task-queue";
 
 type PersonaIdentityRow = {
   id: string;
@@ -39,7 +46,7 @@ type TaskRow = {
   dedupe_key: string | null;
   cooldown_until: string | null;
   payload: Record<string, unknown> | null;
-  status: QueueTaskStatus;
+  status: AiAgentRecentTaskSnapshot["status"];
   scheduled_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -56,6 +63,10 @@ type TaskRow = {
 type AdminRunnerServiceDeps = {
   loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
   compressNextPersona: () => Promise<AiAgentMemoryPersistedCompressResponse | null>;
+  generateTaskContent: (taskId: string) => Promise<AiAgentPersonaTaskGenerationResult>;
+  persistGeneratedTaskResult: (input: {
+    generated: AiAgentPersonaTaskGenerationResult;
+  }) => Promise<AiAgentTextExecutionPersistedResult>;
   executeTextTask: (
     task: AiAgentRecentTaskSnapshot,
   ) => Promise<AiAgentTextExecutionPersistedResult>;
@@ -106,17 +117,11 @@ export type AiAgentRunnerExecutedResponse = {
   orchestratorResult: AiAgentOrchestratorExecutedResult | null;
 };
 
-export type AiAgentTextExecutionPersistedResult = {
-  taskId: string;
-  persistedTable: "comments" | "posts";
-  persistedId: string;
-  resultType: "comment" | "post";
-  updatedTask: AiAgentRecentTaskSnapshot;
-};
-
 export type AiAgentOrchestratorExecutedResult = {
   runtimeState: AiAgentRuntimeStateSnapshot;
 };
+
+export type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-persistence-service";
 
 export type AiAgentRunnerResponse =
   | AiAgentRunnerPreviewResponse
@@ -140,6 +145,8 @@ export class AiAgentAdminRunnerService {
   private readonly deps: AdminRunnerServiceDeps;
 
   public constructor(options?: { deps?: Partial<AdminRunnerServiceDeps> }) {
+    const personaTaskService = new AiAgentPersonaTaskService();
+    const personaTaskPersistenceService = new AiAgentPersonaTaskPersistenceService();
     this.deps = {
       loadTaskById: options?.deps?.loadTaskById ?? ((taskId) => this.readTaskById(taskId)),
       compressNextPersona:
@@ -148,6 +155,20 @@ export class AiAgentAdminRunnerService {
           const result = await new AiAgentMemoryCompressorService().runNext();
           return result.mode === "executed" ? result.compressionResult : null;
         }),
+      generateTaskContent:
+        options?.deps?.generateTaskContent ??
+        ((taskId) =>
+          personaTaskService.generateFromTask({
+            personaTaskId: taskId,
+            mode: "runtime",
+          })),
+      persistGeneratedTaskResult:
+        options?.deps?.persistGeneratedTaskResult ??
+        ((input) =>
+          personaTaskPersistenceService.persistGeneratedResult({
+            ...input,
+            sourceRuntime: "text_runtime",
+          })),
       executeTextTask: options?.deps?.executeTextTask ?? ((task) => this.executeTextTask(task)),
       executeMediaTask:
         options?.deps?.executeMediaTask ??
@@ -365,7 +386,10 @@ export class AiAgentAdminRunnerService {
         target: input.target,
         targetLabel: preview.targetLabel,
         selectedTaskId: task.id,
-        summary: `Persisted ${textResult.resultType} ${textResult.persistedId} and completed queue task ${task.id}.`,
+        summary:
+          textResult.writeMode === "overwritten"
+            ? `Overwrote ${textResult.resultType} ${textResult.persistedId} and completed queue task ${task.id}.`
+            : `Persisted ${textResult.resultType} ${textResult.persistedId} and completed queue task ${task.id}.`,
         executionPreview: buildExecutionPreviewFromTask(textResult.updatedTask),
         compressionResult: null,
         textResult,
@@ -445,126 +469,10 @@ export class AiAgentAdminRunnerService {
   private async executeTextTask(
     task: AiAgentRecentTaskSnapshot,
   ): Promise<AiAgentTextExecutionPersistedResult> {
-    const supabase = createAdminClient();
-    const executionPreview = buildExecutionPreviewFromTask(task);
-    const hasFailedChecks = executionPreview.deterministicChecks.some((check) => !check.pass);
-    if (hasFailedChecks) {
-      throw new Error("text execution blocked by deterministic checks");
-    }
-
-    if (executionPreview.parsedOutput.kind === "comment") {
-      const notificationTarget = task.payload as {
-        postId?: string | null;
-        commentId?: string | null;
-        parentCommentId?: string | null;
-      };
-      let sourcePost: { id: string } | { id: string; post_id: string } | null = null;
-      let sourceError: Error | null = null;
-
-      if (task.sourceTable === "posts") {
-        const response = await supabase
-          .from("posts")
-          .select("id")
-          .eq("id", task.sourceId ?? "")
-          .single<{ id: string }>();
-        sourcePost = response.data;
-        sourceError = response.error;
-      } else if (task.sourceTable === "comments") {
-        const response = await supabase
-          .from("comments")
-          .select("id, post_id")
-          .eq("id", task.sourceId ?? "")
-          .single<{ id: string; post_id: string }>();
-        sourcePost = response.data;
-        sourceError = response.error;
-      } else if (notificationTarget?.postId) {
-        const response = await supabase
-          .from("posts")
-          .select("id")
-          .eq("id", notificationTarget.postId)
-          .single<{ id: string }>();
-        sourcePost = response.data;
-        sourceError = response.error;
-      }
-
-      if (sourceError || !sourcePost) {
-        throw new Error(`load text source failed: ${sourceError?.message ?? "missing source"}`);
-      }
-
-      const postId = "post_id" in sourcePost ? sourcePost.post_id : sourcePost.id;
-      const parentId =
-        task.sourceTable === "comments"
-          ? task.sourceId
-          : task.sourceTable === "notifications"
-            ? (notificationTarget?.commentId ?? notificationTarget?.parentCommentId ?? null)
-            : null;
-      const { data: insertedComment, error: insertError } = await supabase
-        .from("comments")
-        .insert({
-          post_id: postId,
-          parent_id: parentId,
-          persona_id: task.personaId,
-          body: executionPreview.parsedOutput.markdown,
-        })
-        .select("id")
-        .single<{ id: string }>();
-
-      if (insertError || !insertedComment) {
-        throw new Error(`insert comment failed: ${insertError?.message ?? "missing inserted row"}`);
-      }
-
-      const updatedTask = await this.markTaskDone(task, insertedComment.id, "comment");
-      return {
-        taskId: task.id,
-        persistedTable: "comments",
-        persistedId: insertedComment.id,
-        resultType: "comment",
-        updatedTask,
-      };
-    }
-
-    const notificationTarget = task.payload as {
-      postId?: string | null;
-    };
-    const sourcePostId =
-      task.sourceTable === "notifications"
-        ? (notificationTarget?.postId ?? "")
-        : (task.sourceId ?? "");
-    const { data: sourcePost, error: sourceError } = await supabase
-      .from("posts")
-      .select("id, board_id")
-      .eq("id", sourcePostId)
-      .single<{ id: string; board_id: string }>();
-
-    if (sourceError || !sourcePost) {
-      throw new Error(`load text source failed: ${sourceError?.message ?? "missing source"}`);
-    }
-
-    const { data: insertedPost, error: insertError } = await supabase
-      .from("posts")
-      .insert({
-        persona_id: task.personaId,
-        board_id: sourcePost.board_id,
-        title: executionPreview.parsedOutput.title,
-        body: executionPreview.parsedOutput.body,
-        status: "PUBLISHED",
-        post_type: "text",
-      })
-      .select("id")
-      .single<{ id: string }>();
-
-    if (insertError || !insertedPost) {
-      throw new Error(`insert post failed: ${insertError?.message ?? "missing inserted row"}`);
-    }
-
-    const updatedTask = await this.markTaskDone(task, insertedPost.id, "post");
-    return {
-      taskId: task.id,
-      persistedTable: "posts",
-      persistedId: insertedPost.id,
-      resultType: "post",
-      updatedTask,
-    };
+    const generated = await this.deps.generateTaskContent(task.id);
+    return this.deps.persistGeneratedTaskResult({
+      generated,
+    });
   }
 
   private async maybeExecuteMediaForTask(
@@ -580,73 +488,6 @@ export class AiAgentAdminRunnerService {
     }
 
     return this.deps.executeMediaTask(task);
-  }
-
-  private async markTaskDone(
-    task: AiAgentRecentTaskSnapshot,
-    resultId: string,
-    resultType: "comment" | "post",
-  ): Promise<AiAgentRecentTaskSnapshot> {
-    const supabase = createAdminClient();
-    const completedAt = new Date().toISOString();
-    const { data, error } = await supabase
-      .from("persona_tasks")
-      .update({
-        status: "DONE",
-        started_at: task.startedAt ?? completedAt,
-        completed_at: completedAt,
-        result_id: resultId,
-        result_type: resultType,
-        error_message: null,
-        lease_owner: null,
-        lease_until: null,
-      })
-      .eq("id", task.id)
-      .eq("status", task.status)
-      .select(
-        "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
-      )
-      .single<TaskRow>();
-
-    if (error || !data) {
-      throw new Error(`complete text task failed: ${error?.message ?? "missing updated task"}`);
-    }
-
-    const { data: persona, error: personaError } = await supabase
-      .from("personas")
-      .select("id, username, display_name")
-      .eq("id", data.persona_id)
-      .maybeSingle<PersonaIdentityRow>();
-
-    if (personaError) {
-      throw new Error(`load task persona identity failed: ${personaError.message}`);
-    }
-
-    return {
-      id: data.id,
-      personaId: data.persona_id,
-      personaUsername: persona?.username ?? null,
-      personaDisplayName: persona?.display_name ?? null,
-      taskType: data.task_type,
-      dispatchKind: data.dispatch_kind,
-      sourceTable: data.source_table,
-      sourceId: data.source_id,
-      dedupeKey: data.dedupe_key,
-      cooldownUntil: data.cooldown_until,
-      payload: data.payload ?? {},
-      status: data.status,
-      scheduledAt: data.scheduled_at,
-      startedAt: data.started_at,
-      completedAt: data.completed_at,
-      retryCount: data.retry_count,
-      maxRetries: data.max_retries,
-      leaseOwner: data.lease_owner,
-      leaseUntil: data.lease_until,
-      resultId: data.result_id,
-      resultType: data.result_type,
-      errorMessage: data.error_message,
-      createdAt: data.created_at,
-    };
   }
 
   private async readTaskById(taskId: string): Promise<AiAgentRecentTaskSnapshot | null> {

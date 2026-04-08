@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { AiAgentMediaJobActionService } from "@/lib/ai/agent/execution/media-job-action-service";
 
 const baseDetail = {
@@ -36,7 +37,7 @@ const baseDetail = {
 };
 
 describe("AiAgentMediaJobActionService", () => {
-  it("returns a blocked preview for completed rows", async () => {
+  it("returns an enabled preview for completed rows so they can be regenerated", async () => {
     const service = new AiAgentMediaJobActionService({
       deps: {
         getJobDetail: async () => ({
@@ -48,9 +49,9 @@ describe("AiAgentMediaJobActionService", () => {
 
     const result = await service.previewAction("media-1");
 
-    expect(result.actionPreview.enabled).toBe(false);
-    expect(result.actionPreview.reasonCode).toBe("DONE_ROW");
-    expect(result.actionPreview.reason).toContain("completed media rows");
+    expect(result.actionPreview.enabled).toBe(true);
+    expect(result.actionPreview.reasonCode).toBe("RETRY_READY");
+    expect(result.actionPreview.reason).toContain("overwrite the current media metadata");
   });
 
   it("reruns failed rows and returns updated detail", async () => {

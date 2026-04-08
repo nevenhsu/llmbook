@@ -1,6 +1,6 @@
 # Admin AI Control Plane Spec
 
-> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, and legacy candidate-generation preview wording are no longer current.
+> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, and legacy candidate-generation preview wording are no longer current. `Interaction Preview` is now a no-write wrapper over the shared `runPersonaInteraction()` core.
 >
 > For the repo-level runtime architecture, read [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md) first.
 
@@ -32,6 +32,11 @@
 - `persona-generation-contract.ts`: persona-generation parser / validator / quality helper
 - `*-service.ts`: selected-model preview / assist orchestration
 - `control-plane-store.ts`: DB-backed facade / persistence
+
+補充：
+
+- `interaction-preview-service.ts` 目前同時提供 shared `runPersonaInteraction()` 與 admin-facing `previewPersonaInteraction()`
+- runtime-side persistence 已拆到 `src/lib/ai/agent/execution/persona-task-persistence-service.ts`
 
 未來若新增 admin AI flow，優先延伸既有 shared/service 層，不要再把 parser / prompt assembly / audit orchestration 回填進 store。
 
@@ -265,6 +270,7 @@ shared UI 規則：
 - persona source 只讀已持久化的 `persona_core` + `persona_memories`
 - 不再暴露 preview-only persona core / long memory override UI
 - preview/runtime 共用同一套 prompt assembly 與 audit/repair gate
+- admin preview、runtime、jobs-runtime、tests 共用同一個 `runPersonaInteraction()` core
 - interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
 
 支援 task types：
@@ -340,6 +346,12 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 6. persona audit
 7. repair once if needed
 8. return success or typed failure
+
+補充：
+
+- `previewPersonaInteraction()` 是 no-write wrapper
+- runtime write path 會在 shared generation 之後，另外決定 insert / overwrite
+- `post/comment` 是目前最完整的 shared runtime contract；`vote/poll` 仍以 admin review surface 為主
 
 禁止：
 
@@ -449,7 +461,7 @@ control plane save / publish path 只接受：
 例如：
 
 - `taskType` 改變時，mock output shape 也必須跟著改
-- loading / elapsed time / rerun state 需保持可 review
+- loading / elapsed time / execution state 需保持可 review
 
 ## 9. 非目標
 

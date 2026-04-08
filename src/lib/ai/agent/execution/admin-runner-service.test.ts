@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   AiAgentAdminRunnerService,
+  type AiAgentTextExecutionPersistedResult,
   type AiAgentRunnerExecutedResponse,
   type AiAgentRunnerGuardedExecuteResponse,
   type AiAgentRunnerPreviewResponse,
 } from "@/lib/ai/agent/execution/admin-runner-service";
+import type { AiAgentPersonaTaskGenerationResult } from "@/lib/ai/agent/jobs/persona-task-service";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 
 vi.mock("@/lib/ai/agent/execution/media-job-service", () => ({
@@ -192,6 +194,8 @@ describe("AiAgentAdminRunnerService", () => {
           persistedTable: "comments",
           persistedId: "comment-new-1",
           resultType: "comment",
+          writeMode: "inserted",
+          historyId: null,
           updatedTask: {
             ...task,
             status: "DONE",
@@ -221,6 +225,8 @@ describe("AiAgentAdminRunnerService", () => {
         persistedTable: "comments",
         persistedId: "comment-new-1",
         resultType: "comment",
+        writeMode: "inserted",
+        historyId: null,
         updatedTask: {
           ...task,
           status: "DONE",
@@ -232,6 +238,144 @@ describe("AiAgentAdminRunnerService", () => {
       mediaResult: null,
       orchestratorResult: null,
     });
+  });
+
+  it("surfaces overwrite summaries when shared text persistence updates an existing target", async () => {
+    const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
+    const service = new AiAgentAdminRunnerService({
+      deps: {
+        loadTaskById: async (taskId) => (taskId === task.id ? task : null),
+        executeTextTask: async () => ({
+          taskId: task.id,
+          persistedTable: "comments",
+          persistedId: "comment-existing-1",
+          resultType: "comment",
+          writeMode: "overwritten",
+          historyId: "history-1",
+          updatedTask: {
+            ...task,
+            status: "DONE",
+            resultId: "comment-existing-1",
+            resultType: "comment",
+            completedAt: "2026-03-30T00:05:00.000Z",
+          },
+        }),
+      },
+    });
+
+    const result = await service.executeTarget({
+      target: "text_once",
+      taskId: task.id,
+    });
+
+    expect(result).toEqual<AiAgentRunnerExecutedResponse>({
+      mode: "executed",
+      target: "text_once",
+      targetLabel: "Run next text task",
+      selectedTaskId: task.id,
+      summary: `Overwrote comment comment-existing-1 and completed queue task ${task.id}.`,
+      executionPreview: expect.any(Object),
+      compressionResult: null,
+      textResult: {
+        taskId: task.id,
+        persistedTable: "comments",
+        persistedId: "comment-existing-1",
+        resultType: "comment",
+        writeMode: "overwritten",
+        historyId: "history-1",
+        updatedTask: {
+          ...task,
+          status: "DONE",
+          resultId: "comment-existing-1",
+          resultType: "comment",
+          completedAt: "2026-03-30T00:05:00.000Z",
+        },
+      },
+      mediaResult: null,
+      orchestratorResult: null,
+    });
+  });
+
+  it("uses shared persona-task generation before runtime persistence when executeTextTask is not overridden", async () => {
+    const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
+    const generated = {
+      task,
+      mode: "runtime",
+      promptContext: {
+        taskType: "comment",
+        taskContext: "Generate a publishable comment.",
+      },
+      preview: {
+        assembledPrompt: "prompt",
+        markdown: "generated body",
+        rawResponse: "generated body",
+        renderOk: true,
+        renderError: null,
+        tokenBudget: {
+          estimatedInputTokens: 100,
+          maxInputTokens: 1000,
+          maxOutputTokens: 300,
+          blockStats: [],
+          compressedStages: [],
+          exceeded: false,
+          message: null,
+        },
+        auditDiagnostics: null,
+      },
+      parsedOutput: {
+        kind: "comment",
+        body: "generated body",
+      },
+      modelMetadata: {
+        schema_version: 1,
+      },
+      modelSelection: {
+        modelId: "model-1",
+        providerKey: "xai",
+        modelKey: "grok-4-1-fast-reasoning",
+      },
+    } satisfies AiAgentPersonaTaskGenerationResult;
+    const persistResult = {
+      taskId: task.id,
+      persistedTable: "comments",
+      persistedId: "comment-generated-1",
+      resultType: "comment",
+      writeMode: "inserted",
+      historyId: null,
+      updatedTask: {
+        ...task,
+        status: "DONE",
+        resultId: "comment-generated-1",
+        resultType: "comment",
+        completedAt: "2026-03-30T00:10:00.000Z",
+      },
+    } satisfies AiAgentTextExecutionPersistedResult;
+    const generateTaskContent = vi.fn(async () => generated);
+    const persistGeneratedTaskResult = vi.fn(async () => persistResult);
+
+    const service = new AiAgentAdminRunnerService({
+      deps: {
+        loadTaskById: async (taskId: string) => (taskId === task.id ? task : null),
+        generateTaskContent,
+        persistGeneratedTaskResult,
+      } as any,
+    });
+
+    const result = await service.executeTarget({
+      target: "text_once",
+      taskId: task.id,
+    });
+
+    expect(generateTaskContent).toHaveBeenCalledWith(task.id);
+    expect(persistGeneratedTaskResult).toHaveBeenCalledWith({
+      generated,
+    });
+    expect(result).toMatchObject({
+      mode: "executed",
+      target: "text_once",
+      selectedTaskId: task.id,
+      summary: `Persisted comment comment-generated-1 and completed queue task ${task.id}.`,
+    } satisfies Partial<AiAgentRunnerExecutedResponse>);
   });
 
   it("previews orchestrator_once as a runtime Phase A request", async () => {
@@ -377,6 +521,8 @@ describe("AiAgentAdminRunnerService", () => {
           persistedTable: "comments",
           persistedId: "comment-new-3",
           resultType: "comment",
+          writeMode: "inserted",
+          historyId: null,
           updatedTask: {
             ...task,
             status: "DONE",
@@ -406,6 +552,8 @@ describe("AiAgentAdminRunnerService", () => {
         persistedTable: "comments",
         persistedId: "comment-new-3",
         resultType: "comment",
+        writeMode: "inserted",
+        historyId: null,
         updatedTask: {
           ...task,
           status: "DONE",
@@ -441,6 +589,8 @@ describe("AiAgentAdminRunnerService", () => {
           persistedTable: "posts",
           persistedId: "post-new-3",
           resultType: "post",
+          writeMode: "inserted",
+          historyId: null,
           updatedTask: {
             ...task,
             status: "DONE",
@@ -470,6 +620,8 @@ describe("AiAgentAdminRunnerService", () => {
         persistedTable: "posts",
         persistedId: "post-new-3",
         resultType: "post",
+        writeMode: "inserted",
+        historyId: null,
         updatedTask: {
           ...task,
           status: "DONE",

@@ -84,6 +84,7 @@ type MemoryAdminServiceDeps = {
     importance: number;
   }) => Promise<PersistedMemoryInsertRow>;
   deleteShortMemories: (ids: string[]) => Promise<void>;
+  touchPersonaCompressedAt: (input: { personaId: string; compressedAt: string }) => Promise<void>;
 };
 
 export class AiAgentMemoryAdminService {
@@ -164,6 +165,22 @@ export class AiAgentMemoryAdminService {
           const { error } = await supabase.from("persona_memories").delete().in("id", ids);
           if (error) {
             throw new Error(`delete short memories failed: ${error.message}`);
+          }
+        }),
+      touchPersonaCompressedAt:
+        deps?.touchPersonaCompressedAt ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const { error } = await supabase
+            .from("personas")
+            .update({
+              last_compressed_at: input.compressedAt,
+              updated_at: input.compressedAt,
+            })
+            .eq("id", input.personaId);
+
+          if (error) {
+            throw new Error(`update persona last_compressed_at failed: ${error.message}`);
           }
         }),
     };
@@ -277,13 +294,18 @@ export class AiAgentMemoryAdminService {
     };
   }
 
-  public async compressPersona(personaId: string): Promise<AiAgentMemoryCompressResponse> {
+  public async compressPersona(
+    personaId: string,
+    options?: { persistedBy?: string },
+  ): Promise<AiAgentMemoryCompressResponse> {
     const preview = await this.getPersonaPreview(personaId);
     const compressionPreview = preview.compressionPreview;
     const deletedShortMemoryIds = preview.compressionBatchPreview.deletableRows;
     const protectedShortMemoryIds = preview.compressionBatchPreview.protectedRows.map(
       (row) => row.id,
     );
+    const persistedBy = options?.persistedBy?.trim() || "admin_agent_panel";
+    const compressedAt = new Date().toISOString();
 
     await this.deps.deleteCanonicalLongMemories(personaId);
     const persistedLongMemory = await this.deps.insertCanonicalLongMemory({
@@ -294,11 +316,15 @@ export class AiAgentMemoryAdminService {
         compression_audit_result: compressionPreview.compressionAuditResult,
         source_short_memory_ids: deletedShortMemoryIds,
         protected_short_memory_ids: protectedShortMemoryIds,
-        persisted_by: "admin_agent_panel",
-        generated_at: new Date().toISOString(),
+        persisted_by: persistedBy,
+        generated_at: compressedAt,
       },
     });
     await this.deps.deleteShortMemories(deletedShortMemoryIds);
+    await this.deps.touchPersonaCompressedAt({
+      personaId,
+      compressedAt,
+    });
 
     return {
       mode: "persisted",
@@ -325,7 +351,7 @@ export class AiAgentMemoryAdminService {
             compression_audit_result: compressionPreview.compressionAuditResult,
             source_short_memory_ids: deletedShortMemoryIds,
             protected_short_memory_ids: protectedShortMemoryIds,
-            persisted_by: "admin_agent_panel",
+            persisted_by: persistedBy,
           },
           expiresAt: null,
           importance: null,

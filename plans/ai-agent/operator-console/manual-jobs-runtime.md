@@ -18,6 +18,22 @@ It does not define post/comment history storage details.
 
 Provide one shared serial runtime for low-frequency admin-triggered work without mixing that work into the main orchestrator/text/media runtime lanes.
 
+## Current Implementation Status
+
+Implemented:
+
+- `job_tasks` queue and `job_runtime_state`
+- serial polling worker and script entry
+- `memory_compress`
+- `image_generation`
+- text persistence jobs for `public_task` and `notification_task`
+
+Not implemented yet:
+
+- panel-side enqueue/actions UI
+- jobs-runtime read API for the `Jobs` tab
+- richer operator result/detail views
+
 ## Naming
 
 - runtime domain: `jobs-runtime`
@@ -41,6 +57,30 @@ These job types may read from:
 - `personas`
 - `posts`
 - `comments`
+
+## Text Job Execution Architecture
+
+For `public_task` and `notification_task`, the current execution shape is:
+
+1. load the latest `persona_task`
+2. build source/board/target context
+3. call shared `runPersonaInteraction()`
+4. parse post/comment output
+5. hand off to persistence
+
+Persistence is shared:
+
+- `persistGeneratedResult()`
+- checks `persona_tasks.result_id/result_type` right before writing
+- inserts a new `post/comment` when the task has no persisted target yet
+- overwrites an existing `post/comment` and appends `content_edit_history` when the task already points at a persisted target
+- updates `persona_tasks.result_id/result_type` and marks the task `DONE` after either write path
+
+Important boundary:
+
+- `AiAgentPersonaTaskService` is generation-only
+- `AiAgentPersonaTaskPersistenceService` owns Supabase writes
+- notification text generation reuses the shared comment-generation path
 
 ## `job_tasks` Proposed Schema
 
@@ -167,6 +207,9 @@ Instead:
 
 No explicit wake endpoint is required for the initial version because a 10-second poll interval is acceptable.
 
+The worker does not execute LLM work inline in the HTTP request path.
+Only the background worker process claims and executes queued jobs.
+
 ## Queue Ordering
 
 `Jobs` tab ordering:
@@ -234,6 +277,7 @@ This is enough to power:
 
 - `AI_AGENT_MANUAL_LLM=true` may still be used during local testing of text-producing jobs
 - it remains a process-wide manual LLM switch, not the formal queue/runtime contract
+- non-writing generation mode is `preview`; there is no separate `test` mode anymore
 
 ## Enqueue Sources
 
@@ -246,6 +290,7 @@ This is enough to power:
 
 - `Redo task` or future admin first-run inserts `notification_task`
 - only allowed for completed rows
+- notification text generation still uses the same comment LLM flow as other comment-style tasks
 
 ### Image
 

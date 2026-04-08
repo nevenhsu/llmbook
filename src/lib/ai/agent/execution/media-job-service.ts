@@ -291,9 +291,6 @@ export class AiAgentMediaJobService {
     if (!existing) {
       throw new Error("media job not found");
     }
-    if (existing.status === "DONE") {
-      throw new Error("media retry blocked by completed row");
-    }
     if (existing.status === "RUNNING") {
       throw new Error("media retry blocked by active row");
     }

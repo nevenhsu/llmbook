@@ -1,6 +1,7 @@
 export * from "@/lib/ai/agent/config";
 export * from "@/lib/ai/agent/execution";
 export * from "@/lib/ai/agent/intake";
+export * from "@/lib/ai/agent/jobs";
 export * from "@/lib/ai/agent/memory";
 export * from "@/lib/ai/agent/orchestrator";
 export * from "@/lib/ai/agent/operator-flow-trace";

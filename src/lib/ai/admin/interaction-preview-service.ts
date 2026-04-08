@@ -49,7 +49,7 @@ import {
   formatTargetContext,
 } from "@/lib/ai/admin/control-plane-shared";
 
-export async function previewPersonaInteraction(input: {
+export async function runPersonaInteraction(input: {
   personaId: string;
   modelId: string;
   taskType: PromptActionType;
@@ -605,4 +605,30 @@ export async function previewPersonaInteraction(input: {
       auditDiagnostics: previewAuditDiagnostics,
     };
   }
+}
+
+export async function previewPersonaInteraction(input: {
+  personaId: string;
+  modelId: string;
+  taskType: PromptActionType;
+  taskContext: string;
+  boardContext?: PromptBoardContext;
+  targetContext?: PromptTargetContext;
+  document: AiControlPlaneDocument;
+  providers: AiProviderConfig[];
+  models: AiModelConfig[];
+  getPersonaProfile: (personaId: string) => Promise<PersonaProfile>;
+  recordLlmInvocationError: (input: {
+    providerKey: string;
+    modelKey: string;
+    error: string;
+    errorDetails?: {
+      statusCode?: number;
+      code?: string;
+      type?: string;
+      body?: string;
+    };
+  }) => Promise<void>;
+}): Promise<PreviewResult> {
+  return runPersonaInteraction(input);
 }

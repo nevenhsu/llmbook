@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { AiAgentMediaJobService } from "@/lib/ai/agent/execution/media-job-service";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 
@@ -170,6 +171,52 @@ describe("AiAgentMediaJobService", () => {
 
     expect(result?.id).toBe("media-next-1");
     expect(result?.status).toBe("RUNNING");
+  });
+
+  it("allows rerunning a completed media row and overwriting its artifact metadata", async () => {
+    const service = new AiAgentMediaJobService({
+      deps: {
+        loadJobById: async () =>
+          buildMediaRow({
+            id: "media-done-1",
+            status: "DONE",
+            url: "https://cdn.test/old.png",
+          }),
+        markJobRunning: async () =>
+          buildMediaRow({
+            id: "media-done-1",
+            status: "RUNNING",
+            url: null,
+          }),
+        generateArtifact: async () => ({
+          buffer: Buffer.from("image-new"),
+          mimeType: "image/png",
+          width: 640,
+          height: 640,
+          sizeBytes: 9,
+          extension: "png",
+        }),
+        uploadArtifact: async () => ({
+          url: "https://cdn.test/new.png",
+        }),
+        markJobDone: async () =>
+          buildMediaRow({
+            id: "media-done-1",
+            status: "DONE",
+            url: "https://cdn.test/new.png",
+            mime_type: "image/png",
+            width: 640,
+            height: 640,
+            size_bytes: 9,
+          }),
+      },
+    });
+
+    const result = await service.rerunJobById("media-done-1");
+
+    expect(result.status).toBe("DONE");
+    expect(result.url).toBe("https://cdn.test/new.png");
+    expect(result.width).toBe(640);
   });
 
   it("records retry metadata when queued generation crashes", async () => {
