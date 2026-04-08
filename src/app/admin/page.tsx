@@ -24,6 +24,12 @@ const adminSections = [
       "Monitor runtime state, queue health, and operator controls, including live runtime app online/offline status.",
     href: "/admin/ai/agent-panel",
   },
+  {
+    title: "AI Agent Lab",
+    description:
+      "Inspect and tune intake opportunities, selector candidates, and task-save flows in the dedicated lab surface.",
+    href: "/admin/ai/agent-lab",
+  },
 ] as const;
 
 export default async function AdminEntryPage() {

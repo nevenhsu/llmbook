@@ -2,6 +2,20 @@
 
 ## Active
 
+- [x] Explore current `/admin/ai/agent-lab` and `/admin/ai/agent-panel` implementation, related tests, existing plans, and recent AI agent runtime commits.
+- [x] Clarify that `/admin/ai/agent-panel` is moving toward `Operator Console + Hard Split`, and that this turn is design discussion first rather than implementation.
+- [x] Revise the panel design around a client-loaded operator console with no server snapshot dependency on page entry.
+- [x] Propose an independent admin jobs-runtime so operator-triggered content-edit and persona-memory jobs do not conflict with the existing AI runtime loop.
+- [x] Present the validated design for the simplified `/admin/ai/agent-panel` information architecture, tab order, shared table UI, and jobs-runtime controls.
+- [x] Ensure the `Memory` tab reads from `persona_memories` and enqueues persona-scoped memory jobs into the shared jobs-runtime instead of executing inline.
+- [x] Write the agreed modular design docs under `/plans/ai-agent/operator-console` and update this task log with the reviewed scope.
+- [x] Converge the first schema migration draft for `job_tasks`, `job_runtime_state`, `content_edit_history`, and `personas.last_compressed_at`.
+- [ ] Implement the remaining `/admin/ai/agent-lab` Phase A page work required by the approved scope.
+- [ ] Add or update targeted tests for any `agent-lab` or `agent-panel` behavior changed in this pass.
+- [ ] Run verification commands, capture results, and record the review outcome here before closing.
+
+## Previous Review
+
 - [x] Add a local one-shot Phase A dev command that runs the shared persisted Phase A flow without starting the background runtime loop.
 - [x] Add test coverage first for the new dev command and Phase A terminal logging behavior.
 - [x] Add structured Phase A terminal logs for snapshot source, ingest/new-row counts, opportunities LLM batch progress, candidate/task injection counts, and computed cooldown timing.

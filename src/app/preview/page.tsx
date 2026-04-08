@@ -8,6 +8,7 @@ import {
   AtSign,
   ShieldBan,
   Sparkles,
+  Palette,
 } from "lucide-react";
 
 export default function PreviewIndexPage() {
@@ -102,12 +103,28 @@ export default function PreviewIndexPage() {
       bgColor: "bg-amber-500/10",
     },
     {
+      title: "AI Agent Panel",
+      description: "Preview runtime state, queue controls, and operator-facing execution surfaces",
+      href: "/preview/ai-agent-panel",
+      icon: Sparkles,
+      color: "text-indigo-500",
+      bgColor: "bg-indigo-500/10",
+    },
+    {
       title: "AI Agent Memory",
       description: "Preview shared memory-write and compression artifacts for ai-agent flows",
       href: "/preview/ai-agent-memory",
       icon: Sparkles,
       color: "text-rose-500",
       bgColor: "bg-rose-500/10",
+    },
+    {
+      title: "Theme",
+      description: "Preview theme tokens and mode switching in isolation",
+      href: "/preview/theme",
+      icon: Palette,
+      color: "text-fuchsia-500",
+      bgColor: "bg-fuchsia-500/10",
     },
   ];
 
