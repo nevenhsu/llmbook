@@ -14,7 +14,8 @@ Status:
 - the first migration has already been applied in:
   - `supabase/migrations/20260408093000_add_jobs_runtime_tables.sql`
   - `supabase/schema.sql`
-- this document now acts as the design/reference version of that schema pass
+- this document now acts as the approved target/reference version after the image queue split
+- note: the applied first migration and current live schema may still include legacy `image_generation` queue support until the follow-up cleanup migration lands
 
 ## Migration Order
 
@@ -74,14 +75,12 @@ CREATE TABLE public.job_tasks (
   CONSTRAINT job_tasks_status_chk
     CHECK (status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')),
   CONSTRAINT job_tasks_type_chk
-    CHECK (job_type IN ('public_task', 'notification_task', 'image_generation', 'memory_compress')),
+    CHECK (job_type IN ('public_task', 'notification_task', 'memory_compress')),
   CONSTRAINT job_tasks_subject_kind_chk
-    CHECK (subject_kind IN ('persona_task', 'media', 'persona')),
+    CHECK (subject_kind IN ('persona_task', 'persona')),
   CONSTRAINT job_tasks_subject_coherence_chk
     CHECK (
       (job_type IN ('public_task', 'notification_task') AND subject_kind = 'persona_task')
-      OR
-      (job_type = 'image_generation' AND subject_kind = 'media')
       OR
       (job_type = 'memory_compress' AND subject_kind = 'persona')
     ),
@@ -172,7 +171,6 @@ Suggested dedupe basis:
 
 - `public_task`: `public_task:${persona_task_id}`
 - `notification_task`: `notification_task:${persona_task_id}`
-- `image_generation`: `image_generation:${media_id}`
 - `memory_compress`: `memory_compress:${persona_id}`
 
 ### `job_tasks.payload`
@@ -183,10 +181,6 @@ Suggested first shapes:
 
 ```json
 { "persona_task_id": "..." }
-```
-
-```json
-{ "media_id": "..." }
 ```
 
 ```json

@@ -2,6 +2,11 @@
 
 ## Active
 
+- [x] Update the operator-console plan docs so `/admin/ai/agent-panel` no longer treats `Image` as a final tab and instead targets `Runtime / Jobs / Public / Notification / Memory`.
+- [x] Add a dedicated design doc for the new admin image queue page and define its route, scope, and boundary against `jobs-runtime`.
+- [x] Sync implementation-status and lessons so the approved image-page split is recorded as design-only work pending a later implementation pass.
+- [x] Write a dedicated refactor plan doc for the next main runtime convergence pass so the shared loader/executor/wrapper shape is explicit before implementation.
+- [x] Document the long-term target shape as `shared loader + generator + executor + persistence + thin wrappers`, including flow diagrams for production text lane, admin `text_once`, and `jobs-runtime`.
 - [x] Add focused failing tests for main text runtime boundary cleanup so `text-lane` no longer depends on `AiAgentAdminRunnerService` for `text_once`.
 - [x] Extract a shared text runtime service that owns text-task preview/execute logic and shared persistence, then rewire `text-lane` to use it directly.
 - [x] Narrow `AiAgentAdminRunnerService` so `text_once` delegates to the shared text runtime service instead of owning the main runtime text path.
@@ -177,3 +182,9 @@
 - Re-verified the touched runtime files after the final type export fix with `npm test -- src/lib/ai/agent/execution/text-runtime-service.test.ts src/lib/ai/agent/execution/text-lane-service.test.ts src/lib/ai/agent/execution/admin-runner-service.test.ts`.
 - Verified targeted lint with `npx eslint src/lib/ai/agent/execution/persona-task-execution-service.ts src/lib/ai/agent/execution/persona-task-execution-service.test.ts src/lib/ai/agent/execution/text-runtime-service.ts src/lib/ai/agent/execution/text-runtime-service.test.ts src/lib/ai/agent/execution/text-lane-service.ts src/lib/ai/agent/execution/text-lane-service.test.ts src/lib/ai/agent/execution/admin-runner-service.ts src/lib/ai/agent/execution/admin-runner-service.test.ts 'src/app/api/admin/ai/agent/run/[target]/route.ts' 'src/app/api/admin/ai/agent/run/[target]/route.test.ts' src/lib/ai/agent/execution/index.ts`.
 - Verified filtered TypeScript with `npx tsc --noEmit 2>&1 | rg "src/lib/ai/agent/execution/persona-task-execution-service(\\.test)?\\.ts|src/lib/ai/agent/execution/text-runtime-service(\\.test)?\\.ts|src/lib/ai/agent/execution/text-lane-service(\\.test)?\\.ts|src/lib/ai/agent/execution/admin-runner-service(\\.test)?\\.ts|src/app/api/admin/ai/agent/run/\\[target\\]/route(\\.test)?\\.ts|src/lib/ai/agent/execution/index\\.ts"` and got no matches for the touched files.
+- Added `plans/ai-agent/operator-console/main-runtime-boundary-refactor.md` to capture the next convergence target: shared `persona_task` loader, shared executor, and thin `text-runtime` / `admin-runner` wrappers with explicit flow diagrams.
+- Linked the new refactor doc from `plans/ai-agent/operator-console/README.md` and marked the design-writing task complete in the active checklist.
+- Updated the operator-console design docs to reflect the corrected `Image` boundary: image rerun is not a `jobs-runtime` job, stays on the dedicated media/image queue, and only completed image rows should expose active `Rerun`.
+- Updated the operator-console plan docs so `Image` is no longer part of the final `/admin/ai/agent-panel` tab order and instead moves to a dedicated `/admin/ai/image-queue` admin page.
+- Added `plans/ai-agent/operator-console/admin-image-queue-page.md` to define the dedicated image queue page scope, route, and rerun behavior outside `jobs-runtime`.
+- Synced `implementation-status.md` to record that the image-page split is approved but not implemented yet; no application code or tests changed in this pass.

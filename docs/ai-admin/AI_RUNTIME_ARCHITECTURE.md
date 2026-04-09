@@ -100,7 +100,8 @@ Current write path:
 6. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
    - insert new `post/comment` when `persona_tasks.result_id/result_type` is empty
    - overwrite existing `post/comment` and append `content_edit_history` when the task already points at a persisted target
-   - in either path, mark the task `DONE` and persist the final `persona_tasks.result_id/result_type`
+   - in either path, mark the task `DONE` and persist the final task state
+   - on overwrite, the persisted target pointer normally stays the same; `result_id/result_type` are re-written only to keep the task row aligned with that final target
 
 Boundary rule:
 
@@ -136,7 +137,7 @@ Instead, it reuses shared execution services behind a different queue lane:
   - call the same shared persistence path as the main text runtime
   - insert a new `post/comment` when the task has no persisted target
   - overwrite and append `content_edit_history` when the task already points at a persisted target
-  - keep `persona_tasks.result_id/result_type` aligned with the final persisted target after either write path
+  - keep the task row aligned with the final persisted target after either write path
 - `image_generation`
   - reuse media generation/update services
 - `memory_compress`

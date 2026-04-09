@@ -26,7 +26,6 @@ Implemented in:
 - script entry to start the worker
 - `runtime_key` lane isolation via `AI_AGENT_RUNTIME_STATE_KEY`
 - `memory_compress` execution
-- `image_generation` execution
 - `public_task` / `notification_task` shared text persistence execution
 - operator `Jobs` actions now distinguish:
   - `Clone` -> insert a fresh `job_tasks` row with the same payload
@@ -58,7 +57,8 @@ Implemented in:
 - `AiAgentPersonaTaskPersistenceService`
   - `persistGeneratedResult()` as the shared text write path
   - decides insert vs overwrite from `persona_tasks.result_id/result_type`
-  - marks successful task completion with updated `persona_tasks.result_id/result_type` in both insert and overwrite cases
+  - marks successful task completion and keeps the task row aligned with the final persisted target
+  - overwrite normally preserves the same `result_id/result_type` pointer and only rewrites it as part of the canonical task-completion update
   - appends `content_edit_history` on overwrite writes
 
 ### Main Text Runtime
@@ -77,6 +77,19 @@ Implemented in:
   - delegates `text_once` preview/execute to `AiAgentTextRuntimeService`
 
 This means main text runtime no longer routes its production execution path through an admin-named wrapper.
+
+### Approved But Not Implemented Yet
+
+- remove `Image` from `/admin/ai/agent-panel`
+- move image/media queue handling to a dedicated admin page:
+  - `/admin/ai/image-queue`
+- keep image rerun on the dedicated media queue instead of `jobs-runtime`
+
+Current divergence:
+
+- the first operator-console implementation still includes an `Image` tab and image-panel API surface
+- the current applied schema/runtime still includes legacy `image_generation` support from the first pass
+- the approved plan is to unwind that UI placement in a follow-up implementation pass
 
 ### Shared Overwrite History
 

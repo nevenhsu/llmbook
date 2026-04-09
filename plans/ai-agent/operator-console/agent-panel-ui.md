@@ -25,8 +25,7 @@ It does not define runtime state internals, queue worker behavior, or content hi
 2. `Jobs`
 3. `Public`
 4. `Notification`
-5. `Image`
-6. `Memory`
+5. `Memory`
 
 ## Tab Responsibilities
 
@@ -65,18 +64,31 @@ It does not define runtime state internals, queue worker behavior, or content hi
 - Redo action for completed rows only
 - Queue-first ordering and pagination
 
-### Image
-
-- Media queue table
-- Inline thumbnail preview beside the image URL target when `imageUrl` is present
-- Redo image action for completed image rows only
-- No image edit history requirement
-
 ### Memory
 
 - Persona-aggregated table derived from `persona_memories`
 - Persona-scoped `Run` action that enqueues a memory job into `jobs-runtime`
 - Table ordering should prioritize personas that have gone the longest without successful compression
+
+## Dedicated Admin Image Queue Page
+
+Image queue inspection and rerun no longer belong inside `/admin/ai/agent-panel`.
+
+Approved target:
+
+- dedicated route: `/admin/ai/image-queue`
+- dedicated admin page for media/image queue operations
+- separate from `jobs-runtime`
+- separate from `Runtime / Jobs / Public / Notification / Memory`
+
+Responsibilities:
+
+- media queue table
+- inline thumbnail preview beside the image URL target when `imageUrl` is present
+- `Rerun` is active only for rows that already have a generated image
+- `Rerun` should go back into the LLM image queue directly, not into `jobs-runtime`
+- rerun should regenerate the image and overwrite the Supabase `media` image URL
+- no image edit history requirement
 
 ## Shared Table UI
 
@@ -91,7 +103,13 @@ Shared behaviors:
 - consistent action cell layout
 - consistent empty/loading/error states
 
-Image and Jobs may reuse the same table shell primitives, but their columns and actions remain domain-specific.
+Jobs and the dedicated image queue page may reuse the same table shell primitives, but their columns and actions remain domain-specific.
+
+Important boundary:
+
+- image queue actions are not part of `jobs-runtime`
+- image queue belongs to the dedicated image/media queue domain
+- `/admin/ai/agent-panel` should not continue carrying the image queue as a tab
 
 ## Memory Table Shape
 

@@ -25,7 +25,6 @@ Implemented:
 - `job_tasks` queue and `job_runtime_state`
 - serial polling worker and script entry
 - `memory_compress`
-- `image_generation`
 - text persistence jobs for `public_task` and `notification_task`
 
 Not implemented yet:
@@ -46,13 +45,11 @@ Initial job types:
 
 - `public_task`
 - `notification_task`
-- `image_generation`
 - `memory_compress`
 
 These job types may read from:
 
 - `persona_tasks`
-- `media`
 - `persona_memories`
 - `personas`
 - `posts`
@@ -100,14 +97,12 @@ Suggested first version:
   - values:
     - `public_task`
     - `notification_task`
-    - `image_generation`
     - `memory_compress`
 
 - `subject_kind`
   - the primary resource locator used to load the latest runtime input
   - values:
     - `persona_task`
-    - `media`
     - `persona`
 
 - `subject_id`
@@ -174,8 +169,6 @@ Examples:
   - `{ "persona_task_id": "..." }`
 - `notification_task`
   - `{ "persona_task_id": "..." }`
-- `image_generation`
-  - `{ "media_id": "..." }`
 - `memory_compress`
   - `{ "persona_id": "..." }`
 
@@ -238,7 +231,6 @@ Suggested fingerprint basis:
 
 - `public_task`: `job_type + persona_task_id`
 - `notification_task`: `job_type + persona_task_id`
-- `image_generation`: `job_type + media_id`
 - `memory_compress`: `job_type + persona_id`
 
 ## Runtime State
@@ -294,8 +286,11 @@ This is enough to power:
 
 ### Image
 
-- `Redo image` or future admin first-run inserts `image_generation`
-- only allowed for completed image rows
+- image rerun is outside `jobs-runtime`
+- image actions should live on the dedicated admin image queue page:
+  - `/admin/ai/image-queue`
+- image rerun should go back to the dedicated image/media queue directly
+- only rows with an already generated image should expose active `Rerun`
 
 ### Memory
 
@@ -325,10 +320,9 @@ Columns:
 Column intent:
 
 - `Job`
-  - human-readable job type label such as `Public Task`, `Notification Task`, `Image`, or `Memory`
+  - human-readable job type label such as `Public Task`, `Notification Task`, or `Memory`
 - `Target`
   - task jobs: render the target task as a URL
-  - image jobs: show the current image URL
   - memory jobs: render the target persona using shared persona UI
 - `Status`
   - render queue execution state from `job_tasks.status`
@@ -358,6 +352,12 @@ Values:
 - `SKIPPED`
 
 ## Future Extension
+
+Explicit boundary:
+
+- `jobs-runtime` owns `public_task`, `notification_task`, and `memory_compress`
+- image rerun does not belong here
+- image generation remains part of the dedicated media/image queue domain
 
 If more admin-triggered tasks are added later, they should join this runtime only if they remain:
 

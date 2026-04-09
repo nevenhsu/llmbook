@@ -41,6 +41,12 @@
 - 只更新 `/plans` 不夠；只要核心架構或 canonical flow 改了，`docs/ai-admin/*` 這種 repo-level 設計文檔也要同一輪同步，否則會留下比實作更舊的心智模型。
 - 當使用者明確指定實作順序（例如先完成 main runtime boundary cleanup，再談 prompt/context 品質）時，要照這個順序把 code、docs、verification 一次收尾，不要中途跳回相鄰但尚未授權的優化主題。
 - production lane 的正式邊界必須掛在 runtime-named service 上；若 `text-lane` 已經改走 `AiAgentTextRuntimeService`，就不要再讓 `AiAgentAdminRunnerService` 承擔主執行責任。admin/manual surface 應只做 thin wrapper，委派到同一個 runtime service。
+- 若 `/admin/ai/agent-panel` 已經完成 operator-console 化，就不要再把舊的 generic manual runner 視為長期架構一部分；manual admin actions 應優先收斂到 operator-console 的專用 APIs / jobs-runtime / runtime-control，preview 只留在專門的 no-write 頁面。
+- 既然 legacy manual runner 要退場，就不要只刪 service 本體而保留 `orchestrator_once / text_once / media_once / compress_once` 這種 generic target 語意；長期命名要一起改成 domain-specific 的 runtime control 與 jobs actions。
+- 不要把所有 admin 動作都硬塞進 `jobs-runtime`；`Image` tab 的 rerun 屬於獨立的 media/image queue。只有已生成圖片的 row 才應啟用 `Rerun`，且它應直接回到 image queue 重新生成並覆蓋 `media.image url`，不是建立 `job_tasks`。
+- 當使用者進一步收斂 `Image` 不該留在 `/admin/ai/agent-panel` 時，方案文檔也要同步把它從 operator-console 最終 tab order 拿掉，並改成獨立 admin image queue page；不要只改 runtime 邊界卻留下過時的頁面資訊架構。
+- 若共享 execution 架構已引入 `persona_task` store，目標序列要收斂成 `executor -> store -> generator -> context builder -> interaction -> persistence`；不要再把 task loading 混回 generator 的責任敘述裡。
+- 說明 overwrite persistence 時，要區分「標記 task 完成」與「改變 persisted target pointer」：overwrite 通常不會改變 `persona_tasks.result_id/result_type` 指向，只是 canonical completion update 會把同樣的 pointer 再寫一次，並追加 history。
 - Keep one Phase A source of truth only: `ai_opps -> opportunities -> public candidates / notification direct tasking -> persona_tasks`.
 - Remove old flow code, tests, and docs in the same pass; execute-path migration alone is not enough.
 - Keep preview, admin, and runtime on the same stage contract even when preview stays fixture-backed.
