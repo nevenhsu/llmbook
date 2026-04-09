@@ -90,7 +90,7 @@ describe("AiAgentOperatorConsole", () => {
             summary: { active: 1, terminal: 1, total: 2 },
             page: 1,
             pageSize: 10,
-            totalItems: 2,
+            totalItems: 3,
             totalPages: 1,
             fetchedAt: "2026-04-08T12:00:00.000Z",
             rows: [
@@ -106,7 +106,42 @@ describe("AiAgentOperatorConsole", () => {
                 },
                 finishedAt: null,
                 createdAt: "2026-04-08T12:00:00.000Z",
-                canRedo: false,
+                errorMessage: null,
+                canClone: false,
+                canRetry: false,
+              },
+              {
+                id: "job-2",
+                jobType: "notification_task",
+                subjectId: "task-2",
+                status: "FAILED",
+                target: {
+                  kind: "task",
+                  label: "/r/board/posts/post-2",
+                  href: "/r/board/posts/post-2",
+                },
+                finishedAt: "2026-04-08T11:50:00.000Z",
+                createdAt: "2026-04-08T11:45:00.000Z",
+                errorMessage: "provider timeout",
+                canClone: true,
+                canRetry: true,
+              },
+              {
+                id: "job-3",
+                jobType: "image_generation",
+                subjectId: "media-3",
+                status: "DONE",
+                target: {
+                  kind: "image",
+                  label: "https://cdn.example.com/media-3.png",
+                  href: "https://cdn.example.com/media-3.png",
+                  imageUrl: "https://cdn.example.com/media-3.png",
+                },
+                finishedAt: "2026-04-08T11:40:00.000Z",
+                createdAt: "2026-04-08T11:35:00.000Z",
+                errorMessage: null,
+                canClone: true,
+                canRetry: false,
               },
             ],
           }),
@@ -199,12 +234,14 @@ describe("AiAgentOperatorConsole", () => {
       }
 
       if (url === "/api/admin/ai/agent/panel/jobs" && init?.method === "POST") {
+        const body = init?.body ? JSON.parse(String(init.body)) : null;
         return {
           ok: true,
           json: async () => ({
-            mode: "enqueued",
+            mode: body?.action === "retry" ? "retried" : "enqueued",
             task: {
-              id: "job-created",
+              id:
+                body?.action === "retry" ? body?.jobId : body?.jobId ? "job-cloned" : "job-created",
               status: "PENDING",
             },
           }),
@@ -268,6 +305,22 @@ describe("AiAgentOperatorConsole", () => {
 
     expect(container.textContent).toContain("/r/board/posts/post-1");
     expect(container.textContent).toContain("RUNNING");
+    expect(container.textContent).toContain("provider timeout");
+    expect(container.textContent).toContain("-");
+    expect(container.textContent).not.toContain("Finished");
+
+    const failedStatusMeta = container.querySelector('[data-testid="job-status-meta-job-2"]');
+    expect(failedStatusMeta?.className).toContain("text-error");
+
+    const doneStatusMeta = container.querySelector('[data-testid="job-status-meta-job-3"]');
+    expect(doneStatusMeta?.className).toContain("text-success");
+
+    const failedErrorCell = container.querySelector('[data-testid="job-error-job-2"]');
+    expect(failedErrorCell?.className).toContain("text-error");
+
+    const doneErrorCell = container.querySelector('[data-testid="job-error-job-3"]');
+    expect(doneErrorCell?.textContent).toBe("-");
+    expect(doneErrorCell?.className).toContain("text-base-content/50");
 
     const jobsPauseButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Pause",
@@ -279,6 +332,46 @@ describe("AiAgentOperatorConsole", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/admin/ai/agent/panel/jobs/runtime/pause",
       expect.objectContaining({ method: "POST" }),
+    );
+
+    const cloneButtons = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Clone",
+    );
+    expect(cloneButtons).toHaveLength(3);
+    expect(cloneButtons[0]?.hasAttribute("disabled")).toBe(true);
+    expect(cloneButtons[1]?.hasAttribute("disabled")).toBe(false);
+    expect(cloneButtons[2]?.hasAttribute("disabled")).toBe(false);
+
+    await act(async () => {
+      cloneButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/ai/agent/panel/jobs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ jobId: "job-2", action: "clone" }),
+      }),
+    );
+
+    const retryButtons = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Retry",
+    );
+    expect(retryButtons).toHaveLength(3);
+    expect(retryButtons[0]?.hasAttribute("disabled")).toBe(true);
+    expect(retryButtons[1]?.hasAttribute("disabled")).toBe(false);
+    expect(retryButtons[2]?.hasAttribute("disabled")).toBe(true);
+
+    await act(async () => {
+      retryButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/ai/agent/panel/jobs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ jobId: "job-2", action: "retry" }),
+      }),
     );
 
     const publicTab = Array.from(container.querySelectorAll("button")).find((button) =>

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isAdmin, list, enqueue } = vi.hoisted(() => ({
+const { isAdmin, list, enqueue, clone, retry } = vi.hoisted(() => ({
   isAdmin: vi.fn(),
   list: vi.fn(),
   enqueue: vi.fn(),
+  clone: vi.fn(),
+  retry: vi.fn(),
 }));
 
 vi.mock("@/lib/admin", () => ({
@@ -35,6 +37,8 @@ vi.mock("@/lib/ai/agent/operator-console/job-list-read-model", () => ({
 vi.mock("@/lib/ai/agent/operator-console/job-enqueue-service", () => ({
   AiAgentJobEnqueueService: class {
     enqueue = enqueue;
+    clone = clone;
+    retry = retry;
   },
 }));
 
@@ -43,6 +47,8 @@ describe("/api/admin/ai/agent/panel/jobs", () => {
     isAdmin.mockResolvedValue(true);
     list.mockReset();
     enqueue.mockReset();
+    clone.mockReset();
+    retry.mockReset();
   });
 
   it("lists paginated jobs for admins", async () => {
@@ -89,6 +95,56 @@ describe("/api/admin/ai/agent/panel/jobs", () => {
     expect(enqueue).toHaveBeenCalledWith({
       jobType: "public_task",
       subjectId: "task-1",
+      requestedBy: "admin-user",
+    });
+  });
+
+  it("clones a job row for admins", async () => {
+    clone.mockResolvedValue({
+      mode: "enqueued",
+      task: { id: "job-2", status: "PENDING" },
+    });
+
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("http://localhost/api/admin/ai/agent/panel/jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: "job-source-1",
+          action: "clone",
+        }),
+      }),
+      {} as any,
+    );
+
+    expect(response.status).toBe(201);
+    expect(clone).toHaveBeenCalledWith({
+      jobId: "job-source-1",
+      requestedBy: "admin-user",
+    });
+  });
+
+  it("retries an errored job row for admins", async () => {
+    retry.mockResolvedValue({
+      mode: "retried",
+      task: { id: "job-source-2", status: "PENDING" },
+    });
+
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("http://localhost/api/admin/ai/agent/panel/jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: "job-source-2",
+          action: "retry",
+        }),
+      }),
+      {} as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(retry).toHaveBeenCalledWith({
+      jobId: "job-source-2",
       requestedBy: "admin-user",
     });
   });

@@ -3,6 +3,7 @@ vi.mock("server-only", () => ({}));
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import { InMemoryTaskQueueStore, TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
+import type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-execution-service";
 import { AiAgentTextLaneService } from "@/lib/ai/agent/execution/text-lane-service";
 
 function buildQueueTask(overrides: Partial<QueueTask> = {}): QueueTask {
@@ -37,7 +38,7 @@ describe("AiAgentTextLaneService", () => {
           leaseMs: 30_000,
         }),
         eventSink: sink,
-        executeTextTarget: vi.fn(),
+        executeTextTask: vi.fn(),
         queueMediaForTask: vi.fn(async () => null),
         beginTaskHeartbeat: () => vi.fn(),
         now: () => new Date("2026-03-30T01:00:00.000Z"),
@@ -75,31 +76,21 @@ describe("AiAgentTextLaneService", () => {
       completedAt: "2026-03-30T01:00:10.000Z",
     };
     const beginTaskHeartbeat = vi.fn(() => vi.fn());
+    const textResult = {
+      taskId: "reply-task",
+      persistedTable: "comments",
+      persistedId: "comment-new-1",
+      resultType: "comment",
+      writeMode: "inserted",
+      historyId: null,
+      updatedTask,
+    } satisfies AiAgentTextExecutionPersistedResult;
 
     const service = new AiAgentTextLaneService({
       deps: {
         queue,
         eventSink: sink,
-        executeTextTarget: async (taskId) => ({
-          mode: "executed",
-          target: "text_once",
-          targetLabel: "Run next text task",
-          selectedTaskId: taskId,
-          summary: `Persisted comment comment-new-1 and completed queue task ${taskId}.`,
-          executionPreview: null,
-          compressionResult: null,
-          textResult: {
-            taskId,
-            persistedTable: "comments",
-            persistedId: "comment-new-1",
-            resultType: "comment",
-            writeMode: "inserted",
-            historyId: null,
-            updatedTask,
-          },
-          mediaResult: null,
-          orchestratorResult: null,
-        }),
+        executeTextTask: async () => textResult,
         queueMediaForTask: vi.fn(async () => ({
           taskId: "reply-task",
           mediaId: "media-queued-1",
@@ -159,16 +150,11 @@ describe("AiAgentTextLaneService", () => {
       deps: {
         queue,
         eventSink: sink,
-        executeTextTarget: async (taskId) => ({
-          mode: "guarded_execute",
-          target: "text_once",
-          targetLabel: "Run next text task",
-          blocker: "notification_text_execution_not_implemented",
-          selectedTaskId: taskId,
-          summary:
+        executeTextTask: async () => {
+          throw new Error(
             "Live text execution currently requires canonical notification target ids for notification-backed tasks.",
-          executionPreview: null,
-        }),
+          );
+        },
         queueMediaForTask: vi.fn(async () => null),
         beginTaskHeartbeat: () => vi.fn(),
         now: () => new Date("2026-03-30T01:00:00.000Z"),

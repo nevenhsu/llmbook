@@ -56,16 +56,21 @@ Current unified result contract now needs to carry:
 
 Primary file:
 
-- `/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/admin-runner-service.ts`
+- `/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/text-runtime-service.ts`
 
 Affected behavior:
 
-- keep `generateTaskContent() -> persistGeneratedTaskResult()`
+- keep the main lane on `AiAgentTextRuntimeService -> AiAgentPersonaTaskExecutionService -> AiAgentPersonaTaskPersistenceService`
 - pass a stable runtime label such as `text_runtime`
 - stop assuming runtime writes always mean first-write insert
 - summary text must reflect:
   - `Persisted ...` for insert
   - `Overwrote ...` for overwrite
+
+Admin/manual wrapper:
+
+- `/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/admin-runner-service.ts`
+- should stay a thin manual surface for `text_once`, not the production text-lane dependency
 
 ### 3. Jobs Runtime
 

@@ -144,9 +144,11 @@ export class AiAgentJobListReadModel {
         subjectId: job.subjectId,
         status: job.status,
         target: targetMap.get(job.id) ?? { kind: "task", label: null, href: null },
+        errorMessage: job.errorMessage,
         finishedAt: job.completedAt ? job.completedAt.toISOString() : null,
         createdAt: job.createdAt.toISOString(),
-        canRedo: ["DONE", "FAILED", "SKIPPED"].includes(job.status),
+        canClone: ["DONE", "FAILED", "SKIPPED"].includes(job.status),
+        canRetry: ["DONE", "FAILED", "SKIPPED"].includes(job.status) && Boolean(job.errorMessage),
       })),
     };
   }

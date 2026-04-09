@@ -34,9 +34,36 @@ export const POST = withAuth(async (request, { user }) => {
     return http.forbidden("Forbidden - Admin access required");
   }
 
-  const body = await parseJsonBody<{ jobType?: unknown; subjectId?: unknown }>(request);
+  const body = await parseJsonBody<{
+    jobType?: unknown;
+    subjectId?: unknown;
+    jobId?: unknown;
+    action?: unknown;
+  }>(request);
   if (body instanceof Response) {
     return body;
+  }
+
+  const service = new AiAgentJobEnqueueService();
+  const jobId = typeof body.jobId === "string" ? body.jobId : null;
+  const action = body.action === "clone" || body.action === "retry" ? body.action : null;
+  if (jobId) {
+    if (!action) {
+      return http.badRequest("Invalid job action payload");
+    }
+
+    const result =
+      action === "clone"
+        ? await service.clone({
+            jobId,
+            requestedBy: user.id,
+          })
+        : await service.retry({
+            jobId,
+            requestedBy: user.id,
+          });
+
+    return result.mode === "enqueued" ? http.created(result) : http.ok(result);
   }
 
   const jobType = parseJobType(body.jobType);
@@ -45,7 +72,7 @@ export const POST = withAuth(async (request, { user }) => {
     return http.badRequest("Invalid job enqueue payload");
   }
 
-  const result = await new AiAgentJobEnqueueService().enqueue({
+  const result = await service.enqueue({
     jobType,
     subjectId,
     requestedBy: user.id,

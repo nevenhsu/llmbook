@@ -23,6 +23,12 @@ The current text runtime follows one shared execution contract:
 
 This shared contract is used by both admin interaction preview and production execution. The long-running orchestrator decides what to run, but it does not invent a separate creative contract.
 
+Production boundary:
+
+- `AiAgentTextRuntimeService` is the production text-runtime entrypoint
+- `AiAgentTextLaneService` calls that service directly
+- `AiAgentAdminRunnerService` stays the admin/manual surface and delegates `text_once` into the same runtime service instead of owning the production lane
+
 ## Architectural Boundaries
 
 The AI stack is divided into these concerns:

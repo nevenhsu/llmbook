@@ -2,6 +2,20 @@
 
 ## Active
 
+- [x] Add focused failing tests for main text runtime boundary cleanup so `text-lane` no longer depends on `AiAgentAdminRunnerService` for `text_once`.
+- [x] Extract a shared text runtime service that owns text-task preview/execute logic and shared persistence, then rewire `text-lane` to use it directly.
+- [x] Narrow `AiAgentAdminRunnerService` so `text_once` delegates to the shared text runtime service instead of owning the main runtime text path.
+- [x] Update runtime architecture/status docs and lessons to record the cleaned boundary between admin/manual runner APIs and the production text lane.
+- [x] Run targeted verification for the touched text-runtime boundary files and record the review outcome here before closing.
+- [x] Add focused Jobs-tab UI coverage for a merged `Status` cell that also renders finished timing and clearer status/error color treatment.
+- [x] Replace the separate `Finished` column with a richer single `Status` column in the `Jobs` table without changing the jobs API contract.
+- [x] Update operator-console docs and lessons so the finalized `Jobs` table shape documents `Status` as the merged execution-state cell.
+- [x] Run targeted verification for the touched Jobs table UI/test files and record the review outcome here before closing.
+- [x] Add focused failing tests that lock the `Jobs` table `Error` column plus distinct `Clone` and `Retry` actions.
+- [x] Implement backend contracts so `Clone` creates a new `job_tasks` row while `Retry` requeues the same failed row instead of cloning it.
+- [x] Update the `Jobs` tab UI to show `Error`, rename `Run` to `Clone`, and gate `Retry` to rows with error text.
+- [x] Update operator-console docs and lessons for the finalized `Clone` vs `Retry` action semantics.
+- [x] Run targeted verification for the touched jobs-action route/service/UI changes and record the review outcome here before closing.
 - [x] Add a focused failing operator-console UI test that locks inline thumbnail rendering for `Image` tab rows with `imageUrl`.
 - [x] Implement the minimal `Image` tab thumbnail preview without changing the backend image-table contract.
 - [x] Update operator-console docs/open questions to record that the `Image` tab now shows inline thumbnails.
@@ -147,3 +161,19 @@
 - Verified with `npm test -- src/lib/ai/agent/execution/persona-task-context-builder.test.ts`.
 - Added operator-console UI coverage for `Image` rows so the tab now renders an inline thumbnail when `imageUrl` is present, while keeping the existing URL target link.
 - Verified with `npm test -- src/components/admin/agent-panel/AiAgentOperatorConsole.test.ts`.
+- Refined the `Jobs` table contract so it now exposes `Error`, `Clone`, and `Retry`; `Clone` inserts a fresh `job_tasks` row with the same payload, while `Retry` only requeues the same errored terminal row back to `PENDING`.
+- Verified the updated jobs action surface with `npm test -- src/lib/ai/agent/operator-console/job-list-read-model.test.ts src/lib/ai/agent/operator-console/job-enqueue-service.test.ts src/app/api/admin/ai/agent/panel/jobs/route.test.ts src/components/admin/agent-panel/AiAgentOperatorConsole.test.ts`.
+- Verified targeted lint with `npx eslint src/lib/ai/agent/operator-console/job-enqueue-service.ts src/lib/ai/agent/operator-console/job-enqueue-service.test.ts src/lib/ai/agent/operator-console/job-list-read-model.ts src/lib/ai/agent/operator-console/job-list-read-model.test.ts src/lib/ai/agent/operator-console/types.ts src/app/api/admin/ai/agent/panel/jobs/route.ts src/app/api/admin/ai/agent/panel/jobs/route.test.ts src/components/admin/agent-panel/AiAgentOperatorConsole.tsx src/components/admin/agent-panel/AiAgentOperatorConsole.test.ts`.
+- Verified filtered TypeScript with `npx tsc --noEmit 2>&1 | rg "src/lib/ai/agent/operator-console/job-enqueue-service(\\.test)?\\.ts|src/lib/ai/agent/operator-console/job-list-read-model(\\.test)?\\.ts|src/lib/ai/agent/operator-console/types\\.ts|src/app/api/admin/ai/agent/panel/jobs/route(\\.test)?\\.ts|src/components/admin/agent-panel/AiAgentOperatorConsole(\\.test)?\\.tsx"` and got no matches for the touched files.
+- Merged the `Jobs` table `Status` and `Finished` columns into a single colored `Status` cell that keeps the badge plus a secondary queue/finished line, while leaving `Error`, `Clone`, and `Retry` unchanged.
+- Verified the merged-status UI with `npm test -- src/components/admin/agent-panel/AiAgentOperatorConsole.test.ts`.
+- Verified targeted lint with `npx eslint src/components/admin/agent-panel/AiAgentOperatorConsole.tsx src/components/admin/agent-panel/AiAgentOperatorConsole.test.ts src/components/ui/OperatorStatusBadge.tsx`.
+- Verified filtered TypeScript with `npx tsc --noEmit 2>&1 | rg "src/components/admin/agent-panel/AiAgentOperatorConsole(\\.test)?\\.tsx|src/components/ui/OperatorStatusBadge\\.tsx"` and got no matches for the touched files.
+- Added boundary-focused regression coverage proving `AiAgentAdminRunnerService` no longer performs a local `loadTaskById` for delegated `text_once` preview/execute when shared text-runtime deps are supplied.
+- Cleaned the main runtime boundary so `AiAgentTextLaneService` stays on `AiAgentTextRuntimeService`, while `AiAgentAdminRunnerService` remains only the admin/manual wrapper for `text_once`.
+- Removed dead `maybeExecuteMediaForTask()` code from `admin-runner-service.ts` and removed the duplicate `text-runtime-service` export from `src/lib/ai/agent/execution/index.ts`.
+- Synced the boundary docs in `docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md`, `src/lib/ai/README.md`, `plans/ai-agent/operator-console/README.md`, `plans/ai-agent/operator-console/implementation-status.md`, `plans/ai-agent/operator-console/open-questions.md`, and `plans/ai-agent/operator-console/shared-text-write-impact-note.md`.
+- Verified boundary tests with `npm test -- src/lib/ai/agent/execution/persona-task-execution-service.test.ts src/lib/ai/agent/execution/text-runtime-service.test.ts src/lib/ai/agent/execution/text-lane-service.test.ts src/lib/ai/agent/execution/admin-runner-service.test.ts 'src/app/api/admin/ai/agent/run/[target]/route.test.ts'`.
+- Re-verified the touched runtime files after the final type export fix with `npm test -- src/lib/ai/agent/execution/text-runtime-service.test.ts src/lib/ai/agent/execution/text-lane-service.test.ts src/lib/ai/agent/execution/admin-runner-service.test.ts`.
+- Verified targeted lint with `npx eslint src/lib/ai/agent/execution/persona-task-execution-service.ts src/lib/ai/agent/execution/persona-task-execution-service.test.ts src/lib/ai/agent/execution/text-runtime-service.ts src/lib/ai/agent/execution/text-runtime-service.test.ts src/lib/ai/agent/execution/text-lane-service.ts src/lib/ai/agent/execution/text-lane-service.test.ts src/lib/ai/agent/execution/admin-runner-service.ts src/lib/ai/agent/execution/admin-runner-service.test.ts 'src/app/api/admin/ai/agent/run/[target]/route.ts' 'src/app/api/admin/ai/agent/run/[target]/route.test.ts' src/lib/ai/agent/execution/index.ts`.
+- Verified filtered TypeScript with `npx tsc --noEmit 2>&1 | rg "src/lib/ai/agent/execution/persona-task-execution-service(\\.test)?\\.ts|src/lib/ai/agent/execution/text-runtime-service(\\.test)?\\.ts|src/lib/ai/agent/execution/text-lane-service(\\.test)?\\.ts|src/lib/ai/agent/execution/admin-runner-service(\\.test)?\\.ts|src/app/api/admin/ai/agent/run/\\[target\\]/route(\\.test)?\\.ts|src/lib/ai/agent/execution/index\\.ts"` and got no matches for the touched files.

@@ -28,6 +28,10 @@ Implemented in:
 - `memory_compress` execution
 - `image_generation` execution
 - `public_task` / `notification_task` shared text persistence execution
+- operator `Jobs` actions now distinguish:
+  - `Clone` -> insert a fresh `job_tasks` row with the same payload
+  - `Retry` -> reset the same errored `job_tasks` row back to `PENDING`
+- the `Jobs` table now merges `Status` + finished timing into one colored operator cell instead of keeping a separate `Finished` column
 
 ### Shared Post/Comment Generation
 
@@ -59,11 +63,20 @@ Implemented in:
 
 ### Main Text Runtime
 
-- `AiAgentAdminRunnerService` text execution now uses:
-  - `generateTaskContent()`
-  - `persistGeneratedTaskResult()`
+- `AiAgentTextRuntimeService`
+  - is now the production `text_once` runtime boundary
+  - owns shared text-task preview/execute entrypoints for the main lane
+- `AiAgentPersonaTaskExecutionService`
+  - wraps shared `generate -> persist` execution
+  - is reused by `AiAgentTextRuntimeService` and `jobs-runtime`
+- `AiAgentTextLaneService`
+  - calls `AiAgentTextRuntimeService` directly
+  - no longer depends on `AiAgentAdminRunnerService` for the production text drain
+- `AiAgentAdminRunnerService`
+  - remains the admin/manual route surface
+  - delegates `text_once` preview/execute to `AiAgentTextRuntimeService`
 
-This means main text runtime no longer persists directly from `execution-preview` parsed output.
+This means main text runtime no longer routes its production execution path through an admin-named wrapper.
 
 ### Shared Overwrite History
 
@@ -98,12 +111,6 @@ Still open:
 - future runtime callers should keep using `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()` instead of reintroducing lane-specific insert/overwrite wrappers
 - any media-history or memory-history companion persistence
 
-### Explicitly Out Of Scope
-
-- any operator-console UI for `content_edit_history`
-- any `previous_snapshot` viewer
-- any `View History` action in `Jobs`, `Public`, or `Notification`
-
 ## Clarified Runtime Contract
 
 - shared generation modes are `runtime | preview`
@@ -113,6 +120,12 @@ Still open:
   - insert new content
   - overwrite existing content
   - or no-write preview only
+
+## Explicitly Out Of Scope
+
+- any operator-console UI for `content_edit_history`
+- any `previous_snapshot` viewer
+- any `View History` action in `Jobs`, `Public`, or `Notification`
 
 ## Verification Completed
 

@@ -16,14 +16,12 @@ import {
   AiAgentMediaJobService,
   type AiAgentMediaExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/media-job-service";
+import { type AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-execution-service";
 import {
-  AiAgentPersonaTaskPersistenceService,
-  type AiAgentTextExecutionPersistedResult,
-} from "@/lib/ai/agent/execution/persona-task-persistence-service";
-import {
-  AiAgentPersonaTaskService,
-  type AiAgentPersonaTaskGenerationResult,
-} from "@/lib/ai/agent/jobs/persona-task-service";
+  AiAgentTextRuntimeGuardError,
+  AiAgentTextRuntimeService,
+  type AiAgentTextRuntimePreviewResult,
+} from "@/lib/ai/agent/execution/text-runtime-service";
 import {
   AiAgentMemoryCompressorService,
   type AiAgentMemoryPersistedCompressResponse,
@@ -63,13 +61,8 @@ type TaskRow = {
 type AdminRunnerServiceDeps = {
   loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
   compressNextPersona: () => Promise<AiAgentMemoryPersistedCompressResponse | null>;
-  generateTaskContent: (taskId: string) => Promise<AiAgentPersonaTaskGenerationResult>;
-  persistGeneratedTaskResult: (input: {
-    generated: AiAgentPersonaTaskGenerationResult;
-  }) => Promise<AiAgentTextExecutionPersistedResult>;
-  executeTextTask: (
-    task: AiAgentRecentTaskSnapshot,
-  ) => Promise<AiAgentTextExecutionPersistedResult>;
+  previewTextTask: (taskId: string) => Promise<AiAgentTextRuntimePreviewResult>;
+  executeTextTaskById: (taskId: string) => Promise<AiAgentTextExecutionPersistedResult>;
   executeMediaTask: (
     task: AiAgentRecentTaskSnapshot,
   ) => Promise<AiAgentMediaExecutionPersistedResult>;
@@ -145,31 +138,24 @@ export class AiAgentAdminRunnerService {
   private readonly deps: AdminRunnerServiceDeps;
 
   public constructor(options?: { deps?: Partial<AdminRunnerServiceDeps> }) {
-    const personaTaskService = new AiAgentPersonaTaskService();
-    const personaTaskPersistenceService = new AiAgentPersonaTaskPersistenceService();
+    const loadTaskById = options?.deps?.loadTaskById ?? ((taskId) => this.readTaskById(taskId));
+    const textRuntimeService = new AiAgentTextRuntimeService({
+      deps: {
+        loadTaskById,
+      },
+    });
     this.deps = {
-      loadTaskById: options?.deps?.loadTaskById ?? ((taskId) => this.readTaskById(taskId)),
+      loadTaskById,
       compressNextPersona:
         options?.deps?.compressNextPersona ??
         (async () => {
           const result = await new AiAgentMemoryCompressorService().runNext();
           return result.mode === "executed" ? result.compressionResult : null;
         }),
-      generateTaskContent:
-        options?.deps?.generateTaskContent ??
-        ((taskId) =>
-          personaTaskService.generateFromTask({
-            personaTaskId: taskId,
-            mode: "runtime",
-          })),
-      persistGeneratedTaskResult:
-        options?.deps?.persistGeneratedTaskResult ??
-        ((input) =>
-          personaTaskPersistenceService.persistGeneratedResult({
-            ...input,
-            sourceRuntime: "text_runtime",
-          })),
-      executeTextTask: options?.deps?.executeTextTask ?? ((task) => this.executeTextTask(task)),
+      previewTextTask:
+        options?.deps?.previewTextTask ?? ((taskId) => textRuntimeService.previewTask(taskId)),
+      executeTextTaskById:
+        options?.deps?.executeTextTaskById ?? ((taskId) => textRuntimeService.executeTask(taskId)),
       executeMediaTask:
         options?.deps?.executeMediaTask ??
         ((task) => new AiAgentMediaJobService().executeForTask(task)),
@@ -185,13 +171,8 @@ export class AiAgentAdminRunnerService {
     target: AiAgentRunnerTarget;
     taskId?: string | null;
   }): Promise<AiAgentRunnerPreviewResponse> {
-    const task = input.taskId ? await this.deps.loadTaskById(input.taskId) : null;
-    if (input.taskId && !task) {
-      throw new Error("task not found");
-    }
-
     if (input.target === "text_once") {
-      if (!task) {
+      if (!input.taskId) {
         return {
           mode: "preview",
           target: input.target,
@@ -204,16 +185,23 @@ export class AiAgentAdminRunnerService {
         };
       }
 
+      const textPreview = await this.deps.previewTextTask(input.taskId);
+
       return {
         mode: "preview",
         target: input.target,
         targetLabel: getRunnerLabel(input.target),
-        available: true,
-        blocker: null,
-        selectedTaskId: task.id,
-        summary: "Shared execution preview is available for the selected text task.",
-        executionPreview: buildExecutionPreviewFromTask(task),
+        available: textPreview.available,
+        blocker: textPreview.blocker,
+        selectedTaskId: textPreview.selectedTaskId,
+        summary: textPreview.summary,
+        executionPreview: textPreview.executionPreview,
       };
+    }
+
+    const task = input.taskId ? await this.deps.loadTaskById(input.taskId) : null;
+    if (input.taskId && !task) {
+      throw new Error("task not found");
     }
 
     if (input.target === "media_once") {
@@ -353,43 +341,32 @@ export class AiAgentAdminRunnerService {
         };
       }
 
-      const task = await this.deps.loadTaskById(preview.selectedTaskId);
-      if (!task) {
-        throw new Error("task not found");
+      let textResult: AiAgentTextExecutionPersistedResult;
+      try {
+        textResult = await this.deps.executeTextTaskById(preview.selectedTaskId);
+      } catch (error) {
+        if (error instanceof AiAgentTextRuntimeGuardError) {
+          return {
+            mode: "guarded_execute",
+            target: input.target,
+            targetLabel: preview.targetLabel,
+            blocker: error.reasonCode,
+            selectedTaskId: preview.selectedTaskId,
+            summary: error.message,
+            executionPreview: preview.executionPreview,
+          };
+        }
+        throw error;
       }
-
-      const notificationTarget = task.payload as {
-        postId?: string | null;
-      };
-      if (
-        task.dispatchKind !== "public" &&
-        !(
-          task.sourceTable === "notifications" &&
-          (task.taskType !== "post" || notificationTarget?.postId)
-        )
-      ) {
-        return {
-          mode: "guarded_execute",
-          target: input.target,
-          targetLabel: preview.targetLabel,
-          blocker: "notification_text_execution_not_implemented",
-          selectedTaskId: task.id,
-          summary:
-            "Live text execution currently requires canonical notification target ids for notification-backed tasks.",
-          executionPreview: preview.executionPreview,
-        };
-      }
-
-      const textResult = await this.deps.executeTextTask(task);
       return {
         mode: "executed",
         target: input.target,
         targetLabel: preview.targetLabel,
-        selectedTaskId: task.id,
+        selectedTaskId: preview.selectedTaskId,
         summary:
           textResult.writeMode === "overwritten"
-            ? `Overwrote ${textResult.resultType} ${textResult.persistedId} and completed queue task ${task.id}.`
-            : `Persisted ${textResult.resultType} ${textResult.persistedId} and completed queue task ${task.id}.`,
+            ? `Overwrote ${textResult.resultType} ${textResult.persistedId} and completed queue task ${preview.selectedTaskId}.`
+            : `Persisted ${textResult.resultType} ${textResult.persistedId} and completed queue task ${preview.selectedTaskId}.`,
         executionPreview: buildExecutionPreviewFromTask(textResult.updatedTask),
         compressionResult: null,
         textResult,
@@ -464,30 +441,6 @@ export class AiAgentAdminRunnerService {
       summary: `${preview.targetLabel} is still guarded; preview artifacts are available, but live runner execution is not wired yet.`,
       executionPreview: preview.executionPreview,
     };
-  }
-
-  private async executeTextTask(
-    task: AiAgentRecentTaskSnapshot,
-  ): Promise<AiAgentTextExecutionPersistedResult> {
-    const generated = await this.deps.generateTaskContent(task.id);
-    return this.deps.persistGeneratedTaskResult({
-      generated,
-    });
-  }
-
-  private async maybeExecuteMediaForTask(
-    task: AiAgentRecentTaskSnapshot,
-  ): Promise<AiAgentMediaExecutionPersistedResult | null> {
-    const executionPreview = buildExecutionPreviewFromTask(task);
-    if (!executionPreview.writePlan.mediaWrite) {
-      return null;
-    }
-
-    if (task.status !== "DONE" || !task.resultId || !task.resultType) {
-      return null;
-    }
-
-    return this.deps.executeMediaTask(task);
   }
 
   private async readTaskById(taskId: string): Promise<AiAgentRecentTaskSnapshot | null> {

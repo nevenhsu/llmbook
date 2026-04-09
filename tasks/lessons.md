@@ -15,6 +15,8 @@
 - 若 job queue 已成為所有 admin 手動任務的唯一入口，表名可簡化為 `job_tasks`。`content_edit_history.previous_snapshot` 不應直接關聯 job；應由 history row 以明確 `job_task_id` 或等價來源欄位關聯到 `job_tasks`，而 `previous_snapshot` 只保存被覆寫前的內容。
 - 若 jobs queue 的主用途是定位「本次要處理哪個資源」，優先用單一 `subject_kind/subject_id`，不要同時保留 `source_*` 與 `target_*` 造成語意重複。`job_type` 應描述任務類別本身，而不是把 `redo` 之類的觸發方式硬編進型別名稱。
 - 若 operator 明確要求看 queue 執行狀態，應恢復獨立 `Status` 欄，而不是把狀態塞回 `Job` cell。極簡表格不代表隱藏核心執行狀態。
+- `Jobs` row actions 要分清楚：`Clone` 是建立一筆新的 `job_tasks` row 並沿用同 payload；`Retry` 不是 clone，而是只對有 `error_message` 的終態 row 把同一筆 queue row 重設回 `PENDING`。表格也要直接顯示 `Error` 欄，沒錯誤就顯示 `-`。
+- 當 operator table 同時需要狀態與完成資訊時，優先合併成單一 `Status` cell，而不是再開獨立 `Finished` 欄；狀態 badge、次要時間文字、錯誤文字都要有清楚的資訊色彩層級。
 - 當使用者明確定稿 operator 文案（例如 `Pause / Start`）時，所有設計文檔與後續討論都必須立刻統一；不要在其他模組文檔殘留 `Stop / Restart` 或過渡命名。
 - 若專案已經有現成 lane key env（例如 `AI_AGENT_RUNTIME_STATE_KEY`），新的 queue/runtime 設計應直接綁定同一個 key 來源；不要另外描述成獨立、不相干的 runtime key 機制。
 - `content_edit_history` 必須設計成 append-only timeline，同一個 `post/comment` 可累積多筆覆寫紀錄；shared content mutation/history service 不應綁死在 jobs-runtime，未來 main runtime 只要有 overwrite flow 也必須走同一條 history 寫入路徑。
@@ -37,6 +39,8 @@
 - comment context builder 的分支判斷要以 parent/thread 結構為準，不要用模糊語意推測：top-level comment 是沒有 `parent_id` 的 comment，且 recent context 要 query 該 post 最近 10 筆 top-level comments；thread reply 則是 insert comment 會帶 `parent_id`，並走 `source_comment + ancestor_comments + recent_top_level_comments`。`recent_top_level_comments` 還要排除任何已出現在 `ancestor_comments` 的 row，不要再另外發明第二套 reply-only 近期 block。`post` body 的 prompt contract 也要明寫是 markdown。
 - 當使用者把 prompt block 的長度上限定稿時，要立刻寫回方案文檔與 spec，並把對應項目從 open questions 移除或縮小。這輪已定：`board.rules <= 600` 字元，`root_post.body excerpt <= 800` 字元。
 - 只更新 `/plans` 不夠；只要核心架構或 canonical flow 改了，`docs/ai-admin/*` 這種 repo-level 設計文檔也要同一輪同步，否則會留下比實作更舊的心智模型。
+- 當使用者明確指定實作順序（例如先完成 main runtime boundary cleanup，再談 prompt/context 品質）時，要照這個順序把 code、docs、verification 一次收尾，不要中途跳回相鄰但尚未授權的優化主題。
+- production lane 的正式邊界必須掛在 runtime-named service 上；若 `text-lane` 已經改走 `AiAgentTextRuntimeService`，就不要再讓 `AiAgentAdminRunnerService` 承擔主執行責任。admin/manual surface 應只做 thin wrapper，委派到同一個 runtime service。
 - Keep one Phase A source of truth only: `ai_opps -> opportunities -> public candidates / notification direct tasking -> persona_tasks`.
 - Remove old flow code, tests, and docs in the same pass; execute-path migration alone is not enough.
 - Keep preview, admin, and runtime on the same stage contract even when preview stays fixture-backed.

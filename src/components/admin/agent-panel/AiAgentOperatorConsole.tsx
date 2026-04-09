@@ -54,6 +54,42 @@ function jobLabel(jobType: AiAgentOperatorJobListResponse["rows"][number]["jobTy
   }
 }
 
+function jobStatusMetaClass(
+  status: AiAgentOperatorJobListResponse["rows"][number]["status"],
+): string {
+  switch (status) {
+    case "RUNNING":
+      return "text-info";
+    case "PENDING":
+      return "text-warning";
+    case "DONE":
+      return "text-success";
+    case "FAILED":
+      return "text-error";
+    case "SKIPPED":
+      return "text-base-content/60";
+  }
+}
+
+function jobStatusMetaText(row: AiAgentOperatorJobListResponse["rows"][number]): string {
+  if (row.finishedAt) {
+    return formatDateTime(row.finishedAt);
+  }
+
+  switch (row.status) {
+    case "RUNNING":
+      return "Running now";
+    case "PENDING":
+      return "Queued";
+    default:
+      return "-";
+  }
+}
+
+function jobErrorClass(errorMessage: string | null): string {
+  return errorMessage ? "text-error" : "text-base-content/50";
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="border-base-300 bg-base-100 rounded-xl border p-4 shadow-sm">
@@ -255,6 +291,37 @@ export default function AiAgentOperatorConsole() {
         loadRuntime(),
         input.after ? input.after() : Promise.resolve(),
       ]);
+    } catch (error) {
+      setActionError(toErrorMessage(error));
+    } finally {
+      setRowActionPending(null);
+    }
+  }
+
+  async function handleJobRowAction(input: {
+    action: "clone" | "retry";
+    jobId: string;
+    actionKey: string;
+  }) {
+    setRowActionPending(input.actionKey);
+    setActionError(null);
+    setNotice(null);
+    try {
+      const result = await apiPost<{
+        mode: "deduped" | "enqueued" | "retried";
+        task: { id: string; status: string };
+      }>("/api/admin/ai/agent/panel/jobs", {
+        jobId: input.jobId,
+        action: input.action,
+      });
+      if (result.mode === "deduped") {
+        setNotice(`Active job already exists (${result.task.id}).`);
+      } else if (result.mode === "retried") {
+        setNotice(`Retried ${result.task.id}.`);
+      } else {
+        setNotice(`Cloned ${input.jobId} into ${result.task.id}.`);
+      }
+      await Promise.all([loadJobs(jobsPage), loadRuntime()]);
     } catch (error) {
       setActionError(toErrorMessage(error));
     } finally {
@@ -527,7 +594,7 @@ export default function AiAgentOperatorConsole() {
                       <th>Job</th>
                       <th>Target</th>
                       <th>Status</th>
-                      <th>Finished</th>
+                      <th>Error</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -558,25 +625,53 @@ export default function AiAgentOperatorConsole() {
                             )}
                           </td>
                           <td>
-                            <OperatorStatusBadge status={row.status} />
+                            <div className="space-y-1">
+                              <OperatorStatusBadge status={row.status} />
+                              <div
+                                data-testid={`job-status-meta-${row.id}`}
+                                className={`text-xs font-medium ${jobStatusMetaClass(row.status)}`}
+                              >
+                                {jobStatusMetaText(row)}
+                              </div>
+                            </div>
                           </td>
-                          <td>{formatDateTime(row.finishedAt)}</td>
+                          <td
+                            data-testid={`job-error-${row.id}`}
+                            className={`max-w-xs text-sm break-words ${jobErrorClass(row.errorMessage)}`}
+                          >
+                            {row.errorMessage ?? "-"}
+                          </td>
                           <td>
-                            <button
-                              type="button"
-                              className="btn btn-outline btn-xs"
-                              disabled={!row.canRedo || rowActionPending === row.id}
-                              onClick={() => {
-                                void enqueueJob({
-                                  jobType: row.jobType,
-                                  subjectId: row.subjectId,
-                                  actionKey: row.id,
-                                  after: () => loadJobs(jobsPage),
-                                });
-                              }}
-                            >
-                              {rowActionPending === row.id ? "Queueing..." : "Redo"}
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-xs"
+                                disabled={!row.canClone || rowActionPending === `${row.id}:clone`}
+                                onClick={() => {
+                                  void handleJobRowAction({
+                                    action: "clone",
+                                    jobId: row.id,
+                                    actionKey: `${row.id}:clone`,
+                                  });
+                                }}
+                              >
+                                {rowActionPending === `${row.id}:clone` ? "Queueing..." : "Clone"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-xs"
+                                disabled={!row.canRetry || rowActionPending === `${row.id}:retry`}
+                                onClick={() => {
+                                  void handleJobRowAction({
+                                    action: "retry",
+                                    jobId: row.id,
+                                    actionKey: `${row.id}:retry`,
+                                  });
+                                }}
+                              >
+                                {rowActionPending === `${row.id}:retry` ? "Retrying..." : "Retry"}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))

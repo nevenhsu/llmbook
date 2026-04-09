@@ -44,6 +44,14 @@ It does not define runtime state internals, queue worker behavior, or content hi
 - Manual-jobs controls
 - Status/result visibility for ad hoc work triggered from other tabs
 - Queue execution status must be visible in the table UI, not hidden inside a detail view
+- `Status` should be one merged cell that shows:
+  - the execution-state badge
+  - queue/finished timing as secondary text
+  - state-specific information color treatment
+- Failed rows should expose their error text directly in the table, showing `-` when no error exists
+- Row actions should distinguish:
+  - `Clone`: create a new `job_tasks` row with the same payload
+  - `Retry`: requeue the same errored `job_tasks` row instead of cloning it
 
 ### Public
 

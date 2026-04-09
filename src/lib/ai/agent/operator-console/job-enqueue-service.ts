@@ -82,7 +82,14 @@ type EnqueueDeps = {
     dedupeKey: string;
     payload: Record<string, unknown>;
     requestedBy: string;
+    maxRetries?: number;
   }) => Promise<AiAgentJobTask>;
+  loadJobTask: (jobId: string) => Promise<AiAgentJobTask | null>;
+  retryTask: (input: {
+    jobId: string;
+    runtimeKey: string;
+    requestedBy: string;
+  }) => Promise<AiAgentJobTask | null>;
   loadPersonaTask: (
     subjectId: string,
   ) => Promise<{ id: string; status: string; taskType: string } | null>;
@@ -93,6 +100,9 @@ type EnqueueDeps = {
 export type AiAgentJobEnqueueResult =
   | { mode: "deduped"; task: AiAgentJobTask }
   | { mode: "enqueued"; task: AiAgentJobTask };
+export type AiAgentJobRetryResult =
+  | { mode: "deduped"; task: AiAgentJobTask }
+  | { mode: "retried"; task: AiAgentJobTask };
 
 function buildJobInput(input: { jobType: AiAgentJobType; subjectId: string }): {
   subjectKind: AiAgentJobSubjectKind;
@@ -158,19 +168,23 @@ export class AiAgentJobEnqueueService {
         (async (input) => {
           const supabase = createAdminClient();
           const nowIso = this.deps.now().toISOString();
+          const insertRow: Record<string, unknown> = {
+            runtime_key: input.runtimeKey,
+            job_type: input.jobType,
+            subject_kind: input.subjectKind,
+            subject_id: input.subjectId,
+            dedupe_key: input.dedupeKey,
+            status: "PENDING",
+            payload: input.payload,
+            requested_by: input.requestedBy,
+            scheduled_at: nowIso,
+          };
+          if (typeof input.maxRetries === "number") {
+            insertRow.max_retries = input.maxRetries;
+          }
           const { data, error } = await supabase
             .from("job_tasks")
-            .insert({
-              runtime_key: input.runtimeKey,
-              job_type: input.jobType,
-              subject_kind: input.subjectKind,
-              subject_id: input.subjectId,
-              dedupe_key: input.dedupeKey,
-              status: "PENDING",
-              payload: input.payload,
-              requested_by: input.requestedBy,
-              scheduled_at: nowIso,
-            })
+            .insert(insertRow)
             .select(
               "id, runtime_key, job_type, subject_kind, subject_id, dedupe_key, status, payload, requested_by, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, error_message, created_at, updated_at",
             )
@@ -181,6 +195,53 @@ export class AiAgentJobEnqueueService {
           }
 
           return fromRow(data);
+        }),
+      loadJobTask:
+        options?.deps?.loadJobTask ??
+        (async (jobId) => {
+          const supabase = createAdminClient();
+          const { data, error } = await supabase
+            .from("job_tasks")
+            .select(
+              "id, runtime_key, job_type, subject_kind, subject_id, dedupe_key, status, payload, requested_by, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, error_message, created_at, updated_at",
+            )
+            .eq("id", jobId)
+            .maybeSingle<JobTaskRow>();
+          if (error) {
+            throw new Error(`load job_task failed: ${error.message}`);
+          }
+          return data ? fromRow(data) : null;
+        }),
+      retryTask:
+        options?.deps?.retryTask ??
+        (async ({ jobId, runtimeKey, requestedBy }) => {
+          const supabase = createAdminClient();
+          const nowIso = this.deps.now().toISOString();
+          const { data, error } = await supabase
+            .from("job_tasks")
+            .update({
+              status: "PENDING",
+              requested_by: requestedBy,
+              scheduled_at: nowIso,
+              started_at: null,
+              completed_at: null,
+              retry_count: 0,
+              lease_owner: null,
+              lease_until: null,
+              error_message: null,
+              updated_at: nowIso,
+            })
+            .eq("id", jobId)
+            .eq("runtime_key", runtimeKey)
+            .in("status", ["FAILED", "SKIPPED"])
+            .select(
+              "id, runtime_key, job_type, subject_kind, subject_id, dedupe_key, status, payload, requested_by, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, error_message, created_at, updated_at",
+            )
+            .maybeSingle<JobTaskRow>();
+          if (error) {
+            throw new Error(`retry job_task failed: ${error.message}`);
+          }
+          return data ? fromRow(data) : null;
         }),
       loadPersonaTask:
         options?.deps?.loadPersonaTask ??
@@ -264,6 +325,87 @@ export class AiAgentJobEnqueueService {
         requestedBy: input.requestedBy,
       }),
     };
+  }
+
+  public async clone(input: {
+    jobId: string;
+    requestedBy: string;
+  }): Promise<AiAgentJobEnqueueResult> {
+    const sourceJob = await this.requireCurrentRuntimeTask(input.jobId);
+    if (!["DONE", "FAILED", "SKIPPED"].includes(sourceJob.status)) {
+      throw new Error("only terminal job_tasks can be cloned");
+    }
+
+    const existing = await this.deps.findActiveByDedupeKey({
+      runtimeKey: this.deps.runtimeKey,
+      dedupeKey: sourceJob.dedupeKey,
+    });
+    if (existing) {
+      return {
+        mode: "deduped",
+        task: existing,
+      };
+    }
+
+    return {
+      mode: "enqueued",
+      task: await this.deps.insertPendingTask({
+        runtimeKey: this.deps.runtimeKey,
+        jobType: sourceJob.jobType,
+        subjectKind: sourceJob.subjectKind,
+        subjectId: sourceJob.subjectId,
+        dedupeKey: sourceJob.dedupeKey,
+        payload: sourceJob.payload,
+        requestedBy: input.requestedBy,
+        maxRetries: sourceJob.maxRetries,
+      }),
+    };
+  }
+
+  public async retry(input: {
+    jobId: string;
+    requestedBy: string;
+  }): Promise<AiAgentJobRetryResult> {
+    const sourceJob = await this.requireCurrentRuntimeTask(input.jobId);
+    if (!["DONE", "FAILED", "SKIPPED"].includes(sourceJob.status) || !sourceJob.errorMessage) {
+      throw new Error("only terminal job_tasks with an error can be retried");
+    }
+
+    const existing = await this.deps.findActiveByDedupeKey({
+      runtimeKey: this.deps.runtimeKey,
+      dedupeKey: sourceJob.dedupeKey,
+    });
+    if (existing) {
+      return {
+        mode: "deduped",
+        task: existing,
+      };
+    }
+
+    const retried = await this.deps.retryTask({
+      jobId: sourceJob.id,
+      runtimeKey: this.deps.runtimeKey,
+      requestedBy: input.requestedBy,
+    });
+    if (!retried) {
+      throw new Error("retry job_task failed: row was not eligible");
+    }
+
+    return {
+      mode: "retried",
+      task: retried,
+    };
+  }
+
+  private async requireCurrentRuntimeTask(jobId: string): Promise<AiAgentJobTask> {
+    const task = await this.deps.loadJobTask(jobId);
+    if (!task) {
+      throw new Error("job_task not found");
+    }
+    if (task.runtimeKey !== this.deps.runtimeKey) {
+      throw new Error("job_task does not belong to the active runtime_key");
+    }
+    return task;
   }
 
   private async validateSubject(jobType: AiAgentJobType, subjectId: string): Promise<void> {

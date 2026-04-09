@@ -319,7 +319,7 @@ Columns:
 - `Job`
 - `Target`
 - `Status`
-- `Finished`
+- `Error`
 - `Actions`
 
 Column intent:
@@ -332,11 +332,16 @@ Column intent:
   - memory jobs: render the target persona using shared persona UI
 - `Status`
   - render queue execution state from `job_tasks.status`
+  - merge the old finished-at visibility into the same cell as secondary text
+  - use state-specific information color treatment for the secondary status line
   - values include `PENDING`, `RUNNING`, `DONE`, `FAILED`, `SKIPPED`
-- `Finished`
-  - terminal completion time or `-` for non-terminal rows
+- `Error`
+  - render `job_tasks.error_message`
+  - show `-` when no error is present
 - `Actions`
-  - terminal rows may expose `Redo`
+  - `Clone` creates a fresh `job_tasks` row with the same payload as the selected terminal row
+  - `Retry` is only enabled for terminal rows that currently have `error_message`
+  - `Retry` must requeue the same errored `job_tasks` row instead of cloning it
 
 Do not add dedicated `Source` or `Requested` columns in the initial operator table.
 

@@ -9,6 +9,7 @@ This document captures the parts that are intentionally not implemented yet, or 
 The first operator-console delivery is now live, but a few UX details remain open:
 
 - whether `Jobs` needs row-level detail expansion or stays table-only
+- `Jobs` already shows the merged `Status` cell, `Error`, `Clone`, and `Retry`, so any future detail view should stay above that minimal operator surface rather than replacing it
 - whether `Runtime` should show more recent execution breadcrumbs beyond the current summary cards
 
 ## 2. Prompt Context Depth
@@ -36,15 +37,7 @@ The approved prompt-context expansion is now implemented for task-driven generat
 
 - whether comment-thread context needs any additional bounded blocks beyond the current shape
 
-## 3. Main Runtime Boundaries
-
-Main text runtime now reuses shared generation and separate persistence, but a few architectural questions remain:
-
-- should `AiAgentAdminRunnerService` remain the runtime text entry wrapper long-term
-- or should a lower-level text-runtime service call shared generation/persistence directly
-- whether future overwrite-capable callers need extra metadata beyond the current `persistGeneratedResult()` contract
-
-## 4. Content History Scope
+## 3. Content History Scope
 
 `content_edit_history` remains a backend/shared-persistence concern only.
 
@@ -54,7 +47,7 @@ Confirmed out of scope for the current operator-console plan:
 - no `previous_snapshot` viewer UI
 - no history detail panel or diff surface in `/admin/ai/agent-panel`
 
-## 5. Memory Tab Read Model
+## 4. Memory Tab Read Model
 
 The first persona summary table is implemented with:
 
@@ -68,13 +61,13 @@ Still open:
 
 - whether compressor-specific hints such as `deferUntil` or `lastDecision` should appear in the table
 
-## 6. `/admin/ai/agent-lab` Boundary
+## 5. `/admin/ai/agent-lab` Boundary
 
 `/admin/ai/agent-lab` is not carrying any remaining scope in this plan.
 
 It remains the separate Phase A snapshot/debug surface, but there is no open follow-up item for it under the current operator-console track.
 
-## 7. Prompt Context Expansion Rules
+## 6. Prompt Context Expansion Rules
 
 Implemented direction:
 
@@ -89,5 +82,5 @@ Implemented direction:
 Suggested next discussion order:
 
 1. any extra `Jobs` table detail beyond the current minimal operator view
-2. any future runtime-boundary cleanup around text entry wrappers
-3. whether comment-thread context needs any additional bounded blocks beyond the current shape
+2. whether comment-thread context needs any additional bounded blocks beyond the current shape
+3. whether memory-specific compressor hints should appear in the persona summary table

@@ -65,9 +65,11 @@ export type AiAgentOperatorJobRow = {
   subjectId: string;
   status: AiAgentJobStatus;
   target: AiAgentOperatorJobTarget;
+  errorMessage: string | null;
   finishedAt: string | null;
   createdAt: string;
-  canRedo: boolean;
+  canClone: boolean;
+  canRetry: boolean;
 };
 
 export type AiAgentOperatorJobListResponse = AiAgentOperatorPagedResponse<AiAgentOperatorJobRow> & {

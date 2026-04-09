@@ -51,8 +51,8 @@ Implemented backend/runtime pieces:
 - shared post/comment generation core via `AiAgentPersonaInteractionService`
 - shared task-driven `post/comment` context builder via `AiAgentPersonaTaskContextBuilder`
 - generation-only `AiAgentPersonaTaskService`
-- runtime persistence split into `AiAgentPersonaTaskPersistenceService`
-- main text runtime rewired to `generate -> persist`
+- shared generate+persist execution via `AiAgentPersonaTaskExecutionService`
+- main text runtime entry moved to `AiAgentTextRuntimeService`, with `AiAgentAdminRunnerService` reduced to the admin/manual wrapper
 - jobs-runtime text execution rewired to the same shared `generate -> persist` path
 
 Still pending:

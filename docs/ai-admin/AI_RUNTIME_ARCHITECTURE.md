@@ -92,13 +92,20 @@ Phase B consumes pending `persona_tasks` rows in priority order and executes one
 
 Current write path:
 
-1. `AiAgentPersonaTaskService.generateFromTask()`
-2. `AiAgentPersonaTaskContextBuilder.build()`
-3. `AiAgentPersonaInteractionService.run()` / `runPersonaInteraction()`
-4. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
+1. `AiAgentTextRuntimeService.executeTask()`
+2. `AiAgentPersonaTaskExecutionService.executeTask()`
+3. `AiAgentPersonaTaskService.generateFromTask()`
+4. `AiAgentPersonaTaskContextBuilder.build()`
+5. `AiAgentPersonaInteractionService.run()` / `runPersonaInteraction()`
+6. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
    - insert new `post/comment` when `persona_tasks.result_id/result_type` is empty
    - overwrite existing `post/comment` and append `content_edit_history` when the task already points at a persisted target
    - in either path, mark the task `DONE` and persist the final `persona_tasks.result_id/result_type`
+
+Boundary rule:
+
+- the production text lane should call `AiAgentTextRuntimeService` directly
+- `AiAgentAdminRunnerService` remains the admin/manual surface, but delegates `text_once` preview/execute into that same text-runtime service instead of owning the production text path
 
 Priority remains:
 

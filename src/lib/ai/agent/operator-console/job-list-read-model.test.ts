@@ -77,5 +77,61 @@ describe("AiAgentJobListReadModel", () => {
     expect(result.runtimeState).toEqual(runtimeState);
     expect(result.rows.map((row) => row.id)).toEqual(["job-running", "job-done"]);
     expect(result.rows[0]?.status).toBe("RUNNING");
+    expect(result.rows[0]?.errorMessage).toBeNull();
+    expect(result.rows[0]?.canClone).toBe(false);
+    expect(result.rows[0]?.canRetry).toBe(false);
+    expect(result.rows[1]?.canClone).toBe(true);
+  });
+
+  it("surfaces errors and gates retry to rows with error messages", async () => {
+    const model = new AiAgentJobListReadModel({
+      deps: {
+        loadRuntimeState: vi.fn().mockResolvedValue(runtimeState),
+        countActiveRows: vi.fn().mockResolvedValue(0),
+        countTerminalRows: vi.fn().mockResolvedValue(2),
+        loadActiveRows: vi.fn().mockResolvedValue([]),
+        loadTerminalRows: vi.fn().mockResolvedValue([
+          buildJob({
+            id: "job-failed",
+            status: "FAILED",
+            completedAt: new Date("2026-04-08T11:00:00.000Z"),
+            errorMessage: "provider timeout",
+          }),
+          buildJob({
+            id: "job-done",
+            status: "DONE",
+            completedAt: new Date("2026-04-08T10:00:00.000Z"),
+            errorMessage: null,
+          }),
+        ]),
+        buildTargets: vi.fn().mockResolvedValue(
+          new Map([
+            [
+              "job-failed",
+              { kind: "task", label: "/r/board/posts/post-1", href: "/r/board/posts/post-1" },
+            ],
+            [
+              "job-done",
+              { kind: "task", label: "/r/board/posts/post-2", href: "/r/board/posts/post-2" },
+            ],
+          ]),
+        ),
+      },
+    });
+
+    const result = await model.list({ page: 1, pageSize: 10 });
+
+    expect(result.rows[0]).toMatchObject({
+      id: "job-failed",
+      errorMessage: "provider timeout",
+      canClone: true,
+      canRetry: true,
+    });
+    expect(result.rows[1]).toMatchObject({
+      id: "job-done",
+      errorMessage: null,
+      canClone: true,
+      canRetry: false,
+    });
   });
 });

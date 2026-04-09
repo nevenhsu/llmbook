@@ -6,7 +6,7 @@ import {
   type AiAgentRunnerGuardedExecuteResponse,
   type AiAgentRunnerPreviewResponse,
 } from "@/lib/ai/agent/execution/admin-runner-service";
-import type { AiAgentPersonaTaskGenerationResult } from "@/lib/ai/agent/jobs/persona-task-service";
+import { buildExecutionPreviewFromTask } from "@/lib/ai/agent/execution/execution-preview";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 
 vi.mock("@/lib/ai/agent/execution/media-job-service", () => ({
@@ -18,6 +18,38 @@ vi.mock("@/lib/ai/agent/execution/media-job-service", () => ({
 }));
 
 describe("AiAgentAdminRunnerService", () => {
+  it("delegates text_once preview without a local task reload when shared preview deps are provided", async () => {
+    const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
+    const previewTextTask = vi.fn(async () => ({
+      available: true,
+      blocker: null,
+      selectedTaskId: task.id,
+      summary: "Shared execution preview is available for the selected text task.",
+      executionPreview: buildExecutionPreviewFromTask(task),
+    }));
+    const service = new AiAgentAdminRunnerService({
+      deps: {
+        loadTaskById: async () => {
+          throw new Error("loadTaskById should not run for delegated text preview");
+        },
+        previewTextTask,
+      },
+    });
+
+    const result = await service.previewTarget({
+      target: "text_once",
+      taskId: task.id,
+    });
+
+    expect(previewTextTask).toHaveBeenCalledWith(task.id);
+    expect(result).toMatchObject({
+      mode: "preview",
+      target: "text_once",
+      available: true,
+      selectedTaskId: task.id,
+    } satisfies Partial<AiAgentRunnerPreviewResponse>);
+  });
+
   it("returns shared execution preview artifacts for text_once preview", async () => {
     const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
     const service = new AiAgentAdminRunnerService({
@@ -189,7 +221,7 @@ describe("AiAgentAdminRunnerService", () => {
     const service = new AiAgentAdminRunnerService({
       deps: {
         loadTaskById: async (taskId) => (taskId === task.id ? task : null),
-        executeTextTask: async () => ({
+        executeTextTaskById: async () => ({
           taskId: task.id,
           persistedTable: "comments",
           persistedId: "comment-new-1",
@@ -240,12 +272,64 @@ describe("AiAgentAdminRunnerService", () => {
     });
   });
 
+  it("delegates text_once execute without a local task reload when shared preview/execute deps are provided", async () => {
+    const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
+    const previewTextTask = vi.fn(async () => ({
+      available: true,
+      blocker: null,
+      selectedTaskId: task.id,
+      summary: "Shared execution preview is available for the selected text task.",
+      executionPreview: buildExecutionPreviewFromTask(task),
+    }));
+    const executeTextTaskById = vi.fn(
+      async () =>
+        ({
+          taskId: task.id,
+          persistedTable: "comments",
+          persistedId: "comment-boundary-1",
+          resultType: "comment",
+          writeMode: "inserted",
+          historyId: null,
+          updatedTask: {
+            ...task,
+            status: "DONE",
+            resultId: "comment-boundary-1",
+            resultType: "comment",
+            completedAt: "2026-03-30T00:20:00.000Z",
+          },
+        }) satisfies AiAgentTextExecutionPersistedResult,
+    );
+    const service = new AiAgentAdminRunnerService({
+      deps: {
+        loadTaskById: async () => {
+          throw new Error("loadTaskById should not run for delegated text execute");
+        },
+        previewTextTask,
+        executeTextTaskById,
+      },
+    });
+
+    const result = await service.executeTarget({
+      target: "text_once",
+      taskId: task.id,
+    });
+
+    expect(previewTextTask).toHaveBeenCalledWith(task.id);
+    expect(executeTextTaskById).toHaveBeenCalledWith(task.id);
+    expect(result).toMatchObject({
+      mode: "executed",
+      target: "text_once",
+      selectedTaskId: task.id,
+      summary: `Persisted comment comment-boundary-1 and completed queue task ${task.id}.`,
+    } satisfies Partial<AiAgentRunnerExecutedResponse>);
+  });
+
   it("surfaces overwrite summaries when shared text persistence updates an existing target", async () => {
     const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
     const service = new AiAgentAdminRunnerService({
       deps: {
         loadTaskById: async (taskId) => (taskId === task.id ? task : null),
-        executeTextTask: async () => ({
+        executeTextTaskById: async () => ({
           taskId: task.id,
           persistedTable: "comments",
           persistedId: "comment-existing-1",
@@ -298,43 +382,6 @@ describe("AiAgentAdminRunnerService", () => {
 
   it("uses shared persona-task generation before runtime persistence when executeTextTask is not overridden", async () => {
     const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
-    const generated = {
-      task,
-      mode: "runtime",
-      promptContext: {
-        taskType: "comment",
-        taskContext: "Generate a publishable comment.",
-      },
-      preview: {
-        assembledPrompt: "prompt",
-        markdown: "generated body",
-        rawResponse: "generated body",
-        renderOk: true,
-        renderError: null,
-        tokenBudget: {
-          estimatedInputTokens: 100,
-          maxInputTokens: 1000,
-          maxOutputTokens: 300,
-          blockStats: [],
-          compressedStages: [],
-          exceeded: false,
-          message: null,
-        },
-        auditDiagnostics: null,
-      },
-      parsedOutput: {
-        kind: "comment",
-        body: "generated body",
-      },
-      modelMetadata: {
-        schema_version: 1,
-      },
-      modelSelection: {
-        modelId: "model-1",
-        providerKey: "xai",
-        modelKey: "grok-4-1-fast-reasoning",
-      },
-    } satisfies AiAgentPersonaTaskGenerationResult;
     const persistResult = {
       taskId: task.id,
       persistedTable: "comments",
@@ -350,14 +397,12 @@ describe("AiAgentAdminRunnerService", () => {
         completedAt: "2026-03-30T00:10:00.000Z",
       },
     } satisfies AiAgentTextExecutionPersistedResult;
-    const generateTaskContent = vi.fn(async () => generated);
-    const persistGeneratedTaskResult = vi.fn(async () => persistResult);
+    const executeTextTaskById = vi.fn(async () => persistResult);
 
     const service = new AiAgentAdminRunnerService({
       deps: {
         loadTaskById: async (taskId: string) => (taskId === task.id ? task : null),
-        generateTaskContent,
-        persistGeneratedTaskResult,
+        executeTextTaskById,
       } as any,
     });
 
@@ -366,10 +411,7 @@ describe("AiAgentAdminRunnerService", () => {
       taskId: task.id,
     });
 
-    expect(generateTaskContent).toHaveBeenCalledWith(task.id);
-    expect(persistGeneratedTaskResult).toHaveBeenCalledWith({
-      generated,
-    });
+    expect(executeTextTaskById).toHaveBeenCalledWith(task.id);
     expect(result).toMatchObject({
       mode: "executed",
       target: "text_once",
@@ -516,7 +558,7 @@ describe("AiAgentAdminRunnerService", () => {
     const service = new AiAgentAdminRunnerService({
       deps: {
         loadTaskById: async (taskId) => (taskId === task.id ? task : null),
-        executeTextTask: async () => ({
+        executeTextTaskById: async () => ({
           taskId: task.id,
           persistedTable: "comments",
           persistedId: "comment-new-3",
@@ -584,7 +626,7 @@ describe("AiAgentAdminRunnerService", () => {
     const service = new AiAgentAdminRunnerService({
       deps: {
         loadTaskById: async (taskId) => (taskId === task.id ? task : null),
-        executeTextTask: async () => ({
+        executeTextTaskById: async () => ({
           taskId: task.id,
           persistedTable: "posts",
           persistedId: "post-new-3",

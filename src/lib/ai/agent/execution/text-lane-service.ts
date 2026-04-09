@@ -1,8 +1,7 @@
 import {
-  AiAgentAdminRunnerService,
-  type AiAgentRunnerExecutedResponse,
-  type AiAgentRunnerGuardedExecuteResponse,
-} from "@/lib/ai/agent/execution/admin-runner-service";
+  AiAgentTextRuntimeService,
+  type AiAgentTextExecutionPersistedResult,
+} from "@/lib/ai/agent/execution/text-runtime-service";
 import {
   AiAgentMediaJobService,
   type AiAgentMediaExecutionPersistedResult,
@@ -28,7 +27,7 @@ export type AiAgentTextLaneExecutedResult = {
   recoveredTimedOut: number;
   claimedTaskId: string;
   summary: string;
-  response: AiAgentRunnerExecutedResponse;
+  textResult: AiAgentTextExecutionPersistedResult;
 };
 
 export type AiAgentTextLaneFailedResult = {
@@ -47,9 +46,7 @@ export type AiAgentTextLaneRunResult =
 type TextLaneServiceDeps = {
   queue: TaskQueue;
   eventSink: TaskEventSink;
-  executeTextTarget: (
-    taskId: string,
-  ) => Promise<AiAgentRunnerExecutedResponse | AiAgentRunnerGuardedExecuteResponse>;
+  executeTextTask: (taskId: string) => Promise<AiAgentTextExecutionPersistedResult>;
   queueMediaForTask: (
     task: AiAgentRecentTaskSnapshot,
   ) => Promise<AiAgentMediaExecutionPersistedResult | null>;
@@ -91,15 +88,14 @@ export class AiAgentTextLaneService {
         leaseMs: options?.leaseMs ?? 60_000,
       });
     const now = options?.deps?.now ?? (() => new Date());
-    const runner = new AiAgentAdminRunnerService();
+    const textRuntimeService = new AiAgentTextRuntimeService();
     const mediaJobs = new AiAgentMediaJobService();
 
     this.deps = {
       queue,
       eventSink,
-      executeTextTarget:
-        options?.deps?.executeTextTarget ??
-        ((taskId) => runner.executeTarget({ target: "text_once", taskId })),
+      executeTextTask:
+        options?.deps?.executeTextTask ?? ((taskId) => textRuntimeService.executeTask(taskId)),
       queueMediaForTask:
         options?.deps?.queueMediaForTask ?? ((task) => mediaJobs.ensurePendingJobForTask(task)),
       beginTaskHeartbeat:
@@ -134,24 +130,8 @@ export class AiAgentTextLaneService {
     });
 
     try {
-      const response = await this.deps.executeTextTarget(claimedTask.id);
-      if (response.mode !== "executed" || !response.textResult) {
-        await this.deps.queue.fail({
-          taskId: claimedTask.id,
-          workerId: input.workerId,
-          errorMessage: response.summary,
-          now: this.deps.now(),
-        });
-        return {
-          mode: "failed",
-          recoveredTimedOut,
-          claimedTaskId: claimedTask.id,
-          summary: "Claimed text task did not reach an executed state.",
-          errorMessage: response.summary,
-        };
-      }
-
-      const queuedMedia = await this.deps.queueMediaForTask(response.textResult.updatedTask);
+      const textResult = await this.deps.executeTextTask(claimedTask.id);
+      const queuedMedia = await this.deps.queueMediaForTask(textResult.updatedTask);
 
       await this.deps.eventSink.record({
         taskId: claimedTask.id,
@@ -161,18 +141,23 @@ export class AiAgentTextLaneService {
         toStatus: "DONE",
         reasonCode: "COMPLETED",
         workerId: input.workerId,
-        retryCount: response.textResult.updatedTask.retryCount,
+        retryCount: textResult.updatedTask.retryCount,
         occurredAt: this.deps.now().toISOString(),
       });
+
+      const summary =
+        textResult.writeMode === "overwritten"
+          ? `Overwrote ${textResult.resultType} ${textResult.persistedId} and completed queue task ${claimedTask.id}.`
+          : `Persisted ${textResult.resultType} ${textResult.persistedId} and completed queue task ${claimedTask.id}.`;
 
       return {
         mode: "executed",
         recoveredTimedOut,
         claimedTaskId: claimedTask.id,
         summary: queuedMedia
-          ? `${response.summary} Queued media job ${queuedMedia.mediaId} for background generation.`
-          : response.summary,
-        response,
+          ? `${summary} Queued media job ${queuedMedia.mediaId} for background generation.`
+          : summary,
+        textResult,
       };
     } catch (error) {
       const errorMessage =
