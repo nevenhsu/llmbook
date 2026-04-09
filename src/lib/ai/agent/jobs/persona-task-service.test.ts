@@ -173,6 +173,42 @@ describe("AiAgentPersonaTaskService", () => {
     });
   });
 
+  it("passes preformatted board and target context text into shared generation", async () => {
+    const runPersonaInteraction = vi.fn(async () =>
+      buildPreviewResult('{"markdown":"regenerated comment"}'),
+    );
+
+    const service = new AiAgentPersonaTaskService({
+      deps: {
+        loadTaskById: async () => buildTask(),
+        buildPromptContext: async () => ({
+          taskType: "comment",
+          taskContext: "Generate a reply inside the active thread below.",
+          boardContextText: "[board]\nName: Creative Lab",
+          targetContextText: "[source_comment]\n[artist_1]: Please be more specific.",
+        }),
+        loadPreferredTextModel: async () => ({
+          modelId: "model-1",
+          providerKey: "xai",
+          modelKey: "grok-4-1-fast-reasoning",
+        }),
+        runPersonaInteraction,
+      },
+    });
+
+    await service.generateFromTask({
+      personaTaskId: "task-1",
+      mode: "runtime",
+    });
+
+    expect(runPersonaInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boardContextText: "[board]\nName: Creative Lab",
+        targetContextText: "[source_comment]\n[artist_1]: Please be more specific.",
+      }),
+    );
+  });
+
   it("defaults generation to test mode when no runtime mode is requested", async () => {
     const service = new AiAgentPersonaTaskService({
       deps: {

@@ -1,0 +1,60 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { isAdmin, list } = vi.hoisted(() => ({
+  isAdmin: vi.fn(),
+  list: vi.fn(),
+}));
+
+vi.mock("@/lib/admin", () => ({
+  isAdmin,
+}));
+
+vi.mock("@/lib/server/route-helpers", () => {
+  const { NextResponse } = require("next/server");
+  return {
+    http: {
+      badRequest: (message = "Bad Request") =>
+        NextResponse.json({ error: message }, { status: 400 }),
+      forbidden: (message = "Forbidden") => NextResponse.json({ error: message }, { status: 403 }),
+      notFound: (message = "Not Found") => NextResponse.json({ error: message }, { status: 404 }),
+      ok: (data: unknown) => NextResponse.json(data, { status: 200 }),
+    },
+    withAuth: (handler: any) => (req: Request, ctx: any) =>
+      handler(req, { user: { id: "admin-user" } }, ctx),
+  };
+});
+
+vi.mock("@/lib/ai/agent/operator-console/task-table-read-model", () => ({
+  AiAgentTaskTableReadModel: class {
+    list = list;
+  },
+}));
+
+describe("GET /api/admin/ai/agent/panel/tasks/[kind]", () => {
+  beforeEach(() => {
+    isAdmin.mockResolvedValue(true);
+    list.mockReset();
+  });
+
+  it("lists public tasks", async () => {
+    list.mockResolvedValue({
+      kind: "public",
+      rows: [],
+      summary: { active: 0, terminal: 0, total: 0 },
+      page: 1,
+      pageSize: 10,
+      totalItems: 0,
+      totalPages: 1,
+      fetchedAt: "2026-04-08T12:00:00.000Z",
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/admin/ai/agent/panel/tasks/public?page=1&pageSize=10"),
+      { params: Promise.resolve({ kind: "public" }) } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(list).toHaveBeenCalledWith({ kind: "public", page: 1, pageSize: 10 });
+  });
+});

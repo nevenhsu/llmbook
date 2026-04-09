@@ -31,21 +31,30 @@ Implemented in:
 
 ### Shared Post/Comment Generation
 
-- shared `runPersonaInteraction()` execution core for post/comment LLM generation
+- shared `AiAgentPersonaInteractionService`
+  - canonical post/comment LLM generation core
+  - still exported as `runPersonaInteraction()` for existing callers
 - `AdminAiControlPlaneStore.runPersonaInteraction()`
-- `preview` remains a no-write wrapper around the same core
+- `interaction-preview-service.ts` is now only the no-write preview wrapper over the shared core
+- task-driven callers can now provide preformatted `boardContextText` / `targetContextText` when they need richer source-context blocks than the manual preview surface
 
 ### Persona Task Services
 
+- `AiAgentPersonaTaskContextBuilder`
+  - one shared entrypoint for task-driven prompt context
+  - branches into `post` and `comment` source-context assembly
+  - adds bounded board rules, recent published board post titles, root-post excerpts, ancestor comments, and recent top-level comments
+
 - `AiAgentPersonaTaskService`
   - reads `persona_task`
-  - builds source/board/target prompt context
+  - delegates task-driven context assembly to `AiAgentPersonaTaskContextBuilder`
   - runs shared generation
   - parses post/comment output
 
 - `AiAgentPersonaTaskPersistenceService`
   - `persistGeneratedResult()` as the shared text write path
   - decides insert vs overwrite from `persona_tasks.result_id/result_type`
+  - marks successful task completion with updated `persona_tasks.result_id/result_type` in both insert and overwrite cases
   - appends `content_edit_history` on overwrite writes
 
 ### Main Text Runtime
@@ -62,35 +71,38 @@ This means main text runtime no longer persists directly from `execution-preview
   - appends `content_edit_history`
   - overwrites `posts/comments`
   - replaces post tags for rewritten posts
+  - is the intended shared overwrite-history layer for future user-driven post/comment edits too
 
-## Not Implemented Yet
-
-### Operator Console UI
-
-- `/admin/ai/agent-panel` tab refactor
-- client-loaded `Runtime / Jobs / Public / Notification / Image / Memory`
-- reusable shared tables in `src/components/ui/`
-- jobs-runtime queue/status views in the panel
-- panel-side action wiring for enqueueing jobs
+## Remaining Open Work And Boundaries
 
 ### Phase A Page Work
 
-- remaining `/admin/ai/agent-lab` scope that is still open in `tasks/todo.md`
+- no remaining `/admin/ai/agent-lab` scope is tracked as part of the current operator-console plan
 
 ### Prompt-Context Depth
 
-Current source-context querying is still relatively thin:
+Implemented in the current task-driven path:
 
-- no full comment thread hydration
-- no target author in prompt context
-- no board rules in prompt context
-- no richer notification-thread summary beyond source row + parent post title
+- bounded board rules in prompt context
+- recent published board post titles for post anti-duplication
+- bounded root-post excerpts
+- ancestor-comment assembly for thread replies
+- recent top-level comments with ancestor dedupe
+
+Still open:
+
+- any further expansion beyond the current bounded post/thread context
 
 ### Future Shared Runtime Work
 
 - future runtime callers should keep using `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()` instead of reintroducing lane-specific insert/overwrite wrappers
-- any UI for `content_edit_history`
 - any media-history or memory-history companion persistence
+
+### Explicitly Out Of Scope
+
+- any operator-console UI for `content_edit_history`
+- any `previous_snapshot` viewer
+- any `View History` action in `Jobs`, `Public`, or `Notification`
 
 ## Clarified Runtime Contract
 
@@ -106,7 +118,11 @@ Current source-context querying is still relatively thin:
 
 - targeted runtime/generation tests
 - preview regression tests
+- targeted operator-console read-model tests
+- targeted operator-console route tests
+- targeted operator-console UI test
 - targeted eslint on touched runtime/generation files
-- filtered TypeScript for touched runtime/generation files
+- targeted eslint on touched operator-console files
+- filtered TypeScript for touched runtime/generation/operator-console files
 
 See `tasks/todo.md` for the exact commands run in this session.

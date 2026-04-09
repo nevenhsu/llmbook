@@ -1,11 +1,10 @@
-import {
-  AdminAiControlPlaneStore,
-  type PreviewResult,
-  type PromptBoardContext,
-  type PromptTargetContext,
-} from "@/lib/ai/admin/control-plane-store";
+import { AdminAiControlPlaneStore, type PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import { getActiveOrderedModels } from "@/lib/ai/admin/active-model-order";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import {
+  AiAgentPersonaTaskContextBuilder,
+  type AiAgentPersonaTaskPromptContext,
+} from "@/lib/ai/agent/execution/persona-task-context-builder";
 import {
   parseMarkdownActionOutput,
   parsePostActionOutput,
@@ -42,88 +41,25 @@ type TaskRow = {
   created_at: string;
 };
 
-type SourcePostRow = {
-  id: string;
-  title: string;
-  body: string;
-  boards:
-    | {
-        id?: string;
-        name?: string | null;
-        description?: string | null;
-      }
-    | Array<{
-        id?: string;
-        name?: string | null;
-        description?: string | null;
-      }>
-    | null;
-};
-
-type SourceCommentRow = {
-  id: string;
-  body: string;
-  parent_id: string | null;
-  posts:
-    | {
-        id?: string;
-        title?: string | null;
-        boards?:
-          | {
-              id?: string;
-              name?: string | null;
-              description?: string | null;
-            }
-          | Array<{
-              id?: string;
-              name?: string | null;
-              description?: string | null;
-            }>
-          | null;
-      }
-    | Array<{
-        id?: string;
-        title?: string | null;
-        boards?:
-          | {
-              id?: string;
-              name?: string | null;
-              description?: string | null;
-            }
-          | Array<{
-              id?: string;
-              name?: string | null;
-              description?: string | null;
-            }>
-          | null;
-      }>
-    | null;
-};
-
 type PreferredTextModel = {
   modelId: string;
   providerKey: string;
   modelKey: string;
 };
 
-type RewritePromptContext = {
-  taskType: "post" | "comment";
-  taskContext: string;
-  boardContext?: PromptBoardContext;
-  targetContext?: PromptTargetContext;
-};
-
 type PersonaTaskServiceDeps = {
   loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
-  buildPromptContext: (input: { task: AiAgentRecentTaskSnapshot }) => Promise<RewritePromptContext>;
+  buildPromptContext: (input: {
+    task: AiAgentRecentTaskSnapshot;
+  }) => Promise<AiAgentPersonaTaskPromptContext>;
   loadPreferredTextModel: () => Promise<PreferredTextModel>;
   runPersonaInteraction: (input: {
     personaId: string;
     modelId: string;
     taskType: "post" | "comment";
     taskContext: string;
-    boardContext?: PromptBoardContext;
-    targetContext?: PromptTargetContext;
+    boardContextText?: string;
+    targetContextText?: string;
   }) => Promise<PreviewResult>;
 };
 
@@ -151,19 +87,12 @@ export type AiAgentPersonaTaskGeneratedOutput =
 export type AiAgentPersonaTaskGenerationResult = {
   task: AiAgentRecentTaskSnapshot;
   mode: AiAgentPersonaTaskExecutionMode;
-  promptContext: RewritePromptContext;
+  promptContext: AiAgentPersonaTaskPromptContext;
   preview: PreviewResult;
   parsedOutput: AiAgentPersonaTaskGeneratedOutput;
   modelMetadata: Record<string, unknown>;
   modelSelection: PreferredTextModel;
 };
-
-function asSingle<T>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) {
-    return value[0] ?? null;
-  }
-  return value ?? null;
-}
 
 function normalizeTaskType(taskType: string): "post" | "comment" {
   return taskType === "post" ? "post" : "comment";
@@ -176,7 +105,11 @@ export class AiAgentPersonaTaskService {
     this.deps = {
       loadTaskById: options?.deps?.loadTaskById ?? ((taskId) => this.readTaskById(taskId)),
       buildPromptContext:
-        options?.deps?.buildPromptContext ?? ((input) => this.buildPromptContext(input)),
+        options?.deps?.buildPromptContext ??
+        (async (input) => {
+          const contextBuilder = new AiAgentPersonaTaskContextBuilder();
+          return contextBuilder.build(input);
+        }),
       loadPreferredTextModel:
         options?.deps?.loadPreferredTextModel ??
         (async () => {
@@ -235,8 +168,8 @@ export class AiAgentPersonaTaskService {
       modelId: preferredModel.modelId,
       taskType: promptContext.taskType,
       taskContext,
-      boardContext: promptContext.boardContext,
-      targetContext: promptContext.targetContext,
+      boardContextText: promptContext.boardContextText,
+      targetContextText: promptContext.targetContextText,
     });
 
     const rawOutput = preview.rawResponse ?? preview.markdown;
@@ -299,143 +232,6 @@ export class AiAgentPersonaTaskService {
       modelSelection: preferredModel,
     };
   }
-  private async buildPromptContext(input: {
-    task: AiAgentRecentTaskSnapshot;
-  }): Promise<RewritePromptContext> {
-    const { task } = input;
-
-    const sourceSummary =
-      typeof task.payload.summary === "string" && task.payload.summary.trim().length > 0
-        ? task.payload.summary.trim()
-        : null;
-    const notificationContext =
-      typeof task.payload.context === "string" && task.payload.context.trim().length > 0
-        ? task.payload.context.trim()
-        : null;
-
-    const sourceContext = await this.readSourceContext(task);
-    const taskContextParts = [
-      "Generate a publishable response for this persona_task.",
-      "Stay faithful to the same intent and interaction target while producing a clean response in the persona's voice.",
-      sourceSummary ? `Original task summary: ${sourceSummary}` : null,
-      notificationContext ? `Notification context: ${notificationContext}` : null,
-    ].filter((part): part is string => Boolean(part));
-
-    return {
-      taskType: normalizeTaskType(task.taskType),
-      taskContext: taskContextParts.join("\n\n"),
-      boardContext: sourceContext.boardContext,
-      targetContext: sourceContext.targetContext,
-    };
-  }
-
-  private async readSourceContext(task: AiAgentRecentTaskSnapshot): Promise<{
-    boardContext?: PromptBoardContext;
-    targetContext?: PromptTargetContext;
-  }> {
-    if (task.sourceTable === "posts" && task.sourceId) {
-      const sourcePost = await this.readSourcePost(task.sourceId);
-      if (!sourcePost) {
-        return {};
-      }
-
-      const board = asSingle(sourcePost.boards);
-      return {
-        boardContext:
-          board && (board.name || board.description)
-            ? {
-                name: board.name ?? null,
-                description: board.description ?? null,
-              }
-            : undefined,
-        targetContext: {
-          targetType: "post",
-          targetId: sourcePost.id,
-          targetContent: [`Title: ${sourcePost.title}`, "", sourcePost.body].join("\n"),
-        },
-      };
-    }
-
-    if (task.sourceTable === "comments" && task.sourceId) {
-      const sourceComment = await this.readSourceComment(task.sourceId);
-      if (!sourceComment) {
-        return {};
-      }
-
-      const sourcePost = asSingle(sourceComment.posts);
-      const board = sourcePost ? asSingle(sourcePost.boards) : null;
-      return {
-        boardContext:
-          board && (board.name || board.description)
-            ? {
-                name: board.name ?? null,
-                description: board.description ?? null,
-              }
-            : undefined,
-        targetContext: {
-          targetType: "comment",
-          targetId: sourceComment.id,
-          targetContent: sourceComment.body,
-          threadSummary: sourcePost?.title ? `Parent post title: ${sourcePost.title}` : null,
-        },
-      };
-    }
-
-    const notificationCommentId =
-      typeof task.payload.commentId === "string" ? task.payload.commentId : null;
-    const notificationPostId = typeof task.payload.postId === "string" ? task.payload.postId : null;
-
-    if (notificationCommentId) {
-      const sourceComment = await this.readSourceComment(notificationCommentId);
-      if (!sourceComment) {
-        return {};
-      }
-
-      const sourcePost = asSingle(sourceComment.posts);
-      const board = sourcePost ? asSingle(sourcePost.boards) : null;
-      return {
-        boardContext:
-          board && (board.name || board.description)
-            ? {
-                name: board.name ?? null,
-                description: board.description ?? null,
-              }
-            : undefined,
-        targetContext: {
-          targetType: "comment",
-          targetId: sourceComment.id,
-          targetContent: sourceComment.body,
-          threadSummary: sourcePost?.title ? `Parent post title: ${sourcePost.title}` : null,
-        },
-      };
-    }
-
-    if (notificationPostId) {
-      const sourcePost = await this.readSourcePost(notificationPostId);
-      if (!sourcePost) {
-        return {};
-      }
-
-      const board = asSingle(sourcePost.boards);
-      return {
-        boardContext:
-          board && (board.name || board.description)
-            ? {
-                name: board.name ?? null,
-                description: board.description ?? null,
-              }
-            : undefined,
-        targetContext: {
-          targetType: "post",
-          targetId: sourcePost.id,
-          targetContent: [`Title: ${sourcePost.title}`, "", sourcePost.body].join("\n"),
-        },
-      };
-    }
-
-    return {};
-  }
-
   private async readTaskById(taskId: string): Promise<AiAgentRecentTaskSnapshot | null> {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -489,34 +285,5 @@ export class AiAgentPersonaTaskService {
       errorMessage: data.error_message,
       createdAt: data.created_at,
     };
-  }
-  private async readSourcePost(postId: string): Promise<SourcePostRow | null> {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("posts")
-      .select("id, title, body, boards(id, name, description)")
-      .eq("id", postId)
-      .maybeSingle<SourcePostRow>();
-
-    if (error) {
-      throw new Error(`load source post for rewrite failed: ${error.message}`);
-    }
-
-    return data ?? null;
-  }
-
-  private async readSourceComment(commentId: string): Promise<SourceCommentRow | null> {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("comments")
-      .select("id, body, parent_id, posts(id, title, boards(id, name, description))")
-      .eq("id", commentId)
-      .maybeSingle<SourceCommentRow>();
-
-    if (error) {
-      throw new Error(`load source comment for rewrite failed: ${error.message}`);
-    }
-
-    return data ?? null;
   }
 }

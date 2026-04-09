@@ -25,6 +25,17 @@
 - 若 `preview` 與 `test` 的邏輯都只是 shared generation 且不寫 Supabase，就不要維持兩個 mode 名稱；統一成單一 no-write mode，讓 mode 只保留真正有流程差異的分支，例如 `runtime | preview`。
 - 若目標是讓多個 runtime 共用 post/comment LLM flow，`AiAgentPersonaTaskService` 應只負責 task context + shared generation + parse；insert/overwrite 這類 Supabase persistence 要移到獨立的 persistence service，避免 service 名稱與責任再次混濁。
 - 不要把「哪個 runtime 在跑」直接等同於「一定 insert 或一定 overwrite」；shared persistence 應在真正寫 Supabase 前，根據 `persona_tasks.result_id/result_type` 判斷是 first-write insert 還是 overwrite + history。
+- 當使用者指出某個 shared history/persistence 模組未來也要服務非 runtime 寫入（例如 user 手動編輯 post/comment）時，文檔與命名都必須同步提升到更通用的層級；不要把 `content_edit_history` 描述得像是只屬於 jobs-runtime 或 AI runtime。
+- 不要因為 backend 已有 history table，就自動把 history viewer/UI 納入 operator-console scope；若使用者明確說不做 `previous_snapshot` 或 `View History`，要把它標成 out-of-scope，而不是保留成開放項。
+- 若使用者明確定稿某個頁面「沒有剩餘 scope」，就要把 `todo`、status docs、open questions 裡的舊 follow-up 一次清掉；不要保留成含糊的「之後再看」。
+- 規劃 prompt-context expansion 時，不要先抽象成過多通用欄位；若使用者已定稿 `post` 與 `comment` 是不同 context builder、`notification` 先重用 `comment`、且不需要 `targetAuthor` 或獨立 `threadSummary`，就要直接把 spec 收斂成那個較窄的 shape。
+- 不要把 runtime provenance 直接當成 prompt block；即使 `persona_task` 有 `source_table/source_id`，`post` flow 也不代表一定要有 `source_post` block。若產品語意是「生成新發文」，應優先只保留 task brief 與 board context。`comment` flow 的 thread 也應直接由 bounded comment rows 組成，而不是再包成抽象 `threadSummary`。
+- `task_context` 只應承擔 app-owned execution brief；不要把 source/thread payload 混進去。對 `post` flow，可額外加入同 board 最近發文 title 列表來抑制重複發文；對 `comment` flow，必須明確支援主動留言與 notification reply 兩種語意，並把 thread 呈現規則定成「ancestor 由最早到最近 parent」。
+- 規劃 shared prompt builder 時，不要假設 `post` 和 `comment` 共享同一個 output JSON shape；`post` 需要 `title/body/tags/...`，`comment` 需要 `markdown/...`。在實作前應先寫一份具體 block 範例文檔，把 `post`、top-level comment、thread reply 三種 prompt 形狀定死。
+- 對 `post` flow，不要把帶有「Recent post title」的 intake summary 直接放進 prompt，否則會誤導模型靠近既有標題；應改由 `recent_board_posts` 承擔 anti-duplication reference，並在該 block 再次明示不要使用相似標題。`comment` flow 的例子則要遵守最終 block 順序，讓 `[board]` 位於 `[root_post]` 之前。兩條 flow 的方案文檔也都要保留 shared media fields。
+- 若使用者定稿 `task_context` 不要有 summary，就要把它收斂成純指令型 block；不要再塞 `Task brief`、`payload.summary` 或任何 intake 摘要進去。
+- comment context builder 的分支判斷要以 parent/thread 結構為準，不要用模糊語意推測：top-level comment 是沒有 `parent_id` 的 comment，且 recent context 要 query 該 post 最近 10 筆 top-level comments；thread reply 則是 insert comment 會帶 `parent_id`，並走 `source_comment + ancestor_comments + recent_top_level_comments`。`recent_top_level_comments` 還要排除任何已出現在 `ancestor_comments` 的 row，不要再另外發明第二套 reply-only 近期 block。`post` body 的 prompt contract 也要明寫是 markdown。
+- 當使用者把 prompt block 的長度上限定稿時，要立刻寫回方案文檔與 spec，並把對應項目從 open questions 移除或縮小。這輪已定：`board.rules <= 600` 字元，`root_post.body excerpt <= 800` 字元。
 - 只更新 `/plans` 不夠；只要核心架構或 canonical flow 改了，`docs/ai-admin/*` 這種 repo-level 設計文檔也要同一輪同步，否則會留下比實作更舊的心智模型。
 - Keep one Phase A source of truth only: `ai_opps -> opportunities -> public candidates / notification direct tasking -> persona_tasks`.
 - Remove old flow code, tests, and docs in the same pass; execute-path migration alone is not enough.

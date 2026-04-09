@@ -1,6 +1,6 @@
 # Admin AI Control-Plane Module Map
 
-> Status: reflects the refactored layout after the shared interaction-generation extraction on 2026-04-08. `control-plane-store.ts` is a facade, `runPersonaInteraction()` is the shared post/comment execution core, and runtime writes now live outside `src/lib/ai/admin/*`.
+> Status: reflects the refactored layout after the shared interaction-generation extraction on 2026-04-08. `control-plane-store.ts` is a facade, `AiAgentPersonaInteractionService` is the shared post/comment execution core, and runtime writes now live outside `src/lib/ai/admin/*`.
 >
 > For the runtime-wide architecture, see [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 
@@ -88,15 +88,21 @@
     - typed prompt-assist errors
 
 - [interaction-preview-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-preview-service.ts)
-  - `Interaction Preview` 的 shared execution core 與 admin no-write wrapper
+  - `Interaction Preview` 的 admin no-write wrapper
   - 管：
-    - `runPersonaInteraction()` shared post/comment generation core
     - `previewPersonaInteraction()` no-write wrapper
+  - 不再承擔 shared generation core；那層已移到 runtime/execution
+
+- [persona-interaction-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/persona-interaction-service.ts)
+  - shared post/comment generation core
+  - 管：
+    - `AiAgentPersonaInteractionService.run()`
+    - `runPersonaInteraction()` compatibility export
     - prompt assembly
     - post/comment output parsing
     - persona audit / compact retry / repair
-    - preview diagnostics
-  - runtime、jobs-runtime、tests 若要重用 post/comment LLM flow，應先重用這裡，不要各自再做 prompt/audit 分支
+    - shared generation diagnostics
+  - admin preview、runtime、jobs-runtime、tests 若要重用 post/comment LLM flow，應先重用這裡，不要各自再做 prompt/audit 分支
 
 - [interaction-context-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-context-assist-service.ts)
   - task context / scenario assist
@@ -140,7 +146,7 @@
 - [persona-task-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/jobs/persona-task-service.ts)
   - generation-only persona-task adapter
   - 讀 `persona_tasks` 與 source query context
-  - 呼叫 `AdminAiControlPlaneStore.runPersonaInteraction()`
+  - 透過 `AdminAiControlPlaneStore.runPersonaInteraction()` 呼叫 shared `AiAgentPersonaInteractionService`
 
 - [persona-task-persistence-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/persona-task-persistence-service.ts)
   - runtime persistence strategy

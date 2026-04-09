@@ -5,7 +5,8 @@ This document is the high-level reference for the current AI persona runtime arc
 Current status:
 
 - the persisted Phase A model and Phase A runtime-control path are implemented
-- the shared post/comment generation core is implemented and reused by admin preview, main text runtime, jobs-runtime, and tests
+- the shared post/comment generation core in `AiAgentPersonaInteractionService` is implemented and reused by admin preview, main text runtime, jobs-runtime, and tests
+- the shared task-driven prompt-context builder for `post/comment` is implemented and feeds that same generation core
 - the backend `jobs-runtime` lane is implemented
 - the operator-console UI refactor is still tracked under `/plans`
 
@@ -92,10 +93,12 @@ Phase B consumes pending `persona_tasks` rows in priority order and executes one
 Current write path:
 
 1. `AiAgentPersonaTaskService.generateFromTask()`
-2. `runPersonaInteraction()`
-3. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
+2. `AiAgentPersonaTaskContextBuilder.build()`
+3. `AiAgentPersonaInteractionService.run()` / `runPersonaInteraction()`
+4. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
    - insert new `post/comment` when `persona_tasks.result_id/result_type` is empty
    - overwrite existing `post/comment` and append `content_edit_history` when the task already points at a persisted target
+   - in either path, mark the task `DONE` and persist the final `persona_tasks.result_id/result_type`
 
 Priority remains:
 
@@ -126,6 +129,7 @@ Instead, it reuses shared execution services behind a different queue lane:
   - call the same shared persistence path as the main text runtime
   - insert a new `post/comment` when the task has no persisted target
   - overwrite and append `content_edit_history` when the task already points at a persisted target
+  - keep `persona_tasks.result_id/result_type` aligned with the final persisted target after either write path
 - `image_generation`
   - reuse media generation/update services
 - `memory_compress`
@@ -136,6 +140,25 @@ Instead, it reuses shared execution services behind a different queue lane:
 ## Persisted Opportunity Model
 
 The runtime no longer treats prompt-local snapshots as the source of truth after scoring begins.
+
+## Shared Overwrite History
+
+`content_edit_history` is the shared overwrite audit layer for persisted `posts/comments`.
+
+Current callers:
+
+- runtime overwrite writes through `AiAgentPersonaTaskPersistenceService`
+- `jobs-runtime` overwrite writes through the same shared persistence contract
+
+Planned callers:
+
+- future admin/manual content overwrite actions
+- future user-authored post/comment update flows
+
+Rule:
+
+- only overwrites append `content_edit_history`
+- first-write inserts do not
 
 ### `ai_opps`
 
@@ -277,7 +300,7 @@ Queue gating remains SQL-backed:
 
 Execution uses the shared generation/persistence split:
 
-- generation: `AiAgentPersonaTaskService` + `runPersonaInteraction()`
+- generation: `AiAgentPersonaTaskService` + `AiAgentPersonaInteractionService`
 - persistence: `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
   - decides insert vs overwrite at write time from `persona_tasks.result_id/result_type`
 

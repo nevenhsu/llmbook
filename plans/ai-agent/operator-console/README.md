@@ -20,7 +20,7 @@ Refactor `/admin/ai/agent-panel` into a client-loaded operator console for Phase
 - `Memory` tab is persona-aggregated, sourced from `persona_memories`, and enqueues persona-scoped jobs into `jobs-runtime`.
 - `personas` should gain `last_compressed_at` so memory ordering can be based on actual successful compression time.
 - Post/comment rewrite history must be modeled separately from queue/runtime control and reused by both manual jobs and future text-runtime mutations.
-- Post/comment generation now has one shared execution core: `runPersonaInteraction()`.
+- Post/comment generation now has one shared execution core in `AiAgentPersonaInteractionService` (exported as `runPersonaInteraction()` for existing callers).
 - Non-writing execution is unified as `preview`; persona-task generation modes are `runtime | preview`.
 - `AiAgentPersonaTaskService` owns task-context construction, shared generation, and parse only.
 - `AiAgentPersonaTaskPersistenceService` owns runtime text persistence:
@@ -39,6 +39,7 @@ Refactor `/admin/ai/agent-panel` into a client-loaded operator console for Phase
 - [implementation-status.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/implementation-status.md)
 - [open-questions.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/open-questions.md)
 - [shared-text-write-impact-note.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/shared-text-write-impact-note.md)
+- [prompt-block-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/prompt-block-examples.md)
 
 ## Current Status
 
@@ -47,7 +48,8 @@ Implemented backend/runtime pieces:
 - schema + runtime lane for `job_tasks`, `job_runtime_state`, `content_edit_history`, and `personas.last_compressed_at`
 - `jobs-runtime` worker + script entry
 - shared post/comment overwrite history via `AiAgentContentMutationService`
-- shared post/comment generation core via `runPersonaInteraction()`
+- shared post/comment generation core via `AiAgentPersonaInteractionService`
+- shared task-driven `post/comment` context builder via `AiAgentPersonaTaskContextBuilder`
 - generation-only `AiAgentPersonaTaskService`
 - runtime persistence split into `AiAgentPersonaTaskPersistenceService`
 - main text runtime rewired to `generate -> persist`
@@ -55,38 +57,34 @@ Implemented backend/runtime pieces:
 
 Still pending:
 
-- `/admin/ai/agent-panel` operator-console UI refactor
-- `Jobs / Runtime / Public / Notification / Image / Memory` client-loaded tabs
-- shared table UI implementation under `src/components/ui/`
-- remaining `/admin/ai/agent-lab` Phase A page work
-- richer prompt-context querying for full comment threads, target author, and board rules
+- any further prompt-context expansion beyond the current bounded post/thread shape
 
 ## Phase Breakdown
 
 ### Phase 1: Operator Console UI Shell
 
-Status: pending
+Status: implemented
 
-- Replace the current mixed panel layout with the final tab order.
-- Remove JSON-heavy debug surfaces from `agent-panel`.
-- Move Public/Notification table UI into shared `src/components/ui/` primitives.
+- Replaced the current mixed panel layout with the final tab order.
+- Removed JSON-heavy debug surfaces from `/admin/ai/agent-panel`.
+- Added shared Public/Notification table UI and supporting primitives under `src/components/ui/`.
 
 ### Phase 2: Main Runtime Control Cleanup
 
-Status: design settled, UI/backend wiring still pending
+Status: implemented
 
-- Keep only operator-facing runtime status and controls on the `Runtime` tab.
-- Rename button semantics to `Pause` and `Start`.
-- Ensure panel data is client-loaded instead of snapshot-preloaded.
+- Kept only operator-facing runtime status and controls on the `Runtime` tab.
+- Panel/UI contracts now use `Pause` and `Start`.
+- `/admin/ai/agent-panel` now loads data client-side instead of snapshot-preloading.
 
 ### Phase 3: Jobs Runtime
 
-Status: core backend implemented
+Status: implemented
 
 - Add `job_tasks`.
 - Add `job_runtime_state`.
-- Add the `Jobs` tab and a single polling worker.
-- Route Public/Notification/Image/Memory actions into the shared jobs queue.
+- Added the `Jobs` tab and retained the single polling worker.
+- Routed Public/Notification/Image/Memory actions into the shared jobs queue.
 
 ### Phase 4: Content Edit History
 
@@ -95,13 +93,15 @@ Status: backend implemented for overwrite flows
 - Add `content_edit_history`.
 - Add a shared mutation service for post/comment rewrite persistence.
 - Ensure manual jobs and future text-runtime rewrites share one write path.
+- Keep history read/view UI out of the current operator-console scope.
+- Treat `/admin/ai/agent-lab` as already complete for this plan; no remaining Phase A page work is tracked here.
 
 ### Phase 5: Action Integration
 
-Status: backend action routing partially implemented, panel UI pending
+Status: implemented for first operator-console delivery
 
-- Wire `Redo task`, `Redo image`, and persona memory actions into `jobs-runtime`.
-- Finalize empty states, result states, and operator copy.
+- Wired `Redo task`, `Redo image`, and persona memory actions into `jobs-runtime`.
+- Added first-pass empty/loading/error states and operator copy.
 
 ## Non-Goals
 

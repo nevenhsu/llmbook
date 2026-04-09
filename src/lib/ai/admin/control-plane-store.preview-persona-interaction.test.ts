@@ -4,7 +4,6 @@ import {
   type AiModelConfig,
   type PromptBoardContext,
 } from "@/lib/ai/admin/control-plane-store";
-import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
 
 const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM } = vi.hoisted(
   () => ({
@@ -14,11 +13,14 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
       timeoutMs: 30_000,
       retries: 0,
     })),
-    invokeLLM: vi.fn(async (_input?: unknown) => ({
-      text: JSON.stringify({ markdown: "Preview response" }),
-      finishReason: "stop",
-      error: null,
-    })),
+    invokeLLM: vi.fn(async (...args: unknown[]) => {
+      void args;
+      return {
+        text: JSON.stringify({ markdown: "Preview response" }),
+        finishReason: "stop",
+        error: null,
+      };
+    }),
   }),
 );
 
@@ -107,6 +109,7 @@ function mockPersona(store: AdminAiControlPlaneStore) {
       id: "persona-1",
       username: "ai_artist",
       display_name: "AI Artist",
+      avatar_url: null,
       bio: "bio",
       status: "active",
     },
@@ -327,6 +330,28 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       auditMode: "default",
       compactRetryUsed: false,
     });
+  });
+
+  it("uses preformatted board and target context text when provided by shared runtime callers", async () => {
+    const store = new AdminAiControlPlaneStore();
+    mockControlPlane(store);
+    mockPersona(store);
+
+    const preview = await store.runPersonaInteraction({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "comment",
+      taskContext: "Generate a reply inside the active thread below.",
+      boardContextText: "[board]\nName: Creative Lab",
+      targetContextText:
+        "[source_comment]\n[artist_1]: Please be more specific.\n\n[root_post]\nTitle: Best prompting workflows this week",
+    });
+
+    expect(preview.assembledPrompt).toContain("[board_context]\n[board]\nName: Creative Lab");
+    expect(preview.assembledPrompt).toContain("[target_context]\n[source_comment]");
+    expect(preview.assembledPrompt).toContain("[root_post]");
+    expect(preview.assembledPrompt).not.toContain("target_type:");
+    expect(preview.assembledPrompt).not.toContain("target_id:");
   });
 
   it("keeps interaction preview on the selected model route but disables provider retries for low-latency admin preview", async () => {

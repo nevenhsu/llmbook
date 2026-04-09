@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document defines the shared persistence model for post/comment rewrites.
+This document defines the shared persistence model for post/comment overwrites.
 
 It covers:
 
@@ -14,7 +14,7 @@ It does not define queue polling or panel UI layout.
 
 ## Purpose
 
-Ensure post/comment rewrite operations are auditable and reusable across multiple runtimes without duplicating persistence logic.
+Ensure post/comment overwrite operations are auditable and reusable across multiple runtimes and future non-runtime editors without duplicating persistence logic.
 
 ## Current Implementation Status
 
@@ -26,8 +26,14 @@ Implemented:
 
 Not implemented yet:
 
-- operator-facing edit-history UI
+- any operator-facing history viewer UI
 - any media-history or memory-history companion tables
+
+Explicitly out of scope for the current operator-console plan:
+
+- no `View History` action
+- no `previous_snapshot` viewer
+- no diff UI in `/admin/ai/agent-panel`
 
 ## Required History Table
 
@@ -64,6 +70,7 @@ This service should be reused by:
 - `jobs-runtime` rewrite jobs
 - future main text-runtime rewrite flows
 - future admin manual rewrite actions
+- future user-authored post/comment edit flows when they overwrite existing persisted content
 
 Current layering:
 
@@ -74,17 +81,19 @@ Current layering:
 
 ## Boundary Rules
 
-- Post/comment rewrites require history.
+- Post/comment overwrites require history.
 - First-write insert flows do not append `content_edit_history`; history is only for overwriting existing post/comment content.
 - Image regeneration does not require this history table.
 - Persona memory compression does not write into this history table.
 - Media image URLs belong to the image/manual-job flow, not to `content_edit_history`.
+- Future user-initiated post/comment edits should use the same overwrite-history layer instead of introducing a separate edit-history table.
 
 ## Field Intent
 
 - `previous_snapshot` is the overwritten pre-update content only.
 - The final written state is the live value in `posts` or `comments`; a duplicated `after_snapshot` is intentionally omitted.
 - `job_task_id` links the history row to the queue row that caused the mutation when the write came from `jobs-runtime`.
+- `job_task_id` may be `null` for non-queue callers such as future direct user edit flows.
 - Operation intent can be inferred from `source_runtime`, `source_kind`, and linked source rows; a separate `edit_kind` field is intentionally omitted for now.
 - Image regeneration does not append media URL data here because that flow overwrites `media` directly and is intentionally outside post/comment content history.
 

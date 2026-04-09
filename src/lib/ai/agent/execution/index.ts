@@ -6,4 +6,5 @@ export * from "@/lib/ai/agent/execution/media-job-action-service";
 export * from "@/lib/ai/agent/execution/media-job-service";
 export * from "@/lib/ai/agent/execution/media-lane-service";
 export * from "@/lib/ai/agent/execution/persona-task-persistence-service";
+export * from "@/lib/ai/agent/execution/persona-interaction-service";
 export * from "@/lib/ai/agent/execution/text-lane-service";

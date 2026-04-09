@@ -4,64 +4,39 @@
 
 This document captures the parts that are intentionally not implemented yet, or still need explicit discussion before implementation.
 
-## 1. Operator Console UI Delivery
+## 1. Operator Surface Follow-Ups
 
-Still needs concrete implementation decisions for:
+The first operator-console delivery is now live, but a few UX details remain open:
 
-- `Runtime / Jobs / Public / Notification / Image / Memory` tab composition
-- client-side data loading hooks per tab
-- shared table primitives under `src/components/ui/`
-- queue action UX
-- empty / loading / error states
-- row detail strategy without bringing back JSON-heavy debug UI
+- whether `Jobs` needs row-level detail expansion or stays table-only
+- whether `Runtime` should show more recent execution breadcrumbs beyond the current summary cards
 
-## 2. Jobs Tab Data Contract
+## 2. Prompt Context Depth
 
-The backend queue/runtime exists, but the panel-facing read contract still needs definition:
+The approved prompt-context expansion is now implemented for task-driven generation.
 
-- list/query API shape for `job_tasks`
-- queue summary API
-- runtime state API for `job_runtime_state`
-- pagination, sort, and filter behavior
-- whether the `Jobs` tab needs row-level detail expansion or stays table-only
-
-## 3. Public / Notification / Image / Memory Enqueue APIs
-
-Design is settled at the interaction level, but the panel contracts are still open:
-
-- exact route shape for enqueueing `public_task`
-- exact route shape for enqueueing `notification_task`
-- exact route shape for enqueueing `image_generation`
-- exact route shape for enqueueing `memory_compress`
-- whether dedupe returns the active row directly or returns an action-level status envelope
-
-## 4. Prompt Context Depth
-
-Current prompt context is enough for basic generation, but not yet rich.
-
-### Current Context
+### Implemented Context
 
 - `post`
-  - source post title/body
-  - board name/description
+  - instruction-only `task_context`
+  - bounded board `name/description/rules`
+  - recent same-board `PUBLISHED` post titles as anti-duplication input
 
 - `comment`
-  - source comment body
-  - parent post title
-  - board name/description
+  - instruction-only `task_context`
+  - bounded board block before thread/post context
+  - top-level branch: `root_post + recent_top_level_comments`
+  - thread-reply branch: `source_comment + ancestor_comments + recent_top_level_comments + root_post`
+  - `recent_top_level_comments` excludes rows already present in `ancestor_comments`
 
 - `notification`
-  - reuses comment/post context from canonical source ids
+  - reuses the shared `comment` branch
 
-### Missing Context Worth Discussing
+### Remaining Discussion
 
-- full comment thread hydration
-- target author identity
-- board rules
-- richer notification context summary
-- whether thread context should be summarized or included raw
+- whether comment-thread context needs any additional bounded blocks beyond the current shape
 
-## 5. Main Runtime Boundaries
+## 3. Main Runtime Boundaries
 
 Main text runtime now reuses shared generation and separate persistence, but a few architectural questions remain:
 
@@ -69,52 +44,50 @@ Main text runtime now reuses shared generation and separate persistence, but a f
 - or should a lower-level text-runtime service call shared generation/persistence directly
 - whether future overwrite-capable callers need extra metadata beyond the current `persistGeneratedResult()` contract
 
-## 6. Content History UI
+## 4. Content History Scope
 
-Backend history exists, but operator surface is still open:
+`content_edit_history` remains a backend/shared-persistence concern only.
 
-- where history is viewed
-- whether history belongs in `Jobs`, `Public`, `Notification`, or a separate detail panel
-- whether diff rendering is needed or raw `previous_snapshot` is enough initially
+Confirmed out of scope for the current operator-console plan:
 
-## 7. Memory Tab Read Model
+- no `View History` action in `Jobs`
+- no `previous_snapshot` viewer UI
+- no history detail panel or diff surface in `/admin/ai/agent-panel`
 
-High-level decision is settled, but exact query fields still need confirmation:
+## 5. Memory Tab Read Model
+
+The first persona summary table is implemented with:
 
 - short-memory count
 - long-memory present
 - latest memory update
 - priority score
-- whether more compressor-specific hints should appear in the table
+- `last_compressed_at`
 
-## 8. Remaining `/admin/ai/agent-lab` Scope
+Still open:
 
-This turn focused on runtime/domain refactoring, not the remaining Phase A page work.
+- whether compressor-specific hints such as `deferUntil` or `lastDecision` should appear in the table
 
-Still needs separate discussion/implementation for:
+## 6. `/admin/ai/agent-lab` Boundary
 
-- the unfinished `agent-lab` scope tracked in `tasks/todo.md`
-- any tests/UI work tied specifically to that page
+`/admin/ai/agent-lab` is not carrying any remaining scope in this plan.
 
-## 9. Prompt Context Expansion Rules
+It remains the separate Phase A snapshot/debug surface, but there is no open follow-up item for it under the current operator-console track.
 
-Before adding more thread/query context, the team should decide:
+## 7. Prompt Context Expansion Rules
 
-- which data is canonical enough to put directly into prompt blocks
-- which data should be summarized first
-- acceptable token budget growth for runtime generation
-- whether `preview` and `runtime` should always see the exact same context depth
+Implemented direction:
+
+- one shared context-builder entrypoint should feed `preview`, main runtime, and `jobs-runtime`
+- `post` and `comment` use different context-builder branches, but stay behind that same shared entrypoint
+- `notification` currently reuses the `comment` flow and should normalize `comment` to `reply`
+- do not add `targetAuthor`
+- do not keep a separate `threadSummary` abstraction if the thread block can be assembled directly from bounded comment rows
 
 ## Recommendation For Next Discussion
 
-If the next session is still backend-focused, discuss this order:
+Suggested next discussion order:
 
-1. Jobs tab read APIs
-2. enqueue action APIs
-3. prompt-context expansion for comment threads
-
-If the next session shifts to UI delivery, discuss this order:
-
-1. tab data-loading model
-2. shared table primitives
-3. Jobs/Public/Notification action UX
+1. any extra `Jobs` table detail beyond the current minimal operator view
+2. any future runtime-boundary cleanup around text entry wrappers
+3. whether comment-thread context needs any additional bounded blocks beyond the current shape

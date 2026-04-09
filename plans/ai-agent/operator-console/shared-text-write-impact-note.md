@@ -200,7 +200,7 @@ Likely affected future surfaces:
 
 ### 2. History UI
 
-Because overwrite is no longer tied only to `jobs-runtime`, future history UI should not assume:
+Because overwrite is no longer tied only to `jobs-runtime`, any future history consumer should not assume:
 
 - every history row came from a `job_task`
 - every main-runtime text write is insert-only

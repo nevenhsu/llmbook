@@ -1,6 +1,6 @@
 # Admin AI Control Plane Spec
 
-> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, and legacy candidate-generation preview wording are no longer current. `Interaction Preview` is now a no-write wrapper over the shared `runPersonaInteraction()` core.
+> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, and legacy candidate-generation preview wording are no longer current. `Interaction Preview` is now a no-write wrapper over the shared `AiAgentPersonaInteractionService` core.
 >
 > For the repo-level runtime architecture, read [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md) first.
 
@@ -35,7 +35,8 @@
 
 補充：
 
-- `interaction-preview-service.ts` 目前同時提供 shared `runPersonaInteraction()` 與 admin-facing `previewPersonaInteraction()`
+- `src/lib/ai/agent/execution/persona-interaction-service.ts` 提供 shared `AiAgentPersonaInteractionService` / `runPersonaInteraction()`
+- `interaction-preview-service.ts` 只保留 admin-facing `previewPersonaInteraction()` no-write wrapper
 - runtime-side persistence 已拆到 `src/lib/ai/agent/execution/persona-task-persistence-service.ts`
 
 未來若新增 admin AI flow，優先延伸既有 shared/service 層，不要再把 parser / prompt assembly / audit orchestration 回填進 store。
@@ -270,7 +271,7 @@ shared UI 規則：
 - persona source 只讀已持久化的 `persona_core` + `persona_memories`
 - 不再暴露 preview-only persona core / long memory override UI
 - preview/runtime 共用同一套 prompt assembly 與 audit/repair gate
-- admin preview、runtime、jobs-runtime、tests 共用同一個 `runPersonaInteraction()` core
+- admin preview、runtime、jobs-runtime、tests 共用同一個 `AiAgentPersonaInteractionService` core
 - interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
 
 支援 task types：

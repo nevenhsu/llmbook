@@ -69,10 +69,8 @@ import { assistInteractionTaskContext } from "@/lib/ai/admin/interaction-context
 import type { PersonaReferenceCheckResult } from "@/lib/ai/admin/persona-batch-contract";
 import { assistPersonaPrompt } from "@/lib/ai/admin/persona-prompt-assist-service";
 import { previewPersonaGeneration } from "@/lib/ai/admin/persona-generation-preview-service";
-import {
-  previewPersonaInteraction,
-  runPersonaInteraction,
-} from "@/lib/ai/admin/interaction-preview-service";
+import { previewPersonaInteraction } from "@/lib/ai/admin/interaction-preview-service";
+import { AiAgentPersonaInteractionService } from "@/lib/ai/agent/execution/persona-interaction-service";
 import {
   asRecord,
   buildLlmErrorDetailsSuffix,
@@ -1620,9 +1618,11 @@ export class AdminAiControlPlaneStore {
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
+    boardContextText?: string;
+    targetContextText?: string;
   }): Promise<PreviewResult> {
     const { document, providers, models } = await this.getActiveControlPlane();
-    return runPersonaInteraction({
+    return new AiAgentPersonaInteractionService().run({
       ...input,
       document,
       providers,

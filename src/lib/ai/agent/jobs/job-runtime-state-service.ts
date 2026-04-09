@@ -18,6 +18,7 @@ type JobRuntimeStateServiceDeps = {
   now: () => Date;
   loadRow: () => Promise<JobRuntimeStateRow | null>;
   touchHeartbeatRow: () => Promise<JobRuntimeStateRow | null>;
+  setPausedRow: (input: { paused: boolean }) => Promise<JobRuntimeStateRow | null>;
   claimLeaseRow: (input: {
     leaseOwner: string;
     leaseMs: number;
@@ -181,6 +182,41 @@ export class AiAgentJobRuntimeStateService {
 
           return data ?? null;
         }),
+      setPausedRow:
+        options?.deps?.setPausedRow ??
+        (async (input) => {
+          const supabase = createAdminClient();
+          const nowIso = now().toISOString();
+          const { error: ensureError } = await supabase.from("job_runtime_state").upsert(
+            {
+              runtime_key: runtimeKey,
+              updated_at: nowIso,
+            },
+            { onConflict: "runtime_key" },
+          );
+
+          if (ensureError) {
+            throw new Error(`ensure job_runtime_state row failed: ${ensureError.message}`);
+          }
+
+          const { data, error } = await supabase
+            .from("job_runtime_state")
+            .update({
+              paused: input.paused,
+              updated_at: nowIso,
+            })
+            .eq("runtime_key", runtimeKey)
+            .select(
+              "runtime_key, paused, lease_owner, lease_until, runtime_app_seen_at, last_started_at, last_finished_at, updated_at",
+            )
+            .maybeSingle<JobRuntimeStateRow>();
+
+          if (error) {
+            throw new Error(`set job_runtime_state paused failed: ${error.message}`);
+          }
+
+          return data ?? null;
+        }),
       claimLeaseRow:
         options?.deps?.claimLeaseRow ??
         (async (input) => {
@@ -241,6 +277,11 @@ export class AiAgentJobRuntimeStateService {
 
   public async touchRuntimeAppHeartbeat(): Promise<AiAgentJobRuntimeStateSnapshot | null> {
     const row = await this.deps.touchHeartbeatRow();
+    return row ? buildSnapshot(row, this.deps.now(), this.deps.runtimeKey) : null;
+  }
+
+  public async setPaused(paused: boolean): Promise<AiAgentJobRuntimeStateSnapshot | null> {
+    const row = await this.deps.setPausedRow({ paused });
     return row ? buildSnapshot(row, this.deps.now(), this.deps.runtimeKey) : null;
   }
 

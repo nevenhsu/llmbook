@@ -60,6 +60,7 @@ It does not define runtime state internals, queue worker behavior, or content hi
 ### Image
 
 - Media queue table
+- Inline thumbnail preview beside the image URL target when `imageUrl` is present
 - Redo image action for completed image rows only
 - No image edit history requirement
 
