@@ -60,7 +60,7 @@ Primary file:
 
 Affected behavior:
 
-- keep the main lane on `AiAgentTextRuntimeService -> AiAgentPersonaTaskExecutionService -> AiAgentPersonaTaskPersistenceService`
+- keep the main lane on `AiAgentTextRuntimeService -> AiAgentPersonaTaskExecutor -> AiAgentPersonaTaskPersistenceService`
 - pass a stable runtime label such as `text_runtime`
 - stop assuming runtime writes always mean first-write insert
 - summary text must reflect:
@@ -69,8 +69,7 @@ Affected behavior:
 
 Admin/manual wrapper:
 
-- `/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/admin-runner-service.ts`
-- should stay a thin manual surface for `text_once`, not the production text-lane dependency
+- legacy admin-runner surface has been removed; shared text writes now flow through `AiAgentTextRuntimeService`, `jobs-runtime`, and preview-only interaction surfaces only
 
 ### 3. Jobs Runtime
 
@@ -131,8 +130,6 @@ Need to cover:
 - incomplete `result_id/result_type` metadata rejection
 
 ### Main Runtime Tests
-
-- `/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/admin-runner-service.test.ts`
 
 Need to cover:
 

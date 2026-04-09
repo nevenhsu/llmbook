@@ -9,37 +9,6 @@ import {
   parseMarkdownActionOutput,
   parsePostActionOutput,
 } from "@/lib/ai/prompt-runtime/action-output";
-import { createAdminClient } from "@/lib/supabase/admin";
-
-type PersonaIdentityRow = {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-};
-
-type TaskRow = {
-  id: string;
-  persona_id: string;
-  task_type: string;
-  dispatch_kind: string;
-  source_table: string | null;
-  source_id: string | null;
-  dedupe_key: string | null;
-  cooldown_until: string | null;
-  payload: Record<string, unknown> | null;
-  status: AiAgentRecentTaskSnapshot["status"];
-  scheduled_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  retry_count: number;
-  max_retries: number;
-  lease_owner: string | null;
-  lease_until: string | null;
-  result_id: string | null;
-  result_type: string | null;
-  error_message: string | null;
-  created_at: string;
-};
 
 type PreferredTextModel = {
   modelId: string;
@@ -47,8 +16,7 @@ type PreferredTextModel = {
   modelKey: string;
 };
 
-type PersonaTaskServiceDeps = {
-  loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
+type PersonaTaskGeneratorDeps = {
   buildPromptContext: (input: {
     task: AiAgentRecentTaskSnapshot;
   }) => Promise<AiAgentPersonaTaskPromptContext>;
@@ -98,12 +66,11 @@ function normalizeTaskType(taskType: string): "post" | "comment" {
   return taskType === "post" ? "post" : "comment";
 }
 
-export class AiAgentPersonaTaskService {
-  private readonly deps: PersonaTaskServiceDeps;
+export class AiAgentPersonaTaskGenerator {
+  private readonly deps: PersonaTaskGeneratorDeps;
 
-  public constructor(options?: { deps?: Partial<PersonaTaskServiceDeps> }) {
+  public constructor(options?: { deps?: Partial<PersonaTaskGeneratorDeps> }) {
     this.deps = {
-      loadTaskById: options?.deps?.loadTaskById ?? ((taskId) => this.readTaskById(taskId)),
       buildPromptContext:
         options?.deps?.buildPromptContext ??
         (async (input) => {
@@ -147,24 +114,19 @@ export class AiAgentPersonaTaskService {
   }
 
   public async generateFromTask(input: {
-    personaTaskId: string;
+    task: AiAgentRecentTaskSnapshot;
     mode?: AiAgentPersonaTaskExecutionMode;
     extraInstructions?: string | null;
   }): Promise<AiAgentPersonaTaskGenerationResult> {
-    const task = await this.deps.loadTaskById(input.personaTaskId);
-    if (!task) {
-      throw new AiAgentJobPermanentSkipError("persona_task not found");
-    }
-
     const mode = input.mode ?? "preview";
-    const promptContext = await this.deps.buildPromptContext({ task });
+    const promptContext = await this.deps.buildPromptContext({ task: input.task });
     const preferredModel = await this.deps.loadPreferredTextModel();
     const taskContext =
       input.extraInstructions && input.extraInstructions.trim().length > 0
         ? [promptContext.taskContext, input.extraInstructions.trim()].join("\n\n")
         : promptContext.taskContext;
     const preview = await this.deps.runPersonaInteraction({
-      personaId: task.personaId,
+      personaId: input.task.personaId,
       modelId: preferredModel.modelId,
       taskType: promptContext.taskType,
       taskContext,
@@ -180,11 +142,11 @@ export class AiAgentPersonaTaskService {
       model_key: preferredModel.modelKey,
       audit_status: preview.auditDiagnostics?.status ?? null,
       repair_applied: preview.auditDiagnostics?.repairApplied ?? false,
-      task_type: task.taskType,
-      dispatch_kind: task.dispatchKind,
+      task_type: input.task.taskType,
+      dispatch_kind: input.task.dispatchKind,
     } satisfies Record<string, unknown>;
 
-    if (normalizeTaskType(task.taskType) === "post") {
+    if (normalizeTaskType(input.task.taskType) === "post") {
       const parsed = parsePostActionOutput(rawOutput);
       if (parsed.error || !parsed.title) {
         throw new Error(
@@ -193,7 +155,7 @@ export class AiAgentPersonaTaskService {
       }
 
       return {
-        task,
+        task: input.task,
         mode,
         promptContext: {
           ...promptContext,
@@ -217,7 +179,7 @@ export class AiAgentPersonaTaskService {
     }
 
     return {
-      task,
+      task: input.task,
       mode,
       promptContext: {
         ...promptContext,
@@ -230,60 +192,6 @@ export class AiAgentPersonaTaskService {
       },
       modelMetadata,
       modelSelection: preferredModel,
-    };
-  }
-  private async readTaskById(taskId: string): Promise<AiAgentRecentTaskSnapshot | null> {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("persona_tasks")
-      .select(
-        "id, persona_id, task_type, dispatch_kind, source_table, source_id, dedupe_key, cooldown_until, payload, status, scheduled_at, started_at, completed_at, retry_count, max_retries, lease_owner, lease_until, result_id, result_type, error_message, created_at",
-      )
-      .eq("id", taskId)
-      .maybeSingle<TaskRow>();
-
-    if (error) {
-      throw new Error(`load persona_task for rewrite failed: ${error.message}`);
-    }
-
-    if (!data) {
-      return null;
-    }
-
-    const { data: persona, error: personaError } = await supabase
-      .from("personas")
-      .select("id, username, display_name")
-      .eq("id", data.persona_id)
-      .maybeSingle<PersonaIdentityRow>();
-
-    if (personaError) {
-      throw new Error(`load rewrite persona identity failed: ${personaError.message}`);
-    }
-
-    return {
-      id: data.id,
-      personaId: data.persona_id,
-      personaUsername: persona?.username ?? null,
-      personaDisplayName: persona?.display_name ?? null,
-      taskType: data.task_type,
-      dispatchKind: data.dispatch_kind,
-      sourceTable: data.source_table,
-      sourceId: data.source_id,
-      dedupeKey: data.dedupe_key,
-      cooldownUntil: data.cooldown_until,
-      payload: data.payload ?? {},
-      status: data.status,
-      scheduledAt: data.scheduled_at,
-      startedAt: data.started_at,
-      completedAt: data.completed_at,
-      retryCount: data.retry_count,
-      maxRetries: data.max_retries,
-      leaseOwner: data.lease_owner,
-      leaseUntil: data.lease_until,
-      resultId: data.result_id,
-      resultType: data.result_type,
-      errorMessage: data.error_message,
-      createdAt: data.created_at,
     };
   }
 }

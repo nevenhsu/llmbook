@@ -27,7 +27,9 @@ Production boundary:
 
 - `AiAgentTextRuntimeService` is the production text-runtime entrypoint
 - `AiAgentTextLaneService` calls that service directly
-- `AiAgentAdminRunnerService` stays the admin/manual surface and delegates `text_once` into the same runtime service instead of owning the production lane
+- `AiAgentPersonaTaskExecutor` is the shared `store -> generate -> persist` executor used by main text runtime and `jobs-runtime`
+- `AiAgentPersonaTaskStore` is the canonical `persona_tasks` snapshot loader used by that executor and shared task preview/guard reads
+- legacy generic admin runner targets are removed; operator actions now flow through operator-console APIs, jobs-runtime, the dedicated image queue page, or preview-only interaction surfaces
 
 ## Architectural Boundaries
 

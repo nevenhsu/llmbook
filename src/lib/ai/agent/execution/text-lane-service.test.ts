@@ -3,7 +3,7 @@ vi.mock("server-only", () => ({}));
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import { InMemoryTaskQueueStore, TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
-import type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-execution-service";
+import type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-executor";
 import { AiAgentTextLaneService } from "@/lib/ai/agent/execution/text-lane-service";
 
 function buildQueueTask(overrides: Partial<QueueTask> = {}): QueueTask {

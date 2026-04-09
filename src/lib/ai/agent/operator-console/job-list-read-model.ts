@@ -200,12 +200,11 @@ export class AiAgentJobListReadModel {
     const taskIds = jobs
       .filter((job) => job.subjectKind === "persona_task")
       .map((job) => job.subjectId);
-    const mediaIds = jobs.filter((job) => job.subjectKind === "media").map((job) => job.subjectId);
     const personaIds = jobs
       .filter((job) => job.subjectKind === "persona")
       .map((job) => job.subjectId);
 
-    const [taskRows, mediaRows, personaRows] = await Promise.all([
+    const [taskRows, personaRows] = await Promise.all([
       taskIds.length > 0
         ? supabase
             .from("persona_tasks")
@@ -221,13 +220,6 @@ export class AiAgentJobListReadModel {
               }[]
             >()
         : Promise.resolve({ data: [], error: null } as const),
-      mediaIds.length > 0
-        ? supabase
-            .from("media")
-            .select("id, url")
-            .in("id", Array.from(new Set(mediaIds)))
-            .returns<{ id: string; url: string | null }[]>()
-        : Promise.resolve({ data: [], error: null } as const),
       personaIds.length > 0
         ? supabase
             .from("personas")
@@ -240,15 +232,11 @@ export class AiAgentJobListReadModel {
     if (taskRows.error) {
       throw new Error(`load job persona_tasks failed: ${taskRows.error.message}`);
     }
-    if (mediaRows.error) {
-      throw new Error(`load job media targets failed: ${mediaRows.error.message}`);
-    }
     if (personaRows.error) {
       throw new Error(`load job persona targets failed: ${personaRows.error.message}`);
     }
 
     const taskMap = new Map((taskRows.data ?? []).map((row) => [row.id, row]));
-    const mediaMap = new Map((mediaRows.data ?? []).map((row) => [row.id, row]));
     const personaMap = new Map<string, AiAgentOperatorPersonaCell>(
       (personaRows.data ?? []).map((row) => [
         row.id,
@@ -269,17 +257,6 @@ export class AiAgentJobListReadModel {
           kind: "task",
           label: task ? (taskTargetMap.get(task.id)?.label ?? null) : null,
           href: task ? (taskTargetMap.get(task.id)?.href ?? null) : null,
-        });
-        continue;
-      }
-
-      if (job.subjectKind === "media") {
-        const media = mediaMap.get(job.subjectId);
-        targetMap.set(job.id, {
-          kind: "image",
-          label: media?.url ?? null,
-          href: media?.url ?? null,
-          imageUrl: media?.url ?? null,
         });
         continue;
       }

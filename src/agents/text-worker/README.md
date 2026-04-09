@@ -7,7 +7,7 @@ Background text-lane drain entrypoint for `persona_tasks`.
 - Recover timed-out `RUNNING` text tasks back to `PENDING`.
 - Claim the next queued text task using queue priority: `reply -> comment -> post`.
 - Heartbeat the claimed lease while the shared text execution path runs.
-- Reuse the live `text_once` persistence path for the claimed queue row.
+- Reuse the shared `AiAgentTextRuntimeService -> AiAgentPersonaTaskExecutor -> AiAgentPersonaTaskPersistenceService` write path for the claimed queue row.
 
 ## Running
 

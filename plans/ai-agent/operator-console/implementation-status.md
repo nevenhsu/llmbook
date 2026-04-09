@@ -27,6 +27,7 @@ Implemented in:
 - `runtime_key` lane isolation via `AI_AGENT_RUNTIME_STATE_KEY`
 - `memory_compress` execution
 - `public_task` / `notification_task` shared text persistence execution
+- image rerun is explicitly outside `jobs-runtime`; it is handled by the dedicated media/image queue page and media queue flow
 - operator `Jobs` actions now distinguish:
   - `Clone` -> insert a fresh `job_tasks` row with the same payload
   - `Retry` -> reset the same errored `job_tasks` row back to `PENDING`
@@ -48,11 +49,16 @@ Implemented in:
   - branches into `post` and `comment` source-context assembly
   - adds bounded board rules, recent published board post titles, root-post excerpts, ancestor comments, and recent top-level comments
 
-- `AiAgentPersonaTaskService`
-  - reads `persona_task`
+- `AiAgentPersonaTaskGenerator`
+  - receives a loaded `persona_task` snapshot from the shared executor/store path
   - delegates task-driven context assembly to `AiAgentPersonaTaskContextBuilder`
   - runs shared generation
   - parses post/comment output
+
+- `AiAgentPersonaTaskStore`
+  - canonical `persona_tasks` snapshot loader
+  - loads persona identity
+  - maps DB rows into `AiAgentRecentTaskSnapshot`
 
 - `AiAgentPersonaTaskPersistenceService`
   - `persistGeneratedResult()` as the shared text write path
@@ -64,32 +70,33 @@ Implemented in:
 ### Main Text Runtime
 
 - `AiAgentTextRuntimeService`
-  - is now the production `text_once` runtime boundary
+  - is now the production text-runtime boundary
   - owns shared text-task preview/execute entrypoints for the main lane
-- `AiAgentPersonaTaskExecutionService`
-  - wraps shared `generate -> persist` execution
+  - uses the shared task store for preview/guard reads
+  - passes guarded task snapshots into the shared executor
+- `AiAgentPersonaTaskExecutor`
+  - wraps shared `store -> generate -> persist` execution
+  - loads `persona_task` snapshots through `AiAgentPersonaTaskStore` when callers do not already provide one
   - is reused by `AiAgentTextRuntimeService` and `jobs-runtime`
 - `AiAgentTextLaneService`
   - calls `AiAgentTextRuntimeService` directly
-  - no longer depends on `AiAgentAdminRunnerService` for the production text drain
-- `AiAgentAdminRunnerService`
-  - remains the admin/manual route surface
-  - delegates `text_once` preview/execute to `AiAgentTextRuntimeService`
+  - no longer depends on any legacy admin manual runner wrapper
+- legacy generic admin runner surfaces are removed:
+  - `AiAgentAdminRunnerService`
+  - `/api/admin/ai/agent/run/[target]`
+  - `orchestrator_once / text_once / media_once / compress_once`
 
-This means main text runtime no longer routes its production execution path through an admin-named wrapper.
+This means main text runtime no longer routes its production execution path through an admin-named wrapper, and there is no second generic admin execution surface left in the app.
 
-### Approved But Not Implemented Yet
+### Dedicated Image Queue Page
 
-- remove `Image` from `/admin/ai/agent-panel`
-- move image/media queue handling to a dedicated admin page:
+Implemented:
+
+- removed `Image` from `/admin/ai/agent-panel`
+- moved image/media queue handling to:
   - `/admin/ai/image-queue`
-- keep image rerun on the dedicated media queue instead of `jobs-runtime`
-
-Current divergence:
-
-- the first operator-console implementation still includes an `Image` tab and image-panel API surface
-- the current applied schema/runtime still includes legacy `image_generation` support from the first pass
-- the approved plan is to unwind that UI placement in a follow-up implementation pass
+- image rerun stays on the dedicated media queue instead of `jobs-runtime`
+- removed `image_generation` from the `job_tasks`/`jobs-runtime` contract and follow-up schema constraints
 
 ### Shared Overwrite History
 

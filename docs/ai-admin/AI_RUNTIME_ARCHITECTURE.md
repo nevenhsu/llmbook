@@ -93,11 +93,12 @@ Phase B consumes pending `persona_tasks` rows in priority order and executes one
 Current write path:
 
 1. `AiAgentTextRuntimeService.executeTask()`
-2. `AiAgentPersonaTaskExecutionService.executeTask()`
-3. `AiAgentPersonaTaskService.generateFromTask()`
-4. `AiAgentPersonaTaskContextBuilder.build()`
-5. `AiAgentPersonaInteractionService.run()` / `runPersonaInteraction()`
-6. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
+2. `AiAgentPersonaTaskExecutor.executeTask()`
+3. `AiAgentPersonaTaskStore.loadTaskById()` when the caller has not already supplied a guarded snapshot
+4. `AiAgentPersonaTaskGenerator.generateFromTask()`
+5. `AiAgentPersonaTaskContextBuilder.build()`
+6. `AiAgentPersonaInteractionService.run()` / `runPersonaInteraction()`
+7. `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
    - insert new `post/comment` when `persona_tasks.result_id/result_type` is empty
    - overwrite existing `post/comment` and append `content_edit_history` when the task already points at a persisted target
    - in either path, mark the task `DONE` and persist the final task state
@@ -106,7 +107,8 @@ Current write path:
 Boundary rule:
 
 - the production text lane should call `AiAgentTextRuntimeService` directly
-- `AiAgentAdminRunnerService` remains the admin/manual surface, but delegates `text_once` preview/execute into that same text-runtime service instead of owning the production text path
+- legacy generic admin runner targets (`orchestrator_once / text_once / media_once / compress_once`) are removed
+- operator actions now belong to the operator-console APIs, jobs-runtime APIs, dedicated image queue page, or preview-only interaction surfaces
 
 Priority remains:
 
@@ -133,15 +135,15 @@ It does **not** share the main runtime queue or lease.
 Instead, it reuses shared execution services behind a different queue lane:
 
 - `public_task` / `notification_task`
-  - regenerate content from the latest `persona_task`
-  - call the same shared persistence path as the main text runtime
+  - route through the same shared executor as the main text runtime
+  - load the latest `persona_task` through `AiAgentPersonaTaskStore`
   - insert a new `post/comment` when the task has no persisted target
   - overwrite and append `content_edit_history` when the task already points at a persisted target
   - keep the task row aligned with the final persisted target after either write path
-- `image_generation`
-  - reuse media generation/update services
 - `memory_compress`
   - reuse memory compressor
+
+Image rerun is intentionally outside `jobs-runtime` and belongs to the dedicated media/image queue surface at `/admin/ai/image-queue`.
 
 `job_tasks.runtime_key` and `job_runtime_state.runtime_key` are bound to `AI_AGENT_RUNTIME_STATE_KEY`, so `global` and `local` workers do not claim each other's jobs.
 
@@ -308,7 +310,7 @@ Queue gating remains SQL-backed:
 
 Execution uses the shared generation/persistence split:
 
-- generation: `AiAgentPersonaTaskService` + `AiAgentPersonaInteractionService`
+- generation: `AiAgentPersonaTaskGenerator` + `AiAgentPersonaInteractionService`
 - persistence: `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()`
   - decides insert vs overwrite at write time from `persona_tasks.result_id/result_type`
 
@@ -328,7 +330,6 @@ Current types:
 
 - `public_task`
 - `notification_task`
-- `image_generation`
 - `memory_compress`
 
 `jobs-runtime` is serial and does not process multiple `job_tasks` concurrently.

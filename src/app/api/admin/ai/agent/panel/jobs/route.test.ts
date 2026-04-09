@@ -99,6 +99,23 @@ describe("/api/admin/ai/agent/panel/jobs", () => {
     });
   });
 
+  it("rejects removed image_generation jobs", async () => {
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("http://localhost/api/admin/ai/agent/panel/jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          jobType: "image_generation",
+          subjectId: "media-1",
+        }),
+      }),
+      {} as any,
+    );
+
+    expect(response.status).toBe(400);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it("clones a job row for admins", async () => {
     clone.mockResolvedValue({
       mode: "enqueued",

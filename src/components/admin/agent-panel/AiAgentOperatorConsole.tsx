@@ -10,14 +10,13 @@ import OperatorTaskTable from "@/components/ui/OperatorTaskTable";
 import PersonaIdentityCell from "@/components/ui/PersonaIdentityCell";
 import { ApiError, apiFetchJson, apiPost } from "@/lib/api/fetch-json";
 import type {
-  AiAgentOperatorImageTableResponse,
   AiAgentOperatorJobListResponse,
   AiAgentOperatorMemoryTableResponse,
   AiAgentOperatorRuntimeTabResponse,
   AiAgentOperatorTaskTableResponse,
 } from "@/lib/ai/agent/operator-console/types";
 
-type TabId = "runtime" | "jobs" | "public" | "notification" | "image" | "memory";
+type TabId = "runtime" | "jobs" | "public" | "notification" | "memory";
 
 function formatDateTime(value: string | null): string {
   if (!value) {
@@ -47,8 +46,6 @@ function jobLabel(jobType: AiAgentOperatorJobListResponse["rows"][number]["jobTy
       return "Public Task";
     case "notification_task":
       return "Notification Task";
-    case "image_generation":
-      return "Image";
     case "memory_compress":
       return "Memory";
   }
@@ -109,27 +106,23 @@ export default function AiAgentOperatorConsole() {
   const [notificationData, setNotificationData] = useState<AiAgentOperatorTaskTableResponse | null>(
     null,
   );
-  const [imageData, setImageData] = useState<AiAgentOperatorImageTableResponse | null>(null);
   const [memoryData, setMemoryData] = useState<AiAgentOperatorMemoryTableResponse | null>(null);
 
   const [runtimeLoading, setRuntimeLoading] = useState(false);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [publicLoading, setPublicLoading] = useState(false);
   const [notificationLoading, setNotificationLoading] = useState(false);
-  const [imageLoading, setImageLoading] = useState(false);
   const [memoryLoading, setMemoryLoading] = useState(false);
 
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [publicError, setPublicError] = useState<string | null>(null);
   const [notificationError, setNotificationError] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
   const [memoryError, setMemoryError] = useState<string | null>(null);
 
   const [jobsPage, setJobsPage] = useState(1);
   const [publicPage, setPublicPage] = useState(1);
   const [notificationPage, setNotificationPage] = useState(1);
-  const [imagePage, setImagePage] = useState(1);
   const [memoryPage, setMemoryPage] = useState(1);
 
   const [runtimeActionPending, setRuntimeActionPending] = useState<string | null>(null);
@@ -191,25 +184,6 @@ export default function AiAgentOperatorConsole() {
     }
   }, []);
 
-  const loadImages = useCallback(
-    async (page = imagePage) => {
-      setImageLoading(true);
-      setImageError(null);
-      try {
-        setImageData(
-          await apiFetchJson<AiAgentOperatorImageTableResponse>(
-            `/api/admin/ai/agent/panel/images?page=${page}&pageSize=10`,
-          ),
-        );
-      } catch (error) {
-        setImageError(toErrorMessage(error));
-      } finally {
-        setImageLoading(false);
-      }
-    },
-    [imagePage],
-  );
-
   const loadMemory = useCallback(
     async (page = memoryPage) => {
       setMemoryLoading(true);
@@ -265,7 +239,7 @@ export default function AiAgentOperatorConsole() {
   }
 
   async function enqueueJob(input: {
-    jobType: "public_task" | "notification_task" | "image_generation" | "memory_compress";
+    jobType: "public_task" | "notification_task" | "memory_compress";
     subjectId: string;
     actionKey: string;
     after?: () => Promise<void>;
@@ -343,17 +317,12 @@ export default function AiAgentOperatorConsole() {
     if (activeTab === "notification" && !notificationData) {
       void loadTaskTable("notification", notificationPage);
     }
-    if (activeTab === "image" && !imageData) {
-      void loadImages();
-    }
     if (activeTab === "memory" && !memoryData) {
       void loadMemory();
     }
   }, [
     activeTab,
-    imageData,
     jobsData,
-    loadImages,
     loadJobs,
     loadMemory,
     loadTaskTable,
@@ -403,12 +372,6 @@ export default function AiAgentOperatorConsole() {
   }, [activeTab, loadTaskTable, notificationPage]);
 
   useEffect(() => {
-    if (activeTab === "image") {
-      void loadImages(imagePage);
-    }
-  }, [activeTab, imagePage, loadImages]);
-
-  useEffect(() => {
     if (activeTab === "memory") {
       void loadMemory(memoryPage);
     }
@@ -422,9 +385,14 @@ export default function AiAgentOperatorConsole() {
         </p>
         <h1 className="text-3xl font-semibold">AI Agent Operator Console</h1>
         <p className="text-base-content/70 max-w-3xl text-sm">
-          Client-loaded operator controls for runtime visibility, manual jobs, task redo, image
-          redo, and persona memory compression.
+          Client-loaded operator controls for runtime visibility, manual jobs, task redo, and
+          persona memory compression.
         </p>
+        <div className="pt-1">
+          <Link href="/admin/ai/image-queue" className="link link-hover text-sm">
+            Open Image Queue
+          </Link>
+        </div>
       </div>
 
       {notice ? <div className="alert alert-success text-sm">{notice}</div> : null}
@@ -438,7 +406,6 @@ export default function AiAgentOperatorConsole() {
           { id: "jobs", label: "Jobs" },
           { id: "public", label: "Public" },
           { id: "notification", label: "Notification" },
-          { id: "image", label: "Image" },
           { id: "memory", label: "Memory" },
         ]}
       />
@@ -616,10 +583,6 @@ export default function AiAgentOperatorConsole() {
                               <Link href={row.target.href} className="link link-hover text-sm">
                                 {row.target.label}
                               </Link>
-                            ) : row.target.kind === "image" && row.target.imageUrl ? (
-                              <a href={row.target.imageUrl} className="link link-hover text-sm">
-                                {row.target.label}
-                              </a>
                             ) : (
                               <span className="text-base-content/50 text-sm">-</span>
                             )}
@@ -744,116 +707,6 @@ export default function AiAgentOperatorConsole() {
           }}
           pendingActionId={rowActionPending}
         />
-      ) : null}
-
-      {activeTab === "image" ? (
-        <SectionCard
-          title="Image Queue"
-          actions={
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                void loadImages(imagePage);
-              }}
-              disabled={imageLoading}
-            >
-              {imageLoading ? "Loading..." : "Refresh"}
-            </button>
-          }
-        >
-          <div className="space-y-4">
-            {imageError ? <div className="alert alert-error text-sm">{imageError}</div> : null}
-            <div className="border-base-300 overflow-x-auto rounded-xl border">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Persona</th>
-                    <th>Image URL</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {imageLoading ? (
-                    <tr>
-                      <td colSpan={5} className="text-base-content/60 text-center">
-                        Loading rows...
-                      </td>
-                    </tr>
-                  ) : imageData && imageData.rows.length > 0 ? (
-                    imageData.rows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <PersonaIdentityCell persona={row.persona} />
-                        </td>
-                        <td>
-                          {row.imageUrl ? (
-                            <div className="flex items-center gap-3">
-                              {/* Intentional: admin preview rows may point at arbitrary remote media URLs. */}
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={row.imageUrl}
-                                alt={`Image preview for ${row.imageUrl}`}
-                                className="border-base-300 h-12 w-12 rounded-lg border object-cover"
-                                loading="lazy"
-                              />
-                              <a href={row.imageUrl} className="link link-hover text-sm break-all">
-                                {row.imageUrl}
-                              </a>
-                            </div>
-                          ) : (
-                            <span className="text-base-content/50 text-sm">-</span>
-                          )}
-                        </td>
-                        <td>
-                          <OperatorStatusBadge status={row.status} />
-                        </td>
-                        <td>{formatDateTime(row.createdAt)}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs"
-                            disabled={!row.canRedo || rowActionPending === row.id}
-                            onClick={() => {
-                              void enqueueJob({
-                                jobType: "image_generation",
-                                subjectId: row.id,
-                                actionKey: row.id,
-                                after: () => loadImages(imagePage),
-                              });
-                            }}
-                          >
-                            {rowActionPending === row.id ? "Queueing..." : "Redo"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="text-base-content/60 text-center">
-                        No image rows.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {imageData ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-base-content/60 text-sm">
-                  Page {imageData.page} / {imageData.totalPages} · Total {imageData.totalItems}
-                </div>
-                <PaginationClient
-                  page={imageData.page}
-                  totalPages={imageData.totalPages}
-                  onPageChange={setImagePage}
-                />
-              </div>
-            ) : null}
-          </div>
-        </SectionCard>
       ) : null}
 
       {activeTab === "memory" ? (

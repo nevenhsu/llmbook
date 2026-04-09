@@ -10,10 +10,10 @@ The target shape is:
 - one shared task-aware generator
 - one shared task executor
 - one shared persistence layer
-- one long-term thin wrapper:
+- one long-term runtime wrapper:
   - `text-runtime`
-- one legacy surface to remove:
-  - `admin-runner`
+- legacy generic admin runner:
+  - removed
 
 This refactor is about boundary clarity and reuse.
 
@@ -29,8 +29,7 @@ The current stack is already cleaner than the previous `AiAgentAdminRunnerServic
 That means the architecture is only partially converged:
 
 - main text lane uses the shared runtime boundary
-- admin/manual `text_once` delegates correctly
-- but `jobs-runtime` is still bypassing the shared executor
+- `jobs-runtime` is still bypassing the shared executor
 - and task loading remains repeated boilerplate
 
 ## Desired End State
@@ -43,7 +42,7 @@ That means the architecture is only partially converged:
   - maps DB rows to `AiAgentRecentTaskSnapshot`
 
 - `AiAgentPersonaTaskGenerator`
-  - current role of `AiAgentPersonaTaskService`
+  - canonical generation module
   - receives the loaded task snapshot from the shared store
   - builds task prompt context
   - chooses model
@@ -51,7 +50,7 @@ That means the architecture is only partially converged:
   - parses post/comment output
 
 - `AiAgentPersonaTaskExecutor`
-  - current role of `AiAgentPersonaTaskExecutionService`
+  - canonical execution module
   - canonical `generate -> persist` orchestration
   - passes `sourceRuntime`, `jobTaskId`, and `createdBy`
 
@@ -69,12 +68,10 @@ That means the architecture is only partially converged:
   - exposes `previewTask()` and `executeTask()`
   - delegates actual execution to the shared executor
 
-### Legacy Manual Surface To Remove
+### Legacy Manual Surface
 
-- `AiAgentAdminRunnerService`
-  - old admin/manual route adapter
-  - should not remain as a long-term wrapper once operator-console APIs fully replace it
-  - current role is transitional only
+- removed
+- generic admin runner targets no longer belong to the active architecture
 
 ## Thin Wrapper Semantics
 
@@ -84,7 +81,7 @@ This wrapper exists because the production text lane still needs a runtime-speci
 
 It should own:
 
-- `text_once` runtime guard logic
+- text-runtime guard logic
 - notification canonical-target validation
 - `sourceRuntime = "text_runtime"`
 - task preview for production-compatible text execution
@@ -95,19 +92,7 @@ It should **not** own:
 - parsing
 - insert/overwrite persistence rules
 - `jobs-runtime` queue semantics
-- admin/manual route response formatting
-
-### `AiAgentAdminRunnerService`
-
-This service is now legacy.
-
-Manual admin operations should move to:
-
-- operator-console runtime control APIs
-- operator-console jobs enqueue / retry / clone APIs
-- dedicated preview/no-write persona generation pages
-
-So the long-term goal is deletion, not preservation.
+- legacy admin/manual route response formatting
 
 ## Flow Diagrams
 
@@ -127,24 +112,6 @@ flowchart LR
   J --> K["posts/comments + content_edit_history + persona_tasks"]
 ```
 
-### Legacy Admin Manual `text_once`
-
-```mermaid
-flowchart LR
-  A["Admin API / panel action"] --> B["AiAgentAdminRunnerService"]
-  B --> C["AiAgentTextRuntimeService"]
-  C --> D["AiAgentPersonaTaskExecutor"]
-  D --> E["AiAgentPersonaTaskStore"]
-  E --> F["AiAgentPersonaTaskGenerator"]
-  F --> G["AiAgentPersonaTaskContextBuilder"]
-  G --> H["AiAgentPersonaInteractionService"]
-  D --> I["AiAgentPersonaTaskPersistenceService"]
-  I --> J["posts/comments + content_edit_history + persona_tasks"]
-  B --> K["admin/manual response shape"]
-```
-
-This flow is transitional and should be removed once operator-console fully replaces the old manual runner route.
-
 ### `jobs-runtime` Text Job
 
 ```mermaid
@@ -163,11 +130,13 @@ flowchart LR
 
 ### Phase 1: Extract Shared `persona_task` Loader
 
-Create a shared loader module and move repeated task snapshot loading into it.
+Status: implemented.
+
+Created a shared loader module and moved repeated task snapshot loading into it.
 
 Expected consumers:
 
-- `src/lib/ai/agent/execution/persona-task-execution-service.ts`
+- `src/lib/ai/agent/execution/persona-task-executor.ts`
 - transitional callers that still need direct task snapshot reads before full convergence
 
 Suggested module name:
@@ -176,17 +145,18 @@ Suggested module name:
 
 ### Phase 2: Make Executor the Real Shared Entry
 
-Change `jobs-runtime` text jobs to call the executor instead of manually chaining:
+Status: implemented.
+
+Changed `jobs-runtime` text jobs to call the executor instead of manually chaining:
 
 - `generateFromTask()`
 - `persistGeneratedResult()`
 
 This is the most important remaining convergence step.
 
-After this step:
+Current result:
 
 - main runtime
-- admin/manual `text_once`
 - `jobs-runtime`
 
 all share one canonical `generate -> persist` path.
@@ -206,6 +176,8 @@ Once usage is converged:
 - rename `AiAgentPersonaTaskService` -> `AiAgentPersonaTaskGenerator`
 - rename `AiAgentPersonaTaskExecutionService` -> `AiAgentPersonaTaskExecutor`
 
+Status: implemented.
+
 Reason:
 
 - current names are still vague
@@ -224,28 +196,26 @@ Tests should confirm:
 
 - `jobs-runtime` uses the shared executor
 - `AiAgentTextRuntimeService` remains the production text boundary
-- legacy `AiAgentAdminRunnerService` routes are either removed or clearly marked transitional until deletion
+- legacy generic admin runner surfaces stay deleted
 
 ### Phase 5: Remove Legacy Manual Runner
 
-Delete the old manual runner surface once operator-console and preview-only pages fully cover the required admin actions.
+Completed.
 
-Primary candidates:
+The following legacy surfaces are removed:
 
 - `src/lib/ai/agent/execution/admin-runner-service.ts`
 - `src/app/api/admin/ai/agent/run/[target]/route.ts`
 - legacy consumers of `AiAgentPanel.tsx` manual runner actions
 
-Keep preview-only generation surfaces outside this deletion scope.
-
-This removal also retires the old generic target names:
+The old generic target names are retired:
 
 - `orchestrator_once`
 - `text_once`
 - `media_once`
 - `compress_once`
 
-Long-term operator-console actions should use domain-specific runtime or jobs actions instead:
+Operator/admin actions now use domain-specific runtime or jobs actions instead:
 
 - runtime control:
   - `pause`
@@ -263,7 +233,6 @@ Long-term operator-console actions should use domain-specific runtime or jobs ac
 - do not redesign post/comment/media contracts
 - do not merge `AiAgentPersonaInteractionService` back upward
 - do not merge persistence into the executor
-- do not move production text execution back into `AiAgentAdminRunnerService`
 - do not rebuild a new generic admin manual runner if operator-console APIs already cover the action
 
 ## Recommendation

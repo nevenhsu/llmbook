@@ -1,12 +1,8 @@
 import {
-  AiAgentMediaJobService,
-  AiAgentPersonaTaskPersistenceService,
+  AiAgentPersonaTaskExecutor,
   type AiAgentTextExecutionPersistedResult,
 } from "@/lib/ai/agent/execution";
-import {
-  AiAgentJobPermanentSkipError,
-  AiAgentPersonaTaskService,
-} from "@/lib/ai/agent/jobs/persona-task-service";
+import { AiAgentJobPermanentSkipError } from "@/lib/ai/agent/execution/persona-task-generator";
 import {
   AiAgentMemoryAdminService,
   type AiAgentMemoryPersistedCompressResponse,
@@ -63,10 +59,9 @@ type JobsRuntimeServiceDeps = {
   runtimeState: AiAgentJobRuntimeStateService;
   taskStore: AiAgentJobTaskStore;
   executeMemoryCompress: (personaId: string) => Promise<AiAgentMemoryPersistedCompressResponse>;
-  executeImageGeneration: (mediaId: string) => Promise<void>;
-  executeTextPersistence: (input: {
+  executeTextTask: (input: {
     jobTaskId: string;
-    personaTaskId: string;
+    taskId: string;
     sourceRuntime: string;
     createdBy?: string | null;
   }) => Promise<AiAgentTextExecutionPersistedResult>;
@@ -114,8 +109,7 @@ export class AiAgentJobsRuntimeService {
     const runtimeState = options?.deps?.runtimeState ?? new AiAgentJobRuntimeStateService();
     const taskStore = options?.deps?.taskStore ?? new SupabaseJobTaskStore();
     const now = options?.deps?.now ?? (() => new Date());
-    const personaTaskService = new AiAgentPersonaTaskService();
-    const personaTaskPersistenceService = new AiAgentPersonaTaskPersistenceService();
+    const executionService = new AiAgentPersonaTaskExecutor();
 
     this.leaseMs = leaseMs;
     this.deps = {
@@ -132,20 +126,11 @@ export class AiAgentJobsRuntimeService {
           }
           return result;
         }),
-      executeImageGeneration:
-        options?.deps?.executeImageGeneration ??
-        (async (mediaId) => {
-          await new AiAgentMediaJobService().rerunJobById(mediaId);
-        }),
-      executeTextPersistence:
-        options?.deps?.executeTextPersistence ??
+      executeTextTask:
+        options?.deps?.executeTextTask ??
         (async (input) => {
-          const generated = await personaTaskService.generateFromTask({
-            personaTaskId: input.personaTaskId,
-            mode: "runtime",
-          });
-          return personaTaskPersistenceService.persistGeneratedResult({
-            generated,
+          return executionService.executeTask({
+            taskId: input.taskId,
             jobTaskId: input.jobTaskId,
             sourceRuntime: input.sourceRuntime,
             createdBy: input.createdBy ?? null,
@@ -228,30 +213,10 @@ export class AiAgentJobsRuntimeService {
         };
       }
 
-      if (claimedTask.jobType === "image_generation") {
-        await this.deps.executeImageGeneration(claimedTask.subjectId);
-        await this.deps.taskStore.completeTask({
-          taskId: claimedTask.id,
-          runtimeKey: claimedTask.runtimeKey,
-          workerId: input.workerId,
-          now: this.deps.now(),
-        });
-
-        return {
-          mode: "executed",
-          recoveredTimedOut,
-          claimedTaskId: claimedTask.id,
-          jobType: claimedTask.jobType,
-          summary: `Regenerated media ${claimedTask.subjectId} through jobs-runtime.`,
-          memoryResult: null,
-          textResult: null,
-        };
-      }
-
       if (claimedTask.jobType === "public_task" || claimedTask.jobType === "notification_task") {
-        const textResult = await this.deps.executeTextPersistence({
+        const textResult = await this.deps.executeTextTask({
           jobTaskId: claimedTask.id,
-          personaTaskId: claimedTask.subjectId,
+          taskId: claimedTask.subjectId,
           sourceRuntime: "jobs_runtime",
           createdBy: claimedTask.requestedBy,
         });

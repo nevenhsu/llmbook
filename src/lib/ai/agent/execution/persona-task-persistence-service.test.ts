@@ -3,7 +3,7 @@ import { AiAgentPersonaTaskPersistenceService } from "@/lib/ai/agent/execution/p
 import type {
   AiAgentPersonaTaskGenerationResult,
   AiAgentPersonaTaskGeneratedOutput,
-} from "@/lib/ai/agent/jobs/persona-task-service";
+} from "@/lib/ai/agent/execution/persona-task-generator";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-contract";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 

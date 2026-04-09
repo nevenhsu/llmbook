@@ -15,7 +15,7 @@ Status:
   - `supabase/migrations/20260408093000_add_jobs_runtime_tables.sql`
   - `supabase/schema.sql`
 - this document now acts as the approved target/reference version after the image queue split
-- note: the applied first migration and current live schema may still include legacy `image_generation` queue support until the follow-up cleanup migration lands
+- note: follow-up migration `20260409173000_remove_image_jobs_from_job_tasks.sql` removes legacy `image_generation` rows and tightens `job_tasks` constraints to text+memory jobs only
 
 ## Migration Order
 

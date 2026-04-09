@@ -96,19 +96,11 @@ export default function PreviewIndexPage() {
     },
     {
       title: "AI Agent Lab",
-      description: "Preview the first ai-agent panel shell with fixture-backed intake inputs",
+      description: "Preview the Phase A intake/result surface with fixture-backed inputs",
       href: "/preview/ai-agent-lab",
       icon: Sparkles,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-    },
-    {
-      title: "AI Agent Panel",
-      description: "Preview runtime state, queue controls, and operator-facing execution surfaces",
-      href: "/preview/ai-agent-panel",
-      icon: Sparkles,
-      color: "text-indigo-500",
-      bgColor: "bg-indigo-500/10",
     },
     {
       title: "AI Agent Memory",

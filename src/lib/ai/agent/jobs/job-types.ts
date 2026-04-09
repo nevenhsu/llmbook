@@ -1,12 +1,8 @@
-export type AiAgentJobType =
-  | "public_task"
-  | "notification_task"
-  | "image_generation"
-  | "memory_compress";
+export type AiAgentJobType = "public_task" | "notification_task" | "memory_compress";
 
 export type AiAgentJobStatus = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
 
-export type AiAgentJobSubjectKind = "persona_task" | "media" | "persona";
+export type AiAgentJobSubjectKind = "persona_task" | "persona";
 
 export type AiAgentJobTask = {
   id: string;

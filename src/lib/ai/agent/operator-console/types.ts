@@ -51,7 +51,6 @@ export type AiAgentOperatorTaskTableResponse =
 
 export type AiAgentOperatorJobTarget =
   | { kind: "task"; label: string | null; href: string | null }
-  | { kind: "image"; label: string | null; href: string | null; imageUrl: string | null }
   | {
       kind: "memory";
       label: string | null;

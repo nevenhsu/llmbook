@@ -25,7 +25,7 @@
 - 當使用者明確把 persona-task execution mode 收斂成 `runtime/test` 時，就不要再讓 `first_run/rerun` 滲進生成階段；prompt 文案保持 mode-agnostic，只有 `test` 不更新 Supabase，而 runtime persistence 才決定 insert 或 overwrite。
 - 當 mode 或流程語意已經改掉時，對外 persistence API 名稱也要同步收斂；若 runtime 已不再有 `rerun` mode，就不要讓 method/result/dependency 名稱殘留 `rerun`，應改成仍然正確描述現況的 `overwrite` 或更中性的語意。
 - 若 `preview` 與 `test` 的邏輯都只是 shared generation 且不寫 Supabase，就不要維持兩個 mode 名稱；統一成單一 no-write mode，讓 mode 只保留真正有流程差異的分支，例如 `runtime | preview`。
-- 若目標是讓多個 runtime 共用 post/comment LLM flow，`AiAgentPersonaTaskService` 應只負責 task context + shared generation + parse；insert/overwrite 這類 Supabase persistence 要移到獨立的 persistence service，避免 service 名稱與責任再次混濁。
+- 若目標是讓多個 runtime 共用 post/comment LLM flow，generation module 應明確命名成 `AiAgentPersonaTaskGenerator` 並只負責 task context + shared generation + parse；insert/overwrite 這類 Supabase persistence 要移到獨立的 persistence service，避免 service 名稱與責任再次混濁。
 - 不要把「哪個 runtime 在跑」直接等同於「一定 insert 或一定 overwrite」；shared persistence 應在真正寫 Supabase 前，根據 `persona_tasks.result_id/result_type` 判斷是 first-write insert 還是 overwrite + history。
 - 當使用者指出某個 shared history/persistence 模組未來也要服務非 runtime 寫入（例如 user 手動編輯 post/comment）時，文檔與命名都必須同步提升到更通用的層級；不要把 `content_edit_history` 描述得像是只屬於 jobs-runtime 或 AI runtime。
 - 不要因為 backend 已有 history table，就自動把 history viewer/UI 納入 operator-console scope；若使用者明確說不做 `previous_snapshot` 或 `View History`，要把它標成 out-of-scope，而不是保留成開放項。
@@ -47,6 +47,8 @@
 - 當使用者進一步收斂 `Image` 不該留在 `/admin/ai/agent-panel` 時，方案文檔也要同步把它從 operator-console 最終 tab order 拿掉，並改成獨立 admin image queue page；不要只改 runtime 邊界卻留下過時的頁面資訊架構。
 - 若共享 execution 架構已引入 `persona_task` store，目標序列要收斂成 `executor -> store -> generator -> context builder -> interaction -> persistence`；不要再把 task loading 混回 generator 的責任敘述裡。
 - 說明 overwrite persistence 時，要區分「標記 task 完成」與「改變 persisted target pointer」：overwrite 通常不會改變 `persona_tasks.result_id/result_type` 指向，只是 canonical completion update 會把同樣的 pointer 再寫一次，並追加 history。
+- 在這個專案的 active-dev 階段，不要為已決定退場的 flow 留 compatibility branch。若 `Image` 已從 `jobs-runtime` 設計上移除，就應一起移除 `image_generation` 的 UI 分支、queue type、jobs-runtime dispatch 與 schema contract，而不是用「legacy row 仍可能存在」當理由保留舊邏輯。
+- 當使用者要求「都不要兼容舊邏輯」時，要連同舊 route、舊 preview page、舊測試、舊 helper 模組一起移除；不要只刪主 service，卻把 `preview` 索引入口、panel-only helper、或 `*_once` 名詞殘留在 codebase。
 - Keep one Phase A source of truth only: `ai_opps -> opportunities -> public candidates / notification direct tasking -> persona_tasks`.
 - Remove old flow code, tests, and docs in the same pass; execute-path migration alone is not enough.
 - Keep preview, admin, and runtime on the same stage contract even when preview stays fixture-backed.

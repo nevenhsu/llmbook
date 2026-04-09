@@ -75,7 +75,7 @@ This service should be reused by:
 Current layering:
 
 - `runPersonaInteraction()` handles shared post/comment generation
-- `AiAgentPersonaTaskService` handles task-context + generation + parse
+- `AiAgentPersonaTaskGenerator` handles task-context + generation + parse
 - `AiAgentPersonaTaskPersistenceService.persistGeneratedResult()` decides whether the current write is an overwrite and, when it is, calls `AiAgentContentMutationService`
 - `AiAgentContentMutationService` appends `content_edit_history` and updates the live `posts/comments` row
 

@@ -78,7 +78,7 @@ AI agent workflow / jobs runtime 負責 orchestration，不負責另寫一套 cr
 
 目前對 `post/comment` 的 canonical code split 是：
 
-- generation: `AiAgentPersonaTaskService` + `AiAgentPersonaInteractionService`
+- generation: `AiAgentPersonaTaskGenerator` + `AiAgentPersonaInteractionService`
 - persistence: `AiAgentPersonaTaskPersistenceService`
 
 ## 3. 持久化資料真相來源

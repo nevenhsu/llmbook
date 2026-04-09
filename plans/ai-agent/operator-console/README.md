@@ -23,7 +23,7 @@ Refactor `/admin/ai/agent-panel` into a client-loaded operator console for Phase
 - Post/comment rewrite history must be modeled separately from queue/runtime control and reused by both manual jobs and future text-runtime mutations.
 - Post/comment generation now has one shared execution core in `AiAgentPersonaInteractionService` (exported as `runPersonaInteraction()` for existing callers).
 - Non-writing execution is unified as `preview`; persona-task generation modes are `runtime | preview`.
-- `AiAgentPersonaTaskService` owns task-context construction, shared generation, and parse only.
+- `AiAgentPersonaTaskGenerator` owns task-context construction, shared generation, and parse only.
 - `AiAgentPersonaTaskPersistenceService` owns runtime text persistence:
   - `persistGeneratedResult()` as the shared write path
   - decides insert vs overwrite from persisted task metadata
@@ -53,16 +53,17 @@ Implemented backend/runtime pieces:
 - shared post/comment overwrite history via `AiAgentContentMutationService`
 - shared post/comment generation core via `AiAgentPersonaInteractionService`
 - shared task-driven `post/comment` context builder via `AiAgentPersonaTaskContextBuilder`
-- generation-only `AiAgentPersonaTaskService`
-- shared generate+persist execution via `AiAgentPersonaTaskExecutionService`
-- main text runtime entry moved to `AiAgentTextRuntimeService`, with `AiAgentAdminRunnerService` reduced to the admin/manual wrapper
+- generation-only `AiAgentPersonaTaskGenerator`
+- shared generate+persist execution via `AiAgentPersonaTaskExecutor`
+- main text runtime entry moved to `AiAgentTextRuntimeService`
+- removed the legacy generic admin runner surface (`AiAgentAdminRunnerService`, `/api/admin/ai/agent/run/[target]`, `orchestrator_once / text_once / media_once / compress_once`)
 - jobs-runtime text execution rewired to the same shared `generate -> persist` path
 
-Approved next UI split, not implemented yet:
+Implemented UI split:
 
-- remove `Image` from `/admin/ai/agent-panel`
-- move image/media queue handling to `/admin/ai/image-queue`
-- keep image rerun on the dedicated media queue instead of `jobs-runtime`
+- removed `Image` from `/admin/ai/agent-panel`
+- moved image/media queue handling to `/admin/ai/image-queue`
+- image rerun stays on the dedicated media queue instead of `jobs-runtime`
 
 Still pending:
 
@@ -72,11 +73,12 @@ Still pending:
 
 ### Phase 1: Operator Console UI Shell
 
-Status: implemented, with one approved follow-up split
+Status: implemented
 
-- Replaced the current mixed panel layout with the target operator-console shell, but the approved removal of the `Image` tab still needs implementation.
+- Replaced the current mixed panel layout with the target operator-console shell.
 - Removed JSON-heavy debug surfaces from `/admin/ai/agent-panel`.
 - Added shared Public/Notification table UI and supporting primitives under `src/components/ui/`.
+- Moved image/media queue handling off the panel and onto `/admin/ai/image-queue`.
 
 ### Phase 2: Main Runtime Control Cleanup
 
@@ -108,10 +110,10 @@ Status: backend implemented for overwrite flows
 
 ### Phase 5: Action Integration
 
-Status: implemented for first operator-console delivery, with image split pending
+Status: implemented for first operator-console delivery
 
 - Wired `Redo task` and persona memory actions into `jobs-runtime`.
-- Approved image rerun to move onto the dedicated `/admin/ai/image-queue` surface and media queue flow instead of `jobs-runtime`.
+- Moved image rerun onto the dedicated `/admin/ai/image-queue` surface and media queue flow instead of `jobs-runtime`.
 - Added first-pass empty/loading/error states and operator copy.
 
 ## Non-Goals

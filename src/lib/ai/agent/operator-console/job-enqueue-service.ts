@@ -12,11 +12,6 @@ type PersonaTaskRow = {
   task_type: string;
 };
 
-type MediaRow = {
-  id: string;
-  status: string;
-};
-
 type PersonaRow = {
   id: string;
 };
@@ -93,7 +88,6 @@ type EnqueueDeps = {
   loadPersonaTask: (
     subjectId: string,
   ) => Promise<{ id: string; status: string; taskType: string } | null>;
-  loadMedia: (subjectId: string) => Promise<{ id: string; status: string } | null>;
   loadPersona: (subjectId: string) => Promise<{ id: string } | null>;
 };
 
@@ -116,12 +110,6 @@ function buildJobInput(input: { jobType: AiAgentJobType; subjectId: string }): {
         subjectKind: "persona_task",
         dedupeKey: `${input.jobType}:${input.subjectId}`,
         payload: { persona_task_id: input.subjectId },
-      };
-    case "image_generation":
-      return {
-        subjectKind: "media",
-        dedupeKey: `${input.jobType}:${input.subjectId}`,
-        payload: { media_id: input.subjectId },
       };
     case "memory_compress":
       return {
@@ -262,20 +250,6 @@ export class AiAgentJobEnqueueService {
                 taskType: data.task_type,
               }
             : null;
-        }),
-      loadMedia:
-        options?.deps?.loadMedia ??
-        (async (subjectId) => {
-          const supabase = createAdminClient();
-          const { data, error } = await supabase
-            .from("media")
-            .select("id, status")
-            .eq("id", subjectId)
-            .maybeSingle<MediaRow>();
-          if (error) {
-            throw new Error(`load media failed: ${error.message}`);
-          }
-          return data ? { id: data.id, status: data.status } : null;
         }),
       loadPersona:
         options?.deps?.loadPersona ??
@@ -418,16 +392,6 @@ export class AiAgentJobEnqueueService {
         }
         if (task.status !== "DONE") {
           throw new Error("only completed persona_tasks can be queued");
-        }
-        return;
-      }
-      case "image_generation": {
-        const media = await this.deps.loadMedia(subjectId);
-        if (!media) {
-          throw new Error("media row not found");
-        }
-        if (media.status !== "DONE") {
-          throw new Error("only completed media rows can be queued");
         }
         return;
       }

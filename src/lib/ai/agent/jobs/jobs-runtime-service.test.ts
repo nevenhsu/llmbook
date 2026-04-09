@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { AiAgentJobsRuntimeService } from "@/lib/ai/agent/jobs/jobs-runtime-service";
-import { AiAgentJobPermanentSkipError } from "@/lib/ai/agent/jobs/persona-task-service";
+import { AiAgentJobPermanentSkipError } from "@/lib/ai/agent/execution/persona-task-generator";
 import type { AiAgentJobRuntimeStateSnapshot, AiAgentJobTask } from "@/lib/ai/agent/jobs/job-types";
 
 function buildRuntimeStateSnapshot(
@@ -144,7 +144,7 @@ describe("AiAgentJobsRuntimeService", () => {
         subjectId: "task-3",
       }),
     );
-    const executeTextPersistence = vi.fn(async () => ({
+    const executeTextTask = vi.fn(async () => ({
       taskId: "task-3",
       persistedTable: "comments" as const,
       persistedId: "comment-9",
@@ -184,7 +184,7 @@ describe("AiAgentJobsRuntimeService", () => {
           updateHeartbeat: vi.fn(),
           getById: vi.fn(),
         },
-        executeTextPersistence,
+        executeTextTask,
         beginLeaseHeartbeat: () => () => undefined,
       },
     });
@@ -200,9 +200,9 @@ describe("AiAgentJobsRuntimeService", () => {
     }
     expect(result.jobType).toBe("public_task");
     expect(result.summary).toBe("Overwrote comment comment-9 from persona_task task-3.");
-    expect(executeTextPersistence).toHaveBeenCalledWith({
+    expect(executeTextTask).toHaveBeenCalledWith({
       jobTaskId: "job-1",
-      personaTaskId: "task-3",
+      taskId: "task-3",
       sourceRuntime: "jobs_runtime",
       createdBy: "admin-1",
     });
@@ -218,7 +218,7 @@ describe("AiAgentJobsRuntimeService", () => {
         subjectId: "task-4",
       }),
     );
-    const executeTextPersistence = vi.fn(async () => ({
+    const executeTextTask = vi.fn(async () => ({
       taskId: "task-4",
       persistedTable: "comments" as const,
       persistedId: "comment-new-4",
@@ -258,7 +258,7 @@ describe("AiAgentJobsRuntimeService", () => {
           updateHeartbeat: vi.fn(),
           getById: vi.fn(),
         },
-        executeTextPersistence,
+        executeTextTask,
         beginLeaseHeartbeat: () => () => undefined,
       },
     });
@@ -274,76 +274,13 @@ describe("AiAgentJobsRuntimeService", () => {
     }
     expect(result.jobType).toBe("notification_task");
     expect(result.summary).toBe("Persisted new comment comment-new-4 from persona_task task-4.");
-    expect(executeTextPersistence).toHaveBeenCalledWith({
+    expect(executeTextTask).toHaveBeenCalledWith({
       jobTaskId: "job-1",
-      personaTaskId: "task-4",
+      taskId: "task-4",
       sourceRuntime: "jobs_runtime",
       createdBy: "admin-1",
     });
     expect(completeTask).toHaveBeenCalled();
-  });
-
-  it("fails image_generation jobs when the image executor throws", async () => {
-    const failTask = vi.fn(async () =>
-      buildJobTask({
-        status: "FAILED",
-        jobType: "image_generation",
-        subjectKind: "media",
-        subjectId: "media-1",
-        errorMessage: "boom",
-      }),
-    );
-    const executeImageGeneration = vi.fn(async () => {
-      throw new Error("boom");
-    });
-
-    const service = new AiAgentJobsRuntimeService({
-      deps: {
-        runtimeState: {
-          runtimeKey: "local",
-          touchRuntimeAppHeartbeat: async () => buildRuntimeStateSnapshot(),
-          claimLease: async () => ({
-            mode: "claimed" as const,
-            summary: "claimed",
-            runtimeState: buildRuntimeStateSnapshot({ statusLabel: "Running" }),
-          }),
-          releaseLease: async () => ({
-            mode: "released" as const,
-            summary: "released",
-            runtimeState: buildRuntimeStateSnapshot(),
-          }),
-        } as any,
-        taskStore: {
-          recoverTimedOut: async () => [],
-          claimOldestPending: async () =>
-            buildJobTask({
-              jobType: "image_generation",
-              subjectKind: "media",
-              subjectId: "media-1",
-            }),
-          completeTask: vi.fn(),
-          failTask,
-          skipTask: vi.fn(),
-          updateHeartbeat: vi.fn(),
-          getById: vi.fn(),
-        },
-        executeImageGeneration,
-        beginLeaseHeartbeat: () => () => undefined,
-      },
-    });
-
-    const result = await service.runNext({
-      workerId: "jobs-runtime:test",
-      heartbeatMs: 1_000,
-    });
-
-    expect(result.mode).toBe("failed");
-    if (result.mode !== "failed") {
-      throw new Error("expected failed result");
-    }
-    expect(result.jobType).toBe("image_generation");
-    expect(result.errorMessage).toBe("boom");
-    expect(failTask).toHaveBeenCalled();
   });
 
   it("skips text jobs when shared persona-task persistence is permanently blocked", async () => {
@@ -386,7 +323,7 @@ describe("AiAgentJobsRuntimeService", () => {
           updateHeartbeat: vi.fn(),
           getById: vi.fn(),
         },
-        executeTextPersistence: async () => {
+        executeTextTask: async () => {
           throw new AiAgentJobPermanentSkipError(
             "persona_task cannot be loaded for shared persistence",
           );

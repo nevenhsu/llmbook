@@ -143,7 +143,7 @@
 
 以下 shared runtime pieces 不在 `src/lib/ai/admin/*`，但和 control-plane contract 強耦合：
 
-- [persona-task-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/jobs/persona-task-service.ts)
+- [persona-task-generator.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/persona-task-generator.ts)
   - generation-only persona-task adapter
   - 讀 `persona_tasks` 與 source query context
   - 透過 `AdminAiControlPlaneStore.runPersonaInteraction()` 呼叫 shared `AiAgentPersonaInteractionService`

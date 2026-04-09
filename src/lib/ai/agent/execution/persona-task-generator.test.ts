@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { AiAgentPersonaTaskService } from "@/lib/ai/agent/jobs/persona-task-service";
+import { AiAgentPersonaTaskGenerator } from "@/lib/ai/agent/execution/persona-task-generator";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 
@@ -53,7 +53,7 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
   };
 }
 
-describe("AiAgentPersonaTaskService", () => {
+describe("AiAgentPersonaTaskGenerator", () => {
   it("builds shared generation context without passing mode into prompt construction", async () => {
     const buildPromptContext = vi.fn(async (input: { task: AiAgentRecentTaskSnapshot }) => {
       void input.task;
@@ -63,14 +63,8 @@ describe("AiAgentPersonaTaskService", () => {
       };
     });
 
-    const service = new AiAgentPersonaTaskService({
+    const service = new AiAgentPersonaTaskGenerator({
       deps: {
-        loadTaskById: async () =>
-          buildTask({
-            status: "PENDING",
-            resultId: null,
-            resultType: null,
-          }),
         buildPromptContext,
         loadPreferredTextModel: async () => ({
           modelId: "model-1",
@@ -82,7 +76,11 @@ describe("AiAgentPersonaTaskService", () => {
     });
 
     const result = await service.generateFromTask({
-      personaTaskId: "task-1",
+      task: buildTask({
+        status: "PENDING",
+        resultId: null,
+        resultType: null,
+      }),
       mode: "runtime",
     });
 
@@ -99,14 +97,8 @@ describe("AiAgentPersonaTaskService", () => {
   });
 
   it("generates output in runtime mode without requiring persisted result metadata before generation", async () => {
-    const service = new AiAgentPersonaTaskService({
+    const service = new AiAgentPersonaTaskGenerator({
       deps: {
-        loadTaskById: async () =>
-          buildTask({
-            status: "PENDING",
-            resultId: null,
-            resultType: null,
-          }),
         buildPromptContext: async () => ({
           taskType: "comment",
           taskContext: "Generate the first publishable comment.",
@@ -124,7 +116,11 @@ describe("AiAgentPersonaTaskService", () => {
     });
 
     const result = await service.generateFromTask({
-      personaTaskId: "task-1",
+      task: buildTask({
+        status: "PENDING",
+        resultId: null,
+        resultType: null,
+      }),
       mode: "runtime",
     });
 
@@ -140,14 +136,8 @@ describe("AiAgentPersonaTaskService", () => {
       buildPreviewResult('{"markdown":"regenerated comment"}'),
     );
 
-    const service = new AiAgentPersonaTaskService({
+    const service = new AiAgentPersonaTaskGenerator({
       deps: {
-        loadTaskById: async () =>
-          buildTask({
-            status: "FAILED",
-            resultId: null,
-            resultType: null,
-          }),
         buildPromptContext: async () => ({
           taskType: "comment",
           taskContext: "Regenerate the publishable comment response.",
@@ -162,7 +152,11 @@ describe("AiAgentPersonaTaskService", () => {
     });
 
     const result = await service.generateFromTask({
-      personaTaskId: "task-1",
+      task: buildTask({
+        status: "FAILED",
+        resultId: null,
+        resultType: null,
+      }),
       mode: "runtime",
     });
 
@@ -178,9 +172,8 @@ describe("AiAgentPersonaTaskService", () => {
       buildPreviewResult('{"markdown":"regenerated comment"}'),
     );
 
-    const service = new AiAgentPersonaTaskService({
+    const service = new AiAgentPersonaTaskGenerator({
       deps: {
-        loadTaskById: async () => buildTask(),
         buildPromptContext: async () => ({
           taskType: "comment",
           taskContext: "Generate a reply inside the active thread below.",
@@ -197,7 +190,7 @@ describe("AiAgentPersonaTaskService", () => {
     });
 
     await service.generateFromTask({
-      personaTaskId: "task-1",
+      task: buildTask(),
       mode: "runtime",
     });
 
@@ -210,14 +203,8 @@ describe("AiAgentPersonaTaskService", () => {
   });
 
   it("defaults generation to test mode when no runtime mode is requested", async () => {
-    const service = new AiAgentPersonaTaskService({
+    const service = new AiAgentPersonaTaskGenerator({
       deps: {
-        loadTaskById: async () =>
-          buildTask({
-            status: "PENDING",
-            resultId: null,
-            resultType: null,
-          }),
         buildPromptContext: async () => ({
           taskType: "comment",
           taskContext: "Generate the first publishable comment.",
@@ -235,7 +222,11 @@ describe("AiAgentPersonaTaskService", () => {
     });
 
     const result = await service.generateFromTask({
-      personaTaskId: "task-1",
+      task: buildTask({
+        status: "PENDING",
+        resultId: null,
+        resultType: null,
+      }),
     });
 
     expect(result.mode).toBe("preview");

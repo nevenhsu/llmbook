@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AiAgentPersonaTaskGenerationResult } from "@/lib/ai/agent/jobs/persona-task-service";
+import type { AiAgentPersonaTaskGenerationResult } from "@/lib/ai/agent/execution/persona-task-generator";
 import {
-  AiAgentPersonaTaskExecutionService,
+  AiAgentPersonaTaskExecutor,
   type AiAgentTextExecutionPersistedResult,
-} from "@/lib/ai/agent/execution/persona-task-execution-service";
+} from "@/lib/ai/agent/execution/persona-task-executor";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 
-describe("AiAgentPersonaTaskExecutionService", () => {
+describe("AiAgentPersonaTaskExecutor", () => {
   it("generates and persists one persona_task through the shared text path", async () => {
     const task = buildMockAiAgentOverviewSnapshot().recentTasks[0];
     const generated = {
@@ -56,11 +56,13 @@ describe("AiAgentPersonaTaskExecutionService", () => {
         resultType: "comment",
       },
     } satisfies AiAgentTextExecutionPersistedResult;
+    const loadTaskById = vi.fn(async () => task);
     const generateTaskContent = vi.fn(async () => generated);
     const persistGeneratedTaskResult = vi.fn(async () => persistResult);
 
-    const service = new AiAgentPersonaTaskExecutionService({
+    const service = new AiAgentPersonaTaskExecutor({
       deps: {
+        loadTaskById,
         generateTaskContent,
         persistGeneratedTaskResult,
       },
@@ -71,7 +73,11 @@ describe("AiAgentPersonaTaskExecutionService", () => {
       sourceRuntime: "text_runtime",
     });
 
-    expect(generateTaskContent).toHaveBeenCalledWith(task.id);
+    expect(loadTaskById).toHaveBeenCalledWith(task.id);
+    expect(generateTaskContent).toHaveBeenCalledWith({
+      task,
+      mode: "runtime",
+    });
     expect(persistGeneratedTaskResult).toHaveBeenCalledWith({
       generated,
       sourceRuntime: "text_runtime",

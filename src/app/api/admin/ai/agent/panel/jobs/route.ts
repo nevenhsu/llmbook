@@ -6,10 +6,7 @@ import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
 import { parsePositiveInt } from "@/app/api/admin/ai/agent/panel/_shared";
 
 function parseJobType(value: unknown): AiAgentJobType | null {
-  return value === "public_task" ||
-    value === "notification_task" ||
-    value === "image_generation" ||
-    value === "memory_compress"
+  return value === "public_task" || value === "notification_task" || value === "memory_compress"
     ? value
     : null;
 }

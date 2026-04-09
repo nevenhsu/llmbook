@@ -75,7 +75,7 @@ Persistence is shared:
 
 Important boundary:
 
-- `AiAgentPersonaTaskService` is generation-only
+- `AiAgentPersonaTaskGenerator` is generation-only
 - `AiAgentPersonaTaskPersistenceService` owns Supabase writes
 - notification text generation reuses the shared comment-generation path
 

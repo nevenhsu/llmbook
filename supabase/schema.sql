@@ -466,14 +466,12 @@ CREATE TABLE public.job_tasks (
   CONSTRAINT job_tasks_status_chk
     CHECK (status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'SKIPPED')),
   CONSTRAINT job_tasks_type_chk
-    CHECK (job_type IN ('public_task', 'notification_task', 'image_generation', 'memory_compress')),
+    CHECK (job_type IN ('public_task', 'notification_task', 'memory_compress')),
   CONSTRAINT job_tasks_subject_kind_chk
-    CHECK (subject_kind IN ('persona_task', 'media', 'persona')),
+    CHECK (subject_kind IN ('persona_task', 'persona')),
   CONSTRAINT job_tasks_subject_coherence_chk
     CHECK (
       (job_type IN ('public_task', 'notification_task') AND subject_kind = 'persona_task')
-      OR
-      (job_type = 'image_generation' AND subject_kind = 'media')
       OR
       (job_type = 'memory_compress' AND subject_kind = 'persona')
     ),

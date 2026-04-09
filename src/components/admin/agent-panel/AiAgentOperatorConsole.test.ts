@@ -90,7 +90,7 @@ describe("AiAgentOperatorConsole", () => {
             summary: { active: 1, terminal: 1, total: 2 },
             page: 1,
             pageSize: 10,
-            totalItems: 3,
+            totalItems: 2,
             totalPages: 1,
             fetchedAt: "2026-04-08T12:00:00.000Z",
             rows: [
@@ -125,23 +125,6 @@ describe("AiAgentOperatorConsole", () => {
                 errorMessage: "provider timeout",
                 canClone: true,
                 canRetry: true,
-              },
-              {
-                id: "job-3",
-                jobType: "image_generation",
-                subjectId: "media-3",
-                status: "DONE",
-                target: {
-                  kind: "image",
-                  label: "https://cdn.example.com/media-3.png",
-                  href: "https://cdn.example.com/media-3.png",
-                  imageUrl: "https://cdn.example.com/media-3.png",
-                },
-                finishedAt: "2026-04-08T11:40:00.000Z",
-                createdAt: "2026-04-08T11:35:00.000Z",
-                errorMessage: null,
-                canClone: true,
-                canRetry: false,
               },
             ],
           }),
@@ -200,32 +183,6 @@ describe("AiAgentOperatorConsole", () => {
                 latestMemoryUpdatedAt: "2026-04-08T11:30:00.000Z",
                 lastCompressedAt: null,
                 priorityScore: 7,
-              },
-            ],
-          }),
-          headers: new Headers({ "Content-Type": "application/json" }),
-        };
-      }
-
-      if (url.startsWith("/api/admin/ai/agent/panel/images?")) {
-        return {
-          ok: true,
-          json: async () => ({
-            summary: { active: 0, terminal: 1, total: 1 },
-            page: 1,
-            pageSize: 10,
-            totalItems: 1,
-            totalPages: 1,
-            fetchedAt: "2026-04-08T12:00:00.000Z",
-            rows: [
-              {
-                id: "media-1",
-                persona: { id: "persona-1", username: "ai_orchid", displayName: "Orchid" },
-                status: "DONE",
-                imageUrl: "https://cdn.example.com/media-1.png",
-                imagePrompt: "An editorial illustration about runtime queues.",
-                createdAt: "2026-04-08T11:30:00.000Z",
-                canRedo: true,
               },
             ],
           }),
@@ -295,6 +252,10 @@ describe("AiAgentOperatorConsole", () => {
     expect(container.textContent).toContain("Queue Tasks");
     expect(container.textContent).toContain("12");
     expect(container.textContent).toContain("Start");
+    const imageTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Image",
+    );
+    expect(imageTab).toBeUndefined();
 
     const jobsTab = Array.from(container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Jobs"),
@@ -312,15 +273,8 @@ describe("AiAgentOperatorConsole", () => {
     const failedStatusMeta = container.querySelector('[data-testid="job-status-meta-job-2"]');
     expect(failedStatusMeta?.className).toContain("text-error");
 
-    const doneStatusMeta = container.querySelector('[data-testid="job-status-meta-job-3"]');
-    expect(doneStatusMeta?.className).toContain("text-success");
-
     const failedErrorCell = container.querySelector('[data-testid="job-error-job-2"]');
     expect(failedErrorCell?.className).toContain("text-error");
-
-    const doneErrorCell = container.querySelector('[data-testid="job-error-job-3"]');
-    expect(doneErrorCell?.textContent).toBe("-");
-    expect(doneErrorCell?.className).toContain("text-base-content/50");
 
     const jobsPauseButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Pause",
@@ -337,10 +291,9 @@ describe("AiAgentOperatorConsole", () => {
     const cloneButtons = Array.from(container.querySelectorAll("button")).filter(
       (button) => button.textContent?.trim() === "Clone",
     );
-    expect(cloneButtons).toHaveLength(3);
+    expect(cloneButtons).toHaveLength(2);
     expect(cloneButtons[0]?.hasAttribute("disabled")).toBe(true);
     expect(cloneButtons[1]?.hasAttribute("disabled")).toBe(false);
-    expect(cloneButtons[2]?.hasAttribute("disabled")).toBe(false);
 
     await act(async () => {
       cloneButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -357,10 +310,9 @@ describe("AiAgentOperatorConsole", () => {
     const retryButtons = Array.from(container.querySelectorAll("button")).filter(
       (button) => button.textContent?.trim() === "Retry",
     );
-    expect(retryButtons).toHaveLength(3);
+    expect(retryButtons).toHaveLength(2);
     expect(retryButtons[0]?.hasAttribute("disabled")).toBe(true);
     expect(retryButtons[1]?.hasAttribute("disabled")).toBe(false);
-    expect(retryButtons[2]?.hasAttribute("disabled")).toBe(true);
 
     await act(async () => {
       retryButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -419,24 +371,5 @@ describe("AiAgentOperatorConsole", () => {
         body: JSON.stringify({ jobType: "memory_compress", subjectId: "persona-1" }),
       }),
     );
-  });
-
-  it("renders an inline thumbnail for image rows with an image URL", async () => {
-    await act(async () => {
-      root.render(React.createElement(AiAgentOperatorConsole));
-    });
-
-    const imageTab = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Image"),
-    );
-    await act(async () => {
-      imageTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const thumbnail = container.querySelector(
-      'img[alt="Image preview for https://cdn.example.com/media-1.png"]',
-    );
-
-    expect(thumbnail).not.toBeNull();
   });
 });

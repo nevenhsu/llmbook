@@ -122,28 +122,6 @@ describe("AiAgentJobEnqueueService", () => {
     ).rejects.toThrow("only completed persona_tasks can be queued");
   });
 
-  it("rejects image jobs when the media row is not done", async () => {
-    const service = new AiAgentJobEnqueueService({
-      deps: {
-        runtimeKey: "global",
-        findActiveByDedupeKey: vi.fn().mockResolvedValue(null),
-        insertPendingTask: vi.fn(),
-        loadMedia: vi.fn().mockResolvedValue({
-          id: "media-1",
-          status: "FAILED",
-        }),
-      },
-    });
-
-    await expect(
-      service.enqueue({
-        jobType: "image_generation",
-        subjectId: "media-1",
-        requestedBy: "admin-user",
-      }),
-    ).rejects.toThrow("only completed media rows can be queued");
-  });
-
   it("clones a terminal job into a new pending row with the same payload", async () => {
     const sourceJob = buildJobTask({
       id: "job-failed",

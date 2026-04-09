@@ -3,7 +3,7 @@ import {
   AiAgentTextRuntimeGuardError,
   AiAgentTextRuntimeService,
 } from "@/lib/ai/agent/execution/text-runtime-service";
-import type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-execution-service";
+import type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-executor";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 
 describe("AiAgentTextRuntimeService", () => {
@@ -54,7 +54,7 @@ describe("AiAgentTextRuntimeService", () => {
     const result = await service.executeTask(task.id);
 
     expect(executePersistedTask).toHaveBeenCalledWith({
-      taskId: task.id,
+      task,
       sourceRuntime: "text_runtime",
     });
     expect(result).toEqual(persisted);
