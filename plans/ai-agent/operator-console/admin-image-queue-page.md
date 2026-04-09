@@ -1,5 +1,7 @@
 # Admin Image Queue Page Design
 
+> [HISTORICAL] This page-design doc records completed image-queue planning work. Current source of truth: [README.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/README.md) and the implemented `/admin/ai/image-queue` route.
+
 ## Scope
 
 This document defines the dedicated admin page for the AI image/media queue.

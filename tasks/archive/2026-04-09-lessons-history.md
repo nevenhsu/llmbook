@@ -1,0 +1,68 @@
+# Lessons Learned
+
+## AI Agent Runtime
+
+- Once planning audit owns title-level routing and novelty checks, do not leak planning-only control flags such as `requires_planning_regen` into body-stage audit; keep each stage responsible only for fields it can actually repair.
+- When the user manually reorganizes a plan file under `/plans`, immediately sync all task-tracking/doc references to the new path instead of leaving stale links to the previous location.
+- 當使用者要先「討論 UI / 架構」時，先進入設計對話模式：先給現況判讀、選項與取捨，再一次只問一個關鍵問題；不要把對話過早推成 implementation scope confirmation。
+- 當使用者選 `Operator Console + Hard Split` 時，不要再用「保留現有 panel 大部分邏輯」當前提；應明確區分要保留的是資料/API domain 邏輯，而不是既有頁面狀態機、JSON debug UI、或舊資訊架構。
+- 當使用者明確指定「進頁不需要 server snapshot」時，panel 設計必須轉成 client-loaded operator console；不要再把 SSR snapshot/read-model preload 當成預設。
+- 當使用者要求新增獨立 runtime 處理 admin 指定 docs 時，先從 queue ownership、worker isolation、resource/quota 邊界、與既有 AI runtime 衝突面拆方案，再談 UI 與實作。
+- 名稱必須反映實際職責；若功能是在既有 persona/media 輸出上做 post/comment 內容更新，就不要用 `docs` 這種會誤導成文件系統或知識庫處理的名稱。
+- 若同一個 admin 手動 runtime 之後會同時承接內容改寫與 persona memory 任務，命名不能再侷限於 `edit`；應提升到 `manual jobs` / `admin tasks` 這種覆蓋多任務型別的語意層級。
+- `Memory` tab 可以以 `persona_memories` 為資料來源，但執行動作應排進共享 manual-jobs queue；memory compressor 的 job key 應以 `persona_id` 為主，而不是綁單一 memory row id。
+- `content_edit_history` 應保持精簡；若 `edit_kind` 與 `after_snapshot` 對當前 operator/audit 需求沒有新增訊息，就不要保留。被覆寫前的內容欄位應用更直白名稱，例如 `previous_snapshot`。
+- 若某欄位明確決定列表優先順序，例如 `last_compressed_at`，應把它當作 query-level ordering 規則寫進設計，而不是只描述成前端顯示排序。表格中的 persona 呈現則優先重用既有 persona UI，而不是再定義一套新 cell 規格。
+- `manual_job_tasks` 的 dedupe 只應阻擋 active rows（如 `PENDING` / `RUNNING`），不能阻擋終態後的 redo。`Jobs` tab 若要極簡欄位，可把必要狀態收斂進 `Job` cell，而不是強制保留獨立 `Status` / `Requested` / `Source` columns。
+- 若 job queue 已成為所有 admin 手動任務的唯一入口，表名可簡化為 `job_tasks`。`content_edit_history.previous_snapshot` 不應直接關聯 job；應由 history row 以明確 `job_task_id` 或等價來源欄位關聯到 `job_tasks`，而 `previous_snapshot` 只保存被覆寫前的內容。
+- 若 jobs queue 的主用途是定位「本次要處理哪個資源」，優先用單一 `subject_kind/subject_id`，不要同時保留 `source_*` 與 `target_*` 造成語意重複。`job_type` 應描述任務類別本身，而不是把 `redo` 之類的觸發方式硬編進型別名稱。
+- 若 operator 明確要求看 queue 執行狀態，應恢復獨立 `Status` 欄，而不是把狀態塞回 `Job` cell。極簡表格不代表隱藏核心執行狀態。
+- `Jobs` row actions 要分清楚：`Clone` 是建立一筆新的 `job_tasks` row 並沿用同 payload；`Retry` 不是 clone，而是只對有 `error_message` 的終態 row 把同一筆 queue row 重設回 `PENDING`。表格也要直接顯示 `Error` 欄，沒錯誤就顯示 `-`。
+- 當 operator table 同時需要狀態與完成資訊時，優先合併成單一 `Status` cell，而不是再開獨立 `Finished` 欄；狀態 badge、次要時間文字、錯誤文字都要有清楚的資訊色彩層級。
+- 當使用者明確定稿 operator 文案（例如 `Pause / Start`）時，所有設計文檔與後續討論都必須立刻統一；不要在其他模組文檔殘留 `Stop / Restart` 或過渡命名。
+- 若專案已經有現成 lane key env（例如 `AI_AGENT_RUNTIME_STATE_KEY`），新的 queue/runtime 設計應直接綁定同一個 key 來源；不要另外描述成獨立、不相干的 runtime key 機制。
+- `content_edit_history` 必須設計成 append-only timeline，同一個 `post/comment` 可累積多筆覆寫紀錄；shared content mutation/history service 不應綁死在 jobs-runtime，未來 main runtime 只要有 overwrite flow 也必須走同一條 history 寫入路徑。
+- 若 admin/manual flow 本質上是在重跑既有 `persona_task`，不要描述成另一套獨立 executor contract；應明確以 `persona_task.payload/source/result` 為 source of truth，只補共享 rerun + overwrite persistence path。
+- 若同一套 `persona_task` 執行邏輯會被 first run、rerun、與 interaction test 共用，應把共用部分提升成 shared persona-task service：共用 `task -> prompt -> generation -> parse`，再由不同 runtime 決定 insert、overwrite、或 preview-only persistence。
+- 當使用者明確把 persona-task execution mode 收斂成 `runtime/test` 時，就不要再讓 `first_run/rerun` 滲進生成階段；prompt 文案保持 mode-agnostic，只有 `test` 不更新 Supabase，而 runtime persistence 才決定 insert 或 overwrite。
+- 當 mode 或流程語意已經改掉時，對外 persistence API 名稱也要同步收斂；若 runtime 已不再有 `rerun` mode，就不要讓 method/result/dependency 名稱殘留 `rerun`，應改成仍然正確描述現況的 `overwrite` 或更中性的語意。
+- 若 `preview` 與 `test` 的邏輯都只是 shared generation 且不寫 Supabase，就不要維持兩個 mode 名稱；統一成單一 no-write mode，讓 mode 只保留真正有流程差異的分支，例如 `runtime | preview`。
+- 若目標是讓多個 runtime 共用 post/comment LLM flow，generation module 應明確命名成 `AiAgentPersonaTaskGenerator` 並只負責 task context + shared generation + parse；insert/overwrite 這類 Supabase persistence 要移到獨立的 persistence service，避免 service 名稱與責任再次混濁。
+- 不要把「哪個 runtime 在跑」直接等同於「一定 insert 或一定 overwrite」；shared persistence 應在真正寫 Supabase 前，根據 `persona_tasks.result_id/result_type` 判斷是 first-write insert 還是 overwrite + history。
+- 當使用者指出某個 shared history/persistence 模組未來也要服務非 runtime 寫入（例如 user 手動編輯 post/comment）時，文檔與命名都必須同步提升到更通用的層級；不要把 `content_edit_history` 描述得像是只屬於 jobs-runtime 或 AI runtime。
+- 不要因為 backend 已有 history table，就自動把 history viewer/UI 納入 operator-console scope；若使用者明確說不做 `previous_snapshot` 或 `View History`，要把它標成 out-of-scope，而不是保留成開放項。
+- 若使用者明確定稿某個頁面「沒有剩餘 scope」，就要把 `todo`、status docs、open questions 裡的舊 follow-up 一次清掉；不要保留成含糊的「之後再看」。
+- 規劃 prompt-context expansion 時，不要先抽象成過多通用欄位；若使用者已定稿 `post` 與 `comment` 是不同 context builder、`notification` 先重用 `comment`、且不需要 `targetAuthor` 或獨立 `threadSummary`，就要直接把 spec 收斂成那個較窄的 shape。
+- 不要把 runtime provenance 直接當成 prompt block；即使 `persona_task` 有 `source_table/source_id`，`post` flow 也不代表一定要有 `source_post` block。若產品語意是「生成新發文」，應優先只保留 task brief 與 board context。`comment` flow 的 thread 也應直接由 bounded comment rows 組成，而不是再包成抽象 `threadSummary`。
+- `task_context` 只應承擔 app-owned execution brief；不要把 source/thread payload 混進去。對 `post` flow，可額外加入同 board 最近發文 title 列表來抑制重複發文；對 `comment` flow，必須明確支援主動留言與 notification reply 兩種語意，並把 thread 呈現規則定成「ancestor 由最早到最近 parent」。
+- 規劃 shared prompt builder 時，不要假設 `post` 和 `comment` 共享同一個 output JSON shape；`post` 需要 `title/body/tags/...`，`comment` 需要 `markdown/...`。在實作前應先寫一份具體 block 範例文檔，把 `post`、top-level comment、thread reply 三種 prompt 形狀定死。
+- 對 `post` flow，不要把帶有「Recent post title」的 intake summary 直接放進 prompt，否則會誤導模型靠近既有標題；應改由 `recent_board_posts` 承擔 anti-duplication reference，並在該 block 再次明示不要使用相似標題。`comment` flow 的例子則要遵守最終 block 順序，讓 `[board]` 位於 `[root_post]` 之前。兩條 flow 的方案文檔也都要保留 shared media fields。
+- 若使用者定稿 `task_context` 不要有 summary，就要把它收斂成純指令型 block；不要再塞 `Task brief`、`payload.summary` 或任何 intake 摘要進去。
+- comment context builder 的分支判斷要以 parent/thread 結構為準，不要用模糊語意推測：top-level comment 是沒有 `parent_id` 的 comment，且 recent context 要 query 該 post 最近 10 筆 top-level comments；thread reply 則是 insert comment 會帶 `parent_id`，並走 `source_comment + ancestor_comments + recent_top_level_comments`。`recent_top_level_comments` 還要排除任何已出現在 `ancestor_comments` 的 row，不要再另外發明第二套 reply-only 近期 block。`post` body 的 prompt contract 也要明寫是 markdown。
+- 當使用者把 prompt block 的長度上限定稿時，要立刻寫回方案文檔與 spec，並把對應項目從 open questions 移除或縮小。這輪已定：`board.rules <= 600` 字元，`root_post.body excerpt <= 800` 字元。
+- 只更新 `/plans` 不夠；只要核心架構或 canonical flow 改了，`docs/ai-admin/*` 這種 repo-level 設計文檔也要同一輪同步，否則會留下比實作更舊的心智模型。
+- 當使用者明確指定實作順序（例如先完成 main runtime boundary cleanup，再談 prompt/context 品質）時，要照這個順序把 code、docs、verification 一次收尾，不要中途跳回相鄰但尚未授權的優化主題。
+- production lane 的正式邊界必須掛在 runtime-named service 上；若 `text-lane` 已經改走 `AiAgentTextRuntimeService`，就不要再讓 `AiAgentAdminRunnerService` 承擔主執行責任。admin/manual surface 應只做 thin wrapper，委派到同一個 runtime service。
+- 若 `/admin/ai/agent-panel` 已經完成 operator-console 化，就不要再把舊的 generic manual runner 視為長期架構一部分；manual admin actions 應優先收斂到 operator-console 的專用 APIs / jobs-runtime / runtime-control，preview 只留在專門的 no-write 頁面。
+- 既然 legacy manual runner 要退場，就不要只刪 service 本體而保留 `orchestrator_once / text_once / media_once / compress_once` 這種 generic target 語意；長期命名要一起改成 domain-specific 的 runtime control 與 jobs actions。
+- 不要把所有 admin 動作都硬塞進 `jobs-runtime`；`Image` tab 的 rerun 屬於獨立的 media/image queue。只有已生成圖片的 row 才應啟用 `Rerun`，且它應直接回到 image queue 重新生成並覆蓋 `media.image url`，不是建立 `job_tasks`。
+- 當使用者進一步收斂 `Image` 不該留在 `/admin/ai/agent-panel` 時，方案文檔也要同步把它從 operator-console 最終 tab order 拿掉，並改成獨立 admin image queue page；不要只改 runtime 邊界卻留下過時的頁面資訊架構。
+- 若共享 execution 架構已引入 `persona_task` store，目標序列要收斂成 `executor -> store -> generator -> context builder -> interaction -> persistence`；不要再把 task loading 混回 generator 的責任敘述裡。
+- 說明 overwrite persistence 時，要區分「標記 task 完成」與「改變 persisted target pointer」：overwrite 通常不會改變 `persona_tasks.result_id/result_type` 指向，只是 canonical completion update 會把同樣的 pointer 再寫一次，並追加 history。
+- 在這個專案的 active-dev 階段，不要為已決定退場的 flow 留 compatibility branch。若 `Image` 已從 `jobs-runtime` 設計上移除，就應一起移除 `image_generation` 的 UI 分支、queue type、jobs-runtime dispatch 與 schema contract，而不是用「legacy row 仍可能存在」當理由保留舊邏輯。
+- 當使用者要求「都不要兼容舊邏輯」時，要連同舊 route、舊 preview page、舊測試、舊 helper 模組一起移除；不要只刪主 service，卻把 `preview` 索引入口、panel-only helper、或 `*_once` 名詞殘留在 codebase。
+- Keep one Phase A source of truth only: `ai_opps -> opportunities -> public candidates / notification direct tasking -> persona_tasks`.
+- Remove old flow code, tests, and docs in the same pass; execute-path migration alone is not enough.
+- Keep preview, admin, and runtime on the same stage contract even when preview stays fixture-backed.
+- Use local keys for LLM JSON stages; keep DB ids and persona ids app-owned and resolved outside the model.
+- Persist staged LLM work incrementally in 10-row batches so partial progress survives crashes and reruns.
+- Public and notification diverge after scoring: public goes through candidates; notification uses deterministic recipient persona routing.
+- `matched_persona_count` is cumulative and may only increase on newly inserted unique personas.
+- Admin page load is ingest-only: sync snapshot into `ai_opps`, query persisted rows, and only run `Opportunities LLM` from explicit `Run`.
+- Admin manual runs are one-click, one-batch; do not silently auto-loop extra batches on the client.
+- Admin result tables may keep newly processed rows visible even when the next batch input comes only from unfinished rows.
+- Manual `Run Phase A` is request-only, consumed by the runtime app, and must not reset automatic cooldown.
+- Runtime online/offline must come from a runner heartbeat, not from lease or cooldown state.
+- Local Phase A debug commands must not mutate runtime heartbeats, runtime cooldown state, or heartbeat checkpoint rows; repeated debug runs need a read-only snapshot path.
+- Preview running UI should reflect real row semantics: preserve static cells, limit skeletons to unresolved fields, and show `Saving` only on rows actually retrying.
+- Notification downstream tables are append-style during `Opportunities` runs; they should not enter full-table loading states.

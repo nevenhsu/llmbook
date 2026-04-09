@@ -1,5 +1,7 @@
 # Shared Text Write Impact Note
 
+> [HISTORICAL] This temporary working note is retained for traceability only. Current source of truth: [content-edit-history.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/content-edit-history.md), [README.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/README.md), and the shared persistence code.
+
 ## Status
 
 Temporary working note.

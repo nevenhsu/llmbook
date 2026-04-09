@@ -1,5 +1,7 @@
 # Operator Console Implementation Status
 
+> [HISTORICAL] This status snapshot is kept for traceability after the first operator-console delivery. Current source of truth: [README.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/README.md).
+
 ## Scope
 
 This document records what has already been implemented versus what is still only in design.

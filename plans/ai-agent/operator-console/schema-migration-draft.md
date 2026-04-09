@@ -1,5 +1,7 @@
 # Operator Console Schema Migration Draft
 
+> [HISTORICAL] This schema draft records a completed migration shape. Current source of truth is the applied migration history plus [README.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/README.md).
+
 ## Scope
 
 This draft converges the first schema pass for:

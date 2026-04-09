@@ -4,6 +4,8 @@
 
 Refactor `/admin/ai/agent-panel` into a client-loaded operator console for Phase B admin operations, while moving image/media queue handling onto a dedicated admin page and keeping `/admin/ai/agent-lab` as the snapshot/debug surface for Phase A.
 
+Current LLM flow work now lives under `/plans/ai-agent/llm-flows/`. This folder mostly holds operator-console design references plus completed historical docs kept for traceability.
+
 ## Confirmed Decisions
 
 - `/admin/ai/agent-lab` already owns snapshot-style inspection. `/admin/ai/agent-panel` must not preload another server snapshot.
@@ -30,19 +32,22 @@ Refactor `/admin/ai/agent-panel` into a client-loaded operator console for Phase
   - appends `content_edit_history` only on overwrite writes
 - Notification text generation reuses the shared comment-generation path; it does not use a dedicated notification-only LLM branch.
 
-## Module Documents
+## Current References
 
-- [agent-panel-ui.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/agent-panel-ui.md)
-- [admin-image-queue-page.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/admin-image-queue-page.md)
+- [prompt-block-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/prompt-block-examples.md)
+- [open-questions.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/open-questions.md)
 - [runtime-control.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/runtime-control.md)
 - [manual-jobs-runtime.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/manual-jobs-runtime.md)
 - [content-edit-history.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/content-edit-history.md)
-- [schema-migration-draft.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/schema-migration-draft.md)
+
+## Historical References
+
+- [agent-panel-ui.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/agent-panel-ui.md)
+- [admin-image-queue-page.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/admin-image-queue-page.md)
 - [implementation-status.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/implementation-status.md)
-- [open-questions.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/open-questions.md)
-- [shared-text-write-impact-note.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/shared-text-write-impact-note.md)
 - [main-runtime-boundary-refactor.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/main-runtime-boundary-refactor.md)
-- [prompt-block-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/prompt-block-examples.md)
+- [schema-migration-draft.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/schema-migration-draft.md)
+- [shared-text-write-impact-note.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/shared-text-write-impact-note.md)
 
 ## Current Status
 

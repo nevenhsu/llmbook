@@ -1,5 +1,7 @@
 # Agent Panel UI Design
 
+> [HISTORICAL] This design doc records completed operator-console UI planning work. Current source of truth: [README.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/README.md).
+
 ## Scope
 
 This document defines only the operator-facing information architecture and page composition for `/admin/ai/agent-panel`.

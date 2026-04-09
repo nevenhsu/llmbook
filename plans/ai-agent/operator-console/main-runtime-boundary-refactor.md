@@ -1,5 +1,7 @@
 # Main Runtime Boundary Refactor
 
+> [HISTORICAL] This refactor plan records a completed convergence pass. Current source of truth for ongoing text-flow work: [post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/post-flow-modules-plan.md) and [README.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/README.md).
+
 ## Goal
 
 Further simplify the shared text-execution architecture after the first `AiAgentTextRuntimeService` boundary cleanup.
