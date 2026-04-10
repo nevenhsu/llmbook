@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/core/runtime-core-profile";
 import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
 import {
+  buildPlannerPostingLens,
   buildPersonaVoiceRepairPrompt,
   derivePromptPersonaDirectives,
   detectPersonaVoiceDrift,
@@ -41,9 +42,7 @@ import {
   buildPromptBlocks,
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
-  formatAgentMemory,
   formatAgentProfile,
-  formatAgentRelationshipContext,
   formatBoardContext,
   formatPrompt,
   formatTargetContext,
@@ -99,28 +98,28 @@ export class AiAgentPersonaInteractionService {
     });
 
     const profile = await input.getPersonaProfile(input.personaId);
-    const personaMemory = profile.personaMemories
-      .filter((item) => item.memoryType === "memory")
-      .map((item) => item.content)
-      .join("\n");
-    const longMemoryText = profile.personaMemories
-      .filter((item) => item.memoryType === "long_memory")
-      .map((item) => item.content)
-      .join("\n");
     const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
     const runtimePersonaProfile = normalizeCoreProfile(effectivePersonaCore).profile;
-    const personaDirectiveActionType = input.taskType === "post" ? "post" : "comment";
+    const personaDirectiveActionType =
+      input.taskType === "post" || input.taskType === "post_body" || input.taskType === "post_plan"
+        ? "post"
+        : "comment";
     const personaPromptDirectives = derivePromptPersonaDirectives({
       actionType: personaDirectiveActionType,
       profile: runtimePersonaProfile,
       personaCore: effectivePersonaCore,
     });
     const personaCoreSummary = buildInteractionCoreSummary({
-      actionType: input.taskType === "post" ? "post" : "comment",
+      actionType:
+        input.taskType === "post" ||
+        input.taskType === "post_body" ||
+        input.taskType === "post_plan"
+          ? "post"
+          : input.taskType === "reply"
+            ? "reply"
+            : "comment",
       profile: runtimePersonaProfile,
       personaCore: effectivePersonaCore,
-      shortTermMemory: personaMemory,
-      longTermMemory: longMemoryText,
     });
     const defaultStance =
       typeof (effectivePersonaCore.interaction_defaults as Record<string, unknown> | undefined)
@@ -140,18 +139,25 @@ export class AiAgentPersonaInteractionService {
         username: profile.persona.username,
         bio: profile.persona.bio,
       }),
+      plannerMode:
+        input.taskType === "post_plan"
+          ? "This stage is planning and scoring, not final writing."
+          : undefined,
       agentCore: [personaCoreSummary, defaultStance ? `default_stance: ${defaultStance}` : null]
         .filter((item): item is string => Boolean(item))
         .join("\n\n"),
+      agentPostingLens:
+        input.taskType === "post_plan"
+          ? buildPlannerPostingLens({
+              profile: runtimePersonaProfile,
+              personaCore: effectivePersonaCore,
+            }).join("\n")
+          : undefined,
+      planningScoringContract:
+        input.taskType === "post_plan"
+          ? "Return exactly 3 candidates with conservative scores."
+          : undefined,
       agentVoiceContract: personaPromptDirectives.voiceContract.join("\n"),
-      agentMemory: formatAgentMemory({
-        shortTerm: personaMemory,
-        longTerm: longMemoryText,
-      }),
-      agentRelationshipContext: formatAgentRelationshipContext({
-        runtimePersonaProfile,
-        targetContext: input.targetContext,
-      }),
       boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
       targetContext:
         input.targetContextText ??

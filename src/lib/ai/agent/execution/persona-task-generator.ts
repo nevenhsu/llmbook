@@ -5,16 +5,13 @@ import {
   AiAgentPersonaTaskContextBuilder,
   type AiAgentPersonaTaskPromptContext,
 } from "@/lib/ai/agent/execution/persona-task-context-builder";
-import {
-  parseMarkdownActionOutput,
-  parsePostActionOutput,
-} from "@/lib/ai/prompt-runtime/action-output";
-
-type PreferredTextModel = {
-  modelId: string;
-  providerKey: string;
-  modelKey: string;
-};
+import { resolveTextFlowModule } from "@/lib/ai/agent/execution/flows/registry";
+import type {
+  PreferredTextModel,
+  TextFlowKind,
+  TextFlowModule,
+  TextFlowRunResult,
+} from "@/lib/ai/agent/execution/flows/types";
 
 type PersonaTaskGeneratorDeps = {
   buildPromptContext: (input: {
@@ -29,6 +26,7 @@ type PersonaTaskGeneratorDeps = {
     boardContextText?: string;
     targetContextText?: string;
   }) => Promise<PreviewResult>;
+  resolveFlowModule: (flowKind: TextFlowKind) => TextFlowModule;
 };
 
 export class AiAgentJobPermanentSkipError extends Error {
@@ -57,14 +55,11 @@ export type AiAgentPersonaTaskGenerationResult = {
   mode: AiAgentPersonaTaskExecutionMode;
   promptContext: AiAgentPersonaTaskPromptContext;
   preview: PreviewResult;
+  flowResult: TextFlowRunResult;
   parsedOutput: AiAgentPersonaTaskGeneratedOutput;
   modelMetadata: Record<string, unknown>;
   modelSelection: PreferredTextModel;
 };
-
-function normalizeTaskType(taskType: string): "post" | "comment" {
-  return taskType === "post" ? "post" : "comment";
-}
 
 export class AiAgentPersonaTaskGenerator {
   private readonly deps: PersonaTaskGeneratorDeps;
@@ -110,6 +105,8 @@ export class AiAgentPersonaTaskGenerator {
           const controlPlaneStore = new AdminAiControlPlaneStore();
           return controlPlaneStore.runPersonaInteraction(input);
         }),
+      resolveFlowModule:
+        options?.deps?.resolveFlowModule ?? ((flowKind) => resolveTextFlowModule(flowKind)),
     };
   }
 
@@ -120,78 +117,60 @@ export class AiAgentPersonaTaskGenerator {
   }): Promise<AiAgentPersonaTaskGenerationResult> {
     const mode = input.mode ?? "preview";
     const promptContext = await this.deps.buildPromptContext({ task: input.task });
-    const preferredModel = await this.deps.loadPreferredTextModel();
-    const taskContext =
-      input.extraInstructions && input.extraInstructions.trim().length > 0
-        ? [promptContext.taskContext, input.extraInstructions.trim()].join("\n\n")
-        : promptContext.taskContext;
-    const preview = await this.deps.runPersonaInteraction({
-      personaId: input.task.personaId,
-      modelId: preferredModel.modelId,
-      taskType: promptContext.taskType,
-      taskContext,
-      boardContextText: promptContext.boardContextText,
-      targetContextText: promptContext.targetContextText,
-    });
+    const flowModule = this.deps.resolveFlowModule(promptContext.flowKind);
+    const executionResult =
+      mode === "runtime"
+        ? await flowModule.runRuntime({
+            task: input.task,
+            promptContext,
+            extraInstructions: input.extraInstructions,
+            loadPreferredTextModel: this.deps.loadPreferredTextModel,
+            runPersonaInteraction: this.deps.runPersonaInteraction,
+          })
+        : await flowModule.runPreview({
+            task: input.task,
+            promptContext,
+            extraInstructions: input.extraInstructions,
+            loadPreferredTextModel: this.deps.loadPreferredTextModel,
+            runPersonaInteraction: this.deps.runPersonaInteraction,
+          });
 
-    const rawOutput = preview.rawResponse ?? preview.markdown;
-    const modelMetadata = {
-      schema_version: 1,
-      model_id: preferredModel.modelId,
-      provider_key: preferredModel.providerKey,
-      model_key: preferredModel.modelKey,
-      audit_status: preview.auditDiagnostics?.status ?? null,
-      repair_applied: preview.auditDiagnostics?.repairApplied ?? false,
-      task_type: input.task.taskType,
-      dispatch_kind: input.task.dispatchKind,
-    } satisfies Record<string, unknown>;
-
-    if (normalizeTaskType(input.task.taskType) === "post") {
-      const parsed = parsePostActionOutput(rawOutput);
-      if (parsed.error || !parsed.title) {
-        throw new Error(
-          parsed.error ?? "persona_task generation did not produce a valid post payload",
-        );
-      }
-
-      return {
-        task: input.task,
-        mode,
-        promptContext: {
-          ...promptContext,
-          taskContext,
-        },
-        preview,
-        parsedOutput: {
-          kind: "post",
-          title: parsed.title,
-          body: parsed.body,
-          tags: parsed.normalizedTags,
-        },
-        modelMetadata,
-        modelSelection: preferredModel,
-      };
-    }
-
-    const parsed = parseMarkdownActionOutput(rawOutput);
-    if (!parsed.markdown.trim()) {
-      throw new Error("persona_task generation did not produce a valid comment markdown body");
-    }
+    const parsedOutput = mapFlowResultToLegacyOutput(executionResult.flowResult);
 
     return {
       task: input.task,
       mode,
-      promptContext: {
-        ...promptContext,
-        taskContext,
-      },
-      preview,
-      parsedOutput: {
-        kind: "comment",
-        body: parsed.markdown,
-      },
-      modelMetadata,
-      modelSelection: preferredModel,
+      promptContext: executionResult.promptContext,
+      preview: executionResult.preview,
+      flowResult: executionResult.flowResult,
+      parsedOutput,
+      modelMetadata: executionResult.modelMetadata,
+      modelSelection: executionResult.modelSelection,
     };
   }
+}
+
+function mapFlowResultToLegacyOutput(
+  flowResult: TextFlowRunResult,
+): AiAgentPersonaTaskGeneratedOutput {
+  if (flowResult.flowKind === "post") {
+    return {
+      kind: "post",
+      title: flowResult.parsed.renderedPost.title,
+      body: flowResult.parsed.renderedPost.body,
+      tags: flowResult.parsed.renderedPost.tags,
+    };
+  }
+
+  if (flowResult.flowKind === "comment") {
+    return {
+      kind: "comment",
+      body: flowResult.parsed.comment.markdown,
+    };
+  }
+
+  return {
+    kind: "comment",
+    body: flowResult.parsed.reply.markdown,
+  };
 }

@@ -39,13 +39,13 @@ describe("AdminAiControlPlaneStore.previewGlobalPolicyRelease", () => {
     expect(preview.assembledPrompt).toContain("No agent profile available.");
     expect(preview.assembledPrompt).toContain("[output_style]");
     expect(preview.assembledPrompt).toContain("[agent_core]");
-    expect(preview.assembledPrompt).toContain("[agent_memory]");
-    expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
+    expect(preview.assembledPrompt).not.toContain("[agent_memory]");
+    expect(preview.assembledPrompt).not.toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
     expect(preview.assembledPrompt).toContain("[agent_examples]");
-    expect(preview.assembledPrompt).toContain("Short-term:");
-    expect(preview.assembledPrompt).toContain("Long-term:");
-    expect(preview.assembledPrompt).toContain("No relationship context available.");
+    expect(preview.assembledPrompt).toContain(
+      "Internally self-check value_fit, reasoning_fit, discourse_fit, and expression_fit",
+    );
     expect(preview.assembledPrompt).toContain("Do not produce a generic assistant-style reply.");
     expect(preview.assembledPrompt).toContain("No in-character examples available.");
     expect(preview.assembledPrompt).toContain("Use natural conversational tone");
@@ -74,12 +74,10 @@ describe("AdminAiControlPlaneStore.previewGlobalPolicyRelease", () => {
 
     expect(preview.assembledPrompt).toContain("[output_style]");
     expect(preview.assembledPrompt).toContain("[agent_core]");
-    expect(preview.assembledPrompt).toContain("[agent_memory]");
-    expect(preview.assembledPrompt).toContain("[agent_relationship_context]");
+    expect(preview.assembledPrompt).not.toContain("[agent_memory]");
+    expect(preview.assembledPrompt).not.toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).toContain("[agent_enactment_rules]");
     expect(preview.assembledPrompt).toContain("[agent_examples]");
-    expect(preview.assembledPrompt).toContain("Short-term:");
-    expect(preview.assembledPrompt).toContain("Long-term:");
     expect(preview.assembledPrompt).toContain("No output style guidance available.");
   });
 });

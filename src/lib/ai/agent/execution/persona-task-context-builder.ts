@@ -89,6 +89,7 @@ type AiAgentPersonaTaskContextBuilderDeps = {
 };
 
 export type AiAgentPersonaTaskPromptContext = {
+  flowKind: "post" | "comment" | "reply";
   taskType: "post" | "comment";
   taskContext: string;
   boardContextText?: string;
@@ -114,6 +115,18 @@ function asSingle<T>(value: T | T[] | null | undefined): T | null {
 
 function normalizeTaskType(taskType: string): "post" | "comment" {
   return taskType === "post" ? "post" : "comment";
+}
+
+function resolveFlowKind(task: AiAgentRecentTaskSnapshot): "post" | "comment" | "reply" {
+  if (task.taskType === "post") {
+    return "post";
+  }
+  if (task.taskType === "reply") {
+    return "reply";
+  }
+
+  const sourceCommentId = resolveTaskCommentId(task);
+  return sourceCommentId ? "reply" : "comment";
 }
 
 function normalizeWhitespace(input: string): string {
@@ -292,9 +305,15 @@ export class AiAgentPersonaTaskContextBuilder {
   public async build(input: {
     task: AiAgentRecentTaskSnapshot;
   }): Promise<AiAgentPersonaTaskPromptContext> {
-    const taskType = normalizeTaskType(input.task.taskType);
-    if (taskType === "post") {
+    const flowKind = resolveFlowKind(input.task);
+    if (flowKind === "post") {
       return this.buildPostContext(input.task);
+    }
+    if (flowKind === "reply") {
+      const sourceCommentId = resolveTaskCommentId(input.task);
+      if (sourceCommentId) {
+        return this.buildThreadReplyContext(sourceCommentId);
+      }
     }
     return this.buildCommentContext(input.task);
   }
@@ -308,6 +327,7 @@ export class AiAgentPersonaTaskContextBuilder {
     const recentBoardPosts = board ? await this.deps.listRecentBoardPosts(board.id) : [];
 
     return {
+      flowKind: "post",
       taskType: "post",
       taskContext: [
         "Generate a new post for the board below.",
@@ -334,6 +354,7 @@ export class AiAgentPersonaTaskContextBuilder {
     }
 
     return {
+      flowKind: "comment",
       taskType: "comment",
       taskContext: [
         "Generate a comment for the discussion below.",
@@ -350,6 +371,7 @@ export class AiAgentPersonaTaskContextBuilder {
     const recentTopLevelComments = await this.deps.listRecentTopLevelComments(postId);
 
     return {
+      flowKind: "comment",
       taskType: "comment",
       taskContext: [
         "Generate a comment for the discussion below.",
@@ -372,6 +394,7 @@ export class AiAgentPersonaTaskContextBuilder {
     const sourceComment = await this.deps.loadCommentSource(commentId);
     if (!sourceComment) {
       return {
+        flowKind: "reply",
         taskType: "comment",
         taskContext: [
           "Generate a reply inside the active thread below.",
@@ -389,6 +412,7 @@ export class AiAgentPersonaTaskContextBuilder {
     ).filter((comment) => !ancestorIds.has(comment.id));
 
     return {
+      flowKind: "reply",
       taskType: "comment",
       taskContext: [
         "Generate a reply inside the active thread below.",
@@ -397,10 +421,10 @@ export class AiAgentPersonaTaskContextBuilder {
       ].join("\n"),
       boardContextText: buildBoardContextText(rootPost?.board ?? null),
       targetContextText: [
+        rootPost ? buildRootPostBlock(rootPost) : null,
         buildSourceCommentBlock(sourceComment),
         buildAncestorCommentsBlock(ancestorComments),
         buildRecentTopLevelCommentsBlock(recentTopLevelComments),
-        rootPost ? buildRootPostBlock(rootPost) : null,
       ]
         .filter((part): part is string => Boolean(part))
         .join("\n\n"),

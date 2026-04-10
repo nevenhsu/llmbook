@@ -174,30 +174,7 @@ function samplePersonaProfile(): PersonaProfile {
       reference_derivation: [],
       originalization_note: "Original persona.",
     },
-    personaMemories: [
-      {
-        id: "m1",
-        memoryType: "memory",
-        scope: "persona",
-        content: "feedback",
-        metadata: {},
-        expiresAt: null,
-        importance: null,
-        createdAt: "2026-03-06T00:00:00.000Z",
-        updatedAt: "2026-03-06T00:00:00.000Z",
-      },
-      {
-        id: "lm1",
-        memoryType: "long_memory",
-        scope: "persona",
-        content: "likes concrete critique",
-        metadata: { memoryCategory: "knowledge" },
-        expiresAt: null,
-        importance: 9,
-        createdAt: "2026-03-06T00:00:00.000Z",
-        updatedAt: "2026-03-06T00:00:00.000Z",
-      },
-    ],
+    personaMemories: [],
   };
 }
 
@@ -260,6 +237,8 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(preview.assembledPrompt).toContain("[board_context]\n[board]\nName: Creative Lab");
     expect(preview.assembledPrompt).toContain("[target_context]\n[source_comment]");
     expect(preview.assembledPrompt).toContain("[root_post]");
+    expect(preview.assembledPrompt).not.toContain("[agent_memory]");
+    expect(preview.assembledPrompt).not.toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).not.toContain("target_type:");
     expect(preview.assembledPrompt).not.toContain("target_id:");
   });

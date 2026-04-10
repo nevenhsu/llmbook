@@ -1,5 +1,7 @@
 export * from "@/lib/ai/agent/execution/content-mutation-service";
 export * from "@/lib/ai/agent/execution/execution-preview";
+export * from "@/lib/ai/agent/execution/flows/types";
+export * from "@/lib/ai/agent/execution/flows/registry";
 export * from "@/lib/ai/agent/execution/media-admin-service";
 export * from "@/lib/ai/agent/execution/media-job-action-service";
 export * from "@/lib/ai/agent/execution/media-job-service";

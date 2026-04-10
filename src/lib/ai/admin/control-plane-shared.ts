@@ -1,4 +1,6 @@
 import {
+  PLANNER_FAMILY_PROMPT_BLOCK_ORDER,
+  WRITER_FAMILY_PROMPT_BLOCK_ORDER,
   buildActionOutputConstraints,
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
@@ -215,10 +217,11 @@ export function buildPromptBlocks(input: {
   globalDraft: GlobalPolicyStudioDraft;
   agentProfile?: string;
   outputStyle?: string;
+  plannerMode?: string;
   agentCore: string;
+  agentPostingLens?: string;
+  planningScoringContract?: string;
   agentVoiceContract?: string;
-  agentMemory: string;
-  agentRelationshipContext?: string;
   boardContext?: string;
   targetContext?: string;
   agentEnactmentRules?: string;
@@ -228,10 +231,9 @@ export function buildPromptBlocks(input: {
 }): Array<{ name: string; content: string }> {
   const baseline = input.globalDraft.systemBaseline.trim();
   const systemBaseline = baseline || "(not set)";
-
-  return [
-    { name: "system_baseline", content: systemBaseline },
-    {
+  const allBlocks = {
+    system_baseline: { name: "system_baseline", content: systemBaseline },
+    global_policy: {
       name: "global_policy",
       content: [
         "Policy:",
@@ -240,16 +242,34 @@ export function buildPromptBlocks(input: {
         input.globalDraft.forbiddenRules,
       ].join("\n"),
     },
-    {
+    planner_mode: {
+      name: "planner_mode",
+      content:
+        input.plannerMode?.trim() ||
+        [
+          "This stage is planning and scoring, not final writing.",
+          "Generate candidate post ideas and score them conservatively.",
+        ].join("\n"),
+    },
+    output_style: {
       name: "output_style",
       content: input.outputStyle?.trim() || "No output style guidance available.",
     },
-    {
+    agent_profile: {
       name: "agent_profile",
       content: input.agentProfile?.trim() || "No agent profile available.",
     },
-    { name: "agent_core", content: input.agentCore },
-    {
+    agent_core: { name: "agent_core", content: input.agentCore },
+    agent_posting_lens: {
+      name: "agent_posting_lens",
+      content:
+        input.agentPostingLens?.trim() ||
+        [
+          "This persona tends to post when a workflow distinction is being blurred.",
+          "Make the framing feel pointed, not neutral or theatrical.",
+        ].join("\n"),
+    },
+    agent_voice_contract: {
       name: "agent_voice_contract",
       content:
         input.agentVoiceContract?.trim() ||
@@ -258,30 +278,31 @@ export function buildPromptBlocks(input: {
           "Lead with the agent's first reaction before polished explanation.",
         ].join("\n"),
     },
-    { name: "agent_memory", content: input.agentMemory },
-    {
-      name: "agent_relationship_context",
-      content: input.agentRelationshipContext?.trim() || "No relationship context available.",
-    },
-    {
+    board_context: {
       name: "board_context",
       content: input.boardContext?.trim() || "No board context available.",
     },
-    {
+    target_context: {
       name: "target_context",
       content: input.targetContext?.trim() || "No target context available.",
     },
-    {
+    planning_scoring_contract: {
+      name: "planning_scoring_contract",
+      content:
+        input.planningScoringContract?.trim() ||
+        ["Return exactly 3 candidates.", "Score conservatively."].join("\n"),
+    },
+    agent_enactment_rules: {
       name: "agent_enactment_rules",
       content:
         input.agentEnactmentRules?.trim() ||
         [
-          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, agent_memory, target_context, and agent_relationship_context.",
-          "The response must reflect the agent's priorities, biases, tone, and decision style.",
+          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, task_context, and target_context.",
+          "Internally self-check value_fit, reasoning_fit, discourse_fit, and expression_fit before emitting the final JSON.",
           "Do not produce a generic assistant-style reply.",
         ].join("\n"),
     },
-    {
+    agent_anti_style_rules: {
       name: "agent_anti_style_rules",
       content:
         input.agentAntiStyleRules?.trim() ||
@@ -290,13 +311,23 @@ export function buildPromptBlocks(input: {
           "Avoid tutorial framing and advice-list structure unless the task explicitly requires it.",
         ].join("\n"),
     },
-    {
+    agent_examples: {
       name: "agent_examples",
       content: input.agentExamples?.trim() || "No in-character examples available.",
     },
-    { name: "task_context", content: input.taskContext },
-    { name: "output_constraints", content: buildActionOutputConstraints(input.actionType) },
-  ];
+    task_context: { name: "task_context", content: input.taskContext },
+    output_constraints: {
+      name: "output_constraints",
+      content: buildActionOutputConstraints(input.actionType),
+    },
+  } as const;
+
+  const order =
+    input.actionType === "post_plan"
+      ? PLANNER_FAMILY_PROMPT_BLOCK_ORDER
+      : WRITER_FAMILY_PROMPT_BLOCK_ORDER;
+
+  return order.map((name) => allBlocks[name]);
 }
 
 export function formatAgentMemory(input: { shortTerm: string; longTerm: string }): string {

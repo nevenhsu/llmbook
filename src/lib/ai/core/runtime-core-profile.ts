@@ -628,6 +628,11 @@ export function buildInteractionCoreSummary(input: {
   const guardrails = asRecord(input.personaCore?.guardrails);
   const voiceFingerprint = input.profile.voiceFingerprint;
   const taskStyle = input.profile.taskStyleMatrix;
+  const discussionDefaultStance =
+    typeof interactionDefaults?.default_stance === "string" &&
+    interactionDefaults.default_stance.trim().length > 0
+      ? interactionDefaults.default_stance.trim()
+      : input.profile.interactionDoctrine.collaborationStance;
 
   const identityLines = uniqueStrings([
     typeof identitySummary?.one_sentence_identity === "string"
@@ -647,10 +652,6 @@ export function buildInteractionCoreSummary(input: {
   ]).slice(0, 5);
 
   const referenceLines = readCompactReferenceSources(input.personaCore);
-  const memoryLines = uniqueStrings([
-    input.shortTermMemory ? `Recent context: ${input.shortTermMemory}` : null,
-    input.longTermMemory ? `Long memory anchor: ${input.longTermMemory}` : null,
-  ]).slice(0, 2);
 
   if (actionType === "post") {
     const aestheticLines = uniqueStrings([
@@ -659,7 +660,7 @@ export function buildInteractionCoreSummary(input: {
       ...normalizeStringArray(aestheticProfile?.humor_preferences, []).slice(0, 1),
     ]).slice(0, 4);
     const interactionLines = uniqueStrings([
-      `Default stance: ${input.profile.relationshipTendencies.defaultStance}`,
+      `Default stance: ${discussionDefaultStance}`,
       ...normalizeStringArray(interactionDefaults?.discussion_strengths, []).slice(0, 2),
       ...normalizeStringArray(interactionDefaults?.non_generic_traits, []).slice(0, 2),
     ]).slice(0, 5);
@@ -696,7 +697,7 @@ export function buildInteractionCoreSummary(input: {
   }
 
   const replyLines = uniqueStrings([
-    `Default stance: ${input.profile.relationshipTendencies.defaultStance}`,
+    `Default stance: ${discussionDefaultStance}`,
     ...normalizeStringArray(interactionDefaults?.friction_triggers, []).slice(0, 2),
     ...normalizeStringArray(interactionDefaults?.discussion_strengths, []).slice(0, 2),
   ]).slice(0, 5);
@@ -705,10 +706,6 @@ export function buildInteractionCoreSummary(input: {
     ...normalizeStringArray(guardrails?.deescalation_style, []).slice(0, 2),
     ...input.profile.interactionDoctrine.feedbackPrinciples.slice(0, 2),
   ]).slice(0, 5);
-  const compactMemoryLines =
-    memoryLines.length > 0
-      ? memoryLines
-      : readCompactPersonaCoreStrings(input.personaCore, "guardrails").slice(0, 2);
 
   return [
     "Compact persona summary for reply generation:",
@@ -727,7 +724,6 @@ export function buildInteractionCoreSummary(input: {
       `Close: ${taskStyle.comment.closeShape}`,
       `Avoid: ${taskStyle.comment.forbiddenShapes.join(", ")}`,
     ]),
-    formatCompactSummarySection("Memory anchors", compactMemoryLines, "No salient memory anchor."),
     formatCompactSummarySection("Reference roles", referenceLines),
     formatCompactSummarySection("Language signature", [
       `Rhythm: ${input.profile.languageSignature.rhythm}`,

@@ -22,6 +22,9 @@
 
 ## Review
 
+- Landed Task 1 shared flow foundations for the integrated LLM-flow program: added `flowKind` resolution in prompt-context building, introduced a shared text flow-module registry plus discriminated result envelope/diagnostics, and routed `AiAgentPersonaTaskGenerator` through flow modules instead of inline raw parsing.
+- Split runtime prompt assembly into planner-family vs writer-family block orders, added `agent_posting_lens` / planner scaffolding, and removed active `agent_memory` / `agent_relationship_context` block emission from current prompt runtime.
+- Updated prompt-runtime persona projection so relationship-derived wording is no longer required, added shared `buildPlannerPostingLens()` and `buildPersonaEvidence()` helpers, and aligned runtime summaries with the no-active-memory / no-active-relationship direction.
 - Added `plans/ai-agent/llm-flows/reference-role-doctrine-plan.md` to formalize stronger persona fidelity: reference roles should project into doctrine across `value_fit`, `reasoning_fit`, `discourse_fit`, and `expression_fit`, and `writer_family` flows should self-check those dimensions before final output.
 - Added `plans/ai-agent/llm-flows/llm-flows-integration-plan.md` as the main orchestration plan for current flow development, defining the implementation order, shared end-state, and verification gates across `post`, `comment`, `reply`, prompt-family runtime, and generate-persona work.
 - Archived the previous full task log to `tasks/archive/2026-04-09-todo-history.md` to keep this file focused on current active work.

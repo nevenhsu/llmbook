@@ -280,9 +280,6 @@ describe("generateReplyTextWithPromptRuntime", () => {
       result.promptBlocks.find((block) => block.name === "agent_profile")?.content ?? "";
     const coreBlock =
       result.promptBlocks.find((block) => block.name === "agent_core")?.content ?? "";
-    const relationshipBlock =
-      result.promptBlocks.find((block) => block.name === "agent_relationship_context")?.content ??
-      "";
     const voiceContractBlock =
       result.promptBlocks.find((block) => block.name === "agent_voice_contract")?.content ?? "";
     const enactmentBlock =
@@ -294,7 +291,7 @@ describe("generateReplyTextWithPromptRuntime", () => {
 
     expect(blockNames).toContain("target_context");
     expect(blockNames).toContain("agent_profile");
-    expect(blockNames).toContain("agent_relationship_context");
+    expect(blockNames).not.toContain("agent_relationship_context");
     expect(blockNames).toContain("agent_voice_contract");
     expect(blockNames).toContain("agent_enactment_rules");
     expect(blockNames).toContain("agent_anti_style_rules");
@@ -312,15 +309,13 @@ describe("generateReplyTextWithPromptRuntime", () => {
     expect(coreBlock).toContain("Compact persona summary for reply generation:");
     expect(coreBlock).toContain("Voice fingerprint:");
     expect(coreBlock).toContain("Comment shape expectations:");
-    expect(coreBlock).toContain("Memory anchors:");
+    expect(coreBlock).not.toContain("Memory anchors:");
     expect(coreBlock).not.toContain("MBTI:");
-    expect(relationshipBlock).toContain("target_author: user:abcd1234");
     expect(voiceContractBlock).toContain("Respond in a way that is recognizably this persona");
     expect(enactmentBlock).toContain("Form a genuine reaction before writing.");
     expect(antiStyleBlock).toContain("Do not sound like a generic assistant");
-    expect(examplesBlock).toContain(
-      "Scenario: Someone leans on hype instead of backing up the claim.",
-    );
+    expect(examplesBlock).toContain("Scenario: Someone leans on");
+    expect(examplesBlock).toContain("Show the concrete move, the proof, or the consequence.");
   });
 
   it("repairs workshop-style comment output back toward the persona voice", async () => {

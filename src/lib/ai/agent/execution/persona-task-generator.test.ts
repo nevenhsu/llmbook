@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { AiAgentPersonaTaskGenerator } from "@/lib/ai/agent/execution/persona-task-generator";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type {
+  FlowDiagnostics,
+  TextFlowKind,
+  TextFlowRunResult,
+} from "@/lib/ai/agent/execution/flows/types";
 
 function buildTask(overrides: Partial<AiAgentRecentTaskSnapshot> = {}): AiAgentRecentTaskSnapshot {
   return {
@@ -53,25 +58,118 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
   };
 }
 
+function buildDiagnostics(overrides: Partial<FlowDiagnostics> = {}): FlowDiagnostics {
+  return {
+    finalStatus: overrides.finalStatus ?? "passed",
+    terminalStage: overrides.terminalStage ?? null,
+    attempts: overrides.attempts ?? [],
+    stageResults: overrides.stageResults ?? [],
+    gate: overrides.gate,
+  };
+}
+
+function buildFlowResult(flowKind: "post"): Extract<TextFlowRunResult, { flowKind: "post" }>;
+function buildFlowResult(flowKind: "comment"): Extract<TextFlowRunResult, { flowKind: "comment" }>;
+function buildFlowResult(flowKind: "reply"): Extract<TextFlowRunResult, { flowKind: "reply" }>;
+function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
+  if (flowKind === "post") {
+    return {
+      flowKind: "post",
+      parsed: {
+        selectedPostPlan: {
+          title: "Plan title",
+          angleSummary: "Angle",
+          thesis: "Thesis",
+          bodyOutline: ["A", "B", "C"],
+          differenceFromRecent: ["New angle"],
+        },
+        postBody: {
+          body: "Post body",
+          tags: ["#flow"],
+          needImage: false,
+          imagePrompt: null,
+          imageAlt: null,
+        },
+        renderedPost: {
+          title: "Plan title",
+          body: "Post body",
+          tags: ["#flow"],
+          needImage: false,
+          imagePrompt: null,
+          imageAlt: null,
+        },
+      },
+      diagnostics: buildDiagnostics({
+        gate: {
+          attempted: true,
+          passedCandidateIndexes: [1],
+          selectedCandidateIndex: 1,
+        },
+      }),
+    };
+  }
+
+  return {
+    flowKind,
+    parsed:
+      flowKind === "comment"
+        ? {
+            comment: {
+              markdown: "first run comment",
+              needImage: false,
+              imagePrompt: null,
+              imageAlt: null,
+            },
+          }
+        : {
+            reply: {
+              markdown: "first run comment",
+              needImage: false,
+              imagePrompt: null,
+              imageAlt: null,
+            },
+          },
+    diagnostics: buildDiagnostics(),
+  };
+}
+
 describe("AiAgentPersonaTaskGenerator", () => {
-  it("builds shared generation context without passing mode into prompt construction", async () => {
+  it("routes reply generation through the shared flow-module registry instead of parsing raw output inline", async () => {
     const buildPromptContext = vi.fn(async (input: { task: AiAgentRecentTaskSnapshot }) => {
       void input.task;
       return {
+        flowKind: "reply" as const,
         taskType: "comment" as const,
         taskContext: "Generate the publishable comment response.",
       };
     });
+    const runRuntime = vi.fn(async () => ({
+      promptContext: {
+        flowKind: "reply" as const,
+        taskType: "comment" as const,
+        taskContext: "Generate the publishable comment response.",
+      },
+      preview: buildPreviewResult('{"markdown":"first run comment"}'),
+      flowResult: buildFlowResult("reply"),
+      modelSelection: {
+        modelId: "model-1",
+        providerKey: "xai",
+        modelKey: "grok-4-1-fast-reasoning",
+      },
+      modelMetadata: {
+        schema_version: 1,
+      },
+    }));
+    const resolveFlowModule = vi.fn(() => ({
+      flowKind: "reply" as const,
+      runPreview: vi.fn(),
+      runRuntime,
+    }));
 
     const service = new AiAgentPersonaTaskGenerator({
       deps: {
         buildPromptContext,
-        loadPreferredTextModel: async () => ({
-          modelId: "model-1",
-          providerKey: "xai",
-          modelKey: "grok-4-1-fast-reasoning",
-        }),
-        runPersonaInteraction: async () => buildPreviewResult('{"markdown":"first run comment"}'),
+        resolveFlowModule,
       },
     });
 
@@ -88,7 +186,10 @@ describe("AiAgentPersonaTaskGenerator", () => {
       kind: "comment",
       body: "first run comment",
     });
+    expect(result.flowResult.flowKind).toBe("reply");
     expect(buildPromptContext).toHaveBeenCalledTimes(1);
+    expect(resolveFlowModule).toHaveBeenCalledWith("reply");
+    expect(runRuntime).toHaveBeenCalledTimes(1);
     expect(buildPromptContext.mock.calls[0]?.[0]).toEqual({
       task: expect.objectContaining({
         id: "task-1",
@@ -96,128 +197,125 @@ describe("AiAgentPersonaTaskGenerator", () => {
     });
   });
 
-  it("generates output in runtime mode without requiring persisted result metadata before generation", async () => {
+  it.each([
+    {
+      flowKind: "post" as const,
+      expectedKind: "post" as const,
+      promptContext: {
+        flowKind: "post" as const,
+        taskType: "post" as const,
+        taskContext: "Generate the first publishable post.",
+      },
+      expectedOutput: {
+        kind: "post" as const,
+        title: "Plan title",
+        body: "Post body",
+        tags: ["#flow"],
+      },
+    },
+    {
+      flowKind: "comment" as const,
+      expectedKind: "comment" as const,
+      promptContext: {
+        flowKind: "comment" as const,
+        taskType: "comment" as const,
+        taskContext: "Generate the first publishable comment.",
+      },
+      expectedOutput: {
+        kind: "comment" as const,
+        body: "first run comment",
+      },
+    },
+    {
+      flowKind: "reply" as const,
+      expectedKind: "reply" as const,
+      promptContext: {
+        flowKind: "reply" as const,
+        taskType: "comment" as const,
+        taskContext: "Generate the first publishable reply.",
+      },
+      expectedOutput: {
+        kind: "comment" as const,
+        body: "first run comment",
+      },
+    },
+  ])(
+    "uses the shared registry for $flowKind flow generation in runtime mode",
+    async ({ flowKind, expectedKind, promptContext, expectedOutput }) => {
+      const resolveFlowModule = vi.fn(() => ({
+        flowKind,
+        runPreview: vi.fn(),
+        runRuntime: vi.fn(async () => ({
+          promptContext,
+          preview: buildPreviewResult('{"markdown":"first run comment"}'),
+          flowResult: buildFlowResult(flowKind),
+          modelSelection: {
+            modelId: "model-1",
+            providerKey: "xai",
+            modelKey: "grok-4-1-fast-reasoning",
+          },
+          modelMetadata: {
+            schema_version: 1,
+          },
+        })),
+      }));
+
+      const service = new AiAgentPersonaTaskGenerator({
+        deps: {
+          buildPromptContext: async () => promptContext,
+          resolveFlowModule,
+        },
+      });
+
+      const result = await service.generateFromTask({
+        task: buildTask({
+          taskType: flowKind === "post" ? "post" : "comment",
+          sourceTable: flowKind === "post" ? "posts" : "comments",
+          status: "PENDING",
+          resultId: null,
+          resultType: null,
+        }),
+        mode: "runtime",
+      });
+
+      expect(result.flowResult.flowKind).toBe(expectedKind);
+      expect(result.parsedOutput).toEqual(expectedOutput);
+      expect(resolveFlowModule).toHaveBeenCalledWith(flowKind);
+    },
+  );
+
+  it("defaults generation to preview mode when no runtime mode is requested", async () => {
+    const runPreview = vi.fn(async () => ({
+      promptContext: {
+        flowKind: "comment" as const,
+        taskType: "comment" as const,
+        taskContext: "Generate the first publishable comment.",
+      },
+      preview: buildPreviewResult('{"markdown":"first run comment"}'),
+      flowResult: buildFlowResult("comment"),
+      modelSelection: {
+        modelId: "model-1",
+        providerKey: "xai",
+        modelKey: "grok-4-1-fast-reasoning",
+      },
+      modelMetadata: {
+        schema_version: 1,
+      },
+    }));
+    const resolveFlowModule = vi.fn(() => ({
+      flowKind: "comment" as const,
+      runPreview,
+      runRuntime: vi.fn(),
+    }));
+
     const service = new AiAgentPersonaTaskGenerator({
       deps: {
         buildPromptContext: async () => ({
+          flowKind: "comment",
           taskType: "comment",
           taskContext: "Generate the first publishable comment.",
         }),
-        loadPreferredTextModel: async () => ({
-          modelId: "model-1",
-          providerKey: "xai",
-          modelKey: "grok-4-1-fast-reasoning",
-        }),
-        runPersonaInteraction: async (input) => {
-          void input;
-          return buildPreviewResult('{"markdown":"first run comment"}');
-        },
-      },
-    });
-
-    const result = await service.generateFromTask({
-      task: buildTask({
-        status: "PENDING",
-        resultId: null,
-        resultType: null,
-      }),
-      mode: "runtime",
-    });
-
-    expect(result.mode).toBe("runtime");
-    expect(result.parsedOutput).toEqual({
-      kind: "comment",
-      body: "first run comment",
-    });
-  });
-
-  it("uses the shared persona interaction runtime without any persistence side effects", async () => {
-    const runPersonaInteraction = vi.fn(async () =>
-      buildPreviewResult('{"markdown":"regenerated comment"}'),
-    );
-
-    const service = new AiAgentPersonaTaskGenerator({
-      deps: {
-        buildPromptContext: async () => ({
-          taskType: "comment",
-          taskContext: "Regenerate the publishable comment response.",
-        }),
-        loadPreferredTextModel: async () => ({
-          modelId: "model-1",
-          providerKey: "xai",
-          modelKey: "grok-4-1-fast-reasoning",
-        }),
-        runPersonaInteraction,
-      },
-    });
-
-    const result = await service.generateFromTask({
-      task: buildTask({
-        status: "FAILED",
-        resultId: null,
-        resultType: null,
-      }),
-      mode: "runtime",
-    });
-
-    expect(runPersonaInteraction).toHaveBeenCalledTimes(1);
-    expect(result.parsedOutput).toEqual({
-      kind: "comment",
-      body: "regenerated comment",
-    });
-  });
-
-  it("passes preformatted board and target context text into shared generation", async () => {
-    const runPersonaInteraction = vi.fn(async () =>
-      buildPreviewResult('{"markdown":"regenerated comment"}'),
-    );
-
-    const service = new AiAgentPersonaTaskGenerator({
-      deps: {
-        buildPromptContext: async () => ({
-          taskType: "comment",
-          taskContext: "Generate a reply inside the active thread below.",
-          boardContextText: "[board]\nName: Creative Lab",
-          targetContextText: "[source_comment]\n[artist_1]: Please be more specific.",
-        }),
-        loadPreferredTextModel: async () => ({
-          modelId: "model-1",
-          providerKey: "xai",
-          modelKey: "grok-4-1-fast-reasoning",
-        }),
-        runPersonaInteraction,
-      },
-    });
-
-    await service.generateFromTask({
-      task: buildTask(),
-      mode: "runtime",
-    });
-
-    expect(runPersonaInteraction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        boardContextText: "[board]\nName: Creative Lab",
-        targetContextText: "[source_comment]\n[artist_1]: Please be more specific.",
-      }),
-    );
-  });
-
-  it("defaults generation to test mode when no runtime mode is requested", async () => {
-    const service = new AiAgentPersonaTaskGenerator({
-      deps: {
-        buildPromptContext: async () => ({
-          taskType: "comment",
-          taskContext: "Generate the first publishable comment.",
-        }),
-        loadPreferredTextModel: async () => ({
-          modelId: "model-1",
-          providerKey: "xai",
-          modelKey: "grok-4-1-fast-reasoning",
-        }),
-        runPersonaInteraction: async (input) => {
-          void input;
-          return buildPreviewResult('{"markdown":"first run comment"}');
-        },
+        resolveFlowModule,
       },
     });
 
@@ -234,5 +332,58 @@ describe("AiAgentPersonaTaskGenerator", () => {
       kind: "comment",
       body: "first run comment",
     });
+    expect(runPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes preformatted board and target context text into the resolved flow module", async () => {
+    const runRuntime = vi.fn(
+      async (input: {
+        promptContext: { boardContextText?: string; targetContextText?: string };
+      }) => {
+        expect(input.promptContext.boardContextText).toBe("[board]\nName: Creative Lab");
+        expect(input.promptContext.targetContextText).toBe(
+          "[source_comment]\n[artist_1]: Please be more specific.",
+        );
+
+        return {
+          promptContext: input.promptContext,
+          preview: buildPreviewResult('{"markdown":"regenerated comment"}'),
+          flowResult: buildFlowResult("reply"),
+          modelSelection: {
+            modelId: "model-1",
+            providerKey: "xai",
+            modelKey: "grok-4-1-fast-reasoning",
+          },
+          modelMetadata: {
+            schema_version: 1,
+          },
+        };
+      },
+    );
+    const resolveFlowModule = vi.fn(() => ({
+      flowKind: "reply" as const,
+      runPreview: vi.fn(),
+      runRuntime,
+    }));
+
+    const service = new AiAgentPersonaTaskGenerator({
+      deps: {
+        buildPromptContext: async () => ({
+          flowKind: "reply",
+          taskType: "comment",
+          taskContext: "Generate a reply inside the active thread below.",
+          boardContextText: "[board]\nName: Creative Lab",
+          targetContextText: "[source_comment]\n[artist_1]: Please be more specific.",
+        }),
+        resolveFlowModule,
+      },
+    });
+
+    await service.generateFromTask({
+      task: buildTask(),
+      mode: "runtime",
+    });
+
+    expect(runRuntime).toHaveBeenCalledTimes(1);
   });
 });

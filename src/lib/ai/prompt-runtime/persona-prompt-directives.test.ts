@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPersonaEvidence,
+  buildPlannerPostingLens,
   buildPersonaVoiceRepairPrompt,
   derivePromptPersonaDirectives,
   detectPersonaVoiceDrift,
@@ -25,7 +27,7 @@ function sampleProfile(): RuntimeCoreProfile {
       avoid: ["tutorial-style explanation", "balanced essay tone"],
     },
     relationshipTendencies: {
-      defaultStance: "impulsive and loyalty-first",
+      defaultStance: "unused legacy stance",
       trustSignals: ["shows up for the crew"],
       frictionTriggers: ["formal debate styled as posturing"],
     },
@@ -107,6 +109,7 @@ describe("derivePromptPersonaDirectives", () => {
     expect(directives.voiceContract.join("\n")).toContain("Loyalty to chosen crew");
     expect(directives.voiceContract.join("\n")).toContain("reference roles");
     expect(directives.voiceContract.join("\n")).toContain("Monkey D. Luffy");
+    expect(directives.voiceContract.join("\n")).not.toContain("unused legacy stance");
     expect(directives.antiStyleRules.join("\n")).toContain("generic assistant");
     expect(directives.antiStyleRules.join("\n")).toContain("tutorial");
     expect(directives.enactmentRules.join("\n")).toContain("Loyalty to chosen crew");
@@ -119,6 +122,58 @@ describe("derivePromptPersonaDirectives", () => {
     expect(directives.inCharacterExamples[1]?.response).toContain("resolved in the gut");
     expect(directives.referenceRoleGuidance).toHaveLength(1);
     expect(directives.referenceRoleGuidance[0]).toContain("Monkey D. Luffy");
+  });
+
+  it("builds a planner posting lens from discussion semantics and reference sources without relying on relationship fields", () => {
+    const postingLens = buildPlannerPostingLens({
+      profile: sampleProfile(),
+      personaCore: {
+        identity_summary: {
+          one_sentence_identity:
+            "An impulsive, loyal-to-a-fault troublemaker who treats every forum like his ship.",
+        },
+        interaction_defaults: {
+          default_stance: "supportive_but_blunt",
+          discussion_strengths: ["Fiercely defending crewmates with absolute ferocity"],
+          non_generic_traits: [
+            "Would rather throw hands in a group chat than compose a carefully worded reply",
+          ],
+        },
+        reference_sources: [{ name: "Monkey D. Luffy", type: "anime_manga_character" }],
+      },
+    });
+
+    expect(postingLens.join("\n")).toContain("supportive_but_blunt");
+    expect(postingLens.join("\n")).toContain("Monkey D. Luffy");
+    expect(postingLens.join("\n")).not.toContain("unused legacy stance");
+  });
+
+  it("builds compact persona evidence with reference-source names for downstream audit and repair packets", () => {
+    const evidence = buildPersonaEvidence({
+      displayName: "AI Artist",
+      profile: sampleProfile(),
+      personaCore: {
+        identity_summary: {
+          one_sentence_identity:
+            "An impulsive, loyal-to-a-fault troublemaker who treats every forum like his ship.",
+        },
+        interaction_defaults: {
+          default_stance: "supportive_but_blunt",
+          discussion_strengths: ["Fiercely defending crewmates with absolute ferocity"],
+        },
+        reference_sources: [
+          { name: "Monkey D. Luffy", type: "anime_manga_character" },
+          { name: "Straw Hat Pirates", type: "fictional_organization" },
+        ],
+      },
+    });
+
+    expect(evidence.displayName).toBe("AI Artist");
+    expect(evidence.referenceSourceNames).toEqual(["Monkey D. Luffy", "Straw Hat Pirates"]);
+    expect(evidence.doctrine.valueFit.length).toBeGreaterThan(0);
+    expect(evidence.doctrine.reasoningFit.length).toBeGreaterThan(0);
+    expect(evidence.doctrine.discourseFit.length).toBeGreaterThan(0);
+    expect(evidence.doctrine.expressionFit.length).toBeGreaterThan(0);
   });
 
   it("derives different post-specific directives than comment-specific ones", () => {

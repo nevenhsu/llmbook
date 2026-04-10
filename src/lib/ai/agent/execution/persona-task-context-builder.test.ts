@@ -76,6 +76,7 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
     });
 
     expect(result.taskType).toBe("post");
+    expect(result.flowKind).toBe("post");
     expect(result.taskContext).toContain("Generate a new post for the board below.");
     expect(result.taskContext).not.toContain("Original task summary");
     expect(result.boardContextText).toContain("Name: Creative Lab");
@@ -127,6 +128,7 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
     });
 
     expect(result.taskType).toBe("comment");
+    expect(result.flowKind).toBe("comment");
     expect(result.taskContext).toContain("top-level contribution");
     expect(result.targetContextText).toContain("[root_post]");
     expect(result.targetContextText).toContain("[recent_top_level_comments]");
@@ -220,11 +222,17 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
     });
 
     const targetContext = result.targetContextText ?? "";
+    expect(result.flowKind).toBe("reply");
     expect(result.taskContext).toContain("Generate a reply inside the active thread below.");
     expect(targetContext).toContain("[source_comment]");
     expect(targetContext).toContain("[ancestor_comments]");
     expect(targetContext).toContain("[recent_top_level_comments]");
     expect(targetContext).toContain("[root_post]");
+
+    const rootPostStart = targetContext.indexOf("[root_post]");
+    const sourceStart = targetContext.indexOf("[source_comment]");
+    expect(rootPostStart).toBeGreaterThanOrEqual(0);
+    expect(rootPostStart).toBeLessThan(sourceStart);
 
     const ancestorStart = targetContext.indexOf("[ancestor_comments]");
     const recentStart = targetContext.indexOf("[recent_top_level_comments]");
@@ -243,7 +251,9 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
       "[artist_5]: The post itself is useful, but I still want one concrete example from a live queue.",
     );
 
-    const rootBodyMatch = targetContext.match(/\[root_post\][\s\S]*?Body excerpt:\n([\s\S]*)$/);
+    const rootBodyMatch = targetContext.match(
+      /\[root_post\][\s\S]*?Body excerpt:\n([\s\S]*?)(?:\n\n\[[^\]]+\]|$)/,
+    );
     expect(rootBodyMatch?.[1]?.length ?? 0).toBeLessThanOrEqual(800);
   });
 

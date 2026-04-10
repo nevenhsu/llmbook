@@ -14,6 +14,18 @@ export type PromptPersonaDirectives = {
   referenceRoleGuidance: string[];
 };
 
+export type PromptPersonaEvidence = {
+  displayName: string | null;
+  identity: string | null;
+  referenceSourceNames: string[];
+  doctrine: {
+    valueFit: string[];
+    reasoningFit: string[];
+    discourseFit: string[];
+    expressionFit: string[];
+  };
+};
+
 type PersonaDirectiveActionType = Extract<PromptActionType, "post" | "comment">;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -84,6 +96,25 @@ function readPersonaDiscussionStrengths(personaCore?: Record<string, unknown> | 
           (item): item is string => typeof item === "string",
         ),
         6,
+      )
+    : [];
+}
+
+function readPersonaDefaultStance(personaCore?: Record<string, unknown> | null): string | null {
+  const interactionDefaults = asRecord(personaCore?.interaction_defaults);
+  return typeof interactionDefaults?.default_stance === "string"
+    ? normalizeText(interactionDefaults.default_stance)
+    : null;
+}
+
+function readPersonaFrictionTriggers(personaCore?: Record<string, unknown> | null): string[] {
+  const interactionDefaults = asRecord(personaCore?.interaction_defaults);
+  return Array.isArray(interactionDefaults?.friction_triggers)
+    ? uniqueNonEmpty(
+        interactionDefaults.friction_triggers.filter(
+          (item): item is string => typeof item === "string",
+        ),
+        4,
       )
     : [];
 }
@@ -233,6 +264,92 @@ function buildPostWorldviewResponse(input: {
   );
 }
 
+export function buildPlannerPostingLens(input: {
+  profile: RuntimeCoreProfile;
+  personaCore?: Record<string, unknown> | null;
+}): string[] {
+  const stance =
+    readPersonaDefaultStance(input.personaCore) ??
+    input.profile.interactionDoctrine.collaborationStance;
+  const discussionStrengths = readPersonaDiscussionStrengths(input.personaCore);
+  const nonGenericTraits = readPersonaNonGenericTraits(input.personaCore);
+  const references = readPersonaReferences(input.personaCore);
+
+  return uniqueNonEmpty(
+    [
+      `This persona tends to post when ${discussionStrengths[0] ?? "a hidden assumption or weak framing needs to be exposed"}.`,
+      `Natural post framing: ${input.profile.taskStyleMatrix.post.entryShape}`,
+      `Discussion stance: ${stance}.`,
+      nonGenericTraits[0] ? `Keep this posting trait visible: ${nonGenericTraits[0]}.` : null,
+      references.length > 0
+        ? `Reference roles to keep in view while planning: ${references.join(", ")}.`
+        : null,
+      "Make the title feel like a pointed intervention from this persona, not a neutral explainer.",
+    ],
+    6,
+  );
+}
+
+export function buildPersonaEvidence(input: {
+  displayName?: string | null;
+  profile: RuntimeCoreProfile;
+  personaCore?: Record<string, unknown> | null;
+}): PromptPersonaEvidence {
+  const identity = readPersonaIdentity(input.personaCore) ?? input.profile.identityCore.archetype;
+  const defaultStance =
+    readPersonaDefaultStance(input.personaCore) ??
+    input.profile.interactionDoctrine.collaborationStance;
+  const discussionStrengths = readPersonaDiscussionStrengths(input.personaCore);
+  const nonGenericTraits = readPersonaNonGenericTraits(input.personaCore);
+  const referenceSourceNames = readPersonaReferences(input.personaCore);
+
+  return {
+    displayName: input.displayName?.trim() || null,
+    identity,
+    referenceSourceNames,
+    doctrine: {
+      valueFit: uniqueNonEmpty(
+        [
+          ...input.profile.valueHierarchy
+            .slice()
+            .sort((a, b) => a.priority - b.priority)
+            .slice(0, 3)
+            .map((entry) => entry.value),
+          ...discussionStrengths.slice(0, 2),
+        ],
+        5,
+      ),
+      reasoningFit: uniqueNonEmpty(
+        [
+          ...input.profile.reasoningLens.primary.slice(0, 3),
+          input.profile.reasoningLens.promptHint,
+          ...readPersonaFrictionTriggers(input.personaCore).slice(0, 2),
+        ],
+        6,
+      ),
+      discourseFit: uniqueNonEmpty(
+        [
+          input.profile.taskStyleMatrix.post.entryShape,
+          input.profile.taskStyleMatrix.comment.feedbackShape,
+          input.profile.taskStyleMatrix.comment.closeShape,
+          ...discussionStrengths.slice(0, 2),
+        ],
+        5,
+      ),
+      expressionFit: uniqueNonEmpty(
+        [
+          input.profile.voiceFingerprint.openingMove,
+          input.profile.voiceFingerprint.attackStyle,
+          input.profile.voiceFingerprint.closingMove,
+          defaultStance,
+          ...nonGenericTraits.slice(0, 2),
+        ],
+        6,
+      ),
+    },
+  };
+}
+
 export function derivePromptPersonaDirectives(input: {
   actionType: PersonaDirectiveActionType;
   profile: RuntimeCoreProfile;
@@ -242,10 +359,12 @@ export function derivePromptPersonaDirectives(input: {
   const identity = readPersonaIdentity(input.personaCore) ?? input.profile.identityCore.archetype;
   const topValue = input.profile.valueHierarchy[0]?.value ?? "the persona's priorities";
   const defaultStance =
-    input.profile.relationshipTendencies.defaultStance || "the persona's default stance";
+    readPersonaDefaultStance(input.personaCore) ??
+    input.profile.interactionDoctrine.collaborationStance ??
+    "the persona's discussion stance";
   const promptHint = input.profile.reasoningLens.promptHint;
   const tones = uniqueNonEmpty(input.profile.responseStyle.tone, 3);
-  const frictions = uniqueNonEmpty(input.profile.relationshipTendencies.frictionTriggers, 3);
+  const frictions = readPersonaFrictionTriggers(input.personaCore);
   const avoidPatterns = uniqueNonEmpty(
     [
       ...input.profile.responseStyle.avoid,
@@ -283,7 +402,7 @@ export function derivePromptPersonaDirectives(input: {
       `Respond in a way that is recognizably this persona: ${identity}.`,
       `Use this opening move: ${voiceFingerprint.openingMove}`,
       `Let ${topValue} visibly shape what the response defends, challenges, or protects.`,
-      `Keep this relational stance on the page: ${defaultStance}.`,
+      `Keep this discussion stance on the page: ${defaultStance}.`,
       `When the response needs imagery or analogy, prefer these metaphor domains: ${voiceFingerprint.metaphorDomains.join(", ")}.`,
       promptHint ? `Anchor the response in this cue: ${promptHint}.` : null,
       referenceRoleGuidance.length > 0

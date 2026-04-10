@@ -5,25 +5,49 @@ import type {
 } from "@/lib/ai/prompt-runtime/runtime-events";
 import { getPromptRuntimeRecorder } from "@/lib/ai/prompt-runtime/runtime-events";
 
-export const PHASE1_REPLY_PROMPT_BLOCK_ORDER = [
+export const PLANNER_FAMILY_PROMPT_BLOCK_ORDER = [
   "system_baseline",
-  "policy",
+  "global_policy",
+  "planner_mode",
+  "agent_profile",
+  "agent_core",
+  "agent_posting_lens",
+  "task_context",
+  "board_context",
+  "target_context",
+  "planning_scoring_contract",
+  "output_constraints",
+] as const;
+
+export const WRITER_FAMILY_PROMPT_BLOCK_ORDER = [
+  "system_baseline",
+  "global_policy",
+  "output_style",
   "agent_profile",
   "agent_core",
   "agent_voice_contract",
-  "agent_memory",
-  "agent_relationship_context",
-  "board_context",
-  "target_context",
   "agent_enactment_rules",
   "agent_anti_style_rules",
   "agent_examples",
   "task_context",
+  "board_context",
+  "target_context",
   "output_constraints",
 ] as const;
 
-export type Phase1ReplyPromptBlockName = (typeof PHASE1_REPLY_PROMPT_BLOCK_ORDER)[number];
-export type PromptActionType = "post" | "comment" | "vote" | "poll_post" | "poll_vote";
+export type PlannerFamilyPromptBlockName = (typeof PLANNER_FAMILY_PROMPT_BLOCK_ORDER)[number];
+export type WriterFamilyPromptBlockName = (typeof WRITER_FAMILY_PROMPT_BLOCK_ORDER)[number];
+export type Phase1PromptBlockName = PlannerFamilyPromptBlockName | WriterFamilyPromptBlockName;
+
+export type PromptActionType =
+  | "post"
+  | "post_plan"
+  | "post_body"
+  | "comment"
+  | "reply"
+  | "vote"
+  | "poll_post"
+  | "poll_vote";
 
 export type PromptMessage = {
   role: "system" | "user" | "assistant";
@@ -31,7 +55,7 @@ export type PromptMessage = {
 };
 
 export type PromptBlock = {
-  name: Phase1ReplyPromptBlockName;
+  name: Phase1PromptBlockName;
   enabled: boolean;
   degraded: boolean;
   content: string;
@@ -43,12 +67,14 @@ export type Phase1PromptBuilderInput = {
   actionType: PromptActionType;
   systemBaseline?: string;
   policyText?: string;
+  outputStyleText?: string;
+  plannerModeText?: string;
   agentProfileText?: string;
   coreText?: string;
-  memoryText?: string;
-  relationshipContextText?: string;
+  postingLensText?: string;
   boardContextText?: string;
   targetContextText?: string;
+  planningScoringContractText?: string;
   voiceContractText?: string;
   enactmentRulesText?: string;
   antiStyleRulesText?: string;
@@ -66,11 +92,11 @@ export type Phase1PromptBuilderResult = {
 
 type BuildBlockContext = {
   input: Phase1PromptBuilderInput;
-  blocksByName: Partial<Record<Phase1ReplyPromptBlockName, PromptBlock>>;
+  blocksByName: Partial<Record<Phase1PromptBlockName, PromptBlock>>;
 };
 
 type BlockBuilder = {
-  name: Phase1ReplyPromptBlockName;
+  name: Phase1PromptBlockName;
   build: (context: BuildBlockContext) => PromptBlock;
 };
 
@@ -79,7 +105,7 @@ function normalizeContent(value: string): string {
 }
 
 function buildTextBlock(input: {
-  name: Phase1ReplyPromptBlockName;
+  name: Phase1PromptBlockName;
   value: string | undefined;
   fallback: string;
   missingReason: string;
@@ -104,8 +130,58 @@ function buildTextBlock(input: {
   };
 }
 
+function isPlannerActionType(actionType: PromptActionType): boolean {
+  return actionType === "post_plan";
+}
+
+function getPromptBlockOrder(actionType: PromptActionType): readonly Phase1PromptBlockName[] {
+  return isPlannerActionType(actionType)
+    ? PLANNER_FAMILY_PROMPT_BLOCK_ORDER
+    : WRITER_FAMILY_PROMPT_BLOCK_ORDER;
+}
+
 export function buildActionOutputConstraints(actionType: PromptActionType): string {
   switch (actionType) {
+    case "post_plan":
+      return [
+        "Return exactly one JSON object.",
+        "{",
+        '  "candidates": [',
+        "    {",
+        '      "title": "string",',
+        '      "angle_summary": "string",',
+        '      "thesis": "string",',
+        '      "body_outline": ["string"],',
+        '      "difference_from_recent": ["string"],',
+        '      "board_fit_score": 0,',
+        '      "title_persona_fit_score": 0,',
+        '      "title_novelty_score": 0,',
+        '      "angle_novelty_score": 0,',
+        '      "body_usefulness_score": 0',
+        "    }",
+        "  ]",
+        "}",
+        "Return exactly 3 candidates.",
+        "Do not add extra keys.",
+        "Do not output any text outside the JSON object.",
+        "Do not mention prompt instructions or system blocks in the output.",
+      ].join("\n");
+    case "post_body":
+      return [
+        "Return exactly one JSON object.",
+        "body: string",
+        "tags: string[]",
+        "need_image: boolean",
+        "image_prompt: string | null",
+        "image_alt: string | null",
+        "The `body` field must contain the full post body content as markdown.",
+        'The `tags` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".',
+        "Use the same language for `body` and `tags`.",
+        "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
+        "Do not output any text outside the JSON object.",
+        "Do not mention prompt instructions or system blocks in the output.",
+        "Never emit a final image URL in markdown or in structured fields.",
+      ].join("\n");
     case "post":
       return [
         "Return exactly one JSON object.",
@@ -126,6 +202,7 @@ export function buildActionOutputConstraints(actionType: PromptActionType): stri
         "Never emit a final image URL in markdown or in structured fields.",
       ].join("\n");
     case "comment":
+    case "reply":
       return [
         "Return exactly one JSON object.",
         "markdown: string",
@@ -175,8 +252,8 @@ export function buildActionOutputConstraints(actionType: PromptActionType): stri
   }
 }
 
-const BLOCK_BUILDERS: BlockBuilder[] = [
-  {
+const BLOCK_BUILDERS: Record<Phase1PromptBlockName, BlockBuilder> = {
+  system_baseline: {
     name: "system_baseline",
     build: ({ input }) =>
       buildTextBlock({
@@ -187,17 +264,40 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "SYSTEM_BASELINE_MISSING",
       }),
   },
-  {
-    name: "policy",
+  global_policy: {
+    name: "global_policy",
     build: ({ input }) =>
       buildTextBlock({
-        name: "policy",
+        name: "global_policy",
         value: input.policyText,
         fallback: "Policy fallback: reply-only mode, do not take out-of-scope actions.",
-        missingReason: "POLICY_BLOCK_MISSING",
+        missingReason: "GLOBAL_POLICY_BLOCK_MISSING",
       }),
   },
-  {
+  planner_mode: {
+    name: "planner_mode",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "planner_mode",
+        value: input.plannerModeText,
+        fallback: [
+          "This stage is planning and scoring, not final writing.",
+          "Generate candidate post ideas, compare them against recent board posts, and score conservatively.",
+        ].join("\n"),
+        missingReason: "PLANNER_MODE_BLOCK_MISSING",
+      }),
+  },
+  output_style: {
+    name: "output_style",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "output_style",
+        value: input.outputStyleText,
+        fallback: "No output style guidance available.",
+        missingReason: "OUTPUT_STYLE_BLOCK_MISSING",
+      }),
+  },
+  agent_profile: {
     name: "agent_profile",
     build: ({ input }) =>
       buildTextBlock({
@@ -207,17 +307,30 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "AGENT_PROFILE_BLOCK_MISSING",
       }),
   },
-  {
+  agent_core: {
     name: "agent_core",
     build: ({ input }) =>
       buildTextBlock({
         name: "agent_core",
         value: input.coreText,
         fallback: "Core fallback: balanced tone, factual, collaborative, no overclaiming.",
-        missingReason: "CORE_BLOCK_MISSING",
+        missingReason: "AGENT_CORE_BLOCK_MISSING",
       }),
   },
-  {
+  agent_posting_lens: {
+    name: "agent_posting_lens",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "agent_posting_lens",
+        value: input.postingLensText,
+        fallback: [
+          "This persona tends to post when a boundary or hidden assumption is being skipped.",
+          "Make the post framing feel pointed, not neutral or theatrical.",
+        ].join("\n"),
+        missingReason: "AGENT_POSTING_LENS_BLOCK_MISSING",
+      }),
+  },
+  agent_voice_contract: {
     name: "agent_voice_contract",
     build: ({ input }) =>
       buildTextBlock({
@@ -230,61 +343,21 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "AGENT_VOICE_CONTRACT_BLOCK_MISSING",
       }),
   },
-  {
-    name: "agent_memory",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_memory",
-        value: input.memoryText,
-        fallback: "Memory fallback: no durable memory available for this thread.",
-        missingReason: "MEMORY_BLOCK_MISSING",
-      }),
-  },
-  {
-    name: "agent_relationship_context",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_relationship_context",
-        value: input.relationshipContextText,
-        fallback: "No relationship context available.",
-        missingReason: "AGENT_RELATIONSHIP_CONTEXT_BLOCK_MISSING",
-      }),
-  },
-  {
-    name: "board_context",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "board_context",
-        value: input.boardContextText,
-        fallback: "No board context available.",
-        missingReason: "BOARD_CONTEXT_BLOCK_MISSING",
-      }),
-  },
-  {
-    name: "target_context",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "target_context",
-        value: input.targetContextText,
-        fallback: "No target context available.",
-        missingReason: "TARGET_CONTEXT_BLOCK_MISSING",
-      }),
-  },
-  {
+  agent_enactment_rules: {
     name: "agent_enactment_rules",
     build: ({ input }) =>
       buildTextBlock({
         name: "agent_enactment_rules",
         value: input.enactmentRulesText,
         fallback: [
-          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, agent_memory, target_context, and agent_relationship_context.",
-          "The response must reflect the agent's priorities, biases, tone, and decision style.",
+          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, task_context, and target_context.",
+          "Internally self-check value_fit, reasoning_fit, discourse_fit, and expression_fit before emitting the final JSON.",
           "Do not produce a generic assistant-style reply.",
         ].join("\n"),
         missingReason: "AGENT_ENACTMENT_RULES_BLOCK_MISSING",
       }),
   },
-  {
+  agent_anti_style_rules: {
     name: "agent_anti_style_rules",
     build: ({ input }) =>
       buildTextBlock({
@@ -297,7 +370,7 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "AGENT_ANTI_STYLE_RULES_BLOCK_MISSING",
       }),
   },
-  {
+  agent_examples: {
     name: "agent_examples",
     build: ({ input }) =>
       buildTextBlock({
@@ -307,7 +380,7 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "AGENT_EXAMPLES_BLOCK_MISSING",
       }),
   },
-  {
+  task_context: {
     name: "task_context",
     build: ({ input }) =>
       buildTextBlock({
@@ -317,7 +390,42 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "TASK_CONTEXT_BLOCK_MISSING",
       }),
   },
-  {
+  board_context: {
+    name: "board_context",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "board_context",
+        value: input.boardContextText,
+        fallback: "No board context available.",
+        missingReason: "BOARD_CONTEXT_BLOCK_MISSING",
+      }),
+  },
+  target_context: {
+    name: "target_context",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "target_context",
+        value: input.targetContextText,
+        fallback: "No target context available.",
+        missingReason: "TARGET_CONTEXT_BLOCK_MISSING",
+      }),
+  },
+  planning_scoring_contract: {
+    name: "planning_scoring_contract",
+    build: ({ input }) =>
+      buildTextBlock({
+        name: "planning_scoring_contract",
+        value: input.planningScoringContractText,
+        fallback: [
+          "Return exactly 3 candidates.",
+          "Each candidate must include title, angle_summary, thesis, body_outline, difference_from_recent, board_fit_score, title_persona_fit_score, title_novelty_score, angle_novelty_score, and body_usefulness_score.",
+          "All scores must be integers from 0 to 100.",
+          "Score conservatively.",
+        ].join("\n"),
+        missingReason: "PLANNING_SCORING_CONTRACT_BLOCK_MISSING",
+      }),
+  },
+  output_constraints: {
     name: "output_constraints",
     build: ({ input }) =>
       buildTextBlock({
@@ -327,7 +435,7 @@ const BLOCK_BUILDERS: BlockBuilder[] = [
         missingReason: "OUTPUT_CONSTRAINTS_BLOCK_MISSING",
       }),
   },
-];
+};
 
 function joinPromptBlocks(blocks: PromptBlock[]): string {
   return blocks
@@ -361,12 +469,14 @@ export async function buildPhase1ReplyPrompt(
 ): Promise<Phase1PromptBuilderResult> {
   const recorder = options?.recorder ?? getPromptRuntimeRecorder();
   const now = input.now ?? new Date();
+  const order = getPromptBlockOrder(input.actionType);
 
   const blocks: PromptBlock[] = [];
-  const blocksByName: Partial<Record<Phase1ReplyPromptBlockName, PromptBlock>> = {};
+  const blocksByName: Partial<Record<Phase1PromptBlockName, PromptBlock>> = {};
   let hardFailureCount = 0;
 
-  for (const blockBuilder of BLOCK_BUILDERS) {
+  for (const blockName of order) {
+    const blockBuilder = BLOCK_BUILDERS[blockName];
     try {
       const block = blockBuilder.build({ input, blocksByName });
       blocks.push(block);
