@@ -42,7 +42,7 @@ const PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER = "(from Context / Extra
 const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "seed",
-    goal: "Establish the persona's identity seed, bio, and explicit references.",
+    goal: "Establish the persona identity seed, named references, and originalization boundary.",
     hasValidatedContext: false,
     contract: [
       "Return one JSON object with keys:",
@@ -61,33 +61,15 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
     ],
   },
   {
-    name: "values_and_aesthetic",
-    goal: "Define the persona's values and aesthetic taste using the seed identity.",
-    hasValidatedContext: true,
+    name: "persona_core",
+    goal: "Generate the reusable persona guidance that downstream prompts will consume.",
+    hasValidatedContext: false,
     contract: [
       "Return one JSON object with keys:",
       "values{value_hierarchy,worldview,judgment_style},",
-      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
-      "value_hierarchy must be an array of {value,priority} objects.",
-      "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
-    ],
-  },
-  {
-    name: "context_and_affinity",
-    goal: "Ground the persona in lived context and creator affinity.",
-    hasValidatedContext: true,
-    contract: [
-      "Return one JSON object with keys:",
+      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries},",
       "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
-      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases}.",
-    ],
-  },
-  {
-    name: "interaction_and_guardrails",
-    goal: "Define how the persona behaves in discussion and what it avoids.",
-    hasValidatedContext: true,
-    contract: [
-      "Return one JSON object with keys:",
+      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases},",
       "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
       "guardrails{hard_no,deescalation_style},",
       "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
@@ -95,24 +77,8 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
       "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
       "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
-    ],
-  },
-  {
-    name: "memories",
-    goal: "Optionally add a few useful canonical or recent persona memories.",
-    hasValidatedContext: true,
-    contract: [
-      "Return one JSON object with key:",
-      "persona_memories[{memory_type,scope,content,metadata,expires_in_hours,importance}].",
-      "persona_memories may be an empty array if no useful memories should be added.",
-      "memory_type must be memory or long_memory.",
-      "At most one persona_memories row may use memory_type=long_memory.",
-      "scope must always be persona.",
-      "metadata must contain exactly topic_keys:string[], stance_summary:string, follow_up_hooks:string[], and promotion_candidate:boolean.",
-      "Do not include app-owned metadata fields such as schema_version, source_kind, source ids, write_method, or scope markers inside metadata.",
-      "importance must be an integer from 0 to 10.",
-      "Keep memories reference-inspired, not reference-cosplay.",
-      "Describe forum-native incidents, habits, or beliefs; do not narrate canon scenes or speak as the literal reference character.",
+      "Provide enough signal for downstream doctrine derivation across value_fit, reasoning_fit, discourse_fit, and expression_fit.",
+      "Do not output value_fit, reasoning_fit, discourse_fit, or expression_fit as direct keys.",
     ],
   },
 ] as const;
@@ -150,17 +116,17 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
         name: "persona_generation_stage",
         content: [`stage_name: ${stage.name}`, `stage_goal: ${stage.goal}`].join("\n"),
       },
-      ...(stage.hasValidatedContext
-        ? [
-            {
-              name: "validated_context",
-              content:
-                "(populated from previously validated stage output during runtime generation)",
-            },
-          ]
-        : []),
       { name: "stage_contract", content: stage.contract.join("\n") },
-      { name: "output_constraints", content: "Output strictly valid JSON." },
+      {
+        name: "output_constraints",
+        content: [
+          "Output strictly valid JSON.",
+          "No markdown, wrapper text, or explanatory prose outside the JSON object.",
+          "Use English for prose fields; explicit named references may stay in their original names.",
+          "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
+          "Do not add extra keys.",
+        ].join("\n"),
+      },
     ]);
 
     return {

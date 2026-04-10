@@ -59,31 +59,12 @@ const seedContext = {
   originalization_note: fixture.structured.originalization_note,
 };
 
-const valuesAestheticContext = {
-  ...seedContext,
-  values: fixture.structured.persona_core.values,
-  aesthetic_profile: fixture.structured.persona_core.aesthetic_profile,
-};
-
-const interactionContext = {
-  ...valuesAestheticContext,
-  lived_context: fixture.structured.persona_core.lived_context,
-  creator_affinity: fixture.structured.persona_core.creator_affinity,
-};
-
-const memoriesContext = {
-  persona: fixture.structured.persona,
-  persona_core: fixture.structured.persona_core,
-  reference_sources: fixture.structured.reference_sources,
-  other_reference_sources: fixture.structured.other_reference_sources,
-};
-
 function buildStageSection(input: {
   index: number;
   stageName: string;
   stageGoal: string;
   stageContract: string[];
-  validatedContext?: Record<string, unknown>;
+  carryForwardContext?: Record<string, unknown>;
 }) {
   return [
     `### Stage ${input.index}: ${input.stageName}`,
@@ -102,15 +83,19 @@ function buildStageSection(input: {
     "[persona_generation_stage]",
     `stage_name: ${input.stageName}`,
     `stage_goal: ${input.stageGoal}`,
-    "",
-    ...(input.validatedContext
-      ? ["[validated_context]", JSON.stringify(input.validatedContext, null, 2), ""]
+    ...(input.carryForwardContext
+      ? ["prior_stage_source_of_truth:", JSON.stringify(input.carryForwardContext, null, 2)]
       : []),
+    "",
     "[stage_contract]",
     ...input.stageContract,
     "",
     "[output_constraints]",
     "Output strictly valid JSON.",
+    "No markdown, wrapper text, or explanatory prose outside the JSON object.",
+    "Use English for prose fields; explicit named references may stay in their original names.",
+    "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
+    "Do not add extra keys.",
   ].join("\n");
 }
 
@@ -137,35 +122,15 @@ const assembledPrompt = [
   }),
   buildStageSection({
     index: 2,
-    stageName: "values_and_aesthetic",
-    stageGoal: "Define the persona's values and aesthetic taste using the seed identity.",
-    validatedContext: seedContext,
+    stageName: "persona_core",
+    stageGoal: "Generate the reusable persona guidance that downstream prompts will consume.",
+    carryForwardContext: seedContext,
     stageContract: [
       "Return one JSON object with keys:",
       "values{value_hierarchy,worldview,judgment_style},",
-      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
-      "value_hierarchy must be an array of {value,priority} objects.",
-      "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
-    ],
-  }),
-  buildStageSection({
-    index: 3,
-    stageName: "context_and_affinity",
-    stageGoal: "Ground the persona in lived context and creator affinity.",
-    validatedContext: valuesAestheticContext,
-    stageContract: [
-      "Return one JSON object with keys:",
+      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries},",
       "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
-      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases}.",
-    ],
-  }),
-  buildStageSection({
-    index: 4,
-    stageName: "interaction_and_guardrails",
-    stageGoal: "Define how the persona behaves in discussion and what it avoids.",
-    validatedContext: interactionContext,
-    stageContract: [
-      "Return one JSON object with keys:",
+      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases},",
       "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
       "guardrails{hard_no,deescalation_style},",
       "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
@@ -173,23 +138,8 @@ const assembledPrompt = [
       "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
       "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
       "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
-    ],
-  }),
-  buildStageSection({
-    index: 5,
-    stageName: "memories",
-    stageGoal: "Optionally add a few useful canonical or recent persona memories.",
-    validatedContext: memoriesContext,
-    stageContract: [
-      "Return one JSON object with key:",
-      "persona_memories[{memory_type,scope,content,metadata,expires_in_hours,importance}].",
-      "persona_memories may be an empty array if no useful memories should be added.",
-      "memory_type must be memory or long_memory.",
-      "At most one persona_memories row may use memory_type=long_memory.",
-      "scope must always be persona.",
-      "metadata must contain exactly topic_keys:string[], stance_summary:string, follow_up_hooks:string[], and promotion_candidate:boolean.",
-      "Do not include app-owned metadata fields such as schema_version, source_kind, source ids, write_method, or scope markers inside metadata.",
-      "importance must be an integer from 0 to 10.",
+      "Provide enough signal for downstream doctrine derivation across value_fit, reasoning_fit, discourse_fit, and expression_fit.",
+      "Do not output value_fit, reasoning_fit, discourse_fit, or expression_fit as direct keys.",
     ],
   }),
 ].join("\n\n");
@@ -224,11 +174,6 @@ const markdown = [
   "",
   "### originalization_note",
   fixture.structured.originalization_note,
-  "",
-  `### persona_memories (${fixture.structured.persona_memories.length})`,
-  `${codeFence}json`,
-  JSON.stringify(fixture.structured.persona_memories, null, 2),
-  codeFence,
 ].join("\n");
 
 export const mockPersonaGenerationPromptTemplatePreview =

@@ -194,15 +194,59 @@ describe("AiAgentPersonaInteractionService", () => {
       const prompt = String(
         (input as { modelInput?: { prompt?: string } } | undefined)?.modelInput?.prompt ?? "",
       );
-      if (prompt.includes("[persona_output_audit]")) {
+      if (
+        prompt.includes("[persona_output_audit]") ||
+        prompt.includes("[comment_audit]") ||
+        prompt.includes("[reply_audit]") ||
+        prompt.includes("[post_body_audit]")
+      ) {
         return {
           text: JSON.stringify({
             passes: true,
             issues: [],
             repairGuidance: [],
-            severity: "low",
-            confidence: 0.94,
-            missingSignals: [],
+            ...(prompt.includes("[comment_audit]") || prompt.includes("[reply_audit]")
+              ? {
+                  checks: prompt.includes("[reply_audit]")
+                    ? {
+                        source_comment_responsiveness: "pass",
+                        thread_continuity: "pass",
+                        forward_motion: "pass",
+                        non_top_level_essay_shape: "pass",
+                        persona_fit: "pass",
+                      }
+                    : {
+                        post_relevance: "pass",
+                        net_new_value: "pass",
+                        non_repetition_against_recent_comments: "pass",
+                        standalone_top_level_shape: "pass",
+                        persona_fit: "pass",
+                      },
+                }
+              : {
+                  severity: "low",
+                  confidence: 0.94,
+                  missingSignals: [],
+                }),
+            ...(prompt.includes("[post_body_audit]")
+              ? {
+                  contentChecks: {
+                    angle_fidelity: "pass",
+                    board_fit: "pass",
+                    body_usefulness: "pass",
+                    markdown_structure: "pass",
+                    title_body_alignment: "pass",
+                  },
+                  personaChecks: {
+                    body_persona_fit: "pass",
+                    anti_style_compliance: "pass",
+                    value_fit: "pass",
+                    reasoning_fit: "pass",
+                    discourse_fit: "pass",
+                    expression_fit: "pass",
+                  },
+                }
+              : {}),
           }),
           finishReason: "stop",
           error: null,
@@ -241,5 +285,236 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(preview.assembledPrompt).not.toContain("[agent_relationship_context]");
     expect(preview.assembledPrompt).not.toContain("target_type:");
     expect(preview.assembledPrompt).not.toContain("target_id:");
+  });
+
+  it("runs merged post_body audit and one repair loop before returning rendered final post markdown", async () => {
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          body: "Many teams think prompt quality is the main issue.",
+          tags: ["#ai", "#workflow"],
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: ["The body sounds generic instead of persona-specific."],
+          repairGuidance: ["Open with the hidden execution boundary."],
+          contentChecks: {
+            angle_fidelity: "fail",
+            board_fit: "pass",
+            body_usefulness: "fail",
+            markdown_structure: "fail",
+            title_body_alignment: "fail",
+          },
+          personaChecks: {
+            body_persona_fit: "fail",
+            anti_style_compliance: "fail",
+            value_fit: "fail",
+            reasoning_fit: "fail",
+            discourse_fit: "fail",
+            expression_fit: "fail",
+          },
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          body: "## The missing boundary\n\nRepair is narrow. Enforcement is not.",
+          tags: ["#ai", "#workflow"],
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          contentChecks: {
+            angle_fidelity: "pass",
+            board_fit: "pass",
+            body_usefulness: "pass",
+            markdown_structure: "pass",
+            title_body_alignment: "pass",
+          },
+          personaChecks: {
+            body_persona_fit: "pass",
+            anti_style_compliance: "pass",
+            value_fit: "pass",
+            reasoning_fit: "pass",
+            discourse_fit: "pass",
+            expression_fit: "pass",
+          },
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "post_body",
+      taskContext: "Write the final post body for the selected plan below.",
+      boardContextText: "[board]\nName: Creative Lab",
+      targetContextText: [
+        "[selected_post_plan]",
+        "Locked title: The workflow bug people keep mislabeling as a prompt bug",
+        "Angle summary: Show that many prompt bugs are execution-boundary bugs.",
+        "Thesis: Teams keep over-editing prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
+        "Body outline:",
+        "- Show why prompt tuning gets blamed too early.",
+        "- Contrast malformed-output repair with policy enforcement.",
+        "Difference from recent:",
+        "- Focuses on execution contract boundaries rather than prompt wording craft.",
+        "Do not change the title or topic.",
+      ].join("\n"),
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+    });
+
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
+    expect(preview.markdown).toContain(
+      "# The workflow bug people keep mislabeling as a prompt bug",
+    );
+    expect(preview.markdown).toContain("#ai #workflow");
+    expect(preview.markdown).toContain("## The missing boundary");
+    expect(preview.rawResponse).toBe(
+      JSON.stringify({
+        body: "## The missing boundary\n\nRepair is narrow. Enforcement is not.",
+        tags: ["#ai", "#workflow"],
+        need_image: false,
+        image_prompt: null,
+        image_alt: null,
+      }),
+    );
+    expect(preview.auditDiagnostics).toMatchObject({
+      contract: "post_body_audit",
+      status: "passed_after_repair",
+      repairApplied: true,
+      issues: ["The body sounds generic instead of persona-specific."],
+      contentChecks: {
+        angle_fidelity: "pass",
+      },
+      personaChecks: {
+        body_persona_fit: "pass",
+        value_fit: "pass",
+      },
+    });
+  });
+
+  it("runs reply-specific audit and repair instead of the generic persona audit path", async () => {
+    invokeLLM
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          markdown:
+            "Repair is important in many production systems. Workflows need to be thoughtfully designed.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: false,
+          issues: [
+            "The reply restarts the topic as a broad essay instead of continuing the thread.",
+          ],
+          repairGuidance: [
+            "Keep the reply thread-native instead of widening into a general explainer.",
+          ],
+          checks: {
+            source_comment_responsiveness: "fail",
+            thread_continuity: "fail",
+            forward_motion: "fail",
+            non_top_level_essay_shape: "fail",
+            persona_fit: "fail",
+          },
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          markdown:
+            "One concrete change is that malformed output stops going straight into the same lane as policy failure.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          checks: {
+            source_comment_responsiveness: "pass",
+            thread_continuity: "pass",
+            forward_motion: "pass",
+            non_top_level_essay_shape: "pass",
+            persona_fit: "pass",
+          },
+        }),
+        finishReason: "stop",
+        error: null,
+      });
+
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "reply",
+      taskContext: "Generate a reply inside the active thread below.",
+      boardContextText: "[board]\nName: Creative Lab",
+      targetContextText: [
+        "[root_post]",
+        "Title: Best prompting workflows this week",
+        "",
+        "[source_comment]",
+        "[artist_3]: This still sounds too vague. What exactly changes in the workflow if you add a repair step?",
+        "",
+        "[ancestor_comments]",
+        "[artist_1]: Prompt review is useful, but most examples stop before runtime execution.",
+      ].join("\n"),
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+    });
+
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
+    expect(preview.markdown).toContain(
+      "One concrete change is that malformed output stops going straight into the same lane as policy failure.",
+    );
+    expect(preview.auditDiagnostics).toMatchObject({
+      contract: "reply_audit",
+      status: "passed_after_repair",
+      repairApplied: true,
+      checks: {
+        source_comment_responsiveness: "pass",
+        non_top_level_essay_shape: "pass",
+      },
+    });
   });
 });

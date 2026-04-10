@@ -240,15 +240,59 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
       const prompt = String(
         (input as { modelInput?: { prompt?: string } } | undefined)?.modelInput?.prompt ?? "",
       );
-      if (prompt.includes("[persona_output_audit]")) {
+      if (
+        prompt.includes("[persona_output_audit]") ||
+        prompt.includes("[comment_audit]") ||
+        prompt.includes("[reply_audit]") ||
+        prompt.includes("[post_body_audit]")
+      ) {
         return {
           text: JSON.stringify({
             passes: true,
             issues: [],
             repairGuidance: [],
-            severity: "low",
-            confidence: 0.94,
-            missingSignals: [],
+            ...(prompt.includes("[comment_audit]") || prompt.includes("[reply_audit]")
+              ? {
+                  checks: prompt.includes("[reply_audit]")
+                    ? {
+                        source_comment_responsiveness: "pass",
+                        thread_continuity: "pass",
+                        forward_motion: "pass",
+                        non_top_level_essay_shape: "pass",
+                        persona_fit: "pass",
+                      }
+                    : {
+                        post_relevance: "pass",
+                        net_new_value: "pass",
+                        non_repetition_against_recent_comments: "pass",
+                        standalone_top_level_shape: "pass",
+                        persona_fit: "pass",
+                      },
+                }
+              : {
+                  severity: "low",
+                  confidence: 0.94,
+                  missingSignals: [],
+                }),
+            ...(prompt.includes("[post_body_audit]")
+              ? {
+                  contentChecks: {
+                    angle_fidelity: "pass",
+                    board_fit: "pass",
+                    body_usefulness: "pass",
+                    markdown_structure: "pass",
+                    title_body_alignment: "pass",
+                  },
+                  personaChecks: {
+                    body_persona_fit: "pass",
+                    anti_style_compliance: "pass",
+                    value_fit: "pass",
+                    reasoning_fit: "pass",
+                    discourse_fit: "pass",
+                    expression_fit: "pass",
+                  },
+                }
+              : {}),
           }),
           finishReason: "stop",
           error: null,
@@ -319,15 +363,23 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.markdown).toBe("Preview response");
     expect(preview.rawResponse).toBe(JSON.stringify({ markdown: "Preview response" }));
     expect(preview.auditDiagnostics).toEqual({
+      contract: "comment_audit",
       status: "passed",
       issues: [],
       repairGuidance: [],
       severity: "low",
-      confidence: 0.94,
+      confidence: 1,
       missingSignals: [],
       repairApplied: false,
-      auditMode: "default",
+      auditMode: "compact",
       compactRetryUsed: false,
+      checks: {
+        post_relevance: "pass",
+        net_new_value: "pass",
+        non_repetition_against_recent_comments: "pass",
+        standalone_top_level_shape: "pass",
+        persona_fit: "pass",
+      },
     });
   });
 
@@ -484,7 +536,7 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     expect(preview.auditDiagnostics?.compactRetryUsed).toBe(true);
   });
 
-  it("retries comment persona audit with a compact prompt when the first audit returns truncated JSON", async () => {
+  it("repairs comment output through the first-class comment audit contract", async () => {
     const store = new AdminAiControlPlaneStore();
     mockControlPlane(store);
     mockPersona(store);
@@ -500,8 +552,30 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
         error: null,
       })
       .mockResolvedValueOnce({
-        text: '```json\n{\n  "passes": false,\n  "issues": [\n    "Persona claims inability to',
-        finishReason: "length",
+        text: JSON.stringify({
+          passes: false,
+          issues: ["The comment is too generic to feel like a standalone top-level contribution."],
+          repairGuidance: ["Make it stand on its own as a top-level intervention."],
+          checks: {
+            post_relevance: "pass",
+            net_new_value: "fail",
+            non_repetition_against_recent_comments: "fail",
+            standalone_top_level_shape: "fail",
+            persona_fit: "fail",
+          },
+        }),
+        finishReason: "stop",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          markdown:
+            "The useful split is not prompt versus workflow. It is malformed-output recovery versus actual enforcement.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+        finishReason: "stop",
         error: null,
       })
       .mockResolvedValueOnce({
@@ -509,9 +583,13 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
           passes: true,
           issues: [],
           repairGuidance: [],
-          severity: "low",
-          confidence: 0.91,
-          missingSignals: [],
+          checks: {
+            post_relevance: "pass",
+            net_new_value: "pass",
+            non_repetition_against_recent_comments: "pass",
+            standalone_top_level_shape: "pass",
+            persona_fit: "pass",
+          },
         }),
         finishReason: "stop",
         error: null,
@@ -525,12 +603,19 @@ describe("AdminAiControlPlaneStore.previewPersonaInteraction", () => {
     });
 
     expect(preview.renderOk).toBe(true);
-    expect(invokeLLM).toHaveBeenCalledTimes(3);
-    expect(getInvokeCallInput(1)?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("[persona_output_audit]");
-    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("compact");
-    expect(preview.auditDiagnostics?.auditMode).toBe("compact");
-    expect(preview.auditDiagnostics?.compactRetryUsed).toBe(true);
+    expect(invokeLLM).toHaveBeenCalledTimes(4);
+    expect(getInvokeCallInput(1)?.modelInput?.prompt).toContain("[comment_audit]");
+    expect(getInvokeCallInput(2)?.modelInput?.prompt).toContain("[comment_repair]");
+    expect(getInvokeCallInput(3)?.modelInput?.prompt).toContain("[comment_audit]");
+    expect(preview.auditDiagnostics).toMatchObject({
+      contract: "comment_audit",
+      status: "passed_after_repair",
+      repairApplied: true,
+      checks: {
+        standalone_top_level_shape: "pass",
+        persona_fit: "pass",
+      },
+    });
   });
 
   it("repairs invalid post output when the first response omits required tags", async () => {

@@ -7,10 +7,7 @@ export const PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS = 240;
 
 export const PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS = {
   seed: 1200,
-  values_and_aesthetic: 1200,
-  context_and_affinity: 1200,
-  interaction_and_guardrails: 1800,
-  memories: 900,
+  persona_core: 1800,
   repairRetryCap: 1700,
   compactRetryCap: 1300,
   qualityRepairCap: 1800,
@@ -18,7 +15,4 @@ export const PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS = {
 
 export const PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS =
   PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed +
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic +
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.context_and_affinity +
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails +
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.memories;
+  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core;

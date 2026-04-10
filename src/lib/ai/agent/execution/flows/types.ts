@@ -30,6 +30,47 @@ export type FlowDiagnostics = {
     passedCandidateIndexes: number[];
     selectedCandidateIndex: number | null;
   };
+  planningCandidates?: Array<{
+    candidateIndex: number;
+    title: string;
+    overallScore: number;
+    passedHardGate: boolean;
+    scores: {
+      boardFit: number;
+      titlePersonaFit: number;
+      titleNovelty: number;
+      angleNovelty: number;
+      bodyUsefulness: number;
+    };
+  }>;
+  bodyAudit?: {
+    contract: "post_body_audit";
+    status: "passed" | "passed_after_repair";
+    repairApplied: boolean;
+    issues: string[];
+    contentChecks: {
+      angle_fidelity: "pass" | "fail";
+      board_fit: "pass" | "fail";
+      body_usefulness: "pass" | "fail";
+      markdown_structure: "pass" | "fail";
+      title_body_alignment: "pass" | "fail";
+    };
+    personaChecks: {
+      body_persona_fit: "pass" | "fail";
+      anti_style_compliance: "pass" | "fail";
+      value_fit: "pass" | "fail";
+      reasoning_fit: "pass" | "fail";
+      discourse_fit: "pass" | "fail";
+      expression_fit: "pass" | "fail";
+    };
+  };
+  audit?: {
+    contract: "comment_audit" | "reply_audit";
+    status: "passed" | "passed_after_repair";
+    repairApplied: boolean;
+    issues: string[];
+    checks: Record<string, "pass" | "fail">;
+  };
 };
 
 export type WriterMediaTail = {

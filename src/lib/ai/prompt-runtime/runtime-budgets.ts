@@ -36,7 +36,7 @@ export const INTERACTION_RUNTIME_BUDGETS = {
 export function getInteractionRuntimeBudgets(
   actionType: PromptActionType | "reply",
 ): InteractionRuntimeBudgetProfile {
-  if (actionType === "post") {
+  if (actionType === "post" || actionType === "post_plan" || actionType === "post_body") {
     return INTERACTION_RUNTIME_BUDGETS.post;
   }
   if (actionType === "comment" || actionType === "reply") {

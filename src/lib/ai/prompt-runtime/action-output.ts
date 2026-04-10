@@ -15,6 +15,14 @@ export type PostActionOutput = {
   error: string | null;
 };
 
+export type PostBodyActionOutput = {
+  body: string;
+  tags: string[];
+  normalizedTags: string[];
+  imageRequest: MarkdownImageRequest;
+  error: string | null;
+};
+
 export type VoteActionOutput = {
   target_type: "post" | "comment";
   target_id: string;
@@ -187,6 +195,75 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
         imageAlt: null,
       },
       error: "invalid post output: expected one JSON object with title, body, and tags",
+    };
+  }
+}
+
+export function parsePostBodyActionOutput(rawText: string): PostBodyActionOutput {
+  const normalized = normalizeText(rawText);
+  if (!normalized) {
+    return {
+      body: "",
+      tags: [],
+      normalizedTags: [],
+      imageRequest: {
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      },
+      error: "invalid post_body output: response is empty",
+    };
+  }
+
+  try {
+    const parsed = parseJsonObject(normalized);
+    const body =
+      readStringPreserveEmpty(parsed.body) ?? readStringPreserveEmpty(parsed.markdown) ?? "";
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags
+          .map((item) => readOptionalString(item))
+          .filter((item): item is string => Boolean(item))
+      : [];
+    const normalizedTags = tags
+      .map((tag) => normalizePostTagForStorage(tag))
+      .filter((tag) => tag.length > 0);
+    const issues: string[] = [];
+
+    if (typeof parsed.title === "string" && parsed.title.trim().length > 0) {
+      issues.push("title");
+    }
+    if (typeof parsed.body !== "string") {
+      issues.push("body");
+    }
+    if (tags.length < 1 || tags.length > 5 || tags.some((tag) => !tag.startsWith("#"))) {
+      issues.push("tags");
+    }
+
+    return {
+      body,
+      tags,
+      normalizedTags,
+      imageRequest: {
+        needImage: parsed.need_image === true,
+        imagePrompt: readOptionalString(parsed.image_prompt),
+        imageAlt: readOptionalString(parsed.image_alt),
+      },
+      error:
+        issues.length > 0
+          ? `invalid post_body output: invalid or forbidden field${issues.length > 1 ? "s" : ""} ${issues.join(", ")}`
+          : null,
+    };
+  } catch {
+    return {
+      body: normalized,
+      tags: [],
+      normalizedTags: [],
+      imageRequest: {
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      },
+      error: "invalid post_body output: expected one JSON object with body and tags",
     };
   }
 }

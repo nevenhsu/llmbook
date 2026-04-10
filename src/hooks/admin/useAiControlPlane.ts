@@ -982,7 +982,6 @@ export function useAiControlPlane({
             structured: personaGenerationPreview.structured,
             displayName: personaSaveForm.displayName,
             username: personaSaveForm.username,
-            now: new Date(),
           }),
         );
         toast.success("Persona updated");
@@ -1004,7 +1003,6 @@ export function useAiControlPlane({
             structured: personaGenerationPreview.structured,
             displayName: personaSaveForm.displayName,
             username: personaSaveForm.username,
-            now: new Date(),
           }),
         );
         toast.success("Persona saved");

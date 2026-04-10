@@ -12,6 +12,7 @@ import type {
   TextFlowModule,
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
+import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 
 type PersonaTaskGeneratorDeps = {
   buildPromptContext: (input: {
@@ -21,7 +22,7 @@ type PersonaTaskGeneratorDeps = {
   runPersonaInteraction: (input: {
     personaId: string;
     modelId: string;
-    taskType: "post" | "comment";
+    taskType: PromptActionType;
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;

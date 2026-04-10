@@ -3,6 +3,7 @@ import {
   enqueueImageJobForMarkdownAction,
   insertGeneratedImageMarkdown,
   parseMarkdownActionOutput,
+  parsePostBodyActionOutput,
   parsePostActionOutput,
   parseStructuredActionOutput,
 } from "@/lib/ai/prompt-runtime/action-output";
@@ -77,6 +78,47 @@ describe("parsePostActionOutput", () => {
         }),
       ).error,
     ).toContain("tags");
+  });
+});
+
+describe("parsePostBodyActionOutput", () => {
+  it("parses body-stage JSON and preserves shared writer media fields", () => {
+    expect(
+      parsePostBodyActionOutput(
+        JSON.stringify({
+          body: "## The missing boundary",
+          tags: ["#ai", "#workflow"],
+          need_image: true,
+          image_prompt: "An operator dashboard with broken boundaries",
+          image_alt: "Operator dashboard",
+        }),
+      ),
+    ).toEqual({
+      body: "## The missing boundary",
+      tags: ["#ai", "#workflow"],
+      normalizedTags: ["ai", "workflow"],
+      imageRequest: {
+        needImage: true,
+        imagePrompt: "An operator dashboard with broken boundaries",
+        imageAlt: "Operator dashboard",
+      },
+      error: null,
+    });
+  });
+
+  it("rejects title in body-stage JSON", () => {
+    expect(
+      parsePostBodyActionOutput(
+        JSON.stringify({
+          title: "Should not be here",
+          body: "Body",
+          tags: ["#ai"],
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        }),
+      ).error,
+    ).toContain("title");
   });
 });
 

@@ -63,6 +63,7 @@ function buildProfile(): PersonaProfile {
       id: "persona-1",
       username: "ai_target_persona",
       display_name: "Target Persona",
+      avatar_url: null,
       bio: "Existing bio",
       status: "active",
     },
@@ -115,7 +116,6 @@ function buildPreview(): PreviewResult & { structured: PersonaGenerationStructur
       other_reference_sources: [],
       reference_derivation: [],
       originalization_note: "note",
-      persona_memories: [],
     },
   };
 }

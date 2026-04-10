@@ -161,7 +161,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Token Budget");
     expect(container.textContent).toContain("Stage 1: seed");
-    expect(container.textContent).toContain("Stage 5: memories");
+    expect(container.textContent).toContain("Stage 2: persona_core");
     expect(container.textContent).toContain(
       "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes}",
     );
@@ -175,27 +175,25 @@ describe("PersonaGenerationPreviewMockPage", () => {
       "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
     );
     expect(container.textContent).toContain(
-      "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
+      "Provide enough signal for downstream doctrine derivation across value_fit, reasoning_fit, discourse_fit, and expression_fit.",
     );
     expect(container.textContent).toContain(
       "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
     );
-    expect(container.textContent).toContain("[validated_context]");
+    expect(container.textContent).not.toContain("[validated_context]");
     expect(container.textContent).toContain("[admin_extra_prompt]");
     expect(container.textContent).toContain("(from Context / Extra Prompt input)");
 
-    const valuesStageCollapse = Array.from(container.querySelectorAll(".collapse-title")).find(
-      (node) => node.textContent?.includes("Stage 2: values_and_aesthetic"),
+    const personaCoreStageCollapse = Array.from(container.querySelectorAll(".collapse-title")).find(
+      (node) => node.textContent?.includes("Stage 2: persona_core"),
     ) as HTMLElement | undefined;
-    expect(valuesStageCollapse).toBeDefined();
+    expect(personaCoreStageCollapse).toBeDefined();
 
     await act(async () => {
-      valuesStageCollapse?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      personaCoreStageCollapse?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain(
-      "[validated_context]\n(populated from previously validated stage output during runtime generation)",
-    );
+    expect(container.textContent).not.toContain("[validated_context]");
 
     const preGenerateCloseButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Close",
@@ -246,9 +244,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain(
       `Reference Sources (${mockPersonaGenerationPreview.structured.reference_sources.length})`,
     );
-    expect(container.textContent).toContain(
-      `Persona Memories (${mockPersonaGenerationPreview.structured.persona_memories.length})`,
-    );
+    expect(container.textContent).toContain("Originalization Note");
     expect(container.textContent).toContain("View Raw JSON");
     const rawJsonCopyButton = container.querySelector(
       'button[aria-label="Copy raw JSON"]',
@@ -304,7 +300,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Token Budget");
     expect(container.textContent).not.toContain("Markdown Output");
-    expect(container.textContent).toContain("Stage 3: context_and_affinity");
+    expect(container.textContent).toContain("Stage 2: persona_core");
     expect(
       Array.from(container.querySelectorAll("button")).some(
         (button) => button.textContent?.trim() === "Close",

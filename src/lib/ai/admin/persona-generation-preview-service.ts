@@ -14,7 +14,7 @@ import {
   type AiControlPlaneDocument,
   type AiModelConfig,
   type AiProviderConfig,
-  type PersonaGenerationMemoriesStage,
+  type PersonaGenerationCoreStage,
   type PersonaGenerationSeedStage,
   type PersonaGenerationStructured,
   type PreviewResult,
@@ -29,15 +29,10 @@ import {
   collectEnglishOnlyIssues,
   parsePersonaGenerationOutput,
   parsePersonaGenerationSemanticAuditResult,
-  parsePersonaContextAndAffinityOutput,
-  parsePersonaInteractionOutput,
-  parsePersonaMemoriesOutput,
+  parsePersonaCoreStageOutput,
   parsePersonaSeedOutput,
-  parsePersonaValuesAndAestheticOutput,
-  validateInteractionStageQuality,
-  validateMemoriesStageQuality,
+  validatePersonaCoreStageQuality,
   validateSeedStageQuality,
-  validateValuesStageQuality,
 } from "@/lib/ai/admin/persona-generation-contract";
 
 export async function previewPersonaGeneration(input: {
@@ -119,12 +114,12 @@ export async function previewPersonaGeneration(input: {
     stageName: string;
     stageGoal: string;
     stageContract: string;
-    validatedContext?: Record<string, unknown> | null;
+    carryForwardContext?: Record<string, unknown> | null;
     contextFormatting?: "compact" | "pretty";
   }) => {
-    const validatedContextContent = stageInput.validatedContext
+    const carryForwardContextContent = stageInput.carryForwardContext
       ? JSON.stringify(
-          stageInput.validatedContext,
+          stageInput.carryForwardContext,
           null,
           stageInput.contextFormatting === "compact" ? 0 : 2,
         )
@@ -136,18 +131,22 @@ export async function previewPersonaGeneration(input: {
         content: [
           `stage_name: ${stageInput.stageName}`,
           `stage_goal: ${stageInput.stageGoal}`,
+          ...(carryForwardContextContent
+            ? ["prior_stage_source_of_truth:", carryForwardContextContent]
+            : []),
         ].join("\n"),
       },
-      ...(stageInput.validatedContext
-        ? [
-            {
-              name: "validated_context",
-              content: validatedContextContent ?? "",
-            },
-          ]
-        : []),
       { name: "stage_contract", content: stageInput.stageContract },
-      { name: "output_constraints", content: "Output strictly valid JSON." },
+      {
+        name: "output_constraints",
+        content: [
+          "Output strictly valid JSON.",
+          "No markdown, wrapper text, or explanatory prose outside the JSON object.",
+          "Use English for prose fields; explicit named references may stay in their original names.",
+          "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
+          "Do not add extra keys.",
+        ].join("\n"),
+      },
     ];
     return formatPrompt(blocks);
   };
@@ -370,29 +369,36 @@ export async function previewPersonaGeneration(input: {
     };
   };
 
-  const auditMemoriesOriginalizationSemantics = async (
-    stage: PersonaGenerationMemoriesStage,
-    referenceSources: PersonaGenerationStructured["reference_sources"],
+  const auditPersonaCoreSemantics = async (
+    stage: PersonaGenerationCoreStage,
+    seedStage: PersonaGenerationSeedStage,
   ): Promise<{
     issues: string[];
     repairGuidance: string[];
   }> =>
     runPersonaGenerationSemanticAudit({
-      stageName: "memories",
-      auditLabel: "memories_originalization_audit",
+      stageName: "persona_core",
+      auditLabel: "persona_core_quality_audit",
       instructions: [
-        "You are judging whether persona memories stay originalized into forum-native incidents, habits, beliefs, and lived context rather than drifting into canon scenes, in-universe identity, or literal reference roleplay.",
-        "Judge semantic meaning, not specific keywords.",
-        "Flag reference-world proper nouns or roleplay framing when the memory content reads like the persona is literally inside the source world instead of a forum-native identity.",
-        "persona_memories[].metadata must stay a compact semantic metadata object with only topic_keys, stance_summary, follow_up_hooks, and promotion_candidate.",
-        "Do not allow arbitrary tag bags, source-reference notes, or app-owned runtime metadata fields inside persona_memories[].metadata.",
+        "You are judging a compact review packet for persona_core quality.",
+        "The packet is intentionally compact. Do not fail only because omitted background is missing.",
+        "Judge whether values, lived context, creator affinity, interaction defaults, voice fingerprint, and task style matrix read like one coherent persona.",
+        "Check cross-field coherence rather than schema compliance.",
+        "Flag generic compression, identifier-style posture labels, duplicated guidance, or weak signal that would make doctrine projection unstable.",
+        "The stage must provide enough source signal for downstream value_fit, reasoning_fit, discourse_fit, and expression_fit derivation without outputting those fit keys directly.",
       ],
       parsedOutput: {
-        persona_memories: stage.persona_memories,
-        reference_sources: referenceSources,
+        identity_summary: seedStage.identity_summary,
+        reference_sources: seedStage.reference_sources,
+        values: stage.values,
+        lived_context: stage.lived_context,
+        creator_affinity: stage.creator_affinity,
+        interaction_defaults: stage.interaction_defaults,
+        voice_fingerprint: stage.voice_fingerprint,
+        task_style_matrix: stage.task_style_matrix,
       },
       defaultIssue:
-        "persona_memories must stay originalized into forum-native incidents, habits, or beliefs instead of literal reference roleplay.",
+        "persona_core must stay coherent and provide enough distinct cross-field signal for downstream doctrine projection.",
     });
 
   const runPersonaGenerationStage = async <T>(stageInput: {
@@ -406,7 +412,7 @@ export async function previewPersonaGeneration(input: {
       repairGuidance?: string[];
       normalizedParsedOutput?: T;
     }>;
-    validatedContext?: Record<string, unknown> | null;
+    carryForwardContext?: Record<string, unknown> | null;
     allowedReferenceNames?: string[];
     outputMaxTokens: number;
   }): Promise<T> => {
@@ -561,22 +567,20 @@ export async function previewPersonaGeneration(input: {
     };
 
     const buildStageSpecificTruncationGuidance = () => {
-      if (stageInput.stageName === "values_and_aesthetic") {
+      if (stageInput.stageName === "seed") {
         return [
-          "For values_and_aesthetic, keep value_hierarchy to at most 4 items.",
-          "Each values.value_hierarchy[*].value must be a short natural-language phrase, not an identifier label.",
-          "Keep worldview to 1 short item.",
-          "Keep every aesthetic_profile field to at most 1 short item.",
+          "For seed, keep reference_derivation to at most 2 short items.",
+          "Keep each contribution array to at most 2 short items.",
+          "Keep originalization_note to one short sentence.",
         ].join("\n");
       }
-      if (stageInput.stageName === "interaction_and_guardrails") {
+      if (stageInput.stageName === "persona_core") {
         return [
-          "For interaction_and_guardrails, keep every array as short as possible.",
-          "Use at most 2 items for discussion_strengths, friction_triggers, non_generic_traits, metaphor_domains, and forbidden_shapes.",
-          "Keep voice_fingerprint.closing_move as one short string, not an array.",
-          "Keep post/comment entry_shape, body_shape, feedback_shape, and close_shape to one short clause each.",
-          "voice_fingerprint must still include opening_move, metaphor_domains, attack_style, praise_style, closing_move, and forbidden_shapes.",
-          "task_style_matrix.post and task_style_matrix.comment must each include every required shape field and forbidden_shapes.",
+          "For persona_core, keep value_hierarchy to at most 4 items.",
+          "Keep worldview to 1 short item.",
+          "Keep every array field to at most 2 short items unless the schema requires more.",
+          "Keep every task_style_matrix shape field to one short sentence.",
+          "Keep voice_fingerprint opening_move, attack_style, praise_style, and closing_move to one short sentence each.",
         ].join("\n");
       }
       return "";
@@ -929,51 +933,15 @@ export async function previewPersonaGeneration(input: {
     outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
   });
 
-  const valuesStage = await runPersonaGenerationStage({
-    stageName: "values_and_aesthetic",
-    stageGoal: "Define the persona's values and aesthetic taste using the seed identity.",
+  const personaCoreStage = await runPersonaGenerationStage({
+    stageName: "persona_core",
+    stageGoal: "Generate the reusable persona guidance that downstream prompts will consume.",
     stageContract: [
       "Return one JSON object with keys:",
       "values{value_hierarchy,worldview,judgment_style},",
-      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries}.",
-      "value_hierarchy must be an array of {value,priority} objects.",
-      "Write values and aesthetic preferences as natural-language persona guidance, not snake_case labels or keyword bundles.",
-    ].join("\n"),
-    parse: parsePersonaValuesAndAestheticOutput,
-    validateQuality: validateValuesStageQuality,
-    validatedContext: seedStage,
-    allowedReferenceNames: [
-      ...seedStage.reference_sources.map((item) => item.name),
-      ...seedStage.other_reference_sources.map((item) => item.name),
-    ],
-    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.values_and_aesthetic,
-  });
-
-  const contextStage = await runPersonaGenerationStage({
-    stageName: "context_and_affinity",
-    stageGoal: "Ground the persona in lived context and creator affinity.",
-    stageContract: [
-      "Return one JSON object with keys:",
+      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries},",
       "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
-      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases}.",
-    ].join("\n"),
-    parse: parsePersonaContextAndAffinityOutput,
-    validatedContext: {
-      ...seedStage,
-      ...valuesStage,
-    },
-    allowedReferenceNames: [
-      ...seedStage.reference_sources.map((item) => item.name),
-      ...seedStage.other_reference_sources.map((item) => item.name),
-    ],
-    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.context_and_affinity,
-  });
-
-  const interactionStage = await runPersonaGenerationStage({
-    stageName: "interaction_and_guardrails",
-    stageGoal: "Define how the persona behaves in discussion and what it avoids.",
-    stageContract: [
-      "Return one JSON object with keys:",
+      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases},",
       "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
       "guardrails{hard_no,deescalation_style},",
       "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
@@ -981,65 +949,38 @@ export async function previewPersonaGeneration(input: {
       "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
       "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
       "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
+      "Provide enough signal for downstream doctrine derivation across value_fit, reasoning_fit, discourse_fit, and expression_fit.",
+      "Do not output value_fit, reasoning_fit, discourse_fit, or expression_fit as direct keys.",
     ].join("\n"),
-    parse: parsePersonaInteractionOutput,
-    validateQuality: validateInteractionStageQuality,
-    validatedContext: {
-      ...seedStage,
-      ...valuesStage,
-      ...contextStage,
+    parse: parsePersonaCoreStageOutput,
+    validateQuality: validatePersonaCoreStageQuality,
+    validateQualityAsync: (stage) => auditPersonaCoreSemantics(stage, seedStage),
+    carryForwardContext: {
+      persona: seedStage.persona,
+      identity_summary: seedStage.identity_summary,
+      reference_sources: seedStage.reference_sources,
+      other_reference_sources: seedStage.other_reference_sources,
+      reference_derivation: seedStage.reference_derivation,
+      originalization_note: seedStage.originalization_note,
     },
     allowedReferenceNames: [
       ...seedStage.reference_sources.map((item) => item.name),
       ...seedStage.other_reference_sources.map((item) => item.name),
     ],
-    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.interaction_and_guardrails,
+    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
   });
 
   const personaCore = {
     identity_summary: seedStage.identity_summary,
-    values: valuesStage.values,
-    aesthetic_profile: valuesStage.aesthetic_profile,
-    lived_context: contextStage.lived_context,
-    creator_affinity: contextStage.creator_affinity,
-    interaction_defaults: interactionStage.interaction_defaults,
-    guardrails: interactionStage.guardrails,
-    voice_fingerprint: interactionStage.voice_fingerprint,
-    task_style_matrix: interactionStage.task_style_matrix,
+    values: personaCoreStage.values,
+    aesthetic_profile: personaCoreStage.aesthetic_profile,
+    lived_context: personaCoreStage.lived_context,
+    creator_affinity: personaCoreStage.creator_affinity,
+    interaction_defaults: personaCoreStage.interaction_defaults,
+    guardrails: personaCoreStage.guardrails,
+    voice_fingerprint: personaCoreStage.voice_fingerprint,
+    task_style_matrix: personaCoreStage.task_style_matrix,
   };
-
-  const memoriesStage = await runPersonaGenerationStage({
-    stageName: "memories",
-    stageGoal: "Optionally add a few useful canonical or recent persona memories.",
-    stageContract: [
-      "Return one JSON object with key:",
-      "persona_memories[{memory_type,scope,content,metadata,expires_in_hours,importance}].",
-      "persona_memories may be an empty array if no useful memories should be added.",
-      "memory_type must be memory or long_memory.",
-      "At most one persona_memories row may use memory_type=long_memory.",
-      "scope must always be persona.",
-      "metadata must contain exactly topic_keys:string[], stance_summary:string, follow_up_hooks:string[], and promotion_candidate:boolean.",
-      "Do not include app-owned metadata fields such as schema_version, source_kind, source ids, write_method, or scope markers inside metadata.",
-      "importance must be an integer from 0 to 10.",
-      "Keep memories reference-inspired, not reference-cosplay.",
-      "Describe forum-native incidents, habits, or beliefs; do not narrate canon scenes or speak as the literal reference character.",
-    ].join("\n"),
-    parse: parsePersonaMemoriesOutput,
-    validateQuality: (stage) => validateMemoriesStageQuality(stage),
-    validateQualityAsync: (stage) =>
-      auditMemoriesOriginalizationSemantics(stage, seedStage.reference_sources),
-    validatedContext: {
-      persona: seedStage.persona,
-      persona_core: personaCore,
-      reference_sources: seedStage.reference_sources,
-      other_reference_sources: seedStage.other_reference_sources,
-    },
-    allowedReferenceNames: [
-      ...seedStage.reference_sources.map((item) => item.name),
-      ...seedStage.other_reference_sources.map((item) => item.name),
-    ],
-    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.memories,
-  });
 
   const structured = parsePersonaGenerationOutput(
     JSON.stringify({
@@ -1049,7 +990,6 @@ export async function previewPersonaGeneration(input: {
       other_reference_sources: seedStage.other_reference_sources,
       reference_derivation: seedStage.reference_derivation,
       originalization_note: seedStage.originalization_note,
-      persona_memories: memoriesStage.persona_memories,
     }),
   ).structured;
   const assembledPrompt = stagePromptRecords
@@ -1092,11 +1032,6 @@ export async function previewPersonaGeneration(input: {
     "",
     `### originalization_note`,
     structured.originalization_note,
-    "",
-    `### persona_memories (${structured.persona_memories.length})`,
-    "```json",
-    JSON.stringify(structured.persona_memories, null, 2),
-    "```",
   ].join("\n");
 
   try {

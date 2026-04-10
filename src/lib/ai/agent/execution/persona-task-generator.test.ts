@@ -5,6 +5,9 @@ import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overv
 import type {
   FlowDiagnostics,
   TextFlowKind,
+  TextFlowModule,
+  TextFlowModuleRunInput,
+  TextFlowModuleRunResult,
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
 
@@ -71,6 +74,7 @@ function buildDiagnostics(overrides: Partial<FlowDiagnostics> = {}): FlowDiagnos
 function buildFlowResult(flowKind: "post"): Extract<TextFlowRunResult, { flowKind: "post" }>;
 function buildFlowResult(flowKind: "comment"): Extract<TextFlowRunResult, { flowKind: "comment" }>;
 function buildFlowResult(flowKind: "reply"): Extract<TextFlowRunResult, { flowKind: "reply" }>;
+function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult;
 function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
   if (flowKind === "post") {
     return {
@@ -109,26 +113,31 @@ function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
     };
   }
 
+  if (flowKind === "comment") {
+    return {
+      flowKind: "comment",
+      parsed: {
+        comment: {
+          markdown: "first run comment",
+          needImage: false,
+          imagePrompt: null,
+          imageAlt: null,
+        },
+      },
+      diagnostics: buildDiagnostics(),
+    };
+  }
+
   return {
-    flowKind,
-    parsed:
-      flowKind === "comment"
-        ? {
-            comment: {
-              markdown: "first run comment",
-              needImage: false,
-              imagePrompt: null,
-              imageAlt: null,
-            },
-          }
-        : {
-            reply: {
-              markdown: "first run comment",
-              needImage: false,
-              imagePrompt: null,
-              imageAlt: null,
-            },
-          },
+    flowKind: "reply",
+    parsed: {
+      reply: {
+        markdown: "first run comment",
+        needImage: false,
+        imagePrompt: null,
+        imageAlt: null,
+      },
+    },
     diagnostics: buildDiagnostics(),
   };
 }
@@ -242,23 +251,25 @@ describe("AiAgentPersonaTaskGenerator", () => {
   ])(
     "uses the shared registry for $flowKind flow generation in runtime mode",
     async ({ flowKind, expectedKind, promptContext, expectedOutput }) => {
-      const resolveFlowModule = vi.fn(() => ({
-        flowKind,
-        runPreview: vi.fn(),
-        runRuntime: vi.fn(async () => ({
-          promptContext,
-          preview: buildPreviewResult('{"markdown":"first run comment"}'),
-          flowResult: buildFlowResult(flowKind),
-          modelSelection: {
-            modelId: "model-1",
-            providerKey: "xai",
-            modelKey: "grok-4-1-fast-reasoning",
-          },
-          modelMetadata: {
-            schema_version: 1,
-          },
-        })),
-      }));
+      const resolveFlowModule = vi.fn(
+        (requestedFlowKind: TextFlowKind): TextFlowModule => ({
+          flowKind: requestedFlowKind,
+          runPreview: vi.fn(),
+          runRuntime: vi.fn(async () => ({
+            promptContext,
+            preview: buildPreviewResult('{"markdown":"first run comment"}'),
+            flowResult: buildFlowResult(flowKind),
+            modelSelection: {
+              modelId: "model-1",
+              providerKey: "xai",
+              modelKey: "grok-4-1-fast-reasoning",
+            },
+            modelMetadata: {
+              schema_version: 1,
+            },
+          })),
+        }),
+      );
 
       const service = new AiAgentPersonaTaskGenerator({
         deps: {
@@ -285,7 +296,7 @@ describe("AiAgentPersonaTaskGenerator", () => {
   );
 
   it("defaults generation to preview mode when no runtime mode is requested", async () => {
-    const runPreview = vi.fn(async () => ({
+    const runPreview: TextFlowModule["runPreview"] = vi.fn(async () => ({
       promptContext: {
         flowKind: "comment" as const,
         taskType: "comment" as const,
@@ -302,11 +313,13 @@ describe("AiAgentPersonaTaskGenerator", () => {
         schema_version: 1,
       },
     }));
-    const resolveFlowModule = vi.fn(() => ({
-      flowKind: "comment" as const,
-      runPreview,
-      runRuntime: vi.fn(),
-    }));
+    const resolveFlowModule = vi.fn(
+      (_flowKind: TextFlowKind): TextFlowModule => ({
+        flowKind: "comment" as const,
+        runPreview,
+        runRuntime: vi.fn(),
+      }),
+    );
 
     const service = new AiAgentPersonaTaskGenerator({
       deps: {
@@ -336,10 +349,8 @@ describe("AiAgentPersonaTaskGenerator", () => {
   });
 
   it("passes preformatted board and target context text into the resolved flow module", async () => {
-    const runRuntime = vi.fn(
-      async (input: {
-        promptContext: { boardContextText?: string; targetContextText?: string };
-      }) => {
+    const runRuntime: TextFlowModule["runRuntime"] = vi.fn(
+      async (input: TextFlowModuleRunInput): Promise<TextFlowModuleRunResult> => {
         expect(input.promptContext.boardContextText).toBe("[board]\nName: Creative Lab");
         expect(input.promptContext.targetContextText).toBe(
           "[source_comment]\n[artist_1]: Please be more specific.",
@@ -360,11 +371,13 @@ describe("AiAgentPersonaTaskGenerator", () => {
         };
       },
     );
-    const resolveFlowModule = vi.fn(() => ({
-      flowKind: "reply" as const,
-      runPreview: vi.fn(),
-      runRuntime,
-    }));
+    const resolveFlowModule = vi.fn(
+      (_flowKind: TextFlowKind): TextFlowModule => ({
+        flowKind: "reply" as const,
+        runPreview: vi.fn(),
+        runRuntime,
+      }),
+    );
 
     const service = new AiAgentPersonaTaskGenerator({
       deps: {

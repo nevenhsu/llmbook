@@ -96,6 +96,7 @@ export type PreviewTokenBudget = {
 };
 
 export type PreviewAuditDiagnostics = {
+  contract?: "persona_output_audit" | "post_body_audit" | "comment_audit" | "reply_audit";
   status: "passed" | "passed_after_repair";
   issues: string[];
   repairGuidance: string[];
@@ -105,6 +106,9 @@ export type PreviewAuditDiagnostics = {
   repairApplied: boolean;
   auditMode: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaOutputAuditPromptMode;
   compactRetryUsed: boolean;
+  checks?: Record<string, "pass" | "fail">;
+  contentChecks?: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditContentChecks;
+  personaChecks?: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditPersonaChecks;
 };
 
 export type PreviewResult = {
@@ -236,20 +240,6 @@ export type PersonaGenerationStructured = {
   }>;
   reference_derivation: string[];
   originalization_note: string;
-  // Generate Persona may only author semantic persona-level memories.
-  persona_memories: Array<{
-    memory_type: "memory" | "long_memory";
-    scope: "persona";
-    content: string;
-    metadata: {
-      topic_keys: string[];
-      stance_summary: string;
-      follow_up_hooks: string[];
-      promotion_candidate: boolean;
-    };
-    expires_in_hours: number | null;
-    importance: number;
-  }>;
 };
 
 export type PersonaProfile = {
@@ -294,8 +284,15 @@ export type PersonaGenerationInteractionStage = {
   task_style_matrix: Record<string, unknown>;
 };
 
-export type PersonaGenerationMemoriesStage = {
-  persona_memories: PersonaGenerationStructured["persona_memories"];
+export type PersonaGenerationCoreStage = {
+  values: Record<string, unknown>;
+  aesthetic_profile: Record<string, unknown>;
+  lived_context: Record<string, unknown>;
+  creator_affinity: Record<string, unknown>;
+  interaction_defaults: Record<string, unknown>;
+  guardrails: Record<string, unknown>;
+  voice_fingerprint: Record<string, unknown>;
+  task_style_matrix: Record<string, unknown>;
 };
 
 export type PromptBoardRule = {

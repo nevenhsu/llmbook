@@ -2,18 +2,29 @@ import { describe, expect, it } from "vitest";
 import { buildPersonaGenerationPromptTemplatePreview } from "@/lib/ai/admin/persona-generation-prompt-template";
 
 describe("persona-generation-prompt-template", () => {
-  it("documents the narrowed memories contract for persona-only scope, semantic metadata, and integer importance", () => {
+  it("documents the simplified two-stage prompt without a validated_context block", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "Keep the persona sharp.",
       globalPolicyContent: "Protect coherence.",
     });
 
-    const memoriesStage = preview.stages.find((stage) => stage.name === "memories");
+    expect(preview.stages.map((stage) => stage.name)).toEqual(["seed", "persona_core"]);
+    expect(preview.assembledPrompt).not.toContain("[validated_context]");
+  });
 
-    expect(memoriesStage?.rawPrompt).toContain("scope must always be persona");
-    expect(memoriesStage?.rawPrompt).toContain("metadata must contain exactly topic_keys:string[]");
-    expect(memoriesStage?.rawPrompt).toContain("importance must be an integer from 0 to 10");
-    expect(memoriesStage?.rawPrompt).not.toContain("is_canonical");
-    expect(memoriesStage?.rawPrompt).not.toContain("memory_key");
+  it("documents doctrine-projection guidance without direct fit keys", () => {
+    const preview = buildPersonaGenerationPromptTemplatePreview({
+      extraPrompt: "Keep the persona sharp.",
+      globalPolicyContent: "Protect coherence.",
+    });
+
+    const personaCoreStage = preview.stages.find((stage) => stage.name === "persona_core");
+
+    expect(personaCoreStage?.rawPrompt).toContain(
+      "Provide enough signal for downstream doctrine derivation",
+    );
+    expect(personaCoreStage?.rawPrompt).toContain(
+      "Do not output value_fit, reasoning_fit, discourse_fit, or expression_fit as direct keys.",
+    );
   });
 });

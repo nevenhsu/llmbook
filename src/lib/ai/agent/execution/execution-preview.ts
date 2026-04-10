@@ -48,7 +48,7 @@ export type AiAgentExecutionParsedOutput =
     };
 
 export type AiAgentExecutionAuditOutput = {
-  contract: "persona_output_audit";
+  contract: "persona_output_audit" | "post_body_audit" | "comment_audit" | "reply_audit";
   pass: boolean;
   status: "passed" | "passed_after_repair";
   issues: string[];
@@ -59,6 +59,9 @@ export type AiAgentExecutionAuditOutput = {
   repairApplied: boolean;
   auditMode: string | null;
   compactRetryUsed: boolean;
+  checks?: PreviewAuditDiagnostics["checks"];
+  contentChecks?: PreviewAuditDiagnostics["contentChecks"];
+  personaChecks?: PreviewAuditDiagnostics["personaChecks"];
 };
 
 export type AiAgentDeterministicCheckResult = {
@@ -261,7 +264,7 @@ function buildAuditedOutput(
   }
 
   return {
-    contract: "persona_output_audit",
+    contract: auditDiagnostics.contract ?? "persona_output_audit",
     pass: auditDiagnostics.status === "passed" || auditDiagnostics.status === "passed_after_repair",
     status: auditDiagnostics.status,
     issues: auditDiagnostics.issues,
@@ -272,6 +275,9 @@ function buildAuditedOutput(
     repairApplied: auditDiagnostics.repairApplied,
     auditMode: auditDiagnostics.auditMode,
     compactRetryUsed: auditDiagnostics.compactRetryUsed,
+    checks: auditDiagnostics.checks,
+    contentChecks: auditDiagnostics.contentChecks,
+    personaChecks: auditDiagnostics.personaChecks,
   };
 }
 

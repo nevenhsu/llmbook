@@ -1,9 +1,8 @@
 import {
   PersonaGenerationParseError,
   PromptAssistError,
-  type PersonaGenerationContextStage,
+  type PersonaGenerationCoreStage,
   type PersonaGenerationInteractionStage,
-  type PersonaGenerationMemoriesStage,
   type PersonaGenerationSeedStage,
   type PersonaGenerationSemanticAuditResult,
   type PersonaGenerationStructured,
@@ -406,103 +405,96 @@ export function validateInteractionStageQuality(
   return issues;
 }
 
-export function validateMemoriesStageQuality(stage: PersonaGenerationMemoriesStage): string[] {
+export function validatePersonaCoreStageQuality(stage: PersonaGenerationCoreStage): string[] {
   const issues: string[] = [];
+  issues.push(
+    ...validateValuesStageQuality({
+      values: stage.values,
+      aesthetic_profile: stage.aesthetic_profile,
+    }),
+  );
+  issues.push(
+    ...validateInteractionStageQuality({
+      interaction_defaults: stage.interaction_defaults,
+      guardrails: stage.guardrails,
+      voice_fingerprint: stage.voice_fingerprint,
+      task_style_matrix: stage.task_style_matrix,
+    }),
+  );
 
-  for (const [index, memory] of stage.persona_memories.entries()) {
-    const fieldPath = `persona_memories[${index}].content`;
-    const content = readString(memory.content);
-    if (!content) {
-      continue;
-    }
+  const worldview = normalizePersonaStringArray(stage.values.worldview, "values.worldview");
+  const discussionStrengths = normalizePersonaStringArray(
+    stage.interaction_defaults.discussion_strengths,
+    "interaction_defaults.discussion_strengths",
+  );
+  const nonGenericTraits = normalizePersonaStringArray(
+    stage.interaction_defaults.non_generic_traits,
+    "interaction_defaults.non_generic_traits",
+  );
+  const admiredCreatorTypes = normalizePersonaStringArray(
+    stage.creator_affinity.admired_creator_types,
+    "creator_affinity.admired_creator_types",
+  );
+  const openingMove = readString(stage.voice_fingerprint.opening_move);
+  const postBodyShape = readString(asRecord(stage.task_style_matrix.post)?.body_shape);
+  const commentFeedbackShape = readString(
+    asRecord(stage.task_style_matrix.comment)?.feedback_shape,
+  );
 
-    if (hasMixedScriptArtifact(content)) {
-      issues.push(
-        `${fieldPath} contains a mixed-script artifact and must stay in one clean language register.`,
-      );
-    }
+  if (worldview.length === 0) {
+    issues.push("values.worldview must contain at least one worldview statement.");
+  }
+  if (discussionStrengths.length === 0) {
+    issues.push("interaction_defaults.discussion_strengths must contain at least one item.");
+  }
+  if (nonGenericTraits.length === 0) {
+    issues.push("interaction_defaults.non_generic_traits must contain at least one item.");
+  }
+  if (admiredCreatorTypes.length === 0) {
+    issues.push("creator_affinity.admired_creator_types must contain at least one item.");
+  }
+  if (countWords(openingMove) < 5) {
+    issues.push(
+      "voice_fingerprint.opening_move must provide enough signal for downstream discourse projection.",
+    );
+  }
+  if (countWords(postBodyShape) < 5) {
+    issues.push(
+      "task_style_matrix.post.body_shape must provide enough signal for downstream discourse projection.",
+    );
+  }
+  if (countWords(commentFeedbackShape) < 5) {
+    issues.push(
+      "task_style_matrix.comment.feedback_shape must provide enough signal for downstream discourse projection.",
+    );
+  }
 
-    if (memory.metadata.topic_keys.length > 5) {
-      issues.push(`persona_memories[${index}].metadata.topic_keys must contain at most 5 items.`);
-    }
+  const distinctSignals = new Set(
+    [
+      normalizeSingleLineText(readString(stage.interaction_defaults.default_stance)).toLowerCase(),
+      normalizeSingleLineText(openingMove).toLowerCase(),
+      normalizeSingleLineText(postBodyShape).toLowerCase(),
+      normalizeSingleLineText(commentFeedbackShape).toLowerCase(),
+    ].filter((item) => item.length > 0),
+  );
+  if (distinctSignals.size < 3) {
+    issues.push(
+      "persona_core must keep interaction_defaults, voice_fingerprint, and task_style_matrix distinct enough for stable doctrine projection.",
+    );
+  }
 
-    if (memory.metadata.follow_up_hooks.length > 3) {
-      issues.push(
-        `persona_memories[${index}].metadata.follow_up_hooks must contain at most 3 items.`,
-      );
-    }
+  const doctrineSignalCount =
+    worldview.length +
+    discussionStrengths.length +
+    nonGenericTraits.length +
+    admiredCreatorTypes.length;
+  if (doctrineSignalCount < 4) {
+    issues.push(
+      "persona_core must provide enough cross-field signal for value_fit, reasoning_fit, discourse_fit, and expression_fit derivation.",
+    );
   }
 
   return issues;
-}
-
-function normalizePersonaMemoryStringArray(
-  value: unknown,
-  fieldPath: string,
-  options: {
-    allowEmpty: boolean;
-  },
-): string[] {
-  const items =
-    typeof value === "string"
-      ? [value]
-      : Array.isArray(value)
-        ? value.filter((item): item is string => typeof item === "string")
-        : null;
-  if (!items) {
-    throw new Error(`persona generation output missing ${fieldPath}`);
-  }
-  const normalized = items.map((item) => item.trim()).filter((item) => item.length > 0);
-  if (normalized.length === 0 && !options.allowEmpty) {
-    throw new Error(`persona generation output missing ${fieldPath}`);
-  }
-  return normalized;
-}
-
-function parsePersonaMemoryMetadata(
-  value: unknown,
-  fieldPath: string,
-): PersonaGenerationStructured["persona_memories"][number]["metadata"] {
-  const root = asRecord(value);
-  if (!root) {
-    return {
-      topic_keys: [],
-      stance_summary: "",
-      follow_up_hooks: [],
-      promotion_candidate: false,
-    };
-  }
-
-  const topicKeysSource = root.topic_keys;
-  const followUpHooksSource = root.follow_up_hooks;
-  const stanceSummarySource = root.stance_summary;
-  const promotionCandidateSource = root.promotion_candidate;
-
-  return {
-    topic_keys:
-      topicKeysSource === undefined
-        ? []
-        : normalizePersonaMemoryStringArray(topicKeysSource, `${fieldPath}.topic_keys`, {
-            allowEmpty: true,
-          }),
-    stance_summary: typeof stanceSummarySource === "string" ? stanceSummarySource.trim() : "",
-    follow_up_hooks:
-      followUpHooksSource === undefined
-        ? []
-        : normalizePersonaMemoryStringArray(followUpHooksSource, `${fieldPath}.follow_up_hooks`, {
-            allowEmpty: true,
-          }),
-    promotion_candidate:
-      typeof promotionCandidateSource === "boolean" ? promotionCandidateSource : false,
-  };
-}
-
-function parsePersonaMemoryImportance(value: unknown, fieldPath: string): number {
-  const importance = readNumberOrNull(value);
-  if (importance === null || !Number.isInteger(importance) || importance < 0 || importance > 10) {
-    throw new Error(`persona generation output ${fieldPath} must be an integer between 0 and 10`);
-  }
-  return importance;
 }
 
 function normalizePersonaValueHierarchy(
@@ -856,59 +848,6 @@ export function parseOtherReferenceSources(
     fieldPath: options?.fieldPath ?? "other_reference_sources",
     allowEmpty: true,
   });
-}
-
-export function parsePersonaMemories(
-  value: unknown,
-): PersonaGenerationStructured["persona_memories"] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const normalized = value
-    .map((item, index) => {
-      const row = asRecord(item);
-      if (!row) {
-        return null;
-      }
-      const memoryType =
-        readString(row.memory_type).trim() === "long_memory" ? "long_memory" : "memory";
-      const scopeRaw = readString(row.scope).trim();
-      if (scopeRaw !== "persona") {
-        throw new Error(
-          `persona generation output persona_memories[${index}].scope must be persona`,
-        );
-      }
-      const content = readString(row.content).trim();
-      if (!content) {
-        return null;
-      }
-      return {
-        memory_type: memoryType,
-        scope: "persona",
-        content,
-        metadata: parsePersonaMemoryMetadata(row.metadata, `persona_memories[${index}].metadata`),
-        expires_in_hours: readNumberOrNull(row.expires_in_hours),
-        importance: parsePersonaMemoryImportance(
-          row.importance,
-          `persona_memories[${index}].importance`,
-        ),
-      };
-    })
-    .filter(
-      (item): item is PersonaGenerationStructured["persona_memories"][number] => item !== null,
-    );
-
-  const personaLongMemoryCount = normalized.filter(
-    (item) => item.memory_type === "long_memory",
-  ).length;
-  if (personaLongMemoryCount > 1) {
-    throw new Error(
-      "persona generation output persona_memories may contain at most one long_memory row",
-    );
-  }
-
-  return normalized;
 }
 
 export function extractJsonFromText(text: string): string {
@@ -1360,9 +1299,7 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
   }
 }
 
-export function parsePersonaValuesAndAestheticOutput(
-  rawText: string,
-): PersonaGenerationValuesStage {
+export function parsePersonaCoreStageOutput(rawText: string): PersonaGenerationCoreStage {
   const record = parsePersonaStageObject(rawText);
   try {
     return {
@@ -1371,37 +1308,11 @@ export function parsePersonaValuesAndAestheticOutput(
         record.aesthetic_profile,
         "aesthetic_profile",
       ),
-    };
-  } catch (error) {
-    throw new PersonaGenerationParseError(
-      error instanceof Error ? error.message : "persona generation output is invalid",
-      rawText,
-    );
-  }
-}
-
-export function parsePersonaContextAndAffinityOutput(
-  rawText: string,
-): PersonaGenerationContextStage {
-  const record = parsePersonaStageObject(rawText);
-  try {
-    const creatorAffinitySource = record.creator_affinity ?? record.creator_admiration;
-    return {
       lived_context: parsePersonaLivedContext(record.lived_context, "lived_context"),
-      creator_affinity: parsePersonaCreatorAffinity(creatorAffinitySource, "creator_affinity"),
-    };
-  } catch (error) {
-    throw new PersonaGenerationParseError(
-      error instanceof Error ? error.message : "persona generation output is invalid",
-      rawText,
-    );
-  }
-}
-
-export function parsePersonaInteractionOutput(rawText: string): PersonaGenerationInteractionStage {
-  const record = parsePersonaStageObject(rawText);
-  try {
-    return {
+      creator_affinity: parsePersonaCreatorAffinity(
+        record.creator_affinity ?? record.creator_admiration,
+        "creator_affinity",
+      ),
       interaction_defaults: parsePersonaInteractionDefaults(
         record.interaction_defaults,
         "interaction_defaults",
@@ -1421,20 +1332,6 @@ export function parsePersonaInteractionOutput(rawText: string): PersonaGeneratio
   }
 }
 
-export function parsePersonaMemoriesOutput(rawText: string): PersonaGenerationMemoriesStage {
-  const record = parsePersonaStageObject(rawText);
-  try {
-    return {
-      persona_memories: parsePersonaMemories(record.persona_memories),
-    };
-  } catch (error) {
-    throw new PersonaGenerationParseError(
-      error instanceof Error ? error.message : "persona generation output is invalid",
-      rawText,
-    );
-  }
-}
-
 export function parsePersonaGenerationOutput(rawText: string): {
   structured: PersonaGenerationStructured;
 } {
@@ -1445,7 +1342,6 @@ export function parsePersonaGenerationOutput(rawText: string): {
     ["other_reference_sources"],
     ["reference_derivation"],
     ["originalization_note"],
-    ["persona_memories"],
   ]);
   try {
     const persona = requirePersonaRecord(record.persona, "persona");
@@ -1470,7 +1366,6 @@ export function parsePersonaGenerationOutput(rawText: string): {
           record.originalization_note,
           "originalization_note",
         ),
-        persona_memories: parsePersonaMemories(record.persona_memories),
       },
     };
   } catch (error) {
