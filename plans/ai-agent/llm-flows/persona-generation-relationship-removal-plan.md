@@ -1,10 +1,12 @@
 # Persona Generation Relationship Removal Plan
 
+> **Status:** Historical cleanup note. The active generate-persona implementation target is [persona-generation-simplification-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-plan.md). Use this document only to identify stale relationship-oriented fields/wording that still need deletion during the simplification migration.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Remove relationship-specific semantics from the generate-persona contract and downstream runtime assumptions, so persona generation produces reusable discussion/writing guidance without forcing a separate relationship lineage the app no longer actively uses.
+**Goal:** Capture the stale relationship-oriented fields, wording, and runtime assumptions that must be cleaned up while migrating generate-persona to the simplified `seed -> persona_core` contract.
 
-**Architecture:** Keep the staged persona-generation pipeline and keep the existing `interaction_defaults` container, but strip out relationship-oriented semantics from how that stage is defined and consumed. Remove runtime/profile/prompt code that still derives or expects `relationshipTendencies`, while preserving discussion-oriented guidance that already belongs in `interaction_defaults`. This is a latest-contract migration, not a compatibility layer.
+**Architecture:** Use the simplification plan as the canonical migration target, but keep this note as a cleanup checklist for deleting relationship-oriented semantics from remaining runtime/profile/prompt code. Keep the existing `interaction_defaults` container name where it still exists in active schemas, but remove runtime/profile/prompt code that still derives or expects relationship-oriented fields. This is a latest-contract cleanup, not a compatibility layer.
 
 **Tech Stack:** TypeScript, Vitest, admin control-plane staged JSON generation, runtime core-profile normalization, prompt-runtime persona directives, admin preview UI/docs.
 
@@ -12,7 +14,7 @@
 
 ## Core Decision
 
-Generate Persona will no longer produce relationship-coded output as part of the canonical persona payload.
+Generate Persona will no longer produce relationship-coded output as part of the canonical persona payload, and active runtime/prompt code should not preserve relationship fields as passive compatibility data.
 
 The current relationship lineage is:
 
@@ -215,9 +217,9 @@ git commit -m "refactor: update persona preview surfaces for non-relationship in
 
 - Modify: `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`
 - Modify: `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
-- Modify: `plans/ai-agent/operator-console/prompt-block-examples.md`
+- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
 - Modify: `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md`
-- Test/Review: `rg -n "relationshipTendencies|agent_relationship_context" docs src/lib/ai/admin src/lib/ai/core plans`
+- Test/Review: `rg -n "relationshipTendencies|defaultRelationshipStance|agent_relationship_context" docs src/lib/ai/admin src/lib/ai/core plans`
 
 **Step 1: Write the doc/test expectation**
 
@@ -232,7 +234,7 @@ git commit -m "refactor: update persona preview surfaces for non-relationship in
 Run:
 
 ```bash
-rg -n "relationshipTendencies|agent_relationship_context" docs src/lib/ai/admin src/lib/ai/core plans
+rg -n "relationshipTendencies|defaultRelationshipStance|agent_relationship_context" docs src/lib/ai/admin src/lib/ai/core plans
 ```
 
 Expected: multiple hits that still describe the retired relationship lineage.
@@ -251,7 +253,7 @@ Run the same `rg` command and expect only intentional historical/unrelated hits.
 **Step 5: Commit**
 
 ```bash
-git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md plans/ai-agent/operator-console/prompt-block-examples.md plans/ai-agent/llm-flows/prompt-family-architecture-plan.md
+git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md plans/ai-agent/llm-flows/prompt-block-examples.md plans/ai-agent/llm-flows/prompt-family-architecture-plan.md
 git commit -m "docs: remove relationship lineage from persona generation docs"
 ```
 
@@ -278,7 +280,7 @@ Expected: PASS.
 Run:
 
 ```bash
-rg -n "relationshipTendencies|agent_relationship_context" src docs plans
+rg -n "relationshipTendencies|defaultRelationshipStance|agent_relationship_context" src docs plans
 ```
 
 Expected: only intentional historical or unrelated product-domain hits remain.

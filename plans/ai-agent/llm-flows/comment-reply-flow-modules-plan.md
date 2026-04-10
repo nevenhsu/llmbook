@@ -29,6 +29,19 @@
 - In both flows, `[root_post]` must appear immediately after `[board]`.
 - `reply` prompt and audit must explicitly forbid a top-level-essay shape.
 - `comment` prompt and audit must explicitly require a standalone top-level contribution with net-new value.
+- `comment.main` and `reply.main` must internally self-check draft fidelity before emitting final JSON.
+- That internal self-check must explicitly cover:
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
+- Any `comment` or `reply` audit/repair step that judges `persona_fit` must receive compact persona evidence from canonical persona fields. At minimum this includes `reference_sources` names plus a derived thread-writing lens.
+- `comment` and `reply` audits consume compact review packets; repairs consume fuller rewrite packets.
+- Audit prompts must know the packet is intentionally compact and must not fail just because omitted generation context is absent.
+- `comment` and `reply` output constraints must align with `post_body` on the shared writer media tail:
+  - `need_image`
+  - `image_prompt`
+  - `image_alt`
 
 ## Target Shape
 
@@ -43,6 +56,17 @@ persona task / preview request
   -> persist comment row
 ```
 
+## Shared Registry Boundary
+
+This plan inherits the shared registry boundary from [post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/post-flow-modules-plan.md).
+
+For `comment` and `reply`, the important rule is:
+
+- the registry unifies how callers enter a flow
+- it does not erase the semantic difference between top-level comments and thread replies
+
+`comment` and `reply` therefore keep separate prompt contracts, audits, and repairs while still returning through the same outer flow-result envelope.
+
 Routing rules:
 
 ```text
@@ -50,6 +74,47 @@ task_type=comment -> comment flow module
 task_type=reply -> reply flow module
 notification reply task -> reply flow module
 ```
+
+## Result Envelope Alignment
+
+`comment` and `reply` should use the same discriminated outer envelope introduced by the shared registry design.
+
+Recommended result members:
+
+```ts
+type CommentFlowResult = {
+  flowKind: "comment";
+  parsed: {
+    comment: CommentOutput;
+  };
+  diagnostics: FlowDiagnostics;
+};
+
+type ReplyFlowResult = {
+  flowKind: "reply";
+  parsed: {
+    reply: ReplyOutput;
+  };
+  diagnostics: FlowDiagnostics;
+};
+```
+
+Rules:
+
+- callers branch on `flowKind`, not on `markdown` field presence
+- `comment` and `reply` keep separate parsed payload labels even though their output schema is similar
+- notification-triggered replies still return `flowKind: "reply"`
+
+## `FlowDiagnostics` Alignment
+
+`comment` and `reply` should reuse the same minimum `FlowDiagnostics` contract defined in [post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/post-flow-modules-plan.md).
+
+Alignment rules:
+
+- keep `finalStatus`, `terminalStage`, `attempts`, and `stageResults`
+- keep attempt counters per-stage; do not merge retries into one cross-flow total
+- do not invent a second comment-specific diagnostics skeleton
+- omit `gate` because `comment` and `reply` do not run candidate selection
 
 ## Prompt Block Order
 
@@ -85,6 +150,20 @@ image_prompt: string | null
 image_alt: string | null
 ```
 
+This matches the shared writer-output pattern used by `post_body`, except `comment`/`reply` do not carry `tags`.
+
+## Attempt Budget
+
+`comment` and `reply` mirror the `post` attempt policy where it applies, but without planning-specific stages.
+
+- initial main generation: 1
+- `schema_repair`: at most 1 per generation attempt
+- flow-specific repair (`comment_repair` or `reply_repair`): at most 1 per generation attempt
+- fresh regenerate: at most 1 if the initial path still fails after repair/recheck or ends terminally
+- after the regenerate path exhausts its repair budget, terminal fail
+
+This keeps retry semantics aligned across all shared text flows while preserving their simpler single-stage structure.
+
 ## Audit Contracts
 
 ### Comment Audit
@@ -108,6 +187,44 @@ The canonical audit must evaluate:
 - `persona_fit`
 
 Both audits may share the same outer JSON skeleton if useful, but they must remain separately named contracts with flow-specific checks and repair guidance.
+
+Both audits also require compact persona evidence. Board/post/thread context alone is not enough to judge persona fit reliably.
+
+For persona fidelity, both `comment_audit` and `reply_audit` should explicitly judge:
+
+- `value_fit`
+- `reasoning_fit`
+- `discourse_fit`
+- `expression_fit`
+
+Recommended owner:
+
+- one shared `buildPersonaEvidence()` helper in the prompt-runtime persona projection layer
+- do not let `comment` and `reply` assemble separate ad hoc persona-fit blocks
+
+Packet rule:
+
+- audits keep the full generated `markdown` under review
+- surrounding board/post/thread context should be compacted to only what the declared checks need
+- repairs receive the previous output plus fuller thread/post context, audit issues, and repair guidance
+- audit prompts must be told not to treat intentionally omitted background as a failure by itself
+
+## Writer Doctrine Rule
+
+`comment` and `reply` should not wait for external audit to discover that the text "sounds wrong".
+
+Their main prompts should instruct the model to internally test the draft before output:
+
+- `value_fit`
+  - does the draft care about the right things in the right order
+- `reasoning_fit`
+  - does the draft respond to the thread/post through the persona's actual judgment logic
+- `discourse_fit`
+  - does the draft take the right discussion shape for this flow
+- `expression_fit`
+  - does the language pressure feel like this persona rather than generic assistant prose
+
+This internal self-check is silent. It should revise the draft before the final JSON output, not produce extra fields or chain-of-thought.
 
 ## Task 1: Promote `reply` To A First-Class Text Flow Type
 
@@ -164,7 +281,7 @@ git commit -m "refactor: promote reply to a first-class text flow"
 
 **Files:**
 
-- Modify: `plans/ai-agent/operator-console/prompt-block-examples.md`
+- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
 - Modify: `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
 - Modify: `src/lib/ai/agent/execution/persona-task-context-builder.ts`
 - Test: `src/lib/ai/agent/execution/persona-task-context-builder.test.ts`
@@ -204,7 +321,7 @@ Run the same test command and expect PASS.
 **Step 5: Commit**
 
 ```bash
-git add plans/ai-agent/operator-console/prompt-block-examples.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/lib/ai/agent/execution/persona-task-context-builder.ts src/lib/ai/agent/execution/persona-task-context-builder.test.ts
+git add plans/ai-agent/llm-flows/prompt-block-examples.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/lib/ai/agent/execution/persona-task-context-builder.ts src/lib/ai/agent/execution/persona-task-context-builder.test.ts
 git commit -m "docs: split comment and reply prompt contracts"
 ```
 
@@ -242,6 +359,7 @@ Expected: failures because comment-specific audit/repair does not exist yet.
 
 - Add a dedicated `comment_audit` prompt builder and parser.
 - Keep the outer JSON shape concise and machine-checkable.
+- Feed `comment_audit` and `comment_repair` a compact persona-evidence block so persona-fit judgments are grounded in canonical persona data.
 - Ensure repair guidance focuses on:
   - adding net-new value
   - not echoing recent top-level comments
@@ -293,6 +411,7 @@ Expected: failures because reply-specific audit/repair does not exist yet and no
 **Step 3: Write the minimal implementation**
 
 - Add a dedicated `reply_audit` prompt builder and parser.
+- Feed `reply_audit` and `reply_repair` a compact persona-evidence block so persona-fit judgments are grounded in canonical persona data.
 - Make `reply_repair` explicitly preserve thread-local response shape.
 - Reject outputs that drift into standalone essay form even if their markdown is otherwise valid.
 - Normalize notification reply generation into the same `reply` flow-module and audit path.

@@ -102,7 +102,7 @@ admin UI 應同時支援：
 - update write path 覆蓋 canonical persona fields，而不是只 patch 局部舊欄位
 - quality rules 走與 `Generate Persona` 相同的 staged generation pipeline；update 只是在進 pipeline 前先 seed `Context / Extra Prompt`
 - admin persona-generation preview 屬於 review flow，應保留 stage-local parse/quality repair，但不可再額外繼承高 provider retry 數；preview 應固定使用 selected model，並以 low-latency provider retries `0` 執行
-- admin persona-generation preview 若需要把前面 stage 的 canonical JSON 餵給後面 stage，模型實際吃到的 `validated_context` 應使用 compact JSON 以降低延遲；review UI 顯示的 assembled prompt 可維持 pretty-printed 版本
+- admin persona-generation preview 若需要把前面 stage 的 canonical JSON 餵給後面 stage，模型實際吃到的 prior-stage carry-forward payload 應使用 compact JSON 以降低延遲；review UI 顯示的 assembled prompt 不需要把它表現成獨立命名 block
 - 其他 admin review/helper flows 也應遵守同一條 low-latency 規則：`Interaction Preview`、persona `prompt-assist`、以及 `interaction context assist` 應固定使用 selected model / route，但 provider retries 應維持 `0`
 - 上述 low-retry 規則只適用於 admin preview / assist；production runtime 與 agent execution 不應跟著一起降 retry
 

@@ -4,7 +4,7 @@
 >
 > For the higher-level runtime architecture, start with [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 >
-> For concrete source-context block examples, see [prompt-block-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/operator-console/prompt-block-examples.md).
+> For concrete source-context block examples, see [prompt-block-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/prompt-block-examples.md).
 
 ## 1. 目的
 

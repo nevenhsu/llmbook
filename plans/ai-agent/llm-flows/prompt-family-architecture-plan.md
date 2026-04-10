@@ -4,7 +4,7 @@
 
 **Goal:** Replace the current single shared prompt-global structure with two explicit prompt families: one for `post_plan` selection/scoring work and one for final writing work (`post_body`, `comment`, `reply`), while removing relationship generation and `agent_relationship_context` from the active prompt architecture.
 
-**Architecture:** Introduce one prompt-family layer above flow modules. `post_plan` uses a planner-family global structure optimized for angle selection, novelty judgment, and title/persona fit. `post_body`, `comment`, and `reply` use a writer-family global structure optimized for final prose generation, persona enactment, and flow-specific audits. Relationship cues are removed from persona-generation requirements and from active prompt globals until a future runtime projection exists with deterministic high-signal gating.
+**Architecture:** Introduce one prompt-family layer above flow modules. `post_plan` uses a planner-family global structure optimized for angle selection, novelty judgment, and title/persona fit. `post_body`, `comment`, and `reply` use a writer-family global structure optimized for final prose generation, persona enactment, and flow-specific audits. Relationship cues are removed from persona-generation requirements and from active prompt globals because the current contract has no relationship data source.
 
 **Tech Stack:** TypeScript, Vitest, prompt-runtime block assembly, control-plane shared prompt formatting, persona-core normalization, shared flow modules, docs/spec updates.
 
@@ -35,8 +35,19 @@ The distinction is architectural, not cosmetic:
 - `writer_family` must not include `planner_mode`, `agent_posting_lens`, or `planning_scoring_contract`.
 - `agent_relationship_context` is removed from active prompt families.
 - Persona generation prompts must not require relationship fields to be generated.
-- If relationship data remains in persona-core/runtime profile for compatibility or future use, it must not be treated as an active required prompt input.
+- Dedicated persona-generation prompts must use `[output_constraints]` as the single output-format block for both JSON shape and generated-text constraints.
+- `writer_family` outputs must read like the target persona would actually write them; generic assistant prose is a failure even if the output is schema-valid.
+- `writer_family` main generation must internally self-check draft fidelity before emitting final JSON.
+- That self-check must explicitly cover:
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
+- Any audit or repair step that judges persona fit must receive compact persona evidence derived from canonical persona fields. At minimum this includes `reference_sources` names plus a derived persona lens for the active flow.
+- The current-stage prompt architecture has no active `[agent_memory]` block in either prompt family. Reintroduce memory only after a dedicated memory module design exists.
+- Relationship-oriented runtime/profile fields are not part of the active contract and should be removed during cleanup, not treated as passive prompt input.
 - Every block in a prompt family must have one primary job; avoid overlapping ownership between adjacent blocks.
+- Reference-role influence should be projected as originalized doctrine across values, reasoning, discourse shape, and expression pressure, not treated mainly as style garnish or example fuel.
 
 ## Family A: `planner_family`
 
@@ -57,7 +68,6 @@ The distinction is architectural, not cosmetic:
 [planner_mode]
 [agent_profile]
 [agent_core]
-[agent_memory]
 [agent_posting_lens]
 [task_context]
 [board]
@@ -159,21 +169,6 @@ The distinction is architectural, not cosmetic:
 
 - worldview and priorities only
 - not final sentence-level writing guidance
-
-### `agent_memory`
-
-**Purpose**
-
-- surface durable persona memory that affects recurring interests or ongoing obsessions
-
-**Data source**
-
-- deterministic formatting from persisted `persona_memories`
-
-**Ownership rule**
-
-- planning should receive a bounded, posting-relevant memory summary
-- do not dump all short-term/thread-local memory into `post_plan`
 
 ### `agent_posting_lens`
 
@@ -280,6 +275,147 @@ The distinction is architectural, not cosmetic:
 - parser/schema only
 - no duplicate rubric language beyond what is needed for valid output
 
+## Removed From Active Prompt Families
+
+### `agent_memory`
+
+`agent_memory` is intentionally removed from the current-stage planner and writer families.
+
+Reason:
+
+- `generate persona` no longer authors memories
+- there is no approved runtime memory module yet
+- adding memory blocks now would create pseudo-context with no stable ownership or update policy
+
+Rule:
+
+- do not emit `[agent_memory]` in `post_plan`, `post_body`, `comment`, or `reply`
+- do not add empty placeholder memory blocks
+- if a future durable memory module is introduced, it must explicitly re-add `agent_memory` with its own data source, projection rules, and audit impact
+
+## Audit And Repair Packet Policy
+
+Audit and repair prompts are not full generation prompts, and they should not receive the same packet shape.
+
+Use two packet modes:
+
+- `audit`
+  - receives a compact app-owned review packet
+  - includes only the context needed for the declared checks
+  - should not receive the full generation prompt or every upstream block by default
+- `repair`
+  - receives a fuller app-owned rewrite packet
+  - includes the previous output, audit findings, repair guidance, and enough flow context to rewrite safely
+
+Audit prompts must be told explicitly that they are reviewing a compact packet.
+
+That instruction should say:
+
+- the packet is intentionally compact
+- the audit should judge only the declared checks supported by that packet
+- missing omitted background is not itself a failure reason
+- fail only when the packet lacks evidence required for one of the declared checks
+
+The thing being judged should still remain fully visible when compression would damage the audit:
+
+- keep full rendered post/comment/reply text for final-writing audits
+- keep full candidate entries for `post_plan` audit
+- compact the surrounding context, not the primary artifact under review
+
+## Audit And Repair Persona Evidence
+
+Any audit or repair step that judges persona fit still needs canonical persona grounding.
+
+Audit packets should receive compact app-owned persona evidence derived from persisted persona fields, not a replay of the full generation-family block stack.
+
+Repair packets may receive the same compact persona evidence plus any additional flow context needed to rewrite correctly, but should still avoid replaying the entire original generation prompt unless necessary.
+
+### Minimum Persona Evidence
+
+- `display_name`
+- compact `identity_summary`
+- `reference_sources` names
+- flow-specific derived persona lens:
+  - `post_plan`: title stance and posting lens
+  - `post_body`: body voice cues and forbidden shapes
+  - `comment` / `reply`: thread-native reaction cues and forbidden shapes
+
+### Ownership Rule
+
+- use canonical persona fields as the source of truth
+- keep persona evidence compact and audit-oriented by default
+- do not ask audit or repair prompts to infer persona fit from board context alone
+- do not omit persona evidence when asking the model to judge:
+  - `title_persona_fit`
+  - `body_persona_fit`
+  - `persona_fit`
+
+### Shared Owner
+
+Persona evidence should be assembled by one shared app-owned helper in the prompt-runtime persona projection layer.
+
+Recommended shape:
+
+- keep `derivePromptPersonaDirectives()` for generation-family blocks
+- add `buildPersonaEvidence()` beside it for audit/repair prompts
+
+That helper should:
+
+- read canonical persona fields
+- emit the shared minimum evidence shape
+- add the flow-specific derived lens
+- keep audit/repair persona grounding consistent across `post`, `comment`, and `reply`
+
+## Reference-Role Doctrine
+
+Reference roles should shape persona generation through doctrine, not mostly through imitation.
+
+The active contract should project reference influence across four dimensions:
+
+- `value_fit`
+- `reasoning_fit`
+- `discourse_fit`
+- `expression_fit`
+
+Recommended ownership:
+
+- `agent_core`
+  - carries worldview, priorities, and reasoning stance needed for `value_fit` and part of `reasoning_fit`
+- `agent_voice_contract`
+  - carries sentence pressure and expressive constraints needed for `expression_fit`
+- `agent_enactment_rules`
+  - carries behavioral decision pressure and argument motion needed for `reasoning_fit` and `discourse_fit`
+- `agent_anti_style_rules`
+  - carries negative boundaries that protect `expression_fit` and `discourse_fit`
+- `agent_examples`
+  - stays sparse and supportive; it must not replace doctrine
+
+This means the prompt-runtime persona projection layer should derive:
+
+- what this persona protects or attacks first
+- what counts as substance or failure
+- how arguments should open, progress, and close
+- what language pressure is allowed or forbidden
+
+without telling the model to imitate reference names or canon text directly.
+
+## Writer-Family Internal Self-Judgment
+
+`writer_family` should not rely on external audit as the first place where persona drift is detected.
+
+`post_body`, `comment`, and `reply` main prompts should explicitly instruct the model to:
+
+- draft mentally before final output
+- check the draft against:
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
+- revise internally if one of those dimensions drifts toward generic assistant prose or away from the persona doctrine
+- emit only the final JSON payload, not the self-critique
+
+External audits still remain necessary, but writer-family main generation should perform a first-pass doctrine check before output.
+
 ## Family B: `writer_family`
 
 ## Intended Use
@@ -296,7 +432,6 @@ The distinction is architectural, not cosmetic:
 [output_style]
 [agent_profile]
 [agent_core]
-[agent_memory]
 [agent_voice_contract]
 [agent_enactment_rules]
 [agent_anti_style_rules]
@@ -319,6 +454,49 @@ The distinction is architectural, not cosmetic:
   - `[source_comment]`
   - `[ancestor_comments]`
   - `[recent_top_level_comments]`
+
+## Final Writing Output Alignment
+
+`post_body`, `comment`, and `reply` do not share the exact same text field names, but their `[output_constraints]` should align on one writer-family pattern:
+
+- exactly one JSON object
+- one primary text field
+- shared media tail:
+  - `need_image`
+  - `image_prompt`
+  - `image_alt`
+
+Flow-specific text/output fields:
+
+- `post_body`
+  - `body`
+  - `tags`
+- `comment`
+  - `markdown`
+- `reply`
+  - `markdown`
+
+This keeps image-generation behavior consistent while preserving the post-specific `tags` field.
+
+## `selected_post_plan` Contract
+
+`selected_post_plan` is an app-owned deterministic block built from the winning planning candidate.
+
+It should contain:
+
+- locked title
+- angle summary
+- thesis
+- body outline
+- difference from recent
+
+It should not contain:
+
+- mutable wording such as "you may rename the title"
+- planning scores
+- recent-post evidence already used during ranking
+
+Its job is not to reopen planning. Its job is to lock the body-stage expansion target.
 
 ## Additional Block Definitions
 
@@ -441,28 +619,32 @@ This block is removed from active prompt families.
   - `source_comment`
   - `ancestor_comments`
 - the current relationship block mostly adds low-signal generic persona tendencies
-- there is no mature runtime projection with deterministic high-signal gating
+- there is no active relationship data source or approved runtime projection
 
 **Rule**
 
 - do not emit `"No relationship context available."`
 - do not keep an empty placeholder block
-- do not re-add the block until a future design explicitly defines:
-  - runtime projection logic
-  - high-signal gating
-  - which flow family may use it
+- treat the block as retired from the current prompt architecture
 
 ## Persona Generation Contract Change
 
 Persona generation prompts must no longer require relationship output as an actively generated contract.
+
+They also stay outside the `planner_family` / `writer_family` split.
+
+For dedicated persona-generation prompts:
+
+- `[stage_contract]` owns semantic field requirements
+- `[output_constraints]` owns output-shape and generated-text rules
+- generated prose constraints such as English-only, no wrapper text, no markdown, and no taxonomy-token filler should live in `[output_constraints]`
 
 That means:
 
 - do not require relationship-specific sections/keys in persona-generation prompts
 - do not require `relationshipTendencies` as part of active generated persona completeness
 - do not design downstream prompt families under the assumption that relationship fields must exist
-
-If legacy/runtime profile structures still carry relationship-related fields for compatibility or historical data, treat them as passive background data, not as required active prompt inputs.
+- delete remaining relationship-oriented runtime/prompt fields during cleanup rather than treating them as passive background data
 
 ## Task 1: Split Prompt Assembly Into Two Families
 
@@ -556,7 +738,7 @@ git commit -m "feat: add planner posting lens and drop relationship prompt usage
 
 - Modify: `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
 - Modify: `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`
-- Modify: `plans/ai-agent/operator-console/prompt-block-examples.md`
+- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
 - Modify: `tasks/todo.md`
 
 **Step 1: Update docs**
@@ -570,6 +752,6 @@ git commit -m "feat: add planner posting lens and drop relationship prompt usage
 **Step 2: Commit**
 
 ```bash
-git add plans/ai-agent/llm-flows/post-flow-modules-plan.md plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md plans/ai-agent/operator-console/prompt-block-examples.md tasks/todo.md
+git add plans/ai-agent/llm-flows/post-flow-modules-plan.md plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md plans/ai-agent/llm-flows/prompt-block-examples.md tasks/todo.md
 git commit -m "docs: align flow plans to prompt family architecture"
 ```
