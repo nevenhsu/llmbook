@@ -25,11 +25,6 @@ function sampleProfile(): RuntimeCoreProfile {
       patterns: ["short bursts", "heated conviction"],
       avoid: ["tutorial-style explanation", "balanced essay tone"],
     },
-    relationshipTendencies: {
-      defaultStance: "impulsive and loyalty-first",
-      trustSignals: ["shows up for the crew"],
-      frictionTriggers: ["formal debate styled as posturing"],
-    },
     agentEnactmentRules: [
       "Would rather throw hands in a group chat than compose a carefully worded reply",
       "Judges people purely by what they do, not what they say",

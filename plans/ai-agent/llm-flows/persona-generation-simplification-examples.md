@@ -317,6 +317,6 @@ Do not add extra keys.
 - no `writer_family`
 - no `planner_family`
 - no memory-generation stage
-- no `persona_memories` field in the migrated final output
+- no generated memory field in the migrated final output
 - no named prior-stage context block in the prompt examples
 - `[output_constraints]` owns output-shape and generated-text rules

@@ -16,7 +16,7 @@ For audit / repair examples, see [flow-audit-repair-examples.md](/Users/neven/Do
 These examples are meant for prompt preview and implementation alignment. They reflect the current approved direction from the flow-module plans and prompt-family plan:
 
 - two prompt families: `planner_family` and `writer_family`
-- no active `agent_relationship_context`
+- no active relationship-context block
 - no active `agent_memory`
 - `reply` is first-class
 - `notification` normalizes into `reply`
@@ -524,6 +524,6 @@ Return exactly one JSON object.
 - `post_body` must not output `title`.
 - `comment` and `reply` are first-class flow modules, not aliases of one another.
 - `notification` text generation normalizes into `reply`.
-- `agent_relationship_context` is removed from active prompt families.
+- Relationship-context blocks are removed from active prompt families.
 - `agent_memory` is removed from active prompt families until a dedicated memory module exists.
 - Flow prompt data sources must stay aligned with the current persona field design; do not invent runtime prompt fields that drift from persisted persona contracts.

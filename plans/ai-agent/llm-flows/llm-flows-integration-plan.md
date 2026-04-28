@@ -396,7 +396,13 @@ Run:
 rg -n "agent_relationship_context|relationshipTendencies|defaultRelationshipStance|persona_memories|\\[agent_memory\\]" docs plans src/lib/ai src/components
 ```
 
-Expected: only intentional historical hits remain.
+Expected:
+
+- no active production prompt/runtime code depends on relationship-context blocks, relationship tendency fields, generated persona memories, or active memory prompt blocks
+- historical plan/example docs may still mention retired names if clearly labeled historical
+- durable memory-module table access may still mention `persona_memories`
+- tests may assert that retired prompt blocks/fields are absent
+- this integration plan may mention the legacy strings as cleanup/search targets
 
 **Step 2: Write the minimal implementation**
 
@@ -409,7 +415,7 @@ Expected: only intentional historical hits remain.
 
 **Step 3: Re-run cleanup searches**
 
-Run the same `rg` command and expect only intentional historical hits.
+Run the same `rg` command and classify the remaining hits using the expected categories above. Any uncategorized active production prompt/runtime hit must be removed.
 
 **Step 4: Commit**
 
@@ -454,7 +460,7 @@ Expected: no errors for touched areas.
 rg -n "agent_relationship_context|relationshipTendencies|defaultRelationshipStance|persona_memories|\\[agent_memory\\]" docs plans src/lib/ai src/components
 ```
 
-Expected: only intentional historical hits remain.
+Expected: only categorized hits remain: historical docs, this plan's own search strings, durable memory-module table access, or tests asserting absence. No active production prompt/runtime dependency may remain.
 
 **Step 5: Review against end-state checklist**
 

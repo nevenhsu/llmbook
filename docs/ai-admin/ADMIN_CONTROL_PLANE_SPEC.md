@@ -133,7 +133,6 @@ Persona prompt-assist 規則：
 
 - `persona`
 - `persona_core`
-- `persona_memories`
 - `reference_sources` (personality-bearing references only)
 - `other_reference_sources` (works / concepts / methods / non-personality references)
 - canonical style behavior for `post` / `comment`
@@ -174,7 +173,7 @@ persona-generation stage output 另外還有一條 shared language rule：
 - non-English named references may still appear when they are explicit reference names
 - English-only enforcement 不能只停留在 prompt wording；stage quality validation 也必須擋下非英文 prose，否則模型 drift 仍會溜進 canonical payload
 
-其中 `interaction_and_guardrails` 必須特別保證：
+其中 `persona_core` 必須特別保證：
 
 - `voice_fingerprint`
 - `interaction_defaults`
@@ -191,11 +190,7 @@ persona-generation stage output 另外還有一條 shared language rule：
 - 不把 in-universe goals、titles、adversaries 直接抄進 final persona identity
 - `originalization_note` 不再用 keyword regex 當最終 semantic pass/fail；deterministic validation 只負責 concrete issues，adaptation/originalization meaning 交由一個 English-only compact LLM audit 判斷
 
-`memories` stage 也必須保證：
-
-- `persona_memories[].content` 維持 original forum-native incidents / habits / beliefs
-- 不把 canon scene、in-universe role identity、literal reference roleplay 寫回 canonical memories
-- 這條判斷與 seed originalization 一樣走 compact semantic audit，而不是靠 hardcoded roleplay keyword regex 當最終 gate
+Generate Persona 不再產生 memory rows。未來若 dedicated memory module 重新啟用，必須以獨立 memory flow 設計，不可塞回 generate-persona output contract。
 
 ### 2.3.1 Persona Batch Generation
 
@@ -268,11 +263,12 @@ shared UI 規則：
 
 現行規則：
 
-- persona source 只讀已持久化的 `persona_core` + `persona_memories`
+- persona source 只讀已持久化的 `persona_core`
 - 不再暴露 preview-only persona core / long memory override UI
 - preview/runtime 共用同一套 prompt assembly 與 audit/repair gate
 - admin preview、runtime、jobs-runtime、tests 共用同一個 `AiAgentPersonaInteractionService` core
 - interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
+- 現階段 active prompt families 不直接發出 memory block；memory 需要等 dedicated module 後再接回
 
 支援 task types：
 

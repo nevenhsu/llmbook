@@ -20,11 +20,6 @@ export type RuntimeCoreProfile = {
     patterns: string[];
     avoid: string[];
   };
-  relationshipTendencies: {
-    defaultStance: string;
-    trustSignals: string[];
-    frictionTriggers: string[];
-  };
   agentEnactmentRules: string[];
   inCharacterExamples: Array<{
     scenario: string;
@@ -83,7 +78,6 @@ export type RuntimeCoreSummary = {
   riskPreference: "conservative" | "balanced" | "progressive";
   collaborationStance: string;
   rhythm: string;
-  defaultRelationshipStance: string;
   promptHint: string;
   enactmentRuleCount: number;
   exampleCount: number;
@@ -172,11 +166,6 @@ const DEFAULT_CORE_PROFILE: RuntimeCoreProfile = {
     tone: ["direct", "conversational"],
     patterns: ["short paragraphs", "lead with reaction"],
     avoid: ["tutorial lists", "generic encouragement"],
-  },
-  relationshipTendencies: {
-    defaultStance: "supportive_but_blunt",
-    trustSignals: ["specificity", "good faith"],
-    frictionTriggers: ["hype", "manipulation", "vagueness"],
   },
   agentEnactmentRules: [
     "Infer the agent's real reaction before writing.",
@@ -570,28 +559,6 @@ function formatCompactSummarySection(
   ].join("\n");
 }
 
-function readCompactPersonaCoreStrings(
-  personaCore: Record<string, unknown> | null | undefined,
-  key: string,
-): string[] {
-  const record = asRecord(personaCore?.[key]);
-  if (!record) {
-    return [];
-  }
-  return Object.values(record)
-    .flatMap((value) => {
-      if (typeof value === "string") {
-        return [value];
-      }
-      if (Array.isArray(value)) {
-        return value.filter((item): item is string => typeof item === "string");
-      }
-      return [];
-    })
-    .map((value) => value.replace(/\s+/g, " ").trim())
-    .filter((value) => value.length > 0);
-}
-
 function readCompactReferenceSources(
   personaCore: Record<string, unknown> | null | undefined,
 ): string[] {
@@ -788,7 +755,6 @@ function adaptPersonaCoreToCoreProfile(input: unknown): RuntimeCoreProfile | nul
   const dislikedPatterns = normalizeStringArray(aestheticProfile?.disliked_patterns, []);
   const tasteBoundaries = normalizeStringArray(aestheticProfile?.taste_boundaries, []);
   const discussionStrengths = normalizeStringArray(interactionDefaults?.discussion_strengths, []);
-  const frictionTriggers = normalizeStringArray(interactionDefaults?.friction_triggers, []);
   const nonGenericTraits = normalizeStringArray(interactionDefaults?.non_generic_traits, []);
   const worldview = normalizeStringArray(values?.worldview, []);
   const topicsRequiringRetrieval = normalizeStringArray(
@@ -802,7 +768,7 @@ function adaptPersonaCoreToCoreProfile(input: unknown): RuntimeCoreProfile | nul
   const derivedTone = derivePersonaTone({
     defaultStance: normalizeText(
       interactionDefaults?.default_stance,
-      DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
+      DEFAULT_CORE_PROFILE.interactionDoctrine.collaborationStance,
     ),
     nonGenericTraits,
     creatorBiases,
@@ -811,7 +777,7 @@ function adaptPersonaCoreToCoreProfile(input: unknown): RuntimeCoreProfile | nul
   const derivedRhythm = derivePersonaRhythm({
     defaultStance: normalizeText(
       interactionDefaults?.default_stance,
-      DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
+      DEFAULT_CORE_PROFILE.interactionDoctrine.collaborationStance,
     ),
     nonGenericTraits,
     humorPreferences,
@@ -904,20 +870,6 @@ function adaptPersonaCoreToCoreProfile(input: unknown): RuntimeCoreProfile | nul
           ? derivedAvoidPatterns
           : DEFAULT_CORE_PROFILE.responseStyle.avoid,
     },
-    relationshipTendencies: {
-      defaultStance: normalizeText(
-        interactionDefaults?.default_stance,
-        DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
-      ),
-      trustSignals:
-        discussionStrengths.length > 0
-          ? discussionStrengths.slice(0, 6)
-          : DEFAULT_CORE_PROFILE.relationshipTendencies.trustSignals,
-      frictionTriggers:
-        frictionTriggers.length > 0
-          ? frictionTriggers.slice(0, 6)
-          : DEFAULT_CORE_PROFILE.relationshipTendencies.frictionTriggers,
-    },
     agentEnactmentRules:
       nonGenericTraits.length > 0
         ? nonGenericTraits.slice(0, 6)
@@ -1009,7 +961,6 @@ export function normalizeCoreProfile(input: unknown): {
   const identityCore = asRecord(source.identityCore);
   const reasoningLens = asRecord(source.reasoningLens);
   const responseStyle = asRecord(source.responseStyle);
-  const relationshipTendencies = asRecord(source.relationshipTendencies);
   const decisionPolicy = asRecord(source.decisionPolicy);
   const interactionDoctrine = asRecord(source.interactionDoctrine);
   const languageSignature = asRecord(source.languageSignature);
@@ -1081,20 +1032,6 @@ export function normalizeCoreProfile(input: unknown): {
         DEFAULT_CORE_PROFILE.responseStyle.patterns,
       ),
       avoid: normalizeStringArray(responseStyle?.avoid, DEFAULT_CORE_PROFILE.responseStyle.avoid),
-    },
-    relationshipTendencies: {
-      defaultStance: normalizeText(
-        relationshipTendencies?.defaultStance,
-        DEFAULT_CORE_PROFILE.relationshipTendencies.defaultStance,
-      ),
-      trustSignals: normalizeStringArray(
-        relationshipTendencies?.trustSignals,
-        DEFAULT_CORE_PROFILE.relationshipTendencies.trustSignals,
-      ),
-      frictionTriggers: normalizeStringArray(
-        relationshipTendencies?.frictionTriggers,
-        DEFAULT_CORE_PROFILE.relationshipTendencies.frictionTriggers,
-      ),
     },
     agentEnactmentRules: normalizeStringArray(
       source.agentEnactmentRules,
@@ -1176,7 +1113,6 @@ export function summarizeCoreProfile(profile: RuntimeCoreProfile): RuntimeCoreSu
     riskPreference: profile.decisionPolicy.riskPreference,
     collaborationStance: profile.interactionDoctrine.collaborationStance,
     rhythm: profile.languageSignature.rhythm,
-    defaultRelationshipStance: profile.relationshipTendencies.defaultStance,
     promptHint: profile.reasoningLens.promptHint,
     enactmentRuleCount: profile.agentEnactmentRules.length,
     exampleCount: profile.inCharacterExamples.length,

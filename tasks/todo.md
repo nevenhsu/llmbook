@@ -2,11 +2,11 @@
 
 ## Active
 
-- [ ] Execute the integrated LLM-flow program from `plans/ai-agent/llm-flows/llm-flows-integration-plan.md` so shared foundations, `post`, `comment` / `reply`, and generate-persona land in one coordinated sequence.
-- [ ] Introduce one shared text flow-module registry for `post`, `comment`, and `reply`, and route generator/preview/runtime/jobs through it so the app no longer owns parallel text-generation paths.
-- [ ] Implement the staged `post_plan -> post_body` module with hard novelty gating, locked selected title, and a merged body/persona audit contract.
-- [ ] Implement first-class `comment` and `reply` flow modules from `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`, including `notification -> reply` normalization and separate prompt/audit contracts.
-- [ ] Migrate generate-persona to the simplified `seed -> persona_core` contract, remove all relationship-coded output/runtime assumptions, and omit `persona_memories` entirely.
+- [x] Execute the integrated LLM-flow program from `plans/ai-agent/llm-flows/llm-flows-integration-plan.md` so shared foundations, `post`, `comment` / `reply`, and generate-persona land in one coordinated sequence.
+- [x] Introduce one shared text flow-module registry for `post`, `comment`, and `reply`, and route generator/preview/runtime/jobs through it so the app no longer owns parallel text-generation paths.
+- [x] Implement the staged `post_plan -> post_body` module with hard novelty gating, locked selected title, and a merged body/persona audit contract.
+- [x] Implement first-class `comment` and `reply` flow modules from `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`, including `notification -> reply` normalization and separate prompt/audit contracts.
+- [x] Migrate generate-persona to the simplified `seed -> persona_core` contract, remove all relationship-coded output/runtime assumptions, and omit generated memories entirely.
 
 ## Current References
 
@@ -22,6 +22,14 @@
 
 ## Review
 
+- Completed Task 5 cleanup and Task 6 verification from the main LLM-flow integration plan: active admin docs, prompt examples, mock fixtures, and API tests now describe the simplified `seed -> persona_core` persona-generation contract and no active memory/relationship prompt blocks.
+- Removed `relationshipTendencies` and `defaultRelationshipStance` from runtime core profile/summary types and aligned reply-worker legacy code so it no longer attempts to inject memory or relationship blocks into the shared prompt builder.
+- Tightened cleanup search expectations in the integration plan because the original grep scanned its own search strings plus durable memory-module table access; final classification now separates historical docs, memory table support, absence assertions, and active production prompt/runtime dependencies.
+- Marked the legacy reply-worker README as non-current so new production text generation does not bypass the shared `post` / `comment` / `reply` flow registry.
+- Verified the integrated flow stack with the Task 6 targeted test set: 21 test files passed, 89 tests passed.
+- Ran targeted lint for `src/lib/ai/prompt-runtime`, `src/lib/ai/agent/execution`, `src/lib/ai/admin`, `src/lib/ai/core`, and `PersonaStructuredPreview.tsx`; it exits 0 with existing warnings only.
+- Ran filtered TypeScript review for touched AI flow/admin/core/UI paths; no matched errors remain.
+- Ran final legacy-contract searches: active production prompt/runtime code has no `agent_relationship_context`, `relationshipTendencies`, `defaultRelationshipStance`, or active `[agent_memory]` dependency; remaining full-search hits are historical docs, this plan's cleanup strings, durable memory-table code, or tests asserting absence.
 - Migrated generate-persona preview/runtime to the simplified `seed -> persona_core` contract: `persona-generation-preview-service.ts` now runs exactly two stages, removes the active `memories` path, drops the named `[validated_context]` block, keeps carry-forward seed data inside the stage block, and assembles final structured output without `persona_memories`.
 - Added the new persona-core parser/quality gate in `persona-generation-contract.ts`: `parsePersonaCoreStageOutput()` and `validatePersonaCoreStageQuality()` now own the second-stage schema plus compact doctrine-signal checks for downstream `value_fit` / `reasoning_fit` / `discourse_fit` / `expression_fit` derivation.
 - Removed generated persona memories from admin save/update flows by shrinking `PersonaGenerationStructured`, simplifying `persona-save-payload.ts`, and dropping `now`-driven memory payload mapping from `useAiControlPlane`.

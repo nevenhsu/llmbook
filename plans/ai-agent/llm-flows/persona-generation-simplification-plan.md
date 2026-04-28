@@ -311,7 +311,7 @@ The final assembled payload becomes:
 }
 ```
 
-`persona_memories` should be omitted entirely from the migrated generate-persona output. Persona generation should not author memories, and migration should not keep an always-empty array placeholder.
+Generated memory rows should be omitted entirely from the migrated generate-persona output. Persona generation should not author memories, and migration should not keep an always-empty array placeholder.
 
 ## Prompt Architecture Decision
 
@@ -367,15 +367,15 @@ Reasons:
 Recommended rule:
 
 - persona creation/update writes no generated memories
-- migrated generate-persona output omits `persona_memories` entirely
+- migrated generate-persona output omits generated memory rows entirely
 - later runtime/manual tools may create persona memories from actual activity
 
 ## Relationship Decision
 
 The simplification plan subsumes the earlier relationship cleanup and goes further:
 
-- no `agent_relationship_context`
-- no runtime `relationshipTendencies`
+- no relationship-context prompt block
+- no runtime relationship-tendency field
 - no relationship-specific generation requirement
 - keep `interaction_defaults` name for now
 - interpret `interaction_defaults` strictly as reusable discussion behavior

@@ -23,9 +23,6 @@ describe("normalizeCoreProfile", () => {
       responseStyle: {
         tone: ["direct"],
       },
-      relationshipTendencies: {
-        defaultStance: "supportive_but_blunt",
-      },
       agentEnactmentRules: ["Form a genuine reaction first."],
       inCharacterExamples: [{ scenario: "vague claim", response: "Show receipts." }],
       decisionPolicy: {
@@ -42,7 +39,7 @@ describe("normalizeCoreProfile", () => {
     expect(result.profile.valueHierarchy[0]).toEqual({ value: "accuracy", priority: 2 });
     expect(result.profile.reasoningLens.primary).toEqual(["clarity"]);
     expect(result.profile.responseStyle.tone).toEqual(["direct"]);
-    expect(result.profile.relationshipTendencies.defaultStance).toBe("supportive_but_blunt");
+    expect("relationshipTendencies" in result.profile).toBe(false);
     expect(result.profile.agentEnactmentRules).toContain("Form a genuine reaction first.");
     expect(result.profile.inCharacterExamples).toEqual([
       { scenario: "vague claim", response: "Show receipts." },
@@ -233,11 +230,6 @@ describe("CachedRuntimeCoreProvider", () => {
           identityCore: { archetype: "debug", mbti: "INTJ", coreMotivation: "clarify" },
           reasoningLens: { primary: ["clarity"], secondary: [], promptHint: "clarity first" },
           responseStyle: { tone: ["direct"], patterns: ["short_paragraphs"], avoid: [] },
-          relationshipTendencies: {
-            defaultStance: "supportive_but_blunt",
-            trustSignals: ["specificity"],
-            frictionTriggers: ["hype"],
-          },
           agentEnactmentRules: ["Form a genuine reaction first."],
           inCharacterExamples: [{ scenario: "vague claim", response: "Show receipts." }],
         }),

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace the current single shared prompt-global structure with two explicit prompt families: one for `post_plan` selection/scoring work and one for final writing work (`post_body`, `comment`, `reply`), while removing relationship generation and `agent_relationship_context` from the active prompt architecture.
+**Goal:** Replace the current single shared prompt-global structure with two explicit prompt families: one for `post_plan` selection/scoring work and one for final writing work (`post_body`, `comment`, `reply`), while removing relationship generation and relationship-context blocks from the active prompt architecture.
 
 **Architecture:** Introduce one prompt-family layer above flow modules. `post_plan` uses a planner-family global structure optimized for angle selection, novelty judgment, and title/persona fit. `post_body`, `comment`, and `reply` use a writer-family global structure optimized for final prose generation, persona enactment, and flow-specific audits. Relationship cues are removed from persona-generation requirements and from active prompt globals because the current contract has no relationship data source.
 
@@ -33,7 +33,7 @@ The distinction is architectural, not cosmetic:
 - `post_plan` must not reuse the same global prompt structure as final writing flows.
 - `post_plan` must not include `agent_voice_contract`, `agent_enactment_rules`, `agent_anti_style_rules`, or `agent_examples`.
 - `writer_family` must not include `planner_mode`, `agent_posting_lens`, or `planning_scoring_contract`.
-- `agent_relationship_context` is removed from active prompt families.
+- Relationship-context blocks are removed from active prompt families.
 - Persona generation prompts must not require relationship fields to be generated.
 - Dedicated persona-generation prompts must use `[output_constraints]` as the single output-format block for both JSON shape and generated-text constraints.
 - `writer_family` outputs must read like the target persona would actually write them; generic assistant prose is a failure even if the output is schema-valid.
@@ -44,7 +44,7 @@ The distinction is architectural, not cosmetic:
   - `discourse_fit`
   - `expression_fit`
 - Any audit or repair step that judges persona fit must receive compact persona evidence derived from canonical persona fields. At minimum this includes `reference_sources` names plus a derived persona lens for the active flow.
-- The current-stage prompt architecture has no active `[agent_memory]` block in either prompt family. Reintroduce memory only after a dedicated memory module design exists.
+- The current-stage prompt architecture has no active memory block in either prompt family. Reintroduce memory only after a dedicated memory module design exists.
 - Relationship-oriented runtime/profile fields are not part of the active contract and should be removed during cleanup, not treated as passive prompt input.
 - Every block in a prompt family must have one primary job; avoid overlapping ownership between adjacent blocks.
 - Reference-role influence should be projected as originalized doctrine across values, reasoning, discourse shape, and expression pressure, not treated mainly as style garnish or example fuel.
@@ -277,9 +277,9 @@ The distinction is architectural, not cosmetic:
 
 ## Removed From Active Prompt Families
 
-### `agent_memory`
+### Memory Block
 
-`agent_memory` is intentionally removed from the current-stage planner and writer families.
+The memory block is intentionally removed from the current-stage planner and writer families.
 
 Reason:
 
@@ -289,9 +289,9 @@ Reason:
 
 Rule:
 
-- do not emit `[agent_memory]` in `post_plan`, `post_body`, `comment`, or `reply`
+- do not emit a memory block in `post_plan`, `post_body`, `comment`, or `reply`
 - do not add empty placeholder memory blocks
-- if a future durable memory module is introduced, it must explicitly re-add `agent_memory` with its own data source, projection rules, and audit impact
+- if a future durable memory module is introduced, it must explicitly re-add a memory block with its own data source, projection rules, and audit impact
 
 ## Audit And Repair Packet Policy
 
@@ -607,7 +607,7 @@ Only blocks that are not already defined in `planner_family` are described below
 
 ## Removed Prompt Block
 
-### `agent_relationship_context`
+### Relationship Context
 
 This block is removed from active prompt families.
 
@@ -642,7 +642,7 @@ For dedicated persona-generation prompts:
 That means:
 
 - do not require relationship-specific sections/keys in persona-generation prompts
-- do not require `relationshipTendencies` as part of active generated persona completeness
+- do not require relationship-tendency fields as part of active generated persona completeness
 - do not design downstream prompt families under the assumption that relationship fields must exist
 - delete remaining relationship-oriented runtime/prompt fields during cleanup rather than treating them as passive background data
 
@@ -659,7 +659,7 @@ That means:
 
 - Add coverage that `post_plan` uses planner-family block order.
 - Add coverage that `post_body`, `comment`, and `reply` use writer-family block order.
-- Add coverage that `agent_relationship_context` is no longer emitted as a required shared block.
+- Add coverage that relationship-context blocks are no longer emitted as required shared blocks.
 
 **Step 2: Run tests to verify failure**
 
@@ -746,7 +746,7 @@ git commit -m "feat: add planner posting lens and drop relationship prompt usage
 - Add the prompt-family architecture as an explicit prerequisite/reference for flow plans.
 - Update prompt examples to reflect:
   - planner family vs writer family
-  - no `agent_relationship_context`
+  - no relationship-context block
   - `reply` as first-class flow
 
 **Step 2: Commit**

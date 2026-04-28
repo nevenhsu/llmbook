@@ -2,11 +2,9 @@ import {
   PersonaGenerationParseError,
   PromptAssistError,
   type PersonaGenerationCoreStage,
-  type PersonaGenerationInteractionStage,
   type PersonaGenerationSeedStage,
   type PersonaGenerationSemanticAuditResult,
   type PersonaGenerationStructured,
-  type PersonaGenerationValuesStage,
   type PromptAssistAttemptStage,
   type PromptAssistNamedReference,
   type PromptAssistNamedReferenceType,
@@ -15,9 +13,6 @@ import {
 import {
   asRecord,
   buildLlmErrorDetailsSuffix,
-  readBoolean,
-  readNullableString,
-  readNumberOrNull,
   readPositiveInt,
   readString,
 } from "@/lib/ai/admin/control-plane-shared";
@@ -262,7 +257,17 @@ export function validateSeedStageQuality(stage: PersonaGenerationSeedStage): str
   return issues;
 }
 
-export function validateValuesStageQuality(stage: PersonaGenerationValuesStage): string[] {
+type PersonaCoreValuesAndAesthetic = Pick<
+  PersonaGenerationCoreStage,
+  "values" | "aesthetic_profile"
+>;
+
+type PersonaCoreInteractionGuidance = Pick<
+  PersonaGenerationCoreStage,
+  "interaction_defaults" | "guardrails" | "voice_fingerprint" | "task_style_matrix"
+>;
+
+export function validateValuesStageQuality(stage: PersonaCoreValuesAndAesthetic): string[] {
   const issues: string[] = [];
   for (const [index, item] of (
     stage.values.value_hierarchy as Array<{ value: string; priority: number }>
@@ -288,9 +293,7 @@ export function validateValuesStageQuality(stage: PersonaGenerationValuesStage):
   return issues;
 }
 
-export function validateInteractionStageQuality(
-  stage: PersonaGenerationInteractionStage,
-): string[] {
+export function validateInteractionStageQuality(stage: PersonaCoreInteractionGuidance): string[] {
   const issues: string[] = [];
   const taskStyleMatrix = stage.task_style_matrix as {
     post: Record<string, unknown>;

@@ -267,23 +267,6 @@ export type PersonaGenerationSeedStage = {
   originalization_note: string;
 };
 
-export type PersonaGenerationValuesStage = {
-  values: Record<string, unknown>;
-  aesthetic_profile: Record<string, unknown>;
-};
-
-export type PersonaGenerationContextStage = {
-  lived_context: Record<string, unknown>;
-  creator_affinity: Record<string, unknown>;
-};
-
-export type PersonaGenerationInteractionStage = {
-  interaction_defaults: Record<string, unknown>;
-  guardrails: Record<string, unknown>;
-  voice_fingerprint: Record<string, unknown>;
-  task_style_matrix: Record<string, unknown>;
-};
-
 export type PersonaGenerationCoreStage = {
   values: Record<string, unknown>;
   aesthetic_profile: Record<string, unknown>;

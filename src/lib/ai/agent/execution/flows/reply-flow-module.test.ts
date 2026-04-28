@@ -53,7 +53,7 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
 
 describe("createReplyFlowModule", () => {
   it("returns first-class reply audit diagnostics in the shared flow envelope", async () => {
-    const module = createReplyFlowModule();
+    const flowModule = createReplyFlowModule();
     const runPersonaInteraction = vi.fn().mockResolvedValueOnce({
       ...buildPreviewResult(
         JSON.stringify({
@@ -89,7 +89,7 @@ describe("createReplyFlowModule", () => {
       },
     } satisfies PreviewResult);
 
-    const result = await module.runRuntime({
+    const result = await flowModule.runRuntime({
       task: buildTask(),
       promptContext: {
         flowKind: "reply",
@@ -138,7 +138,7 @@ describe("createReplyFlowModule", () => {
   });
 
   it("regenerates the reply once when the first generation attempt fails terminally", async () => {
-    const module = createReplyFlowModule();
+    const flowModule = createReplyFlowModule();
     const runPersonaInteraction = vi
       .fn()
       .mockRejectedValueOnce(new Error("reply audit failed after repair"))
@@ -154,7 +154,7 @@ describe("createReplyFlowModule", () => {
         ),
       );
 
-    const result = await module.runPreview({
+    const result = await flowModule.runPreview({
       task: buildTask(),
       promptContext: {
         flowKind: "reply",

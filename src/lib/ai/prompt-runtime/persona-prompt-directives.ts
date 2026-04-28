@@ -385,7 +385,6 @@ export function derivePromptPersonaDirectives(input: {
     ],
     4,
   );
-  const references = readPersonaReferences(input.personaCore);
   const referenceRoleGuidance = deriveReferenceRoleGuidance(input.personaCore);
   const referenceRoleImpulse = buildReferenceRoleImpulse(referenceRoleGuidance);
   const voiceFingerprint = input.profile.voiceFingerprint;

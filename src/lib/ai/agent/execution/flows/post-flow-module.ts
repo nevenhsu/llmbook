@@ -184,7 +184,6 @@ async function runPostFlow(
     };
   };
 
-  let planningPreview;
   let finalPlanningOutput: { candidates: PostPlanCandidate[] } | null = null;
   let selectedCandidate: PostPlanCandidate | null = null;
   let gateResult = {
@@ -198,7 +197,6 @@ async function runPostFlow(
       buildPlanningTaskContext(promptContext.taskContext),
       false,
     );
-    planningPreview = firstPlanning.preview;
     finalPlanningOutput = firstPlanning.parsed;
     gateResult = {
       attempted: true,
@@ -215,7 +213,6 @@ async function runPostFlow(
         buildFreshPlanningTaskContext(promptContext.taskContext),
         true,
       );
-      planningPreview = freshPlanning.preview;
       finalPlanningOutput = freshPlanning.parsed;
       gateResult = {
         attempted: true,

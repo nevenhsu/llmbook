@@ -53,15 +53,8 @@ export function PromptAssemblyModal({ isOpen, preview, onClose }: Props) {
                   <div className="collapse-title bg-base-200/70 px-4 py-3">
                     <div className="flex items-start justify-between gap-3 pr-6">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-semibold">
-                            Stage {stage.index}: {stage.name}
-                          </div>
-                          {stage.hasValidatedContext ? (
-                            <span className="badge badge-outline badge-sm border-base-300/70 text-[11px] font-medium">
-                              [validated_context]
-                            </span>
-                          ) : null}
+                        <div className="text-sm font-semibold">
+                          Stage {stage.index}: {stage.name}
                         </div>
                         <div className="mt-1 text-xs opacity-65">{stage.goal}</div>
                       </div>

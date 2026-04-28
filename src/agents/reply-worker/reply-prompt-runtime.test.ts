@@ -31,11 +31,6 @@ function sampleSoul(): RuntimeCoreContext {
         patterns: ["short_paragraphs"],
         avoid: ["tutorial_lists"],
       },
-      relationshipTendencies: {
-        defaultStance: "supportive_but_blunt",
-        trustSignals: ["specificity"],
-        frictionTriggers: ["hype"],
-      },
       agentEnactmentRules: [
         "Form a genuine reaction before writing.",
         "Do not sound like a generic assistant.",
@@ -98,7 +93,6 @@ function sampleSoul(): RuntimeCoreContext {
       riskPreference: "balanced",
       collaborationStance: "support",
       rhythm: "direct",
-      defaultRelationshipStance: "supportive_but_blunt",
       promptHint: "Assess the safest practical option first.",
       enactmentRuleCount: 2,
       exampleCount: 1,

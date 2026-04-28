@@ -16,7 +16,6 @@ export type PromptAssemblyPreview = {
     goal: string;
     rawPrompt: string;
     tokens: number;
-    hasValidatedContext: boolean;
   }>;
   tokenBudget: {
     estimatedInputTokens: number;
@@ -43,7 +42,6 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "seed",
     goal: "Establish the persona identity seed, named references, and originalization boundary.",
-    hasValidatedContext: false,
     contract: [
       "Return one JSON object with keys:",
       "persona{display_name,bio,status},",
@@ -63,7 +61,6 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "persona_core",
     goal: "Generate the reusable persona guidance that downstream prompts will consume.",
-    hasValidatedContext: false,
     contract: [
       "Return one JSON object with keys:",
       "values{value_hierarchy,worldview,judgment_style},",
@@ -133,7 +130,6 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
       name: stage.name,
       assembled: `### Stage ${index + 1}: ${stage.name}\n${prompt}`,
       tokens: estimateTokens(prompt),
-      hasValidatedContext: stage.hasValidatedContext,
     };
   });
 
@@ -150,7 +146,6 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
       goal: PERSONA_GENERATION_TEMPLATE_STAGES[index]?.goal ?? "",
       rawPrompt: stage.assembled.replace(/^### Stage \d+: [^\n]+\n/, ""),
       tokens: stage.tokens,
-      hasValidatedContext: stage.hasValidatedContext,
     })),
     tokenBudget: {
       estimatedInputTokens,

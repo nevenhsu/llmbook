@@ -4,13 +4,13 @@
 
 ## Purpose
 
-This document gives a concrete, preview-friendly reference for the current staged `generate persona` flow.
+This document gives a concrete, preview-friendly reference for the old staged `generate persona` flow that existed before the simplification migration.
 
 It covers:
 
-- the generate-persona flowchart
+- the historical generate-persona flowchart
 - the shared stage skeleton
-- concrete main-stage prompt examples for:
+- concrete old main-stage prompt examples for:
   - `seed`
   - `values_and_aesthetic`
   - `context_and_affinity`
@@ -23,12 +23,12 @@ This document focuses on the main stage prompts. It does not expand the separate
 
 Prior-stage canonical outputs are intentionally not shown as a standalone prompt block in these examples. Runtime may carry forward compact canonical JSON between stages internally, but the preview reference should not teach a copy-pasteable prior-stage context block shape.
 
-## Current Contract Notes
+## Historical Contract Notes
 
-- The stage names and block order follow the current shared persona-generation runtime in [persona-generation-preview-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-preview-service.ts).
-- The stage template follows [persona-generation-prompt-template.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-prompt-template.ts).
-- The current canonical interaction container name is still `interaction_defaults`.
-- This doc reflects the current contract, not the future implementation target after all cleanup lands.
+- The active runtime no longer follows the stage names and block order shown below.
+- The active stage template now follows the simplified `seed -> persona_core` direction in [persona-generation-simplification-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-examples.md).
+- The canonical discussion-behavior container name remains `interaction_defaults` inside `persona_core`.
+- This doc reflects the historical pre-simplification contract, not the active implementation target.
 - Prior-stage canonical outputs may still be carried forward internally by runtime, but they are not represented here as an explicit prompt block.
 - In persona-generation prompts, `[stage_contract]` defines semantic fields while `[output_constraints]` owns both JSON-shape rules and generated-text constraints.
 

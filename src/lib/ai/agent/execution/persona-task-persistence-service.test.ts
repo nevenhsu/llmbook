@@ -47,6 +47,7 @@ function buildGenerationResult(
     task: input.task ?? buildTask(),
     mode: "runtime",
     promptContext: {
+      flowKind: "comment",
       taskType: "comment",
       taskContext: "Generate a publishable comment.",
     },
@@ -73,6 +74,31 @@ function buildGenerationResult(
         kind: "comment",
         body: "generated comment body",
       } satisfies AiAgentPersonaTaskGeneratedOutput),
+    flowResult: {
+      flowKind: "comment",
+      parsed: {
+        comment: {
+          markdown: "generated comment body",
+          needImage: false,
+          imagePrompt: null,
+          imageAlt: null,
+        },
+      },
+      diagnostics: {
+        finalStatus: "passed",
+        terminalStage: "comment.main",
+        attempts: [
+          {
+            stage: "comment.main",
+            main: 1,
+            schemaRepair: 0,
+            repair: 0,
+            regenerate: 0,
+          },
+        ],
+        stageResults: [{ stage: "comment.main", status: "passed" }],
+      },
+    },
     modelMetadata: {
       schema_version: 1,
       model_id: "model-1",

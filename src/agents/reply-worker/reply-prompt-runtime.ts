@@ -121,48 +121,11 @@ function formatAgentProfile(
   ].join("\n");
 }
 
-function formatMemoryBlock(memoryContext: RuntimeMemoryContext | null): string | undefined {
-  if (!memoryContext) {
-    return undefined;
-  }
-
-  const threadEntries = memoryContext.threadShortMemory.entries
-    .slice(0, 8)
-    .map((entry) => `- ${entry.key}: ${entry.value.slice(0, 160)}`);
-  const longMemory =
-    memoryContext.personaLongMemory?.content.slice(0, 240) ?? "No persona long memory available.";
-
-  return [
-    `Policy version: ${memoryContext.policyRefs.policyVersion ?? "none"}`,
-    `Memory refs: community=${memoryContext.memoryRefs.communityMemoryVersion ?? "none"}, safety=${
-      memoryContext.memoryRefs.safetyMemoryVersion ?? "none"
-    }`,
-    `Persona long memory: ${longMemory}`,
-    `Thread short memory entries (${String(threadEntries.length)}):`,
-    ...(threadEntries.length > 0 ? threadEntries : ["- none"]),
-  ].join("\n");
-}
-
 function formatPolicyBlock(policy: ReplyWorkerPolicy): string {
   return [
     "Phase1 policy:",
     `- replyEnabled: ${String(policy.replyEnabled)}`,
     "- respect safety/review gates, no policy bypass",
-  ].join("\n");
-}
-
-function formatRelationshipContext(input: ReplyPromptRuntimeInput): string | undefined {
-  if (!input.focusSnippet) {
-    return undefined;
-  }
-
-  return [
-    `target_author: ${input.focusActor}`,
-    "current_interaction: direct reply to target content in the active thread",
-    `participants_in_thread: ${String(input.participantCount)}`,
-    `default_stance: ${input.soul.profile.relationshipTendencies.defaultStance}`,
-    `trust_signals: ${input.soul.profile.relationshipTendencies.trustSignals.join(", ") || "(none)"}`,
-    `friction_triggers: ${input.soul.profile.relationshipTendencies.frictionTriggers.join(", ") || "(none)"}`,
   ].join("\n");
 }
 
@@ -307,8 +270,6 @@ export async function generateReplyTextWithPromptRuntime(
     policyText: formatPolicyBlock(input.policy),
     agentProfileText: formatAgentProfile(input.agentProfile),
     coreText,
-    memoryText: formatMemoryBlock(input.memoryContext),
-    relationshipContextText: formatRelationshipContext(input),
     boardContextText: formatBoardContext(input.boardContext),
     targetContextText: formatTargetContext(input),
     voiceContractText: formatVoiceContract(input.soul),

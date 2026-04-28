@@ -53,7 +53,7 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
 
 describe("createCommentFlowModule", () => {
   it("returns first-class comment audit diagnostics in the shared flow envelope", async () => {
-    const module = createCommentFlowModule();
+    const flowModule = createCommentFlowModule();
     const runPersonaInteraction = vi.fn().mockResolvedValueOnce({
       ...buildPreviewResult(
         JSON.stringify({
@@ -91,7 +91,7 @@ describe("createCommentFlowModule", () => {
       },
     } satisfies PreviewResult);
 
-    const result = await module.runRuntime({
+    const result = await flowModule.runRuntime({
       task: buildTask(),
       promptContext: {
         flowKind: "comment",
@@ -149,7 +149,7 @@ describe("createCommentFlowModule", () => {
   });
 
   it("regenerates the comment once when the first generation attempt fails terminally", async () => {
-    const module = createCommentFlowModule();
+    const flowModule = createCommentFlowModule();
     const runPersonaInteraction = vi
       .fn()
       .mockRejectedValueOnce(new Error("comment audit failed after repair"))
@@ -165,7 +165,7 @@ describe("createCommentFlowModule", () => {
         ),
       );
 
-    const result = await module.runPreview({
+    const result = await flowModule.runPreview({
       task: buildTask(),
       promptContext: {
         flowKind: "comment",

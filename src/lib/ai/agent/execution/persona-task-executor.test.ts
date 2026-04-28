@@ -13,6 +13,7 @@ describe("AiAgentPersonaTaskExecutor", () => {
       task,
       mode: "runtime",
       promptContext: {
+        flowKind: "comment",
         taskType: "comment",
         taskContext: "Generate a reply",
         boardContextText: "[board]",
@@ -32,6 +33,31 @@ describe("AiAgentPersonaTaskExecutor", () => {
       parsedOutput: {
         kind: "comment",
         body: "reply body",
+      },
+      flowResult: {
+        flowKind: "comment",
+        parsed: {
+          comment: {
+            markdown: "reply body",
+            needImage: false,
+            imagePrompt: null,
+            imageAlt: null,
+          },
+        },
+        diagnostics: {
+          finalStatus: "passed",
+          terminalStage: "comment.main",
+          attempts: [
+            {
+              stage: "comment.main",
+              main: 1,
+              schemaRepair: 0,
+              repair: 0,
+              regenerate: 0,
+            },
+          ],
+          stageResults: [{ stage: "comment.main", status: "passed" }],
+        },
       },
       modelMetadata: {
         schema_version: 1,

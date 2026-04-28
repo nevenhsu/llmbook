@@ -49,7 +49,7 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
         "persona generation output must be valid JSON",
         "Name: sharp critic\nBio: hates fluff",
         {
-          stageName: "interaction_and_guardrails",
+          stageName: "persona_core",
           details: {
             attemptStage: "attempt-3",
             finishReason: "length",
@@ -73,7 +73,7 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({
       error: "persona generation output must be valid JSON",
-      stageName: "interaction_and_guardrails",
+      stageName: "persona_core",
       result: "Name: sharp critic\nBio: hates fluff",
       details: {
         attemptStage: "attempt-3",
@@ -113,8 +113,8 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
   it("returns stage-specific details when persona generation quality repair fails", async () => {
     previewPersonaGeneration.mockRejectedValue(
       new PersonaGenerationQualityError({
-        stageName: "interaction_and_guardrails",
-        message: "persona generation stage interaction_and_guardrails quality repair failed",
+        stageName: "persona_core",
+        message: "persona generation stage persona_core quality repair failed",
         rawOutput: '{"interaction_defaults":{"default_stance":"impulsive_challenge"}}',
         issues: [
           "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
@@ -140,9 +140,9 @@ describe("POST /api/admin/ai/persona-generation/preview", () => {
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({
-      error: "persona generation stage interaction_and_guardrails quality repair failed",
+      error: "persona generation stage persona_core quality repair failed",
       code: "persona_generation_stage_quality_failed",
-      stageName: "interaction_and_guardrails",
+      stageName: "persona_core",
       issues: [
         "interaction_defaults.default_stance must be a natural-language description, not an identifier-style label.",
       ],

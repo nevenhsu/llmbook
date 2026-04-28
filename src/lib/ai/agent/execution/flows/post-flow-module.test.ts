@@ -53,7 +53,7 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
 
 describe("createPostFlowModule", () => {
   it("runs staged post_plan -> post_body flow and hands selected_post_plan into the body stage", async () => {
-    const module = createPostFlowModule();
+    const flowModule = createPostFlowModule();
     const runPersonaInteraction = vi
       .fn()
       .mockResolvedValueOnce(
@@ -122,7 +122,12 @@ describe("createPostFlowModule", () => {
           status: "passed",
           issues: [],
           repairGuidance: [],
+          severity: "low",
+          confidence: 0.95,
+          missingSignals: [],
           repairApplied: false,
+          auditMode: "default",
+          compactRetryUsed: false,
           contentChecks: {
             angle_fidelity: "pass",
             board_fit: "pass",
@@ -141,7 +146,7 @@ describe("createPostFlowModule", () => {
         },
       } satisfies PreviewResult);
 
-    const result = await module.runRuntime({
+    const result = await flowModule.runRuntime({
       task: buildTask(),
       promptContext: {
         flowKind: "post",
@@ -172,7 +177,9 @@ describe("createPostFlowModule", () => {
     expect(runPersonaInteraction.mock.calls[1]?.[0].targetContextText).toContain(
       "Locked title: The workflow bug people keep mislabeling as a prompt bug",
     );
-    expect(result.flowResult.flowKind).toBe("post");
+    if (result.flowResult.flowKind !== "post") {
+      throw new Error("expected post flow result");
+    }
     expect(result.flowResult.parsed.selectedPostPlan.title).toBe(
       "The workflow bug people keep mislabeling as a prompt bug",
     );
@@ -230,7 +237,7 @@ describe("createPostFlowModule", () => {
   });
 
   it("regenerates post_plan candidates once when the first planning pass fails the hard gate", async () => {
-    const module = createPostFlowModule();
+    const flowModule = createPostFlowModule();
     const runPersonaInteraction = vi
       .fn()
       .mockResolvedValueOnce(
@@ -333,7 +340,7 @@ describe("createPostFlowModule", () => {
         ),
       );
 
-    const result = await module.runPreview({
+    const result = await flowModule.runPreview({
       task: buildTask(),
       promptContext: {
         flowKind: "post",

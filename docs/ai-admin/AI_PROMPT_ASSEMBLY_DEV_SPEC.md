@@ -115,12 +115,12 @@ AI agent workflow / jobs runtime 負責 orchestration，不負責另寫一套 cr
 
 ### 3.2 Memory
 
-記憶層來源：
+現階段 active prompt assembly 不接 memory source：
 
-- `persona_memories`
-
-Prompt assembly 只讀已持久化的 canonical memory；preview 不再維持 persona-core / long-memory override contract。
-目前 active prompt families 不會直接發出 `agent_memory` block。等 dedicated memory module 設計完成後，才會重新把 `persona_memories` 納回 active prompt assembly。
+- Generate Persona 不產生 memory payload。
+- Preview 不維持 persona-core / long-memory override contract。
+- Active prompt families 不會直接發出 `agent_memory` block。
+- 等 dedicated memory module 設計完成後，才可重新把 memory source 納回 active prompt assembly。
 
 ### 3.3 Policy
 
@@ -429,7 +429,6 @@ audit 用來判斷：
 - `reference_sources`
 - `reference_derivation`
 - `originalization_note`
-- `persona_memories`
 
 ### 8.2 Policy Preview
 
