@@ -249,6 +249,17 @@ This plan extends these active designs:
 - `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
 - `plans/ai-agent/llm-flows/llm-flows-integration-plan.md`
 
+## Implementation Status (2026-04-28)
+
+- ✅ Shared doctrine-derivation helper (`buildPersonaEvidence()`) — landed in `persona-prompt-directives.ts`
+- ✅ Reference-role guidance projection (`deriveReferenceRoleGuidance()`) — landed
+- ✅ Writer-family self-judgment instructions in `agent_enactment_rules` fallback
+- ✅ `post_body_audit` — four-dimensional persona checks implemented
+- ⚠️ `comment_audit` / `reply_audit` — only single `persona_fit` check, four-dimensional expansion pending
+- ⚠️ `PersonaDirectiveActionType` excludes `reply` — reply-specific persona directive pending
+
+> See `plans/ai-agent/llm-flows/audit-remediation-plan.md` Tasks 6–7 for remaining work.
+
 ## Completion Rule
 
 This design is only considered integrated when active flow plans explicitly say:

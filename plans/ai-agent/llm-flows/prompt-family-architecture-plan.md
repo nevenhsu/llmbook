@@ -646,7 +646,7 @@ That means:
 - do not design downstream prompt families under the assumption that relationship fields must exist
 - delete remaining relationship-oriented runtime/prompt fields during cleanup rather than treating them as passive background data
 
-## Task 1: Split Prompt Assembly Into Two Families
+## Task 1: Split Prompt Assembly Into Two Families ✅ DONE
 
 **Files:**
 
@@ -688,7 +688,7 @@ git add src/lib/ai/prompt-runtime/prompt-builder.ts src/lib/ai/admin/control-pla
 git commit -m "refactor: split prompt assembly into planner and writer families"
 ```
 
-## Task 2: Introduce `agent_posting_lens` And Remove Relationship Usage
+## Task 2: Introduce `agent_posting_lens` And Remove Relationship Usage ✅ DONE
 
 **Files:**
 
@@ -732,7 +732,7 @@ git add src/lib/ai/agent/execution/persona-interaction-service.ts src/lib/ai/pro
 git commit -m "feat: add planner posting lens and drop relationship prompt usage"
 ```
 
-## Task 3: Update Flow Plans And Prompt Docs
+## Task 3: Update Flow Plans And Prompt Docs ✅ DONE
 
 **Files:**
 

@@ -256,7 +256,7 @@ This keeps retry behavior explicit and prevents hidden infinite loops in preview
 
 This keeps writer-flow output constraints aligned without forcing `comment`/`reply` to adopt post tags.
 
-## Task 1: Introduce The Shared Text Flow Module Boundary
+## Task 1: Introduce The Shared Text Flow Module Boundary ✅ DONE
 
 **Files:**
 
@@ -311,7 +311,7 @@ git add src/lib/ai/agent/execution/flows src/lib/ai/agent/execution/persona-task
 git commit -m "refactor: route text generation through shared flow modules"
 ```
 
-## Task 2: Add The Post Planning Contract And Hard-Gate Utilities
+## Task 2: Add The Post Planning Contract And Hard-Gate Utilities ✅ DONE
 
 **Files:**
 
@@ -373,7 +373,7 @@ git add src/lib/ai/prompt-runtime/post-plan-contract.ts src/lib/ai/prompt-runtim
 git commit -m "feat: add staged post planning contract"
 ```
 
-## Task 3: Implement The `post_plan` Module Stage
+## Task 3: Implement The `post_plan` Module Stage ✅ DONE
 
 **Files:**
 
@@ -428,7 +428,9 @@ git add src/lib/ai/agent/execution/flows/post-flow-module.ts src/lib/ai/agent/ex
 git commit -m "feat: add staged post planning flow"
 ```
 
-## Task 4: Implement The `post_body` Contract, Audit, And Repair Loop
+## Task 4: Implement The `post_body` Contract, Audit, And Repair Loop ⚠️ PARTIAL
+
+> **Status:** `post-body-audit.ts` contract (prompt builder, parser, repair builder) is complete with tests. **Remaining:** audit/repair loop not wired inside `post-flow-module.ts`. Schema repair counter not reset on regenerate. See `audit-remediation-plan.md` Tasks 4–5.
 
 **Files:**
 
@@ -492,7 +494,7 @@ git add src/lib/ai/prompt-runtime/post-body-audit.ts src/lib/ai/prompt-runtime/p
 git commit -m "feat: add staged post body audit and repair"
 ```
 
-## Task 5: Route All App-Owned Post Generation Through The Flow Registry
+## Task 5: Route All App-Owned Post Generation Through The Flow Registry ✅ DONE
 
 **Files:**
 
@@ -537,7 +539,9 @@ git add src/lib/ai/agent/execution/persona-task-executor.ts src/lib/ai/agent/exe
 git commit -m "refactor: make flow modules the only app-owned text path"
 ```
 
-## Task 6: Final Verification
+## Task 6: Final Verification ⏳ BLOCKED
+
+> **Status:** Blocked on Task 4 audit wiring. Run after `audit-remediation-plan.md` Tasks 4–5 are complete.
 
 **Files:**
 

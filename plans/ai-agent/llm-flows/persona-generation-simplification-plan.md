@@ -419,6 +419,18 @@ and removes persona-generation memory authoring entirely.
 - Make `persona_core` quality audit explicitly judge cross-field coherence
 - Make `persona_core` quality audit also judge whether doctrine can be derived clearly from canonical source fields without persisting doctrine dimensions directly
 
+## Implementation Status (2026-04-28) ✅ DONE
+
+All items above are implemented:
+
+- ✅ 2-stage `seed → persona_core` pipeline — `persona-generation-preview-service.ts`
+- ✅ `PersonaGenerationSeedStage` + `PersonaGenerationCoreStage` — `control-plane-contract.ts`
+- ✅ `validateSeedStageQuality()` — landed
+- ✅ `validatePersonaCoreStageQuality()` with cross-field coherence checks — landed
+- ✅ `persona_memories` removed from generation output (test asserts absence)
+- ✅ Relationship fields removed from generation output (`grep` confirms no active usage)
+- ✅ Persona generation uses its own staged prompt template, not planner/writer family
+
 ## Reference Examples Doc
 
 When this simplified design is discussed or implemented, use a dedicated examples doc instead of reusing the current `5-stage` reference:

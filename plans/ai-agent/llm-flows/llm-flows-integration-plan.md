@@ -24,6 +24,7 @@ Supporting plans remain active for detailed contract/file guidance:
 - `plans/ai-agent/llm-flows/persona-generation-simplification-examples.md`
 - `plans/ai-agent/llm-flows/prompt-block-examples.md`
 - `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- `plans/ai-agent/llm-flows/audit-remediation-plan.md` ← **NEW: remaining gap closures**
 
 Rules:
 
@@ -79,7 +80,7 @@ By the end of this program, the repo should have one coherent LLM-flow stack wit
 
 Do not start Task 3 or Task 4 until Task 1 is done. Task 2 should land before Task 3 unless both are executed in one branch with the registry/foundation already passing.
 
-## Task 1: Land Shared Flow Foundations
+## Task 1: Land Shared Flow Foundations ✅ DONE
 
 **Detailed references:**
 
@@ -148,7 +149,9 @@ git add src/lib/ai/agent/execution/flows/types.ts src/lib/ai/agent/execution/flo
 git commit -m "refactor: add shared llm flow foundations"
 ```
 
-## Task 2: Land The Staged `post` Flow
+## Task 2: Land The Staged `post` Flow ⚠️ PARTIAL
+
+> **Status:** Core `post_plan → post_body` staged flow is implemented with schema repair, hard gate, and fresh regenerate. **Remaining:** body audit/repair loop not wired in `post-flow-module.ts`; planning audit contract missing. Schema repair counter not reset on regenerate. See `audit-remediation-plan.md` Tasks 4–5.
 
 **Detailed references:**
 
@@ -229,7 +232,9 @@ git add src/lib/ai/prompt-runtime/post-plan-contract.ts src/lib/ai/prompt-runtim
 git commit -m "feat: land staged post flow on shared registry"
 ```
 
-## Task 3: Land First-Class `comment` And `reply`
+## Task 3: Land First-Class `comment` And `reply` ⚠️ PARTIAL
+
+> **Status:** `reply` is first-class in flow registry, context builder, and prompt contracts. `comment_audit` and `reply_audit` contract files exist with prompt builders and parsers. **Remaining:** audit/repair loop not wired in `single-stage-writer-flow.ts`; audit checks only have single `persona_fit` instead of four-dimensional doctrine. See `audit-remediation-plan.md` Tasks 3, 6.
 
 **Detailed references:**
 
@@ -308,7 +313,7 @@ git add src/lib/ai/prompt-runtime/comment-flow-audit.ts src/lib/ai/prompt-runtim
 git commit -m "feat: land first-class comment and reply flows"
 ```
 
-## Task 4: Simplify Generate-Persona To `seed -> persona_core`
+## Task 4: Simplify Generate-Persona To `seed -> persona_core` ✅ DONE
 
 **Detailed references:**
 
@@ -369,7 +374,7 @@ git add src/lib/ai/admin/persona-generation-preview-service.ts src/lib/ai/admin/
 git commit -m "refactor: simplify persona generation flow"
 ```
 
-## Task 5: Cleanup Active Docs And Retire Stale Contracts
+## Task 5: Cleanup Active Docs And Retire Stale Contracts ✅ DONE
 
 **Detailed references:**
 
@@ -424,7 +429,9 @@ git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMB
 git commit -m "docs: align active llm flow contracts"
 ```
 
-## Task 6: Final Integrated Verification
+## Task 6: Final Integrated Verification ⏳ BLOCKED
+
+> **Status:** Blocked on Task 2 and Task 3 remaining audit work. Run after `audit-remediation-plan.md` is complete.
 
 **Files:**
 

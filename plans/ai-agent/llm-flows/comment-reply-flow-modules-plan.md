@@ -226,7 +226,7 @@ Their main prompts should instruct the model to internally test the draft before
 
 This internal self-check is silent. It should revise the draft before the final JSON output, not produce extra fields or chain-of-thought.
 
-## Task 1: Promote `reply` To A First-Class Text Flow Type
+## Task 1: Promote `reply` To A First-Class Text Flow Type ✅ DONE
 
 **Files:**
 
@@ -277,7 +277,7 @@ git add src/lib/ai/prompt-runtime/prompt-builder.ts src/lib/ai/prompt-runtime/ru
 git commit -m "refactor: promote reply to a first-class text flow"
 ```
 
-## Task 2: Lock The Comment And Reply Prompt Contracts
+## Task 2: Lock The Comment And Reply Prompt Contracts ✅ DONE
 
 **Files:**
 
@@ -325,7 +325,9 @@ git add plans/ai-agent/llm-flows/prompt-block-examples.md docs/ai-admin/AI_PROMP
 git commit -m "docs: split comment and reply prompt contracts"
 ```
 
-## Task 3: Add A First-Class `comment_audit` Contract
+## Task 3: Add A First-Class `comment_audit` Contract ⚠️ PARTIAL
+
+> **Status:** `comment-flow-audit.ts` contract (prompt builder, parser, repair builder) is complete with tests. **Remaining:** (1) audit/repair loop not wired in `single-stage-writer-flow.ts`, (2) audit checks only have single `persona_fit` instead of four-dimensional doctrine checks. See `audit-remediation-plan.md` Tasks 3, 6.
 
 **Files:**
 
@@ -377,7 +379,9 @@ git add src/lib/ai/prompt-runtime/comment-flow-audit.ts src/lib/ai/prompt-runtim
 git commit -m "feat: add top-level comment audit contract"
 ```
 
-## Task 4: Add A First-Class `reply_audit` Contract
+## Task 4: Add A First-Class `reply_audit` Contract ⚠️ PARTIAL
+
+> **Status:** `reply-flow-audit.ts` contract (prompt builder, parser, repair builder) is complete with tests. **Remaining:** (1) audit/repair loop not wired in `single-stage-writer-flow.ts`, (2) audit checks only have single `persona_fit` instead of four-dimensional doctrine checks. See `audit-remediation-plan.md` Tasks 3, 6.
 
 **Files:**
 
@@ -427,7 +431,7 @@ git add src/lib/ai/prompt-runtime/reply-flow-audit.ts src/lib/ai/prompt-runtime/
 git commit -m "feat: add thread reply audit contract"
 ```
 
-## Task 5: Route Notification And Runtime Docs Onto `reply`
+## Task 5: Route Notification And Runtime Docs Onto `reply` ✅ DONE
 
 **Files:**
 
@@ -473,7 +477,9 @@ git add src/lib/ai/README.md plans/ai-agent/operator-console/README.md plans/ai-
 git commit -m "docs: normalize notification text generation to reply"
 ```
 
-## Task 6: Final Verification
+## Task 6: Final Verification ⏳ BLOCKED
+
+> **Status:** Blocked on Tasks 3–4 audit wiring. Run after `audit-remediation-plan.md` Tasks 3, 6 are complete.
 
 **Files:**
 
