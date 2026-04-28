@@ -1,21 +1,19 @@
-import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
+import { getInteractionMaxOutputTokens } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import {
   buildInteractionCoreSummary,
   normalizeCoreProfile,
 } from "@/lib/ai/core/runtime-core-profile";
-import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
 import {
-  buildPromptBlocks,
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
   formatAgentProfile,
   formatBoardContext,
   formatPrompt,
-  formatTarget,
+  formatTargetContext,
+  buildPromptBlocks,
 } from "@/lib/ai/admin/control-plane-shared";
 import type {
   AiControlPlaneDocument,
@@ -25,97 +23,249 @@ import type {
   PreviewResult,
   PromptBoardContext,
   PromptTargetContext,
-  PromptActionType,
 } from "@/lib/ai/admin/control-plane-contract";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
+import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
+import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import {
-  buildPersonaEvidence,
   buildPlannerPostingLens,
-  buildPersonaVoiceRepairPrompt,
   derivePromptPersonaDirectives,
-  detectPersonaVoiceDrift,
 } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-import {
-  PersonaOutputValidationError,
-  buildPersonaOutputAuditPrompt,
-  isRetryablePersonaAuditParseFailure,
-  parsePersonaAuditResult,
-  type PersonaAuditResult,
-  type PersonaOutputAuditPromptMode,
-} from "@/lib/ai/prompt-runtime/persona-output-audit";
-import {
-  parseMarkdownActionOutput,
-  parsePostBodyActionOutput,
-} from "@/lib/ai/prompt-runtime/action-output";
-import {
-  buildPostBodyAuditPrompt,
-  buildPostBodyRepairPrompt,
-  parsePostBodyAuditResult,
-} from "@/lib/ai/prompt-runtime/post-body-audit";
-import {
-  buildReplyAuditPrompt,
-  buildReplyRepairPrompt,
-  parseReplyAuditResult,
-} from "@/lib/ai/prompt-runtime/reply-flow-audit";
-import type {
-  AiAgentPersonaInteractionInput,
-  PersonaInteractionStageResult,
-} from "@/lib/ai/agent/execution/persona-interaction-service";
+
+export type PersonaInteractionStagePurpose = "main" | "schema_repair" | "audit" | "quality_repair";
+
+export type PersonaInteractionStageResult = {
+  assembledPrompt: string;
+  rawText: string;
+  finishReason: string | null;
+  tokenBudget: PreviewResult["tokenBudget"];
+  providerId: string | null;
+  modelId: string | null;
+};
+
+export type PersonaInteractionStageInput = {
+  personaId: string;
+  modelId: string;
+  taskType: PromptActionType;
+  stagePurpose: PersonaInteractionStagePurpose;
+  taskContext: string;
+  boardContext?: PromptBoardContext;
+  targetContext?: PromptTargetContext;
+  boardContextText?: string;
+  targetContextText?: string;
+  document: AiControlPlaneDocument;
+  providers: AiProviderConfig[];
+  models: AiModelConfig[];
+  getPersonaProfile: (personaId: string) => Promise<PersonaProfile>;
+  recordLlmInvocationError: (input: {
+    providerKey: string;
+    modelKey: string;
+    error: string;
+    errorDetails?: {
+      statusCode?: number;
+      code?: string;
+      type?: string;
+      body?: string;
+    };
+  }) => Promise<void>;
+};
+
+function mapDirectiveActionType(taskType: PromptActionType): "post" | "comment" | "reply" {
+  if (taskType === "post" || taskType === "post_plan" || taskType === "post_body") {
+    return "post";
+  }
+  if (taskType === "reply") {
+    return "reply";
+  }
+  return "comment";
+}
+
+function buildLeanStageBlocks(input: {
+  document: AiControlPlaneDocument;
+  taskContext: string;
+}): Array<{ name: string; content: string }> {
+  return [
+    {
+      name: "system_baseline",
+      content: input.document.globalPolicyDraft.systemBaseline.trim() || "(not set)",
+    },
+    {
+      name: "global_policy",
+      content: [
+        "Policy:",
+        input.document.globalPolicyDraft.globalPolicy,
+        "Forbidden:",
+        input.document.globalPolicyDraft.forbiddenRules,
+      ].join("\n"),
+    },
+    {
+      name: "task_context",
+      content: input.taskContext,
+    },
+  ];
+}
 
 export class AiAgentPersonaInteractionStageService {
-  public async runStage(input: {
-    personaId: string;
-    modelId: string;
-    taskType: PromptActionType;
-    taskContext: string;
-    boardContextText?: string;
-    targetContextText?: string;
-  }): Promise<PersonaInteractionStageResult> {
-    const blocks = [{ name: "task_context", content: input.taskContext }];
+  public async runStage(
+    input: PersonaInteractionStageInput,
+  ): Promise<PersonaInteractionStageResult> {
+    const { model, provider } = resolvePersonaTextModel({
+      modelId: input.modelId,
+      models: input.models,
+      providers: input.providers,
+      featureLabel: "persona interaction stage",
+    });
+    const invocationConfig = await resolveLlmInvocationConfig({
+      taskType: "generic",
+      capability: "text_generation",
+      promptModality: "text_only",
+      targetOverride: {
+        providerId: provider.providerKey,
+        modelId: model.modelKey,
+      },
+    });
+    const registry = await createDbBackedLlmProviderRegistry({
+      includeMock: true,
+      includeXai: true,
+      includeMinimax: true,
+    });
 
-    if (input.boardContextText) {
-      blocks.push({ name: "board_context", content: input.boardContextText });
-    }
+    const profile = await input.getPersonaProfile(input.personaId);
+    const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
+    const runtimePersonaProfile = normalizeCoreProfile(effectivePersonaCore).profile;
+    const directiveActionType = mapDirectiveActionType(input.taskType);
+    const personaPromptDirectives = derivePromptPersonaDirectives({
+      actionType: directiveActionType,
+      profile: runtimePersonaProfile,
+      personaCore: effectivePersonaCore,
+    });
+    const personaCoreSummary = buildInteractionCoreSummary({
+      actionType: directiveActionType,
+      profile: runtimePersonaProfile,
+      personaCore: effectivePersonaCore,
+    });
+    const defaultStance =
+      typeof (effectivePersonaCore.interaction_defaults as Record<string, unknown> | undefined)
+        ?.default_stance === "string"
+        ? (
+            (effectivePersonaCore.interaction_defaults as Record<string, unknown>)
+              .default_stance as string
+          ).trim()
+        : "";
+    const includeExpandedContext =
+      input.stagePurpose === "main" || input.stagePurpose === "schema_repair";
 
-    if (input.targetContextText) {
-      blocks.push({ name: "target_context", content: input.targetContextText });
-    }
-
+    const maxOutputTokens = getInteractionMaxOutputTokens({
+      actionType: input.taskType,
+      stagePurpose: input.stagePurpose,
+    });
+    const blocks = includeExpandedContext
+      ? buildPromptBlocks({
+          actionType: input.taskType,
+          globalDraft: input.document.globalPolicyDraft,
+          outputStyle: input.document.globalPolicyDraft.styleGuide,
+          agentProfile: formatAgentProfile({
+            displayName: profile.persona.display_name,
+            username: profile.persona.username,
+            bio: profile.persona.bio,
+          }),
+          plannerMode:
+            input.taskType === "post_plan"
+              ? "This stage is planning and scoring, not final writing."
+              : undefined,
+          agentCore: [personaCoreSummary, defaultStance ? `default_stance: ${defaultStance}` : null]
+            .filter((item): item is string => Boolean(item))
+            .join("\n\n"),
+          agentPostingLens:
+            input.taskType === "post_plan"
+              ? buildPlannerPostingLens({
+                  profile: runtimePersonaProfile,
+                  personaCore: effectivePersonaCore,
+                }).join("\n")
+              : undefined,
+          planningScoringContract:
+            input.taskType === "post_plan"
+              ? "Return exactly 3 candidates with conservative scores."
+              : undefined,
+          agentVoiceContract: personaPromptDirectives.voiceContract.join("\n"),
+          boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
+          targetContext:
+            input.targetContextText ??
+            formatTargetContext({
+              taskType: input.taskType,
+              targetContext: input.targetContext,
+            }),
+          agentEnactmentRules: personaPromptDirectives.enactmentRules.join("\n"),
+          agentAntiStyleRules: personaPromptDirectives.antiStyleRules.join("\n"),
+          agentExamples: personaPromptDirectives.inCharacterExamples
+            .map((example) =>
+              [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"),
+            )
+            .join("\n\n"),
+          taskContext: input.taskContext,
+        })
+      : buildLeanStageBlocks({
+          document: input.document,
+          taskContext: input.taskContext,
+        });
     const assembledPrompt = formatPrompt(blocks);
     const tokenBudget = buildTokenBudgetSignal({
       blocks,
       maxInputTokens: DEFAULT_TOKEN_LIMITS.interactionMaxInputTokens,
-      maxOutputTokens: DEFAULT_TOKEN_LIMITS.interactionMaxOutputTokens,
+      maxOutputTokens,
     });
 
-    const rawText = JSON.stringify({
-      response: "stage result",
-      taskType: input.taskType,
-      personaId: input.personaId,
-      timestamp: new Date().toISOString(),
+    const llmResult = await invokeLLM({
+      registry,
+      taskType: "generic",
+      routeOverride: invocationConfig.route,
+      modelInput: {
+        prompt: assembledPrompt,
+        maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
+        temperature: input.stagePurpose === "audit" ? 0 : 0.3,
+      },
+      entityId: `persona-interaction-stage:${model.id}`,
+      timeoutMs: invocationConfig.timeoutMs,
+      retries: Math.min(invocationConfig.retries ?? 0, ADMIN_UI_LLM_PROVIDER_RETRIES),
+      onProviderError: async (event) => {
+        await input.recordLlmInvocationError({
+          providerKey: event.providerId,
+          modelKey: event.modelId,
+          error: event.error,
+          errorDetails: event.errorDetails,
+        });
+      },
     });
+
+    const rawText = llmResult.text.trim();
+    if (!rawText) {
+      throw new Error(
+        llmResult.error ??
+          `persona interaction stage returned empty output (finishReason=${String(llmResult.finishReason ?? "unknown")})`,
+      );
+    }
 
     return {
       assembledPrompt,
       rawText,
-      finishReason: null,
+      finishReason: llmResult.finishReason ?? null,
       tokenBudget,
-      providerId: null,
-      modelId: input.modelId,
+      providerId: llmResult.providerId,
+      modelId: llmResult.modelId,
     };
   }
 }
 
-export async function runPersonaInteractionStage(input: {
-  personaId: string;
-  modelId: string;
-  taskType: PromptActionType;
-  taskContext: string;
-  boardContextText?: string;
-  targetContextText?: string;
-}): Promise<PreviewResult> {
+export async function runPersonaInteractionStage(
+  input: Omit<PersonaInteractionStageInput, "stagePurpose"> & {
+    stagePurpose?: PersonaInteractionStagePurpose;
+  },
+): Promise<PreviewResult> {
   const stageService = new AiAgentPersonaInteractionStageService();
-  const stageResult = await stageService.runStage(input);
+  const stageResult = await stageService.runStage({
+    ...input,
+    stagePurpose: input.stagePurpose ?? "main",
+  });
 
   return {
     assembledPrompt: stageResult.assembledPrompt,

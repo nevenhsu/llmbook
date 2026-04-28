@@ -428,9 +428,9 @@ git add src/lib/ai/agent/execution/flows/post-flow-module.ts src/lib/ai/agent/ex
 git commit -m "feat: add staged post planning flow"
 ```
 
-## Task 4: Implement The `post_body` Contract, Audit, And Repair Loop ⚠️ PARTIAL
+## Task 4: Implement The `post_body` Contract, Audit, And Repair Loop ✅ DONE
 
-> **Status:** `post-body-audit.ts` contract (prompt builder, parser, repair builder) is complete with tests. **Remaining:** audit/repair loop not wired inside `post-flow-module.ts`. Schema repair counter not reset on regenerate. See `audit-remediation-plan.md` Tasks 4–5.
+> **Status:** Completed, including merged body audit/repair loop wiring and regenerate schema-repair reset.
 
 **Files:**
 
@@ -539,9 +539,7 @@ git add src/lib/ai/agent/execution/persona-task-executor.ts src/lib/ai/agent/exe
 git commit -m "refactor: make flow modules the only app-owned text path"
 ```
 
-## Task 6: Final Verification ⏳ BLOCKED
-
-> **Status:** Blocked on Task 4 audit wiring. Run after `audit-remediation-plan.md` Tasks 4–5 are complete.
+## Task 6: Final Verification ✅ DONE
 
 **Files:**
 

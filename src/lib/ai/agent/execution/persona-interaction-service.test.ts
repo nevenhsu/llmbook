@@ -293,79 +293,7 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(preview.assembledPrompt).not.toContain("target_id:");
   });
 
-  it("runs merged post_body audit and one repair loop before returning rendered final post markdown", async () => {
-    invokeLLM
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          body: "Many teams think prompt quality is the main issue.",
-          tags: ["#ai", "#workflow"],
-          need_image: false,
-          image_prompt: null,
-          image_alt: null,
-        }),
-        finishReason: "stop",
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: false,
-          issues: ["The body sounds generic instead of persona-specific."],
-          repairGuidance: ["Open with the hidden execution boundary."],
-          contentChecks: {
-            angle_fidelity: "fail",
-            board_fit: "pass",
-            body_usefulness: "fail",
-            markdown_structure: "fail",
-            title_body_alignment: "fail",
-          },
-          personaChecks: {
-            body_persona_fit: "fail",
-            anti_style_compliance: "fail",
-            value_fit: "fail",
-            reasoning_fit: "fail",
-            discourse_fit: "fail",
-            expression_fit: "fail",
-          },
-        }),
-        finishReason: "stop",
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          body: "## The missing boundary\n\nRepair is narrow. Enforcement is not.",
-          tags: ["#ai", "#workflow"],
-          need_image: false,
-          image_prompt: null,
-          image_alt: null,
-        }),
-        finishReason: "stop",
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: true,
-          issues: [],
-          repairGuidance: [],
-          contentChecks: {
-            angle_fidelity: "pass",
-            board_fit: "pass",
-            body_usefulness: "pass",
-            markdown_structure: "pass",
-            title_body_alignment: "pass",
-          },
-          personaChecks: {
-            body_persona_fit: "pass",
-            anti_style_compliance: "pass",
-            value_fit: "pass",
-            reasoning_fit: "pass",
-            discourse_fit: "pass",
-            expression_fit: "pass",
-          },
-        }),
-        finishReason: "stop",
-        error: null,
-      });
-
+  it("delegates post_body execution to raw stage service", async () => {
     const service = new AiAgentPersonaInteractionService();
 
     const preview = await service.run({
@@ -393,103 +321,16 @@ describe("AiAgentPersonaInteractionService", () => {
       recordLlmInvocationError: async () => {},
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(4);
-    expect(preview.markdown).toContain(
-      "# The workflow bug people keep mislabeling as a prompt bug",
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(preview.assembledPrompt).toContain("[task_context]");
+    expect(preview.assembledPrompt).toContain(
+      "Write the final post body for the selected plan below.",
     );
-    expect(preview.markdown).toContain("#ai #workflow");
-    expect(preview.markdown).toContain("## The missing boundary");
-    expect(preview.rawResponse).toBe(
-      JSON.stringify({
-        body: "## The missing boundary\n\nRepair is narrow. Enforcement is not.",
-        tags: ["#ai", "#workflow"],
-        need_image: false,
-        image_prompt: null,
-        image_alt: null,
-      }),
-    );
-    expect(preview.auditDiagnostics).toMatchObject({
-      contract: "post_body_audit",
-      status: "passed_after_repair",
-      repairApplied: true,
-      issues: ["The body sounds generic instead of persona-specific."],
-      contentChecks: {
-        angle_fidelity: "pass",
-      },
-      personaChecks: {
-        body_persona_fit: "pass",
-        value_fit: "pass",
-      },
-    });
+    expect(preview.rawResponse).toContain("Preview response");
+    expect(preview.auditDiagnostics).toBeNull();
   });
 
-  it("runs reply-specific audit and repair instead of the generic persona audit path", async () => {
-    invokeLLM
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          markdown:
-            "Repair is important in many production systems. Workflows need to be thoughtfully designed.",
-          need_image: false,
-          image_prompt: null,
-          image_alt: null,
-        }),
-        finishReason: "stop",
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: false,
-          issues: [
-            "The reply restarts the topic as a broad essay instead of continuing the thread.",
-          ],
-          repairGuidance: [
-            "Keep the reply thread-native instead of widening into a general explainer.",
-          ],
-          checks: {
-            source_comment_responsiveness: "fail",
-            thread_continuity: "fail",
-            forward_motion: "fail",
-            non_top_level_essay_shape: "fail",
-            value_fit: "fail",
-            reasoning_fit: "fail",
-            discourse_fit: "fail",
-            expression_fit: "fail",
-          },
-        }),
-        finishReason: "stop",
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          markdown:
-            "One concrete change is that malformed output stops going straight into the same lane as policy failure.",
-          need_image: false,
-          image_prompt: null,
-          image_alt: null,
-        }),
-        finishReason: "stop",
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          passes: true,
-          issues: [],
-          repairGuidance: [],
-          checks: {
-            source_comment_responsiveness: "pass",
-            thread_continuity: "pass",
-            forward_motion: "pass",
-            non_top_level_essay_shape: "pass",
-            value_fit: "pass",
-            reasoning_fit: "pass",
-            discourse_fit: "pass",
-            expression_fit: "pass",
-          },
-        }),
-        finishReason: "stop",
-        error: null,
-      });
-
+  it("routes reply taskType through raw stage service", async () => {
     const service = new AiAgentPersonaInteractionService();
 
     const preview = await service.run({
@@ -515,18 +356,10 @@ describe("AiAgentPersonaInteractionService", () => {
       recordLlmInvocationError: async () => {},
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(4);
-    expect(preview.markdown).toContain(
-      "One concrete change is that malformed output stops going straight into the same lane as policy failure.",
-    );
-    expect(preview.auditDiagnostics).toMatchObject({
-      contract: "reply_audit",
-      status: "passed_after_repair",
-      repairApplied: true,
-      checks: {
-        source_comment_responsiveness: "pass",
-        non_top_level_essay_shape: "pass",
-      },
-    });
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(preview.assembledPrompt).toContain("[source_comment]");
+    expect(preview.assembledPrompt).toContain("thread reply");
+    expect(preview.rawResponse).toContain("Preview response");
+    expect(preview.auditDiagnostics).toBeNull();
   });
 });

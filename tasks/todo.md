@@ -2,6 +2,12 @@
 
 ## Active
 
+- [x] Inspect the current implementation of `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md` against code and tests.
+- [x] Fix the raw persona interaction stage boundary so flow modules invoke real LLM stages without parsed preview orchestration.
+- [x] Replace fallback-only flow audit persona evidence with canonical persona-core evidence.
+- [x] Add the missing comment/reply schema-repair path for invalid structured text-flow output.
+- [x] Run focused LLM-flow verification and document results.
+
 - [x] Review the current `plans/ai-agent/llm-flows` implementation against the active LLM-flow plans and lessons.
 - [x] Identify concrete improvements and optimizations for shared flow execution, prompt contracts, audits, diagnostics, tests, and docs.
 - [x] Write a new markdown implementation plan under `plans/ai-agent/llm-flows`.
@@ -34,6 +40,15 @@
 - Flow audit/repair reference: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
 
 ## Review
+
+- Inspected `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md` implementation against the current flow code with two parallel read-only audits plus local root-cause tracing.
+- Fixed the highest-risk Task 1/3/2 gaps: `AiAgentPersonaInteractionStageService` now resolves the selected provider/model, loads persona core, assembles main/schema prompts with persona directives, invokes the LLM, and returns raw text/metadata without parsing; admin store stage calls now supply active control-plane and persona dependencies.
+- Kept direct admin interaction preview as a thin wrapper over the raw stage call that renders obvious structured post/comment/reply output for preview display while leaving flow modules as the parser/audit owners.
+- Replaced runtime generator fallback audit evidence with canonical `buildPersonaEvidence()` output loaded from `persona_core`, so flow audits receive reference names and doctrine signals by default.
+- Added comment/reply schema-repair handling before audit: invalid main JSON now calls one `stagePurpose: "schema_repair"` attempt, increments `schemaRepair`, and only then proceeds to audit or regeneration.
+- Added regression coverage for real raw-stage invocation, reply-native directive assembly, canonical persona evidence wiring, and comment/reply schema repair.
+- Verification passed: focused red-green test set, `npm test -- src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts`, `npm run typecheck`, `npm run lint` with the existing 9 warnings only, and final `npm run verify` with 20 LLM-flow test files / 111 tests passing.
+- Remaining plan gaps from the read-only audits are Task 4 `post_plan` LLM semantic audit, Task 5 persona-generation strict exact-key/fail-closed hardening, and Task 6 deeper failure diagnostic surfacing into queue/operator surfaces.
 
 - Reviewed the current LLM-flow implementation and wrote `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md`.
 - The review found the shared registry and staged flow contracts are substantially landed, but the next hardening pass should prioritize raw stage invocation because flow modules currently use the parsed/audited `runPersonaInteraction` service for audit prompts.
@@ -99,3 +114,5 @@
 - Synced prompt/audit/persona-generation example references to the moved `/plans/ai-agent/llm-flows` paths.
 - Marked `plans/ai-agent/llm-flows/persona-generation-prompt-examples.md` as historical so active implementation work follows the simplification plan/examples instead of the old 5-stage flow.
 - Demoted `plans/ai-agent/llm-flows/persona-generation-relationship-removal-plan.md` to a historical cleanup note; the simplification plan is now the sole active generate-persona implementation direction.
+- Completed Task 8 docs sync from the LLM-flow optimization plan: active flow plans no longer mark completed audit-remediation work as partial/blocked, and flow audit examples now include four-dimensional doctrine checks for comment/reply.
+- Completed Task 9 verification consolidation: added `npm run test:llm-flows`, updated `verify` to run `typecheck -> lint -> test:llm-flows`, and updated active guideline/integration docs to use the consolidated command.

@@ -44,6 +44,7 @@ import { assistPersonaPrompt } from "@/lib/ai/admin/persona-prompt-assist-servic
 import { previewPersonaGeneration } from "@/lib/ai/admin/persona-generation-preview-service";
 import { previewPersonaInteraction } from "@/lib/ai/admin/interaction-preview-service";
 import { AiAgentPersonaInteractionService } from "@/lib/ai/agent/execution/persona-interaction-service";
+import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
 import {
   asRecord,
   buildLlmErrorDetailsSuffix,
@@ -1599,6 +1600,26 @@ export class AdminAiControlPlaneStore {
     });
   }
 
+  public async runPersonaInteractionStage(input: {
+    personaId: string;
+    modelId: string;
+    taskType: PromptActionType;
+    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
+    taskContext: string;
+    boardContextText?: string;
+    targetContextText?: string;
+  }): Promise<PreviewResult> {
+    const { document, providers, models } = await this.getActiveControlPlane();
+    return runPersonaInteractionStage({
+      ...input,
+      document,
+      providers,
+      models,
+      getPersonaProfile: (personaId) => this.getPersonaProfile(personaId),
+      recordLlmInvocationError: (event) => this.recordLlmInvocationError(event),
+    });
+  }
+
   public async previewPersonaInteraction(input: {
     personaId: string;
     modelId: string;
@@ -1610,8 +1631,18 @@ export class AdminAiControlPlaneStore {
     return previewPersonaInteraction({
       ...input,
       ...(await this.getActiveControlPlane()),
-      getPersonaProfile: (personaId) => this.getPersonaProfile(personaId),
-      recordLlmInvocationError: (event) => this.recordLlmInvocationError(event),
+      getPersonaProfile: (personaId: string) => this.getPersonaProfile(personaId),
+      recordLlmInvocationError: (event: {
+        providerKey: string;
+        modelKey: string;
+        error: string;
+        errorDetails?: {
+          statusCode?: number;
+          code?: string;
+          type?: string;
+          body?: string;
+        };
+      }) => this.recordLlmInvocationError(event),
     });
   }
 

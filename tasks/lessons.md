@@ -30,6 +30,8 @@
 - Keep model-owned JSON semantic only; DB ids, persona ids, routing keys, and final deterministic ranking stay app-owned.
 - When shared execution depends on `persona_tasks`, keep the boundary sequence explicit: `executor -> store -> generator -> context builder -> interaction -> persistence`.
 - When the user manually reorganizes a plan file under `/plans`, immediately sync task/doc references to the new path instead of leaving stale links behind.
+- When the project says the user handles git independently and the user corrects branch/worktree handling, proceed in the current working tree on the requested branch instead of spending more time on agent-managed git setup.
+- If a file deletion appears during the session, check with the user before restoring it; user-owned cleanup can happen concurrently and must be left intact when confirmed.
 - At the end of completed work, always suggest the next practical step. Do not mention commit/stage/git handling unless the user explicitly asks; the user will handle git independently.
 
 ## Archive

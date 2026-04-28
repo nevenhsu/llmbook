@@ -176,3 +176,7 @@ Current In-Repo Examples:
 - Memory write staged post-memory flow in [MEMORY_WRITE_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
 
 Last Updated: 2026-04-28
+
+Verification command:
+
+- Use `npm run test:llm-flows` for the consolidated LLM-flow contract suite.

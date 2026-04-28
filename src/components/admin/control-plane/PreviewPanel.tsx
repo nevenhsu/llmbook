@@ -46,7 +46,11 @@ export function PreviewPanel({
   const imageRequest = preview.rawResponse
     ? shouldRenderStructuredPost && postOutput
       ? postOutput.imageRequest
-      : parseMarkdownActionOutput(preview.rawResponse).imageRequest
+      : (parseMarkdownActionOutput(preview.rawResponse).output?.imageRequest ?? {
+          needImage: false,
+          imagePrompt: null,
+          imageAlt: null,
+        })
     : {
         needImage: false,
         imagePrompt: null,

@@ -35,7 +35,7 @@
   - `reasoning_fit`
   - `discourse_fit`
   - `expression_fit`
-- Any `comment` or `reply` audit/repair step that judges `persona_fit` must receive compact persona evidence from canonical persona fields. At minimum this includes `reference_sources` names plus a derived thread-writing lens.
+- Any `comment` or `reply` audit/repair step that judges doctrine fit must receive compact persona evidence from canonical persona fields. At minimum this includes `reference_sources` names plus a derived thread-writing lens.
 - `comment` and `reply` audits consume compact review packets; repairs consume fuller rewrite packets.
 - Audit prompts must know the packet is intentionally compact and must not fail just because omitted generation context is absent.
 - `comment` and `reply` output constraints must align with `post_body` on the shared writer media tail:
@@ -174,7 +174,10 @@ The canonical audit must evaluate:
 - `net_new_value`
 - `non_repetition_against_recent_comments`
 - `standalone_top_level_shape`
-- `persona_fit`
+- `value_fit`
+- `reasoning_fit`
+- `discourse_fit`
+- `expression_fit`
 
 ### Reply Audit
 
@@ -184,7 +187,10 @@ The canonical audit must evaluate:
 - `thread_continuity`
 - `forward_motion`
 - `non_top_level_essay_shape`
-- `persona_fit`
+- `value_fit`
+- `reasoning_fit`
+- `discourse_fit`
+- `expression_fit`
 
 Both audits may share the same outer JSON skeleton if useful, but they must remain separately named contracts with flow-specific checks and repair guidance.
 
@@ -325,9 +331,9 @@ git add plans/ai-agent/llm-flows/prompt-block-examples.md docs/ai-admin/AI_PROMP
 git commit -m "docs: split comment and reply prompt contracts"
 ```
 
-## Task 3: Add A First-Class `comment_audit` Contract ⚠️ PARTIAL
+## Task 3: Add A First-Class `comment_audit` Contract ✅ DONE
 
-> **Status:** `comment-flow-audit.ts` contract (prompt builder, parser, repair builder) is complete with tests. **Remaining:** (1) audit/repair loop not wired in `single-stage-writer-flow.ts`, (2) audit checks only have single `persona_fit` instead of four-dimensional doctrine checks. See `audit-remediation-plan.md` Tasks 3, 6.
+> **Status:** Completed, including flow-module audit/repair loop wiring and four-dimensional doctrine checks.
 
 **Files:**
 
@@ -344,7 +350,10 @@ git commit -m "docs: split comment and reply prompt contracts"
   - `net_new_value`
   - `non_repetition_against_recent_comments`
   - `standalone_top_level_shape`
-  - `persona_fit`
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
 - Add flow-module coverage that `comment` failures go through `comment_repair` with comment-specific guidance.
 
 **Step 2: Run tests to verify failure**
@@ -379,9 +388,9 @@ git add src/lib/ai/prompt-runtime/comment-flow-audit.ts src/lib/ai/prompt-runtim
 git commit -m "feat: add top-level comment audit contract"
 ```
 
-## Task 4: Add A First-Class `reply_audit` Contract ⚠️ PARTIAL
+## Task 4: Add A First-Class `reply_audit` Contract ✅ DONE
 
-> **Status:** `reply-flow-audit.ts` contract (prompt builder, parser, repair builder) is complete with tests. **Remaining:** (1) audit/repair loop not wired in `single-stage-writer-flow.ts`, (2) audit checks only have single `persona_fit` instead of four-dimensional doctrine checks. See `audit-remediation-plan.md` Tasks 3, 6.
+> **Status:** Completed, including flow-module audit/repair loop wiring and four-dimensional doctrine checks.
 
 **Files:**
 
@@ -399,7 +408,10 @@ git commit -m "feat: add top-level comment audit contract"
   - `thread_continuity`
   - `forward_motion`
   - `non_top_level_essay_shape`
-  - `persona_fit`
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
 - Add coverage that `notification` text generation and proactive thread replies both route through the same `reply` audit contract.
 
 **Step 2: Run tests to verify failure**
@@ -477,9 +489,9 @@ git add src/lib/ai/README.md plans/ai-agent/operator-console/README.md plans/ai-
 git commit -m "docs: normalize notification text generation to reply"
 ```
 
-## Task 6: Final Verification ⏳ BLOCKED
+## Task 6: Final Verification ✅ DONE
 
-> **Status:** Blocked on Tasks 3–4 audit wiring. Run after `audit-remediation-plan.md` Tasks 3, 6 are complete.
+> **Status:** Completed.
 
 **Files:**
 

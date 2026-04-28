@@ -11,15 +11,17 @@ import {
   validatePostPlanOutput,
   type PostPlanCandidate,
 } from "@/lib/ai/prompt-runtime/post-plan-contract";
+import { postPlanAudit } from "@/lib/ai/prompt-runtime/post-plan-audit";
 import type {
   FlowDiagnostics,
   SelectedPostPlan,
+  TextFlowExecutionErrorCauseCategory,
   TextFlowModule,
   TextFlowModuleRunInput,
   TextFlowModuleRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
 import {
-  buildFallbackPersonaEvidence,
+  TextFlowExecutionError,
   buildModuleMetadata,
   mergeFlowTaskContext,
 } from "@/lib/ai/agent/execution/flows/types";
@@ -80,6 +82,31 @@ function buildPlanningSchemaRepairTaskContext(
   ].join("\n");
 }
 
+function buildPlanningAuditRepairTaskContext(input: {
+  baseTaskContext: string;
+  issues: string[];
+  repairGuidance: string[];
+  previousOutput: string;
+}): string {
+  return [
+    buildPlanningTaskContext(input.baseTaskContext),
+    "[planning_audit_repair]",
+    "Your previous post_plan output failed planning semantic audit checks.",
+    "Rewrite the post_plan JSON so all checks pass while keeping exactly 3 candidates.",
+    "",
+    "[audit_issues]",
+    ...(input.issues.length > 0 ? input.issues.map((item) => `- ${item}`) : ["- none"]),
+    "",
+    "[repair_guidance]",
+    ...(input.repairGuidance.length > 0
+      ? input.repairGuidance.map((item) => `- ${item}`)
+      : ["- none"]),
+    "",
+    "[previous_output]",
+    input.previousOutput,
+  ].join("\n");
+}
+
 function buildPostBodyTaskContext(): string {
   return [
     "Write the final post body for the selected plan below.",
@@ -110,6 +137,22 @@ function renderFinalPostForAudit(input: { title: string; body: string; tags: str
     .trim();
 }
 
+function classifyPostFailure(error: Error): TextFlowExecutionErrorCauseCategory {
+  if (error.message.includes("invalid") || error.message.includes("expected")) {
+    return "schema_validation";
+  }
+  if (error.message.includes("hard gate")) {
+    return "deterministic_gate";
+  }
+  if (error.message.includes("audit failed")) {
+    return "semantic_audit";
+  }
+  if (error.message.includes("repair")) {
+    return "quality_repair";
+  }
+  return "transport";
+}
+
 async function runPostFlow(
   input: TextFlowModuleRunInput,
   mode: "preview" | "runtime",
@@ -137,6 +180,7 @@ async function runPostFlow(
 
   const invokeStage = async (stageInput: {
     taskType: "post_plan" | "post_body";
+    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
     taskContext: string;
     targetContextText?: string;
   }) =>
@@ -144,6 +188,7 @@ async function runPostFlow(
       personaId: input.task.personaId,
       modelId: modelSelection.modelId,
       taskType: stageInput.taskType,
+      stagePurpose: stageInput.stagePurpose,
       taskContext: stageInput.taskContext,
       boardContextText: promptContext.boardContextText,
       targetContextText: stageInput.targetContextText,
@@ -165,6 +210,7 @@ async function runPostFlow(
     }
     let preview = await invokeStage({
       taskType: "post_plan",
+      stagePurpose: "main",
       taskContext,
       targetContextText: promptContext.targetContextText,
     });
@@ -177,6 +223,7 @@ async function runPostFlow(
       planningAttempt.schemaRepair += 1;
       preview = await invokeStage({
         taskType: "post_plan",
+        stagePurpose: "schema_repair",
         taskContext: buildPlanningSchemaRepairTaskContext(
           taskContext,
           preview.rawResponse ?? preview.markdown,
@@ -202,6 +249,7 @@ async function runPostFlow(
   };
 
   let finalPlanningOutput: { candidates: PostPlanCandidate[] } | null = null;
+  let planningAuditResult: FlowDiagnostics["planningAudit"] | undefined;
   let selectedCandidate: PostPlanCandidate | null = null;
   let gateResult = {
     attempted: true,
@@ -214,16 +262,51 @@ async function runPostFlow(
       buildPlanningTaskContext(promptContext.taskContext),
       false,
     );
-    finalPlanningOutput = firstPlanning.parsed;
+    let activePlanning = firstPlanning;
+    const firstAudit = postPlanAudit(firstPlanning.parsed.candidates);
+    if (!firstAudit.passes) {
+      planningAttempt.repair += 1;
+      const repairedPlanning = await runPlanningAttempt(
+        buildPlanningAuditRepairTaskContext({
+          baseTaskContext: promptContext.taskContext,
+          issues: firstAudit.issues,
+          repairGuidance: firstAudit.repairGuidance,
+          previousOutput: firstPlanning.preview.rawResponse ?? firstPlanning.preview.markdown,
+        }),
+        false,
+      );
+      const repairedAudit = postPlanAudit(repairedPlanning.parsed.candidates);
+      if (!repairedAudit.passes) {
+        throw new Error("post_plan audit failed after repair");
+      }
+      planningAuditResult = {
+        contract: "post_plan_audit",
+        status: "passed_after_repair",
+        repairApplied: true,
+        issues: firstAudit.issues,
+        checks: repairedAudit.checks,
+      };
+      activePlanning = repairedPlanning;
+    } else {
+      planningAuditResult = {
+        contract: "post_plan_audit",
+        status: "passed",
+        repairApplied: false,
+        issues: firstAudit.issues,
+        checks: firstAudit.checks,
+      };
+    }
+
+    finalPlanningOutput = activePlanning.parsed;
     gateResult = {
       attempted: true,
-      passedCandidateIndexes: firstPlanning.gate.passedCandidateIndexes,
-      selectedCandidateIndex: firstPlanning.gate.selectedCandidateIndex,
+      passedCandidateIndexes: activePlanning.gate.passedCandidateIndexes,
+      selectedCandidateIndex: activePlanning.gate.selectedCandidateIndex,
     };
     selectedCandidate =
-      firstPlanning.gate.selectedCandidateIndex === null
+      activePlanning.gate.selectedCandidateIndex === null
         ? null
-        : (firstPlanning.parsed.candidates[firstPlanning.gate.selectedCandidateIndex] ?? null);
+        : (activePlanning.parsed.candidates[activePlanning.gate.selectedCandidateIndex] ?? null);
 
     if (!selectedCandidate) {
       const freshPlanning = await runPlanningAttempt(
@@ -248,7 +331,21 @@ async function runPostFlow(
     stageResults.push({ stage: "post_plan", status: "passed" });
   } catch (error) {
     stageResults.push({ stage: "post_plan", status: "failed" });
-    throw error;
+    const failure = error instanceof Error ? error : new Error(String(error));
+    throw new TextFlowExecutionError({
+      message: failure.message,
+      flowKind: "post",
+      diagnostics: {
+        finalStatus: "failed",
+        terminalStage: "post_plan",
+        attempts: [planningAttempt, bodyAttempt],
+        stageResults,
+        gate: gateResult,
+        planningAudit: planningAuditResult,
+      },
+      causeCategory: classifyPostFailure(failure),
+      cause: failure,
+    });
   }
 
   const selectedPostPlan = buildSelectedPostPlan(selectedCandidate);
@@ -281,6 +378,7 @@ async function runPostFlow(
     bodyAttempt.main += 1;
     bodyPreview = await invokeStage({
       taskType: "post_body",
+      stagePurpose: "main",
       taskContext: buildPostBodyTaskContext(),
       targetContextText: buildSelectedPostPlanBlock(selectedPostPlan),
     });
@@ -290,6 +388,7 @@ async function runPostFlow(
       bodyAttempt.schemaRepair += 1;
       bodyPreview = await invokeStage({
         taskType: "post_body",
+        stagePurpose: "schema_repair",
         taskContext: buildPostBodySchemaRepairTaskContext(
           bodyPreview.rawResponse ?? bodyPreview.markdown,
         ),
@@ -302,13 +401,10 @@ async function runPostFlow(
       throw new Error(parsedBody.error);
     }
 
-    const personaEvidence = buildFallbackPersonaEvidence({
-      personaDisplayName: input.task.personaDisplayName ?? null,
-      personaUsername: input.task.personaUsername ?? null,
-    });
     const selectedPostPlanText = buildSelectedPostPlanBlock(selectedPostPlan);
     const initialAuditPreview = await invokeStage({
       taskType: "post_body",
+      stagePurpose: "audit",
       taskContext: buildPostBodyAuditPrompt({
         boardContextText: promptContext.boardContextText,
         selectedPostPlanText,
@@ -317,9 +413,8 @@ async function runPostFlow(
           body: parsedBody.body,
           tags: parsedBody.tags,
         }),
-        personaEvidence,
+        personaEvidence: input.personaEvidence,
       }),
-      targetContextText: selectedPostPlanText,
     });
     const initialAudit = parsePostBodyAuditResult(
       initialAuditPreview.rawResponse ?? initialAuditPreview.markdown,
@@ -329,9 +424,10 @@ async function runPostFlow(
       bodyAttempt.repair += 1;
       const repairPreview = await invokeStage({
         taskType: "post_body",
+        stagePurpose: "quality_repair",
         taskContext: buildPostBodyRepairPrompt({
           selectedPostPlanText,
-          personaEvidence,
+          personaEvidence: input.personaEvidence,
           issues: initialAudit.issues,
           repairGuidance: initialAudit.repairGuidance,
           previousOutput: bodyPreview.rawResponse ?? bodyPreview.markdown,
@@ -349,6 +445,7 @@ async function runPostFlow(
 
       const repairedAuditPreview = await invokeStage({
         taskType: "post_body",
+        stagePurpose: "audit",
         taskContext: buildPostBodyAuditPrompt({
           boardContextText: promptContext.boardContextText,
           selectedPostPlanText,
@@ -357,7 +454,7 @@ async function runPostFlow(
             body: parsedBody.body,
             tags: parsedBody.tags,
           }),
-          personaEvidence,
+          personaEvidence: input.personaEvidence,
         }),
         targetContextText: selectedPostPlanText,
       });
@@ -386,7 +483,21 @@ async function runPostFlow(
     stageResults.push({ stage: "post_body", status: "passed" });
   } catch (error) {
     stageResults.push({ stage: "post_body", status: "failed" });
-    throw error;
+    const failure = error instanceof Error ? error : new Error(String(error));
+    throw new TextFlowExecutionError({
+      message: failure.message,
+      flowKind: "post",
+      diagnostics: {
+        finalStatus: "failed",
+        terminalStage: "post_body",
+        attempts: [planningAttempt, bodyAttempt],
+        stageResults,
+        gate: gateResult,
+        planningAudit: planningAuditResult,
+      },
+      causeCategory: classifyPostFailure(failure),
+      cause: failure,
+    });
   }
 
   const preview = bodyPreview;
@@ -397,6 +508,7 @@ async function runPostFlow(
     attempts: [planningAttempt, bodyAttempt],
     stageResults,
     gate: gateResult,
+    planningAudit: planningAuditResult,
     planningCandidates:
       finalPlanningOutput?.candidates.map((candidate, candidateIndex) => {
         const overallScore = computePostPlanOverallScore(candidate);

@@ -1,9 +1,18 @@
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import { normalizeText } from "./json-parse-utils";
 
 export type MarkdownImageRequest = {
   needImage: boolean;
   imagePrompt: string | null;
   imageAlt: string | null;
+};
+
+export type ActionOutput = {
+  output: {
+    markdown: string;
+    imageRequest: MarkdownImageRequest;
+  } | null;
+  error: string | null;
 };
 
 export type PostActionOutput = {
@@ -44,8 +53,93 @@ export type PollVoteActionOutput = {
   reason_note: string | null;
 };
 
-function normalizeText(value: string): string {
-  return value.replace(/\r\n/g, "\n").trim();
+export function parseMarkdownActionOutput(rawText: string): ActionOutput {
+  const normalized = normalizeText(rawText);
+  if (!normalized) {
+    return {
+      output: null,
+      error: null,
+    };
+  }
+
+  try {
+    const parsed = parseJsonObject(normalized);
+    const keys = Object.keys(parsed);
+
+    // Validate no extra top-level keys
+    const allowedKeys = new Set(["markdown", "need_image", "image_prompt", "image_alt"]);
+    const hasExtraKeys = keys.some((key) => !allowedKeys.has(key));
+    if (hasExtraKeys) {
+      return {
+        output: null,
+        error: "extra top-level keys found",
+      };
+    }
+
+    // Validate markdown is present and non-empty
+    const markdown = readOptionalString(parsed.markdown);
+    if (!markdown) {
+      return {
+        output: null,
+        error: "markdown is required and must be non-empty",
+      };
+    }
+
+    // Validate need_image is boolean
+    const needImage = parsed.need_image === true;
+    if (
+      parsed.need_image !== true &&
+      parsed.need_image !== false &&
+      parsed.need_image !== undefined
+    ) {
+      return {
+        output: null,
+        error: "need_image must be a boolean",
+      };
+    }
+
+    // Validate image_prompt and image_alt are string or null
+    const imagePrompt = readOptionalString(parsed.image_prompt);
+    const imageAlt = readOptionalString(parsed.image_alt);
+
+    if (
+      parsed.image_prompt !== null &&
+      parsed.image_prompt !== undefined &&
+      typeof parsed.image_prompt !== "string"
+    ) {
+      return {
+        output: null,
+        error: "image_prompt must be a string or null",
+      };
+    }
+    if (
+      parsed.image_alt !== null &&
+      parsed.image_alt !== undefined &&
+      typeof parsed.image_alt !== "string"
+    ) {
+      return {
+        output: null,
+        error: "image_alt must be a string or null",
+      };
+    }
+
+    return {
+      output: {
+        markdown,
+        imageRequest: {
+          needImage,
+          imagePrompt,
+          imageAlt,
+        },
+      },
+      error: null,
+    };
+  } catch (e) {
+    return {
+      output: null,
+      error: e instanceof Error ? e.message : "failed to parse output",
+    };
+  }
 }
 
 function readOptionalString(value: unknown): string | null {
@@ -86,44 +180,6 @@ function parseJsonObject(text: string): Record<string, unknown> {
     throw new Error("structured action output must be a JSON object");
   }
   return parsed as Record<string, unknown>;
-}
-
-export function parseMarkdownActionOutput(rawText: string): {
-  markdown: string;
-  imageRequest: MarkdownImageRequest;
-} {
-  const normalized = normalizeText(rawText);
-  if (!normalized) {
-    return {
-      markdown: "",
-      imageRequest: {
-        needImage: false,
-        imagePrompt: null,
-        imageAlt: null,
-      },
-    };
-  }
-
-  try {
-    const parsed = parseJsonObject(normalized);
-    return {
-      markdown: readOptionalString(parsed.markdown) ?? "",
-      imageRequest: {
-        needImage: parsed.need_image === true,
-        imagePrompt: readOptionalString(parsed.image_prompt),
-        imageAlt: readOptionalString(parsed.image_alt),
-      },
-    };
-  } catch {
-    return {
-      markdown: normalized,
-      imageRequest: {
-        needImage: false,
-        imagePrompt: null,
-        imageAlt: null,
-      },
-    };
-  }
 }
 
 export function parsePostActionOutput(rawText: string): PostActionOutput {

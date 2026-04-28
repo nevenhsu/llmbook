@@ -149,9 +149,9 @@ git add src/lib/ai/agent/execution/flows/types.ts src/lib/ai/agent/execution/flo
 git commit -m "refactor: add shared llm flow foundations"
 ```
 
-## Task 2: Land The Staged `post` Flow ⚠️ PARTIAL
+## Task 2: Land The Staged `post` Flow ✅ DONE
 
-> **Status:** Core `post_plan → post_body` staged flow is implemented with schema repair, hard gate, and fresh regenerate. **Remaining:** body audit/repair loop not wired in `post-flow-module.ts`; planning audit contract missing. Schema repair counter not reset on regenerate. See `audit-remediation-plan.md` Tasks 4–5.
+> **Status:** Completed, including schema repair, hard gate, fresh regenerate, body audit/repair wiring, planning audit/repair, and regenerate schema-repair reset.
 
 **Detailed references:**
 
@@ -232,9 +232,9 @@ git add src/lib/ai/prompt-runtime/post-plan-contract.ts src/lib/ai/prompt-runtim
 git commit -m "feat: land staged post flow on shared registry"
 ```
 
-## Task 3: Land First-Class `comment` And `reply` ⚠️ PARTIAL
+## Task 3: Land First-Class `comment` And `reply` ✅ DONE
 
-> **Status:** `reply` is first-class in flow registry, context builder, and prompt contracts. `comment_audit` and `reply_audit` contract files exist with prompt builders and parsers. **Remaining:** audit/repair loop not wired in `single-stage-writer-flow.ts`; audit checks only have single `persona_fit` instead of four-dimensional doctrine. See `audit-remediation-plan.md` Tasks 3, 6.
+> **Status:** Completed, including first-class routing, compact audit/repair loop wiring, and four-dimensional doctrine checks.
 
 **Detailed references:**
 
@@ -429,9 +429,7 @@ git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMB
 git commit -m "docs: align active llm flow contracts"
 ```
 
-## Task 6: Final Integrated Verification ⏳ BLOCKED
-
-> **Status:** Blocked on Task 2 and Task 3 remaining audit work. Run after `audit-remediation-plan.md` is complete.
+## Task 6: Final Integrated Verification ✅ DONE
 
 **Files:**
 
@@ -440,7 +438,7 @@ git commit -m "docs: align active llm flow contracts"
 **Step 1: Run targeted tests**
 
 ```bash
-npm test -- src/lib/ai/prompt-runtime/prompt-builder.test.ts src/lib/ai/prompt-runtime/post-plan-contract.test.ts src/lib/ai/prompt-runtime/post-body-audit.test.ts src/lib/ai/prompt-runtime/comment-flow-audit.test.ts src/lib/ai/prompt-runtime/reply-flow-audit.test.ts src/lib/ai/agent/execution/persona-task-context-builder.test.ts src/lib/ai/agent/execution/persona-task-generator.test.ts src/lib/ai/agent/execution/persona-interaction-service.test.ts src/lib/ai/agent/execution/execution-preview.test.ts src/lib/ai/agent/execution/persona-task-executor.test.ts src/lib/ai/agent/execution/persona-task-persistence-service.test.ts src/lib/ai/agent/execution/text-runtime-service.test.ts src/lib/ai/agent/jobs/jobs-runtime-service.test.ts src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts src/lib/ai/admin/persona-generation-contract.test.ts src/lib/ai/admin/persona-generation-prompt-template.test.ts src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/lib/ai/admin/persona-save-payload.test.ts src/hooks/admin/useAiControlPlane.update-persona-preview.test.ts src/lib/ai/core/runtime-core-profile.test.ts src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts
+npm run test:llm-flows
 ```
 
 Expected: PASS.

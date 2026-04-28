@@ -1,68 +1,22 @@
-import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
-import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
-import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
-import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
-import {
-  buildInteractionCoreSummary,
-  normalizeCoreProfile,
-} from "@/lib/ai/core/runtime-core-profile";
-import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
-import {
-  buildCommentAuditPrompt,
-  buildCommentRepairPrompt,
-  parseCommentAuditResult,
-} from "@/lib/ai/prompt-runtime/comment-flow-audit";
-import {
-  buildPersonaEvidence,
-  buildPlannerPostingLens,
-  buildPersonaVoiceRepairPrompt,
-  derivePromptPersonaDirectives,
-  detectPersonaVoiceDrift,
-} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-import {
-  PersonaOutputValidationError,
-  buildPersonaOutputAuditPrompt,
-  isRetryablePersonaAuditParseFailure,
-  parsePersonaAuditResult,
-  type PersonaAuditResult,
-  type PersonaOutputAuditPromptMode,
-} from "@/lib/ai/prompt-runtime/persona-output-audit";
-import {
-  parseMarkdownActionOutput,
-  parsePostBodyActionOutput,
-} from "@/lib/ai/prompt-runtime/action-output";
-import {
-  buildPostBodyAuditPrompt,
-  buildPostBodyRepairPrompt,
-  parsePostBodyAuditResult,
-} from "@/lib/ai/prompt-runtime/post-body-audit";
-import {
-  buildReplyAuditPrompt,
-  buildReplyRepairPrompt,
-  parseReplyAuditResult,
-} from "@/lib/ai/prompt-runtime/reply-flow-audit";
 import type {
   AiControlPlaneDocument,
   AiModelConfig,
   AiProviderConfig,
   PersonaProfile,
   PreviewResult,
+  PromptBoardContext,
+  PromptTargetContext,
 } from "@/lib/ai/admin/control-plane-contract";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
-import {
-  buildPromptBlocks,
-  buildTokenBudgetSignal,
-  DEFAULT_TOKEN_LIMITS,
-  formatAgentProfile,
-  formatBoardContext,
-  formatPrompt,
-  formatTarget,
-} from "@/lib/ai/admin/control-plane-shared";
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
+import {
+  parseMarkdownActionOutput,
+  parsePostActionOutput,
+  parsePostBodyActionOutput,
+} from "@/lib/ai/prompt-runtime/action-output";
+import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 
-type AiAgentPersonaInteractionInput = {
+export type AiAgentPersonaInteractionInput = {
   personaId: string;
   modelId: string;
   taskType: PromptActionType;
@@ -90,15 +44,77 @@ type AiAgentPersonaInteractionInput = {
 
 export class AiAgentPersonaInteractionService {
   public async run(input: AiAgentPersonaInteractionInput): Promise<PreviewResult> {
-    return await runPersonaInteractionStage({
+    const preview = await runPersonaInteractionStage({
       personaId: input.personaId,
       modelId: input.modelId,
       taskType: input.taskType,
+      stagePurpose: "main",
       taskContext: input.taskContext,
+      boardContext: input.boardContext,
+      targetContext: input.targetContext,
       boardContextText: input.boardContextText,
       targetContextText: input.targetContextText,
+      document: input.document,
+      providers: input.providers,
+      models: input.models,
+      getPersonaProfile: input.getPersonaProfile,
+      recordLlmInvocationError: input.recordLlmInvocationError,
     });
+    const markdown = renderInteractionPreviewMarkdown(
+      input.taskType,
+      preview.rawResponse ?? preview.markdown,
+    );
+
+    try {
+      markdownToEditorHtml(markdown);
+      return {
+        ...preview,
+        markdown,
+        renderOk: true,
+        renderError: null,
+      };
+    } catch (error) {
+      return {
+        ...preview,
+        markdown,
+        renderOk: false,
+        renderError: error instanceof Error ? error.message : "render validation failed",
+      };
+    }
   }
+}
+
+function renderInteractionPreviewMarkdown(taskType: PromptActionType, rawText: string): string {
+  if (taskType === "comment" || taskType === "reply") {
+    const parsed = parseMarkdownActionOutput(rawText);
+    return parsed.output?.markdown?.trim() || rawText.trim();
+  }
+
+  if (taskType === "post") {
+    const parsed = parsePostActionOutput(rawText);
+    if (!parsed.error) {
+      return [
+        parsed.title ? `# ${parsed.title}` : null,
+        parsed.tags.join(" ").trim() || null,
+        parsed.body.trim(),
+      ]
+        .filter((part): part is string => Boolean(part))
+        .join("\n\n")
+        .trim();
+    }
+  }
+
+  if (taskType === "post_body") {
+    const parsed = parsePostBodyActionOutput(rawText);
+    if (!parsed.error) {
+      return [parsed.tags.join(" ").trim() || null, parsed.body.trim()]
+        .filter((part): part is string => Boolean(part))
+        .join("\n\n")
+        .trim();
+    }
+  }
+
+  return rawText.trim();
 }
 
 export async function runPersonaInteraction(

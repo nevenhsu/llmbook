@@ -44,6 +44,20 @@ export type FlowDiagnostics = {
       bodyUsefulness: number;
     };
   }>;
+  planningAudit?: {
+    contract: "post_plan_audit";
+    status: "passed" | "passed_after_repair";
+    repairApplied: boolean;
+    issues: string[];
+    checks: {
+      candidate_count: "pass" | "fail";
+      board_fit: "pass" | "fail";
+      novelty_evidence: "pass" | "fail";
+      persona_posting_lens_fit: "pass" | "fail";
+      body_outline_usefulness: "pass" | "fail";
+      no_model_owned_final_selection: "pass" | "fail";
+    };
+  };
   bodyAudit?: {
     contract: "post_body_audit";
     status: "passed" | "passed_after_repair";
@@ -73,6 +87,38 @@ export type FlowDiagnostics = {
     checks: Record<string, "pass" | "fail">;
   };
 };
+
+export type TextFlowExecutionErrorCauseCategory =
+  | "transport"
+  | "empty_output"
+  | "schema_validation"
+  | "deterministic_gate"
+  | "semantic_audit"
+  | "quality_repair"
+  | "render_validation";
+
+export class TextFlowExecutionError extends Error {
+  public readonly flowKind: TextFlowKind;
+  public readonly diagnostics: FlowDiagnostics;
+  public readonly causeCategory: TextFlowExecutionErrorCauseCategory;
+
+  public constructor(input: {
+    message: string;
+    flowKind: TextFlowKind;
+    diagnostics: FlowDiagnostics;
+    causeCategory: TextFlowExecutionErrorCauseCategory;
+    cause?: unknown;
+  }) {
+    super(input.message);
+    this.name = "TextFlowExecutionError";
+    this.flowKind = input.flowKind;
+    this.diagnostics = input.diagnostics;
+    this.causeCategory = input.causeCategory;
+    if (input.cause !== undefined) {
+      (this as Error & { cause?: unknown }).cause = input.cause;
+    }
+  }
+}
 
 export type WriterMediaTail = {
   needImage: boolean;
@@ -141,10 +187,12 @@ export type TextFlowModuleRunInput = {
     personaId: string;
     modelId: string;
     taskType: PromptActionType;
+    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;
   }) => Promise<PreviewResult>;
+  personaEvidence: PromptPersonaEvidence;
 };
 
 export type TextFlowModuleRunResult = {

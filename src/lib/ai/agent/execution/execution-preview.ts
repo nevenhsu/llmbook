@@ -216,12 +216,18 @@ function buildParsedOutput(input: {
   }
 
   const parsed = parseMarkdownActionOutput(input.rawOutput);
+  const markdown = parsed.output?.markdown ?? "";
+  const imageRequest = parsed.output?.imageRequest ?? {
+    needImage: false,
+    imagePrompt: null,
+    imageAlt: null,
+  };
   return {
     kind: "comment",
-    schemaValid: parsed.markdown.trim().length > 0,
-    markdown: parsed.markdown,
-    imageRequest: parsed.imageRequest,
-    error: parsed.markdown.trim().length > 0 ? null : "interaction preview returned empty markdown",
+    schemaValid: markdown.trim().length > 0,
+    markdown,
+    imageRequest,
+    error: markdown.trim().length > 0 ? null : "interaction preview returned empty markdown",
   };
 }
 

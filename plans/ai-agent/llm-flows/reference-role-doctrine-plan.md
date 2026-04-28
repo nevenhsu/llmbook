@@ -255,7 +255,7 @@ This plan extends these active designs:
 - ✅ Reference-role guidance projection (`deriveReferenceRoleGuidance()`) — landed
 - ✅ Writer-family self-judgment instructions in `agent_enactment_rules` fallback
 - ✅ `post_body_audit` — four-dimensional persona checks implemented
-- ⚠️ `comment_audit` / `reply_audit` — only single `persona_fit` check, four-dimensional expansion pending
+- ✅ `comment_audit` / `reply_audit` — four-dimensional doctrine checks landed
 - ⚠️ `PersonaDirectiveActionType` excludes `reply` — reply-specific persona directive pending
 
 > See `plans/ai-agent/llm-flows/audit-remediation-plan.md` Tasks 6–7 for remaining work.

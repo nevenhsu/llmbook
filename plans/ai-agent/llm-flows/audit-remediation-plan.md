@@ -327,3 +327,8 @@ npm run typecheck
 - Additional hardening after plan completion:
   - Added negative-path flow tests for `comment` and `reply` audit-repair loops:
     - audit fail -> repair -> re-audit fail -> fresh regenerate -> audit pass
+
+## Status
+
+- Completed and integrated into active flow plans.
+- Ongoing hardening and verification should follow `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md`.

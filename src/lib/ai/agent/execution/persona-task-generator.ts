@@ -13,20 +13,25 @@ import type {
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import { buildPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import { normalizeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
 
 type PersonaTaskGeneratorDeps = {
   buildPromptContext: (input: {
     task: AiAgentRecentTaskSnapshot;
   }) => Promise<AiAgentPersonaTaskPromptContext>;
   loadPreferredTextModel: () => Promise<PreferredTextModel>;
-  runPersonaInteraction: (input: {
+  runPersonaInteractionStage: (input: {
     personaId: string;
     modelId: string;
     taskType: PromptActionType;
+    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;
   }) => Promise<PreviewResult>;
+  loadPersonaEvidence: (personaId: string) => Promise<PromptPersonaEvidence>;
   resolveFlowModule: (flowKind: TextFlowKind) => TextFlowModule;
 };
 
@@ -104,11 +109,23 @@ export class AiAgentPersonaTaskGenerator {
             modelKey: preferredModel.modelKey,
           };
         }),
-      runPersonaInteraction:
-        options?.deps?.runPersonaInteraction ??
+      runPersonaInteractionStage:
+        options?.deps?.runPersonaInteractionStage ??
         (async (input) => {
           const controlPlaneStore = new AdminAiControlPlaneStore();
-          return controlPlaneStore.runPersonaInteraction(input);
+          return controlPlaneStore.runPersonaInteractionStage(input);
+        }),
+      loadPersonaEvidence:
+        options?.deps?.loadPersonaEvidence ??
+        (async (personaId) => {
+          const controlPlaneStore = new AdminAiControlPlaneStore();
+          const profile = await controlPlaneStore.getPersonaProfile(personaId);
+          const personaCore = profile.personaCore as Record<string, unknown>;
+          return buildPersonaEvidence({
+            displayName: profile.persona.display_name,
+            profile: normalizeCoreProfile(personaCore).profile,
+            personaCore,
+          });
         }),
       resolveFlowModule:
         options?.deps?.resolveFlowModule ?? ((flowKind) => resolveTextFlowModule(flowKind)),
@@ -123,6 +140,7 @@ export class AiAgentPersonaTaskGenerator {
     const mode = input.mode ?? "preview";
     const promptContext = await this.deps.buildPromptContext({ task: input.task });
     const flowModule = this.deps.resolveFlowModule(promptContext.flowKind);
+    const personaEvidence = await this.deps.loadPersonaEvidence(input.task.personaId);
     const executionResult =
       mode === "runtime"
         ? await flowModule.runRuntime({
@@ -130,14 +148,16 @@ export class AiAgentPersonaTaskGenerator {
             promptContext,
             extraInstructions: input.extraInstructions,
             loadPreferredTextModel: this.deps.loadPreferredTextModel,
-            runPersonaInteraction: this.deps.runPersonaInteraction,
+            runPersonaInteractionStage: this.deps.runPersonaInteractionStage,
+            personaEvidence,
           })
         : await flowModule.runPreview({
             task: input.task,
             promptContext,
             extraInstructions: input.extraInstructions,
             loadPreferredTextModel: this.deps.loadPreferredTextModel,
-            runPersonaInteraction: this.deps.runPersonaInteraction,
+            runPersonaInteractionStage: this.deps.runPersonaInteractionStage,
+            personaEvidence,
           });
 
     const parsedOutput = mapFlowResultToLegacyOutput(executionResult.flowResult);

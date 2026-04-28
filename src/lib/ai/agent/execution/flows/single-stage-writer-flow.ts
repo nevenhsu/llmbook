@@ -13,17 +13,38 @@ import type {
   CommentOutput,
   FlowDiagnostics,
   ReplyOutput,
+  TextFlowExecutionErrorCauseCategory,
   TextFlowKind,
   TextFlowModuleRunInput,
   TextFlowModuleRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
 import {
-  buildFallbackPersonaEvidence,
+  TextFlowExecutionError,
   buildModuleMetadata,
   mergeFlowTaskContext,
 } from "@/lib/ai/agent/execution/flows/types";
 
 type SingleStageWriterFlowKind = Extract<TextFlowKind, "comment" | "reply">;
+
+function classifySingleStageFailure(error: Error): TextFlowExecutionErrorCauseCategory {
+  if (error.message.includes("did not produce a valid markdown body")) {
+    return "empty_output";
+  }
+  if (error.message.includes("audit failed")) {
+    return "semantic_audit";
+  }
+  return "transport";
+}
+
+function requireMarkdownOutput(
+  parsed: ReturnType<typeof parseMarkdownActionOutput>,
+  flowKind: SingleStageWriterFlowKind,
+) {
+  if (!parsed.output?.markdown?.trim()) {
+    throw new Error(`${flowKind} flow did not produce a valid markdown body`);
+  }
+  return parsed.output;
+}
 
 function buildFreshRegenerateTaskContext(
   baseTaskContext: string,
@@ -39,6 +60,28 @@ function buildFreshRegenerateTaskContext(
   ].join("\n\n");
 }
 
+function buildSchemaRepairTaskContext(input: {
+  baseTaskContext: string;
+  flowKind: SingleStageWriterFlowKind;
+  previousOutput: string;
+  error: string | null;
+}) {
+  return [
+    input.baseTaskContext,
+    "[retry_repair]",
+    `Your previous ${input.flowKind} response did not satisfy the required JSON contract.`,
+    "Rewrite it as exactly one valid JSON object.",
+    "Required keys: markdown, need_image, image_prompt, image_alt.",
+    "Do not output prose outside the JSON object.",
+    input.error ? `Parser error: ${input.error}` : null,
+    "",
+    "[previous_invalid_response]",
+    input.previousOutput,
+  ]
+    .filter((part): part is string => part !== null)
+    .join("\n");
+}
+
 function extractTargetBlock(
   targetContextText: string | undefined,
   blockName: string,
@@ -50,7 +93,7 @@ function extractTargetBlock(
     return null;
   }
   const rest = source.slice(start + marker.length);
-  const nextOffset = rest.search(/\n\[[^\n]+\]/);
+  const nextOffset = rest.search(/\[[^\n]+\]/);
   return nextOffset === -1
     ? source.slice(start).trim()
     : source.slice(start, start + marker.length + nextOffset).trim();
@@ -67,15 +110,12 @@ async function runAuditRepairLoop(input: {
   parsed: ReturnType<typeof parseMarkdownActionOutput>;
   audit: FlowDiagnostics["audit"];
 }> {
-  const personaEvidence = buildFallbackPersonaEvidence({
-    personaDisplayName: input.moduleInput.task.personaDisplayName ?? null,
-    personaUsername: input.moduleInput.task.personaUsername ?? null,
-  });
   const sharedAuditCall = async (taskContext: string) =>
     input.moduleInput.runPersonaInteractionStage({
       personaId: input.moduleInput.task.personaId,
       modelId: input.modelId,
       taskType: input.flowKind,
+      stagePurpose: "audit",
       taskContext,
       boardContextText: input.promptContext.boardContextText,
       targetContextText: input.promptContext.targetContextText,
@@ -83,13 +123,13 @@ async function runAuditRepairLoop(input: {
 
   if (input.flowKind === "comment") {
     const auditPrompt = buildCommentAuditPrompt({
-      personaEvidence,
+      personaEvidence: input.moduleInput.personaEvidence,
       rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
       recentTopLevelCommentsText: extractTargetBlock(
         input.promptContext.targetContextText,
         "recent_top_level_comments",
       ),
-      generatedComment: input.parsed.markdown,
+      generatedComment: input.parsed.output?.markdown ?? "",
     });
     const auditPreview = await sharedAuditCall(auditPrompt);
     const audit = parseCommentAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
@@ -108,7 +148,7 @@ async function runAuditRepairLoop(input: {
     input.attempt.repair += 1;
     const repairPreview = await sharedAuditCall(
       buildCommentRepairPrompt({
-        personaEvidence,
+        personaEvidence: input.moduleInput.personaEvidence,
         rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
         recentTopLevelCommentsText: extractTargetBlock(
           input.promptContext.targetContextText,
@@ -116,21 +156,22 @@ async function runAuditRepairLoop(input: {
         ),
         issues: audit.issues,
         repairGuidance: audit.repairGuidance,
-        previousOutput: input.parsed.markdown,
+        previousOutput: input.parsed.output?.markdown ?? "",
       }),
     );
     const repairedParsed = parseMarkdownActionOutput(
       repairPreview.rawResponse ?? repairPreview.markdown,
     );
+    const repairedOutput = requireMarkdownOutput(repairedParsed, "comment");
     const repairedAuditPreview = await sharedAuditCall(
       buildCommentAuditPrompt({
-        personaEvidence,
+        personaEvidence: input.moduleInput.personaEvidence,
         rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
         recentTopLevelCommentsText: extractTargetBlock(
           input.promptContext.targetContextText,
           "recent_top_level_comments",
         ),
-        generatedComment: repairedParsed.markdown,
+        generatedComment: repairedOutput.markdown,
       }),
     );
     const repairedAudit = parseCommentAuditResult(
@@ -152,13 +193,13 @@ async function runAuditRepairLoop(input: {
   }
 
   const auditPrompt = buildReplyAuditPrompt({
-    personaEvidence,
+    personaEvidence: input.moduleInput.personaEvidence,
     sourceCommentText: extractTargetBlock(input.promptContext.targetContextText, "source_comment"),
     ancestorCommentsText: extractTargetBlock(
       input.promptContext.targetContextText,
       "ancestor_comments",
     ),
-    generatedReply: input.parsed.markdown,
+    generatedReply: input.parsed.output?.markdown ?? "",
   });
   const auditPreview = await sharedAuditCall(auditPrompt);
   const audit = parseReplyAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
@@ -177,7 +218,7 @@ async function runAuditRepairLoop(input: {
   input.attempt.repair += 1;
   const repairPreview = await sharedAuditCall(
     buildReplyRepairPrompt({
-      personaEvidence,
+      personaEvidence: input.moduleInput.personaEvidence,
       sourceCommentText: extractTargetBlock(
         input.promptContext.targetContextText,
         "source_comment",
@@ -188,15 +229,16 @@ async function runAuditRepairLoop(input: {
       ),
       issues: audit.issues,
       repairGuidance: audit.repairGuidance,
-      previousOutput: input.parsed.markdown,
+      previousOutput: input.parsed.output?.markdown ?? "",
     }),
   );
   const repairedParsed = parseMarkdownActionOutput(
     repairPreview.rawResponse ?? repairPreview.markdown,
   );
+  const repairedOutput = requireMarkdownOutput(repairedParsed, "reply");
   const repairedAuditPreview = await sharedAuditCall(
     buildReplyAuditPrompt({
-      personaEvidence,
+      personaEvidence: input.moduleInput.personaEvidence,
       sourceCommentText: extractTargetBlock(
         input.promptContext.targetContextText,
         "source_comment",
@@ -205,7 +247,7 @@ async function runAuditRepairLoop(input: {
         input.promptContext.targetContextText,
         "ancestor_comments",
       ),
-      generatedReply: repairedParsed.markdown,
+      generatedReply: repairedOutput.markdown,
     }),
   );
   const repairedAudit = parseReplyAuditResult(
@@ -266,16 +308,6 @@ export async function runSingleStageWriterFlow(input: {
   };
   let lastError: Error | null = null;
 
-  const invokeGeneration = async (taskContext: string) =>
-    input.moduleInput.runPersonaInteractionStage({
-      personaId: input.moduleInput.task.personaId,
-      modelId: modelSelection.modelId,
-      taskType: input.taskType,
-      taskContext,
-      boardContextText: promptContext.boardContextText,
-      targetContextText: promptContext.targetContextText,
-    });
-
   for (const regenerateAttempt of [false, true] as const) {
     attempt.main += 1;
     if (regenerateAttempt) {
@@ -283,15 +315,37 @@ export async function runSingleStageWriterFlow(input: {
     }
 
     try {
-      const preview = await invokeGeneration(
-        regenerateAttempt
+      let preview = await input.moduleInput.runPersonaInteractionStage({
+        personaId: input.moduleInput.task.personaId,
+        modelId: modelSelection.modelId,
+        taskType: input.taskType,
+        stagePurpose: "main",
+        taskContext: regenerateAttempt
           ? buildFreshRegenerateTaskContext(promptContext.taskContext, input.flowKind)
           : promptContext.taskContext,
-      );
-      const parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);
-      if (!parsed.markdown.trim()) {
-        throw new Error(`${input.flowKind} flow did not produce a valid markdown body`);
+        boardContextText: promptContext.boardContextText,
+        targetContextText: promptContext.targetContextText,
+      });
+      let parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);
+      if ((!parsed.output?.markdown?.trim() || parsed.error) && attempt.schemaRepair < 1) {
+        attempt.schemaRepair += 1;
+        preview = await input.moduleInput.runPersonaInteractionStage({
+          personaId: input.moduleInput.task.personaId,
+          modelId: modelSelection.modelId,
+          taskType: input.taskType,
+          stagePurpose: "schema_repair",
+          taskContext: buildSchemaRepairTaskContext({
+            baseTaskContext: promptContext.taskContext,
+            flowKind: input.flowKind,
+            previousOutput: preview.rawResponse ?? preview.markdown,
+            error: parsed.error,
+          }),
+          boardContextText: promptContext.boardContextText,
+          targetContextText: promptContext.targetContextText,
+        });
+        parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);
       }
+      const parsedOutput = requireMarkdownOutput(parsed, input.flowKind);
 
       const audited = await runAuditRepairLoop({
         flowKind: input.flowKind,
@@ -319,22 +373,18 @@ export async function runSingleStageWriterFlow(input: {
                 flowKind: "comment",
                 parsed: mapParsedOutput(
                   "comment",
-                  audited.parsed.markdown,
-                  audited.parsed.imageRequest,
-                ) as {
-                  comment: CommentOutput;
-                },
+                  audited.parsed.output?.markdown ?? parsedOutput.markdown,
+                  audited.parsed.output?.imageRequest ?? parsedOutput.imageRequest,
+                ) as { comment: CommentOutput },
                 diagnostics,
               }
             : {
                 flowKind: "reply",
                 parsed: mapParsedOutput(
                   "reply",
-                  audited.parsed.markdown,
-                  audited.parsed.imageRequest,
-                ) as {
-                  reply: ReplyOutput;
-                },
+                  audited.parsed.output?.markdown ?? parsedOutput.markdown,
+                  audited.parsed.output?.imageRequest ?? parsedOutput.imageRequest,
+                ) as { reply: ReplyOutput },
                 diagnostics,
               },
         modelSelection,
@@ -356,5 +406,18 @@ export async function runSingleStageWriterFlow(input: {
     }
   }
 
-  throw lastError ?? new Error(`${input.flowKind} flow failed`);
+  const failure = lastError ?? new Error(`${input.flowKind} flow failed`);
+  const diagnostics: FlowDiagnostics = {
+    finalStatus: "failed",
+    terminalStage: input.stage,
+    attempts: [attempt],
+    stageResults: [{ stage: input.stage, status: "failed" }],
+  };
+  throw new TextFlowExecutionError({
+    message: failure.message,
+    flowKind: input.flowKind,
+    diagnostics,
+    causeCategory: classifySingleStageFailure(failure),
+    cause: failure,
+  });
 }
