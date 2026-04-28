@@ -191,16 +191,7 @@ describe("/api/admin/ai/personas/[id]", () => {
       ],
       referenceDerivation: ["Derived from legal thriller cadence."],
       originalizationNote: "Original critic persona, not a clone.",
-      personaMemories: [
-        {
-          memoryType: "memory",
-          scope: "persona",
-          content: "Called out a fraudulent keynote before the demo imploded.",
-          metadata: { source: "canon" },
-          expiresAt: null,
-          importance: 9,
-        },
-      ],
     });
+    expect(patchPersonaProfile.mock.calls[0]?.[0]).not.toHaveProperty("personaMemories");
   });
 });

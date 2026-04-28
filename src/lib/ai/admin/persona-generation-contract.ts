@@ -25,25 +25,18 @@ function requirePersonaRecord(value: unknown, fieldPath: string): Record<string,
   return record;
 }
 
-function unwrapPersonaStageRoot(
-  root: Record<string, unknown>,
-  requiredFieldGroups: string[][],
-): Record<string, unknown> {
-  const satisfiesGroups = (record: Record<string, unknown>) =>
-    requiredFieldGroups.every((group) => group.some((field) => field in record));
-
-  if (satisfiesGroups(root)) {
-    return root;
+function assertExactKeys(
+  record: Record<string, unknown>,
+  fieldPath: string,
+  allowed: string[],
+): void {
+  const allowedSet = new Set(allowed);
+  const extra = Object.keys(record).filter((key) => !allowedSet.has(key));
+  if (extra.length > 0) {
+    throw new Error(
+      `${fieldPath} contains forbidden key${extra.length === 1 ? "" : "s"} ${extra.join(", ")}`,
+    );
   }
-
-  for (const value of Object.values(root)) {
-    const nested = asRecord(value);
-    if (nested && satisfiesGroups(nested)) {
-      return nested;
-    }
-  }
-
-  return root;
 }
 
 function requirePersonaText(value: unknown, fieldPath: string): string {
@@ -52,6 +45,14 @@ function requirePersonaText(value: unknown, fieldPath: string): string {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
   return text;
+}
+
+function readPersonaStatus(value: unknown, fieldPath: string): "active" | "inactive" {
+  const status = readString(value).trim();
+  if (status !== "active" && status !== "inactive") {
+    throw new Error(`${fieldPath} must be active or inactive`);
+  }
+  return status;
 }
 
 function normalizePersonaStringArray(value: unknown, fieldPath: string): string[] {
@@ -553,8 +554,8 @@ function parsePersonaIdentitySummary(
   fieldPath = "persona_core.identity_summary",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, ["archetype", "core_motivation", "one_sentence_identity"]);
   return {
-    ...root,
     archetype: requirePersonaText(root.archetype, `${fieldPath}.archetype`),
     core_motivation: requirePersonaText(root.core_motivation, `${fieldPath}.core_motivation`),
     one_sentence_identity: requirePersonaText(
@@ -569,8 +570,8 @@ function parsePersonaValues(
   fieldPath = "persona_core.values",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, ["value_hierarchy", "worldview", "judgment_style"]);
   return {
-    ...root,
     value_hierarchy: normalizePersonaValueHierarchy(
       root.value_hierarchy,
       `${fieldPath}.value_hierarchy`,
@@ -585,8 +586,14 @@ function parsePersonaAestheticProfile(
   fieldPath = "persona_core.aesthetic_profile",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, [
+    "humor_preferences",
+    "narrative_preferences",
+    "creative_preferences",
+    "disliked_patterns",
+    "taste_boundaries",
+  ]);
   return {
-    ...root,
     humor_preferences: normalizePersonaStringArray(
       root.humor_preferences,
       `${fieldPath}.humor_preferences`,
@@ -615,8 +622,14 @@ function parsePersonaLivedContext(
   fieldPath = "persona_core.lived_context",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, [
+    "familiar_scenes_of_life",
+    "personal_experience_flavors",
+    "cultural_contexts",
+    "topics_with_confident_grounding",
+    "topics_requiring_runtime_retrieval",
+  ]);
   return {
-    ...root,
     familiar_scenes_of_life: normalizePersonaStringArray(
       root.familiar_scenes_of_life,
       `${fieldPath}.familiar_scenes_of_life`,
@@ -645,8 +658,13 @@ function parsePersonaCreatorAffinity(
   fieldPath = "persona_core.creator_affinity",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, [
+    "admired_creator_types",
+    "structural_preferences",
+    "detail_selection_habits",
+    "creative_biases",
+  ]);
   return {
-    ...root,
     admired_creator_types: normalizePersonaStringArray(
       root.admired_creator_types,
       `${fieldPath}.admired_creator_types`,
@@ -671,8 +689,13 @@ function parsePersonaInteractionDefaults(
   fieldPath = "persona_core.interaction_defaults",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, [
+    "default_stance",
+    "discussion_strengths",
+    "friction_triggers",
+    "non_generic_traits",
+  ]);
   return {
-    ...root,
     default_stance: requirePersonaText(root.default_stance, `${fieldPath}.default_stance`),
     discussion_strengths: normalizePersonaStringArray(
       root.discussion_strengths,
@@ -694,8 +717,8 @@ function parsePersonaGuardrails(
   fieldPath = "persona_core.guardrails",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, ["hard_no", "deescalation_style"]);
   return {
-    ...root,
     hard_no: normalizePersonaStringArray(root.hard_no, `${fieldPath}.hard_no`),
     deescalation_style: normalizePersonaStringArray(
       root.deescalation_style,
@@ -709,8 +732,15 @@ function parsePersonaVoiceFingerprint(
   fieldPath = "persona_core.voice_fingerprint",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, [
+    "opening_move",
+    "metaphor_domains",
+    "attack_style",
+    "praise_style",
+    "closing_move",
+    "forbidden_shapes",
+  ]);
   return {
-    ...root,
     opening_move: requirePersonaText(root.opening_move, `${fieldPath}.opening_move`),
     metaphor_domains: normalizePersonaStringArray(
       root.metaphor_domains,
@@ -731,13 +761,23 @@ function parsePersonaTaskStyleMatrix(
   fieldPath = "persona_core.task_style_matrix",
 ): Record<string, unknown> {
   const root = requirePersonaRecord(value, fieldPath);
+  assertExactKeys(root, fieldPath, ["post", "comment"]);
   const post = requirePersonaRecord(root.post, `${fieldPath}.post`);
   const comment = requirePersonaRecord(root.comment, `${fieldPath}.comment`);
-  const commentFeedbackShape = comment.feedback_shape ?? comment.body_shape;
+  assertExactKeys(post, `${fieldPath}.post`, [
+    "entry_shape",
+    "body_shape",
+    "close_shape",
+    "forbidden_shapes",
+  ]);
+  assertExactKeys(comment, `${fieldPath}.comment`, [
+    "entry_shape",
+    "feedback_shape",
+    "close_shape",
+    "forbidden_shapes",
+  ]);
   return {
-    ...root,
     post: {
-      ...post,
       entry_shape: requirePersonaText(post.entry_shape, `${fieldPath}.post.entry_shape`),
       body_shape: requirePersonaText(post.body_shape, `${fieldPath}.post.body_shape`),
       close_shape: requirePersonaText(post.close_shape, `${fieldPath}.post.close_shape`),
@@ -747,10 +787,9 @@ function parsePersonaTaskStyleMatrix(
       ),
     },
     comment: {
-      ...comment,
       entry_shape: requirePersonaText(comment.entry_shape, `${fieldPath}.comment.entry_shape`),
       feedback_shape: requirePersonaText(
-        commentFeedbackShape,
+        comment.feedback_shape,
         `${fieldPath}.comment.feedback_shape`,
       ),
       close_shape: requirePersonaText(comment.close_shape, `${fieldPath}.comment.close_shape`),
@@ -764,8 +803,18 @@ function parsePersonaTaskStyleMatrix(
 
 export function parsePersonaCore(value: unknown): Record<string, unknown> {
   const root = requirePersonaRecord(value, "persona_core");
+  assertExactKeys(root, "persona_core", [
+    "identity_summary",
+    "values",
+    "aesthetic_profile",
+    "lived_context",
+    "creator_affinity",
+    "interaction_defaults",
+    "guardrails",
+    "voice_fingerprint",
+    "task_style_matrix",
+  ]);
   return {
-    ...root,
     identity_summary: parsePersonaIdentitySummary(root.identity_summary),
     values: parsePersonaValues(root.values),
     aesthetic_profile: parsePersonaAestheticProfile(root.aesthetic_profile),
@@ -780,8 +829,19 @@ export function parsePersonaCore(value: unknown): Record<string, unknown> {
 
 export function parseStoredPersonaCoreProfile(value: unknown): Record<string, unknown> {
   const root = requirePersonaRecord(value, "persona_core");
+  const coreRoot = {
+    identity_summary: root.identity_summary,
+    values: root.values,
+    aesthetic_profile: root.aesthetic_profile,
+    lived_context: root.lived_context,
+    creator_affinity: root.creator_affinity,
+    interaction_defaults: root.interaction_defaults,
+    guardrails: root.guardrails,
+    voice_fingerprint: root.voice_fingerprint,
+    task_style_matrix: root.task_style_matrix,
+  };
   return {
-    ...parsePersonaCore(root),
+    ...parsePersonaCore(coreRoot),
     reference_sources: parseReferenceSources(root.reference_sources, {
       allowEmpty: true,
       fieldPath: "persona_core.reference_sources",
@@ -1185,14 +1245,20 @@ export function buildPromptAssistAttemptDetails(input: {
 }
 
 function parsePersonaStageObject(rawText: string): Record<string, unknown> {
-  const jsonText = extractJsonFromText(rawText);
-  if (!jsonText) {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
     throw new PersonaGenerationParseError("persona generation output is empty", rawText);
+  }
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    throw new PersonaGenerationParseError(
+      "persona generation output must be a raw JSON object",
+      rawText,
+    );
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonText);
+    parsed = JSON.parse(trimmed);
   } catch {
     throw new PersonaGenerationParseError("persona generation output must be valid JSON", rawText);
   }
@@ -1210,17 +1276,23 @@ function parsePersonaStageObject(rawText: string): Record<string, unknown> {
 export function parsePersonaGenerationSemanticAuditResult(
   rawText: string,
 ): PersonaGenerationSemanticAuditResult {
-  const jsonText = extractJsonFromText(rawText);
-  if (!jsonText) {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
     throw new PersonaGenerationParseError(
       "persona generation semantic audit returned empty output",
+      rawText,
+    );
+  }
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    throw new PersonaGenerationParseError(
+      "persona generation semantic audit must be a raw JSON object",
       rawText,
     );
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonText);
+    parsed = JSON.parse(trimmed);
   } catch {
     throw new PersonaGenerationParseError(
       "persona generation semantic audit returned invalid JSON",
@@ -1232,6 +1304,19 @@ export function parsePersonaGenerationSemanticAuditResult(
   if (!record) {
     throw new PersonaGenerationParseError(
       "persona generation semantic audit must return a JSON object",
+      rawText,
+    );
+  }
+  try {
+    assertExactKeys(record, "semantic audit", [
+      "passes",
+      "issues",
+      "repairGuidance",
+      "keptReferenceNames",
+    ]);
+  } catch (error) {
+    throw new PersonaGenerationParseError(
+      error instanceof Error ? error.message : "persona generation semantic audit is invalid",
       rawText,
     );
   }
@@ -1268,20 +1353,22 @@ export function parsePersonaGenerationSemanticAuditResult(
 
 export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedStage {
   try {
-    const record = unwrapPersonaStageRoot(parsePersonaStageObject(rawText), [
-      ["persona"],
-      ["identity_summary"],
-      ["reference_sources"],
-      ["other_reference_sources"],
-      ["reference_derivation"],
-      ["originalization_note"],
+    const record = parsePersonaStageObject(rawText);
+    assertExactKeys(record, "seed", [
+      "persona",
+      "identity_summary",
+      "reference_sources",
+      "other_reference_sources",
+      "reference_derivation",
+      "originalization_note",
     ]);
     const persona = requirePersonaRecord(record.persona, "persona");
+    assertExactKeys(persona, "persona", ["display_name", "bio", "status"]);
     return {
       persona: {
         display_name: requirePersonaText(persona.display_name, "persona.display_name"),
         bio: requirePersonaText(persona.bio, "persona.bio"),
-        status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
+        status: readPersonaStatus(persona.status, "persona.status"),
       },
       identity_summary: parsePersonaIdentitySummary(record.identity_summary, "identity_summary"),
       reference_sources: parseReferenceSources(record.reference_sources, {
@@ -1305,27 +1392,40 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
 export function parsePersonaCoreStageOutput(rawText: string): PersonaGenerationCoreStage {
   const record = parsePersonaStageObject(rawText);
   try {
+    assertExactKeys(record, "persona_core", [
+      "values",
+      "aesthetic_profile",
+      "lived_context",
+      "creator_affinity",
+      "interaction_defaults",
+      "guardrails",
+      "voice_fingerprint",
+      "task_style_matrix",
+    ]);
     return {
-      values: parsePersonaValues(record.values, "values"),
+      values: parsePersonaValues(record.values, "persona_core.values"),
       aesthetic_profile: parsePersonaAestheticProfile(
         record.aesthetic_profile,
-        "aesthetic_profile",
+        "persona_core.aesthetic_profile",
       ),
-      lived_context: parsePersonaLivedContext(record.lived_context, "lived_context"),
+      lived_context: parsePersonaLivedContext(record.lived_context, "persona_core.lived_context"),
       creator_affinity: parsePersonaCreatorAffinity(
-        record.creator_affinity ?? record.creator_admiration,
-        "creator_affinity",
+        record.creator_affinity,
+        "persona_core.creator_affinity",
       ),
       interaction_defaults: parsePersonaInteractionDefaults(
         record.interaction_defaults,
-        "interaction_defaults",
+        "persona_core.interaction_defaults",
       ),
-      guardrails: parsePersonaGuardrails(record.guardrails, "guardrails"),
+      guardrails: parsePersonaGuardrails(record.guardrails, "persona_core.guardrails"),
       voice_fingerprint: parsePersonaVoiceFingerprint(
         record.voice_fingerprint,
-        "voice_fingerprint",
+        "persona_core.voice_fingerprint",
       ),
-      task_style_matrix: parsePersonaTaskStyleMatrix(record.task_style_matrix, "task_style_matrix"),
+      task_style_matrix: parsePersonaTaskStyleMatrix(
+        record.task_style_matrix,
+        "persona_core.task_style_matrix",
+      ),
     };
   } catch (error) {
     throw new PersonaGenerationParseError(
@@ -1338,23 +1438,25 @@ export function parsePersonaCoreStageOutput(rawText: string): PersonaGenerationC
 export function parsePersonaGenerationOutput(rawText: string): {
   structured: PersonaGenerationStructured;
 } {
-  const record = unwrapPersonaStageRoot(parsePersonaStageObject(rawText), [
-    ["persona"],
-    ["persona_core"],
-    ["reference_sources"],
-    ["other_reference_sources"],
-    ["reference_derivation"],
-    ["originalization_note"],
-  ]);
+  const record = parsePersonaStageObject(rawText);
   try {
+    assertExactKeys(record, "persona_generation", [
+      "persona",
+      "persona_core",
+      "reference_sources",
+      "other_reference_sources",
+      "reference_derivation",
+      "originalization_note",
+    ]);
     const persona = requirePersonaRecord(record.persona, "persona");
+    assertExactKeys(persona, "persona", ["display_name", "bio", "status"]);
     const personaCore = requirePersonaRecord(record.persona_core, "persona_core");
     return {
       structured: {
         persona: {
           display_name: requirePersonaText(persona.display_name, "persona.display_name"),
           bio: requirePersonaText(persona.bio, "persona.bio"),
-          status: readString(persona.status).trim() === "inactive" ? "inactive" : "active",
+          status: readPersonaStatus(persona.status, "persona.status"),
         },
         persona_core: parsePersonaCore(personaCore),
         reference_sources: parseReferenceSources(record.reference_sources, {

@@ -270,6 +270,12 @@ export async function previewPersonaGeneration(input: {
       },
       defaultIssue:
         "originalization_note must explain how the persona is adapted into an original forum-native identity.",
+      failClosedOnTransport: true,
+      fallbackRepairGuidance: [
+        "Return valid audit JSON.",
+        "Rewrite persona.bio, identity_summary, reference_derivation, and originalization_note as an original forum-native identity rather than direct roleplay or reference-world transplant.",
+        "Make originalization_note explicitly explain the adaptation away from the named references.",
+      ],
     });
 
   const auditSeedReferenceClassification = async (
@@ -399,6 +405,12 @@ export async function previewPersonaGeneration(input: {
       },
       defaultIssue:
         "persona_core must stay coherent and provide enough distinct cross-field signal for downstream doctrine projection.",
+      failClosedOnTransport: true,
+      fallbackRepairGuidance: [
+        "Return valid audit JSON.",
+        "Rewrite persona_core so values, lived context, creator affinity, interaction defaults, voice fingerprint, and task style matrix all describe one coherent persona.",
+        "Expand compressed labels into reusable natural-language guidance with enough signal for value_fit, reasoning_fit, discourse_fit, and expression_fit derivation.",
+      ],
     });
 
   const runPersonaGenerationStage = async <T>(stageInput: {

@@ -204,14 +204,12 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
     });
   });
 
-  it("replaces admin-managed persona memories across persona and board scopes", async () => {
+  it("rejects personaMemories in persona profile patch payloads", async () => {
     const deleteChain = {
       eq: vi.fn(() => deleteChain),
       in: vi.fn(async () => ({ error: null })),
     };
-    const deleteIn = deleteChain.in;
-    const deleteEq = deleteChain.eq;
-    const deleteFn = vi.fn(() => ({ eq: deleteEq }));
+    const deleteFn = vi.fn(() => ({ eq: deleteChain.eq }));
     const insert = vi.fn(async () => ({ error: null }));
 
     createAdminClient.mockReturnValue({
@@ -234,34 +232,24 @@ describe("AdminAiControlPlaneStore.patchPersonaProfile", () => {
     const { AdminAiControlPlaneStore } = await import("@/lib/ai/admin/control-plane-store");
     const store = new AdminAiControlPlaneStore();
 
-    await store.patchPersonaProfile({
-      personaId: "persona-1",
-      personaMemories: [
-        {
-          memoryType: "memory",
-          scope: "board",
-          content: "This board keeps relitigating scarcity.",
-          metadata: { continuity_kind: "board_theme" },
-          expiresAt: null,
-          importance: 0.4,
-        },
-      ],
-    });
+    await expect(
+      store.patchPersonaProfile({
+        personaId: "persona-1",
+        personaMemories: [
+          {
+            memoryType: "memory",
+            scope: "board",
+            content: "This board keeps relitigating scarcity.",
+            metadata: { continuity_kind: "board_theme" },
+            expiresAt: null,
+            importance: 0.4,
+          },
+        ],
+      } as any),
+    ).rejects.toThrow(/personaMemories/);
 
-    expect(deleteFn).toHaveBeenCalledTimes(1);
-    expect(deleteEq).toHaveBeenCalledWith("persona_id", "persona-1");
-    expect(deleteIn).toHaveBeenCalledWith("scope", ["persona", "board"]);
-    expect(insert).toHaveBeenCalledWith([
-      expect.objectContaining({
-        persona_id: "persona-1",
-        scope: "board",
-      }),
-    ]);
-    const insertedRows = (insert as { mock: { calls: unknown[][] } }).mock.calls[0]?.[0] as
-      | Array<Record<string, unknown>>
-      | undefined;
-    expect(insertedRows?.[0]).not.toHaveProperty("is_canonical");
-    expect(insertedRows?.[0]).not.toHaveProperty("memory_key");
+    expect(deleteFn).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
   });
 });
 
@@ -269,6 +257,80 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+  });
+
+  it("rejects personaMemories in create persona payloads", async () => {
+    const personasInsertSingle = vi.fn(async () => ({
+      data: { id: "persona-1" },
+      error: null,
+    }));
+    const personasInsertSelect = vi.fn(() => ({
+      single: personasInsertSingle,
+    }));
+    const personasInsert = vi.fn(() => ({
+      select: personasInsertSelect,
+    }));
+    const personaCoresUpsert = vi.fn(async () => ({ error: null }));
+    const referenceDeleteEq = vi.fn(async () => ({ error: null }));
+    const referenceDelete = vi.fn(() => ({ eq: referenceDeleteEq }));
+    const referenceInsert = vi.fn(async () => ({ error: null }));
+    const memoryInsert = vi.fn(async () => ({ error: null }));
+
+    createAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "personas") {
+          return {
+            insert: personasInsert,
+          };
+        }
+        if (table === "persona_cores") {
+          return {
+            upsert: personaCoresUpsert,
+          };
+        }
+        if (table === "persona_reference_sources") {
+          return {
+            delete: referenceDelete,
+            insert: referenceInsert,
+          };
+        }
+        if (table === "persona_memories") {
+          return {
+            insert: memoryInsert,
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    const { AdminAiControlPlaneStore } = await import("@/lib/ai/admin/control-plane-store");
+    const store = new AdminAiControlPlaneStore();
+
+    await expect(
+      store.createPersona({
+        username: "ai_riptideroo",
+        persona: {
+          display_name: "Riptide Roo",
+          bio: "Boisterous forum warrior.",
+          status: "active",
+        },
+        personaCore: buildPersonaCore(),
+        referenceSources: [],
+        otherReferenceSources: [],
+        referenceDerivation: [],
+        originalizationNote: "Reference-inspired, not reference-cosplay.",
+        personaMemories: [
+          {
+            memoryType: "long_memory",
+            scope: "persona",
+            content: "Prefers bold action over polished argument.",
+          },
+        ],
+      } as any),
+    ).rejects.toThrow(/personaMemories/);
+
+    expect(personasInsert).not.toHaveBeenCalled();
+    expect(memoryInsert).not.toHaveBeenCalled();
   });
 
   it("normalizes explicit persona usernames with the shared persona username helper", async () => {
@@ -305,11 +367,6 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
             insert: referenceInsert,
           };
         }
-        if (table === "persona_memories") {
-          return {
-            insert: vi.fn(async () => ({ error: null })),
-          };
-        }
         throw new Error(`Unexpected table ${table}`);
       },
     });
@@ -341,7 +398,6 @@ describe("AdminAiControlPlaneStore.createPersona", () => {
       ],
       referenceDerivation: [],
       originalizationNote: "Reference-inspired, not reference-cosplay.",
-      personaMemories: [],
     });
 
     expect(personasInsert).toHaveBeenCalledWith({

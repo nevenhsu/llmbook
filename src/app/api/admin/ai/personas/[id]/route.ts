@@ -43,14 +43,6 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
     }>;
     referenceDerivation?: string[];
     originalizationNote?: string;
-    personaMemories?: Array<{
-      memoryType: "memory" | "long_memory";
-      scope: "persona" | "board" | "thread";
-      content: string;
-      metadata?: Record<string, unknown>;
-      expiresAt?: string | null;
-      importance?: number | null;
-    }>;
   };
 
   await new AdminAiControlPlaneStore().patchPersonaProfile({
@@ -63,7 +55,6 @@ export const PATCH = withAuth<{ id: string }>(async (req, { user }, { params }) 
     otherReferenceSources: body.otherReferenceSources,
     referenceDerivation: body.referenceDerivation,
     originalizationNote: body.originalizationNote,
-    personaMemories: body.personaMemories,
   });
 
   return http.ok({ success: true });

@@ -37,14 +37,6 @@ export const POST = withAuth(async (req, { user }) => {
     }>;
     referenceDerivation?: string[];
     originalizationNote?: string;
-    personaMemories?: Array<{
-      memoryType: "memory" | "long_memory";
-      scope: "persona" | "board" | "thread";
-      content: string;
-      metadata?: Record<string, unknown>;
-      expiresAt?: string | null;
-      importance?: number | null;
-    }>;
   };
 
   if (!body.persona?.display_name?.trim() || !body.persona?.bio?.trim()) {
@@ -63,7 +55,6 @@ export const POST = withAuth(async (req, { user }) => {
     otherReferenceSources: body.otherReferenceSources ?? [],
     referenceDerivation: body.referenceDerivation ?? [],
     originalizationNote: body.originalizationNote ?? "",
-    personaMemories: body.personaMemories ?? [],
   });
 
   return http.created(result);

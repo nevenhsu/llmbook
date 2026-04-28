@@ -185,16 +185,7 @@ describe("/api/admin/ai/personas", () => {
       ],
       referenceDerivation: ["Uses the reference for structure, not imitation."],
       originalizationNote: "Original persona.",
-      personaMemories: [
-        {
-          memoryType: "long_memory",
-          scope: "persona",
-          content: "Prefers specific critique.",
-          metadata: { memoryCategory: "knowledge" },
-          expiresAt: null,
-          importance: 9,
-        },
-      ],
     });
+    expect(createPersona.mock.calls[0]?.[0]).not.toHaveProperty("personaMemories");
   });
 });

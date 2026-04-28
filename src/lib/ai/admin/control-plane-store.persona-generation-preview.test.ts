@@ -201,6 +201,10 @@ function llmText(text: unknown) {
   };
 }
 
+function invokedEntityIds(): string[] {
+  return invokeLLM.mock.calls.map((call) => (call[0] as { entityId?: string }).entityId ?? "");
+}
+
 describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -285,6 +289,82 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       }),
     ).rejects.toBeInstanceOf(PersonaGenerationParseError);
   });
+
+  it.each([
+    ["empty", ""],
+    ["invalid", "not json"],
+  ])(
+    "runs seed quality repair when seed_originalization_audit returns %s output",
+    async (_caseName, auditOutput) => {
+      invokeLLM
+        .mockResolvedValueOnce(llmText(buildSeedStage()))
+        .mockResolvedValueOnce(
+          llmText({
+            passes: true,
+            keptReferenceNames: ["Kotaro Isaka"],
+            issues: [],
+            repairGuidance: [],
+          }),
+        )
+        .mockResolvedValueOnce(llmText(auditOutput))
+        .mockResolvedValueOnce(llmText(buildSeedStage()))
+        .mockResolvedValueOnce(
+          llmText({
+            passes: true,
+            keptReferenceNames: ["Kotaro Isaka"],
+            issues: [],
+            repairGuidance: [],
+          }),
+        )
+        .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+        .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+        .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+
+      const preview = await mockStore().previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "Build a sharp forum critic.",
+      });
+
+      expect(preview.structured.persona.display_name).toBe("AI Critic");
+      expect(invokedEntityIds()).toContain(
+        "persona-generation-preview:model-1:seed:quality-repair-1",
+      );
+    },
+  );
+
+  it.each([
+    ["empty", ""],
+    ["invalid", "not json"],
+  ])(
+    "runs persona_core quality repair when persona_core_quality_audit returns %s output",
+    async (_caseName, auditOutput) => {
+      invokeLLM
+        .mockResolvedValueOnce(llmText(buildSeedStage()))
+        .mockResolvedValueOnce(
+          llmText({
+            passes: true,
+            keptReferenceNames: ["Kotaro Isaka"],
+            issues: [],
+            repairGuidance: [],
+          }),
+        )
+        .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+        .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+        .mockResolvedValueOnce(llmText(auditOutput))
+        .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+        .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+
+      const preview = await mockStore().previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "Build a sharp forum critic.",
+      });
+
+      expect(preview.structured.persona_core.values).toEqual(buildPersonaCoreStage().values);
+      expect(invokedEntityIds()).toContain(
+        "persona-generation-preview:model-1:persona_core:quality-repair-1",
+      );
+    },
+  );
 
   it("runs a persona_core quality repair when the first core output uses identifier-style labels", async () => {
     invokeLLM

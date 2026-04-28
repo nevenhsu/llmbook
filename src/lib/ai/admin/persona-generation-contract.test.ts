@@ -69,40 +69,42 @@ function buildPersonaCoreStage() {
   };
 }
 
+function buildPersonaSeedStage() {
+  return {
+    persona: {
+      display_name: "Joyful Tinkerer",
+      bio: "Veteran game designer who trusts prototype joy over abstract theory.",
+      status: "active",
+    },
+    identity_summary: {
+      archetype: "Play-first builder",
+      core_motivation: "Protect delight from over-designed process.",
+      one_sentence_identity:
+        "A hands-on design mentor who judges ideas by player delight before polish.",
+    },
+    reference_sources: [
+      {
+        name: "Shigeru Miyamoto",
+        type: "philosophical_influence",
+        contribution: ["Champion of intuitive play and everyday wonder."],
+      },
+    ],
+    other_reference_sources: [
+      {
+        name: "prototyping philosophy",
+        type: "design_approach",
+        contribution: ["Messy prototypes reveal joy faster than abstract specs."],
+      },
+    ],
+    reference_derivation: ["Turned play-first intuition into forum-native coaching voice."],
+    originalization_note:
+      "Built as a forum-native design mentor, not as direct roleplay of the references.",
+  };
+}
+
 describe("persona-generation-contract", () => {
   it("parses seed output with separate personality-bearing and other reference sources", () => {
-    const parsed = parsePersonaSeedOutput(
-      JSON.stringify({
-        persona: {
-          display_name: "Joyful Tinkerer",
-          bio: "Veteran game designer who trusts prototype joy over abstract theory.",
-          status: "active",
-        },
-        identity_summary: {
-          archetype: "Play-first builder",
-          core_motivation: "Protect delight from over-designed process.",
-          one_sentence_identity:
-            "A hands-on design mentor who judges ideas by player delight before polish.",
-        },
-        reference_sources: [
-          {
-            name: "Shigeru Miyamoto",
-            type: "philosophical_influence",
-            contribution: ["Champion of intuitive play and everyday wonder."],
-          },
-        ],
-        other_reference_sources: [
-          {
-            name: "prototyping philosophy",
-            type: "design_approach",
-            contribution: ["Messy prototypes reveal joy faster than abstract specs."],
-          },
-        ],
-        reference_derivation: ["Turned play-first intuition into forum-native coaching voice."],
-        originalization_note:
-          "Built as a forum-native design mentor, not as direct roleplay of the references.",
-      }),
-    );
+    const parsed = parsePersonaSeedOutput(JSON.stringify(buildPersonaSeedStage()));
 
     expect(parsed.reference_sources).toEqual([
       expect.objectContaining({
@@ -121,6 +123,85 @@ describe("persona-generation-contract", () => {
 
     expect(parsed.values).toEqual(buildPersonaCoreStage().values);
     expect(parsed.voice_fingerprint).toEqual(buildPersonaCoreStage().voice_fingerprint);
+  });
+
+  it("rejects wrapped seed output", () => {
+    expect(() => parsePersonaSeedOutput(JSON.stringify({ seed: buildPersonaSeedStage() }))).toThrow(
+      /forbidden key seed/,
+    );
+  });
+
+  it("rejects fenced JSON for canonical seed and persona_core stages", () => {
+    expect(() =>
+      parsePersonaSeedOutput(`\`\`\`json\n${JSON.stringify(buildPersonaSeedStage())}\n\`\`\``),
+    ).toThrow(/must be a raw JSON object/);
+    expect(() =>
+      parsePersonaCoreStageOutput(`\`\`\`json\n${JSON.stringify(buildPersonaCoreStage())}\n\`\`\``),
+    ).toThrow(/must be a raw JSON object/);
+  });
+
+  it("rejects unknown persona seed status instead of coercing it", () => {
+    const seed = buildPersonaSeedStage();
+    seed.persona.status = "draft";
+    expect(() => parsePersonaSeedOutput(JSON.stringify(seed))).toThrow(
+      /persona.status must be active or inactive/,
+    );
+  });
+
+  it("rejects direct doctrine fit keys in persona_core output", () => {
+    expect(() =>
+      parsePersonaCoreStageOutput(
+        JSON.stringify({
+          ...buildPersonaCoreStage(),
+          value_fit: ["clarity"],
+        }),
+      ),
+    ).toThrow(/forbidden key value_fit/);
+  });
+
+  it("rejects retired persona_core aliases", () => {
+    const { creator_affinity: _creatorAffinity, ...withoutCreatorAffinity } =
+      buildPersonaCoreStage();
+    expect(() =>
+      parsePersonaCoreStageOutput(
+        JSON.stringify({
+          ...withoutCreatorAffinity,
+          creator_admiration: buildPersonaCoreStage().creator_affinity,
+        }),
+      ),
+    ).toThrow(/forbidden key creator_admiration/);
+
+    const core = buildPersonaCoreStage();
+    const { feedback_shape: _feedbackShape, ...commentWithoutFeedbackShape } =
+      core.task_style_matrix.comment;
+    expect(() =>
+      parsePersonaCoreStageOutput(
+        JSON.stringify({
+          ...core,
+          task_style_matrix: {
+            ...core.task_style_matrix,
+            comment: {
+              ...commentWithoutFeedbackShape,
+              body_shape: "Old compatibility alias.",
+            },
+          },
+        }),
+      ),
+    ).toThrow(/forbidden key body_shape/);
+  });
+
+  it("rejects forbidden nested persona_core keys", () => {
+    expect(() =>
+      parsePersonaCoreStageOutput(
+        JSON.stringify({
+          ...buildPersonaCoreStage(),
+          values: {
+            ...buildPersonaCoreStage().values,
+            extra_priority_hint: "not allowed",
+          },
+        }),
+      ),
+    ).toThrow(/persona_core.values contains forbidden key extra_priority_hint/);
   });
 
   it("parses final structured output without persona_memories", () => {
@@ -198,5 +279,18 @@ describe("persona-generation-contract", () => {
 
     expect(parsed.passes).toBe(false);
     expect(parsed.issues).toEqual(["persona_core.voice_fingerprint is too generic."]);
+  });
+
+  it("rejects semantic audit responses with extra top-level keys", () => {
+    expect(() =>
+      parsePersonaGenerationSemanticAuditResult(
+        JSON.stringify({
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+          summary: "not allowed",
+        }),
+      ),
+    ).toThrow(/semantic audit contains forbidden key summary/);
   });
 });

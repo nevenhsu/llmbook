@@ -102,20 +102,6 @@ export type {
   ProviderTestStatus,
 } from "@/lib/ai/admin/control-plane-contract";
 
-function assertSinglePersonaLongMemory(
-  memories: Array<{
-    memoryType: "memory" | "long_memory";
-    scope: "persona" | "board" | "thread";
-  }>,
-) {
-  const personaLongMemoryCount = memories.filter(
-    (item) => item.memoryType === "long_memory" && item.scope === "persona",
-  ).length;
-  if (personaLongMemoryCount > 1) {
-    throw new Error("personaMemories may contain at most one persona long_memory row");
-  }
-}
-
 const SUPPORTED_PROVIDER_CATALOG: Array<{
   providerKey: string;
   displayName: string;
@@ -1246,15 +1232,11 @@ export class AdminAiControlPlaneStore {
     otherReferenceSources: PersonaGenerationStructured["other_reference_sources"];
     referenceDerivation: string[];
     originalizationNote: string;
-    personaMemories?: Array<{
-      memoryType: "memory" | "long_memory";
-      scope: "persona" | "board" | "thread";
-      content: string;
-      metadata?: Record<string, unknown>;
-      expiresAt?: string | null;
-      importance?: number | null;
-    }>;
   }): Promise<{ personaId: string }> {
+    if ((input as { personaMemories?: unknown }).personaMemories !== undefined) {
+      throw new Error("personaMemories are no longer accepted by createPersona");
+    }
+
     const username = input.username?.trim()
       ? normalizeUsernameInput(input.username, { isPersona: true })
       : derivePersonaUsername(input.persona.display_name);
@@ -1298,29 +1280,6 @@ export class AdminAiControlPlaneStore {
     }
 
     await this.replacePersonaReferenceSources(personaId, input.referenceSources);
-
-    if (input.personaMemories && input.personaMemories.length > 0) {
-      assertSinglePersonaLongMemory(input.personaMemories);
-      const memoryRows = input.personaMemories
-        .map((item) => ({
-          persona_id: personaId,
-          memory_type: item.memoryType,
-          scope: item.scope,
-          content: item.content.trim(),
-          metadata: item.metadata ?? {},
-          expires_at: item.expiresAt ?? null,
-          importance: item.importance ?? null,
-        }))
-        .filter((item) => item.content.length > 0);
-      if (memoryRows.length > 0) {
-        const { error: memoryError } = await this.supabase
-          .from("persona_memories")
-          .insert(memoryRows);
-        if (memoryError) {
-          throw new Error(`save persona memory failed: ${memoryError.message}`);
-        }
-      }
-    }
 
     return { personaId };
   }
@@ -1427,15 +1386,11 @@ export class AdminAiControlPlaneStore {
     otherReferenceSources?: PersonaGenerationStructured["other_reference_sources"];
     referenceDerivation?: string[];
     originalizationNote?: string;
-    personaMemories?: Array<{
-      memoryType: "memory" | "long_memory";
-      scope: "persona" | "board" | "thread";
-      content: string;
-      metadata?: Record<string, unknown>;
-      expiresAt?: string | null;
-      importance?: number | null;
-    }>;
   }): Promise<void> {
+    if ((input as { personaMemories?: unknown }).personaMemories !== undefined) {
+      throw new Error("personaMemories are no longer accepted by patchPersonaProfile");
+    }
+
     const updates: Record<string, unknown> = {};
     if (input.displayName !== undefined) {
       const trimmedDisplayName = input.displayName.trim();
@@ -1515,39 +1470,6 @@ export class AdminAiControlPlaneStore {
       }
 
       await this.replacePersonaReferenceSources(input.personaId, input.referenceSources);
-    }
-
-    if (input.personaMemories) {
-      assertSinglePersonaLongMemory(input.personaMemories);
-      const { error: deleteError } = await this.supabase
-        .from("persona_memories")
-        .delete()
-        .eq("persona_id", input.personaId)
-        .in("scope", ["persona", "board"]);
-      if (deleteError) {
-        throw new Error(`clear persona memories failed: ${deleteError.message}`);
-      }
-
-      const memoryRows = input.personaMemories
-        .map((item) => ({
-          persona_id: input.personaId,
-          memory_type: item.memoryType,
-          scope: item.scope,
-          content: item.content.trim(),
-          metadata: item.metadata ?? {},
-          expires_at: item.expiresAt ?? null,
-          importance: item.importance ?? null,
-        }))
-        .filter((item) => item.content.length > 0);
-
-      if (memoryRows.length > 0) {
-        const { error: memoryError } = await this.supabase
-          .from("persona_memories")
-          .insert(memoryRows);
-        if (memoryError) {
-          throw new Error(`update persona memories failed: ${memoryError.message}`);
-        }
-      }
     }
   }
 

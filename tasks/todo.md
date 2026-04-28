@@ -2,6 +2,13 @@
 
 ## Active
 
+- [ ] Execute `plans/ai-agent/llm-flows/llm-flows-remaining-hardening-implementation-plan.md` task by task.
+- [x] Task 1: harden persona-generation stage parsers with strict exact-key contracts.
+- [x] Task 2: fail persona-generation semantic audits closed and remove generate-persona memory payload surfaces.
+- [ ] Task 3: add semantic LLM audit/repair for `post_plan`.
+- [ ] Task 4: surface flow failure diagnostics to runtime/operator consumers.
+- [ ] Task 5: sync active docs and run final verification.
+
 - [x] Inspect the current implementation of `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md` against code and tests.
 - [x] Fix the raw persona interaction stage boundary so flow modules invoke real LLM stages without parsed preview orchestration.
 - [x] Replace fallback-only flow audit persona evidence with canonical persona-core evidence.
@@ -40,6 +47,11 @@
 - Flow audit/repair reference: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
 
 ## Review
+
+- Task 1 from `plans/ai-agent/llm-flows/llm-flows-remaining-hardening-implementation-plan.md` is complete: persona-generation stage parsers now require raw JSON objects, reject wrapped/fenced outputs, reject unknown persona statuses, reject retired aliases, and enforce exact-key contracts on seed/core/final/audit payloads.
+- Verified Task 1 with `npm test -- src/lib/ai/admin/persona-generation-contract.test.ts`; 12 tests passed.
+- Task 2 is complete: seed originalization and persona-core semantic audits now fail closed on empty/invalid audit transport output and drive quality repair, while create/update persona save paths reject direct `personaMemories` input and routes no longer forward it.
+- Verified Task 2 with `npm test -- src/lib/ai/admin/control-plane-store.persona-generation-preview.test.ts src/lib/ai/admin/control-plane-store.patch-persona-profile.test.ts src/app/api/admin/ai/personas/route.test.ts 'src/app/api/admin/ai/personas/[id]/route.test.ts'`; 18 tests passed.
 
 - Inspected `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md` implementation against the current flow code with two parallel read-only audits plus local root-cause tracing.
 - Fixed the highest-risk Task 1/3/2 gaps: `AiAgentPersonaInteractionStageService` now resolves the selected provider/model, loads persona core, assembles main/schema prompts with persona directives, invokes the LLM, and returns raw text/metadata without parsing; admin store stage calls now supply active control-plane and persona dependencies.
