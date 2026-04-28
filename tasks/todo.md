@@ -2,6 +2,11 @@
 
 ## Active
 
+- [x] Review the current `plans/ai-agent/llm-flows` implementation against the active LLM-flow plans and lessons.
+- [x] Identify concrete improvements and optimizations for shared flow execution, prompt contracts, audits, diagnostics, tests, and docs.
+- [x] Write a new markdown implementation plan under `plans/ai-agent/llm-flows`.
+- [x] Add a review note documenting the new plan and verification performed.
+
 - [x] Execute the integrated LLM-flow program from `plans/ai-agent/llm-flows/llm-flows-integration-plan.md` so shared foundations, `post`, `comment` / `reply`, and generate-persona land in one coordinated sequence.
 - [x] Introduce one shared text flow-module registry for `post`, `comment`, and `reply`, and route generator/preview/runtime/jobs through it so the app no longer owns parallel text-generation paths.
 - [x] Implement the staged `post_plan -> post_body` module with hard novelty gating, locked selected title, and a merged body/persona audit contract.
@@ -17,6 +22,7 @@
 
 ## Current References
 
+- LLM flow improvements and optimization plan: `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md`
 - LLM flow integration plan: `plans/ai-agent/llm-flows/llm-flows-integration-plan.md`
 - Reference-role doctrine plan: `plans/ai-agent/llm-flows/reference-role-doctrine-plan.md`
 - Post flow implementation plan: `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
@@ -29,6 +35,10 @@
 
 ## Review
 
+- Reviewed the current LLM-flow implementation and wrote `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md`.
+- The review found the shared registry and staged flow contracts are substantially landed, but the next hardening pass should prioritize raw stage invocation because flow modules currently use the parsed/audited `runPersonaInteraction` service for audit prompts.
+- The new plan also captures strict comment/reply JSON parsing, canonical persona evidence for audits, reply-specific directive routing, `post_plan` semantic audit/repair, persona-generation exact-key/fail-closed hardening, failure diagnostics, prompt-cost optimization, stale docs cleanup, and a consolidated `test:llm-flows` verification script.
+- Verification for this planning pass used static code/doc inspection plus read-only parallel reviews of text flows, persona generation, and docs/tests; no implementation tests were run because this turn only added a plan document and task-tracker notes.
 - Completed a full TypeScript debt pass. Root causes were stale Next generated route types, persona-generation save payload drift, expanded admin model/provider/persona fixture contracts, removed agent barrel exports, widened intake injection test literals, and newer runtime/config fields missing from AI-agent test fixtures.
 - Removed stale `now` arguments from persona batch save payload building, expanded affected admin/test fixtures to the current contracts, removed dead agent barrel exports, and regenerated Next route types with `npx next typegen`.
 - Verified the full project TypeScript compiler during the debt pass; it exits 0.
