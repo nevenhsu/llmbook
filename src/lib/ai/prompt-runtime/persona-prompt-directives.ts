@@ -26,7 +26,7 @@ export type PromptPersonaEvidence = {
   };
 };
 
-type PersonaDirectiveActionType = Extract<PromptActionType, "post" | "comment">;
+export type PersonaDirectiveActionType = Extract<PromptActionType, "post" | "comment" | "reply">;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -350,12 +350,43 @@ export function buildPersonaEvidence(input: {
   };
 }
 
+export function formatPersonaEvidenceForAudit(input: PromptPersonaEvidence): string {
+  const lines = [
+    input.displayName ? `display_name: ${input.displayName}` : null,
+    "identity_summary:",
+    ...(input.identity ? [`- ${input.identity}`] : ["- No identity summary available."]),
+    "reference_sources:",
+    ...(input.referenceSourceNames.length > 0
+      ? input.referenceSourceNames.map((item) => `- ${item}`)
+      : ["- No reference sources available."]),
+    "value_fit:",
+    ...(input.doctrine.valueFit.length > 0
+      ? input.doctrine.valueFit.map((item) => `- ${item}`)
+      : ["- No value-fit doctrine available."]),
+    "reasoning_fit:",
+    ...(input.doctrine.reasoningFit.length > 0
+      ? input.doctrine.reasoningFit.map((item) => `- ${item}`)
+      : ["- No reasoning-fit doctrine available."]),
+    "discourse_fit:",
+    ...(input.doctrine.discourseFit.length > 0
+      ? input.doctrine.discourseFit.map((item) => `- ${item}`)
+      : ["- No discourse-fit doctrine available."]),
+    "expression_fit:",
+    ...(input.doctrine.expressionFit.length > 0
+      ? input.doctrine.expressionFit.map((item) => `- ${item}`)
+      : ["- No expression-fit doctrine available."]),
+  ].filter((item): item is string => Boolean(item));
+
+  return lines.join("\n");
+}
+
 export function derivePromptPersonaDirectives(input: {
   actionType: PersonaDirectiveActionType;
   profile: RuntimeCoreProfile;
   personaCore?: Record<string, unknown> | null;
 }): PromptPersonaDirectives {
   const isPost = input.actionType === "post";
+  const isReply = input.actionType === "reply";
   const identity = readPersonaIdentity(input.personaCore) ?? input.profile.identityCore.archetype;
   const topValue = input.profile.valueHierarchy[0]?.value ?? "the persona's priorities";
   const defaultStance =
@@ -409,7 +440,9 @@ export function derivePromptPersonaDirectives(input: {
         : null,
       isPost
         ? `Shape the post so the thesis stays unmistakable: entry ${input.profile.taskStyleMatrix.post.entryShape} Body ${input.profile.taskStyleMatrix.post.bodyShape} Close ${input.profile.taskStyleMatrix.post.closeShape}`
-        : `Shape the reply like this: entry ${input.profile.taskStyleMatrix.comment.entryShape} Feedback ${input.profile.taskStyleMatrix.comment.feedbackShape} Close ${input.profile.taskStyleMatrix.comment.closeShape}`,
+        : isReply
+          ? `Shape the thread reply like this: entry ${input.profile.taskStyleMatrix.comment.entryShape} Feedback ${input.profile.taskStyleMatrix.comment.feedbackShape} Close ${input.profile.taskStyleMatrix.comment.closeShape}. Respond to the live point in-thread; do not restart from scratch.`
+          : `Shape the top-level comment like this: entry ${input.profile.taskStyleMatrix.comment.entryShape} Feedback ${input.profile.taskStyleMatrix.comment.feedbackShape} Close ${input.profile.taskStyleMatrix.comment.closeShape}`,
       tones.length > 0 ? `Tonal mix to preserve: ${tones.join(", ")}.` : null,
     ],
     8,
@@ -421,6 +454,9 @@ export function derivePromptPersonaDirectives(input: {
       isPost
         ? "Do not default to balanced essay framing, op-ed neatness, tutorial structure, or advice-list formatting unless the task explicitly requires it."
         : "Do not default to generic helpfulness, detached summary, tutorial structure, or advice-list formatting unless the task explicitly requires it.",
+      isReply
+        ? "Do not write a top-level essay or standalone analysis when replying in a thread."
+        : null,
       forbiddenShapes.length > 0
         ? `Do not fall into forbidden shapes like: ${forbiddenShapes.join("; ")}.`
         : null,
@@ -455,7 +491,9 @@ export function derivePromptPersonaDirectives(input: {
         : null,
       isPost
         ? `Keep the thesis visible early through this post structure: ${input.profile.taskStyleMatrix.post.entryShape} Then ${input.profile.taskStyleMatrix.post.bodyShape} Then ${input.profile.taskStyleMatrix.post.closeShape}`
-        : `Reply to the live tension in the thread with this shape: ${input.profile.taskStyleMatrix.comment.feedbackShape}. Close like this: ${input.profile.taskStyleMatrix.comment.closeShape}`,
+        : isReply
+          ? `Reply to a specific point in the live thread with this shape: ${input.profile.taskStyleMatrix.comment.feedbackShape}. Close like this: ${input.profile.taskStyleMatrix.comment.closeShape}`
+          : `Write a standalone top-level contribution with this shape: ${input.profile.taskStyleMatrix.comment.feedbackShape}. Close like this: ${input.profile.taskStyleMatrix.comment.closeShape}`,
       `Keep the wording in this rhythm: ${input.profile.languageSignature.rhythm}.`,
     ],
     9,

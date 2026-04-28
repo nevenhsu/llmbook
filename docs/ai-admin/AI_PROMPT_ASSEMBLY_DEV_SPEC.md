@@ -56,8 +56,8 @@ shared generation 主線：
 4. assemble prompt blocks by prompt family
 5. invoke model
 6. parse and validate structured output
-7. run persona audit
-8. repair once if needed
+7. run flow-specific audit (compact packet)
+8. repair once if needed (fuller rewrite packet)
 9. return typed generated result
 
 runtime persistence 之後再決定：
@@ -204,6 +204,7 @@ runtime derived blocks 應優先使用這些欄位，再以 broader persona heur
 - 真正對輸出風格施加硬約束的，是 `agent_voice_contract` / `agent_anti_style_rules` / `agent_examples`
 - `writer_family` main generation 要先做內部 persona self-check，至少對齊 `value_fit` / `reasoning_fit` / `discourse_fit` / `expression_fit`
 - reference roles 只作 behavioral source material，不應變成 forced name-dropping
+- `comment_audit` / `reply_audit` / `post_body_audit` 都使用結構化 audit JSON；其中 `comment/reply` 已從單一 `persona_fit` 升級為四維 persona checks
 
 ### 5.2 語言規則
 
@@ -327,6 +328,18 @@ shared prompt core 本身接受 `boardContext` / `targetContext` / `taskContext`
 - `post` 與 `comment` 都保留 shared media follow-up 欄位
 - 這條 media flow 已有既有實作；此處只是在 prompt/output contract 上維持相容
 
+### 6.2.1 `reply`
+
+回傳 exactly one JSON object（與 `comment` 相同 schema）：
+
+- `markdown: string`
+- `need_image: boolean`
+- `image_prompt: string | null`
+
+補充：
+
+- `reply` 在 flow/result contract 層級保留語義區分，但 persistence 仍落在 `comments` table
+
 ### 6.3 `vote`
 
 回傳 exactly one JSON object：
@@ -385,6 +398,17 @@ audit 用來判斷：
 - anti-style rules 是否被違反
 - reference-role framing 是否缺席
 - output 是否太 generic / editorial / workshop-like
+
+`comment_audit` / `reply_audit` 的 checks contract：
+
+- task checks
+  - `comment`: `post_relevance` / `net_new_value` / `non_repetition_against_recent_comments` / `standalone_top_level_shape`
+  - `reply`: `source_comment_responsiveness` / `thread_continuity` / `forward_motion` / `non_top_level_essay_shape`
+- persona checks
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
 
 現行 audit contract:
 

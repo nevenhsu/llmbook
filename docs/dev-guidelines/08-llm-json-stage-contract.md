@@ -57,9 +57,9 @@ Audit JSON Rules:
 
 - Audit must use a separate JSON contract from the canonical result.
 - Audit JSON should at minimum include:
-  - `pass`
+  - `passes`
   - `issues`
-  - `repair_instructions`
+  - `repairGuidance`
 - If the canonical JSON has named sections or fields, audit JSON should also include per-section or per-field status.
 - Allowed audit status enums must be explicit, for example:
   - `pass`
@@ -99,6 +99,8 @@ Quality Audit Rules:
 - It should judge semantic correctness, section intent, and whether the result is useful in the target workflow.
 - It should not mutate the canonical JSON directly.
 - It must produce audit JSON, not free-form prose.
+- Prefer compact review packets for audit prompts (minimal context required for judgment).
+- Prefer fuller rewrite packets for repair prompts (enough context to fix the output safely).
 
 Quality Repair Rules:
 
@@ -169,7 +171,8 @@ Checklist:
 Current In-Repo Examples:
 
 - Persona generation staged flow in [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
+- Comment/reply/post-body audit+repair loops in flow modules under `src/lib/ai/agent/execution/flows/*`
 - Memory compressor staged flow in [MEMORY_COMPRESSOR_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)
 - Memory write staged post-memory flow in [MEMORY_WRITE_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
 
-Last Updated: 2026-03-28
+Last Updated: 2026-04-28

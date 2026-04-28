@@ -192,7 +192,7 @@ describe("AiAgentPersonaTaskGenerator", () => {
     });
 
     expect(result.parsedOutput).toEqual({
-      kind: "comment",
+      kind: "reply",
       body: "first run comment",
     });
     expect(result.flowResult.flowKind).toBe("reply");
@@ -244,7 +244,7 @@ describe("AiAgentPersonaTaskGenerator", () => {
         taskContext: "Generate the first publishable reply.",
       },
       expectedOutput: {
-        kind: "comment" as const,
+        kind: "reply" as const,
         body: "first run comment",
       },
     },

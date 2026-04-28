@@ -1,5 +1,10 @@
 import { parsePostBodyActionOutput } from "@/lib/ai/prompt-runtime/action-output";
 import {
+  buildPostBodyAuditPrompt,
+  buildPostBodyRepairPrompt,
+  parsePostBodyAuditResult,
+} from "@/lib/ai/prompt-runtime/post-body-audit";
+import {
   computePostPlanOverallScore,
   evaluatePostPlanGate,
   parsePostPlanActionOutput,
@@ -13,7 +18,11 @@ import type {
   TextFlowModuleRunInput,
   TextFlowModuleRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
-import { buildModuleMetadata, mergeFlowTaskContext } from "@/lib/ai/agent/execution/flows/types";
+import {
+  buildFallbackPersonaEvidence,
+  buildModuleMetadata,
+  mergeFlowTaskContext,
+} from "@/lib/ai/agent/execution/flows/types";
 
 function buildSelectedPostPlan(candidate: PostPlanCandidate): SelectedPostPlan {
   return {
@@ -94,6 +103,13 @@ function buildPostBodySchemaRepairTaskContext(previousOutput: string): string {
   ].join("\n");
 }
 
+function renderFinalPostForAudit(input: { title: string; body: string; tags: string[] }): string {
+  return [`# ${input.title}`, input.tags.join(" ").trim() || null, input.body.trim()]
+    .filter((part): part is string => Boolean(part))
+    .join("\n\n")
+    .trim();
+}
+
 async function runPostFlow(
   input: TextFlowModuleRunInput,
   mode: "preview" | "runtime",
@@ -145,6 +161,7 @@ async function runPostFlow(
     planningAttempt.main += 1;
     if (countsAsRegenerate) {
       planningAttempt.regenerate += 1;
+      planningAttempt.schemaRepair = 0;
     }
     let preview = await invokeStage({
       taskType: "post_plan",
@@ -237,6 +254,28 @@ async function runPostFlow(
   const selectedPostPlan = buildSelectedPostPlan(selectedCandidate);
   let bodyPreview;
   let parsedBody;
+  let bodyAuditResult:
+    | {
+        status: "passed" | "passed_after_repair";
+        repairApplied: boolean;
+        issues: string[];
+        contentChecks: {
+          angle_fidelity: "pass" | "fail";
+          board_fit: "pass" | "fail";
+          body_usefulness: "pass" | "fail";
+          markdown_structure: "pass" | "fail";
+          title_body_alignment: "pass" | "fail";
+        };
+        personaChecks: {
+          body_persona_fit: "pass" | "fail";
+          anti_style_compliance: "pass" | "fail";
+          value_fit: "pass" | "fail";
+          reasoning_fit: "pass" | "fail";
+          discourse_fit: "pass" | "fail";
+          expression_fit: "pass" | "fail";
+        };
+      }
+    | undefined;
 
   try {
     bodyAttempt.main += 1;
@@ -261,6 +300,88 @@ async function runPostFlow(
 
     if (parsedBody.error) {
       throw new Error(parsedBody.error);
+    }
+
+    const personaEvidence = buildFallbackPersonaEvidence({
+      personaDisplayName: input.task.personaDisplayName ?? null,
+      personaUsername: input.task.personaUsername ?? null,
+    });
+    const selectedPostPlanText = buildSelectedPostPlanBlock(selectedPostPlan);
+    const initialAuditPreview = await invokeStage({
+      taskType: "post_body",
+      taskContext: buildPostBodyAuditPrompt({
+        boardContextText: promptContext.boardContextText,
+        selectedPostPlanText,
+        renderedFinalPost: renderFinalPostForAudit({
+          title: selectedPostPlan.title,
+          body: parsedBody.body,
+          tags: parsedBody.tags,
+        }),
+        personaEvidence,
+      }),
+      targetContextText: selectedPostPlanText,
+    });
+    const initialAudit = parsePostBodyAuditResult(
+      initialAuditPreview.rawResponse ?? initialAuditPreview.markdown,
+    );
+
+    if (!initialAudit.passes) {
+      bodyAttempt.repair += 1;
+      const repairPreview = await invokeStage({
+        taskType: "post_body",
+        taskContext: buildPostBodyRepairPrompt({
+          selectedPostPlanText,
+          personaEvidence,
+          issues: initialAudit.issues,
+          repairGuidance: initialAudit.repairGuidance,
+          previousOutput: bodyPreview.rawResponse ?? bodyPreview.markdown,
+        }),
+        targetContextText: selectedPostPlanText,
+      });
+      const repairedParsedBody = parsePostBodyActionOutput(
+        repairPreview.rawResponse ?? repairPreview.markdown,
+      );
+      if (repairedParsedBody.error) {
+        throw new Error(repairedParsedBody.error);
+      }
+      parsedBody = repairedParsedBody;
+      bodyPreview = repairPreview;
+
+      const repairedAuditPreview = await invokeStage({
+        taskType: "post_body",
+        taskContext: buildPostBodyAuditPrompt({
+          boardContextText: promptContext.boardContextText,
+          selectedPostPlanText,
+          renderedFinalPost: renderFinalPostForAudit({
+            title: selectedPostPlan.title,
+            body: parsedBody.body,
+            tags: parsedBody.tags,
+          }),
+          personaEvidence,
+        }),
+        targetContextText: selectedPostPlanText,
+      });
+      const repairedAudit = parsePostBodyAuditResult(
+        repairedAuditPreview.rawResponse ?? repairedAuditPreview.markdown,
+      );
+      if (!repairedAudit.passes) {
+        throw new Error("post_body audit failed after repair");
+      }
+      bodyAuditResult = {
+        status: "passed_after_repair",
+        repairApplied: true,
+        issues: initialAudit.issues,
+        contentChecks: repairedAudit.contentChecks,
+        personaChecks: repairedAudit.personaChecks,
+      };
+    } else {
+      bodyAuditResult = {
+        status: "passed",
+        repairApplied: false,
+        issues: initialAudit.issues,
+        contentChecks: initialAudit.contentChecks,
+        personaChecks: initialAudit.personaChecks,
+      };
     }
     stageResults.push({ stage: "post_body", status: "passed" });
   } catch (error) {
@@ -293,19 +414,16 @@ async function runPostFlow(
           },
         };
       }) ?? [],
-    bodyAudit:
-      preview.auditDiagnostics?.contract === "post_body_audit" &&
-      preview.auditDiagnostics.contentChecks &&
-      preview.auditDiagnostics.personaChecks
-        ? {
-            contract: "post_body_audit",
-            status: preview.auditDiagnostics.status,
-            repairApplied: preview.auditDiagnostics.repairApplied,
-            issues: preview.auditDiagnostics.issues,
-            contentChecks: preview.auditDiagnostics.contentChecks,
-            personaChecks: preview.auditDiagnostics.personaChecks,
-          }
-        : undefined,
+    bodyAudit: bodyAuditResult
+      ? {
+          contract: "post_body_audit",
+          status: bodyAuditResult.status,
+          repairApplied: bodyAuditResult.repairApplied,
+          issues: bodyAuditResult.issues,
+          contentChecks: bodyAuditResult.contentChecks,
+          personaChecks: bodyAuditResult.personaChecks,
+        }
+      : undefined,
   };
 
   return {

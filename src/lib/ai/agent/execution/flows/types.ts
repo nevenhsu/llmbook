@@ -2,6 +2,7 @@ import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
+import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 
 export type TextFlowKind = "post" | "comment" | "reply";
 
@@ -172,6 +173,23 @@ export function mergeFlowTaskContext(input: {
   return {
     ...input.promptContext,
     taskContext,
+  };
+}
+
+export function buildFallbackPersonaEvidence(input: {
+  personaDisplayName: string | null;
+  personaUsername: string | null;
+}): PromptPersonaEvidence {
+  return {
+    displayName: input.personaDisplayName,
+    identity: input.personaUsername,
+    referenceSourceNames: [],
+    doctrine: {
+      valueFit: [],
+      reasoningFit: [],
+      discourseFit: [],
+      expressionFit: [],
+    },
   };
 }
 

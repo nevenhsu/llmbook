@@ -1,3 +1,5 @@
+import { normalizeText, parseJsonObject, readStringArray } from "./json-parse-utils";
+
 export type PostPlanCandidate = {
   title: string;
   angleSummary: string;
@@ -26,31 +28,6 @@ export type PostPlanGateResult = {
   selectedCandidateIndex: number | null;
 };
 
-function normalizeText(value: string): string {
-  return value.replace(/\r\n/g, "\n").trim();
-}
-
-function extractJsonFromText(text: string): string {
-  const trimmed = normalizeText(text);
-  if (!trimmed) {
-    return "";
-  }
-  const fenced = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i);
-  return fenced?.[1]?.trim() ?? trimmed;
-}
-
-function parseJsonObject(text: string): Record<string, unknown> {
-  const jsonText = extractJsonFromText(text);
-  if (!jsonText) {
-    throw new Error("structured action output is empty");
-  }
-  const parsed = JSON.parse(jsonText) as unknown;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("structured action output must be a JSON object");
-  }
-  return parsed as Record<string, unknown>;
-}
-
 function readOptionalString(value: unknown): string {
   if (typeof value !== "string") {
     return "";
@@ -58,11 +35,8 @@ function readOptionalString(value: unknown): string {
   return normalizeText(value);
 }
 
-function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((item) => readOptionalString(item)).filter((item) => item.length > 0);
+function readStringArrayOrEmpty(value: unknown): string[] {
+  return readStringArray(value) ?? [];
 }
 
 function readScore(value: unknown): number {
@@ -124,7 +98,15 @@ export function parsePostPlanActionOutput(rawText: string): ParsedPostPlanAction
   }
 
   try {
-    const parsed = parseJsonObject(normalized);
+    const parsed = parseJsonObject(normalized, (type) => {
+      if (type === "empty") {
+        return new Error("structured action output is empty");
+      }
+      if (type === "invalid_json") {
+        return new Error("structured action output is invalid JSON");
+      }
+      return new Error("structured action output must be a JSON object");
+    });
     const candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
 
     return {
@@ -138,8 +120,8 @@ export function parsePostPlanActionOutput(rawText: string): ParsedPostPlanAction
             title: readOptionalString(record.title),
             angleSummary: readOptionalString(record.angle_summary),
             thesis: readOptionalString(record.thesis),
-            bodyOutline: readStringArray(record.body_outline),
-            differenceFromRecent: readStringArray(record.difference_from_recent),
+            bodyOutline: readStringArrayOrEmpty(record.body_outline),
+            differenceFromRecent: readStringArrayOrEmpty(record.difference_from_recent),
             boardFitScore: readScore(record.board_fit_score),
             titlePersonaFitScore: readScore(record.title_persona_fit_score),
             titleNoveltyScore: readScore(record.title_novelty_score),

@@ -342,4 +342,44 @@ describe("AiAgentPersonaTaskPersistenceService", () => {
       historyId: null,
     });
   });
+
+  it("treats reply generated output as comment persistence semantics", async () => {
+    const insertComment = vi.fn(async () => ({ id: "comment-new-3" }));
+    const markTaskDone = vi.fn(async () =>
+      buildTask({
+        status: "DONE",
+        resultId: "comment-new-3",
+        resultType: "comment",
+      }),
+    );
+    const service = new AiAgentPersonaTaskPersistenceService({
+      deps: {
+        resolveCommentOwner: async () => ({
+          postId: "post-1",
+          parentId: "comment-source-1",
+        }),
+        insertComment,
+        markTaskDone,
+      },
+    });
+
+    const result = await service.persistGeneratedResult({
+      generated: buildGenerationResult({
+        parsedOutput: {
+          kind: "reply",
+          body: "thread-native reply body",
+        },
+      }),
+      sourceRuntime: "text_runtime",
+    });
+
+    expect(insertComment).toHaveBeenCalledWith({
+      postId: "post-1",
+      parentId: "comment-source-1",
+      personaId: "persona-1",
+      body: "thread-native reply body",
+    });
+    expect(result.resultType).toBe("comment");
+    expect(result.persistedTable).toBe("comments");
+  });
 });

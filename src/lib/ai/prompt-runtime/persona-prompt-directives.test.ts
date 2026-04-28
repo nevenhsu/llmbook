@@ -3,6 +3,7 @@ import {
   buildPersonaEvidence,
   buildPlannerPostingLens,
   buildPersonaVoiceRepairPrompt,
+  formatPersonaEvidenceForAudit,
   derivePromptPersonaDirectives,
   detectPersonaVoiceDrift,
 } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
@@ -221,8 +222,35 @@ describe("derivePromptPersonaDirectives", () => {
 
     expect(commentDirectives.voiceContract.join("\n")).toContain("immediate reaction");
     expect(commentDirectives.antiStyleRules.join("\n")).toContain("generic helpfulness");
-    expect(commentDirectives.enactmentRules.join("\n")).toContain("live tension in the thread");
+    expect(commentDirectives.enactmentRules.join("\n")).toContain(
+      "standalone top-level contribution",
+    );
     expect(commentDirectives.inCharacterExamples[0]?.scenario).toContain("Someone leans on");
+  });
+
+  it("supports reply action type with thread-native anti-style guidance", () => {
+    const replyDirectives = derivePromptPersonaDirectives({
+      actionType: "reply",
+      profile: sampleProfile(),
+    });
+
+    expect(replyDirectives.voiceContract.join("\n")).toContain("thread reply");
+    expect(replyDirectives.antiStyleRules.join("\n")).toContain("top-level essay");
+    expect(replyDirectives.enactmentRules.join("\n")).toContain(
+      "specific point in the live thread",
+    );
+  });
+
+  it("formats persona evidence for compact audit packets", () => {
+    const evidence = buildPersonaEvidence({
+      displayName: "AI Artist",
+      profile: sampleProfile(),
+    });
+
+    const formatted = formatPersonaEvidenceForAudit(evidence);
+    expect(formatted).toContain("display_name: AI Artist");
+    expect(formatted).toContain("value_fit:");
+    expect(formatted).toContain("reasoning_fit:");
   });
 });
 

@@ -54,40 +54,38 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
 describe("createReplyFlowModule", () => {
   it("returns first-class reply audit diagnostics in the shared flow envelope", async () => {
     const flowModule = createReplyFlowModule();
-    const runPersonaInteraction = vi.fn().mockResolvedValueOnce({
-      ...buildPreviewResult(
-        JSON.stringify({
-          markdown:
-            "Then make the gate show the rejected angles too, otherwise the operator still cannot tell whether novelty failed or phrasing failed.",
-          need_image: false,
-          image_prompt: null,
-          image_alt: null,
-        }),
-      ),
-      auditDiagnostics: {
-        contract: "reply_audit",
-        status: "passed",
-        issues: [],
-        repairGuidance: [],
-        severity: "low",
-        confidence: 0.88,
-        missingSignals: [],
-        repairApplied: false,
-        auditMode: "compact",
-        compactRetryUsed: false,
-        checks: {
-          source_comment_responsiveness: "pass",
-          thread_continuity: "pass",
-          forward_motion: "pass",
-          non_top_level_essay_shape: "pass",
-          persona_fit: "pass",
-          value_fit: "pass",
-          reasoning_fit: "pass",
-          discourse_fit: "pass",
-          expression_fit: "pass",
-        },
-      },
-    } satisfies PreviewResult);
+    const runPersonaInteraction = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown:
+              "Then make the gate show the rejected angles too, otherwise the operator still cannot tell whether novelty failed or phrasing failed.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              source_comment_responsiveness: "pass",
+              thread_continuity: "pass",
+              forward_motion: "pass",
+              non_top_level_essay_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
+      );
 
     const result = await flowModule.runRuntime({
       task: buildTask(),
@@ -128,7 +126,6 @@ describe("createReplyFlowModule", () => {
         thread_continuity: "pass",
         forward_motion: "pass",
         non_top_level_essay_shape: "pass",
-        persona_fit: "pass",
         value_fit: "pass",
         reasoning_fit: "pass",
         discourse_fit: "pass",
@@ -152,6 +149,25 @@ describe("createReplyFlowModule", () => {
             image_alt: null,
           }),
         ),
+      )
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              source_comment_responsiveness: "pass",
+              thread_continuity: "pass",
+              forward_motion: "pass",
+              non_top_level_essay_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
       );
 
     const result = await flowModule.runPreview({
@@ -169,7 +185,7 @@ describe("createReplyFlowModule", () => {
       runPersonaInteraction,
     });
 
-    expect(runPersonaInteraction).toHaveBeenCalledTimes(2);
+    expect(runPersonaInteraction).toHaveBeenCalledTimes(3);
     expect(runPersonaInteraction.mock.calls[1]?.[0].taskContext).toContain("[fresh_regenerate]");
     expect(result.flowResult.diagnostics.attempts).toEqual([
       {
@@ -184,5 +200,136 @@ describe("createReplyFlowModule", () => {
       throw new Error("expected reply flow result");
     }
     expect(result.flowResult.parsed.reply.markdown).toContain("preview itself");
+  });
+
+  it("regenerates when reply audit still fails after one repair attempt", async () => {
+    const flowModule = createReplyFlowModule();
+    const runPersonaInteraction = vi
+      .fn()
+      // first main generation
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown: "This restarts as a broad explanation.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      // first audit -> fail
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: false,
+            issues: ["Does not directly answer the source comment."],
+            repairGuidance: ["Answer with one concrete workflow change."],
+            checks: {
+              source_comment_responsiveness: "fail",
+              thread_continuity: "fail",
+              forward_motion: "fail",
+              non_top_level_essay_shape: "fail",
+              value_fit: "fail",
+              reasoning_fit: "fail",
+              discourse_fit: "fail",
+              expression_fit: "fail",
+            },
+          }),
+        ),
+      )
+      // repair output
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown: "Attempted repair, but still too detached from the source comment.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      // re-audit -> still fail (forces regenerate)
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: false,
+            issues: ["Still reads like a top-level essay."],
+            repairGuidance: ["Reply to the quoted point directly."],
+            checks: {
+              source_comment_responsiveness: "fail",
+              thread_continuity: "fail",
+              forward_motion: "fail",
+              non_top_level_essay_shape: "fail",
+              value_fit: "fail",
+              reasoning_fit: "fail",
+              discourse_fit: "fail",
+              expression_fit: "fail",
+            },
+          }),
+        ),
+      )
+      // fresh regenerate generation
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown:
+              "The concrete change is splitting malformed-output repair from policy rejection, so operators can diagnose the right failure lane.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      // regenerated audit -> pass
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              source_comment_responsiveness: "pass",
+              thread_continuity: "pass",
+              forward_motion: "pass",
+              non_top_level_essay_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
+      );
+
+    const result = await flowModule.runPreview({
+      task: buildTask(),
+      promptContext: {
+        flowKind: "reply",
+        taskType: "comment",
+        taskContext: "Generate a reply inside the active thread below.",
+      },
+      loadPreferredTextModel: async () => ({
+        modelId: "model-1",
+        providerKey: "xai",
+        modelKey: "grok-4-1-fast-reasoning",
+      }),
+      runPersonaInteraction,
+    });
+
+    expect(runPersonaInteraction).toHaveBeenCalledTimes(6);
+    expect(runPersonaInteraction.mock.calls[4]?.[0].taskContext).toContain("[fresh_regenerate]");
+    expect(result.flowResult.diagnostics.attempts).toEqual([
+      {
+        stage: "reply.main",
+        main: 2,
+        schemaRepair: 0,
+        repair: 1,
+        regenerate: 1,
+      },
+    ]);
+    if (result.flowResult.flowKind !== "reply") {
+      throw new Error("expected reply flow result");
+    }
+    expect(result.flowResult.parsed.reply.markdown).toContain("malformed-output repair");
   });
 });

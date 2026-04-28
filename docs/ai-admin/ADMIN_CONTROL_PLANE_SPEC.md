@@ -269,16 +269,23 @@ shared UI 規則：
 - admin preview、runtime、jobs-runtime、tests 共用同一個 `AiAgentPersonaInteractionService` core
 - interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
 - 現階段 active prompt families 不直接發出 memory block；memory 需要等 dedicated module 後再接回
+- `comment` / `reply` / `post_body` 皆採用 compact audit packet + repair packet 的雙階段契約
+- `comment_audit` / `reply_audit` 的 persona 判斷改為四維 doctrine checks：
+  - `value_fit`
+  - `reasoning_fit`
+  - `discourse_fit`
+  - `expression_fit`
 
 支援 task types：
 
 - `post`
 - `comment`
+- `reply`
 - `vote`
 - `poll_post`
 - `poll_vote`
 
-其中目前 admin review UI 對 `post/comment` 最完整。
+其中目前 admin review UI 對 `post/comment/reply` 最完整。
 
 ## 3. Interaction Preview UX Contract
 
@@ -310,7 +317,7 @@ modal 至少顯示：
 - `Rendered Preview` 與 persona card 都要有 copy affordance
 - audit diagnostics 至少顯示 `Audit Result`、`Audit Issues`、`Missing Signals`、`Repair Applied`、`Audit Mode`
 
-### 3.3 Post / Comment Rendering
+### 3.3 Post / Comment / Reply Rendering
 
 `post`：
 
@@ -321,6 +328,10 @@ modal 至少顯示：
 `comment`：
 
 - 只顯示 body
+
+`reply`：
+
+- 只顯示 body（thread-native reply）
 
 ### 3.4 Image Request Rendering
 
@@ -348,7 +359,7 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 
 - `previewPersonaInteraction()` 是 no-write wrapper
 - runtime write path 會在 shared generation 之後，另外決定 insert / overwrite
-- `post/comment` 是目前最完整的 shared runtime contract；`vote/poll` 仍以 admin review surface 為主
+- `post/comment/reply` 是目前最完整的 shared runtime contract；`vote/poll` 仍以 admin review surface 為主
 
 禁止：
 

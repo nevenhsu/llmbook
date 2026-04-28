@@ -54,42 +54,38 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
 describe("createCommentFlowModule", () => {
   it("returns first-class comment audit diagnostics in the shared flow envelope", async () => {
     const flowModule = createCommentFlowModule();
-    const runPersonaInteraction = vi.fn().mockResolvedValueOnce({
-      ...buildPreviewResult(
-        JSON.stringify({
-          markdown:
-            "I would push this one step further: the board needs a novelty rubric, not just title filtering.",
-          need_image: false,
-          image_prompt: null,
-          image_alt: null,
-        }),
-      ),
-      auditDiagnostics: {
-        contract: "comment_audit",
-        status: "passed_after_repair",
-        issues: ["The first draft repeated a recent top-level framing too closely."],
-        repairGuidance: [
-          "Shift toward novelty policy instead of repeating the same workflow complaint.",
-        ],
-        severity: "medium",
-        confidence: 0.84,
-        missingSignals: [],
-        repairApplied: true,
-        auditMode: "compact",
-        compactRetryUsed: false,
-        checks: {
-          post_relevance: "pass",
-          net_new_value: "pass",
-          non_repetition_against_recent_comments: "pass",
-          standalone_top_level_shape: "pass",
-          persona_fit: "pass",
-          value_fit: "pass",
-          reasoning_fit: "pass",
-          discourse_fit: "pass",
-          expression_fit: "pass",
-        },
-      },
-    } satisfies PreviewResult);
+    const runPersonaInteraction = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown:
+              "I would push this one step further: the board needs a novelty rubric, not just title filtering.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              post_relevance: "pass",
+              net_new_value: "pass",
+              non_repetition_against_recent_comments: "pass",
+              standalone_top_level_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
+      );
 
     const result = await flowModule.runRuntime({
       task: buildTask(),
@@ -122,15 +118,14 @@ describe("createCommentFlowModule", () => {
     });
     expect(result.flowResult.diagnostics.audit).toEqual({
       contract: "comment_audit",
-      status: "passed_after_repair",
-      repairApplied: true,
-      issues: ["The first draft repeated a recent top-level framing too closely."],
+      status: "passed",
+      repairApplied: false,
+      issues: [],
       checks: {
         post_relevance: "pass",
         net_new_value: "pass",
         non_repetition_against_recent_comments: "pass",
         standalone_top_level_shape: "pass",
-        persona_fit: "pass",
         value_fit: "pass",
         reasoning_fit: "pass",
         discourse_fit: "pass",
@@ -142,7 +137,7 @@ describe("createCommentFlowModule", () => {
         stage: "comment.main",
         main: 1,
         schemaRepair: 0,
-        repair: 1,
+        repair: 0,
         regenerate: 0,
       },
     ]);
@@ -163,6 +158,25 @@ describe("createCommentFlowModule", () => {
             image_alt: null,
           }),
         ),
+      )
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              post_relevance: "pass",
+              net_new_value: "pass",
+              non_repetition_against_recent_comments: "pass",
+              standalone_top_level_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
       );
 
     const result = await flowModule.runPreview({
@@ -180,7 +194,7 @@ describe("createCommentFlowModule", () => {
       runPersonaInteraction,
     });
 
-    expect(runPersonaInteraction).toHaveBeenCalledTimes(2);
+    expect(runPersonaInteraction).toHaveBeenCalledTimes(3);
     expect(runPersonaInteraction.mock.calls[1]?.[0].taskContext).toContain("[fresh_regenerate]");
     expect(result.flowResult.diagnostics.attempts).toEqual([
       {
@@ -195,5 +209,136 @@ describe("createCommentFlowModule", () => {
       throw new Error("expected comment flow result");
     }
     expect(result.flowResult.parsed.comment.markdown).toContain("board-level novelty memory");
+  });
+
+  it("regenerates when audit still fails after one repair attempt", async () => {
+    const flowModule = createCommentFlowModule();
+    const runPersonaInteraction = vi
+      .fn()
+      // first main generation
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown: "This is still broad and generic.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      // first audit -> fail
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: false,
+            issues: ["Too generic and repeats recent thread framing."],
+            repairGuidance: ["Add one concrete boundary-level distinction."],
+            checks: {
+              post_relevance: "pass",
+              net_new_value: "fail",
+              non_repetition_against_recent_comments: "fail",
+              standalone_top_level_shape: "fail",
+              value_fit: "fail",
+              reasoning_fit: "fail",
+              discourse_fit: "fail",
+              expression_fit: "fail",
+            },
+          }),
+        ),
+      )
+      // repair output
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown: "Attempted repair but still not thread-native enough.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      // re-audit -> still fail (forces regenerate)
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: false,
+            issues: ["Still repeats nearby top-level wording."],
+            repairGuidance: ["Force a fresh framing."],
+            checks: {
+              post_relevance: "pass",
+              net_new_value: "fail",
+              non_repetition_against_recent_comments: "fail",
+              standalone_top_level_shape: "fail",
+              value_fit: "fail",
+              reasoning_fit: "fail",
+              discourse_fit: "fail",
+              expression_fit: "fail",
+            },
+          }),
+        ),
+      )
+      // fresh regenerate generation
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown:
+              "The core fix is to separate schema-repair from policy-gate failures in operator logs.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      // regenerated audit -> pass
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              post_relevance: "pass",
+              net_new_value: "pass",
+              non_repetition_against_recent_comments: "pass",
+              standalone_top_level_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
+      );
+
+    const result = await flowModule.runPreview({
+      task: buildTask(),
+      promptContext: {
+        flowKind: "comment",
+        taskType: "comment",
+        taskContext: "Generate a top-level comment on the post below.",
+      },
+      loadPreferredTextModel: async () => ({
+        modelId: "model-1",
+        providerKey: "xai",
+        modelKey: "grok-4-1-fast-reasoning",
+      }),
+      runPersonaInteraction,
+    });
+
+    expect(runPersonaInteraction).toHaveBeenCalledTimes(6);
+    expect(runPersonaInteraction.mock.calls[4]?.[0].taskContext).toContain("[fresh_regenerate]");
+    expect(result.flowResult.diagnostics.attempts).toEqual([
+      {
+        stage: "comment.main",
+        main: 2,
+        schemaRepair: 0,
+        repair: 1,
+        regenerate: 1,
+      },
+    ]);
+    if (result.flowResult.flowKind !== "comment") {
+      throw new Error("expected comment flow result");
+    }
+    expect(result.flowResult.parsed.comment.markdown).toContain("schema-repair");
   });
 });

@@ -1,5 +1,9 @@
 import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import {
+  formatPersonaEvidenceForAudit,
+  type PromptPersonaEvidence,
+} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import { parseJsonObject, readStringArray, readCheckStatus } from "./json-parse-utils";
 
 export type PostBodyAuditCheckStatus = "pass" | "fail";
 
@@ -28,62 +32,28 @@ export type PostBodyAuditResult = {
   personaChecks: PostBodyAuditPersonaChecks;
 };
 
-function normalizeText(value: string): string {
-  return value.replace(/\r\n/g, "\n").trim();
-}
-
-function extractJsonFromText(text: string): string {
-  const trimmed = normalizeText(text);
-  if (!trimmed) {
-    return "";
-  }
-  const fenced = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i);
-  return fenced?.[1]?.trim() ?? trimmed;
-}
-
-function parseJsonObject(text: string): Record<string, unknown> {
-  const jsonText = extractJsonFromText(text);
-  if (!jsonText) {
-    throw new PersonaOutputValidationError({
-      code: "persona_audit_invalid",
-      message: "post_body audit returned empty output",
-      rawOutput: text,
-    });
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new PersonaOutputValidationError({
-      code: "persona_audit_invalid",
-      message: "post_body audit returned invalid JSON",
-      rawOutput: text,
-    });
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new PersonaOutputValidationError({
+function parseAuditJsonObject(text: string): Record<string, unknown> {
+  return parseJsonObject(text, (type) => {
+    if (type === "empty") {
+      return new PersonaOutputValidationError({
+        code: "persona_audit_invalid",
+        message: "post_body audit returned empty output",
+        rawOutput: text,
+      });
+    }
+    if (type === "invalid_json") {
+      return new PersonaOutputValidationError({
+        code: "persona_audit_invalid",
+        message: "post_body audit returned invalid JSON",
+        rawOutput: text,
+      });
+    }
+    return new PersonaOutputValidationError({
       code: "persona_audit_invalid",
       message: "post_body audit output must be a JSON object",
       rawOutput: text,
     });
-  }
-
-  return parsed as Record<string, unknown>;
-}
-
-function readStringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-  return value
-    .map((item) => (typeof item === "string" ? normalizeText(item) : ""))
-    .filter((item) => item.length > 0);
-}
-
-function readCheckStatus(value: unknown): PostBodyAuditCheckStatus | null {
-  return value === "pass" || value === "fail" ? value : null;
+  });
 }
 
 function parseContentChecks(value: unknown): PostBodyAuditContentChecks | null {
@@ -147,36 +117,6 @@ function parsePersonaChecks(value: unknown): PostBodyAuditPersonaChecks | null {
     discourse_fit,
     expression_fit,
   };
-}
-
-export function formatPersonaEvidenceForAudit(input: PromptPersonaEvidence): string {
-  const lines = [
-    input.displayName ? `display_name: ${input.displayName}` : null,
-    "identity_summary:",
-    ...(input.identity ? [`- ${input.identity}`] : ["- No identity summary available."]),
-    "reference_sources:",
-    ...(input.referenceSourceNames.length > 0
-      ? input.referenceSourceNames.map((item) => `- ${item}`)
-      : ["- No reference sources available."]),
-    "value_fit:",
-    ...(input.doctrine.valueFit.length > 0
-      ? input.doctrine.valueFit.map((item) => `- ${item}`)
-      : ["- No value-fit doctrine available."]),
-    "reasoning_fit:",
-    ...(input.doctrine.reasoningFit.length > 0
-      ? input.doctrine.reasoningFit.map((item) => `- ${item}`)
-      : ["- No reasoning-fit doctrine available."]),
-    "discourse_fit:",
-    ...(input.doctrine.discourseFit.length > 0
-      ? input.doctrine.discourseFit.map((item) => `- ${item}`)
-      : ["- No discourse-fit doctrine available."]),
-    "expression_fit:",
-    ...(input.doctrine.expressionFit.length > 0
-      ? input.doctrine.expressionFit.map((item) => `- ${item}`)
-      : ["- No expression-fit doctrine available."]),
-  ].filter((item): item is string => Boolean(item));
-
-  return lines.join("\n");
 }
 
 export function buildPostBodyAuditPrompt(input: {
@@ -295,7 +235,7 @@ export function buildPostBodyRepairPrompt(input: {
 }
 
 export function parsePostBodyAuditResult(rawText: string): PostBodyAuditResult {
-  const parsed = parseJsonObject(rawText);
+  const parsed = parseAuditJsonObject(rawText);
   const issues = readStringArray(parsed.issues);
   const repairGuidance = readStringArray(parsed.repairGuidance);
   const contentChecks = parseContentChecks(parsed.contentChecks);

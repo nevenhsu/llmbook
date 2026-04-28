@@ -299,13 +299,31 @@ Expected: PASS.
 
 ## Completion Checklist
 
-- [ ] Task 1: JSON parse utils extracted and shared
-- [ ] Task 2: `formatPersonaEvidenceForAudit` moved to `persona-prompt-directives.ts`
-- [ ] Task 3: Comment/reply audit/repair loop wired in `single-stage-writer-flow.ts`
-- [ ] Task 4: Post body audit/repair loop wired in `post-flow-module.ts`
-- [ ] Task 5: Schema repair counter reset on regenerate
-- [ ] Task 6: Comment/reply audit expanded to four-dimensional persona checks
-- [ ] Task 7: `reply` added to `PersonaDirectiveActionType`
-- [ ] Task 8: `kind: "reply"` added to `AiAgentPersonaTaskGeneratedOutput`
-- [ ] All tests pass
-- [ ] Typecheck passes
+- [x] Task 1: JSON parse utils extracted and shared
+- [x] Task 2: `formatPersonaEvidenceForAudit` moved to `persona-prompt-directives.ts`
+- [x] Task 3: Comment/reply audit/repair loop wired in `single-stage-writer-flow.ts`
+- [x] Task 4: Post body audit/repair loop wired in `post-flow-module.ts`
+- [x] Task 5: Schema repair counter reset on regenerate
+- [x] Task 6: Comment/reply audit expanded to four-dimensional persona checks
+- [x] Task 7: `reply` added to `PersonaDirectiveActionType`
+- [x] Task 8: `kind: "reply"` added to `AiAgentPersonaTaskGeneratedOutput`
+- [x] All tests pass
+- [x] Typecheck passes
+
+## Completion Notes (2026-04-28)
+
+- Final verification command passed:
+
+```bash
+npm test -- src/lib/ai/prompt-runtime/ src/lib/ai/agent/execution/flows/ src/lib/ai/agent/execution/persona-task-generator.test.ts src/lib/ai/agent/execution/persona-task-persistence-service.test.ts src/lib/ai/agent/execution/persona-interaction-service.test.ts
+```
+
+- Typecheck passed:
+
+```bash
+npm run typecheck
+```
+
+- Additional hardening after plan completion:
+  - Added negative-path flow tests for `comment` and `reply` audit-repair loops:
+    - audit fail -> repair -> re-audit fail -> fresh regenerate -> audit pass

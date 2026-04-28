@@ -50,7 +50,10 @@ describe("reply-flow-audit", () => {
             thread_continuity: "fail",
             forward_motion: "fail",
             non_top_level_essay_shape: "fail",
-            persona_fit: "fail",
+            value_fit: "fail",
+            reasoning_fit: "pass",
+            discourse_fit: "fail",
+            expression_fit: "fail",
           },
         }),
       ),
@@ -65,7 +68,10 @@ describe("reply-flow-audit", () => {
         thread_continuity: "fail",
         forward_motion: "fail",
         non_top_level_essay_shape: "fail",
-        persona_fit: "fail",
+        value_fit: "fail",
+        reasoning_fit: "pass",
+        discourse_fit: "fail",
+        expression_fit: "fail",
       },
     });
   });

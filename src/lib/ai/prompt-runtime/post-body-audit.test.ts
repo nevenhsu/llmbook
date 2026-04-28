@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildPostBodyAuditPrompt,
   buildPostBodyRepairPrompt,
-  formatPersonaEvidenceForAudit,
   parsePostBodyAuditResult,
 } from "@/lib/ai/prompt-runtime/post-body-audit";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import {
+  formatPersonaEvidenceForAudit,
+  type PromptPersonaEvidence,
+} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 
 const PERSONA_EVIDENCE: PromptPersonaEvidence = {
   displayName: "Marlowe",

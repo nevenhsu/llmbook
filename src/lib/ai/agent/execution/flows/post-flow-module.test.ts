@@ -107,8 +107,8 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
-      .mockResolvedValueOnce({
-        ...buildPreviewResult(
+      .mockResolvedValueOnce(
+        buildPreviewResult(
           JSON.stringify({
             body: "## The missing boundary\n\nRepair is narrow. Enforcement is not.",
             tags: ["#ai", "#workflow"],
@@ -117,34 +117,31 @@ describe("createPostFlowModule", () => {
             image_alt: null,
           }),
         ),
-        auditDiagnostics: {
-          contract: "post_body_audit",
-          status: "passed",
-          issues: [],
-          repairGuidance: [],
-          severity: "low",
-          confidence: 0.95,
-          missingSignals: [],
-          repairApplied: false,
-          auditMode: "default",
-          compactRetryUsed: false,
-          contentChecks: {
-            angle_fidelity: "pass",
-            board_fit: "pass",
-            body_usefulness: "pass",
-            markdown_structure: "pass",
-            title_body_alignment: "pass",
-          },
-          personaChecks: {
-            body_persona_fit: "pass",
-            anti_style_compliance: "pass",
-            value_fit: "pass",
-            reasoning_fit: "pass",
-            discourse_fit: "pass",
-            expression_fit: "pass",
-          },
-        },
-      } satisfies PreviewResult);
+      )
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            contentChecks: {
+              angle_fidelity: "pass",
+              board_fit: "pass",
+              body_usefulness: "pass",
+              markdown_structure: "pass",
+              title_body_alignment: "pass",
+            },
+            personaChecks: {
+              body_persona_fit: "pass",
+              anti_style_compliance: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
+      );
 
     const result = await flowModule.runRuntime({
       task: buildTask(),
@@ -164,7 +161,7 @@ describe("createPostFlowModule", () => {
       runPersonaInteraction,
     });
 
-    expect(runPersonaInteraction).toHaveBeenCalledTimes(2);
+    expect(runPersonaInteraction).toHaveBeenCalledTimes(3);
     expect(runPersonaInteraction.mock.calls[0]?.[0]).toMatchObject({
       taskType: "post_plan",
     });
@@ -338,6 +335,30 @@ describe("createPostFlowModule", () => {
             image_alt: null,
           }),
         ),
+      )
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            contentChecks: {
+              angle_fidelity: "pass",
+              board_fit: "pass",
+              body_usefulness: "pass",
+              markdown_structure: "pass",
+              title_body_alignment: "pass",
+            },
+            personaChecks: {
+              body_persona_fit: "pass",
+              anti_style_compliance: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+        ),
       );
 
     const result = await flowModule.runPreview({
@@ -357,7 +378,7 @@ describe("createPostFlowModule", () => {
       runPersonaInteraction,
     });
 
-    expect(runPersonaInteraction).toHaveBeenCalledTimes(3);
+    expect(runPersonaInteraction).toHaveBeenCalledTimes(4);
     expect(runPersonaInteraction.mock.calls[1]?.[0].taskType).toBe("post_plan");
     expect(runPersonaInteraction.mock.calls[1]?.[0].taskContext).toContain("fresh set of 3");
     expect(result.flowResult.diagnostics.attempts).toEqual(

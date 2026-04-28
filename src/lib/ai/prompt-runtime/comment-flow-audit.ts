@@ -1,6 +1,9 @@
 import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-import { formatPersonaEvidenceForAudit } from "@/lib/ai/prompt-runtime/post-body-audit";
+import {
+  formatPersonaEvidenceForAudit,
+  type PromptPersonaEvidence,
+} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import { parseJsonObject, readStringArray, readCheckStatus } from "./json-parse-utils";
 
 export type CommentAuditCheckStatus = "pass" | "fail";
 
@@ -9,7 +12,10 @@ export type CommentAuditChecks = {
   net_new_value: CommentAuditCheckStatus;
   non_repetition_against_recent_comments: CommentAuditCheckStatus;
   standalone_top_level_shape: CommentAuditCheckStatus;
-  persona_fit: CommentAuditCheckStatus;
+  value_fit: CommentAuditCheckStatus;
+  reasoning_fit: CommentAuditCheckStatus;
+  discourse_fit: CommentAuditCheckStatus;
+  expression_fit: CommentAuditCheckStatus;
 };
 
 export type CommentAuditResult = {
@@ -19,62 +25,28 @@ export type CommentAuditResult = {
   checks: CommentAuditChecks;
 };
 
-function normalizeText(value: string): string {
-  return value.replace(/\r\n/g, "\n").trim();
-}
-
-function extractJsonFromText(text: string): string {
-  const trimmed = normalizeText(text);
-  if (!trimmed) {
-    return "";
-  }
-  const fenced = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i);
-  return fenced?.[1]?.trim() ?? trimmed;
-}
-
-function parseJsonObject(text: string): Record<string, unknown> {
-  const jsonText = extractJsonFromText(text);
-  if (!jsonText) {
-    throw new PersonaOutputValidationError({
-      code: "persona_audit_invalid",
-      message: "comment audit returned empty output",
-      rawOutput: text,
-    });
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new PersonaOutputValidationError({
-      code: "persona_audit_invalid",
-      message: "comment audit returned invalid JSON",
-      rawOutput: text,
-    });
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new PersonaOutputValidationError({
+function parseAuditJsonObject(text: string): Record<string, unknown> {
+  return parseJsonObject(text, (type) => {
+    if (type === "empty") {
+      return new PersonaOutputValidationError({
+        code: "persona_audit_invalid",
+        message: "comment audit returned empty output",
+        rawOutput: text,
+      });
+    }
+    if (type === "invalid_json") {
+      return new PersonaOutputValidationError({
+        code: "persona_audit_invalid",
+        message: "comment audit returned invalid JSON",
+        rawOutput: text,
+      });
+    }
+    return new PersonaOutputValidationError({
       code: "persona_audit_invalid",
       message: "comment audit output must be a JSON object",
       rawOutput: text,
     });
-  }
-
-  return parsed as Record<string, unknown>;
-}
-
-function readStringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-  return value
-    .map((item) => (typeof item === "string" ? normalizeText(item) : ""))
-    .filter((item) => item.length > 0);
-}
-
-function readCheckStatus(value: unknown): CommentAuditCheckStatus | null {
-  return value === "pass" || value === "fail" ? value : null;
+  });
 }
 
 function parseChecks(value: unknown): CommentAuditChecks | null {
@@ -88,14 +60,20 @@ function parseChecks(value: unknown): CommentAuditChecks | null {
     record.non_repetition_against_recent_comments,
   );
   const standalone_top_level_shape = readCheckStatus(record.standalone_top_level_shape);
-  const persona_fit = readCheckStatus(record.persona_fit);
+  const value_fit = readCheckStatus(record.value_fit);
+  const reasoning_fit = readCheckStatus(record.reasoning_fit);
+  const discourse_fit = readCheckStatus(record.discourse_fit);
+  const expression_fit = readCheckStatus(record.expression_fit);
 
   if (
     !post_relevance ||
     !net_new_value ||
     !non_repetition_against_recent_comments ||
     !standalone_top_level_shape ||
-    !persona_fit
+    !value_fit ||
+    !reasoning_fit ||
+    !discourse_fit ||
+    !expression_fit
   ) {
     return null;
   }
@@ -105,7 +83,10 @@ function parseChecks(value: unknown): CommentAuditChecks | null {
     net_new_value,
     non_repetition_against_recent_comments,
     standalone_top_level_shape,
-    persona_fit,
+    value_fit,
+    reasoning_fit,
+    discourse_fit,
+    expression_fit,
   };
 }
 
@@ -126,7 +107,10 @@ export function buildCommentAuditPrompt(input: {
     "- net_new_value",
     "- non_repetition_against_recent_comments",
     "- standalone_top_level_shape",
-    "- persona_fit",
+    "- value_fit",
+    "- reasoning_fit",
+    "- discourse_fit",
+    "- expression_fit",
     "",
     "Rules:",
     "- Do not complain that unrelated generation background is absent; judge only the checks supported by this packet.",
@@ -153,7 +137,10 @@ export function buildCommentAuditPrompt(input: {
     '    "net_new_value": "pass | fail",',
     '    "non_repetition_against_recent_comments": "pass | fail",',
     '    "standalone_top_level_shape": "pass | fail",',
-    '    "persona_fit": "pass | fail"',
+    '    "value_fit": "pass | fail",',
+    '    "reasoning_fit": "pass | fail",',
+    '    "discourse_fit": "pass | fail",',
+    '    "expression_fit": "pass | fail"',
     "  }",
     "}",
   ].join("\n");
@@ -201,7 +188,7 @@ export function buildCommentRepairPrompt(input: {
 }
 
 export function parseCommentAuditResult(rawText: string): CommentAuditResult {
-  const parsed = parseJsonObject(rawText);
+  const parsed = parseAuditJsonObject(rawText);
   const issues = readStringArray(parsed.issues);
   const repairGuidance = readStringArray(parsed.repairGuidance);
   const checks = parseChecks(parsed.checks);

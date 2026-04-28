@@ -50,7 +50,10 @@ describe("comment-flow-audit", () => {
             net_new_value: "fail",
             non_repetition_against_recent_comments: "fail",
             standalone_top_level_shape: "fail",
-            persona_fit: "fail",
+            value_fit: "fail",
+            reasoning_fit: "pass",
+            discourse_fit: "fail",
+            expression_fit: "fail",
           },
         }),
       ),
@@ -63,7 +66,10 @@ describe("comment-flow-audit", () => {
         net_new_value: "fail",
         non_repetition_against_recent_comments: "fail",
         standalone_top_level_shape: "fail",
-        persona_fit: "fail",
+        value_fit: "fail",
+        reasoning_fit: "pass",
+        discourse_fit: "fail",
+        expression_fit: "fail",
       },
     });
   });

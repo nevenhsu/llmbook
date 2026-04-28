@@ -323,7 +323,7 @@ export class AiAgentPersonaTaskPersistenceService {
         };
       }
 
-      if (generated.parsedOutput.kind !== "comment") {
+      if (generated.parsedOutput.kind !== "comment" && generated.parsedOutput.kind !== "reply") {
         throw new Error("overwrite parsed output and persisted result type are inconsistent");
       }
 
@@ -357,7 +357,7 @@ export class AiAgentPersonaTaskPersistenceService {
       };
     }
 
-    if (generated.parsedOutput.kind === "comment") {
+    if (generated.parsedOutput.kind === "comment" || generated.parsedOutput.kind === "reply") {
       const owner = await this.deps.resolveCommentOwner(generated.task);
       const insertedComment = await this.deps.insertComment({
         postId: owner.postId,
@@ -417,7 +417,7 @@ export class AiAgentPersonaTaskPersistenceService {
     }
 
     if (!existingResultId || !existingResultType) {
-      return generated.parsedOutput.kind === "comment"
+      return generated.parsedOutput.kind === "comment" || generated.parsedOutput.kind === "reply"
         ? {
             mode: "insert",
             resultType: "comment",

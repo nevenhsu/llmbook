@@ -49,6 +49,10 @@ export type AiAgentPersonaTaskGeneratedOutput =
   | {
       kind: "comment";
       body: string;
+    }
+  | {
+      kind: "reply";
+      body: string;
     };
 
 export type AiAgentPersonaTaskGenerationResult = {
@@ -171,7 +175,7 @@ function mapFlowResultToLegacyOutput(
   }
 
   return {
-    kind: "comment",
+    kind: "reply",
     body: flowResult.parsed.reply.markdown,
   };
 }
