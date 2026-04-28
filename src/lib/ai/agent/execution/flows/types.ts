@@ -137,7 +137,7 @@ export type TextFlowModuleRunInput = {
   promptContext: AiAgentPersonaTaskPromptContext;
   extraInstructions?: string | null;
   loadPreferredTextModel: () => Promise<PreferredTextModel>;
-  runPersonaInteraction: (input: {
+  runPersonaInteractionStage: (input: {
     personaId: string;
     modelId: string;
     taskType: PromptActionType;

@@ -72,7 +72,7 @@ async function runAuditRepairLoop(input: {
     personaUsername: input.moduleInput.task.personaUsername ?? null,
   });
   const sharedAuditCall = async (taskContext: string) =>
-    input.moduleInput.runPersonaInteraction({
+    input.moduleInput.runPersonaInteractionStage({
       personaId: input.moduleInput.task.personaId,
       modelId: input.modelId,
       taskType: input.flowKind,
@@ -267,7 +267,7 @@ export async function runSingleStageWriterFlow(input: {
   let lastError: Error | null = null;
 
   const invokeGeneration = async (taskContext: string) =>
-    input.moduleInput.runPersonaInteraction({
+    input.moduleInput.runPersonaInteractionStage({
       personaId: input.moduleInput.task.personaId,
       modelId: modelSelection.modelId,
       taskType: input.taskType,

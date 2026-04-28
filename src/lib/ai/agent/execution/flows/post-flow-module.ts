@@ -140,7 +140,7 @@ async function runPostFlow(
     taskContext: string;
     targetContextText?: string;
   }) =>
-    input.runPersonaInteraction({
+    input.runPersonaInteractionStage({
       personaId: input.task.personaId,
       modelId: modelSelection.modelId,
       taskType: stageInput.taskType,
