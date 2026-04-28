@@ -7,6 +7,13 @@
 - [x] Implement the staged `post_plan -> post_body` module with hard novelty gating, locked selected title, and a merged body/persona audit contract.
 - [x] Implement first-class `comment` and `reply` flow modules from `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`, including `notification -> reply` normalization and separate prompt/audit contracts.
 - [x] Migrate generate-persona to the simplified `seed -> persona_core` contract, remove all relationship-coded output/runtime assumptions, and omit generated memories entirely.
+- [x] Retire the legacy standalone `src/agents/reply-worker` path so `reply` generation only exists through the shared text flow registry.
+- [x] Run a full project TypeScript debt pass, classify current errors, and fix the smallest high-signal group that blocks future AI-flow work.
+- [x] Add one project-level `typecheck` script that regenerates Next route types before TypeScript checking.
+- [x] Standardize active verification docs and CI on `npm run typecheck` instead of raw project-level `tsc`.
+- [x] Add one project-level `verify` script for pre-handoff checks.
+- [x] Clean AI/admin/flow lint warnings surfaced by `npm run verify`.
+- [x] Clean low-risk general app/UI/script unused-code lint warnings.
 
 ## Current References
 
@@ -22,10 +29,34 @@
 
 ## Review
 
+- Completed a full TypeScript debt pass. Root causes were stale Next generated route types, persona-generation save payload drift, expanded admin model/provider/persona fixture contracts, removed agent barrel exports, widened intake injection test literals, and newer runtime/config fields missing from AI-agent test fixtures.
+- Removed stale `now` arguments from persona batch save payload building, expanded affected admin/test fixtures to the current contracts, removed dead agent barrel exports, and regenerated Next route types with `npx next typegen`.
+- Verified the full project TypeScript compiler during the debt pass; it exits 0.
+- Added `npm run typecheck` as the standard project-level typecheck entrypoint; it runs `next typegen` before `tsc --noEmit --pretty false` so stale generated route types do not recreate false failures.
+- Verified `npm run typecheck`; it exits 0 and confirms route types are generated successfully before TypeScript checking.
+- Added a dedicated `Project Typecheck` GitHub Actions workflow that runs `npm run typecheck` on pull requests, pushes to `main`, and manual dispatch.
+- Updated active verification guidance in refactor rules and current LLM-flow plans so project-level TypeScript verification uses `npm run typecheck`; archived historical notes were left unchanged.
+- Verified active docs no longer instruct `npx tsc --noEmit` as a project-level check; remaining `tsc --noEmit` references are the package script implementation and the guideline explaining why raw `tsc` should not be used directly.
+- Added `npm run test:core` for stable, non-interactive AI flow/prompt contract tests, and added `npm run verify` as `typecheck -> lint -> test:core`.
+- Confirmed raw full-suite `npm test` is too broad for the default pre-handoff path because it includes external Supabase storage integration, manual stdio/editor tests, and unrelated existing unit drift.
+- Verified final `npm run verify`; it exits 0 with existing lint warnings only, and `test:core` passes 10 test files / 39 tests.
+- Cleaned the AI/admin/flow lint warning cluster: removed dead AI admin imports/types, fixed unused public API/test callback parameters without changing call contracts, stabilized the policy-version effect dependency, and documented the intentional provider image preview `<img>` escape hatch.
+- Verified targeted lint for `src/lib/ai`, admin hooks, and control-plane sections; it exits 0.
+- Verified `npm run verify`; it exits 0, with remaining lint warnings reduced from 110 to 60 and now outside the cleaned AI/admin/flow cluster.
+- Verified touched stable tests: persona batch generation, AI control plane hooks, persona generation section, and LLM invocation tests all pass.
+- Cleaned low-risk general app/UI/script lint warnings by removing dead imports, dead locals, unused mock callback parameters, and stale preview-only handlers; also made board permission helpers honor the optional Supabase client passed by existing call sites.
+- Verified `npm run lint`; remaining warnings are down to 9 and are limited to hooks dependency review plus intentional/behavioral image-rendering decisions.
+- Verified `npm run verify`; it exits 0 with the same 9 remaining lint warnings, and `test:core` passes 10 files / 39 tests.
+- Verified touched stable tests: posts API, board create API, image upload utilities, route helpers, Postgres transaction helper, comment item, post row, and post media gallery all pass.
+- Verified touched tests: agent lab runner, persona interaction section, persona batch generation, opportunity pipeline, memory compressor, and overview read model all pass.
+- Verified targeted lint for touched files; it exits 0.
+- Retired the legacy standalone reply-worker path by deleting `src/agents/reply-worker` runtime, tool registry, policy, README, and tests; no app-owned `reply` text generation path remains outside the shared flow registry.
+- Updated `src/agents/README.md` to state that `post`, `comment`, and `reply` generation must go through `src/lib/ai/agent/execution/flows`, and documented `reply-worker/` as deleted.
+- Verified the retirement with legacy-reference search, shared flow/runtime tests, targeted lint, and filtered TypeScript review.
 - Completed Task 5 cleanup and Task 6 verification from the main LLM-flow integration plan: active admin docs, prompt examples, mock fixtures, and API tests now describe the simplified `seed -> persona_core` persona-generation contract and no active memory/relationship prompt blocks.
-- Removed `relationshipTendencies` and `defaultRelationshipStance` from runtime core profile/summary types and aligned reply-worker legacy code so it no longer attempts to inject memory or relationship blocks into the shared prompt builder.
+- Removed `relationshipTendencies` and `defaultRelationshipStance` from runtime core profile/summary types; the later reply-worker retirement removed the remaining legacy standalone path entirely.
 - Tightened cleanup search expectations in the integration plan because the original grep scanned its own search strings plus durable memory-module table access; final classification now separates historical docs, memory table support, absence assertions, and active production prompt/runtime dependencies.
-- Marked the legacy reply-worker README as non-current so new production text generation does not bypass the shared `post` / `comment` / `reply` flow registry.
+- Superseded the temporary legacy reply-worker README warning by deleting the `reply-worker/` folder.
 - Verified the integrated flow stack with the Task 6 targeted test set: 21 test files passed, 89 tests passed.
 - Ran targeted lint for `src/lib/ai/prompt-runtime`, `src/lib/ai/agent/execution`, `src/lib/ai/admin`, `src/lib/ai/core`, and `PersonaStructuredPreview.tsx`; it exits 0 with existing warnings only.
 - Ran filtered TypeScript review for touched AI flow/admin/core/UI paths; no matched errors remain.

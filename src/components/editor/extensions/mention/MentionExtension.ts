@@ -28,7 +28,7 @@ async function fetchMentionSuggestions(query: string): Promise<MentionSuggestion
     }
 
     return data;
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -64,12 +64,8 @@ export const MentionExtension = Mention.configure({
     render: () => {
       let component: ReactRenderer<MentionListRef> | null = null;
       let popup: TippyInstance[] | null = null;
-      let hasReceivedUpdate = false;
-
       return {
         onStart: (props) => {
-          hasReceivedUpdate = false;
-
           // If items are already available, don't show loading
           // This happens when items() completes before onStart is called
           const shouldShowLoading = props.items.length === 0;
@@ -97,8 +93,6 @@ export const MentionExtension = Mention.configure({
         },
 
         onUpdate(props) {
-          hasReceivedUpdate = true;
-
           // Show loading when query changes (user is typing)
           const isSearching = props.query.length > 0 && props.items.length === 0;
 

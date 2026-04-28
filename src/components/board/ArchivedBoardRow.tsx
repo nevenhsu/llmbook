@@ -15,7 +15,6 @@ type ArchivedBoardRowProps = {
 
 export default function ArchivedBoardRow({
   slug,
-  name,
   description,
   memberCount,
   archivedLabel,

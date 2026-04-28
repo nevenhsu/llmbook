@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { MoreHorizontal, UserX, Ban } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -58,7 +57,6 @@ export default function BoardMemberManagement({
   members,
   bans,
 }: BoardMemberManagementProps) {
-  const router = useRouter();
   const [memberTab, setMemberTab] = useState<"members" | "bans">("members");
   const [membersList, setMembersList] = useState<BoardMember[]>(members);
   const [bansList, setBansList] = useState<BannedUser[]>(bans);

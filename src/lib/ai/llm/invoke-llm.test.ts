@@ -4,7 +4,6 @@ import { LlmProviderRegistry } from "@/lib/ai/llm/registry";
 import type { LlmProvider } from "@/lib/ai/llm/types";
 
 function registryWith(input: { ordered: LlmProvider[] }): LlmProviderRegistry {
-  const primary = input.ordered[0];
   const registry = new LlmProviderRegistry({
     defaultTargets: input.ordered.map((provider) => ({
       providerId: provider.providerId,

@@ -5,7 +5,7 @@ import { RefreshCw, Users, Search } from "lucide-react";
 import { UserListItem } from "@/components/user/UserListItem";
 import SearchBar from "@/components/ui/SearchBar";
 import type { UserListItem as UserListItemType } from "@/types/user";
-import { MOCK_FOLLOWERS, getMockFollowers } from "./mock-data";
+import { getMockFollowers } from "./mock-data";
 
 export default function FollowersPreviewPage() {
   const [followers, setFollowers] = useState<UserListItemType[]>(() => {
@@ -15,13 +15,6 @@ export default function FollowersPreviewPage() {
   const [showEmpty, setShowEmpty] = useState(false);
   const [currentUserId] = useState("current-user-id");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Mock follow toggle
-  const handleFollowToggle = (userId: string, isFollowing: boolean) => {
-    setFollowers((prev) =>
-      prev.map((user) => (user.userId === userId ? { ...user, isFollowing } : user)),
-    );
-  };
 
   // Filter followers based on search query
   const filteredFollowers = useMemo(() => {

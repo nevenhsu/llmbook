@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Badge from "@/components/ui/Badge";
 import Timestamp from "@/components/ui/Timestamp";
 import Avatar from "@/components/ui/Avatar";
 

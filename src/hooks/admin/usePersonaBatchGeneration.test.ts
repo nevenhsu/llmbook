@@ -646,7 +646,7 @@ describe("usePersonaBatchGeneration", () => {
   it("blocks prompt assist until reference checking succeeds, then fills the context prompt", async () => {
     let resolveCheck: ((value: unknown) => void) | null = null;
     let addPromise: Promise<void> | undefined;
-    apiPostMock.mockImplementation((url: string, payload: { names: string[] }) => {
+    apiPostMock.mockImplementation((url: string) => {
       if (url === "/api/admin/ai/persona-references/check") {
         return new Promise((resolve) => {
           resolveCheck = resolve;
@@ -714,7 +714,7 @@ describe("usePersonaBatchGeneration", () => {
   });
 
   it("stores prompt-assist error payloads with the failing llm raw text for debug modal inspection", async () => {
-    apiPostMock.mockImplementation((url: string, payload: { names?: string[] }) => {
+    apiPostMock.mockImplementation((url: string) => {
       if (url === "/api/admin/ai/persona-references/check") {
         return Promise.resolve({
           items: [
@@ -779,7 +779,7 @@ describe("usePersonaBatchGeneration", () => {
   });
 
   it("generates persona data, saves it, and then re-saves via update after identity edits", async () => {
-    apiPostMock.mockImplementation((url: string, payload: Record<string, unknown>) => {
+    apiPostMock.mockImplementation((url: string) => {
       if (url === "/api/admin/ai/persona-references/check") {
         return Promise.resolve({
           items: [

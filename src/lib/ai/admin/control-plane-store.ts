@@ -7,15 +7,7 @@ import {
   normalizeUsernameInput,
   validateUsernameFormat,
 } from "@/lib/username-validation";
-import {
-  buildActionOutputConstraints,
-  type PromptActionType,
-} from "@/lib/ai/prompt-runtime/prompt-builder";
-import {
-  ADMIN_UI_LLM_PROVIDER_RETRIES,
-  PERSONA_GENERATION_MAX_INPUT_TOKENS,
-  PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
-} from "@/lib/ai/admin/persona-generation-token-budgets";
+import { type PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
@@ -25,25 +17,16 @@ import {
   upsertProviderSecret,
 } from "@/lib/ai/llm/provider-secrets";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import type { RuntimeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
 import {
-  PromptAssistError,
-  PersonaGenerationParseError,
-  PersonaGenerationQualityError,
   type AdminControlPlaneSnapshot,
   type AiControlPlaneDocument,
   type AiModelConfig,
   type AiProviderConfig,
   type GlobalPolicyStudioDraft,
   type ModelCapability,
-  type ModelErrorKind,
-  type ModelLifecycleStatus,
   type ModelRow,
-  type ModelStatus,
   type ModelTestResult,
-  type ModelTestStatus,
   type PersonaCoreRow,
-  type PersonaGenerationSemanticAuditResult,
   type PersonaGenerationStructured,
   type PersonaMemoryStoreRow,
   type PersonaProfile,
@@ -51,14 +34,9 @@ import {
   type PolicyReleaseListItem,
   type PolicyReleaseRow,
   type PreviewResult,
-  type PreviewTokenBudget,
-  type PromptAssistAttemptStage,
-  type PromptBlockStat,
   type PromptBoardContext,
   type PromptTargetContext,
   type ProviderRow,
-  type ProviderStatus,
-  type ProviderTestStatus,
 } from "@/lib/ai/admin/control-plane-contract";
 import { assistInteractionTaskContext } from "@/lib/ai/admin/interaction-context-assist-service";
 import type { PersonaReferenceCheckResult } from "@/lib/ai/admin/persona-batch-contract";
@@ -71,7 +49,6 @@ import {
   buildLlmErrorDetailsSuffix,
   buildPromptBlocks,
   buildTokenBudgetSignal,
-  DEFAULT_POLICY_DRAFT,
   DEFAULT_TOKEN_LIMITS,
   formatPrompt,
   isGenericModelTestError,
@@ -463,6 +440,7 @@ export class AdminAiControlPlaneStore {
     },
     actorId: string,
   ): Promise<AiProviderConfig> {
+    void actorId;
     const { providers, models } = await this.loadActiveForMutation();
     const now = nowIso();
     const apiKey = input.apiKey?.trim() ?? "";

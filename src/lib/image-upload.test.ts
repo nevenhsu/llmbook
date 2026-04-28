@@ -8,7 +8,6 @@ import {
   getAspectRatioClass,
   createImagePreview,
   uploadImage,
-  type UploadOptions,
 } from "./image-upload";
 import { createAdminClient } from "./supabase/admin";
 import { publicEnv, privateEnv, isIntegrationTest, validateTestEnv } from "./env";

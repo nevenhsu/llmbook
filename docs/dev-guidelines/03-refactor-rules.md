@@ -9,6 +9,8 @@ Guidelines:
 - Prefer small, incremental changes over large rewrites.
 - Add or update tests to cover the modified behavior; ensure coverage remains high.
 - Update types and interfaces to reflect changes; avoid silent type drift.
+- Run `npm run verify` before handoff when touching code; it combines project typecheck, lint, and non-interactive core tests.
+- Run `npm run typecheck` for TypeScript verification; it regenerates Next route types before running `tsc`, so do not use raw `tsc --noEmit` as the project-level check.
 - Run the full test suite locally before merging; watch for edge cases.
 - Use code review to catch unintended side effects; consider cross-component impact.
 - When refactoring, preserve public API surface unless a breaking change is explicitly requested.
@@ -18,7 +20,7 @@ Notes:
 - Document the rationale for major refactors so future readers understand the trade-offs.
 - Include a brief migration note if APIs or interfaces change.
 
-Last Updated: 2026-02-19
+Last Updated: 2026-04-28
 
 Hooks Refactor Guidelines
 

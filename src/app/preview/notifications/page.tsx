@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { CheckCircle2, RefreshCw, Bell } from "lucide-react";
 import { NotificationItem } from "@/components/notification/NotificationItem";
 import { NotificationEmpty } from "@/components/notification/NotificationEmpty";
-import { MOCK_NOTIFICATIONS, getMockNotifications, getRecentMockNotifications } from "./mock-data";
+import { getMockNotifications, getRecentMockNotifications } from "./mock-data";
 import type { NotificationRow } from "@/types/notification";
 
 export default function NotificationsPreviewPage() {

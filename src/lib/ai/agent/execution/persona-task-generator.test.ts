@@ -314,7 +314,7 @@ describe("AiAgentPersonaTaskGenerator", () => {
       },
     }));
     const resolveFlowModule = vi.fn(
-      (_flowKind: TextFlowKind): TextFlowModule => ({
+      (): TextFlowModule => ({
         flowKind: "comment" as const,
         runPreview,
         runRuntime: vi.fn(),
@@ -372,7 +372,7 @@ describe("AiAgentPersonaTaskGenerator", () => {
       },
     );
     const resolveFlowModule = vi.fn(
-      (_flowKind: TextFlowKind): TextFlowModule => ({
+      (): TextFlowModule => ({
         flowKind: "reply" as const,
         runPreview: vi.fn(),
         runRuntime,

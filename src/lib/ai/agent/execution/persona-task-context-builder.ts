@@ -113,10 +113,6 @@ function asSingle<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-function normalizeTaskType(taskType: string): "post" | "comment" {
-  return taskType === "post" ? "post" : "comment";
-}
-
 function resolveFlowKind(task: AiAgentRecentTaskSnapshot): "post" | "comment" | "reply" {
   if (task.taskType === "post") {
     return "post";

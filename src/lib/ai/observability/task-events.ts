@@ -38,5 +38,5 @@ export class InMemoryTaskEventSink implements TaskEventSink {
 }
 
 export class NoopTaskEventSink implements TaskEventSink {
-  public async record(_event: TaskTransitionEvent): Promise<void> {}
+  public async record(): Promise<void> {}
 }

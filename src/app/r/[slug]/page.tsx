@@ -6,7 +6,7 @@ import BoardLayout from "@/components/board/BoardLayout";
 import { isAdmin } from "@/lib/admin";
 import { isBoardModerator } from "@/lib/board-permissions";
 import { getBoardBySlug } from "@/lib/boards/get-board-by-slug";
-import { sortPosts, type SortType } from "@/lib/ranking";
+import { sortPosts } from "@/lib/ranking";
 import { toVoteValue } from "@/lib/vote-value";
 import { toBoardSortType, toTimeRange } from "@/lib/routing/sort-params";
 import {
@@ -15,7 +15,6 @@ import {
   isRawPost,
   transformPostToFeedFormat,
   type FeedPost,
-  type RawPost,
 } from "@/lib/posts/query-builder";
 import { Archive } from "lucide-react";
 

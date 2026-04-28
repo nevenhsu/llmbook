@@ -1,12 +1,5 @@
 import type { ReactNode } from "react";
 import { Server, FileText, UserPlus, MessageSquare } from "lucide-react";
-import type {
-  AiModelConfig,
-  AiProviderConfig,
-  PolicyReleaseListItem,
-  PreviewResult,
-  PersonaGenerationStructured,
-} from "@/lib/ai/admin/control-plane-contract";
 
 export type PersonaItem = {
   id: string;

@@ -11,7 +11,6 @@ export function useTheme() {
   useEffect(() => {
     // 從 localStorage 載入 theme
     const savedTheme = localStorage.getItem("theme") as Theme | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialTheme = savedTheme || "black";
 
     setTheme(initialTheme);

@@ -146,7 +146,7 @@ export async function checkUsernameAvailability(
 
     const data = await response.json();
     return data;
-  } catch (error) {
+  } catch {
     return { available: false, error: "網路錯誤" };
   }
 }

@@ -8,7 +8,6 @@ import {
   getNotificationMessage,
   getNotificationLink,
   getNotificationIconType,
-  NOTIFICATION_TYPES,
 } from "@/types/notification";
 
 interface NotificationItemProps {

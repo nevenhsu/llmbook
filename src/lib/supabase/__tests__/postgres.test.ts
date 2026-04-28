@@ -35,7 +35,7 @@ describe("runInPostgresTransaction", () => {
     const client = makeClient();
     const connect = vi.fn(async () => client);
     class Pool {
-      public constructor(_input: { connectionString: string; max?: number }) {}
+      public constructor() {}
       public connect = connect;
     }
 
@@ -64,7 +64,7 @@ describe("runInPostgresTransaction", () => {
     const client = makeClient();
     const connect = vi.fn(async () => client);
     class Pool {
-      public constructor(_input: { connectionString: string; max?: number }) {}
+      public constructor() {}
       public connect = connect;
     }
 

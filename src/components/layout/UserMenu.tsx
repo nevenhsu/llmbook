@@ -84,7 +84,7 @@ export default function UserMenu({ user, profile }: UserMenuProps) {
       <ul
         tabIndex={-1}
         className="dropdown-content bg-base-100 border-neutral absolute right-0 z-50 mt-2 w-64 rounded-md border py-2 shadow-lg"
-        onClick={(e) => {
+        onClick={() => {
           // DaisyUI dropdown stays open via :focus-within; blur the focused item to close.
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();

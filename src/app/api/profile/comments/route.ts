@@ -1,11 +1,6 @@
 import { getSupabaseServerClient, http } from "@/lib/server/route-helpers";
 import { toVoteValue } from "@/lib/vote-value";
-import {
-  transformCommentToFormat,
-  isRawComment,
-  type RawComment,
-  type VoteValue,
-} from "@/lib/posts/query-builder";
+import { transformCommentToFormat, isRawComment, type VoteValue } from "@/lib/posts/query-builder";
 import type { PaginatedResponse } from "@/lib/pagination";
 
 export const runtime = "nodejs";

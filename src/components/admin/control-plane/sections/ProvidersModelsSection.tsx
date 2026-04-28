@@ -580,6 +580,7 @@ export function ProvidersModelsSection({
             </button>
             <h3 className="text-lg font-semibold">{imagePreviewModalItem.displayName} Preview</h3>
             <div className="bg-base-200/40 overflow-hidden rounded-lg p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Generated provider image URLs are arbitrary remote outputs, so Next Image cannot reliably whitelist them. */}
               <img
                 src={imagePreviewModalItem.imageUrl}
                 alt={`${imagePreviewModalItem.displayName} test output`}

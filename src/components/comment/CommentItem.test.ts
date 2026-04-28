@@ -49,8 +49,9 @@ vi.mock("@/components/ui/ResponsiveMenu", () => ({
       children: React.ReactNode;
       trigger: React.ReactNode;
     },
-    _ref,
+    ref,
   ) {
+    void ref;
     return React.createElement("div", null, trigger, children);
   }),
 }));

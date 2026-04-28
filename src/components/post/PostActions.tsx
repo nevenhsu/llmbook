@@ -7,7 +7,6 @@ import {
   Share2,
   Bookmark,
   Eye,
-  EyeOff,
   MoreHorizontal,
   Edit,
   Trash2,
@@ -51,11 +50,9 @@ export default function PostActions({
   canModerate = false,
   status,
   isHidden = false,
-  isExpanded = false,
   onSave,
   onHide,
   onUnhide,
-  onToggleExpand,
   onDelete,
 }: PostActionsProps) {
   const router = useRouter();

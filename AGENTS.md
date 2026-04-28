@@ -1,3 +1,7 @@
+# Agent Behavior
+
+At the end of completed work, always suggest the next practical step. Do not mention commit/stage/g- At the end of completed work, always suggest the next practical step. Do not mention commit/stage/git handling unless the user explicitly asks; the user will handle git independently.
+
 # Agent Development Guide
 
 Quick reference for shared libraries and conventions.
@@ -79,10 +83,6 @@ Quick reference for shared libraries and conventions.
 - If implementing any LLM flow that returns JSON used by runtime logic, persistence, ranking, cleanup, or downstream automation, you MUST read [LLM JSON Stage Contract](docs/dev-guidelines/08-llm-json-stage-contract.md) first.
 - Treat that document as the reusable implementation skill for staged LLM JSON flows.
 - This applies to runtime and admin flows alike.
-
-這個版本更加精煉，專注於日常開發需要快速定位的入口。
-
-你也可以在 Plans/ 或 Docs/ 下維護自己的一致性規範。
 
 ---
 

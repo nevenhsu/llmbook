@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { UserPlus, UserMinus } from "lucide-react";
 import { useLoginModal } from "@/contexts/LoginModalContext";
-import { ApiError } from "@/lib/api/fetch-json";
 import toast from "react-hot-toast";
 
 interface FollowButtonProps {

@@ -495,10 +495,10 @@ npx eslint src/lib/ai/prompt-runtime/prompt-builder.ts src/lib/ai/prompt-runtime
 
 Expected: PASS.
 
-**Step 3: Run filtered TypeScript**
+**Step 3: Run project typecheck**
 
 ```bash
-npx tsc --noEmit 2>&1 | rg "src/lib/ai/prompt-runtime/prompt-builder|src/lib/ai/prompt-runtime/runtime-budgets|src/lib/ai/prompt-runtime/comment-flow-audit|src/lib/ai/prompt-runtime/reply-flow-audit|src/lib/ai/agent/execution/persona-task-context-builder|src/lib/ai/agent/execution/persona-task-generator|src/lib/ai/agent/execution/execution-preview|src/lib/ai/agent/execution/persona-interaction-service|src/lib/ai/agent/execution/persona-task-persistence-service|src/lib/ai/agent/execution/flows/comment-flow-module|src/lib/ai/agent/execution/flows/reply-flow-module|src/lib/ai/admin/control-plane-store.preview-persona-interaction.test.ts"
+npm run typecheck
 ```
 
-Expected: no matches for touched files.
+Expected: PASS.

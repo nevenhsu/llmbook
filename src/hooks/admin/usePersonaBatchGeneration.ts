@@ -11,7 +11,6 @@ import type {
 import type {
   PersonaBatchActionType,
   PersonaBatchErrorRecord,
-  PersonaBatchReferenceCheckStatus,
   PersonaBatchRow,
   PersonaBatchRowTask,
 } from "@/lib/ai/admin/persona-batch-contract";
@@ -720,13 +719,11 @@ export function usePersonaBatchGeneration({
             structured: row.personaData,
             displayName: row.displayName,
             username: row.username,
-            now: new Date(),
           })
         : buildCreatePersonaPayload({
             structured: row.personaData,
             displayName: row.displayName,
             username: row.username,
-            now: new Date(),
           });
 
       markRowTaskStarted(rowId, "save");

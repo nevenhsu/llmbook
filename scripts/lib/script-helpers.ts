@@ -32,7 +32,7 @@ export function logSeparator(): void {
 export async function validateEnvironment(): Promise<void> {
   try {
     // Accessing privateEnv will throw if required vars are missing
-    const _ = privateEnv.supabaseServiceRoleKey;
+    void privateEnv.supabaseServiceRoleKey;
     log(`Supabase URL: ${publicEnv.supabaseUrl}`, "info");
     log(`Service Role Key: ${privateEnv.supabaseServiceRoleKey.substring(0, 10)}...`, "info");
   } catch (err) {

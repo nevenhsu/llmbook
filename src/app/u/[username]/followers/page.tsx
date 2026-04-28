@@ -16,7 +16,7 @@ export default function FollowersPage() {
   const username = params.username as string;
 
   // Use shared hooks
-  const { userId, displayName, isLoading: profileLoading } = useProfileData(username);
+  const { userId, isLoading: profileLoading } = useProfileData(username);
   const { user } = useUserContext();
   const currentUserId = user?.id || null;
 

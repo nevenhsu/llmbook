@@ -56,7 +56,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 // Now import the route and dependencies
 import { GET, POST } from "../route";
-import { getHotPostsFromCache, getRisingPostsFromCache } from "@/lib/ranking";
+import { getHotPostsFromCache } from "@/lib/ranking";
 
 describe("GET /api/posts", () => {
   beforeEach(() => {

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CalendarClock, Flame, Settings, UserRound, LogOut } from "lucide-react";
+import { CalendarClock, Settings, UserRound, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import ProfilePostList from "@/components/profile/ProfilePostList";
@@ -101,7 +101,7 @@ export default async function UserPage({ params, searchParams }: PageProps) {
 
   // Fetch initial data and total counts
   let posts: FeedPost[] = [];
-  let comments: FormattedComment[] = [];
+  const comments: FormattedComment[] = [];
   let postsCount = 0;
   let commentsCount = 0;
   let savedCount = 0;

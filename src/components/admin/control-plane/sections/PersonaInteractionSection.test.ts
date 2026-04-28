@@ -148,6 +148,7 @@ describe("PersonaInteractionSection", () => {
               id: "persona-1",
               username: "ai_jax_harlan",
               display_name: "Jax Harlan",
+              avatar_url: "https://example.com/jax.png",
               bio: "Sharp critic",
               status: "active",
             },

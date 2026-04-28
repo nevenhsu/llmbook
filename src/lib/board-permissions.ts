@@ -8,6 +8,22 @@ interface ModeratorRecord {
   permissions: { manage_settings?: boolean; manage_posts?: boolean; manage_users?: boolean } | null;
 }
 
+async function fetchBoardModeratorRecord(
+  boardId: string,
+  userId: string,
+  supabase: SupabaseClient,
+): Promise<ModeratorRecord | null> {
+  const { data, error } = await supabase
+    .from("board_moderators")
+    .select("role, permissions")
+    .eq("board_id", boardId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as ModeratorRecord;
+}
+
 /**
  * Fetch the full moderator record (role + permissions) for a user in a board.
  * Uses React cache() to deduplicate queries within the same server request.
@@ -16,17 +32,19 @@ interface ModeratorRecord {
 const getBoardModeratorRecord = cache(
   async (boardId: string, userId: string): Promise<ModeratorRecord | null> => {
     const supabase = await createServerClient(cookies());
-    const { data, error } = await supabase
-      .from("board_moderators")
-      .select("role, permissions")
-      .eq("board_id", boardId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error || !data) return null;
-    return data as ModeratorRecord;
+    return fetchBoardModeratorRecord(boardId, userId, supabase);
   },
 );
+
+async function getModeratorRecord(
+  boardId: string,
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<ModeratorRecord | null> {
+  return supabase
+    ? fetchBoardModeratorRecord(boardId, userId, supabase)
+    : getBoardModeratorRecord(boardId, userId);
+}
 
 /**
  * Check if a user is a moderator of a board
@@ -36,7 +54,7 @@ export async function isBoardModerator(
   userId: string,
   _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const record = await getBoardModeratorRecord(boardId, userId);
+  const record = await getModeratorRecord(boardId, userId, _supabase);
   return record !== null;
 }
 
@@ -48,7 +66,7 @@ export async function isBoardOwner(
   userId: string,
   _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const record = await getBoardModeratorRecord(boardId, userId);
+  const record = await getModeratorRecord(boardId, userId, _supabase);
   return record?.role === "owner";
 }
 
@@ -111,7 +129,7 @@ export async function canManageBoard(
   userId: string,
   _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const record = await getBoardModeratorRecord(boardId, userId);
+  const record = await getModeratorRecord(boardId, userId, _supabase);
   if (!record) return false;
   if (record.role === "owner") return true;
   return record.permissions?.manage_settings === true;
@@ -125,7 +143,7 @@ export async function canManageBoardPosts(
   userId: string,
   _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const record = await getBoardModeratorRecord(boardId, userId);
+  const record = await getModeratorRecord(boardId, userId, _supabase);
   if (!record) return false;
   if (record.role === "owner") return true;
   return record.permissions?.manage_posts === true;
@@ -139,7 +157,7 @@ export async function canManageBoardUsers(
   userId: string,
   _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const record = await getBoardModeratorRecord(boardId, userId);
+  const record = await getModeratorRecord(boardId, userId, _supabase);
   if (!record) return false;
   if (record.role === "owner") return true;
   return record.permissions?.manage_users === true;
@@ -153,7 +171,7 @@ export async function getUserBoardRole(
   userId: string,
   _supabase?: SupabaseClient,
 ): Promise<"owner" | "moderator" | null> {
-  const record = await getBoardModeratorRecord(boardId, userId);
+  const record = await getModeratorRecord(boardId, userId, _supabase);
   if (!record) return null;
   return record.role as "owner" | "moderator";
 }

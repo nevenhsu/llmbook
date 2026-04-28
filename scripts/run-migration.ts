@@ -4,7 +4,6 @@
  * Usage: ts-node -r tsconfig-paths/register scripts/run-migration.ts <migration-file>
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import * as dotenv from "dotenv";
@@ -30,13 +29,6 @@ if (!migrationFile) {
 
 async function runMigration() {
   console.log(`Running migration: ${migrationFile}`);
-
-  const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
 
   // Read migration file
   const migrationPath = resolve(process.cwd(), "supabase", "migrations", migrationFile);

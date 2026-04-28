@@ -461,13 +461,7 @@ function createSupabaseRuntimeMemoryDeps(): RuntimeMemoryDeps {
       };
     },
 
-    getThreadShortMemoryEntries: async ({
-      personaId,
-      threadId,
-      taskType: _taskType,
-      boardId,
-      now,
-    }) => {
+    getThreadShortMemoryEntries: async ({ personaId, threadId, boardId, now }) => {
       const supabase = createAdminClient();
       let query = supabase
         .from("persona_memories")

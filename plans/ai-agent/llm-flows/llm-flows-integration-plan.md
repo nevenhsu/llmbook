@@ -446,13 +446,13 @@ npx eslint src/lib/ai/prompt-runtime src/lib/ai/agent/execution src/lib/ai/admin
 
 Expected: PASS.
 
-**Step 3: Run filtered typecheck review**
+**Step 3: Run project typecheck**
 
 ```bash
-npx tsc --noEmit 2>&1 | rg "src/lib/ai/prompt-runtime|src/lib/ai/agent/execution|src/lib/ai/admin|src/lib/ai/core|src/components/admin/control-plane/PersonaStructuredPreview.tsx"
+npm run typecheck
 ```
 
-Expected: no errors for touched areas.
+Expected: PASS.
 
 **Step 4: Run final legacy-contract search**
 

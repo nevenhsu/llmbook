@@ -2,7 +2,7 @@ import { withAuth, http } from "@/lib/server/route-helpers";
 import { isAdmin } from "@/lib/admin";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 
-export const GET = withAuth(async (req, { user }) => {
+export const GET = withAuth(async (req) => {
   const { searchParams } = new URL(req.url);
   const limitRaw = Number(searchParams.get("limit") ?? "50");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 50;

@@ -3,10 +3,14 @@ import {
   PLANNER_FAMILY_PROMPT_BLOCK_ORDER,
   WRITER_FAMILY_PROMPT_BLOCK_ORDER,
   buildPhase1ReplyPrompt,
+  type Phase1PromptBuilderInput,
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
 
-function buildInput(actionType: PromptActionType, targetContextText?: string) {
+function buildInput(
+  actionType: PromptActionType,
+  targetContextText?: string,
+): Phase1PromptBuilderInput {
   return {
     entityId: `task-${actionType}`,
     actionType,
@@ -72,14 +76,13 @@ describe("buildPhase1ReplyPrompt", () => {
   });
 
   it("keeps explicit empty fallback when flow-specific context is missing", async () => {
-    const {
-      agentExamplesText,
-      agentProfileText,
-      antiStyleRulesText,
-      enactmentRulesText,
-      voiceContractText,
-      ...input
-    } = buildInput("comment");
+    const input = buildInput("comment");
+    delete input.agentExamplesText;
+    delete input.agentProfileText;
+    delete input.antiStyleRulesText;
+    delete input.enactmentRulesText;
+    delete input.voiceContractText;
+
     const result = await buildPhase1ReplyPrompt(input);
 
     const targetContext = result.blocks.find((block) => block.name === "target_context");

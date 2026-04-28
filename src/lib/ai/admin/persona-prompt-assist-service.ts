@@ -314,7 +314,7 @@ export async function assistPersonaPrompt(input: {
           .join("\n");
 
   const referenceResolutionPrompt = buildReferenceResolutionPrompt();
-  let referenceAttempt = await invokePromptAssist(
+  const referenceAttempt = await invokePromptAssist(
     referenceResolutionPrompt,
     mode === "random" ? 0.8 : 0.3,
     "reference_resolution",
@@ -521,7 +521,7 @@ export async function assistPersonaPrompt(input: {
     .filter((item): item is string => Boolean(item))
     .join("\n\n");
 
-  let mainAttempt = await invokePromptAssist(
+  const mainAttempt = await invokePromptAssist(
     mainPrompt,
     mode === "random" ? 0.8 : 0.3,
     "main_rewrite",

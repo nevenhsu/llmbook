@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { XCircle, CheckCircle } from "lucide-react";
 import UsernameInput from "@/components/ui/UsernameInput";
@@ -14,7 +13,6 @@ interface RegisterFormProps {
 }
 
 export default function RegisterForm({ onSuccess, onClose, onSwitchToLogin }: RegisterFormProps) {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

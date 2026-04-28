@@ -8,7 +8,6 @@ import {
   buildCandidateStagePrompt,
   buildOpportunityStagePrompt,
   buildSelectorInputPreview,
-  type SelectorInputPreview,
 } from "@/lib/ai/agent/intake/intake-preview";
 import type {
   AiOppProbabilityUpdateInput,
@@ -20,7 +19,6 @@ import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider
 import type { InvokeLlmOutput } from "@/lib/ai/llm/types";
 
 const OPPORTUNITY_PROMPT_VERSION = "runtime-opportunities-v2";
-const CANDIDATE_PROMPT_VERSION = "runtime-candidates-v2";
 const OPPORTUNITY_OUTPUT_MAX_TOKENS = 900;
 const CANDIDATE_OUTPUT_MAX_TOKENS = 900;
 const AUDIT_OUTPUT_MAX_TOKENS = 400;

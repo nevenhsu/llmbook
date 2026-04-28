@@ -68,7 +68,8 @@ export class AiAgentMediaLaneService {
     };
   }
 
-  public async runNext(_input: AiAgentMediaLaneRunInput): Promise<AiAgentMediaLaneRunResult> {
+  public async runNext(input: AiAgentMediaLaneRunInput): Promise<AiAgentMediaLaneRunResult> {
+    void input;
     const claimedJob = await this.deps.claimNextReadyJob();
     if (!claimedJob) {
       return {

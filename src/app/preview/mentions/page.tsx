@@ -15,7 +15,6 @@ export default function MentionsPreviewPage() {
   const [scenario, setScenario] = useState<
     "default" | "search" | "loading" | "empty-search" | "empty-default" | "single" | "long"
   >("default");
-  const [query, setQuery] = useState("");
 
   const mockCommand = (item: { id: string; label: string }) => {
     console.log("Selected:", item);

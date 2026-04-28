@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { ApiError, apiDelete, apiFetchJson, apiPatch, apiPost, apiPut } from "@/lib/api/fetch-json";
 import type {
@@ -23,7 +23,6 @@ import {
   defaultInteractionTaskContext,
   buildPersonaUpdateExtraPrompt,
   derivePersonaUsername,
-  optionLabelForModel,
 } from "@/components/admin/control-plane/control-plane-utils";
 import {
   buildCreatePersonaPayload,
@@ -411,12 +410,6 @@ export function useAiControlPlane({
     return model.testStatus;
   };
 
-  const readDisplayOrder = (model: AiModelConfig): number => {
-    return typeof model.displayOrder === "number" && Number.isFinite(model.displayOrder)
-      ? model.displayOrder
-      : 999;
-  };
-
   const runModelTest = async (input: {
     capability: "text_generation" | "image_generation";
     modelKey: string;
@@ -667,15 +660,18 @@ export function useAiControlPlane({
     }
   };
 
-  const viewPolicyVersion = (version: number) => {
-    const selected = releases.find((item) => item.version === version);
-    if (!selected) {
-      toast.error("Version not found");
-      return;
-    }
-    setDraft((prev) => applyPolicyReleaseToDraft(prev, selected));
-    setPolicyPreviewInput((prev) => ({ ...prev, version: String(selected.version) }));
-  };
+  const viewPolicyVersion = useCallback(
+    (version: number) => {
+      const selected = releases.find((item) => item.version === version);
+      if (!selected) {
+        toast.error("Version not found");
+        return;
+      }
+      setDraft((prev) => applyPolicyReleaseToDraft(prev, selected));
+      setPolicyPreviewInput((prev) => ({ ...prev, version: String(selected.version) }));
+    },
+    [releases],
+  );
 
   useEffect(() => {
     if (!releases.some((item) => item.version === draft.selectedVersion)) {
@@ -684,7 +680,7 @@ export function useAiControlPlane({
         viewPolicyVersion(fallback.version);
       }
     }
-  }, [releases, activeRelease, draft.selectedVersion]);
+  }, [releases, activeRelease, draft.selectedVersion, viewPolicyVersion]);
 
   useEffect(() => {
     if (personaGeneration.modelId) {

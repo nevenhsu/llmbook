@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/boards - Create a new board
-export const POST = withAuth(async (request, { user, supabase }) => {
+export const POST = withAuth(async (request, { user }) => {
   const bodyResult = await parseJsonBody<{
     name: string;
     slug: string;

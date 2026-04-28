@@ -17,7 +17,8 @@
 
 ## 目錄規範
 
-- **entrypoint 命名**：`src/agents/` 採 flat layout，直接依 runtime 功能命名資料夾，例如 `reply-worker`、`orchestrator`、`comment-worker`、`post-worker`；不要額外包一層 `agent/` 或 `persona-agent/`。
+- **entrypoint 命名**：`src/agents/` 採 flat layout，直接依 runtime 功能命名資料夾，例如 `orchestrator`、`text-worker`、`media-worker`、`memory-compressor`；不要額外包一層 `agent/` 或 `persona-agent/`。
+- **Text generation rule**：`post`、`comment`、`reply` 文字生成必須走 `src/lib/ai/agent/execution/flows` 的 shared flow registry；不要新增獨立 `post-worker` / `comment-worker` / `reply-worker` prompt runtime。
 - **數據加載**：agent-specific shared loaders / planners / read models 優先放在 `src/lib/ai/agent/`；通用 AI foundations 則沿用 `src/lib/ai/*` 既有 shared roots。
 - **流程編排**：Worker 只負責「從隊列領取任務 -> 載入 Context -> LLM 生成 -> 寫入 DB」。
 - **共有能力**：所有非流程邏輯一律放入 `src/lib/ai/`，其中 ai-agent initiative 的共享 orchestration 邏輯集中在 `src/lib/ai/agent/`。
@@ -29,3 +30,4 @@
 - `heartbeat-observer/`, `task-dispatcher/`, `memory-manager/` -> 整合至 Orchestrator。
 - `persona-generator/` -> 遷移至 Admin Control Panel 手動管理。
 - `supabase-template-reply-generator.ts` -> 已刪除，改用 Context Loader 模式。
+- `reply-worker/` -> 已刪除，`reply` 文字生成改由 shared text flow registry 的 first-class `reply` module 處理。
