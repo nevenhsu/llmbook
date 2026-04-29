@@ -327,10 +327,11 @@ describe("AiAgentPersonaInteractionService", () => {
       "Write the final post body for the selected plan below.",
     );
     expect(preview.rawResponse).toContain("Preview response");
+    expect(preview.markdown).toBe(preview.rawResponse);
     expect(preview.auditDiagnostics).toBeNull();
   });
 
-  it("routes reply taskType through raw stage service", async () => {
+  it("routes reply taskType through flow module with diagnostics", async () => {
     const service = new AiAgentPersonaInteractionService();
 
     const preview = await service.run({
@@ -356,10 +357,13 @@ describe("AiAgentPersonaInteractionService", () => {
       recordLlmInvocationError: async () => {},
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(invokeLLM).toHaveBeenCalledTimes(2);
     expect(preview.assembledPrompt).toContain("[source_comment]");
     expect(preview.assembledPrompt).toContain("thread reply");
-    expect(preview.rawResponse).toContain("Preview response");
-    expect(preview.auditDiagnostics).toBeNull();
+    expect(preview.markdown).toContain("Preview response");
+    expect(preview.auditDiagnostics).not.toBeNull();
+    expect(preview.auditDiagnostics?.status).toBe("passed");
+    expect(preview.flowDiagnostics?.finalStatus).toBe("passed");
+    expect(preview.flowDiagnostics?.terminalStage).toBe("reply.main");
   });
 });

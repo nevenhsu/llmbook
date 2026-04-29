@@ -9,13 +9,64 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
       timeoutMs: 30_000,
       retries: 0,
     })),
-    invokeLLM: vi.fn(async () => ({
-      text: '{"markdown":"Preview response","need_image":false,"image_prompt":null,"image_alt":null}',
-      finishReason: "stop",
-      providerId: "xai",
-      modelId: "grok-4-1-fast-reasoning",
-      error: null,
-    })),
+    invokeLLM: vi.fn(async (input?: unknown) => {
+      const prompt = String(
+        (input as { modelInput?: { prompt?: string } } | undefined)?.modelInput?.prompt ?? "",
+      );
+      if (prompt.includes("[comment_audit]")) {
+        return {
+          text: JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              post_relevance: "pass",
+              net_new_value: "pass",
+              non_repetition_against_recent_comments: "pass",
+              standalone_top_level_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          error: null,
+        };
+      }
+      if (prompt.includes("[reply_audit]")) {
+        return {
+          text: JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            checks: {
+              source_comment_responsiveness: "pass",
+              thread_continuity: "pass",
+              forward_motion: "pass",
+              non_top_level_essay_shape: "pass",
+              value_fit: "pass",
+              reasoning_fit: "pass",
+              discourse_fit: "pass",
+              expression_fit: "pass",
+            },
+          }),
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          error: null,
+        };
+      }
+      return {
+        text: '{"markdown":"Preview response","need_image":false,"image_prompt":null,"image_alt":null}',
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        error: null,
+      };
+    }),
   }),
 );
 
@@ -124,7 +175,9 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
     expect(preview.assembledPrompt).toContain("[task_context]");
     expect(preview.assembledPrompt).toContain("Reply to the thread.");
     expect(preview.rawResponse).toContain("Preview response");
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(invokeLLM).toHaveBeenCalledTimes(2);
+    expect(preview.auditDiagnostics?.contract).toBe("comment_audit");
+    expect(preview.flowDiagnostics?.terminalStage).toBe("comment.main");
   });
 
   it("runPersonaInteraction keeps preformatted board/target blocks", async () => {
@@ -146,6 +199,8 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
     expect(preview.assembledPrompt).toContain("[target_context]");
     expect(preview.assembledPrompt).toContain("[source_comment]");
     expect(preview.rawResponse).toContain("Preview response");
+    expect(preview.auditDiagnostics?.contract).toBe("reply_audit");
+    expect(preview.flowDiagnostics?.terminalStage).toBe("reply.main");
   });
 
   it("runPersonaInteractionStage returns raw stage payload for flow modules", async () => {

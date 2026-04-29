@@ -61,7 +61,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     });
   });
 
-  it("returns 400 for invalid taskType", async () => {
+  it("accepts reply taskType", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({ personaId: "p1", modelId: "m1", taskType: "reply" }),
@@ -69,7 +69,29 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     });
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+    expect(previewPersonaInteraction).toHaveBeenCalledWith({
+      personaId: "p1",
+      modelId: "m1",
+      taskType: "reply",
+      taskContext: "",
+      boardContext: undefined,
+      targetContext: undefined,
+    });
+  });
+
+  it("rejects internal post stage task types", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({ personaId: "p1", modelId: "m1", taskType: "post_body" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    const body = await res.json();
     expect(res.status).toBe(400);
+    expect(body.error).toContain("post, comment, reply, vote, poll_post, or poll_vote");
+    expect(previewPersonaInteraction).not.toHaveBeenCalled();
   });
 
   it("passes structured vote target context through to the store", async () => {

@@ -27,7 +27,7 @@ export function InteractionPreviewMockPage() {
   const [interactionInput, setInteractionInput] = useState<{
     personaId: string;
     modelId: string;
-    taskType: "post" | "comment";
+    taskType: "post" | "comment" | "reply";
     taskContext: string;
   }>(mockInteractionPreviewDefaultInput);
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);

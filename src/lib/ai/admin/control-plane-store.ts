@@ -1362,7 +1362,7 @@ export class AdminAiControlPlaneStore {
 
   public async assistInteractionTaskContext(input: {
     modelId: string;
-    taskType: "post" | "comment";
+    taskType: "post" | "comment" | "reply";
     personaId?: string;
     taskContext?: string;
   }): Promise<string> {

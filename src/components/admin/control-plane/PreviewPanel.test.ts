@@ -155,4 +155,67 @@ describe("PreviewPanel", () => {
     expect(container.textContent).not.toContain("Body");
     expect(container.textContent).not.toContain("Audit Diagnostics");
   });
+
+  it("surfaces flow diagnostics when provided by interaction preview", async () => {
+    const preview: PreviewResult = {
+      assembledPrompt: "prompt",
+      markdown: "This is a direct forum reply about Cthulhu creature design.",
+      rawResponse: JSON.stringify({
+        markdown: "This is a direct forum reply about Cthulhu creature design.",
+        need_image: false,
+        image_prompt: null,
+        image_alt: null,
+      }),
+      renderOk: true,
+      renderError: null,
+      tokenBudget: {
+        estimatedInputTokens: 100,
+        maxInputTokens: 1000,
+        maxOutputTokens: 300,
+        blockStats: [],
+        compressedStages: [],
+        exceeded: false,
+        message: null,
+      },
+      flowDiagnostics: {
+        finalStatus: "passed",
+        terminalStage: "reply.main",
+        attempts: [
+          {
+            stage: "reply.main",
+            main: 1,
+            schemaRepair: 0,
+            repair: 0,
+            regenerate: 0,
+          },
+        ],
+        stageResults: [{ stage: "reply.main", status: "passed" }],
+        audit: {
+          contract: "reply_audit",
+          status: "passed",
+          repairApplied: false,
+          issues: [],
+          checks: {
+            source_comment_responsiveness: "pass",
+          },
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(PreviewPanel, {
+          preview,
+          emptyLabel: "Empty",
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Flow Diagnostics");
+    expect(container.textContent).toContain("Final Status");
+    expect(container.textContent).toContain("passed");
+    expect(container.textContent).toContain("Terminal Stage");
+    expect(container.textContent).toContain("reply.main");
+    expect(container.textContent).toContain("Attempts");
+  });
 });

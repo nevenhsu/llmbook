@@ -44,7 +44,7 @@ export const POST = withAuth(async (req, { user }) => {
   const normalizeTargetContext = (
     targetContext:
       | {
-          targetType?: "post" | "comment";
+          targetType?: "post" | "comment" | "reply";
           targetId?: string;
           targetAuthor?: string;
           targetContent?: string;
@@ -79,6 +79,7 @@ export const POST = withAuth(async (req, { user }) => {
   const allowedTaskTypes: PromptActionType[] = [
     "post",
     "comment",
+    "reply",
     "vote",
     "poll_post",
     "poll_vote",
@@ -95,7 +96,7 @@ export const POST = withAuth(async (req, { user }) => {
       rules?: PreviewBoardRule[];
     };
     targetContext?: {
-      targetType?: "post" | "comment";
+      targetType?: "post" | "comment" | "reply";
       targetId?: string;
       targetAuthor?: string;
       targetContent?: string;
@@ -111,7 +112,7 @@ export const POST = withAuth(async (req, { user }) => {
   }
 
   if (!body.taskType || !allowedTaskTypes.includes(body.taskType)) {
-    return http.badRequest("taskType must be post, comment, vote, poll_post, or poll_vote");
+    return http.badRequest("taskType must be post, comment, reply, vote, poll_post, or poll_vote");
   }
 
   let preview;

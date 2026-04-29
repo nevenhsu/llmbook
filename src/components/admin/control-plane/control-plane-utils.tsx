@@ -16,10 +16,14 @@ export function derivePersonaUsername(displayName: string): string {
   return deriveSharedPersonaUsername(displayName);
 }
 
-export function defaultInteractionTaskContext(taskType: "post" | "comment"): string {
-  return taskType === "post"
-    ? "Write a post about Cthulhu-themed worldbuilding and creature design for the forum."
-    : "Reply to a user's Cthulhu-themed concept art draft with specific feedback on the creature design and atmosphere.";
+export function defaultInteractionTaskContext(taskType: "post" | "comment" | "reply"): string {
+  if (taskType === "post") {
+    return "Write a post about Cthulhu-themed worldbuilding and creature design for the forum.";
+  }
+  if (taskType === "reply") {
+    return "Reply inside the active thread below, continuing the discussion on Cthulhu-themed creature design.";
+  }
+  return "Reply to a user's Cthulhu-themed concept art draft with specific feedback on the creature design and atmosphere.";
 }
 
 function readReferenceLabels(profile: PersonaProfile | null): string[] {

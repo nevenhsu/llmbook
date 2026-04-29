@@ -60,6 +60,9 @@ export function PreviewPanel({
     ? Math.round((budget.estimatedInputTokens / budget.maxInputTokens) * 100)
     : 0;
   const audit = preview.auditDiagnostics ?? null;
+  const flowDiagnostics = preview.flowDiagnostics ?? null;
+  const auditRepairGuidance = audit?.repairGuidance ?? [];
+  const auditMissingSignals = audit?.missingSignals ?? [];
 
   const copyRenderedPreview = async () => {
     try {
@@ -222,7 +225,7 @@ export function PreviewPanel({
                     <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
                       Confidence
                     </p>
-                    <p className="font-medium">{audit.confidence.toFixed(2)}</p>
+                    <p className="font-medium">{audit.confidence?.toFixed(2) ?? "N/A"}</p>
                   </div>
                 </section>
                 <section className="space-y-1.5">
@@ -239,28 +242,92 @@ export function PreviewPanel({
                     <p className="text-sm opacity-70">No persona drift issues were detected.</p>
                   )}
                 </section>
-                {audit.missingSignals.length > 0 ? (
+                {auditMissingSignals.length > 0 ? (
                   <section className="space-y-1.5">
                     <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
                       Missing Signals
                     </p>
                     <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
-                      {audit.missingSignals.map((signal) => (
+                      {auditMissingSignals.map((signal) => (
                         <li key={signal}>{signal}</li>
                       ))}
                     </ul>
                   </section>
                 ) : null}
-                {audit.repairGuidance.length > 0 ? (
+                {auditRepairGuidance.length > 0 ? (
                   <section className="space-y-1.5">
                     <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
                       Repair Guidance
                     </p>
                     <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
-                      {audit.repairGuidance.map((item) => (
+                      {auditRepairGuidance.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
+                  </section>
+                ) : null}
+              </div>
+            </div>
+          </details>
+        ) : null}
+        {flowDiagnostics ? (
+          <details className="collapse-arrow border-base-300 collapse rounded-lg border">
+            <summary className="collapse-title text-sm font-semibold">Flow Diagnostics</summary>
+            <div className="collapse-content">
+              <div className="space-y-4 rounded-lg border p-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Final Status
+                    </p>
+                    <p className="font-medium">{flowDiagnostics.finalStatus}</p>
+                  </section>
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Terminal Stage
+                    </p>
+                    <p className="font-medium">{flowDiagnostics.terminalStage ?? "None"}</p>
+                  </section>
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Attempts
+                    </p>
+                    <p className="font-medium">{flowDiagnostics.attempts.length}</p>
+                  </section>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="table-xs table">
+                    <thead>
+                      <tr>
+                        <th>Stage</th>
+                        <th className="text-right">Main</th>
+                        <th className="text-right">Schema Repair</th>
+                        <th className="text-right">Quality Repair</th>
+                        <th className="text-right">Regenerate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flowDiagnostics.attempts.map((attempt) => (
+                        <tr key={attempt.stage}>
+                          <td>{attempt.stage}</td>
+                          <td className="text-right font-mono">{attempt.main}</td>
+                          <td className="text-right font-mono">{attempt.schemaRepair}</td>
+                          <td className="text-right font-mono">{attempt.repair}</td>
+                          <td className="text-right font-mono">{attempt.regenerate}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {flowDiagnostics.gate ? (
+                  <section className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-[0.16em] uppercase opacity-60">
+                      Gate
+                    </p>
+                    <p className="text-sm">
+                      selected={flowDiagnostics.gate.selectedCandidateIndex ?? "none"} passed=
+                      {flowDiagnostics.gate.passedCandidateIndexes.join(", ") || "none"}
+                    </p>
                   </section>
                 ) : null}
               </div>

@@ -23,14 +23,14 @@ export interface PersonaInteractionSectionProps {
   interactionInput: {
     personaId: string;
     modelId: string;
-    taskType: "post" | "comment";
+    taskType: "post" | "comment" | "reply";
     taskContext: string;
   };
   setInteractionInput: Dispatch<
     SetStateAction<{
       personaId: string;
       modelId: string;
-      taskType: "post" | "comment";
+      taskType: "post" | "comment" | "reply";
       taskContext: string;
     }>
   >;
@@ -118,7 +118,7 @@ export function PersonaInteractionSection({
                 className="select select-bordered select-sm w-full"
                 value={interactionInput.taskType}
                 onChange={(e) => {
-                  const taskType = e.target.value as "post" | "comment";
+                  const taskType = e.target.value as "post" | "comment" | "reply";
                   setInteractionInput((prev) => ({
                     ...prev,
                     taskType,
@@ -128,6 +128,7 @@ export function PersonaInteractionSection({
               >
                 <option value="post">Post Generation</option>
                 <option value="comment">Comment Response</option>
+                <option value="reply">Thread Reply</option>
               </select>
             </div>
           </div>

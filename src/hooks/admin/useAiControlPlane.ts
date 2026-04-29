@@ -168,7 +168,7 @@ export function useAiControlPlane({
   const [interactionInput, setInteractionInput] = useState({
     personaId: initialPersonas[0]?.id ?? "",
     modelId: initialModels.find((item) => item.capability === "text_generation")?.id ?? "",
-    taskType: "post" as "post" | "comment",
+    taskType: "post" as "post" | "comment" | "reply",
     taskContext: defaultInteractionTaskContext("post"),
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);

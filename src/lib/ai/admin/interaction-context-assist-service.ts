@@ -12,7 +12,7 @@ import { asRecord, readString } from "@/lib/ai/admin/control-plane-shared";
 
 export async function assistInteractionTaskContext(input: {
   modelId: string;
-  taskType: "post" | "comment";
+  taskType: "post" | "comment" | "reply";
   personaId?: string;
   taskContext?: string;
   providers: AiProviderConfig[];

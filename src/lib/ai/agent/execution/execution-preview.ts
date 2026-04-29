@@ -48,9 +48,9 @@ export type AiAgentExecutionParsedOutput =
     };
 
 export type AiAgentExecutionAuditOutput = {
-  contract: "persona_output_audit" | "post_body_audit" | "comment_audit" | "reply_audit";
+  contract: NonNullable<PreviewAuditDiagnostics["contract"]>;
   pass: boolean;
-  status: "passed" | "passed_after_repair";
+  status: PreviewAuditDiagnostics["status"];
   issues: string[];
   repairInstructions: string[];
   severity: string | null;
@@ -274,13 +274,13 @@ function buildAuditedOutput(
     pass: auditDiagnostics.status === "passed" || auditDiagnostics.status === "passed_after_repair",
     status: auditDiagnostics.status,
     issues: auditDiagnostics.issues,
-    repairInstructions: auditDiagnostics.repairGuidance,
-    severity: auditDiagnostics.severity,
-    confidence: auditDiagnostics.confidence,
-    missingSignals: auditDiagnostics.missingSignals,
+    repairInstructions: auditDiagnostics.repairGuidance ?? [],
+    severity: auditDiagnostics.severity ?? null,
+    confidence: auditDiagnostics.confidence ?? null,
+    missingSignals: auditDiagnostics.missingSignals ?? [],
     repairApplied: auditDiagnostics.repairApplied,
-    auditMode: auditDiagnostics.auditMode,
-    compactRetryUsed: auditDiagnostics.compactRetryUsed,
+    auditMode: auditDiagnostics.auditMode ?? null,
+    compactRetryUsed: auditDiagnostics.compactRetryUsed ?? false,
     checks: auditDiagnostics.checks,
     contentChecks: auditDiagnostics.contentChecks,
     personaChecks: auditDiagnostics.personaChecks,

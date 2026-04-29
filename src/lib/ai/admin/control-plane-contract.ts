@@ -96,19 +96,75 @@ export type PreviewTokenBudget = {
 };
 
 export type PreviewAuditDiagnostics = {
-  contract?: "persona_output_audit" | "post_body_audit" | "comment_audit" | "reply_audit";
-  status: "passed" | "passed_after_repair";
+  contract?: string;
+  status: "passed" | "passed_after_repair" | "failed";
   issues: string[];
-  repairGuidance: string[];
-  severity: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaAuditSeverity;
-  confidence: number;
-  missingSignals: string[];
+  repairGuidance?: string[];
+  severity?: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaAuditSeverity;
+  confidence?: number;
+  missingSignals?: string[];
   repairApplied: boolean;
-  auditMode: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaOutputAuditPromptMode;
-  compactRetryUsed: boolean;
+  auditMode?: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaOutputAuditPromptMode;
+  compactRetryUsed?: boolean;
   checks?: Record<string, "pass" | "fail">;
   contentChecks?: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditContentChecks;
   personaChecks?: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditPersonaChecks;
+};
+
+export type PreviewFlowDiagnostics = {
+  finalStatus: "passed" | "failed";
+  terminalStage: string | null;
+  attempts: Array<{
+    stage: string;
+    main: number;
+    schemaRepair: number;
+    repair: number;
+    regenerate: number;
+  }>;
+  stageResults: Array<{
+    stage: string;
+    status: "passed" | "failed" | "skipped";
+  }>;
+  gate?: {
+    attempted: boolean;
+    passedCandidateIndexes: number[];
+    selectedCandidateIndex: number | null;
+  };
+  planningCandidates?: Array<{
+    candidateIndex: number;
+    title: string;
+    overallScore: number;
+    passedHardGate: boolean;
+    scores: {
+      boardFit: number;
+      titlePersonaFit: number;
+      titleNovelty: number;
+      angleNovelty: number;
+      bodyUsefulness: number;
+    };
+  }>;
+  planningAudit?: {
+    contract: "post_plan_audit";
+    status: "passed" | "passed_after_repair" | "failed";
+    repairApplied: boolean;
+    issues: string[];
+    checks: Record<string, "pass" | "fail">;
+  };
+  bodyAudit?: {
+    contract: "post_body_audit";
+    status: "passed" | "passed_after_repair";
+    repairApplied: boolean;
+    issues: string[];
+    contentChecks: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditContentChecks;
+    personaChecks: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditPersonaChecks;
+  };
+  audit?: {
+    contract: "comment_audit" | "reply_audit";
+    status: "passed" | "passed_after_repair";
+    repairApplied: boolean;
+    issues: string[];
+    checks: Record<string, "pass" | "fail">;
+  };
 };
 
 export type PreviewResult = {
@@ -119,6 +175,7 @@ export type PreviewResult = {
   renderError: string | null;
   tokenBudget: PreviewTokenBudget;
   auditDiagnostics?: PreviewAuditDiagnostics | null;
+  flowDiagnostics?: PreviewFlowDiagnostics | null;
 };
 
 export type PersonaGenerationSemanticAuditResult = {
@@ -295,7 +352,7 @@ export type PromptTargetOption = {
 };
 
 export type PromptTargetContext = {
-  targetType?: "post" | "comment" | null;
+  targetType?: "post" | "comment" | "reply" | null;
   targetId?: string | null;
   targetAuthor?: string | null;
   targetContent?: string | null;
