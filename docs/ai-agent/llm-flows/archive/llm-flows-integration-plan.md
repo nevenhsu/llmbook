@@ -16,15 +16,15 @@ Use this document as the main implementation sequence for current LLM-flow devel
 
 Supporting plans remain active for detailed contract/file guidance:
 
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`
-- `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md`
-- `plans/ai-agent/llm-flows/reference-role-doctrine-plan.md`
-- `plans/ai-agent/llm-flows/persona-generation-simplification-plan.md`
-- `plans/ai-agent/llm-flows/persona-generation-simplification-examples.md`
-- `plans/ai-agent/llm-flows/prompt-block-examples.md`
-- `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
-- `plans/ai-agent/llm-flows/audit-remediation-plan.md` ← **NEW: remaining gap closures**
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md`
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md`
+- `docs/ai-agent/llm-flows/prompt-family-architecture.md`
+- `docs/ai-agent/llm-flows/reference-role-doctrine.md`
+- `docs/ai-agent/llm-flows/persona-generation-contract.md`
+- `docs/ai-agent/llm-flows/persona-generation-simplification-examples.md`
+- `docs/ai-agent/llm-flows/prompt-block-examples.md`
+- `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- `docs/ai-agent/llm-flows/archive/audit-remediation-plan.md` ← **NEW: remaining gap closures**
 
 Rules:
 
@@ -36,7 +36,7 @@ Rules:
 ## Preconditions
 
 - Read `docs/dev-guidelines/08-llm-json-stage-contract.md` before implementing any staged JSON generation/audit/repair path.
-- Treat `plans/ai-agent/llm-flows/persona-generation-prompt-examples.md` and `plans/ai-agent/llm-flows/persona-generation-relationship-removal-plan.md` as historical references only.
+- Treat `docs/ai-agent/llm-flows/archive/persona-generation-prompt-examples.md` and `docs/ai-agent/llm-flows/archive/persona-generation-relationship-removal-plan.md` as historical references only.
 - Do not reintroduce relationship-oriented prompt/runtime fields or active `agent_memory` blocks while landing this program.
 
 ## Final Target State
@@ -84,10 +84,10 @@ Do not start Task 3 or Task 4 until Task 1 is done. Task 2 should land before Ta
 
 **Detailed references:**
 
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md` Task 1
-- `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md` Task 1
-- `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md` Task 2
-- `plans/ai-agent/llm-flows/reference-role-doctrine-plan.md`
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md` Task 1
+- `docs/ai-agent/llm-flows/prompt-family-architecture.md` Task 1
+- `docs/ai-agent/llm-flows/prompt-family-architecture.md` Task 2
+- `docs/ai-agent/llm-flows/reference-role-doctrine.md`
 
 **Files:**
 
@@ -155,10 +155,10 @@ git commit -m "refactor: add shared llm flow foundations"
 
 **Detailed references:**
 
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md` Task 2
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md` Task 3
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md` Task 4
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md` Task 5
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md` Task 2
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md` Task 3
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md` Task 4
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md` Task 5
 
 **Files:**
 
@@ -238,11 +238,11 @@ git commit -m "feat: land staged post flow on shared registry"
 
 **Detailed references:**
 
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md` Task 1
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md` Task 2
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md` Task 3
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md` Task 4
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md` Task 5
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md` Task 1
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md` Task 2
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md` Task 3
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md` Task 4
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md` Task 5
 
 **Files:**
 
@@ -317,8 +317,8 @@ git commit -m "feat: land first-class comment and reply flows"
 
 **Detailed references:**
 
-- `plans/ai-agent/llm-flows/persona-generation-simplification-plan.md`
-- `plans/ai-agent/llm-flows/persona-generation-simplification-examples.md`
+- `docs/ai-agent/llm-flows/persona-generation-contract.md`
+- `docs/ai-agent/llm-flows/persona-generation-simplification-examples.md`
 
 **Files:**
 
@@ -378,18 +378,18 @@ git commit -m "refactor: simplify persona generation flow"
 
 **Detailed references:**
 
-- `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md`
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`
-- `plans/ai-agent/llm-flows/persona-generation-simplification-plan.md`
+- `docs/ai-agent/llm-flows/prompt-family-architecture.md`
+- `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md`
+- `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md`
+- `docs/ai-agent/llm-flows/persona-generation-contract.md`
 
 **Files:**
 
 - Modify: `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`
 - Modify: `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
-- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
-- Modify: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
-- Modify: `plans/ai-agent/llm-flows/persona-generation-prompt-examples.md`
+- Modify: `docs/ai-agent/llm-flows/prompt-block-examples.md`
+- Modify: `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- Modify: `docs/ai-agent/llm-flows/archive/persona-generation-prompt-examples.md`
 - Modify: `tasks/todo.md`
 - Modify: `tasks/lessons.md`
 
@@ -425,7 +425,7 @@ Run the same `rg` command and classify the remaining hits using the expected cat
 **Step 4: Commit**
 
 ```bash
-git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md plans/ai-agent/llm-flows/prompt-block-examples.md plans/ai-agent/llm-flows/flow-audit-repair-examples.md plans/ai-agent/llm-flows/persona-generation-prompt-examples.md tasks/todo.md tasks/lessons.md
+git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md docs/ai-agent/llm-flows/prompt-block-examples.md docs/ai-agent/llm-flows/flow-audit-repair-examples.md docs/ai-agent/llm-flows/archive/persona-generation-prompt-examples.md tasks/todo.md tasks/lessons.md
 git commit -m "docs: align active llm flow contracts"
 ```
 

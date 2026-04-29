@@ -299,7 +299,7 @@ Expected: PASS.
 - Modify: `src/lib/ai/agent/execution/flows/post-flow-module.ts`
 - Modify: `src/lib/ai/agent/execution/flows/post-flow-module.test.ts`
 - Modify: `src/lib/ai/agent/execution/flows/types.ts`
-- Modify: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- Modify: `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`
 
 **Step 1: Define audit contract**
 
@@ -585,12 +585,12 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `plans/ai-agent/llm-flows/llm-flows-integration-plan.md`
-- Modify: `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
-- Modify: `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`
-- Modify: `plans/ai-agent/llm-flows/reference-role-doctrine-plan.md`
-- Modify: `plans/ai-agent/llm-flows/audit-remediation-plan.md`
-- Modify: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- Modify: `docs/ai-agent/llm-flows/archive/llm-flows-integration-plan.md`
+- Modify: `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md`
+- Modify: `docs/ai-agent/llm-flows/archive/comment-reply-flow-modules-plan.md`
+- Modify: `docs/ai-agent/llm-flows/reference-role-doctrine.md`
+- Modify: `docs/ai-agent/llm-flows/archive/audit-remediation-plan.md`
+- Modify: `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`
 - Modify: `tasks/todo.md`
 
 **Step 1: Update status markers**
@@ -615,8 +615,8 @@ Remove old `persona_fit` example output from active examples.
 Run:
 
 ```bash
-rg -n 'PARTIAL|not wired|single `persona_fit`|single persona_fit|Blocked on Tasks 3|Blocked on Task 4' plans/ai-agent/llm-flows
-rg -n 'persona_fit' plans/ai-agent/llm-flows/flow-audit-repair-examples.md
+rg -n 'PARTIAL|not wired|single `persona_fit`|single persona_fit|Blocked on Tasks 3|Blocked on Task 4' docs/ai-agent/llm-flows
+rg -n 'persona_fit' docs/ai-agent/llm-flows/flow-audit-repair-examples.md
 ```
 
 Expected:
@@ -636,8 +636,8 @@ Expected:
 
 - Modify: `package.json`
 - Modify: `docs/dev-guidelines/08-llm-json-stage-contract.md`
-- Modify: `plans/ai-agent/llm-flows/llm-flows-integration-plan.md`
-- Modify: `plans/ai-agent/llm-flows/audit-remediation-plan.md`
+- Modify: `docs/ai-agent/llm-flows/archive/llm-flows-integration-plan.md`
+- Modify: `docs/ai-agent/llm-flows/archive/audit-remediation-plan.md`
 - Modify: `tasks/todo.md`
 
 **Step 1: Add `test:llm-flows`**

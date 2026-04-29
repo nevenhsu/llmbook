@@ -319,7 +319,7 @@ git commit -m "refactor: route text generation through shared flow modules"
 - Create: `src/lib/ai/prompt-runtime/post-plan-contract.test.ts`
 - Modify: `src/lib/ai/prompt-runtime/prompt-builder.ts`
 - Modify: `src/lib/ai/prompt-runtime/runtime-budgets.ts`
-- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
+- Modify: `docs/ai-agent/llm-flows/prompt-block-examples.md`
 
 **Step 1: Write the failing tests**
 
@@ -369,7 +369,7 @@ Run the same test command and expect PASS.
 **Step 5: Commit**
 
 ```bash
-git add src/lib/ai/prompt-runtime/post-plan-contract.ts src/lib/ai/prompt-runtime/post-plan-contract.test.ts src/lib/ai/prompt-runtime/prompt-builder.ts src/lib/ai/prompt-runtime/runtime-budgets.ts plans/ai-agent/llm-flows/prompt-block-examples.md
+git add src/lib/ai/prompt-runtime/post-plan-contract.ts src/lib/ai/prompt-runtime/post-plan-contract.test.ts src/lib/ai/prompt-runtime/prompt-builder.ts src/lib/ai/prompt-runtime/runtime-budgets.ts docs/ai-agent/llm-flows/prompt-block-examples.md
 git commit -m "feat: add staged post planning contract"
 ```
 

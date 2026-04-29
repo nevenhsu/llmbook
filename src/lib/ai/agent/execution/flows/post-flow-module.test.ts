@@ -66,6 +66,92 @@ function buildPersonaEvidence(): PromptPersonaEvidence {
   };
 }
 
+function buildPostPlanAuditResult(passes = true) {
+  return {
+    passes,
+    issues: passes ? [] : ["The candidates are too close to recent board posts."],
+    repairGuidance: passes ? [] : ["Make each candidate's angle more distinct."],
+    checks: {
+      candidate_count: "pass",
+      board_fit: "pass",
+      novelty_evidence: passes ? "pass" : "fail",
+      persona_posting_lens_fit: "pass",
+      body_outline_usefulness: "pass",
+      no_model_owned_final_selection: "pass",
+    },
+  };
+}
+
+function buildPostBodyAuditResult(passes = true) {
+  return {
+    passes,
+    issues: passes ? [] : ["The body does not follow the selected plan."],
+    repairGuidance: passes ? [] : ["Rewrite the body to match the locked plan."],
+    contentChecks: {
+      angle_fidelity: passes ? "pass" : "fail",
+      board_fit: "pass",
+      body_usefulness: "pass",
+      markdown_structure: "pass",
+      title_body_alignment: "pass",
+    },
+    personaChecks: {
+      body_persona_fit: "pass",
+      anti_style_compliance: "pass",
+      value_fit: "pass",
+      reasoning_fit: "pass",
+      discourse_fit: "pass",
+      expression_fit: "pass",
+    },
+  };
+}
+
+function buildPassingPostPlanResponse(title = "Passing semantic plan") {
+  return {
+    candidates: [
+      {
+        title,
+        angle_summary: "A distinct execution-boundary perspective.",
+        thesis: "Separate malformed-output repair from policy enforcement.",
+        body_outline: [
+          "Show the mistaken blame pattern.",
+          "Name the boundary.",
+          "Give the operator move.",
+        ],
+        difference_from_recent: ["Fresh execution-boundary framing."],
+        board_fit_score: 88,
+        title_persona_fit_score: 84,
+        title_novelty_score: 86,
+        angle_novelty_score: 89,
+        body_usefulness_score: 82,
+      },
+      {
+        title: `${title} backup`,
+        angle_summary: "Another distinct workflow perspective.",
+        thesis: "Treat validation and enforcement as different operating steps.",
+        body_outline: ["A", "B", "C"],
+        difference_from_recent: ["Different enough."],
+        board_fit_score: 82,
+        title_persona_fit_score: 80,
+        title_novelty_score: 81,
+        angle_novelty_score: 83,
+        body_usefulness_score: 79,
+      },
+      {
+        title: `${title} third`,
+        angle_summary: "A third usable angle.",
+        thesis: "Post-processing boundaries matter more than prompt polish.",
+        body_outline: ["A", "B", "C"],
+        difference_from_recent: ["Another framing."],
+        board_fit_score: 84,
+        title_persona_fit_score: 82,
+        title_novelty_score: 83,
+        angle_novelty_score: 85,
+        body_usefulness_score: 81,
+      },
+    ],
+  };
+}
+
 describe("createPostFlowModule", () => {
   it("runs staged post_plan -> post_body flow and hands selected_post_plan into the body stage", async () => {
     const flowModule = createPostFlowModule();
@@ -120,6 +206,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
@@ -131,30 +218,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            contentChecks: {
-              angle_fidelity: "pass",
-              board_fit: "pass",
-              body_usefulness: "pass",
-              markdown_structure: "pass",
-              title_body_alignment: "pass",
-            },
-            personaChecks: {
-              body_persona_fit: "pass",
-              anti_style_compliance: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-            },
-          }),
-        ),
-      );
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostBodyAuditResult())));
 
     const result = await flowModule.runRuntime({
       task: buildTask(),
@@ -175,17 +239,21 @@ describe("createPostFlowModule", () => {
       personaEvidence: buildPersonaEvidence(),
     });
 
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(4);
     expect(runPersonaInteractionStage.mock.calls[0]?.[0]).toMatchObject({
       taskType: "post_plan",
     });
     expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+    });
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
       taskType: "post_body",
     });
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].targetContextText).toContain(
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0].targetContextText).toContain(
       "[selected_post_plan]",
     );
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].targetContextText).toContain(
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0].targetContextText).toContain(
       "Locked title: The workflow bug people keep mislabeling as a prompt bug",
     );
     if (result.flowResult.flowKind !== "post") {
@@ -295,6 +363,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
@@ -339,6 +408,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
@@ -350,30 +420,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            contentChecks: {
-              angle_fidelity: "pass",
-              board_fit: "pass",
-              body_usefulness: "pass",
-              markdown_structure: "pass",
-              title_body_alignment: "pass",
-            },
-            personaChecks: {
-              body_persona_fit: "pass",
-              anti_style_compliance: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-            },
-          }),
-        ),
-      );
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostBodyAuditResult())));
 
     const result = await flowModule.runPreview({
       task: buildTask(),
@@ -393,18 +440,26 @@ describe("createPostFlowModule", () => {
       personaEvidence: buildPersonaEvidence(),
     });
 
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(4);
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].taskType).toBe("post_plan");
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].taskContext).toContain(
-      "[planning_audit_repair]",
-    );
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(6);
+    expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+    });
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "main",
+    });
+    expect(runPersonaInteractionStage.mock.calls[3]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+    });
     expect(result.flowResult.diagnostics.attempts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           stage: "post_plan",
           main: 2,
-          repair: 1,
-          regenerate: 0,
+          repair: 0,
+          regenerate: 1,
         }),
         expect.objectContaining({
           stage: "post_body",
@@ -467,6 +522,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult(false))))
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
@@ -511,6 +567,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
@@ -522,30 +579,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            contentChecks: {
-              angle_fidelity: "pass",
-              board_fit: "pass",
-              body_usefulness: "pass",
-              markdown_structure: "pass",
-              title_body_alignment: "pass",
-            },
-            personaChecks: {
-              body_persona_fit: "pass",
-              anti_style_compliance: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-            },
-          }),
-        ),
-      );
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostBodyAuditResult())));
 
     const result = await flowModule.runRuntime({
       task: buildTask(),
@@ -563,11 +597,22 @@ describe("createPostFlowModule", () => {
       personaEvidence: buildPersonaEvidence(),
     });
 
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(4);
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].taskType).toBe("post_plan");
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].taskContext).toContain(
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(6);
+    expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+    });
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "main",
+    });
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0].taskContext).toContain(
       "[planning_audit_repair]",
     );
+    expect(runPersonaInteractionStage.mock.calls[3]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+    });
     if (result.flowResult.flowKind !== "post") {
       throw new Error("expected post flow result");
     }
@@ -584,6 +629,143 @@ describe("createPostFlowModule", () => {
         body_outline_usefulness: "pass",
         no_model_owned_final_selection: "pass",
       },
+    });
+  });
+
+  it("throws typed semantic audit error when post_plan audit still fails after repair", async () => {
+    const flowModule = createPostFlowModule();
+    const runPersonaInteractionStage = vi
+      .fn()
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPassingPostPlanResponse())))
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult(false))))
+      .mockResolvedValueOnce(
+        buildPreviewResult(JSON.stringify(buildPassingPostPlanResponse("Repaired plan"))),
+      )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult(false))));
+
+    await expect(
+      flowModule.runRuntime({
+        task: buildTask(),
+        promptContext: {
+          flowKind: "post",
+          taskType: "post",
+          taskContext: "Generate a new post for the board below.",
+        },
+        loadPreferredTextModel: async () => ({
+          modelId: "model-1",
+          providerKey: "xai",
+          modelKey: "grok-4-1-fast-reasoning",
+        }),
+        runPersonaInteractionStage: runPersonaInteractionStage as any,
+        personaEvidence: buildPersonaEvidence(),
+      }),
+    ).rejects.toMatchObject({
+      name: "TextFlowExecutionError",
+      flowKind: "post",
+      diagnostics: {
+        finalStatus: "failed",
+        terminalStage: "post_plan",
+        planningAudit: {
+          contract: "post_plan_audit",
+          status: "failed",
+          repairApplied: true,
+        },
+      },
+      causeCategory: "semantic_audit",
+    });
+
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(4);
+    expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+    });
+    expect(runPersonaInteractionStage.mock.calls[2]?.[0].taskContext).toContain(
+      "[planning_audit_repair]",
+    );
+  });
+
+  it("classifies invalid post_body audit JSON as semantic_audit", async () => {
+    const flowModule = createPostFlowModule();
+    const runPersonaInteractionStage = vi
+      .fn()
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPassingPostPlanResponse())))
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            body: "A valid post body.",
+            tags: ["#ai"],
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(buildPreviewResult("not json"));
+
+    await expect(
+      flowModule.runRuntime({
+        task: buildTask(),
+        promptContext: {
+          flowKind: "post",
+          taskType: "post",
+          taskContext: "Generate a new post for the board below.",
+        },
+        loadPreferredTextModel: async () => ({
+          modelId: "model-1",
+          providerKey: "xai",
+          modelKey: "grok-4-1-fast-reasoning",
+        }),
+        runPersonaInteractionStage: runPersonaInteractionStage as any,
+        personaEvidence: buildPersonaEvidence(),
+      }),
+    ).rejects.toMatchObject({
+      name: "TextFlowExecutionError",
+      flowKind: "post",
+      causeCategory: "semantic_audit",
+    });
+  });
+
+  it("classifies invalid post_body quality repair output as quality_repair", async () => {
+    const flowModule = createPostFlowModule();
+    const runPersonaInteractionStage = vi
+      .fn()
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPassingPostPlanResponse())))
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            body: "A valid but semantically weak body.",
+            tags: ["#ai"],
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostBodyAuditResult(false))))
+      .mockResolvedValueOnce(buildPreviewResult("not json"));
+
+    await expect(
+      flowModule.runRuntime({
+        task: buildTask(),
+        promptContext: {
+          flowKind: "post",
+          taskType: "post",
+          taskContext: "Generate a new post for the board below.",
+        },
+        loadPreferredTextModel: async () => ({
+          modelId: "model-1",
+          providerKey: "xai",
+          modelKey: "grok-4-1-fast-reasoning",
+        }),
+        runPersonaInteractionStage: runPersonaInteractionStage as any,
+        personaEvidence: buildPersonaEvidence(),
+      }),
+    ).rejects.toMatchObject({
+      name: "TextFlowExecutionError",
+      flowKind: "post",
+      causeCategory: "quality_repair",
     });
   });
 
@@ -635,6 +817,7 @@ describe("createPostFlowModule", () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
       .mockResolvedValueOnce(buildPreviewResult('{"body":"missing tags"}'))
       .mockResolvedValueOnce(buildPreviewResult('{"body":"still missing tags"}'));
 

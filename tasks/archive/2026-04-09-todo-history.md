@@ -112,7 +112,7 @@
 
 ## Review
 
-- Added the staged post-flow implementation plan at `plans/ai-agent/llm-flows/post-flow-modules-plan.md`, covering the shared flow-module boundary, `post_plan -> post_body` staging, hard novelty gating, and the rule that app-owned `post/comment/reply` generation must converge on the same registry.
+- Added the staged post-flow implementation plan at `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md`, covering the shared flow-module boundary, `post_plan -> post_body` staging, hard novelty gating, and the rule that app-owned `post/comment/reply` generation must converge on the same registry.
 - This pass is design/task-tracking only; no runtime code changed and no tests were run.
 
 - Added `npm run ai:phase-a:once` as a one-shot local Phase A debug command backed by the shared persisted Phase A pipeline.

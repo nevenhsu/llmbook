@@ -92,4 +92,38 @@ describe("AiAgentTaskTableReadModel", () => {
     ]);
     expect(secondPage.rows.map((row) => row.id)).toEqual(["task-done-2", "task-done-1"]);
   });
+
+  it("exposes compact flow failure metadata from terminal task errors", async () => {
+    const terminalRows = [
+      buildTask({
+        id: "task-failed-1",
+        status: "FAILED",
+        completedAt: "2026-04-08T12:02:00.000Z",
+        errorMessage:
+          'reply audit output must be valid JSON flow_failure={"flowKind":"reply","causeCategory":"semantic_audit","terminalStage":"reply.main"}',
+      }),
+    ];
+
+    const model = new AiAgentTaskTableReadModel({
+      deps: {
+        loadActiveRows: vi.fn().mockResolvedValue([]),
+        countActiveRows: vi.fn().mockResolvedValue(0),
+        loadTerminalRows: vi.fn().mockResolvedValue(terminalRows),
+        countTerminalRows: vi.fn().mockResolvedValue(terminalRows.length),
+        loadTargetMap: vi.fn().mockResolvedValue(new Map()),
+      },
+    });
+
+    const result = await model.list({ kind: "public", page: 1, pageSize: 10 });
+
+    expect(result.rows[0]).toMatchObject({
+      id: "task-failed-1",
+      errorMessage: expect.stringContaining("flow_failure="),
+      flowFailure: {
+        flowKind: "reply",
+        causeCategory: "semantic_audit",
+        terminalStage: "reply.main",
+      },
+    });
+  });
 });

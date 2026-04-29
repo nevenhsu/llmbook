@@ -11,7 +11,12 @@ import {
   validatePostPlanOutput,
   type PostPlanCandidate,
 } from "@/lib/ai/prompt-runtime/post-plan-contract";
-import { postPlanAudit } from "@/lib/ai/prompt-runtime/post-plan-audit";
+import {
+  buildPostPlanAuditPrompt,
+  buildPostPlanRepairPrompt,
+  parsePostPlanAuditResult,
+  type PostPlanAuditResult,
+} from "@/lib/ai/prompt-runtime/post-plan-audit";
 import type {
   FlowDiagnostics,
   SelectedPostPlan,
@@ -82,31 +87,6 @@ function buildPlanningSchemaRepairTaskContext(
   ].join("\n");
 }
 
-function buildPlanningAuditRepairTaskContext(input: {
-  baseTaskContext: string;
-  issues: string[];
-  repairGuidance: string[];
-  previousOutput: string;
-}): string {
-  return [
-    buildPlanningTaskContext(input.baseTaskContext),
-    "[planning_audit_repair]",
-    "Your previous post_plan output failed planning semantic audit checks.",
-    "Rewrite the post_plan JSON so all checks pass while keeping exactly 3 candidates.",
-    "",
-    "[audit_issues]",
-    ...(input.issues.length > 0 ? input.issues.map((item) => `- ${item}`) : ["- none"]),
-    "",
-    "[repair_guidance]",
-    ...(input.repairGuidance.length > 0
-      ? input.repairGuidance.map((item) => `- ${item}`)
-      : ["- none"]),
-    "",
-    "[previous_output]",
-    input.previousOutput,
-  ].join("\n");
-}
-
 function buildPostBodyTaskContext(): string {
   return [
     "Write the final post body for the selected plan below.",
@@ -138,17 +118,17 @@ function renderFinalPostForAudit(input: { title: string; body: string; tags: str
 }
 
 function classifyPostFailure(error: Error): TextFlowExecutionErrorCauseCategory {
+  if (error.message.includes("quality repair")) {
+    return "quality_repair";
+  }
+  if (error.message.includes("audit failed") || error.message.includes("audit")) {
+    return "semantic_audit";
+  }
   if (error.message.includes("invalid") || error.message.includes("expected")) {
     return "schema_validation";
   }
   if (error.message.includes("hard gate")) {
     return "deterministic_gate";
-  }
-  if (error.message.includes("audit failed")) {
-    return "semantic_audit";
-  }
-  if (error.message.includes("repair")) {
-    return "quality_repair";
   }
   return "transport";
 }
@@ -202,6 +182,7 @@ async function runPostFlow(
     parsed: NonNullable<ReturnType<typeof parsePostPlanActionOutput>["output"]>;
     validationIssues: string[];
     gate: ReturnType<typeof evaluatePostPlanGate>;
+    audit: PostPlanAuditResult;
   }> => {
     planningAttempt.main += 1;
     if (countsAsRegenerate) {
@@ -240,10 +221,23 @@ async function runPostFlow(
       throw new Error(validationIssues[0] ?? parsed.error ?? "post_plan stage failed");
     }
 
+    const auditPreview = await invokeStage({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+      taskContext: buildPostPlanAuditPrompt({
+        candidates: parsed.output.candidates,
+        boardContextText: promptContext.boardContextText,
+        targetContextText: promptContext.targetContextText,
+        personaEvidence: input.personaEvidence,
+      }),
+    });
+    const audit = parsePostPlanAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
+
     return {
       preview,
       parsed: parsed.output,
       validationIssues,
+      audit,
       gate: evaluatePostPlanGate(parsed.output),
     };
   };
@@ -263,20 +257,27 @@ async function runPostFlow(
       false,
     );
     let activePlanning = firstPlanning;
-    const firstAudit = postPlanAudit(firstPlanning.parsed.candidates);
+    const firstAudit = firstPlanning.audit;
     if (!firstAudit.passes) {
       planningAttempt.repair += 1;
       const repairedPlanning = await runPlanningAttempt(
-        buildPlanningAuditRepairTaskContext({
-          baseTaskContext: promptContext.taskContext,
+        buildPostPlanRepairPrompt({
+          baseTaskContext: buildPlanningTaskContext(promptContext.taskContext),
           issues: firstAudit.issues,
           repairGuidance: firstAudit.repairGuidance,
           previousOutput: firstPlanning.preview.rawResponse ?? firstPlanning.preview.markdown,
         }),
         false,
       );
-      const repairedAudit = postPlanAudit(repairedPlanning.parsed.candidates);
+      const repairedAudit = repairedPlanning.audit;
       if (!repairedAudit.passes) {
+        planningAuditResult = {
+          contract: "post_plan_audit",
+          status: "failed",
+          repairApplied: true,
+          issues: repairedAudit.issues.length > 0 ? repairedAudit.issues : firstAudit.issues,
+          checks: repairedAudit.checks,
+        };
         throw new Error("post_plan audit failed after repair");
       }
       planningAuditResult = {
@@ -313,6 +314,24 @@ async function runPostFlow(
         buildFreshPlanningTaskContext(promptContext.taskContext),
         true,
       );
+      if (!freshPlanning.audit.passes) {
+        planningAuditResult = {
+          contract: "post_plan_audit",
+          status: "failed",
+          repairApplied: false,
+          issues: freshPlanning.audit.issues,
+          checks: freshPlanning.audit.checks,
+        };
+        throw new Error("post_plan audit failed after fresh regeneration");
+      }
+      planningAuditResult = {
+        contract: "post_plan_audit",
+        status:
+          planningAuditResult?.status === "passed_after_repair" ? "passed_after_repair" : "passed",
+        repairApplied: planningAuditResult?.repairApplied ?? false,
+        issues: planningAuditResult?.issues ?? freshPlanning.audit.issues,
+        checks: freshPlanning.audit.checks,
+      };
       finalPlanningOutput = freshPlanning.parsed;
       gateResult = {
         attempted: true,
@@ -438,7 +457,7 @@ async function runPostFlow(
         repairPreview.rawResponse ?? repairPreview.markdown,
       );
       if (repairedParsedBody.error) {
-        throw new Error(repairedParsedBody.error);
+        throw new Error(`post_body quality repair output invalid: ${repairedParsedBody.error}`);
       }
       parsedBody = repairedParsedBody;
       bodyPreview = repairPreview;

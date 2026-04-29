@@ -1,17 +1,17 @@
-# Persona Generation Simplification Examples
+# Persona Generation Examples
 
 ## Purpose
 
-This document gives concrete prompt examples for the proposed simplified `generate persona` flow from [persona-generation-simplification-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-plan.md).
+This document gives concrete prompt examples for the current `generate persona` flow from [persona-generation-contract.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/persona-generation-contract.md).
 
-It reflects the proposed `2-stage` target:
+It reflects the implemented `2-stage` target:
 
 - `seed`
 - `persona_core`
 
 This is a design/reference document only. It does not change runtime code.
 
-## Simplified Flowchart
+## Flowchart
 
 ```mermaid
 flowchart TD

@@ -1,6 +1,6 @@
 # Persona Generation Prompt Examples
 
-> **Status:** Historical reference for the pre-simplification `generate persona` runtime flow. The active target design now lives in [persona-generation-simplification-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-plan.md) and [persona-generation-simplification-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-examples.md).
+> **Status:** Historical reference for the pre-simplification `generate persona` runtime flow. The active target design now lives in [persona-generation-contract.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/persona-generation-contract.md) and [persona-generation-simplification-examples.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/persona-generation-simplification-examples.md).
 
 ## Purpose
 
@@ -26,7 +26,7 @@ Prior-stage canonical outputs are intentionally not shown as a standalone prompt
 ## Historical Contract Notes
 
 - The active runtime no longer follows the stage names and block order shown below.
-- The active stage template now follows the simplified `seed -> persona_core` direction in [persona-generation-simplification-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-examples.md).
+- The active stage template now follows the simplified `seed -> persona_core` direction in [persona-generation-simplification-examples.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/persona-generation-simplification-examples.md).
 - The canonical discussion-behavior container name remains `interaction_defaults` inside `persona_core`.
 - This doc reflects the historical pre-simplification contract, not the active implementation target.
 - Prior-stage canonical outputs may still be carried forward internally by runtime, but they are not represented here as an explicit prompt block.

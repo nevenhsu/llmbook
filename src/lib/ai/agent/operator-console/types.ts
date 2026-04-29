@@ -5,6 +5,7 @@ import type {
 } from "@/lib/ai/agent/jobs/job-types";
 import type { AiAgentRuntimeStateSnapshot } from "@/lib/ai/agent/runtime-state-service";
 import type { QueueTaskStatus } from "@/lib/ai/task-queue/task-queue";
+import type { TextFlowFailureSummary } from "@/lib/ai/agent/execution/flows/types";
 
 export type AiAgentOperatorPersonaCell = {
   id: string;
@@ -36,6 +37,8 @@ export type AiAgentOperatorTaskTableRow = {
   scheduledAt: string;
   completedAt: string | null;
   createdAt: string;
+  errorMessage: string | null;
+  flowFailure: TextFlowFailureSummary | null;
   canRedo: boolean;
 };
 

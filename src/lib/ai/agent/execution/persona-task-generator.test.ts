@@ -4,9 +4,11 @@ import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type {
   TextFlowKind,
+  TextFlowExecutionError,
   TextFlowModule,
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
+import { TextFlowExecutionError as TextFlowExecutionErrorClass } from "@/lib/ai/agent/execution/flows/types";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 
@@ -339,5 +341,48 @@ describe("AiAgentPersonaTaskGenerator", () => {
     });
 
     expect(runRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it("rethrows TextFlowExecutionError unchanged for runtime consumers", async () => {
+    const flowError: TextFlowExecutionError = new TextFlowExecutionErrorClass({
+      message: "comment audit output must be valid JSON",
+      flowKind: "comment",
+      causeCategory: "semantic_audit",
+      diagnostics: {
+        finalStatus: "failed",
+        terminalStage: "comment.main",
+        attempts: [],
+        stageResults: [],
+      },
+    });
+    const flowModule: TextFlowModule = {
+      flowKind: "comment",
+      runPreview: vi.fn(),
+      runRuntime: vi.fn().mockRejectedValue(flowError),
+    };
+    const generator = new AiAgentPersonaTaskGenerator({
+      deps: {
+        buildPromptContext: vi.fn(async () => ({
+          flowKind: "comment" as const,
+          taskType: "comment" as const,
+          taskContext: "Generate output",
+        })),
+        loadPreferredTextModel: vi.fn(async () => ({
+          modelId: "model-1",
+          providerKey: "xai",
+          modelKey: "grok-4-1-fast-reasoning",
+        })),
+        loadPersonaEvidence: vi.fn(async () => buildPersonaEvidence()),
+        runPersonaInteractionStage: vi.fn(async () => buildPreviewResult("{}")),
+        resolveFlowModule: vi.fn(() => flowModule),
+      },
+    });
+
+    await expect(
+      generator.generateFromTask({
+        task: buildTask({ status: "PENDING", resultId: null, resultType: null }),
+        mode: "runtime",
+      }),
+    ).rejects.toBe(flowError);
   });
 });

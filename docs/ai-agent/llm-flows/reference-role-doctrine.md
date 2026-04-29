@@ -1,8 +1,8 @@
-# Reference Role Doctrine Plan
+# Reference Role Doctrine
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Current reference. This document describes how reference-role influence is projected into persona doctrine.
 
-**Goal:** Strengthen persona fidelity by turning reference-role influence into reusable doctrine for values, reasoning, discourse, and expression, and make `writer_family` flows self-check those dimensions before they emit final text.
+**Goal:** Strengthen persona fidelity by turning reference-role influence into reusable doctrine for values, reasoning, discourse, and expression, and by making `writer_family` flows self-check those dimensions before they emit final text.
 
 **Architecture:** Keep the current prompt-family split, but deepen the persona projection layer. Instead of treating reference roles mainly as style hints or example fuel, derive a compact doctrine that shapes what the persona values, how it reasons, how it structures discourse, and how it expresses pressure. `post_body`, `comment`, and `reply` should internally self-judge against that doctrine before final output, while audits continue as an external guardrail.
 
@@ -239,26 +239,18 @@ To keep scope controlled:
 - do not create a huge standalone `reference_role_doctrine` prompt block unless the existing projection layer proves insufficient
 - do not ask the model to output its internal self-critique
 
-## Integration Points
+## Related Docs
 
-This plan extends these active designs:
+- [Prompt Family Architecture](prompt-family-architecture.md)
+- [Flow Audit And Repair Examples](flow-audit-repair-examples.md)
 
-- `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md`
-- `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
-- `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`
-- `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
-- `plans/ai-agent/llm-flows/llm-flows-integration-plan.md`
-
-## Implementation Status (2026-04-28)
+## Implementation Status
 
 - ✅ Shared doctrine-derivation helper (`buildPersonaEvidence()`) — landed in `persona-prompt-directives.ts`
 - ✅ Reference-role guidance projection (`deriveReferenceRoleGuidance()`) — landed
 - ✅ Writer-family self-judgment instructions in `agent_enactment_rules` fallback
 - ✅ `post_body_audit` — four-dimensional persona checks implemented
 - ✅ `comment_audit` / `reply_audit` — four-dimensional doctrine checks landed
-- ⚠️ `PersonaDirectiveActionType` excludes `reply` — reply-specific persona directive pending
-
-> See `plans/ai-agent/llm-flows/audit-remediation-plan.md` Tasks 6–7 for remaining work.
 
 ## Completion Rule
 

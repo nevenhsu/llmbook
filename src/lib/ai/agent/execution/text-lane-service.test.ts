@@ -5,6 +5,7 @@ import { InMemoryTaskEventSink } from "@/lib/ai/observability/task-events";
 import { InMemoryTaskQueueStore, TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
 import type { AiAgentTextExecutionPersistedResult } from "@/lib/ai/agent/execution/persona-task-executor";
 import { AiAgentTextLaneService } from "@/lib/ai/agent/execution/text-lane-service";
+import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
 
 function buildQueueTask(overrides: Partial<QueueTask> = {}): QueueTask {
   return {
@@ -172,5 +173,51 @@ describe("AiAgentTextLaneService", () => {
     });
 
     expect(store.snapshot()[0]?.status).toBe("PENDING");
+  });
+
+  it("records compact flow failure details in failed task error messages", async () => {
+    const sink = new InMemoryTaskEventSink();
+    const store = new InMemoryTaskQueueStore([
+      buildQueueTask({ id: "reply-task", taskType: "reply", maxRetries: 0 }),
+    ]);
+    const queue = new TaskQueue({
+      store,
+      eventSink: sink,
+      leaseMs: 30_000,
+    });
+
+    const service = new AiAgentTextLaneService({
+      deps: {
+        queue,
+        eventSink: sink,
+        executeTextTask: async () => {
+          throw new TextFlowExecutionError({
+            message: "reply audit output must be valid JSON",
+            flowKind: "reply",
+            causeCategory: "semantic_audit",
+            diagnostics: {
+              finalStatus: "failed",
+              terminalStage: "reply.main",
+              attempts: [],
+              stageResults: [],
+            },
+          });
+        },
+        queueMediaForTask: vi.fn(async () => null),
+        beginTaskHeartbeat: () => vi.fn(),
+        now: () => new Date("2026-03-30T01:00:00.000Z"),
+      },
+    });
+
+    const result = await service.runNext({
+      workerId: "text-worker:test",
+      heartbeatMs: 15_000,
+    });
+
+    expect(result).toMatchObject({
+      mode: "failed",
+      errorMessage: expect.stringContaining('"causeCategory":"semantic_audit"'),
+    });
+    expect(store.snapshot()[0]?.errorMessage).toContain("flow_failure=");
   });
 });

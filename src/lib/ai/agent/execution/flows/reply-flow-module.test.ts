@@ -461,4 +461,54 @@ describe("createReplyFlowModule", () => {
       },
     });
   });
+
+  it("classifies invalid reply audit JSON as semantic_audit", async () => {
+    const flowModule = createReplyFlowModule();
+    const runPersonaInteractionStage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown: "A valid reply body.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(buildPreviewResult("not json"))
+      .mockResolvedValueOnce(
+        buildPreviewResult(
+          JSON.stringify({
+            markdown: "A second valid reply body.",
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(buildPreviewResult("not json"));
+
+    await expect(
+      flowModule.runRuntime({
+        task: buildTask(),
+        promptContext: {
+          flowKind: "reply",
+          taskType: "comment",
+          taskContext: "Generate a reply inside the active thread below.",
+        },
+        loadPreferredTextModel: async () => ({
+          modelId: "model-1",
+          providerKey: "xai",
+          modelKey: "grok-4-1-fast-reasoning",
+        }),
+        runPersonaInteractionStage: runPersonaInteractionStage as any,
+        personaEvidence: buildPersonaEvidence(),
+      }),
+    ).rejects.toMatchObject({
+      name: "TextFlowExecutionError",
+      flowKind: "reply",
+      causeCategory: "semantic_audit",
+    });
+  });
 });

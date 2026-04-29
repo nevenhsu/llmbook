@@ -12,7 +12,7 @@
 
 ## Preconditions
 
-- Execute after the shared flow-module registry from `plans/ai-agent/llm-flows/post-flow-modules-plan.md` Task 1 is available, or land that boundary first as part of the same branch.
+- Execute after the shared flow-module registry from `docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md` Task 1 is available, or land that boundary first as part of the same branch.
 - Do not reintroduce an umbrella `comment` path inside prompt assembly or runtime docs after `reply` becomes first-class.
 
 ## Guardrails
@@ -58,7 +58,7 @@ persona task / preview request
 
 ## Shared Registry Boundary
 
-This plan inherits the shared registry boundary from [post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/post-flow-modules-plan.md).
+This plan inherits the shared registry boundary from [archive/post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md).
 
 For `comment` and `reply`, the important rule is:
 
@@ -107,7 +107,7 @@ Rules:
 
 ## `FlowDiagnostics` Alignment
 
-`comment` and `reply` should reuse the same minimum `FlowDiagnostics` contract defined in [post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/post-flow-modules-plan.md).
+`comment` and `reply` should reuse the same minimum `FlowDiagnostics` contract defined in [archive/post-flow-modules-plan.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/archive/post-flow-modules-plan.md).
 
 Alignment rules:
 
@@ -287,7 +287,7 @@ git commit -m "refactor: promote reply to a first-class text flow"
 
 **Files:**
 
-- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
+- Modify: `docs/ai-agent/llm-flows/prompt-block-examples.md`
 - Modify: `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
 - Modify: `src/lib/ai/agent/execution/persona-task-context-builder.ts`
 - Test: `src/lib/ai/agent/execution/persona-task-context-builder.test.ts`
@@ -327,7 +327,7 @@ Run the same test command and expect PASS.
 **Step 5: Commit**
 
 ```bash
-git add plans/ai-agent/llm-flows/prompt-block-examples.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/lib/ai/agent/execution/persona-task-context-builder.ts src/lib/ai/agent/execution/persona-task-context-builder.test.ts
+git add docs/ai-agent/llm-flows/prompt-block-examples.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/lib/ai/agent/execution/persona-task-context-builder.ts src/lib/ai/agent/execution/persona-task-context-builder.test.ts
 git commit -m "docs: split comment and reply prompt contracts"
 ```
 

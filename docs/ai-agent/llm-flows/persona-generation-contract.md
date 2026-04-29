@@ -1,12 +1,10 @@
-# Persona Generation Simplification Plan
+# Persona Generation Contract
 
-> **Status:** Active generate-persona implementation plan. This document supersedes the earlier relationship-removal-only direction and is the sole canonical target for persona-generation migration.
+> **Status:** Current reference. This document describes the implemented `seed -> persona_core` generate-persona contract.
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Goal:** Keep `generate persona` on the smallest staged JSON flow that protects reference/originalization quality without forcing it into runtime text-flow prompt families.
 
-**Goal:** Simplify `generate persona` into the smallest staged JSON flow that still protects reference/originalization quality, while removing unnecessary alignment pressure with runtime text-flow prompt families.
-
-**Architecture:** Replace the current `5-stage` persona-generation flow with a dedicated `2-stage` persona-generation pipeline: `seed -> persona_core`. Keep persona generation as its own canonical-data generation system rather than forcing it into the `post/comment/reply` prompt-family architecture. Remove persona-generation memory authoring entirely and collapse parsing into a shared staged JSON runner with only two stage schemas.
+**Architecture:** Persona generation uses a dedicated `2-stage` pipeline: `seed -> persona_core`. It is its own canonical-data generation system, separate from the `post/comment/reply` prompt-family architecture. Persona generation does not author memories.
 
 **Tech Stack:** TypeScript, Vitest, admin control-plane persona-generation preview, staged JSON validation/repair, runtime core-profile normalization, admin docs.
 
@@ -380,13 +378,9 @@ The simplification plan subsumes the earlier relationship cleanup and goes furth
 - keep `interaction_defaults` name for now
 - interpret `interaction_defaults` strictly as reusable discussion behavior
 
-## Migration Boundary
+## Current Contract Boundary
 
-This plan is the active migration boundary for generate-persona.
-
-It supersedes the earlier direction that only cleaned relationship wording while preserving the `5-stage` structure.
-
-Specifically, this plan replaces:
+The current generate-persona contract replaces the old stages:
 
 - `seed`
 - `values_and_aesthetic`
@@ -401,13 +395,6 @@ with:
 
 and removes persona-generation memory authoring entirely.
 
-## Open Questions For Next Discussion
-
-- Should `seed` semantic audit still be split into two checks:
-  - reference classification
-  - originalization
-    or merged into one compact audit?
-
 ## Current Recommendation Summary
 
 - Merge current `5 stages` into `2 stages`
@@ -419,7 +406,7 @@ and removes persona-generation memory authoring entirely.
 - Make `persona_core` quality audit explicitly judge cross-field coherence
 - Make `persona_core` quality audit also judge whether doctrine can be derived clearly from canonical source fields without persisting doctrine dimensions directly
 
-## Implementation Status (2026-04-28) ✅ DONE
+## Implementation Status
 
 All items above are implemented:
 
@@ -431,8 +418,6 @@ All items above are implemented:
 - ✅ Relationship fields removed from generation output (`grep` confirms no active usage)
 - ✅ Persona generation uses its own staged prompt template, not planner/writer family
 
-## Reference Examples Doc
+## Related Docs
 
-When this simplified design is discussed or implemented, use a dedicated examples doc instead of reusing the current `5-stage` reference:
-
-- `plans/ai-agent/llm-flows/persona-generation-simplification-examples.md`
+- [Persona Generation Examples](persona-generation-simplification-examples.md)

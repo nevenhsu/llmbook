@@ -11,7 +11,7 @@ This document gives concrete assembled-prompt examples for the approved shared t
 
 It is a design/reference document only. It does not change runtime code.
 
-For audit / repair examples, see [flow-audit-repair-examples.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/flow-audit-repair-examples.md).
+For audit / repair examples, see [flow-audit-repair-examples.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/flow-audit-repair-examples.md).
 
 These examples are meant for prompt preview and implementation alignment. They reflect the current approved direction from the flow-module plans and prompt-family plan:
 

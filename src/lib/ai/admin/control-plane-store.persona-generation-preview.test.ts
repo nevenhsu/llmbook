@@ -249,6 +249,22 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       identity_summary: buildSeedStage().identity_summary,
       values: buildPersonaCoreStage().values,
     });
+    const semanticAuditPrompts = invokeLLM.mock.calls
+      .map((call) => call[0] as { entityId?: string; modelInput?: { prompt?: string } })
+      .filter((call) => call.entityId?.includes("semantic-audit"))
+      .map((call) => call.modelInput?.prompt ?? "");
+    expect(semanticAuditPrompts).toHaveLength(3);
+    expect(semanticAuditPrompts.every((prompt) => prompt.includes("[output_constraints]"))).toBe(
+      true,
+    );
+    for (const prompt of semanticAuditPrompts) {
+      expect(prompt).toContain('"passes": true');
+      expect(prompt).toContain('"issues": ["string"]');
+      expect(prompt).toContain('"repairGuidance": ["string"]');
+    }
+    expect(
+      semanticAuditPrompts.some((prompt) => prompt.includes('"keptReferenceNames": ["string"]')),
+    ).toBe(true);
   });
 
   it("throws a typed parse error when persona_core is missing required fields", async () => {

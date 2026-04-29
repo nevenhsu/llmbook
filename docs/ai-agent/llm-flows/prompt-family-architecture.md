@@ -1,10 +1,10 @@
-# Prompt Family Architecture Plan
+# Prompt Family Architecture
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Current reference. This document describes the implemented prompt-family split for staged LLM text flows.
 
-**Goal:** Replace the current single shared prompt-global structure with two explicit prompt families: one for `post_plan` selection/scoring work and one for final writing work (`post_body`, `comment`, `reply`), while removing relationship generation and relationship-context blocks from the active prompt architecture.
+**Goal:** Maintain two explicit prompt families: one for `post_plan` selection/scoring work and one for final writing work (`post_body`, `comment`, `reply`), with no relationship-context block in active prompt architecture.
 
-**Architecture:** Introduce one prompt-family layer above flow modules. `post_plan` uses a planner-family global structure optimized for angle selection, novelty judgment, and title/persona fit. `post_body`, `comment`, and `reply` use a writer-family global structure optimized for final prose generation, persona enactment, and flow-specific audits. Relationship cues are removed from persona-generation requirements and from active prompt globals because the current contract has no relationship data source.
+**Architecture:** One prompt-family layer sits above flow modules. `post_plan` uses a planner-family global structure optimized for angle selection, novelty judgment, and title/persona fit. `post_body`, `comment`, and `reply` use a writer-family global structure optimized for final prose generation, persona enactment, and flow-specific audits. Relationship cues are absent from active prompt globals because the current contract has no relationship data source.
 
 **Tech Stack:** TypeScript, Vitest, prompt-runtime block assembly, control-plane shared prompt formatting, persona-core normalization, shared flow modules, docs/spec updates.
 
@@ -646,112 +646,6 @@ That means:
 - do not design downstream prompt families under the assumption that relationship fields must exist
 - delete remaining relationship-oriented runtime/prompt fields during cleanup rather than treating them as passive background data
 
-## Task 1: Split Prompt Assembly Into Two Families ✅ DONE
+## Implementation Status
 
-**Files:**
-
-- Modify: `src/lib/ai/prompt-runtime/prompt-builder.ts`
-- Modify: `src/lib/ai/admin/control-plane-shared.ts`
-- Modify: `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
-- Test: `src/lib/ai/prompt-runtime/prompt-builder.test.ts`
-
-**Step 1: Write the failing tests**
-
-- Add coverage that `post_plan` uses planner-family block order.
-- Add coverage that `post_body`, `comment`, and `reply` use writer-family block order.
-- Add coverage that relationship-context blocks are no longer emitted as required shared blocks.
-
-**Step 2: Run tests to verify failure**
-
-Run:
-
-```bash
-npm test -- src/lib/ai/prompt-runtime/prompt-builder.test.ts
-```
-
-Expected: failures because prompt assembly still assumes one shared block skeleton.
-
-**Step 3: Write the minimal implementation**
-
-- Add prompt-family-level block ordering.
-- Keep common blocks shared where ownership is actually the same.
-- Remove mandatory relationship block emission.
-
-**Step 4: Re-run tests**
-
-Run the same test command and expect PASS.
-
-**Step 5: Commit**
-
-```bash
-git add src/lib/ai/prompt-runtime/prompt-builder.ts src/lib/ai/admin/control-plane-shared.ts docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md src/lib/ai/prompt-runtime/prompt-builder.test.ts
-git commit -m "refactor: split prompt assembly into planner and writer families"
-```
-
-## Task 2: Introduce `agent_posting_lens` And Remove Relationship Usage ✅ DONE
-
-**Files:**
-
-- Modify: `src/lib/ai/agent/execution/persona-interaction-service.ts`
-- Modify: `src/lib/ai/prompt-runtime/persona-prompt-directives.ts`
-- Modify: `src/lib/ai/core/runtime-core-profile.ts`
-- Test: `src/lib/ai/agent/execution/persona-interaction-service.test.ts`
-- Test: `src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts`
-
-**Step 1: Write the failing tests**
-
-- Add coverage for planner-family persona projection:
-  - `agent_posting_lens` exists for `post_plan`
-  - `agent_voice_contract` does not
-- Add coverage that relationship-derived prompt content is not required or emitted.
-
-**Step 2: Run tests to verify failure**
-
-Run:
-
-```bash
-npm test -- src/lib/ai/agent/execution/persona-interaction-service.test.ts src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts
-```
-
-Expected: failures because planner-family persona projection does not exist yet and relationship assumptions still leak into writer-family blocks.
-
-**Step 3: Write the minimal implementation**
-
-- Add a planner-family persona projection for post planning.
-- Keep posting-lens scope narrow and non-prose-oriented.
-- Remove active relationship prompt usage.
-
-**Step 4: Re-run tests**
-
-Run the same test command and expect PASS.
-
-**Step 5: Commit**
-
-```bash
-git add src/lib/ai/agent/execution/persona-interaction-service.ts src/lib/ai/prompt-runtime/persona-prompt-directives.ts src/lib/ai/core/runtime-core-profile.ts src/lib/ai/agent/execution/persona-interaction-service.test.ts src/lib/ai/prompt-runtime/persona-prompt-directives.test.ts
-git commit -m "feat: add planner posting lens and drop relationship prompt usage"
-```
-
-## Task 3: Update Flow Plans And Prompt Docs ✅ DONE
-
-**Files:**
-
-- Modify: `plans/ai-agent/llm-flows/post-flow-modules-plan.md`
-- Modify: `plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md`
-- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
-- Modify: `tasks/todo.md`
-
-**Step 1: Update docs**
-
-- Add the prompt-family architecture as an explicit prerequisite/reference for flow plans.
-- Update prompt examples to reflect:
-  - planner family vs writer family
-  - no relationship-context block
-  - `reply` as first-class flow
-
-**Step 2: Commit**
-
-```bash
-git add plans/ai-agent/llm-flows/post-flow-modules-plan.md plans/ai-agent/llm-flows/comment-reply-flow-modules-plan.md plans/ai-agent/llm-flows/prompt-block-examples.md tasks/todo.md
-git commit -m "docs: align flow plans to prompt family architecture"
-```
+Implemented in prompt-runtime and shared AI-agent flow code.

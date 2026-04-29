@@ -10,6 +10,7 @@ import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overv
 import { NoopTaskEventSink, type TaskEventSink } from "@/lib/ai/observability/task-events";
 import { SupabaseTaskQueueStore } from "@/lib/ai/task-queue/supabase-task-queue-store";
 import { TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
+import { appendTextFlowFailureSuffix } from "@/lib/ai/agent/execution/flows/types";
 
 export type AiAgentTextLaneRunInput = {
   workerId: string;
@@ -161,7 +162,9 @@ export class AiAgentTextLaneService {
       };
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown text-lane execution error";
+        error instanceof Error
+          ? appendTextFlowFailureSuffix(error)
+          : "Unknown text-lane execution error";
       await this.deps.queue.fail({
         taskId: claimedTask.id,
         workerId: input.workerId,

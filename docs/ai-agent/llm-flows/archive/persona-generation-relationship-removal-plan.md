@@ -1,6 +1,6 @@
 # Persona Generation Relationship Removal Plan
 
-> **Status:** Historical cleanup note. The active generate-persona implementation target is [persona-generation-simplification-plan.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/llm-flows/persona-generation-simplification-plan.md). Use this document only to identify stale relationship-oriented fields/wording that still need deletion during the simplification migration.
+> **Status:** Historical cleanup note. The active generate-persona implementation target is [persona-generation-contract.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/persona-generation-contract.md). Use this document only to identify stale relationship-oriented fields/wording that still need deletion during the simplification migration.
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -217,8 +217,8 @@ git commit -m "refactor: update persona preview surfaces for non-relationship in
 
 - Modify: `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`
 - Modify: `docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md`
-- Modify: `plans/ai-agent/llm-flows/prompt-block-examples.md`
-- Modify: `plans/ai-agent/llm-flows/prompt-family-architecture-plan.md`
+- Modify: `docs/ai-agent/llm-flows/prompt-block-examples.md`
+- Modify: `docs/ai-agent/llm-flows/prompt-family-architecture.md`
 - Test/Review: `rg -n "relationshipTendencies|defaultRelationshipStance|agent_relationship_context" docs src/lib/ai/admin src/lib/ai/core plans`
 
 **Step 1: Write the doc/test expectation**
@@ -253,7 +253,7 @@ Run the same `rg` command and expect only intentional historical/unrelated hits.
 **Step 5: Commit**
 
 ```bash
-git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md plans/ai-agent/llm-flows/prompt-block-examples.md plans/ai-agent/llm-flows/prompt-family-architecture-plan.md
+git add docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md docs/ai-admin/AI_PROMPT_ASSEMBLY_DEV_SPEC.md docs/ai-agent/llm-flows/prompt-block-examples.md docs/ai-agent/llm-flows/prompt-family-architecture.md
 git commit -m "docs: remove relationship lineage from persona generation docs"
 ```
 

@@ -4,6 +4,7 @@ import type {
   AiAgentOperatorTaskTableResponse,
   AiAgentOperatorTaskTarget,
 } from "@/lib/ai/agent/operator-console/types";
+import { parseTextFlowFailureSummary } from "@/lib/ai/agent/execution/flows/types";
 
 type PersonaRow = {
   id: string;
@@ -203,6 +204,8 @@ export class AiAgentTaskTableReadModel {
         scheduledAt: row.scheduledAt,
         completedAt: row.completedAt,
         createdAt: row.createdAt,
+        errorMessage: row.errorMessage,
+        flowFailure: parseTextFlowFailureSummary(row.errorMessage),
         canRedo: row.status === "DONE",
       })),
     };

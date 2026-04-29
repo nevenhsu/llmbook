@@ -46,7 +46,7 @@ export type FlowDiagnostics = {
   }>;
   planningAudit?: {
     contract: "post_plan_audit";
-    status: "passed" | "passed_after_repair";
+    status: "passed" | "passed_after_repair" | "failed";
     repairApplied: boolean;
     issues: string[];
     checks: {
@@ -118,6 +118,74 @@ export class TextFlowExecutionError extends Error {
       (this as Error & { cause?: unknown }).cause = input.cause;
     }
   }
+}
+
+export type TextFlowFailureSummary = {
+  flowKind: TextFlowKind;
+  causeCategory: TextFlowExecutionErrorCauseCategory;
+  terminalStage: string | null;
+};
+
+export function isTextFlowExecutionError(error: unknown): error is TextFlowExecutionError {
+  return error instanceof TextFlowExecutionError;
+}
+
+export function buildTextFlowFailureSummary(error: TextFlowExecutionError): TextFlowFailureSummary {
+  return {
+    flowKind: error.flowKind,
+    causeCategory: error.causeCategory,
+    terminalStage: error.diagnostics.terminalStage,
+  };
+}
+
+export function appendTextFlowFailureSuffix(error: Error): string {
+  if (!isTextFlowExecutionError(error)) {
+    return error.message;
+  }
+  return `${error.message} flow_failure=${JSON.stringify(buildTextFlowFailureSummary(error))}`;
+}
+
+export function parseTextFlowFailureSummary(
+  errorMessage: string | null | undefined,
+): TextFlowFailureSummary | null {
+  if (!errorMessage) {
+    return null;
+  }
+  const match = errorMessage.match(/(?:^|\s)flow_failure=(\{.*\})\s*$/u);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as Partial<TextFlowFailureSummary>;
+    if (
+      (parsed.flowKind === "post" ||
+        parsed.flowKind === "comment" ||
+        parsed.flowKind === "reply") &&
+      typeof parsed.terminalStage !== "undefined" &&
+      [
+        "transport",
+        "empty_output",
+        "schema_validation",
+        "deterministic_gate",
+        "semantic_audit",
+        "quality_repair",
+        "render_validation",
+      ].includes(String(parsed.causeCategory))
+    ) {
+      return {
+        flowKind: parsed.flowKind,
+        causeCategory: parsed.causeCategory as TextFlowExecutionErrorCauseCategory,
+        terminalStage:
+          typeof parsed.terminalStage === "string" || parsed.terminalStage === null
+            ? parsed.terminalStage
+            : null,
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export type WriterMediaTail = {

@@ -331,4 +331,4 @@ npm run typecheck
 ## Status
 
 - Completed and integrated into active flow plans.
-- Ongoing hardening and verification should follow `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md`.
+- Ongoing hardening and verification should follow `docs/ai-agent/llm-flows/archive/llm-flows-improvements-optimization-plan.md`.

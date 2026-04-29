@@ -160,8 +160,9 @@ describe("persona-generation-contract", () => {
   });
 
   it("rejects retired persona_core aliases", () => {
-    const { creator_affinity: _creatorAffinity, ...withoutCreatorAffinity } =
-      buildPersonaCoreStage();
+    const withoutCreatorAffinity = buildPersonaCoreStage();
+    delete (withoutCreatorAffinity as Partial<ReturnType<typeof buildPersonaCoreStage>>)
+      .creator_affinity;
     expect(() =>
       parsePersonaCoreStageOutput(
         JSON.stringify({
@@ -172,8 +173,9 @@ describe("persona-generation-contract", () => {
     ).toThrow(/forbidden key creator_admiration/);
 
     const core = buildPersonaCoreStage();
-    const { feedback_shape: _feedbackShape, ...commentWithoutFeedbackShape } =
-      core.task_style_matrix.comment;
+    const commentWithoutFeedbackShape = { ...core.task_style_matrix.comment };
+    delete (commentWithoutFeedbackShape as Partial<typeof core.task_style_matrix.comment>)
+      .feedback_shape;
     expect(() =>
       parsePersonaCoreStageOutput(
         JSON.stringify({

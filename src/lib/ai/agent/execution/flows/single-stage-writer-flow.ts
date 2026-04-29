@@ -27,10 +27,13 @@ import {
 type SingleStageWriterFlowKind = Extract<TextFlowKind, "comment" | "reply">;
 
 function classifySingleStageFailure(error: Error): TextFlowExecutionErrorCauseCategory {
+  if (error.message.includes("quality repair")) {
+    return "quality_repair";
+  }
   if (error.message.includes("did not produce a valid markdown body")) {
     return "empty_output";
   }
-  if (error.message.includes("audit failed")) {
+  if (error.message.includes("audit failed") || error.message.includes("audit")) {
     return "semantic_audit";
   }
   return "transport";
@@ -162,7 +165,14 @@ async function runAuditRepairLoop(input: {
     const repairedParsed = parseMarkdownActionOutput(
       repairPreview.rawResponse ?? repairPreview.markdown,
     );
-    const repairedOutput = requireMarkdownOutput(repairedParsed, "comment");
+    if (!repairedParsed.output?.markdown?.trim() || repairedParsed.error) {
+      throw new Error(
+        `comment quality repair output did not produce a valid markdown body${
+          repairedParsed.error ? `: ${repairedParsed.error}` : ""
+        }`,
+      );
+    }
+    const repairedOutput = repairedParsed.output;
     const repairedAuditPreview = await sharedAuditCall(
       buildCommentAuditPrompt({
         personaEvidence: input.moduleInput.personaEvidence,
@@ -235,7 +245,14 @@ async function runAuditRepairLoop(input: {
   const repairedParsed = parseMarkdownActionOutput(
     repairPreview.rawResponse ?? repairPreview.markdown,
   );
-  const repairedOutput = requireMarkdownOutput(repairedParsed, "reply");
+  if (!repairedParsed.output?.markdown?.trim() || repairedParsed.error) {
+    throw new Error(
+      `reply quality repair output did not produce a valid markdown body${
+        repairedParsed.error ? `: ${repairedParsed.error}` : ""
+      }`,
+    );
+  }
+  const repairedOutput = repairedParsed.output;
   const repairedAuditPreview = await sharedAuditCall(
     buildReplyAuditPrompt({
       personaEvidence: input.moduleInput.personaEvidence,

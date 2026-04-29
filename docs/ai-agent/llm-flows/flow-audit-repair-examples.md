@@ -4,6 +4,29 @@ This document provides JSON examples for flow audit and repair scenarios in the 
 
 ## Post Plan Audit Examples
 
+`post_plan` now uses two audit layers:
+
+- Schema/deterministic validation in app code verifies the candidate contract and score fields.
+- A compact semantic LLM audit runs before hard-gate selection and returns exactly:
+
+```json
+{
+  "passes": true,
+  "issues": [],
+  "repairGuidance": [],
+  "checks": {
+    "candidate_count": "pass",
+    "board_fit": "pass",
+    "novelty_evidence": "pass",
+    "persona_posting_lens_fit": "pass",
+    "body_outline_usefulness": "pass",
+    "no_model_owned_final_selection": "pass"
+  }
+}
+```
+
+If `passes` is false, the flow runs one `quality_repair` planning attempt, then revalidates and reaudits before the hard gate. If the repaired planning audit still fails, the flow fails with `causeCategory: "semantic_audit"` and `diagnostics.planningAudit.status: "failed"`.
+
 ### Valid Post Plan Output
 
 ```json

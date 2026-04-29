@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Finish the remaining hardening work from `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md` so staged LLM flows fail closed, surface useful diagnostics, and keep active contracts free of retired compatibility paths.
+**Goal:** Finish the remaining hardening work from `docs/ai-agent/llm-flows/archive/llm-flows-improvements-optimization-plan.md` so staged LLM flows fail closed, surface useful diagnostics, and keep active contracts free of retired compatibility paths.
 
 **Architecture:** Keep text-flow orchestration inside flow modules and keep persona generation as a strict two-stage `seed -> persona_core` pipeline. Use TDD for each behavior change: first add a focused failing contract/flow test, then implement the smallest contract change, then run the targeted test before moving to the next task. Do not add compatibility branches for retired contracts.
 
@@ -191,7 +191,7 @@ Expected: PASS.
 - Test: `src/lib/ai/prompt-runtime/post-plan-audit.test.ts`
 - Modify: `src/lib/ai/agent/execution/flows/post-flow-module.ts`
 - Test: `src/lib/ai/agent/execution/flows/post-flow-module.test.ts`
-- Modify: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- Modify: `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`
 
 **Step 1: Add failing prompt/parser tests**
 
@@ -361,8 +361,8 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `plans/ai-agent/llm-flows/llm-flows-improvements-optimization-plan.md`
-- Modify: `plans/ai-agent/llm-flows/flow-audit-repair-examples.md`
+- Modify: `docs/ai-agent/llm-flows/archive/llm-flows-improvements-optimization-plan.md`
+- Modify: `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`
 - Modify: `tasks/todo.md`
 
 **Step 1: Update status markers**
@@ -375,7 +375,7 @@ Expected: PASS.
 Run:
 
 ```bash
-rg -n 'creator_admiration|body_shape|persona_fit|fenced JSON|wrapper' plans/ai-agent/llm-flows docs/dev-guidelines/08-llm-json-stage-contract.md
+rg -n 'creator_admiration|body_shape|persona_fit|fenced JSON|wrapper' docs/ai-agent/llm-flows docs/dev-guidelines/08-llm-json-stage-contract.md
 ```
 
 Expected: only intentional historical references or explicit rejection examples remain.
