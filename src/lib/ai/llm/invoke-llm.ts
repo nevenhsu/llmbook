@@ -294,13 +294,15 @@ export async function invokeLLM(input: {
   entityId: string;
   timeoutMs?: number;
   retries?: number;
+  manualMode?: "auto" | "never";
   recorder?: PromptRuntimeEventRecorder;
   onProviderError?: (event: LlmProviderErrorEvent) => Promise<void> | void;
 }): Promise<InvokeLlmOutput> {
   const recorder = input.recorder ?? getPromptRuntimeRecorder();
   const taskType = input.taskType ?? "generic";
+  const manualMode = input.manualMode ?? "auto";
 
-  if (process.env.AI_AGENT_MANUAL_LLM === "true") {
+  if (manualMode !== "never" && process.env.AI_AGENT_MANUAL_LLM === "true") {
     if (!process.stdin.isTTY) {
       throw new Error(
         "AI_AGENT_MANUAL_LLM is true but process.stdin.isTTY is false. Cannot automatically fallback to API.",

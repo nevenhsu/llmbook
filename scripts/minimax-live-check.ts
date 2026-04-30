@@ -60,7 +60,7 @@ async function main() {
         const output = await generateText({
           model,
           prompt: "Respond with exactly: pong",
-          maxOutputTokens: 8,
+          maxOutputTokens: 32,
           temperature: 0,
         });
         console.log(

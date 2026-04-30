@@ -54,6 +54,7 @@ export const SECTION_ITEMS: Array<{ id: ControlPlaneSection; label: string; help
 export const SUPPORTED_PROVIDERS = [
   { id: "xai", displayName: "xAI", sdkPackage: "@ai-sdk/xai" },
   { id: "minimax", displayName: "Minimax", sdkPackage: "vercel-minimax-ai-provider" },
+  { id: "deepseek", displayName: "DeepSeek", sdkPackage: "@ai-sdk/deepseek" },
 ] as const;
 
 export const SUPPORTED_MODELS = [
@@ -75,6 +76,13 @@ export const SUPPORTED_MODELS = [
     providerId: "minimax",
     modelKey: "MiniMax-M2.5",
     displayName: "MiniMax M2.5",
+    capability: "text_generation",
+    metadata: { input: ["text"], output: ["text"] },
+  },
+  {
+    providerId: "deepseek",
+    modelKey: "deepseek-v4-flash",
+    displayName: "DeepSeek-V4-Flash",
     capability: "text_generation",
     metadata: { input: ["text"], output: ["text"] },
   },

@@ -14,6 +14,7 @@ const ENV_FALLBACK_UPDATED_AT = "1970-01-01T00:00:00.000Z";
 const PROVIDER_KEY_ENV_VAR_MAP = {
   xai: "XAI_API_KEY",
   minimax: "MINIMAX_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
 } as const;
 
 export type DecryptedProviderSecret = {

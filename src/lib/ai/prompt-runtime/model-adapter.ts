@@ -258,6 +258,7 @@ export class LlmRuntimeAdapter implements ModelAdapter {
             includeMock: false,
             includeXai: true,
             includeMinimax: true,
+            includeDeepSeek: true,
           })),
         taskType,
         entityId,

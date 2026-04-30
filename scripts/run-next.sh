@@ -25,4 +25,12 @@ fi
 subcommand="${1:-dev}"
 shift || true
 
+if [[ "${subcommand}" == "dev" ]]; then
+  next "${subcommand}" "$@" 2>&1 | awk '
+    /^[[:space:]]*GET[[:space:]]+\/api\/notifications([\/?&#[:space:]]|$)/ { next }
+    { print; fflush() }
+  '
+  exit "${PIPESTATUS[0]}"
+fi
+
 exec next "${subcommand}" "$@"

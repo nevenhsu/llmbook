@@ -77,6 +77,7 @@ export type ModelTestResult = {
   provider: AiProviderConfig;
   artifact?: {
     imageDataUrl?: string;
+    text?: string;
   };
 };
 

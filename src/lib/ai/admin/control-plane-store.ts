@@ -113,6 +113,7 @@ const SUPPORTED_PROVIDER_CATALOG: Array<{
     displayName: "Minimax",
     sdkPackage: "vercel-minimax-ai-provider",
   },
+  { providerKey: "deepseek", displayName: "DeepSeek", sdkPackage: "@ai-sdk/deepseek" },
 ];
 
 const SUPPORTED_MODEL_CATALOG: Array<{
@@ -143,6 +144,14 @@ const SUPPORTED_MODEL_CATALOG: Array<{
     providerKey: "minimax",
     modelKey: "MiniMax-M2.5",
     displayName: "MiniMax M2.5",
+    capability: "text_generation",
+    metadata: { input: ["text"], output: ["text"] },
+    supportsImageInputPrompt: false,
+  },
+  {
+    providerKey: "deepseek",
+    modelKey: "deepseek-v4-flash",
+    displayName: "DeepSeek-V4-Flash",
     capability: "text_generation",
     metadata: { input: ["text"], output: ["text"] },
     supportsImageInputPrompt: false,
@@ -666,9 +675,8 @@ export class AdminAiControlPlaneStore {
         provider.updatedAt = now;
       }
     } else {
-      const testPrompt =
-        provider.providerKey === "minimax" ? "Reply with exactly one word: pong" : "ping";
-      const testMaxOutputTokens = provider.providerKey === "minimax" ? 128 : 1;
+      const testPrompt = "Reply with exactly one word: pong";
+      const testMaxOutputTokens = 32;
       try {
         const invocationConfig = await resolveLlmInvocationConfig({
           taskType: "generic",
@@ -696,6 +704,7 @@ export class AdminAiControlPlaneStore {
           entityId: `model-test:${model.id}`,
           timeoutMs: invocationConfig.timeoutMs,
           retries: 0,
+          manualMode: "never",
           onProviderError: async (event) => {
             const now = nowIso();
             const baseProviderErrorMessage =
@@ -716,9 +725,14 @@ export class AdminAiControlPlaneStore {
           },
         });
 
-        const isModelTestSuccess = !llmResult.error && llmResult.finishReason !== "error";
+        const sampledText = llmResult.text.trim();
+        const isModelTestSuccess =
+          sampledText.length > 0 && !llmResult.error && llmResult.finishReason !== "error";
         if (isModelTestSuccess) {
           const now = nowIso();
+          artifact = {
+            text: sampledText,
+          };
           model.testStatus = "success";
           model.status = "active";
           model.lastErrorKind = null;
@@ -735,7 +749,9 @@ export class AdminAiControlPlaneStore {
           const now = nowIso();
           const rawErrorCandidate =
             readNonEmptyMessage(llmResult.error, model.lastErrorMessage) ??
-            `Model returned empty output (finishReason=${String(llmResult.finishReason ?? "unknown")})`;
+            (sampledText.length === 0
+              ? "Model returned empty output"
+              : `Model returned empty output (finishReason=${String(llmResult.finishReason ?? "unknown")})`);
           const rawError = isGenericModelTestError(rawErrorCandidate)
             ? `Provider API request failed${buildLlmErrorDetailsSuffix(llmResult.errorDetails)}`
             : `${rawErrorCandidate}${buildLlmErrorDetailsSuffix(llmResult.errorDetails)}`;

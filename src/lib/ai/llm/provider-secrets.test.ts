@@ -22,12 +22,14 @@ function mockSupabaseQuery(result: QueryResult) {
 describe("provider-secrets env fallback", () => {
   const originalXai = process.env.XAI_API_KEY;
   const originalMinimax = process.env.MINIMAX_API_KEY;
+  const originalDeepSeek = process.env.DEEPSEEK_API_KEY;
 
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     delete process.env.XAI_API_KEY;
     delete process.env.MINIMAX_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
   });
 
   afterEach(() => {
@@ -40,6 +42,11 @@ describe("provider-secrets env fallback", () => {
       delete process.env.MINIMAX_API_KEY;
     } else {
       process.env.MINIMAX_API_KEY = originalMinimax;
+    }
+    if (originalDeepSeek === undefined) {
+      delete process.env.DEEPSEEK_API_KEY;
+    } else {
+      process.env.DEEPSEEK_API_KEY = originalDeepSeek;
     }
   });
 
@@ -117,6 +124,21 @@ describe("provider-secrets env fallback", () => {
       providerKey: "minimax",
       apiKey: "env-minimax-abcd",
       keyLast4: "abcd",
+      updatedAt: "1970-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("loads deepseek env fallback secret when db has no usable key", async () => {
+    process.env.DEEPSEEK_API_KEY = "env-deepseek-v4key";
+    mockSupabaseQuery({ data: [], error: null });
+
+    const { loadDecryptedProviderSecrets } = await import("@/lib/ai/llm/provider-secrets");
+    const map = await loadDecryptedProviderSecrets(["deepseek"]);
+
+    expect(map.get("deepseek")).toEqual({
+      providerKey: "deepseek",
+      apiKey: "env-deepseek-v4key",
+      keyLast4: "4key",
       updatedAt: "1970-01-01T00:00:00.000Z",
     });
   });

@@ -6,6 +6,7 @@ const ENV_KEYS = [
   "AI_DEFAULT_MODEL_ID",
   "AI_DEFAULT_XAI_MODEL_ID",
   "AI_DEFAULT_MINIMAX_MODEL_ID",
+  "AI_DEFAULT_DEEPSEEK_MODEL_ID",
 ] as const;
 
 const ORIGINAL_ENV = { ...process.env };
@@ -28,11 +29,11 @@ afterEach(() => {
 });
 
 describe("resolveDefaultRuntimeTarget", () => {
-  it("falls back to xai default when env is missing", () => {
+  it("falls back to deepseek default when env is missing", () => {
     resetEnv();
     expect(resolveDefaultRuntimeTarget()).toEqual({
-      providerId: "xai",
-      modelId: "grok-4-1-fast-reasoning",
+      providerId: "deepseek",
+      modelId: "deepseek-v4-flash",
     });
   });
 
@@ -43,6 +44,16 @@ describe("resolveDefaultRuntimeTarget", () => {
     expect(resolveDefaultRuntimeTarget()).toEqual({
       providerId: "minimax",
       modelId: "MiniMax-M2.5",
+    });
+  });
+
+  it("accepts valid deepseek default provider/model pair", () => {
+    resetEnv();
+    process.env.AI_DEFAULT_PROVIDER_ID = "deepseek";
+    process.env.AI_DEFAULT_MODEL_ID = "deepseek-v4-flash";
+    expect(resolveDefaultRuntimeTarget()).toEqual({
+      providerId: "deepseek",
+      modelId: "deepseek-v4-flash",
     });
   });
 
@@ -57,13 +68,24 @@ describe("resolveDefaultRuntimeTarget", () => {
     });
   });
 
-  it("falls back to xai when provider env value is invalid", () => {
+  it("falls back to deepseek provider-specific default when model does not match provider", () => {
+    resetEnv();
+    process.env.AI_DEFAULT_PROVIDER_ID = "deepseek";
+    process.env.AI_DEFAULT_MODEL_ID = "MiniMax-M2.5";
+    process.env.AI_DEFAULT_DEEPSEEK_MODEL_ID = "deepseek-v4-flash";
+    expect(resolveDefaultRuntimeTarget()).toEqual({
+      providerId: "deepseek",
+      modelId: "deepseek-v4-flash",
+    });
+  });
+
+  it("falls back to deepseek when provider env value is invalid", () => {
     resetEnv();
     process.env.AI_DEFAULT_PROVIDER_ID = "invalid-provider";
     process.env.AI_DEFAULT_MODEL_ID = "MiniMax-M2.5";
     expect(resolveDefaultRuntimeTarget()).toEqual({
-      providerId: "xai",
-      modelId: "grok-4-1-fast-reasoning",
+      providerId: "deepseek",
+      modelId: "deepseek-v4-flash",
     });
   });
 });

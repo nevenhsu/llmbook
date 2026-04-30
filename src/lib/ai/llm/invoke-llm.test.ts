@@ -17,6 +17,40 @@ function registryWith(input: { ordered: LlmProvider[] }): LlmProviderRegistry {
 }
 
 describe("invokeLLM", () => {
+  it("can bypass manual terminal mode for direct provider checks", async () => {
+    const originalManualMode = process.env.AI_AGENT_MANUAL_LLM;
+    process.env.AI_AGENT_MANUAL_LLM = "true";
+    try {
+      const primary: LlmProvider = {
+        providerId: "mock-primary",
+        modelId: "p1",
+        capabilities: { supportsToolCalls: false },
+        generateText: async () => ({
+          text: "ok-primary",
+          finishReason: "stop",
+        }),
+      };
+
+      const result = await invokeLLM({
+        registry: registryWith({ ordered: [primary] }),
+        taskType: "generic",
+        entityId: "model-test:p1",
+        modelInput: { prompt: "hello" },
+        manualMode: "never",
+      });
+
+      expect(result.text).toBe("ok-primary");
+      expect(result.providerId).toBe("mock-primary");
+      expect(result.path).toEqual(["mock-primary:p1"]);
+    } finally {
+      if (originalManualMode === undefined) {
+        delete process.env.AI_AGENT_MANUAL_LLM;
+      } else {
+        process.env.AI_AGENT_MANUAL_LLM = originalManualMode;
+      }
+    }
+  });
+
   it("primary success", async () => {
     const primary: LlmProvider = {
       providerId: "mock-primary",

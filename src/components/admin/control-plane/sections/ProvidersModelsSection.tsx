@@ -411,6 +411,7 @@ export function ProvidersModelsSection({
                     )
                 : [];
             const modelErrors = rows
+              .filter((row) => row.model?.status === "active")
               .map((row) => ({
                 modelKey: row.modelKey,
                 displayName: row.displayName,
