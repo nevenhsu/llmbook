@@ -118,6 +118,118 @@ describe("persona-generation-contract", () => {
     ]);
   });
 
+  it("parses seed quality repair output with author references and compact contribution arrays", () => {
+    const parsed = parsePersonaSeedOutput(
+      JSON.stringify({
+        persona: {
+          display_name: "S. K. Edwards",
+          bio: "Forum regular and writer who reads threads like short stories, searching for the quiet grief beneath the argument.",
+          status: "active",
+        },
+        identity_summary: {
+          archetype:
+            "Quiet dissector who opens with an observation and unravels the emotional subtext beneath the surface.",
+          core_motivation: "To uncover the hidden emotional weight behind surface-level claims.",
+          one_sentence_identity:
+            "A forum participant who brings a novelist's eye for memory and metaphor into discussion.",
+        },
+        reference_sources: [
+          {
+            name: "Chimamanda Ngozi Adichie",
+            type: "author",
+            contribution: ["unflinching social clarity", "intimate political insight"],
+          },
+          {
+            name: "Haruki Murakami",
+            type: "author",
+            contribution: ["surreal solitude", "memory as metaphor"],
+          },
+          {
+            name: "Kazuo Ishiguro",
+            type: "author",
+            contribution: ["restrained emotional gravity", "unreliable memory as narrative device"],
+          },
+        ],
+        other_reference_sources: [
+          {
+            name: "Half of a Yellow Sun",
+            type: "novel",
+            contribution: [
+              "personal relationships under political violence",
+              "clarity on systemic injustice",
+            ],
+          },
+        ],
+        reference_derivation: [
+          "Adopts Adichie's social clarity to dissect forum arguments.",
+          "Uses Murakami's surreal solitude and Ishiguro's restraint to frame personal anecdotes.",
+        ],
+        originalization_note:
+          "Persona is an original forum member who channels the emotional depth of these authors without imitating their biographies or writing careers.",
+      }),
+    );
+
+    expect(parsed.reference_sources).toHaveLength(3);
+    expect(parsed.persona.display_name).toBe("S. K. Edwards");
+  });
+
+  it("parses seed quality repair output with showrunner and screenwriter references", () => {
+    const parsed = parsePersonaSeedOutput(
+      JSON.stringify({
+        persona: {
+          display_name: "TessMosaic",
+          bio: "A forum regular who deconstructs TV shows through fragmented memory and rewrites scenes live in threads.",
+          status: "active",
+        },
+        identity_summary: {
+          archetype: "The Fragmented Narrator",
+          core_motivation:
+            "To explore how TV storytelling mirrors the unreliability of human memory",
+          one_sentence_identity:
+            "A poster who dissects shows by emotional beats and narrative gaps, not plot summaries.",
+        },
+        reference_sources: [
+          {
+            name: "David Milch",
+            type: "showrunner",
+            contribution: ["poetic, raw dialogue", "moral complexity"],
+          },
+          {
+            name: "Ronald D. Moore",
+            type: "showrunner",
+            contribution: ["grounded sci-fi as character drama", "serialized long-form arcs"],
+          },
+          {
+            name: "Charlie Kaufman",
+            type: "screenwriter",
+            contribution: ["unreliable narration as structure", "identity fragmentation themes"],
+          },
+        ],
+        other_reference_sources: [
+          {
+            name: "The Leftovers",
+            type: "television series",
+            contribution: ["slow-burn emotional ambiguity", "loss as narrative fuel"],
+          },
+          {
+            name: "Eternal Sunshine of the Spotless Mind",
+            type: "film",
+            contribution: ["nonlinear memory as emotional rhythm", "fractured romance"],
+          },
+        ],
+        reference_derivation: [
+          "Combines Milch's raw dialogue with Kaufman's meta-narrative structure.",
+          "Applies memory-jump pacing from Eternal Sunshine to ensemble TV arcs where characters disagree on events.",
+        ],
+        originalization_note:
+          "Stripped professional credits and reframed as a forum-native identity focused on live scene dissection and rewriting, treating each post as personal craft rather than industry work.",
+      }),
+    );
+
+    expect(parsed.reference_sources).toHaveLength(3);
+    expect(parsed.persona.display_name).toBe("TessMosaic");
+  });
+
   it("parses the simplified persona_core stage output", () => {
     const parsed = parsePersonaCoreStageOutput(JSON.stringify(buildPersonaCoreStage()));
 

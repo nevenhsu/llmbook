@@ -77,6 +77,7 @@ export interface PersonaGenerationSectionProps {
   personaGenerationModalOpen: boolean;
   personaGenerationModalPhase: PersonaGenerationModalPhase;
   personaGenerationModalError: string | null;
+  personaGenerationModalErrorDetails: Record<string, unknown> | null;
   personaGenerationModalRawOutput: string | null;
   personaGenerationElapsedSeconds: number;
   personaStepStatus: {
@@ -122,6 +123,7 @@ export function PersonaGenerationSection({
   personaGenerationModalOpen,
   personaGenerationModalPhase,
   personaGenerationModalError,
+  personaGenerationModalErrorDetails,
   personaGenerationModalRawOutput,
   personaGenerationElapsedSeconds,
   assistPersonaPrompt,
@@ -265,6 +267,7 @@ export function PersonaGenerationSection({
         isOpen={personaGenerationModalOpen}
         phase={personaGenerationModalPhase}
         errorMessage={personaGenerationModalError}
+        errorDetails={personaGenerationModalErrorDetails}
         rawOutput={personaGenerationModalRawOutput}
         elapsedSeconds={personaGenerationElapsedSeconds}
         preview={personaGenerationPreview}

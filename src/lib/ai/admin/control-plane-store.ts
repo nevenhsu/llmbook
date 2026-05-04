@@ -1489,7 +1489,11 @@ export class AdminAiControlPlaneStore {
     }
   }
 
-  public async previewPersonaGeneration(input: { modelId: string; extraPrompt: string }): Promise<
+  public async previewPersonaGeneration(input: {
+    modelId: string;
+    extraPrompt: string;
+    debug?: boolean;
+  }): Promise<
     PreviewResult & {
       structured: PersonaGenerationStructured;
     }

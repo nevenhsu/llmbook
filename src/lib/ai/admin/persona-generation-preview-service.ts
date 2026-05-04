@@ -26,14 +26,22 @@ import {
   formatPrompt,
 } from "@/lib/ai/admin/control-plane-shared";
 import {
+  deepMergeJson,
+  deriveJsonLeafType,
+  deriveJsonSchema,
+  buildRepairSchemaHint,
+} from "@/lib/ai/admin/llm-flow-shared";
+import {
   collectEnglishOnlyIssues,
   parsePersonaGenerationOutput,
   parsePersonaGenerationSemanticAuditResult,
   parsePersonaCoreStageOutput,
   parsePersonaSeedOutput,
+  parseQualityRepairDelta,
   validatePersonaCoreStageQuality,
   validateSeedStageQuality,
 } from "@/lib/ai/admin/persona-generation-contract";
+import { PERSONA_GENERATION_TEMPLATE_STAGES } from "@/lib/ai/admin/persona-generation-prompt-template";
 
 export async function previewPersonaGeneration(input: {
   modelId: string;
@@ -41,6 +49,7 @@ export async function previewPersonaGeneration(input: {
   document: AiControlPlaneDocument;
   providers: AiProviderConfig[];
   models: AiModelConfig[];
+  debug?: boolean;
   recordLlmInvocationError: (input: {
     providerKey: string;
     modelKey: string;
@@ -55,6 +64,19 @@ export async function previewPersonaGeneration(input: {
 }): Promise<
   PreviewResult & {
     structured: PersonaGenerationStructured;
+    stageDebugRecords: Array<{
+      name: string;
+      displayPrompt: string;
+      outputMaxTokens: number;
+      attempts: Array<{
+        attempt: string;
+        text: string;
+        finishReason: string | null;
+        providerId: string | null;
+        modelId: string | null;
+        hadError: boolean;
+      }>;
+    }>;
   }
 > {
   const { model, provider } = resolvePersonaTextModel({
@@ -109,6 +131,51 @@ export async function previewPersonaGeneration(input: {
     displayPrompt: string;
     outputMaxTokens: number;
   }> = [];
+
+  const stageDebugRecords: Array<{
+    name: string;
+    displayPrompt: string;
+    outputMaxTokens: number;
+    attempts: Array<{
+      attempt: string;
+      text: string;
+      finishReason: string | null;
+      providerId: string | null;
+      modelId: string | null;
+      hadError: boolean;
+    }>;
+  }> = [];
+
+  const recordStageAttempt = (
+    stageName: string,
+    attempt: string,
+    result: {
+      text: string;
+      finishReason?: string | null;
+      providerId?: string | null;
+      modelId?: string | null;
+      error?: string | null;
+    },
+  ) => {
+    let record = stageDebugRecords.find((r) => r.name === stageName);
+    if (!record) {
+      record = {
+        name: stageName,
+        displayPrompt: "",
+        outputMaxTokens: 0,
+        attempts: [],
+      };
+      stageDebugRecords.push(record);
+    }
+    record.attempts.push({
+      attempt,
+      text: result.text,
+      finishReason: result.finishReason ?? null,
+      providerId: result.providerId ?? null,
+      modelId: result.modelId ?? null,
+      hadError: Boolean(result.error),
+    });
+  };
 
   const buildStagePrompt = (stageInput: {
     stageName: string;
@@ -169,6 +236,7 @@ export async function previewPersonaGeneration(input: {
       `[${auditInput.auditLabel}]`,
       ...auditInput.instructions,
       "Keep your response in English.",
+      "The parsed_stage packet is intentionally compact — do not fail because omitted background is missing.",
       "",
       "[output_constraints]",
       "Return exactly one JSON object.",
@@ -188,7 +256,25 @@ export async function previewPersonaGeneration(input: {
       "Keep every issue and repairGuidance item short and functional.",
       "",
       "[parsed_stage]",
-      JSON.stringify(auditInput.parsedOutput, null, 2),
+      (() => {
+        const compactValue = (val: unknown, depth: number): unknown => {
+          if (depth >= 2 && typeof val === "string") return val.slice(0, 80);
+          if (depth >= 4) return null;
+          if (Array.isArray(val)) {
+            const items = val.slice(0, depth >= 2 ? 1 : 2).map((v) => compactValue(v, depth + 1));
+            return items;
+          }
+          if (val && typeof val === "object") {
+            const sub: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+              sub[k] = compactValue(v, depth + 1);
+            }
+            return sub;
+          }
+          return val;
+        };
+        return JSON.stringify(compactValue(auditInput.parsedOutput, 0));
+      })(),
     ].join("\n");
 
     const auditResult = await invokeLLM({
@@ -215,6 +301,8 @@ export async function previewPersonaGeneration(input: {
         });
       },
     });
+
+    recordStageAttempt(auditInput.stageName, auditInput.auditLabel, auditResult);
 
     if (!auditResult.text.trim()) {
       if (!auditInput.failClosedOnTransport) {
@@ -266,9 +354,14 @@ export async function previewPersonaGeneration(input: {
       auditLabel: "seed_originalization_audit",
       instructions: [
         "You are judging whether the seed-stage output has been adapted into a new forum-native identity rather than staying as literal roleplay, direct copy, or reference-world transplant.",
-        "Judge semantic meaning, not specific keywords.",
-        "Flag unresolved reference-world proper noun leakage in persona.bio, identity_summary, or originalization_note when it keeps the persona too close to the source material.",
-        "Check whether originalization_note clearly explains the adaptation into a new identity.",
+        "PASS when the persona has its own distinct name, describes original forum-native behavior, and the originalization_note explains how the adaptation was done.",
+        "FAIL only when the persona is unmistakably the reference character placed in the forum with no meaningful adaptation.",
+        "In every issue and repairGuidance, name the exact field that needs rewriting (e.g., persona.bio, originalization_note, reference_derivation[0]).",
+        "Examples:",
+        "  PASS: 'Inspired by Sherlock Holmes's analytical rigor but grounded as a data science forum moderator.'",
+        "  FAIL: 'Sherlock Holmes has joined the forum. He solves cases at 221B Baker Street.' → issue: 'persona.bio directly copies the reference character without adaptation.'",
+        "Legitimate inspiration that recontextualizes traits for forum-native behavior should pass.",
+        "If in doubt, pass.",
       ],
       parsedOutput: {
         persona: stage.persona,
@@ -279,12 +372,11 @@ export async function previewPersonaGeneration(input: {
         originalization_note: stage.originalization_note,
       },
       defaultIssue:
-        "originalization_note must explain how the persona is adapted into an original forum-native identity.",
-      failClosedOnTransport: true,
+        "originalization_note must explain how the persona was adapted into a forum-native identity distinct from the named references.",
+      failClosedOnTransport: false,
       fallbackRepairGuidance: [
-        "Return valid audit JSON.",
-        "Rewrite persona.bio, identity_summary, reference_derivation, and originalization_note as an original forum-native identity rather than direct roleplay or reference-world transplant.",
-        "Make originalization_note explicitly explain the adaptation away from the named references.",
+        "Rewrite originalization_note to explicitly describe the adaptation: name the reference traits that were kept, explain what was changed, and state the resulting forum-native identity.",
+        "Ensure persona.bio does not copy the reference character's name, context, or in-universe details.",
       ],
     });
 
@@ -315,7 +407,6 @@ export async function previewPersonaGeneration(input: {
         "reference_sources must contain at least one personality-bearing named reference.",
       failClosedOnTransport: true,
       fallbackRepairGuidance: [
-        "Return valid audit JSON.",
         "Keep only personality-bearing named references inside reference_sources.",
         "Move concepts, works, principles, groups, and other non-personality references into other_reference_sources.",
         "Ensure at least one personality-bearing named reference remains in reference_sources.",
@@ -398,10 +489,14 @@ export async function previewPersonaGeneration(input: {
       instructions: [
         "You are judging a compact review packet for persona_core quality.",
         "The packet is intentionally compact. Do not fail only because omitted background is missing.",
-        "Judge whether values, lived context, creator affinity, interaction defaults, voice fingerprint, and task style matrix read like one coherent persona.",
-        "Check cross-field coherence rather than schema compliance.",
-        "Flag generic compression, identifier-style posture labels, duplicated guidance, or weak signal that would make doctrine projection unstable.",
-        "The stage must provide enough source signal for downstream value_fit, reasoning_fit, discourse_fit, and expression_fit derivation without outputting those fit keys directly.",
+        "Judge whether values, lived_context, creator_affinity, interaction_defaults, voice_fingerprint, and task_style_matrix describe the same persona without internal contradictions.",
+        "Flag only concrete problems. In every issue, include the exact field path (e.g., voice_fingerprint.opening_move):",
+        "  - A field directly contradicts another field (e.g., 'voice_fingerprint.opening_move says aggressive but interaction_defaults.default_stance says deferential').",
+        "  - A field uses single-word labels that provide no actionable guidance (e.g., 'interaction_defaults.default_stance is just \"skeptic\"').",
+        "  - Two fields repeat identical long-form text verbatim (e.g., 'voice_fingerprint.closing_move copies task_style_matrix.post.close_shape').",
+        "  - A required behavioral dimension is entirely absent (e.g., 'voice_fingerprint.praise_style is missing').",
+        "In repairGuidance, name the exact field(s) to rewrite and suggest the target tone or approach.",
+        "Do not flag reasonable stylistic variation or thematically coherent but differently-phrased guidance.",
       ],
       parsedOutput: {
         identity_summary: seedStage.identity_summary,
@@ -414,14 +509,73 @@ export async function previewPersonaGeneration(input: {
         task_style_matrix: stage.task_style_matrix,
       },
       defaultIssue:
-        "persona_core must stay coherent and provide enough distinct cross-field signal for downstream doctrine projection.",
-      failClosedOnTransport: true,
+        "persona_core coherence could not be verified — check voice_fingerprint.opening_move against interaction_defaults.default_stance for consistency.",
+      failClosedOnTransport: false,
       fallbackRepairGuidance: [
-        "Return valid audit JSON.",
-        "Rewrite persona_core so values, lived context, creator affinity, interaction defaults, voice fingerprint, and task style matrix all describe one coherent persona.",
-        "Expand compressed labels into reusable natural-language guidance with enough signal for value_fit, reasoning_fit, discourse_fit, and expression_fit derivation.",
+        "Ensure voice_fingerprint.opening_move describes how the persona starts interactions, distinct from interaction_defaults.default_stance which describes the overall posture.",
+        "Expand any compressed single-word labels into reusable natural-language guidance.",
       ],
     });
+
+  const auditPersonaCoreDistinctSignals = async (
+    stage: PersonaGenerationCoreStage,
+  ): Promise<{
+    issues: string[];
+    repairGuidance: string[];
+  }> =>
+    runPersonaGenerationSemanticAudit({
+      stageName: "persona_core",
+      auditLabel: "persona_core_distinct_signals_audit",
+      instructions: [
+        "You are judging whether four key persona_core fields are meaningfully distinct.",
+        "Evaluate: interaction_defaults.default_stance, voice_fingerprint.opening_move, task_style_matrix.post.body_shape, task_style_matrix.comment.feedback_shape.",
+        "These fields serve different purposes and should describe different aspects of the persona's behavior.",
+        "Flag only when two or more are functionally interchangeable — name both fields explicitly in the issue.",
+        "Example issue: 'interaction_defaults.default_stance and voice_fingerprint.opening_move both say the same thing — differentiate them.'",
+        "Coherent thematic overlap is expected and should pass.",
+        "In repairGuidance, name which exact field(s) to rewrite and suggest what aspect they should cover instead.",
+      ],
+      parsedOutput: {
+        interaction_defaults: stage.interaction_defaults,
+        voice_fingerprint: stage.voice_fingerprint,
+        task_style_matrix: stage.task_style_matrix,
+      },
+      defaultIssue:
+        "voice_fingerprint.opening_move, interaction_defaults.default_stance, task_style_matrix.post.body_shape, and task_style_matrix.comment.feedback_shape must describe different behavioral dimensions.",
+      failClosedOnTransport: false,
+      fallbackRepairGuidance: [
+        "Rewrite voice_fingerprint.opening_move to describe how the persona opens a conversation, distinct from interaction_defaults.default_stance which describes the overall posture.",
+        "Ensure task_style_matrix.post.body_shape and task_style_matrix.comment.feedback_shape cover different response formats.",
+      ],
+    });
+
+  const auditPersonaCoreStageSemantics = async (
+    stage: PersonaGenerationCoreStage,
+    seedStage: PersonaGenerationSeedStage,
+  ): Promise<{
+    issues: string[];
+    repairGuidance: string[];
+    normalizedParsedOutput?: PersonaGenerationCoreStage;
+  }> => {
+    const coherenceAudit = await auditPersonaCoreSemantics(stage, seedStage);
+    const distinctSignalsAudit = await auditPersonaCoreDistinctSignals(stage);
+
+    const issues = [...coherenceAudit.issues, ...distinctSignalsAudit.issues];
+    const repairGuidance = [
+      ...coherenceAudit.repairGuidance,
+      ...distinctSignalsAudit.repairGuidance,
+    ];
+
+    if (issues.length === 0) {
+      return { issues: [], repairGuidance: [] };
+    }
+
+    return { issues, repairGuidance };
+  };
+
+  const deriveRepairType = (val: unknown): string => deriveJsonLeafType(val);
+  const deriveRepairSchema = (value: unknown, prefix: string): string =>
+    deriveJsonSchema(value, prefix);
 
   const runPersonaGenerationStage = async <T>(stageInput: {
     stageName: string;
@@ -453,8 +607,22 @@ export async function previewPersonaGeneration(input: {
       outputMaxTokens: stageInput.outputMaxTokens,
     });
 
-    const invokeStageAttempt = async (prompt: string, attempt: 1 | 2 | 3 | 4) =>
-      invokeLLM({
+    let stageDebug = stageDebugRecords.find((r) => r.name === stageInput.stageName);
+    if (!stageDebug) {
+      stageDebug = {
+        name: stageInput.stageName,
+        displayPrompt,
+        outputMaxTokens: stageInput.outputMaxTokens,
+        attempts: [],
+      };
+      stageDebugRecords.push(stageDebug);
+    } else {
+      stageDebug.displayPrompt = displayPrompt;
+      stageDebug.outputMaxTokens = stageInput.outputMaxTokens;
+    }
+
+    const invokeStageAttempt = async (prompt: string, attempt: 1 | 2) => {
+      const result = await invokeLLM({
         registry,
         taskType: "generic",
         routeOverride: invocationConfig.route,
@@ -463,18 +631,8 @@ export async function previewPersonaGeneration(input: {
           maxOutputTokens:
             attempt === 1
               ? Math.min(stageInput.outputMaxTokens, maxOutputTokens)
-              : attempt === 2
-                ? Math.min(PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap, maxOutputTokens)
-                : attempt === 3
-                  ? Math.min(
-                      PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.compactRetryCap,
-                      maxOutputTokens,
-                    )
-                  : Math.min(
-                      PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
-                      maxOutputTokens,
-                    ),
-          temperature: attempt === 1 ? 0.4 : attempt === 2 ? 0.2 : 0.1,
+              : Math.min(PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap, maxOutputTokens),
+          temperature: attempt === 1 ? 0.4 : 0.2,
         },
         entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:attempt-${attempt}`,
         timeoutMs: invocationConfig.timeoutMs,
@@ -488,9 +646,12 @@ export async function previewPersonaGeneration(input: {
           });
         },
       });
+      recordStageAttempt(stageInput.stageName, `attempt-${attempt}`, result);
+      return result;
+    };
 
-    const invokeQualityRepairAttempt = async (prompt: string, attempt: 1 | 2 | 3) =>
-      invokeLLM({
+    const invokeQualityRepairAttempt = async (prompt: string, attempt: 1 | 2) => {
+      const result = await invokeLLM({
         registry,
         taskType: "generic",
         routeOverride: invocationConfig.route,
@@ -514,22 +675,12 @@ export async function previewPersonaGeneration(input: {
           });
         },
       });
+      recordStageAttempt(stageInput.stageName, `quality-repair-${attempt}`, result);
+      return result;
+    };
 
     const isLengthTruncated = (result: { text: string; finishReason?: string | null }) =>
       result.finishReason === "length" && result.text.trim().length > 0;
-
-    const hasEmptyOutput = (result: { text: string }) => result.text.trim().length === 0;
-
-    const shouldRetryQualityRepair = (result: {
-      text: string;
-      finishReason?: string | null;
-      error?: string | null;
-    }) => isLengthTruncated(result) || hasEmptyOutput(result) || Boolean(result.error);
-
-    const buildQualityRepairFailureMessage = (result: { text: string }) =>
-      hasEmptyOutput(result)
-        ? `persona generation stage ${stageInput.stageName} quality repair returned empty output`
-        : `persona generation stage ${stageInput.stageName} quality repair returned invalid JSON`;
 
     const buildStageAttemptDetails = (input: {
       attemptStage: string;
@@ -599,6 +750,7 @@ export async function previewPersonaGeneration(input: {
       if (stageInput.stageName === "persona_core") {
         return [
           "For persona_core, keep value_hierarchy to at most 4 items.",
+          "value_hierarchy must be a JSON array of objects, never a plain string.",
           "Keep worldview to 1 short item.",
           "Keep every array field to at most 2 short items unless the schema requires more.",
           "Keep every task_style_matrix shape field to one short sentence.",
@@ -611,96 +763,86 @@ export async function previewPersonaGeneration(input: {
     const buildRetryRepairPrompt = (repairInput: {
       mode: "generic" | "truncated";
       previousTruncatedOutput?: string | null;
+      parsedOutput?: Record<string, unknown> | null;
     }) =>
       repairInput.mode === "truncated"
-        ? `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${stageInput.stageName} was truncated before the JSON object was complete.\nRewrite it from scratch in a shorter form.\nReturn strictly valid JSON only.\nKeep every string to one short sentence.\nLimit arrays to at most 2 items unless the schema requires more.\nPrioritize finishing the full JSON object over richness.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`
-        : `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${stageInput.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nDo not add commentary.\nDo not omit required keys.`;
-
-    const buildCompactRepairPrompt = (repairInput: {
-      mode: "generic" | "truncated";
-      previousTruncatedOutput?: string | null;
-    }) =>
-      repairInput.mode === "truncated"
-        ? `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${stageInput.stageName} were truncated before the JSON object was complete.\nReturn a much shorter version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string extremely short.\nUse only 1 item in arrays unless the schema requires more.\nPrefer the shortest valid phrasing for every field.\nPrioritize closing the full JSON object.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`
-        : `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${stageInput.stageName} were invalid or incomplete JSON.\nReturn a compact version from scratch using the same contract.\nReturn strictly valid JSON only.\nKeep every string very short.\nUse at most 2 items in arrays unless the schema requires more.\nDo not add commentary.\nDo not omit required keys.`;
-
-    const buildFinalTruncationRescuePrompt = (repairInput: {
-      previousTruncatedOutput?: string | null;
-    }) =>
-      `${basePrompt}\n\n[retry_repair]\nYour previous responses for stage ${stageInput.stageName} kept truncating before the JSON object was complete.\nReturn the shortest valid JSON object that still satisfies the exact schema.\nReturn strictly valid JSON only.\nBefore finishing, verify that every required key from stage_contract is present exactly once.\nKeep every string to one short clause.\nUse only 1 item in arrays unless the schema requires more.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\nDo not add commentary.\nDo not omit required keys.`;
+        ? `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${stageInput.stageName} was truncated before the JSON object was complete.\nRewrite it from scratch in a shorter form.\nReturn strictly valid JSON only.\nKeep every string to one short sentence.\nLimit arrays to at most 2 items unless the schema requires more.\nPrioritize finishing the full JSON object over richness.\nvalue_hierarchy must be a JSON array of {value, priority} objects — never a plain string.\nDo not collapse array fields into strings.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\n${buildRepairSchemaHint(repairInput.parsedOutput ?? null)}\nDo not add commentary.\nDo not omit required keys.`
+        : `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${stageInput.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nvalue_hierarchy must be a JSON array of {value, priority} objects — never a plain string.\nDo not collapse array fields into strings.\n${buildRepairSchemaHint(repairInput.parsedOutput ?? null)}\nDo not add commentary.\nDo not omit required keys.`;
 
     const buildQualityRepairPrompt = (repairInput: {
       qualityIssues: string[];
       previousParsedOutput: T;
       repairGuidance?: string[];
-      mode: "initial" | "truncated" | "empty_or_error" | "invalid_json" | "final_truncated";
-      previousTruncatedOutput?: string | null;
-    }) =>
-      [
-        basePrompt,
+      isRetry: boolean;
+    }) => {
+      const validKeys = Object.keys(
+        repairInput.previousParsedOutput as Record<string, unknown>,
+      ).join(", ");
+
+      const allText = [...repairInput.qualityIssues, ...(repairInput.repairGuidance ?? [])].join(
+        " ",
+      );
+      const output = repairInput.previousParsedOutput as Record<string, unknown>;
+      const mentionedKeys = Object.keys(output).filter((key) => allText.includes(key));
+      const targetedSchema =
+        mentionedKeys.length > 0 && mentionedKeys.length < Object.keys(output).length
+          ? mentionedKeys
+              .map((key) => {
+                const schema = deriveRepairSchema(output[key], key);
+                return schema
+                  ? `${key}: { ${schema} }`
+                  : `${key}: ${deriveRepairType(output[key])}`;
+              })
+              .join("\n")
+          : "";
+
+      const compactPrevious = JSON.stringify(repairInput.previousParsedOutput);
+      const previousSnippet =
+        compactPrevious.length <= 1200
+          ? compactPrevious
+          : `${compactPrevious.slice(0, 800)}...${compactPrevious.slice(-300)}`;
+
+      const header = repairInput.isRetry
+        ? "[retry] Parse failed on previous delta. Return a SMALL delta with only the fields mentioned in the issue below."
+        : `[repair] Fix the quality issue below. Return a delta with only the fields that need to change.`;
+
+      const lines = [
+        header,
         "",
-        "[quality_repair]",
-        repairInput.mode === "truncated"
-          ? `Your previous quality-repair response for stage ${stageInput.stageName} was truncated before the JSON object was complete.`
-          : repairInput.mode === "final_truncated"
-            ? `Your previous quality-repair response for stage ${stageInput.stageName} kept truncating before the JSON object was complete.`
-            : repairInput.mode === "empty_or_error"
-              ? `Your previous quality-repair response for stage ${stageInput.stageName} was empty or failed before returning JSON.`
-              : repairInput.mode === "invalid_json"
-                ? `Your previous quality-repair response for stage ${stageInput.stageName} was invalid or incomplete JSON.`
-                : `Your previous response for stage ${stageInput.stageName} was valid JSON but failed the quality contract.`,
-        repairInput.mode === "truncated" || repairInput.mode === "final_truncated"
-          ? "Rewrite this stage from scratch in a shorter form while preserving the quality fixes."
-          : repairInput.mode === "empty_or_error"
-            ? "Rewrite this stage from scratch and return the full JSON object without leaving it blank."
-            : repairInput.mode === "invalid_json"
-              ? "Rewrite this stage from scratch and return one complete valid JSON object that satisfies the same quality fixes."
-              : "Rewrite this stage from scratch using the same JSON schema.",
-        "Use natural-language behavioral descriptions, not enum labels, taxonomy tokens, or snake_case identifiers.",
-        "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
-        ...(repairInput.mode === "truncated" || repairInput.mode === "final_truncated"
-          ? [
-              "Keep every string to one short sentence.",
-              repairInput.mode === "final_truncated"
-                ? "Use only 1 item in arrays unless the schema requires more."
-                : "Limit arrays to at most 2 items unless the schema requires more.",
-              "Prioritize finishing the full JSON object over richness.",
-              buildStageSpecificTruncationGuidance(),
-            ]
-          : repairInput.mode === "empty_or_error"
-            ? [
-                "Return strictly valid JSON in one attempt.",
-                "Do not return blank output.",
-                "Do not defer, explain, or apologize.",
-              ]
-            : repairInput.mode === "invalid_json"
-              ? [
-                  "Return strictly valid JSON in one attempt.",
-                  "Do not leave arrays or objects half-open.",
-                  "Do not add commentary, prefixes, or trailing explanation.",
-                ]
-              : []),
-        "Quality issues:",
+        `Available keys: ${validKeys}`,
+        "",
+        "Issue to fix:",
         ...repairInput.qualityIssues.map((issue) => `- ${issue}`),
         ...(repairInput.repairGuidance?.length
-          ? [
-              "",
-              "Additional repair guidance:",
-              ...repairInput.repairGuidance.map((item) => `- ${item}`),
-            ]
+          ? ["", "Repair guidance:", ...repairInput.repairGuidance.map((item) => `- ${item}`)]
           : []),
+      ];
+
+      if (targetedSchema) {
+        lines.push(
+          "",
+          "Sub-key structure for the field(s) to fix — use these exact sub-keys:",
+          targetedSchema,
+        );
+      }
+
+      lines.push(
         "",
-        "Previous parsed output:",
-        JSON.stringify(repairInput.previousParsedOutput, null, 2),
-        ...(repairInput.mode === "truncated" || repairInput.mode === "final_truncated"
-          ? ["", buildTruncatedOutputContext(repairInput.previousTruncatedOutput)]
-          : []),
+        "What to return: a delta object containing ONLY the sub-fields that need changing.",
+        "Use the exact sub-key names from the structure above. Do NOT invent new sub-key names.",
+        "Leave all other fields and sub-fields unchanged — they are already correct.",
         "",
-        "Return strictly valid JSON only.",
-        "Do not add commentary.",
-      ]
-        .filter((value) => value !== "")
-        .join("\n");
+        '[output] {"repair": {"<key>": {"<sub_key>": "<new value>"}}}',
+        "Return raw JSON only. No markdown, no commentary.",
+        "",
+        "=== CONTEXT ONLY — DO NOT INCLUDE IN OUTPUT ===",
+        "Reference JSON showing current values:",
+        previousSnippet,
+        "=== END CONTEXT ===",
+      );
+
+      return lines.join("\n");
+    };
 
     const attemptParse = (
       result: {
@@ -756,44 +898,10 @@ export async function previewPersonaGeneration(input: {
         const repairPrompt = buildRetryRepairPrompt({
           mode: firstWasTruncated ? "truncated" : "generic",
           previousTruncatedOutput: firstWasTruncated ? first.text : null,
+          parsedOutput: null,
         });
         const second = await invokeStageAttempt(repairPrompt, 2);
-        const secondWasTruncated = isLengthTruncated(second);
-        try {
-          return attemptParse(second, "attempt-2");
-        } catch (secondParseError) {
-          if (!(secondParseError instanceof PersonaGenerationParseError)) {
-            throw secondParseError;
-          }
-          const latestTruncatedOutput = secondWasTruncated
-            ? second.text
-            : firstWasTruncated
-              ? first.text
-              : null;
-          const compactRepairPrompt = buildCompactRepairPrompt({
-            mode: latestTruncatedOutput ? "truncated" : "generic",
-            previousTruncatedOutput: latestTruncatedOutput,
-          });
-          const third = await invokeStageAttempt(compactRepairPrompt, 3);
-          const thirdWasTruncated = isLengthTruncated(third);
-          try {
-            return attemptParse(third, "attempt-3");
-          } catch (compactError) {
-            if (compactError instanceof PersonaGenerationParseError) {
-              if (thirdWasTruncated) {
-                const fourth = await invokeStageAttempt(
-                  buildFinalTruncationRescuePrompt({
-                    previousTruncatedOutput: third.text,
-                  }),
-                  4,
-                );
-                return attemptParse(fourth, "attempt-4");
-              }
-              throw compactError;
-            }
-            throw secondParseError;
-          }
-        }
+        return attemptParse(second, "attempt-2");
       }
     };
 
@@ -835,33 +943,30 @@ export async function previewPersonaGeneration(input: {
     let previousParsedOutput = initialQualityResult.normalizedParsedOutput;
     let pendingQualityIssues = initialQualityResult.issues;
     let pendingRepairGuidance = initialQualityResult.repairGuidance;
-    let nextRepairMode:
-      | "initial"
-      | "truncated"
-      | "empty_or_error"
-      | "invalid_json"
-      | "final_truncated" = "initial";
-    let previousTruncatedOutput: string | null = null;
+    let isQualityRepairRetry = false;
 
-    for (const attempt of [1, 2, 3] as const) {
+    for (const attempt of [1, 2] as const) {
       const qualityRepairPrompt = buildQualityRepairPrompt({
         qualityIssues: pendingQualityIssues,
         previousParsedOutput: previousParsedOutput,
         repairGuidance: pendingRepairGuidance,
-        mode: nextRepairMode,
-        previousTruncatedOutput,
+        isRetry: isQualityRepairRetry,
       });
 
       const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt, attempt);
       const attemptStage = `quality-repair-${attempt}` as const;
 
       try {
-        const repairedStage = attemptParse(qualityRepaired, attemptStage) as T;
-        const repairedQualityResult = await collectStageQualityResult(repairedStage);
+        const delta = parseQualityRepairDelta(qualityRepaired.text);
+        const mergedStage = deepMergeJson(
+          previousParsedOutput as Record<string, unknown>,
+          delta.repair,
+        ) as T;
+        const repairedQualityResult = await collectStageQualityResult(mergedStage);
         if (repairedQualityResult.issues.length === 0) {
           return repairedQualityResult.normalizedParsedOutput;
         }
-        if (attempt === 3) {
+        if (attempt === 2) {
           throw new PersonaGenerationQualityError({
             stageName: stageInput.stageName,
             message: `persona generation stage ${stageInput.stageName} quality repair failed`,
@@ -877,48 +982,23 @@ export async function previewPersonaGeneration(input: {
         previousParsedOutput = repairedQualityResult.normalizedParsedOutput;
         pendingQualityIssues = repairedQualityResult.issues;
         pendingRepairGuidance = repairedQualityResult.repairGuidance;
-        nextRepairMode = "initial";
-        previousTruncatedOutput = null;
-      } catch (error) {
-        if (!(error instanceof PersonaGenerationParseError)) {
-          throw error;
-        }
-        const retryableQualityRepair = shouldRetryQualityRepair(qualityRepaired);
-        const parseFailedWithBody =
-          qualityRepaired.text.trim().length > 0 && !retryableQualityRepair;
-        if (attempt === 3) {
+        isQualityRepairRetry = false;
+      } catch (parseError) {
+        if (attempt === 2) {
+          const parseMessage =
+            parseError instanceof Error ? parseError.message : "unknown parse error";
           throw new PersonaGenerationQualityError({
             stageName: stageInput.stageName,
-            message: buildQualityRepairFailureMessage(qualityRepaired),
-            rawOutput: error.rawOutput,
+            message: `persona generation stage ${stageInput.stageName} quality repair delta parse or merge failed: ${parseMessage}`,
+            rawOutput: qualityRepaired.text,
             issues: pendingQualityIssues,
-            details: error.details,
+            details: buildStageAttemptDetails({
+              attemptStage,
+              llmResult: qualityRepaired,
+            }),
           });
         }
-        if (parseFailedWithBody) {
-          nextRepairMode = "invalid_json";
-          previousTruncatedOutput = null;
-          continue;
-        }
-        if (!retryableQualityRepair) {
-          throw new PersonaGenerationQualityError({
-            stageName: stageInput.stageName,
-            message: buildQualityRepairFailureMessage(qualityRepaired),
-            rawOutput: error.rawOutput,
-            issues: pendingQualityIssues,
-            details: error.details,
-          });
-        }
-
-        const truncated = isLengthTruncated(qualityRepaired);
-        nextRepairMode = truncated
-          ? attempt === 2
-            ? "final_truncated"
-            : "truncated"
-          : hasEmptyOutput(qualityRepaired) || Boolean(qualityRepaired.error)
-            ? "empty_or_error"
-            : "invalid_json";
-        previousTruncatedOutput = truncated ? qualityRepaired.text : null;
+        isQualityRepairRetry = true;
       }
     }
 
@@ -930,133 +1010,119 @@ export async function previewPersonaGeneration(input: {
     });
   };
 
-  const seedStage = await runPersonaGenerationStage({
-    stageName: "seed",
-    stageGoal: "Establish the persona's identity seed, bio, and explicit references.",
-    stageContract: [
-      "Return one JSON object with keys:",
-      "persona{display_name,bio,status},",
-      "identity_summary{archetype,core_motivation,one_sentence_identity},",
-      "reference_sources[{name,type,contribution}],",
-      "other_reference_sources[{name,type,contribution}],",
-      "reference_derivation:string[],",
-      "originalization_note:string.",
-      "status should be active or inactive.",
-      "The final persona must be reference-inspired, not reference-cosplay.",
-      "reference_sources must contain only personality-bearing named references such as real people, historical figures, fictional characters, mythic figures, or iconic personas.",
-      "Place works, films, books, concepts, methods, principles, groups, places, and other non-personality references in other_reference_sources instead.",
-      "Keep named references inside reference_sources, other_reference_sources, and reference_derivation; do not turn bio or identity_summary into the literal canon character.",
-      "Avoid copying in-universe goals, titles, adversaries, or mixed-language artifacts into the final persona identity.",
-    ].join("\n"),
-    parse: parsePersonaSeedOutput,
-    validateQuality: validateSeedStageQuality,
-    validateQualityAsync: auditSeedStageSemantics,
-    allowedReferenceNames: [],
-    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
-  });
-
-  const personaCoreStage = await runPersonaGenerationStage({
-    stageName: "persona_core",
-    stageGoal: "Generate the reusable persona guidance that downstream prompts will consume.",
-    stageContract: [
-      "Return one JSON object with keys:",
-      "values{value_hierarchy,worldview,judgment_style},",
-      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries},",
-      "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
-      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases},",
-      "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
-      "guardrails{hard_no,deescalation_style},",
-      "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
-      "task_style_matrix{post{entry_shape,body_shape,close_shape,forbidden_shapes},comment{entry_shape,feedback_shape,close_shape,forbidden_shapes}}.",
-      "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
-      "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
-      "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
-      "Provide enough signal for downstream doctrine derivation across value_fit, reasoning_fit, discourse_fit, and expression_fit.",
-      "Do not output value_fit, reasoning_fit, discourse_fit, or expression_fit as direct keys.",
-    ].join("\n"),
-    parse: parsePersonaCoreStageOutput,
-    validateQuality: validatePersonaCoreStageQuality,
-    validateQualityAsync: (stage) => auditPersonaCoreSemantics(stage, seedStage),
-    carryForwardContext: {
-      persona: seedStage.persona,
-      identity_summary: seedStage.identity_summary,
-      reference_sources: seedStage.reference_sources,
-      other_reference_sources: seedStage.other_reference_sources,
-      reference_derivation: seedStage.reference_derivation,
-      originalization_note: seedStage.originalization_note,
-    },
-    allowedReferenceNames: [
-      ...seedStage.reference_sources.map((item) => item.name),
-      ...seedStage.other_reference_sources.map((item) => item.name),
-    ],
-    outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
-  });
-
-  const personaCore = {
-    identity_summary: seedStage.identity_summary,
-    values: personaCoreStage.values,
-    aesthetic_profile: personaCoreStage.aesthetic_profile,
-    lived_context: personaCoreStage.lived_context,
-    creator_affinity: personaCoreStage.creator_affinity,
-    interaction_defaults: personaCoreStage.interaction_defaults,
-    guardrails: personaCoreStage.guardrails,
-    voice_fingerprint: personaCoreStage.voice_fingerprint,
-    task_style_matrix: personaCoreStage.task_style_matrix,
-  };
-
-  const structured = parsePersonaGenerationOutput(
-    JSON.stringify({
-      persona: seedStage.persona,
-      persona_core: personaCore,
-      reference_sources: seedStage.reference_sources,
-      other_reference_sources: seedStage.other_reference_sources,
-      reference_derivation: seedStage.reference_derivation,
-      originalization_note: seedStage.originalization_note,
-    }),
-  ).structured;
-  const assembledPrompt = stagePromptRecords
-    .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.displayPrompt}`)
-    .join("\n\n");
-  const tokenBudget = buildTokenBudgetSignal({
-    blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
-    maxInputTokens:
-      DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens * stagePromptRecords.length,
-    maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
-  });
-
-  const markdown = [
-    `## Persona Preview (${model.displayName})`,
-    "",
-    `### persona`,
-    `- display_name: ${structured.persona.display_name}`,
-    `- status: ${structured.persona.status}`,
-    `- bio: ${structured.persona.bio}`,
-    "",
-    `### persona_core`,
-    "```json",
-    JSON.stringify(structured.persona_core, null, 2),
-    "```",
-    "",
-    `### reference_sources (${structured.reference_sources.length})`,
-    "```json",
-    JSON.stringify(structured.reference_sources, null, 2),
-    "```",
-    "",
-    `### other_reference_sources (${structured.other_reference_sources.length})`,
-    "```json",
-    JSON.stringify(structured.other_reference_sources, null, 2),
-    "```",
-    "",
-    `### reference_derivation`,
-    "```json",
-    JSON.stringify(structured.reference_derivation, null, 2),
-    "```",
-    "",
-    `### originalization_note`,
-    structured.originalization_note,
-  ].join("\n");
+  let assembledPrompt = "";
+  let markdown = "";
+  let tokenBudget:
+    | {
+        estimatedInputTokens: number;
+        maxInputTokens: number;
+        maxOutputTokens: number;
+        blockStats: Array<{ name: string; tokens: number }>;
+        compressedStages: Array<"memory" | "long_memory">;
+        exceeded: boolean;
+        message: string | null;
+      }
+    | undefined;
+  let structured: PersonaGenerationStructured | undefined;
 
   try {
+    const seedStage = await runPersonaGenerationStage({
+      stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
+      stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
+      stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[0].contract.join("\n"),
+      parse: parsePersonaSeedOutput,
+      validateQuality: validateSeedStageQuality,
+      validateQualityAsync: auditSeedStageSemantics,
+      allowedReferenceNames: [],
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
+    });
+
+    const personaCoreStage = await runPersonaGenerationStage({
+      stageName: PERSONA_GENERATION_TEMPLATE_STAGES[1].name,
+      stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[1].goal,
+      stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[1].contract.join("\n"),
+      parse: parsePersonaCoreStageOutput,
+      validateQuality: validatePersonaCoreStageQuality,
+      validateQualityAsync: (stage) => auditPersonaCoreStageSemantics(stage, seedStage),
+      carryForwardContext: {
+        persona: seedStage.persona,
+        identity_summary: seedStage.identity_summary,
+        reference_sources: seedStage.reference_sources,
+        other_reference_sources: seedStage.other_reference_sources,
+        reference_derivation: seedStage.reference_derivation,
+        originalization_note: seedStage.originalization_note,
+      },
+      allowedReferenceNames: [
+        ...seedStage.reference_sources.map((item) => item.name),
+        ...seedStage.other_reference_sources.map((item) => item.name),
+      ],
+      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
+    });
+
+    const personaCore = {
+      identity_summary: seedStage.identity_summary,
+      values: personaCoreStage.values,
+      aesthetic_profile: personaCoreStage.aesthetic_profile,
+      lived_context: personaCoreStage.lived_context,
+      creator_affinity: personaCoreStage.creator_affinity,
+      interaction_defaults: personaCoreStage.interaction_defaults,
+      guardrails: personaCoreStage.guardrails,
+      voice_fingerprint: personaCoreStage.voice_fingerprint,
+      task_style_matrix: personaCoreStage.task_style_matrix,
+    };
+
+    structured = parsePersonaGenerationOutput(
+      JSON.stringify({
+        persona: seedStage.persona,
+        persona_core: personaCore,
+        reference_sources: seedStage.reference_sources,
+        other_reference_sources: seedStage.other_reference_sources,
+        reference_derivation: seedStage.reference_derivation,
+        originalization_note: seedStage.originalization_note,
+      }),
+    ).structured;
+    assembledPrompt = stagePromptRecords
+      .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.displayPrompt}`)
+      .join("\n\n");
+    tokenBudget = buildTokenBudgetSignal({
+      blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
+      maxInputTokens:
+        DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens * stagePromptRecords.length,
+      maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+    });
+
+    markdown = [
+      `## Persona Preview (${model.displayName})`,
+      "",
+      `### persona`,
+      `- display_name: ${structured.persona.display_name}`,
+      `- status: ${structured.persona.status}`,
+      `- bio: ${structured.persona.bio}`,
+      "",
+      `### persona_core`,
+      "```json",
+      JSON.stringify(structured.persona_core, null, 2),
+      "```",
+      "",
+      `### reference_sources (${structured.reference_sources.length})`,
+      "```json",
+      JSON.stringify(structured.reference_sources, null, 2),
+      "```",
+      "",
+      `### other_reference_sources (${structured.other_reference_sources.length})`,
+      "```json",
+      JSON.stringify(structured.other_reference_sources, null, 2),
+      "```",
+      "",
+      `### reference_derivation`,
+      "```json",
+      JSON.stringify(structured.reference_derivation, null, 2),
+      "```",
+      "",
+      `### originalization_note`,
+      structured.originalization_note,
+    ].join("\n");
+
     markdownToEditorHtml(markdown);
     return {
       assembledPrompt,
@@ -1065,15 +1131,39 @@ export async function previewPersonaGeneration(input: {
       renderError: null,
       tokenBudget,
       structured,
+      stageDebugRecords,
     };
   } catch (error) {
+    if (error instanceof PersonaGenerationParseError) {
+      (error as unknown as { details: Record<string, unknown> | null }).details = {
+        ...(error.details ?? {}),
+        stageDebugRecords,
+      };
+      throw error;
+    }
     return {
       assembledPrompt,
       markdown,
       renderOk: false,
       renderError: error instanceof Error ? error.message : "render validation failed",
-      tokenBudget,
-      structured,
+      tokenBudget: tokenBudget ?? {
+        estimatedInputTokens: 0,
+        maxInputTokens: 0,
+        maxOutputTokens: 0,
+        blockStats: [],
+        compressedStages: [] as Array<"memory" | "long_memory">,
+        exceeded: false,
+        message: null,
+      },
+      structured: structured ?? {
+        persona: { display_name: "", bio: "", status: "active" },
+        persona_core: {},
+        reference_sources: [],
+        other_reference_sources: [],
+        reference_derivation: [],
+        originalization_note: "",
+      },
+      stageDebugRecords,
     };
   }
 }

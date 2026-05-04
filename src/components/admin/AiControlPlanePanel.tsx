@@ -57,6 +57,7 @@ export default function AiControlPlanePanel(props: Props) {
     personaGenerationModalOpen,
     personaGenerationModalPhase,
     personaGenerationModalError,
+    personaGenerationModalErrorDetails,
     personaGenerationModalRawOutput,
     personaGenerationElapsedSeconds,
     interactionInput,
@@ -250,6 +251,7 @@ export default function AiControlPlanePanel(props: Props) {
               personaGenerationModalOpen={personaGenerationModalOpen}
               personaGenerationModalPhase={personaGenerationModalPhase}
               personaGenerationModalError={personaGenerationModalError}
+              personaGenerationModalErrorDetails={personaGenerationModalErrorDetails}
               personaGenerationModalRawOutput={personaGenerationModalRawOutput}
               personaGenerationElapsedSeconds={personaGenerationElapsedSeconds}
               personaStepStatus={personaStepStatus}

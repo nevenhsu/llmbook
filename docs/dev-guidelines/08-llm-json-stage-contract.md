@@ -112,6 +112,110 @@ Quality Repair Rules:
   - explicit repair instructions
 - After quality repair, re-run deterministic checks and then re-run quality audit.
 
+## Audit / Repair Contract Pattern (from persona generation flow)
+
+The core principle: **audit tells repair exactly which keys to fix, repair returns only the changed fields as a delta**.
+
+### 1. Audit Must Name Exact Keys
+
+Every `issues` entry and `repairGuidance` entry must include the exact field path. Vague issues produce vague repairs that fix nothing or fix everything.
+
+```
+// Wrong
+issues: ["fields must stay coherent"]
+
+// Right
+issues: ["voice_fingerprint.opening_move contradicts interaction_defaults.default_stance — differentiate them"]
+repairGuidance: ["Rewrite voice_fingerprint.opening_move to describe how the persona opens a conversation"]
+```
+
+Audit instructions must require field paths in output. Include concrete pass/fail examples calibrated to the domain.
+
+### 2. Repair Prompt Must Include Targeted Key/Type Instructions
+
+Include sub-key structure only for the keys the audit flagged, derived from the audit issues text — not the full schema. See `src/lib/ai/admin/llm-flow-shared.ts` for the reusable `deriveJsonLeafType()` and `deriveJsonSchema()` helpers.
+
+```typescript
+const allText = [...issues, ...repairGuidance].join(" ");
+const mentionedKeys = Object.keys(output).filter((key) => allText.includes(key));
+// deriveSchema only for mentionedKeys using deriveJsonSchema/deriveJsonLeafType
+```
+
+This gives the repair LLM exact sub-key names without the noise of the full stage contract.
+
+### 3. Context Must Be Separate From Output
+
+Wrap current values in clear markers so the LLM treats them as reference, not template:
+
+```
+=== CONTEXT ONLY — DO NOT INCLUDE IN OUTPUT ===
+{...current values...}
+=== END CONTEXT ===
+```
+
+Instruction: "Your repair delta must contain ONLY the changed sub-fields, not this entire output."
+
+### 4. Delta Repair Format
+
+Repair returns only changed fields as `{"repair": {...}}`. App deep-merges into previous valid output using `deepMergeJson()` from `src/lib/ai/admin/llm-flow-shared.ts`.
+
+```json
+{ "repair": { "voice_fingerprint": { "opening_move": "new text" } } }
+```
+
+Delta output is 50-300 tokens (vs 2000+ for full regeneration). Eliminates truncation, reduces retry attempts from 4 to 2.
+
+### 5. Audit Packets Must Be Compact
+
+Audit prompts include parsed output as context. Use compact JSON (no indentation) and truncate to avoid overwhelming the audit LLM's small output budget:
+
+```typescript
+const compact = JSON.stringify(parsedOutput);
+const snippet =
+  compact.length <= 1500 ? compact : `${compact.slice(0, 1000)}...${compact.slice(-400)}`;
+```
+
+Instruct the audit LLM that the packet is intentionally compact and omitted background is not a failure reason.
+
+### 6. `failClosedOnTransport` Should Be `false`
+
+When audit LLM returns empty or fails to parse, treat it as a pass — don't block the stage with a generic default issue that produces poor repair guidance.
+
+```typescript
+failClosedOnTransport: false; // transport failure → passes (avoids false positives)
+```
+
+### 7. Composite Audits: Merge, Don't Early-Return
+
+Run all audits and merge issues. Early return hides problems from the repair LLM:
+
+```typescript
+const a1 = await audit1(stage);
+const a2 = await audit2(stage);
+return {
+  issues: [...a1.issues, ...a2.issues],
+  repairGuidance: [...a1.repairGuidance, ...a2.repairGuidance],
+};
+```
+
+Exception: when one audit normalizes output the next depends on (e.g., reference filtering before originalization check), early return is acceptable.
+
+### 8. DeriveType / DeriveSchema Helpers
+
+Reusable utilities in `src/lib/ai/admin/llm-flow-shared.ts`:
+
+- `deriveJsonLeafType(val)` — returns `"string"`, `"number"`, `"string[]"`, `"object"`, etc.
+- `deriveJsonSchema(value, prefix)` — recursively builds `"key: { sub1: type, sub2: type[] }"` for each top-level key
+- `buildRepairSchemaHint(output)` — builds compact `[schema]` block from parsed output
+- `deepMergeJson(base, repair)` — recursively merges repair fields into base
+
+### 9. Budget: Prevent Truncation Upfront
+
+- Measure actual output sizes from debug records; use generous stage budgets
+- Increasing budget is cheaper than multiple repair retries
+- `qualityRepairCap` can be smaller since delta output is compact
+- Budget definitions in `src/lib/ai/admin/persona-generation-token-budgets.ts`
+
 Failure Handling:
 
 - `schema_repair` retries should be bounded.
@@ -162,11 +266,20 @@ Checklist:
 - Extra-key policy defined
 - Canonical JSON example included
 - Audit JSON example included
+- Audit issues include exact field paths (not generic)
+- Audit instructions include pass/fail examples
+- Audit packets use compact JSON, truncated
+- `failClosedOnTransport: false` for semantic audits
+- Repair prompt includes targeted key/type instructions (derived from audit issue keys)
+- Repair prompt separates context from output with markers
+- Delta repair format (`{"repair": {...}}`) with deep merge
+- Composite audits merge issues (no early return unless dependency)
 - Deterministic checks listed
-- Repair retry policy listed
+- Repair retry policy listed (2 attempts for delta repair)
 - `finishReason=length` policy listed
 - App-owned vs model-owned fields listed
 - Final render path listed
+- Stage budgets calibrated from actual output sizes
 
 Current In-Repo Examples:
 
@@ -175,7 +288,7 @@ Current In-Repo Examples:
 - Memory compressor staged flow in [MEMORY_COMPRESSOR_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)
 - Memory write staged post-memory flow in [MEMORY_WRITE_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
 
-Last Updated: 2026-04-28
+Last Updated: 2026-05-04
 
 Verification command:
 

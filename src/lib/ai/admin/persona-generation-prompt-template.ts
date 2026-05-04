@@ -28,29 +28,35 @@ export type PromptAssemblyPreview = {
   };
 };
 
-const PERSONA_GENERATION_SYSTEM_BASELINE = "Generate a coherent forum persona profile.";
-const PERSONA_GENERATION_GENERATOR_INSTRUCTION = [
+export const PERSONA_GENERATION_SYSTEM_BASELINE = "Generate a coherent forum persona profile.";
+export const PERSONA_GENERATION_GENERATOR_INSTRUCTION = [
   "Generate the canonical persona payload in smaller validated stages.",
   "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
   "Use snake_case keys exactly as provided.",
   "Preserve named references when they clarify the persona.",
   "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
 ].join("\n");
+export const PERSONA_GENERATION_OUTPUT_CONSTRAINTS = [
+  "Output strictly valid JSON.",
+  "No markdown, wrapper text, or explanatory prose outside the JSON object.",
+  "Use English for prose fields; explicit named references may stay in their original names.",
+  "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
+  "Do not add extra keys.",
+].join("\n");
 const PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER = "(from Context / Extra Prompt input)";
 
-const PERSONA_GENERATION_TEMPLATE_STAGES = [
+export const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
     name: "seed",
-    goal: "Establish the persona identity seed, named references, and originalization boundary.",
+    goal: "Establish the persona's identity seed, bio, and explicit references.",
     contract: [
-      "Return one JSON object with keys:",
-      "persona{display_name,bio,status},",
-      "identity_summary{archetype,core_motivation,one_sentence_identity},",
-      "reference_sources[{name,type,contribution}],",
-      "other_reference_sources[{name,type,contribution}],",
-      "reference_derivation:string[],",
-      "originalization_note:string.",
-      "status should be active or inactive.",
+      "Return one JSON object with exactly these top-level keys:",
+      'persona: { display_name: string; bio: string; status: "active" | "inactive" }',
+      "identity_summary: { archetype: string; core_motivation: string; one_sentence_identity: string }",
+      "reference_sources: Array<{ name: string; type: string; contribution: string[] }>",
+      "other_reference_sources: Array<{ name: string; type: string; contribution: string[] }>",
+      "reference_derivation: string[]",
+      "originalization_note: string",
       "The final persona must be reference-inspired, not reference-cosplay.",
       "reference_sources must contain only personality-bearing named references such as real people, historical figures, fictional characters, mythic figures, or iconic personas.",
       "Place works, films, books, concepts, methods, principles, groups, places, and other non-personality references in other_reference_sources instead.",
@@ -62,15 +68,17 @@ const PERSONA_GENERATION_TEMPLATE_STAGES = [
     name: "persona_core",
     goal: "Generate the reusable persona guidance that downstream prompts will consume.",
     contract: [
-      "Return one JSON object with keys:",
-      "values{value_hierarchy,worldview,judgment_style},",
-      "aesthetic_profile{humor_preferences,narrative_preferences,creative_preferences,disliked_patterns,taste_boundaries},",
-      "lived_context{familiar_scenes_of_life,personal_experience_flavors,cultural_contexts,topics_with_confident_grounding,topics_requiring_runtime_retrieval},",
-      "creator_affinity{admired_creator_types,structural_preferences,detail_selection_habits,creative_biases},",
-      "interaction_defaults{default_stance,discussion_strengths,friction_triggers,non_generic_traits},",
-      "guardrails{hard_no,deescalation_style},",
-      "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes},",
-      "task_style_matrix{post{entry_shape,body_shape,close_shape,forbidden_shapes},comment{entry_shape,feedback_shape,close_shape,forbidden_shapes}}.",
+      "Return one JSON object with exactly these top-level keys:",
+      "values: { value_hierarchy: Array<{ value: string; priority: number }>; worldview: string[]; judgment_style: string }",
+      "aesthetic_profile: { humor_preferences: string[]; narrative_preferences: string[]; creative_preferences: string[]; disliked_patterns: string[]; taste_boundaries: string[] }",
+      "lived_context: { familiar_scenes_of_life: string[]; personal_experience_flavors: string[]; cultural_contexts: string[]; topics_with_confident_grounding: string[]; topics_requiring_runtime_retrieval: string[] }",
+      "creator_affinity: { admired_creator_types: string[]; structural_preferences: string[]; detail_selection_habits: string[]; creative_biases: string[] }",
+      "interaction_defaults: { default_stance: string; discussion_strengths: string[]; friction_triggers: string[]; non_generic_traits: string[] }",
+      "guardrails: { hard_no: string[]; deescalation_style: string }",
+      "voice_fingerprint: { opening_move: string; metaphor_domains: string[]; attack_style: string; praise_style: string; closing_move: string; forbidden_shapes: string[] }",
+      "task_style_matrix: { post: { entry_shape: string; body_shape: string; close_shape: string; forbidden_shapes: string[] }; comment: { entry_shape: string; feedback_shape: string; close_shape: string; forbidden_shapes: string[] } }",
+      "Every field marked string[] must be a JSON array of strings, even if it contains only one item.",
+      "value_hierarchy must be a JSON array of objects, never a single string or object map.",
       "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
       "Do not output snake_case identifier-style values like impulsive_challenge or bold_declaration.",
       "Every style-bearing string should read like prompt-ready persona guidance another model can directly follow.",
@@ -116,13 +124,7 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
       { name: "stage_contract", content: stage.contract.join("\n") },
       {
         name: "output_constraints",
-        content: [
-          "Output strictly valid JSON.",
-          "No markdown, wrapper text, or explanatory prose outside the JSON object.",
-          "Use English for prose fields; explicit named references may stay in their original names.",
-          "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
-          "Do not add extra keys.",
-        ].join("\n"),
+        content: PERSONA_GENERATION_OUTPUT_CONSTRAINTS,
       },
     ]);
 

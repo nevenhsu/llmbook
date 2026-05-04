@@ -66,6 +66,20 @@ export function isEligiblePersonaGenerationModel(
   );
 }
 
+function getPersonaGenerationErrorDiagnostics(error: unknown): Record<string, unknown> | null {
+  if (!(error instanceof ApiError) || !error.details || typeof error.details !== "object") {
+    return null;
+  }
+  const details = error.details as Record<string, unknown>;
+  const diagnostics: Record<string, unknown> = {};
+  for (const key of ["code", "stageName", "issues", "details", "stageDebugRecords"] as const) {
+    if (key in details && details[key] !== undefined && details[key] !== null) {
+      diagnostics[key] = details[key];
+    }
+  }
+  return Object.keys(diagnostics).length > 0 ? diagnostics : null;
+}
+
 export interface UseAiControlPlaneProps {
   initialProviders: AiProviderConfig[];
   initialModels: AiModelConfig[];
@@ -154,6 +168,8 @@ export function useAiControlPlane({
   const [personaGenerationModalError, setPersonaGenerationModalError] = useState<string | null>(
     null,
   );
+  const [personaGenerationModalErrorDetails, setPersonaGenerationModalErrorDetails] =
+    useState<Record<string, unknown> | null>(null);
   const [personaGenerationModalRawOutput, setPersonaGenerationModalRawOutput] = useState<
     string | null
   >(null);
@@ -814,6 +830,7 @@ export function useAiControlPlane({
     setPersonaGenerationMode("create");
     setPersonaGenerationModalOpen(true);
     setPersonaGenerationModalError(null);
+    setPersonaGenerationModalErrorDetails(null);
     setPersonaGenerationModalRawOutput(null);
     setPersonaLastSavedAt(null);
     setPersonaGenerationModalPhase("loading");
@@ -822,9 +839,13 @@ export function useAiControlPlane({
     try {
       const res = await apiPost<{
         preview: PreviewResult & { structured: PersonaGenerationStructured };
-      }>("/api/admin/ai/persona-generation/preview", personaGeneration, {
-        signal: abortController.signal,
-      });
+      }>(
+        "/api/admin/ai/persona-generation/preview",
+        { ...personaGeneration, debug: true },
+        {
+          signal: abortController.signal,
+        },
+      );
       if (personaGenerationAbortRef.current !== abortController) {
         return;
       }
@@ -845,6 +866,7 @@ export function useAiControlPlane({
       }
       const message = error instanceof Error ? error.message : "Failed to generate preview";
       setPersonaGenerationModalError(message);
+      setPersonaGenerationModalErrorDetails(getPersonaGenerationErrorDiagnostics(error));
       setPersonaGenerationModalRawOutput(
         error instanceof ApiError &&
           error.details &&
@@ -906,6 +928,7 @@ export function useAiControlPlane({
     setPersonaGenerationMode("update");
     setPersonaGenerationModalOpen(true);
     setPersonaGenerationModalError(null);
+    setPersonaGenerationModalErrorDetails(null);
     setPersonaGenerationModalRawOutput(null);
     setPersonaLastSavedAt(null);
     setPersonaGenerationModalPhase("loading");
@@ -919,6 +942,7 @@ export function useAiControlPlane({
         {
           modelId: personaUpdate.modelId,
           extraPrompt: personaUpdate.extraPrompt,
+          debug: true,
         },
         {
           signal: abortController.signal,
@@ -936,6 +960,7 @@ export function useAiControlPlane({
       }
       const message = error instanceof Error ? error.message : "Failed to generate preview";
       setPersonaGenerationModalError(message);
+      setPersonaGenerationModalErrorDetails(getPersonaGenerationErrorDiagnostics(error));
       setPersonaGenerationModalRawOutput(
         error instanceof ApiError &&
           error.details &&
@@ -1275,6 +1300,7 @@ export function useAiControlPlane({
     personaGenerationModalOpen,
     personaGenerationModalPhase,
     personaGenerationModalError,
+    personaGenerationModalErrorDetails,
     personaGenerationModalRawOutput,
     personaGenerationElapsedSeconds,
     interactionInput,

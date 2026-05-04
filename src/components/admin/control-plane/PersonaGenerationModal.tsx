@@ -10,6 +10,7 @@ type Props = {
   isOpen: boolean;
   phase: PersonaGenerationModalPhase;
   errorMessage: string | null;
+  errorDetails?: Record<string, unknown> | null;
   rawOutput: string | null;
   elapsedSeconds: number;
   preview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
@@ -41,6 +42,7 @@ export function PersonaGenerationModal({
   isOpen,
   phase,
   errorMessage,
+  errorDetails = null,
   rawOutput,
   elapsedSeconds,
   preview,
@@ -69,6 +71,7 @@ export function PersonaGenerationModal({
         mode="modal"
         phase={phase}
         errorMessage={errorMessage}
+        errorDetails={errorDetails}
         rawOutput={rawOutput}
         elapsedSeconds={elapsedSeconds}
         preview={preview}

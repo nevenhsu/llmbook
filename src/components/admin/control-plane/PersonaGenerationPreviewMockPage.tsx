@@ -139,6 +139,7 @@ export function PersonaGenerationPreviewMockPage() {
   const [personaGenerationModalError, setPersonaGenerationModalError] = useState<string | null>(
     null,
   );
+  const [personaGenerationModalErrorDetails] = useState<Record<string, unknown> | null>(null);
   const [personaGenerationModalRawOutput] = useState<string | null>(null);
   const [personaGenerationElapsedSeconds, setPersonaGenerationElapsedSeconds] = useState(0);
   const personaGenerationStartedAtRef = useRef<number | null>(null);
@@ -344,6 +345,7 @@ export function PersonaGenerationPreviewMockPage() {
         personaGenerationModalOpen={personaGenerationModalOpen}
         personaGenerationModalPhase={personaGenerationModalPhase}
         personaGenerationModalError={personaGenerationModalError}
+        personaGenerationModalErrorDetails={personaGenerationModalErrorDetails}
         personaGenerationModalRawOutput={personaGenerationModalRawOutput}
         personaGenerationElapsedSeconds={personaGenerationElapsedSeconds}
         personaStepStatus={{

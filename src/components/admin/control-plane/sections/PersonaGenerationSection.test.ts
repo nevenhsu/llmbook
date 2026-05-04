@@ -123,6 +123,7 @@ describe("PersonaGenerationSection", () => {
           personaGenerationModalOpen: false,
           personaGenerationModalPhase: "idle",
           personaGenerationModalError: null,
+          personaGenerationModalErrorDetails: null,
           personaGenerationModalRawOutput: null,
           personaGenerationElapsedSeconds: 0,
           personaStepStatus: {

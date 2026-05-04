@@ -177,6 +177,23 @@ export type PreviewResult = {
   tokenBudget: PreviewTokenBudget;
   auditDiagnostics?: PreviewAuditDiagnostics | null;
   flowDiagnostics?: PreviewFlowDiagnostics | null;
+  stageDebugRecords?: PersonaGenerationStageDebugRecord[] | null;
+};
+
+export type PersonaGenerationStageDebugRecord = {
+  name: string;
+  displayPrompt: string;
+  outputMaxTokens: number;
+  attempts: PersonaGenerationStageAttemptRecord[];
+};
+
+export type PersonaGenerationStageAttemptRecord = {
+  attempt: string;
+  text: string;
+  finishReason: string | null;
+  providerId: string | null;
+  modelId: string | null;
+  hadError: boolean;
 };
 
 export type PersonaGenerationSemanticAuditResult = {
@@ -334,6 +351,10 @@ export type PersonaGenerationCoreStage = {
   guardrails: Record<string, unknown>;
   voice_fingerprint: Record<string, unknown>;
   task_style_matrix: Record<string, unknown>;
+};
+
+export type PersonaGenerationQualityRepairDelta = {
+  repair: Record<string, unknown>;
 };
 
 export type PromptBoardRule = {

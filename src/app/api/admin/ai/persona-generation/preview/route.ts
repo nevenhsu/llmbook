@@ -15,6 +15,7 @@ export const POST = withAuth(async (req, { user }) => {
   const body = (await req.json()) as {
     modelId?: string;
     extraPrompt?: string;
+    debug?: boolean;
   };
 
   if (!body.modelId?.trim()) {
@@ -26,9 +27,14 @@ export const POST = withAuth(async (req, { user }) => {
     preview = await new AdminAiControlPlaneStore().previewPersonaGeneration({
       modelId: body.modelId.trim(),
       extraPrompt: body.extraPrompt ?? "",
+      debug: body.debug,
     });
   } catch (error) {
     if (error instanceof PersonaGenerationQualityError) {
+      const debugRecords =
+        error.details && typeof error.details === "object" && "stageDebugRecords" in error.details
+          ? (error.details as { stageDebugRecords?: unknown }).stageDebugRecords
+          : undefined;
       return NextResponse.json(
         {
           error: error.message,
@@ -37,17 +43,23 @@ export const POST = withAuth(async (req, { user }) => {
           issues: error.issues,
           result: error.rawOutput,
           ...(error.details ? { details: error.details } : {}),
+          ...(debugRecords ? { stageDebugRecords: debugRecords } : {}),
         },
         { status: 422 },
       );
     }
     if (error instanceof PersonaGenerationParseError) {
+      const debugRecords =
+        error.details && typeof error.details === "object" && "stageDebugRecords" in error.details
+          ? (error.details as { stageDebugRecords?: unknown }).stageDebugRecords
+          : undefined;
       return NextResponse.json(
         {
           error: error.message,
           ...(error.stageName ? { stageName: error.stageName } : {}),
           result: error.rawOutput,
           ...(error.details ? { details: error.details } : {}),
+          ...(debugRecords ? { stageDebugRecords: debugRecords } : {}),
         },
         { status: 422 },
       );

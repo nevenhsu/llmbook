@@ -201,6 +201,10 @@ function llmText(text: unknown) {
   };
 }
 
+function llmRepairDelta(fields: Record<string, unknown>) {
+  return llmText({ repair: fields });
+}
+
 function invokedEntityIds(): string[] {
   return invokeLLM.mock.calls.map((call) => (call[0] as { entityId?: string }).entityId ?? "");
 }
@@ -232,6 +236,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       )
       .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
       .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
       .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
 
     const preview = await mockStore().previewPersonaGeneration({
@@ -253,7 +258,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       .map((call) => call[0] as { entityId?: string; modelInput?: { prompt?: string } })
       .filter((call) => call.entityId?.includes("semantic-audit"))
       .map((call) => call.modelInput?.prompt ?? "");
-    expect(semanticAuditPrompts).toHaveLength(3);
+    expect(semanticAuditPrompts).toHaveLength(4);
     expect(semanticAuditPrompts.every((prompt) => prompt.includes("[output_constraints]"))).toBe(
       true,
     );
@@ -310,7 +315,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     ["empty", ""],
     ["invalid", "not json"],
   ])(
-    "runs seed quality repair when seed_originalization_audit returns %s output",
+    "treats originalization_audit with %s output as a pass instead of failing and triggering repair",
     async (_caseName, auditOutput) => {
       invokeLLM
         .mockResolvedValueOnce(llmText(buildSeedStage()))
@@ -323,17 +328,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           }),
         )
         .mockResolvedValueOnce(llmText(auditOutput))
-        .mockResolvedValueOnce(llmText(buildSeedStage()))
-        .mockResolvedValueOnce(
-          llmText({
-            passes: true,
-            keptReferenceNames: ["Kotaro Isaka"],
-            issues: [],
-            repairGuidance: [],
-          }),
-        )
-        .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
         .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+        .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
         .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
 
       const preview = await mockStore().previewPersonaGeneration({
@@ -342,17 +338,95 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       });
 
       expect(preview.structured.persona.display_name).toBe("AI Critic");
-      expect(invokedEntityIds()).toContain(
+      expect(invokedEntityIds()).not.toContain(
         "persona-generation-preview:model-1:seed:quality-repair-1",
       );
     },
   );
 
+  it("keeps the first seed quality repair compact enough to close JSON", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(llmText(buildSeedStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: true,
+          keptReferenceNames: ["Kotaro Isaka"],
+          issues: [],
+          repairGuidance: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        llmText({
+          passes: false,
+          issues: ["originalization_note stays too close to the named references."],
+          repairGuidance: ["Rewrite the note as a forum-native original identity."],
+        }),
+      )
+      .mockResolvedValueOnce(llmRepairDelta(buildSeedStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: true,
+          keptReferenceNames: ["Kotaro Isaka"],
+          issues: [],
+          repairGuidance: [],
+        }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+
+    await mockStore().previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Build a literary forum critic.",
+    });
+
+    const qualityRepairCall = invokeLLM.mock.calls.find((call) => {
+      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
+      return entityId.includes("seed:quality-repair-1");
+    });
+    const prompt = (qualityRepairCall?.[0] as { modelInput?: { prompt?: string } }).modelInput
+      ?.prompt;
+
+    expect(prompt).toContain("[output]");
+    expect(prompt).toContain('"repair"');
+    expect(prompt).toContain("originalization_note stays too close to the named references.");
+  });
+
+  it("surfaces the parser reason when quality repair delta returns invalid JSON", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(llmText(buildSeedStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: true,
+          keptReferenceNames: ["Kotaro Isaka"],
+          issues: [],
+          repairGuidance: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        llmText({
+          passes: false,
+          issues: ["originalization_note stays too close to the named references."],
+          repairGuidance: ["Rewrite the note as a forum-native original identity."],
+        }),
+      )
+      .mockResolvedValueOnce(llmText("not json"))
+      .mockResolvedValueOnce(llmText("still not json"));
+
+    await expect(
+      mockStore().previewPersonaGeneration({
+        modelId: "model-1",
+        extraPrompt: "Build a literary forum critic.",
+      }),
+    ).rejects.toThrow(/quality repair delta/);
+  });
+
   it.each([
     ["empty", ""],
     ["invalid", "not json"],
   ])(
-    "runs persona_core quality repair when persona_core_quality_audit returns %s output",
+    "treats persona_core audit with %s output as a pass instead of triggering repair",
     async (_caseName, auditOutput) => {
       invokeLLM
         .mockResolvedValueOnce(llmText(buildSeedStage()))
@@ -367,7 +441,6 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
         .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
         .mockResolvedValueOnce(llmText(auditOutput))
-        .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
         .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
 
       const preview = await mockStore().previewPersonaGeneration({
@@ -376,7 +449,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       });
 
       expect(preview.structured.persona_core.values).toEqual(buildPersonaCoreStage().values);
-      expect(invokedEntityIds()).toContain(
+      expect(invokedEntityIds()).not.toContain(
         "persona-generation-preview:model-1:persona_core:quality-repair-1",
       );
     },
@@ -394,17 +467,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       )
       .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
-      .mockResolvedValueOnce(
-        llmText({
-          ...buildPersonaCoreStage(),
-          interaction_defaults: {
-            default_stance: "hot_take_machine",
-            discussion_strengths: ["fast"],
-            friction_triggers: ["hype"],
-            non_generic_traits: ["edgy"],
-          },
-        }),
-      )
+      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
       .mockResolvedValueOnce(
         llmText({
           passes: false,
@@ -412,7 +475,11 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           repairGuidance: ["Rewrite interaction defaults as natural-language guidance."],
         }),
       )
-      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(
+        llmRepairDelta({ interaction_defaults: buildPersonaCoreStage().interaction_defaults }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
       .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
 
     const preview = await mockStore().previewPersonaGeneration({
@@ -428,6 +495,90 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       return entityId.includes("persona_core:quality-repair-1");
     });
     expect(qualityRepairCall).toBeDefined();
+  });
+
+  it("keeps the first persona_core quality repair as a delta", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(llmText(buildSeedStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: true,
+          keptReferenceNames: ["Kotaro Isaka"],
+          issues: [],
+          repairGuidance: [],
+        }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: false,
+          issues: ["persona_core.interaction_defaults is too compressed for doctrine projection."],
+          repairGuidance: ["Rewrite interaction defaults as natural-language guidance."],
+        }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(
+        llmRepairDelta({ interaction_defaults: buildPersonaCoreStage().interaction_defaults }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+
+    await mockStore().previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Build a sharp forum critic.",
+    });
+
+    const qualityRepairCall = invokeLLM.mock.calls.find((call) => {
+      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
+      return entityId.includes("persona_core:quality-repair-1");
+    });
+    const prompt = (qualityRepairCall?.[0] as { modelInput?: { prompt?: string } }).modelInput
+      ?.prompt;
+
+    expect(prompt).toContain("[output]");
+    expect(prompt).toContain('"repair"');
+    expect(prompt).toContain("Available keys:");
+    expect(prompt).toContain("persona_core.interaction_defaults is too compressed");
+  });
+
+  it("retries persona_core quality repair when first delta is invalid and recovers", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(llmText(buildSeedStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: true,
+          keptReferenceNames: ["Kotaro Isaka"],
+          issues: [],
+          repairGuidance: [],
+        }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+      .mockResolvedValueOnce(
+        llmText({
+          passes: false,
+          issues: [
+            "persona_core must stay coherent and provide enough distinct cross-field signal.",
+          ],
+          repairGuidance: ["Rewrite as compact but coherent persona guidance."],
+        }),
+      )
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText("not valid json"))
+      .mockResolvedValueOnce(llmRepairDelta(buildPersonaCoreStage()))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+
+    const preview = await mockStore().previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Build a sharp forum critic.",
+    });
+
+    expect(preview.structured.persona_core.values).toEqual(buildPersonaCoreStage().values);
+    expect(invokedEntityIds()).toContain(
+      "persona-generation-preview:model-1:persona_core:quality-repair-2",
+    );
   });
 
   it("throws a typed quality error when persona_core quality repair still fails", async () => {
@@ -461,8 +612,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       )
       .mockResolvedValueOnce(
-        llmText({
-          ...buildPersonaCoreStage(),
+        llmRepairDelta({
           interaction_defaults: {
             default_stance: "hot_take_machine",
             discussion_strengths: ["fast"],
@@ -479,26 +629,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
         }),
       )
       .mockResolvedValueOnce(
-        llmText({
-          ...buildPersonaCoreStage(),
-          interaction_defaults: {
-            default_stance: "hot_take_machine",
-            discussion_strengths: ["fast"],
-            friction_triggers: ["hype"],
-            non_generic_traits: ["edgy"],
-          },
-        }),
-      )
-      .mockResolvedValueOnce(
-        llmText({
-          passes: false,
-          issues: ["persona_core.interaction_defaults is still too compressed."],
-          repairGuidance: ["Expand interaction defaults into reusable natural-language guidance."],
-        }),
-      )
-      .mockResolvedValueOnce(
-        llmText({
-          ...buildPersonaCoreStage(),
+        llmRepairDelta({
           interaction_defaults: {
             default_stance: "hot_take_machine",
             discussion_strengths: ["fast"],

@@ -91,6 +91,7 @@ describe("AiControlPlanePanel", () => {
       personaGenerationModalOpen: false,
       personaGenerationModalPhase: "idle",
       personaGenerationModalError: null,
+      personaGenerationModalErrorDetails: null,
       personaGenerationModalRawOutput: null,
       personaGenerationElapsedSeconds: 0,
       interactionInput: { personaId: "", modelId: "", taskType: "post", taskContext: "" },

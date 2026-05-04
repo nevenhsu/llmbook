@@ -1,8 +1,13 @@
 "use client";
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { useEffect, useState } from "react";
 import { Save, Sparkles, UserPlus } from "lucide-react";
-import { normalizeUsernameInput, validateUsernameFormat } from "@/lib/username-validation";
+import {
+  normalizeUsernameInput,
+  validateUsernameFormat,
+  derivePersonaUsername,
+} from "@/lib/username-validation";
 import type {
   PersonaProfile,
   PreviewResult,
@@ -17,11 +22,13 @@ import {
 import { ModalShell } from "@/components/ui/ModalShell";
 import { PersonaStructuredPreview } from "./PersonaStructuredPreview";
 import { PersonaInfoCard } from "./PersonaInfoCard";
+import { PersonaGenerationDebugCard } from "./PersonaGenerationDebugCard";
 
 type Props = {
   mode?: "modal" | "page";
   phase: PersonaGenerationModalPhase;
   errorMessage: string | null;
+  errorDetails?: Record<string, unknown> | null;
   rawOutput: string | null;
   elapsedSeconds: number;
   preview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
@@ -93,6 +100,7 @@ export function PersonaGenerationPreviewSurface({
   mode = "modal",
   phase,
   errorMessage,
+  errorDetails = null,
   rawOutput,
   elapsedSeconds,
   preview,
@@ -113,6 +121,10 @@ export function PersonaGenerationPreviewSurface({
   onRegenerate,
   onSave,
 }: Props) {
+  const [formChanged, setFormChanged] = useState(false);
+  useEffect(() => {
+    if (lastSavedAt) setFormChanged(false);
+  }, [lastSavedAt]);
   const canSave = canSavePersonaGeneration(phase, preview) && !disableActions;
   const trimmedDisplayName = saveForm.displayName.trim();
   const normalizedUsername = saveForm.username.trim().toLowerCase();
@@ -128,7 +140,7 @@ export function PersonaGenerationPreviewSurface({
         : preview && !usernameValidation.valid
           ? (usernameValidation.error ?? "Invalid username")
           : null;
-  const hasSaved = Boolean(lastSavedAt);
+  const hasSaved = Boolean(lastSavedAt) && !formChanged;
   const actionDisabled = isGenerating || disableActions;
   const showElapsedStatus = phase === "loading" || (phase !== "idle" && elapsedSeconds > 0);
   const elapsedLabel =
@@ -162,11 +174,19 @@ export function PersonaGenerationPreviewSurface({
               <div className="alert alert-error">
                 <span>{errorMessage}</span>
               </div>
-              {rawOutput ? (
+              {rawOutput !== null ? (
                 <div className="space-y-2">
                   <div className="text-sm font-semibold">LLM Response</div>
                   <pre className="bg-base-200 max-h-72 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
-                    {rawOutput}
+                    {rawOutput || "(empty output)"}
+                  </pre>
+                </div>
+              ) : null}
+              {errorDetails ? (
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Attempt Details</div>
+                  <pre className="bg-base-200 max-h-48 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
+                    {JSON.stringify(errorDetails, null, 2)}
                   </pre>
                 </div>
               ) : null}
@@ -195,7 +215,9 @@ export function PersonaGenerationPreviewSurface({
                       setSaveForm((prev) => ({
                         ...prev,
                         displayName,
+                        username: derivePersonaUsername(displayName),
                       }));
+                      setFormChanged(true);
                     }}
                     placeholder="e.g. Satoshi Nakamoto"
                   />
@@ -217,6 +239,7 @@ export function PersonaGenerationPreviewSurface({
                         ...prev,
                         username: nextUsername,
                       }));
+                      setFormChanged(true);
                     }}
                     placeholder="e.g. satoshi"
                   />
@@ -230,6 +253,12 @@ export function PersonaGenerationPreviewSurface({
               No preview response available.
             </div>
           )}
+          <PersonaGenerationDebugCard
+            records={preview?.stageDebugRecords ?? undefined}
+            errorMessage={errorMessage}
+            errorDetails={errorDetails}
+            rawOutput={rawOutput}
+          />
         </div>
       )}
     </>

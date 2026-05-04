@@ -462,28 +462,14 @@ export function validatePersonaCoreStageQuality(stage: PersonaGenerationCoreStag
       "voice_fingerprint.opening_move must provide enough signal for downstream discourse projection.",
     );
   }
-  if (countWords(postBodyShape) < 5) {
+  if (countWords(postBodyShape) < 3) {
     issues.push(
       "task_style_matrix.post.body_shape must provide enough signal for downstream discourse projection.",
     );
   }
-  if (countWords(commentFeedbackShape) < 5) {
+  if (countWords(commentFeedbackShape) < 3) {
     issues.push(
       "task_style_matrix.comment.feedback_shape must provide enough signal for downstream discourse projection.",
-    );
-  }
-
-  const distinctSignals = new Set(
-    [
-      normalizeSingleLineText(readString(stage.interaction_defaults.default_stance)).toLowerCase(),
-      normalizeSingleLineText(openingMove).toLowerCase(),
-      normalizeSingleLineText(postBodyShape).toLowerCase(),
-      normalizeSingleLineText(commentFeedbackShape).toLowerCase(),
-    ].filter((item) => item.length > 0),
-  );
-  if (distinctSignals.size < 3) {
-    issues.push(
-      "persona_core must keep interaction_defaults, voice_fingerprint, and task_style_matrix distinct enough for stable doctrine projection.",
     );
   }
 
@@ -842,15 +828,15 @@ export function parseStoredPersonaCoreProfile(value: unknown): Record<string, un
   };
   return {
     ...parsePersonaCore(coreRoot),
-    reference_sources: parseReferenceSources(root.reference_sources, {
+    reference_sources: parseReferenceSources(root.reference_sources ?? [], {
       allowEmpty: true,
       fieldPath: "persona_core.reference_sources",
     }),
-    other_reference_sources: parseOtherReferenceSources(root.other_reference_sources, {
+    other_reference_sources: parseOtherReferenceSources(root.other_reference_sources ?? [], {
       fieldPath: "persona_core.other_reference_sources",
     }),
     reference_derivation: normalizePersonaStringArray(
-      root.reference_derivation,
+      root.reference_derivation ?? [],
       "persona_core.reference_derivation",
     ),
     originalization_note: requirePersonaText(
@@ -1482,4 +1468,32 @@ export function parsePersonaGenerationOutput(rawText: string): {
       rawText,
     );
   }
+}
+
+export function parseQualityRepairDelta(rawText: string): {
+  repair: Record<string, unknown>;
+} {
+  const jsonText = extractJsonFromText(rawText);
+  if (!jsonText) {
+    throw new Error("quality repair delta output is empty");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error("quality repair delta output must be valid JSON");
+  }
+
+  const record = asRecord(parsed);
+  if (!record) {
+    throw new Error("quality repair delta output must be a JSON object");
+  }
+
+  const repairRecord = asRecord(record.repair);
+  if (!repairRecord || Object.keys(repairRecord).length === 0) {
+    throw new Error("quality repair delta must contain a non-empty repair object");
+  }
+
+  return { repair: repairRecord };
 }

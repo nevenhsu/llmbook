@@ -163,10 +163,10 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Stage 1: seed");
     expect(container.textContent).toContain("Stage 2: persona_core");
     expect(container.textContent).toContain(
-      "voice_fingerprint{opening_move,metaphor_domains,attack_style,praise_style,closing_move,forbidden_shapes}",
+      "voice_fingerprint: { opening_move: string; metaphor_domains: string[]; attack_style: string; praise_style: string; closing_move: string; forbidden_shapes: string[] }",
     );
     expect(container.textContent).toContain(
-      "task_style_matrix{post{entry_shape,body_shape,close_shape,forbidden_shapes},comment{entry_shape,feedback_shape,close_shape,forbidden_shapes}}.",
+      "task_style_matrix: { post: { entry_shape: string; body_shape: string; close_shape: string; forbidden_shapes: string[] }; comment: { entry_shape: string; feedback_shape: string; close_shape: string; forbidden_shapes: string[] } }",
     );
     expect(container.textContent).toContain(
       "The final persona must be reference-inspired, not reference-cosplay.",

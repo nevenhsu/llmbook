@@ -132,20 +132,43 @@ generate persona request
 Persona-generation stages follow the same packet principle as text flows:
 
 - audits consume compact review packets
-- repairs consume fuller rewrite packets
+- repairs return delta merge objects
 
 For generate-persona this means:
 
 - `seed.semantic_audit`
   - compact packet with the parsed `seed` output and only the supporting evidence needed to judge reference classification/originalization
 - `seed.quality_repair`
-  - fuller packet with previous output, audit findings, repair guidance, and enough stage context to rewrite the `seed` payload safely
-- `persona_core.quality_audit`
+  - delta packet: the LLM returns only changed fields as `{"repair": {...}}` and the app deep-merges them into the previous valid output
+- `persona_core.quality_audit` (coherence)
   - compact packet with the parsed `persona_core` output and the specific fields needed to judge coherence/quality
+- `persona_core.distinct_signals_audit`
+  - compact packet judging whether `default_stance`, `opening_move`, `body_shape`, and `feedback_shape` are meaningfully distinct (semantic, not textual comparison)
 - `persona_core.quality_repair`
-  - fuller packet with previous output, audit findings, repair guidance, and enough stage context to rewrite `persona_core` safely
+  - delta packet: the LLM returns only changed persona_core fields as `{"repair": {...}}` and the app deep-merges them
 
 Audit prompts must be instructed that the packet is intentionally compact and that omitted background is not itself a failure reason.
+
+### Delta Repair Format
+
+Quality repair no longer asks the LLM to regenerate the entire stage JSON. Instead, the LLM returns only the fields that need to change as a shallow delta:
+
+```json
+{
+  "repair": {
+    "voice_fingerprint": { "opening_move": "new text" },
+    "interaction_defaults": { "discussion_strengths": ["new item"] }
+  }
+}
+```
+
+The app deep-merges `repair` into the previous valid output, replacing matching top-level keys and recursively merging nested objects.
+
+This reduces quality repair output from ~2400 tokens (full object) to ~200-800 tokens (changed fields only), eliminating truncation as a source of retries and making 1 repair sufficient in virtually all cases.
+
+### Quality Repair Max Attempts
+
+Reduced from 4 to 2. The delta format is compact enough that 1 repair should always succeed; the second attempt handles rare cases of invalid JSON delta output.
 
 ## Stage 1: `seed`
 
@@ -276,6 +299,7 @@ Putting them in one stage increases internal coherence and reduces orchestration
   - `voice_fingerprint`
   - `task_style_matrix`
 - internal coherence among voice/behavior/style fields
+- distinct behavioral signals across `interaction_defaults.default_stance`, `voice_fingerprint.opening_move`, `task_style_matrix.post.body_shape`, and `task_style_matrix.comment.feedback_shape` (judged semantically via a separate audit, not by deterministic string comparison)
 - doctrine-projection sufficiency:
   - the fields together must provide enough stable signal for downstream runtime/prompt code to derive
     - `value_fit`
@@ -417,6 +441,10 @@ All items above are implemented:
 - ✅ `persona_memories` removed from generation output (test asserts absence)
 - ✅ Relationship fields removed from generation output (`grep` confirms no active usage)
 - ✅ Persona generation uses its own staged prompt template, not planner/writer family
+- ✅ Delta quality repair — LLM returns only changed fields as `{"repair": {...}}`, app deep-merges; max attempts reduced 4→2
+- ✅ `auditPersonaCoreDistinctSignals` — semantic audit replaces deterministic string-comparison distinct signals check
+- ✅ Audit instructions tightened with concrete examples and calibrated criteria
+- ✅ Shape-field word count thresholds relaxed (body_shape, feedback_shape 5→3)
 
 ## Related Docs
 
