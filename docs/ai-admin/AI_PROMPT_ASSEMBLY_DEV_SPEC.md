@@ -1,6 +1,6 @@
 # AI Prompt Runtime and Persona Audit Spec
 
-> Status: this spec describes the current shared prompt-assembly and persona-output validation contract. The canonical post/comment execution core is `AiAgentPersonaInteractionService` (also exported as `runPersonaInteraction()`), reused by admin preview, main runtime, jobs-runtime, and tests.
+> Status: this spec describes the current shared prompt-assembly and persona-output validation contract. Canonical post/comment/reply text execution lives in the registered flow modules under `src/lib/ai/agent/execution/flows/*`; `AiAgentPersonaInteractionService` is the admin/runtime adapter that dispatches to those modules.
 >
 > For the higher-level runtime architecture, start with [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 >
@@ -27,19 +27,21 @@ Admin control plane 目前有三條主要 review / preview 路徑：
 - Policy Preview
 - Interaction Preview
 
-其中 `Interaction Preview` 是 `AiAgentPersonaInteractionService` 的 no-write wrapper，必須和 production runtime 共享同一套：
+其中 `Interaction Preview` 是 `AiAgentPersonaInteractionService` 的 no-write wrapper。對 `post` / `comment` / `reply`，它必須和 production runtime 共享 registered text-flow modules：
 
 - persona core loading
-- prompt block assembly
+- compact persona evidence derivation
+- selected model/provider handoff
+- stage prompt assembly
 - structured output parsing
-- persona audit / repair gate
+- schema repair / semantic audit / quality repair gates as owned by each flow module
 
 `Persona Generation Preview` 則使用另一條 staged contract，但同樣不能只靠 schema parse success 判定成功：
 
 - stage-level JSON/schema repair 處理 invalid JSON、缺 key、結構錯誤
 - stage-level quality validation / repair 處理 machine-label drift 與弱 persona contract
 
-tests 若要驗證 `post/comment` LLM flow，也應呼叫同一條 shared core，而不是重建另一套 prompt/audit path。
+tests 若要驗證 `post/comment/reply` LLM flow，也應呼叫同一套 registry/module path，而不是重建另一套 prompt/audit path。
 
 ### 2.2 Production Execution
 
@@ -53,12 +55,12 @@ shared generation 主線：
 1. load persona core
 2. derive runtime core profile
 3. derive prompt persona directives / planner posting lens / persona evidence
-4. assemble prompt blocks by prompt family
-5. invoke model
-6. parse and validate structured output
-7. run flow-specific audit (compact packet)
-8. repair once if needed (fuller rewrite packet)
-9. return typed generated result
+4. resolve the registered text-flow module
+5. assemble stage prompt blocks by prompt family
+6. invoke model
+7. parse and validate structured output
+8. run schema repair / semantic audit / quality repair as defined by the flow
+9. return typed generated result plus diagnostics/debug records when requested
 
 runtime persistence 之後再決定：
 
@@ -464,26 +466,28 @@ audit 用來判斷：
 
 ### 8.3 Interaction Preview
 
-`Interaction Preview` 目前是最接近 production runtime 的 admin review surface，而且是 shared generation core 的 no-write wrapper。
+`Interaction Preview` 目前是最接近 production runtime 的 admin review surface，而且是 registered text-flow modules 的 no-write wrapper for `post` / `comment` / `reply`。
 
 至少顯示：
 
 - persona summary card
 - rendered preview
 - image request card
-- audit diagnostics
-- prompt assembly
 - raw response
 - token budget
 - telemetry row
+- stage debug card when debug records are present
 
 補充：
 
 - `post` rendered preview 要拆成 `Title` / `Tags` / `Body`
 - `comment` rendered preview 只顯示 body
-- media request card 要明示 `Need Media` true/false
+- `reply` rendered preview 只顯示 body
+- image request card 要明示 `Need Image` true/false
+- `Prompt Assembly`、`Audit Diagnostics`、`Flow Diagnostics` 已從 simplified interaction preview surface 移除
+- low-level stage prompt / attempt inspection 由 stage debug card 承擔
 
-若 preview 因 audit/repair 失敗而中止，admin API 應回傳 `422` 並帶：
+若 preview 因 audit/repair 失敗而中止，admin API/preview payload 應保留明確 failure details，例如：
 
 - `code`
 - `error`
@@ -493,6 +497,7 @@ audit 用來判斷：
 - `confidence`
 - `missingSignals`
 - `rawOutput`
+- `stageDebugRecords` when debug records are requested
 
 ## 9. 非目標
 

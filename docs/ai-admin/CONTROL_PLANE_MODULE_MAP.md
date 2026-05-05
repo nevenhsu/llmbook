@@ -1,6 +1,6 @@
 # Admin AI Control-Plane Module Map
 
-> Status: reflects the refactored layout after the shared interaction-generation extraction on 2026-04-08. `control-plane-store.ts` is a facade, `AiAgentPersonaInteractionService` is the shared post/comment execution core, and runtime writes now live outside `src/lib/ai/admin/*`.
+> Status: reflects the current layout after the registered post/comment/reply flow-module migration and the simplified admin preview surface. `control-plane-store.ts` is a facade, `AiAgentPersonaInteractionService` is the no-write interaction adapter, text-flow logic lives under `src/lib/ai/agent/execution/flows/*`, and runtime writes live outside `src/lib/ai/admin/*`.
 >
 > For the runtime-wide architecture, see [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md).
 
@@ -91,18 +91,33 @@
   - `Interaction Preview` 的 admin no-write wrapper
   - 管：
     - `previewPersonaInteraction()` no-write wrapper
-  - 不再承擔 shared generation core；那層已移到 runtime/execution
+    - `debug: true` handoff so admin review can inspect stage prompt/attempt records
+  - 不承擔 prompt assembly / audit / repair core；那層已移到 runtime/execution flow modules
 
 - [persona-interaction-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/persona-interaction-service.ts)
-  - shared post/comment generation core
+  - admin/runtime interaction adapter
   - 管：
     - `AiAgentPersonaInteractionService.run()`
     - `runPersonaInteraction()` compatibility export
-    - prompt assembly
-    - post/comment output parsing
-    - persona audit / compact retry / repair
-    - shared generation diagnostics
-  - admin preview、runtime、jobs-runtime、tests 若要重用 post/comment LLM flow，應先重用這裡，不要各自再做 prompt/audit 分支
+    - user-facing `post` / `comment` / `reply` dispatch to registered text-flow modules
+    - persisted persona profile loading for preview
+    - selected model/provider handoff
+    - final markdown render validation
+  - 不要在這裡新增每個 flow 的 parser / audit / repair 分支；那層歸 `flows/*` ownership
+
+- [flows/registry.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/flows/registry.ts)
+- [flows/types.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/flows/types.ts)
+- [post-flow-module.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/flows/post-flow-module.ts)
+- [comment-flow-module.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/flows/comment-flow-module.ts)
+- [reply-flow-module.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/flows/reply-flow-module.ts)
+  - shared text-flow modules for `post` / `comment` / `reply`
+  - 管：
+    - stage sequencing
+    - schema repair
+    - semantic audit
+    - quality repair
+    - flow diagnostics and debug record collection
+  - admin preview、runtime、jobs-runtime、tests 若要重用 post/comment/reply LLM flow，應走 registry/module，不要各自再做 prompt/audit 分支
 
 - [interaction-context-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-context-assist-service.ts)
   - task context / scenario assist
@@ -177,6 +192,11 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
   - shared modal/status UI，不限定 admin
   - 之後若別的 agent flow 也要 debug API payload/raw response 或看 structured persona，優先重用這層
 
+- [PersonaGenerationDebugCard.tsx](/Users/neven/Documents/projects/llmbook/src/components/admin/control-plane/PersonaGenerationDebugCard.tsx)
+  - current stage prompt/attempt debug UI reused by persona generation preview and interaction preview
+  - 名稱仍偏 persona-generation；active refactor plan tracks moving this to shared `StageDebugCard`
+  - 不要再新增第二個 flow-specific debug card；先執行或更新 [shared stage-debug UI plan](/Users/neven/Documents/projects/llmbook/plans/2026-05-05-shared-stage-debug-ui-refactor.md)
+
 - `control-plane-store.*.test.ts`
   - store facade 與 service orchestration 的 focused regression tests
 
@@ -197,7 +217,8 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
 
 ### 若要加新的 admin preview/helper flow
 
-- orchestration 新增 service file
+- 若是 text interaction flow，先新增/擴充 `flows/*` module 並註冊到 registry
+- admin-facing orchestration 新增 service file only when a route/UI wrapper is needed
 - store 只做 thin wrapper
 - shared parse/formatter 盡量放 [control-plane-shared.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-shared.ts)
 

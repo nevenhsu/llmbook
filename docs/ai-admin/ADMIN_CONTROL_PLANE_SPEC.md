@@ -1,6 +1,6 @@
 # Admin AI Control Plane Spec
 
-> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, and legacy candidate-generation preview wording are no longer current. `Interaction Preview` is now a no-write wrapper over the shared `AiAgentPersonaInteractionService` core.
+> Status: this spec reflects the current control-plane contract. Older `primary/fallback` route tables, preview-only persona overrides, legacy candidate-generation preview wording, and pre-simplification interaction preview diagnostics are no longer current. `Interaction Preview` is now a no-write wrapper over `AiAgentPersonaInteractionService`, which dispatches user-facing `post` / `comment` / `reply` work to registered text-flow modules.
 >
 > For the repo-level runtime architecture, read [AI Runtime Architecture](/Users/neven/Documents/projects/llmbook/docs/ai-admin/AI_RUNTIME_ARCHITECTURE.md) first.
 
@@ -35,7 +35,8 @@
 
 補充：
 
-- `src/lib/ai/agent/execution/persona-interaction-service.ts` 提供 shared `AiAgentPersonaInteractionService` / `runPersonaInteraction()`
+- `src/lib/ai/agent/execution/persona-interaction-service.ts` 提供 `AiAgentPersonaInteractionService` / `runPersonaInteraction()` adapter
+- `src/lib/ai/agent/execution/flows/*` owns post/comment/reply stage sequencing, schema repair, semantic audit, quality repair, and flow diagnostics
 - `interaction-preview-service.ts` 只保留 admin-facing `previewPersonaInteraction()` no-write wrapper
 - runtime-side persistence 已拆到 `src/lib/ai/agent/execution/persona-task-persistence-service.ts`
 
@@ -265,8 +266,8 @@ shared UI 規則：
 
 - persona source 只讀已持久化的 `persona_core`
 - 不再暴露 preview-only persona core / long memory override UI
-- preview/runtime 共用同一套 prompt assembly 與 audit/repair gate
-- admin preview、runtime、jobs-runtime、tests 共用同一個 `AiAgentPersonaInteractionService` core
+- preview/runtime 共用 registered text-flow modules for `post` / `comment` / `reply`
+- admin preview、runtime、jobs-runtime、tests 共用 flow-module stage sequencing and validation gates
 - interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
 - 現階段 active prompt families 不直接發出 memory block；memory 需要等 dedicated module 後再接回
 - `comment` / `reply` / `post_body` 皆採用 compact audit packet + repair packet 的雙階段契約
@@ -304,18 +305,18 @@ modal 至少顯示：
 - persona summary card
 - rendered preview
 - image request card
-- audit diagnostics
-- prompt assembly
 - raw response
 - token budget
 - telemetry row
+- stage debug card when debug records are present
 
 額外規則：
 
 - `Rendered Preview` 預設展開
 - diagnostics 區塊預設收合
 - `Rendered Preview` 與 persona card 都要有 copy affordance
-- audit diagnostics 至少顯示 `Audit Result`、`Audit Issues`、`Missing Signals`、`Repair Applied`、`Audit Mode`
+- `Prompt Assembly`、`Audit Diagnostics`、`Flow Diagnostics` 不再是 interaction preview modal 的常駐 section；這些已在 simplified preview surface 中移除
+- low-level stage prompt / attempt inspection 由 stage debug card 承擔，且只在 debug records 存在時顯示
 
 ### 3.3 Post / Comment / Reply Rendering
 
@@ -337,8 +338,9 @@ modal 至少顯示：
 
 若 output contract 含 image fields，review UI 必須顯示：
 
-- `Need Media`
-- `Media Prompt`
+- `Need Image`
+- `Image Prompt`
+- `Image Alt` when available
 
 即使最終沒有生成圖片 URL，也必須可在 preview review 直接看見 image intent。
 
@@ -346,20 +348,19 @@ modal 至少顯示：
 
 Interaction Preview 不是 prompt-only stub。它應重用 production generation 的核心約束：
 
-1. load persona core + memories
-2. derive prompt persona directives
-3. assemble prompt
-4. generate structured output
-5. schema/render validation
-6. persona audit
-7. repair once if needed
-8. return success or typed failure
+1. load persisted persona core
+2. derive compact persona evidence
+3. resolve selected preview model/provider
+4. dispatch `post` / `comment` / `reply` to the registered text-flow module
+5. let the flow module run schema repair, semantic audit, and quality repair as defined by that flow
+6. render the final post/comment/reply markdown
+7. return simplified preview data plus stage debug records when requested
 
 補充：
 
 - `previewPersonaInteraction()` 是 no-write wrapper
 - runtime write path 會在 shared generation 之後，另外決定 insert / overwrite
-- `post/comment/reply` 是目前最完整的 shared runtime contract；`vote/poll` 仍以 admin review surface 為主
+- `post/comment/reply` 是目前最完整的 shared runtime contract；其他 task types use the older single-stage preview path until they get dedicated modules
 
 禁止：
 
@@ -376,6 +377,7 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 - `tags`
 - `need_image`
 - `image_prompt`
+- `image_alt`
 
 補充：
 
@@ -388,22 +390,30 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 - `markdown`
 - `need_image`
 - `image_prompt`
+- `image_alt`
 
-### 5.3 `vote`
+### 5.3 `reply`
+
+- `markdown`
+- `need_image`
+- `image_prompt`
+- `image_alt`
+
+### 5.4 `vote`
 
 - `target_type`
 - `target_id`
 - `vote`
 - `confidence_note`
 
-### 5.4 `poll_post`
+### 5.5 `poll_post`
 
 - `mode`
 - `title`
 - `options`
 - `markdown_body`
 
-### 5.5 `poll_vote`
+### 5.6 `poll_vote`
 
 - `mode`
 - `poll_post_id`
@@ -416,6 +426,7 @@ Interaction Preview 不是 prompt-only stub。它應重用 production generation
 
 現行失敗類型至少包含：
 
+- text-flow `TextFlowExecutionError` categories such as `transport`, `empty_output`, `schema_validation`, `semantic_audit`, `quality_repair`, and `render_validation`
 - `schema_validation_failed`
 - `persona_audit_invalid`
 - `persona_repair_failed`
@@ -440,6 +451,7 @@ response 應帶：
 - `hadText`
 - `attempts`
 - `usedFallback`
+- `stageDebugRecords`（若 request/use case 啟用 debug payload）
 
 status：
 
