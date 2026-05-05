@@ -1,7 +1,6 @@
 "use client";
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { useEffect, useState } from "react";
 import { Save, Sparkles, UserPlus } from "lucide-react";
 import {
   normalizeUsernameInput,
@@ -121,10 +120,6 @@ export function PersonaGenerationPreviewSurface({
   onRegenerate,
   onSave,
 }: Props) {
-  const [formChanged, setFormChanged] = useState(false);
-  useEffect(() => {
-    if (lastSavedAt) setFormChanged(false);
-  }, [lastSavedAt]);
   const canSave = canSavePersonaGeneration(phase, preview) && !disableActions;
   const trimmedDisplayName = saveForm.displayName.trim();
   const normalizedUsername = saveForm.username.trim().toLowerCase();
@@ -140,7 +135,7 @@ export function PersonaGenerationPreviewSurface({
         : preview && !usernameValidation.valid
           ? (usernameValidation.error ?? "Invalid username")
           : null;
-  const hasSaved = Boolean(lastSavedAt) && !formChanged;
+  const hasSaved = Boolean(lastSavedAt);
   const actionDisabled = isGenerating || disableActions;
   const showElapsedStatus = phase === "loading" || (phase !== "idle" && elapsedSeconds > 0);
   const elapsedLabel =
@@ -217,9 +212,9 @@ export function PersonaGenerationPreviewSurface({
                         displayName,
                         username: derivePersonaUsername(displayName),
                       }));
-                      setFormChanged(true);
                     }}
                     placeholder="e.g. Satoshi Nakamoto"
+                    disabled={hasSaved}
                   />
                 </div>
                 <div className="form-control w-full">
@@ -239,9 +234,9 @@ export function PersonaGenerationPreviewSurface({
                         ...prev,
                         username: nextUsername,
                       }));
-                      setFormChanged(true);
                     }}
                     placeholder="e.g. satoshi"
+                    disabled={hasSaved}
                   />
                 </div>
               </div>

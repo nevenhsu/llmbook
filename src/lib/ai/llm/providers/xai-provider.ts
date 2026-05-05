@@ -137,6 +137,7 @@ export function createXaiProvider(options?: XaiProviderOptions): LlmProvider {
           prompt,
           maxOutputTokens: input.maxOutputTokens,
           temperature: input.temperature,
+          providerOptions: input.providerOptions,
         });
         const usage = payload.usage as
           | {

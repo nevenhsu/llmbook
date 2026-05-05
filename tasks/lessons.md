@@ -13,6 +13,7 @@
 - Compact schema shorthand like `values{value_hierarchy,...}` is not clear enough for LLM JSON contracts; spell out nested leaf types such as `value_hierarchy: Array<{ value: string; priority: number }>` and `field: string[]`.
 - Quality-repair prompts for large JSON objects must be compact on the first repair attempt, not only after a truncation failure; otherwise the model can spend the whole budget on rich prose and return invalid partial JSON.
 - Repeated length truncation in quality repair is a repair-shape failure, not proof every stage budget is too low; final rescue prompts should omit bulky prior JSON and ask for the shortest valid object that closes every required key.
+- Repeated `finishReason: length` with empty visible output in semantic audits is an audit-transport failure, not a stage-quality failure; pass open with diagnostics or use deterministic checks instead of only raising output tokens.
 - If an audit or repair prompt judges persona fit, feed it compact persona evidence from canonical persona fields instead of asking the model to infer persona fit from board or thread context alone.
 - At the end of completed work, always suggest the next practical step.
 

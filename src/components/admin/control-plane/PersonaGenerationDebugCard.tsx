@@ -4,15 +4,21 @@ import { useCallback, useState } from "react";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";
 import type { PersonaGenerationStageDebugRecord } from "@/lib/ai/admin/control-plane-contract";
 
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text).catch(() => {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
-  });
+async function copyToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // fall through to fallback
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }
 
 function StageAttemptBlock({
@@ -85,7 +91,7 @@ function StageBlock({ record }: { record: PersonaGenerationStageDebugRecord }) {
         "",
       );
     }
-    copyToClipboard(parts.join("\n"));
+    void copyToClipboard(parts.join("\n"));
   }, [record]);
 
   return (
@@ -208,7 +214,7 @@ export function PersonaGenerationDebugCard({
         }
       }
     }
-    copyToClipboard(parts.join("\n"));
+    void copyToClipboard(parts.join("\n"));
   }, [effectiveRecords, errorMessage, errorDetails, rawOutput]);
 
   const label = hasError && !hasRecords ? "Error Debug" : "Stage Debug";

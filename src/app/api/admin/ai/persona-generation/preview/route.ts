@@ -32,7 +32,10 @@ export const POST = withAuth(async (req, { user }) => {
   } catch (error) {
     if (error instanceof PersonaGenerationQualityError) {
       const debugRecords =
-        error.details && typeof error.details === "object" && "stageDebugRecords" in error.details
+        body.debug &&
+        error.details &&
+        typeof error.details === "object" &&
+        "stageDebugRecords" in error.details
           ? (error.details as { stageDebugRecords?: unknown }).stageDebugRecords
           : undefined;
       return NextResponse.json(
@@ -50,7 +53,10 @@ export const POST = withAuth(async (req, { user }) => {
     }
     if (error instanceof PersonaGenerationParseError) {
       const debugRecords =
-        error.details && typeof error.details === "object" && "stageDebugRecords" in error.details
+        body.debug &&
+        error.details &&
+        typeof error.details === "object" &&
+        "stageDebugRecords" in error.details
           ? (error.details as { stageDebugRecords?: unknown }).stageDebugRecords
           : undefined;
       return NextResponse.json(

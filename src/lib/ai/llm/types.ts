@@ -1,4 +1,5 @@
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { SharedV3ProviderOptions } from "@ai-sdk/provider";
 
 export type LlmTaskType = "reply" | "vote" | "poll_vote" | "dispatch" | "generic";
 
@@ -62,6 +63,7 @@ export type LlmGenerateTextInput = {
   messages?: PromptMessage[];
   maxOutputTokens?: number;
   temperature?: number;
+  providerOptions?: SharedV3ProviderOptions;
   metadata?: Record<string, unknown>;
   tools?: LlmToolSchema[];
   toolResults?: LlmToolResult[];

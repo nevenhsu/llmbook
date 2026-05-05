@@ -55,7 +55,11 @@ function readPersonaStatus(value: unknown, fieldPath: string): "active" | "inact
   return status;
 }
 
-function normalizePersonaStringArray(value: unknown, fieldPath: string): string[] {
+function normalizePersonaStringArray(
+  value: unknown,
+  fieldPath: string,
+  allowEmpty = false,
+): string[] {
   const items =
     typeof value === "string"
       ? [value]
@@ -66,7 +70,7 @@ function normalizePersonaStringArray(value: unknown, fieldPath: string): string[
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
   const normalized = items.map((item) => item.trim()).filter((item) => item.length > 0);
-  if (normalized.length === 0) {
+  if (normalized.length === 0 && !allowEmpty) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
   return normalized;
@@ -838,6 +842,7 @@ export function parseStoredPersonaCoreProfile(value: unknown): Record<string, un
     reference_derivation: normalizePersonaStringArray(
       root.reference_derivation ?? [],
       "persona_core.reference_derivation",
+      true,
     ),
     originalization_note: requirePersonaText(
       root.originalization_note,

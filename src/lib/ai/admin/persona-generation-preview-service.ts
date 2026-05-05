@@ -18,6 +18,7 @@ import {
   type PersonaGenerationSeedStage,
   type PersonaGenerationStructured,
   type PreviewResult,
+  type PreviewTokenBudget,
 } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import {
@@ -241,6 +242,9 @@ export async function previewPersonaGeneration(input: {
       "[output_constraints]",
       "Return exactly one JSON object.",
       "Return raw JSON only. Do not use markdown fences.",
+      'If the stage passes, return exactly {"passes":true,"issues":[],"repairGuidance":[]}.',
+      "If the stage fails, keep the whole JSON response under 120 words.",
+      "Do not include analysis, reasoning, or explanatory prose.",
       "passes: boolean",
       "issues: string[]",
       "repairGuidance: string[]",
@@ -258,7 +262,7 @@ export async function previewPersonaGeneration(input: {
       "[parsed_stage]",
       (() => {
         const compactValue = (val: unknown, depth: number): unknown => {
-          if (depth >= 2 && typeof val === "string") return val.slice(0, 80);
+          if (depth >= 2 && typeof val === "string") return val.slice(0, 50);
           if (depth >= 4) return null;
           if (Array.isArray(val)) {
             const items = val.slice(0, depth >= 2 ? 1 : 2).map((v) => compactValue(v, depth + 1));
@@ -288,6 +292,14 @@ export async function previewPersonaGeneration(input: {
           maxOutputTokens,
         ),
         temperature: 0,
+        providerOptions: {
+          xai: {
+            reasoningEffort: "low",
+          },
+          deepseek: {
+            reasoningEffort: "low",
+          },
+        },
       },
       entityId: `persona-generation-preview:${model.id}:${auditInput.stageName}:${auditInput.auditLabel}:semantic-audit-1`,
       timeoutMs: invocationConfig.timeoutMs,
@@ -489,7 +501,7 @@ export async function previewPersonaGeneration(input: {
       instructions: [
         "You are judging a compact review packet for persona_core quality.",
         "The packet is intentionally compact. Do not fail only because omitted background is missing.",
-        "Judge whether values, lived_context, creator_affinity, interaction_defaults, voice_fingerprint, and task_style_matrix describe the same persona without internal contradictions.",
+        "Judge whether values, interaction_defaults, voice_fingerprint, and task_style_matrix describe the same persona without internal contradictions.",
         "Flag only concrete problems. In every issue, include the exact field path (e.g., voice_fingerprint.opening_move):",
         "  - A field directly contradicts another field (e.g., 'voice_fingerprint.opening_move says aggressive but interaction_defaults.default_stance says deferential').",
         "  - A field uses single-word labels that provide no actionable guidance (e.g., 'interaction_defaults.default_stance is just \"skeptic\"').",
@@ -499,11 +511,12 @@ export async function previewPersonaGeneration(input: {
         "Do not flag reasonable stylistic variation or thematically coherent but differently-phrased guidance.",
       ],
       parsedOutput: {
-        identity_summary: seedStage.identity_summary,
-        reference_sources: seedStage.reference_sources,
+        identity_summary: {
+          archetype: seedStage.identity_summary.archetype,
+          core_motivation: seedStage.identity_summary.core_motivation,
+          one_sentence_identity: seedStage.identity_summary.one_sentence_identity,
+        },
         values: stage.values,
-        lived_context: stage.lived_context,
-        creator_affinity: stage.creator_affinity,
         interaction_defaults: stage.interaction_defaults,
         voice_fingerprint: stage.voice_fingerprint,
         task_style_matrix: stage.task_style_matrix,
@@ -958,10 +971,11 @@ export async function previewPersonaGeneration(input: {
 
       try {
         const delta = parseQualityRepairDelta(qualityRepaired.text);
-        const mergedStage = deepMergeJson(
+        const rawMerged = deepMergeJson(
           previousParsedOutput as Record<string, unknown>,
           delta.repair,
-        ) as T;
+        );
+        const mergedStage = stageInput.parse(JSON.stringify(rawMerged)) as T;
         const repairedQualityResult = await collectStageQualityResult(mergedStage);
         if (repairedQualityResult.issues.length === 0) {
           return repairedQualityResult.normalizedParsedOutput;
@@ -985,6 +999,9 @@ export async function previewPersonaGeneration(input: {
         isQualityRepairRetry = false;
       } catch (parseError) {
         if (attempt === 2) {
+          if (parseError instanceof PersonaGenerationQualityError) {
+            throw parseError;
+          }
           const parseMessage =
             parseError instanceof Error ? parseError.message : "unknown parse error";
           throw new PersonaGenerationQualityError({
@@ -1010,23 +1027,15 @@ export async function previewPersonaGeneration(input: {
     });
   };
 
-  let assembledPrompt = "";
-  let markdown = "";
-  let tokenBudget:
-    | {
-        estimatedInputTokens: number;
-        maxInputTokens: number;
-        maxOutputTokens: number;
-        blockStats: Array<{ name: string; tokens: number }>;
-        compressedStages: Array<"memory" | "long_memory">;
-        exceeded: boolean;
-        message: string | null;
-      }
-    | undefined;
-  let structured: PersonaGenerationStructured | undefined;
+  let seedStage!: PersonaGenerationSeedStage;
+  let personaCoreStage!: PersonaGenerationCoreStage;
+  let structured!: PersonaGenerationStructured;
+  let assembledPrompt!: string;
+  let tokenBudget!: PreviewTokenBudget;
+  let markdown!: string;
 
   try {
-    const seedStage = await runPersonaGenerationStage({
+    seedStage = await runPersonaGenerationStage({
       stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
       stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
       stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[0].contract.join("\n"),
@@ -1037,7 +1046,7 @@ export async function previewPersonaGeneration(input: {
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
     });
 
-    const personaCoreStage = await runPersonaGenerationStage({
+    personaCoreStage = await runPersonaGenerationStage({
       stageName: PERSONA_GENERATION_TEMPLATE_STAGES[1].name,
       stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[1].goal,
       stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[1].contract.join("\n"),
@@ -1048,9 +1057,6 @@ export async function previewPersonaGeneration(input: {
         persona: seedStage.persona,
         identity_summary: seedStage.identity_summary,
         reference_sources: seedStage.reference_sources,
-        other_reference_sources: seedStage.other_reference_sources,
-        reference_derivation: seedStage.reference_derivation,
-        originalization_note: seedStage.originalization_note,
       },
       allowedReferenceNames: [
         ...seedStage.reference_sources.map((item) => item.name),
@@ -1059,7 +1065,7 @@ export async function previewPersonaGeneration(input: {
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
     });
 
-    const personaCore = {
+    const personaCore: PersonaGenerationStructured["persona_core"] = {
       identity_summary: seedStage.identity_summary,
       values: personaCoreStage.values,
       aesthetic_profile: personaCoreStage.aesthetic_profile,
@@ -1122,7 +1128,17 @@ export async function previewPersonaGeneration(input: {
       `### originalization_note`,
       structured.originalization_note,
     ].join("\n");
+  } catch (error) {
+    if (error instanceof PersonaGenerationParseError) {
+      (error as unknown as { details: Record<string, unknown> | null }).details = {
+        ...(error.details ?? {}),
+        stageDebugRecords,
+      };
+    }
+    throw error;
+  }
 
+  try {
     markdownToEditorHtml(markdown);
     return {
       assembledPrompt,
@@ -1131,39 +1147,17 @@ export async function previewPersonaGeneration(input: {
       renderError: null,
       tokenBudget,
       structured,
-      stageDebugRecords,
+      stageDebugRecords: input.debug ? stageDebugRecords : [],
     };
   } catch (error) {
-    if (error instanceof PersonaGenerationParseError) {
-      (error as unknown as { details: Record<string, unknown> | null }).details = {
-        ...(error.details ?? {}),
-        stageDebugRecords,
-      };
-      throw error;
-    }
     return {
       assembledPrompt,
       markdown,
       renderOk: false,
       renderError: error instanceof Error ? error.message : "render validation failed",
-      tokenBudget: tokenBudget ?? {
-        estimatedInputTokens: 0,
-        maxInputTokens: 0,
-        maxOutputTokens: 0,
-        blockStats: [],
-        compressedStages: [] as Array<"memory" | "long_memory">,
-        exceeded: false,
-        message: null,
-      },
-      structured: structured ?? {
-        persona: { display_name: "", bio: "", status: "active" },
-        persona_core: {},
-        reference_sources: [],
-        other_reference_sources: [],
-        reference_derivation: [],
-        originalization_note: "",
-      },
-      stageDebugRecords,
+      tokenBudget,
+      structured,
+      stageDebugRecords: input.debug ? stageDebugRecords : [],
     };
   }
 }

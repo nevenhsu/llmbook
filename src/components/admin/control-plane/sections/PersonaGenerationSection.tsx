@@ -156,7 +156,6 @@ export function PersonaGenerationSection({
   const canRunUpdate =
     Boolean(personaUpdate.personaId) &&
     Boolean(personaUpdate.modelId) &&
-    Boolean(selectedUpdatePersona) &&
     Boolean(selectedUpdatePersonaProfile) &&
     !selectedUpdatePersonaProfileLoading &&
     !personaUpdateLoading &&

@@ -110,8 +110,20 @@ export function PersonaPromptCard({
             onChange={onModelChange}
           />
 
-          {targetPersona ? (
-            <PersonaInfoCard persona={targetPersona} profile={targetPersonaProfile ?? null} />
+          {targetPersona || targetPersonaProfile ? (
+            <PersonaInfoCard
+              persona={
+                targetPersona ?? {
+                  id: targetPersonaId ?? "",
+                  username: targetPersonaProfile?.persona.username ?? "",
+                  display_name: targetPersonaProfile?.persona.display_name ?? "",
+                  bio: targetPersonaProfile?.persona.bio ?? "A forum contributor.",
+                  status: targetPersonaProfile?.persona.status ?? "active",
+                  avatar_url: null,
+                }
+              }
+              profile={targetPersonaProfile ?? null}
+            />
           ) : null}
 
           <div className="form-control w-full">

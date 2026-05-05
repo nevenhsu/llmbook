@@ -900,10 +900,6 @@ export function useAiControlPlane({
       toast.error("Selected model is unavailable. Use a model with configured API key.");
       return;
     }
-    if (!selectedUpdatePersona) {
-      toast.error("Target persona is unavailable");
-      return;
-    }
     if (selectedUpdatePersonaProfileLoading) {
       toast.error("Target persona references are still loading");
       return;
@@ -916,8 +912,8 @@ export function useAiControlPlane({
       personaGenerationMode === "update" && personaGenerationModalOpen
         ? prev
         : {
-            displayName: selectedUpdatePersona.display_name,
-            username: selectedUpdatePersona.username,
+            displayName: selectedUpdatePersonaProfile.persona.display_name,
+            username: selectedUpdatePersonaProfile.persona.username,
           },
     );
     personaGenerationAbortRef.current?.abort();

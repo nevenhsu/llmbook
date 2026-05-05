@@ -209,6 +209,23 @@ function invokedEntityIds(): string[] {
   return invokeLLM.mock.calls.map((call) => (call[0] as { entityId?: string }).entityId ?? "");
 }
 
+function mockSuccessfulPersonaGenerationPreview() {
+  invokeLLM
+    .mockResolvedValueOnce(llmText(buildSeedStage()))
+    .mockResolvedValueOnce(
+      llmText({
+        passes: true,
+        keptReferenceNames: ["Kotaro Isaka"],
+        issues: [],
+        repairGuidance: [],
+      }),
+    )
+    .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+    .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
+    .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
+    .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+}
+
 describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -224,20 +241,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
   });
 
   it("assembles a two-stage preview without validated_context or persona_memories", async () => {
-    invokeLLM
-      .mockResolvedValueOnce(llmText(buildSeedStage()))
-      .mockResolvedValueOnce(
-        llmText({
-          passes: true,
-          keptReferenceNames: ["Kotaro Isaka"],
-          issues: [],
-          repairGuidance: [],
-        }),
-      )
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
-      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
+    mockSuccessfulPersonaGenerationPreview();
 
     const preview = await mockStore().previewPersonaGeneration({
       modelId: "model-1",
@@ -270,6 +274,53 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(
       semanticAuditPrompts.some((prompt) => prompt.includes('"keptReferenceNames": ["string"]')),
     ).toBe(true);
+  });
+
+  it("gives persona_core semantic audits enough visible output budget for reasoning models", async () => {
+    mockSuccessfulPersonaGenerationPreview();
+
+    await mockStore().previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Build a sharp forum critic.",
+    });
+
+    const personaCoreAuditCall = invokeLLM.mock.calls.find((call) => {
+      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
+      return entityId.includes("persona_core:persona_core_quality_audit:semantic-audit-1");
+    });
+    const maxOutputTokens = (
+      personaCoreAuditCall?.[0] as { modelInput?: { maxOutputTokens?: number } }
+    ).modelInput?.maxOutputTokens;
+
+    expect(maxOutputTokens).toBeGreaterThanOrEqual(2048);
+  });
+
+  it("keeps persona_core quality audit context narrow and uses low reasoning effort", async () => {
+    mockSuccessfulPersonaGenerationPreview();
+
+    await mockStore().previewPersonaGeneration({
+      modelId: "model-1",
+      extraPrompt: "Build a sharp forum critic.",
+    });
+
+    const personaCoreAuditCall = invokeLLM.mock.calls.find((call) => {
+      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
+      return entityId.includes("persona_core:persona_core_quality_audit:semantic-audit-1");
+    });
+    const callInput = personaCoreAuditCall?.[0] as {
+      modelInput?: {
+        prompt?: string;
+        providerOptions?: { xai?: { reasoningEffort?: string } };
+      };
+    };
+    const parsedStage = callInput.modelInput?.prompt?.split("[parsed_stage]\n")[1] ?? "";
+
+    expect(parsedStage).toContain("identity_anchor");
+    expect(parsedStage).toContain("persona_core_focus");
+    expect(parsedStage).not.toContain("reference_sources");
+    expect(parsedStage).not.toContain("other_reference_sources");
+    expect(parsedStage).not.toContain("reference_derivation");
+    expect(callInput.modelInput?.providerOptions?.xai?.reasoningEffort).toBe("low");
   });
 
   it("throws a typed parse error when persona_core is missing required fields", async () => {
