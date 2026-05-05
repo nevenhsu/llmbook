@@ -6,8 +6,8 @@ import {
 } from "@/lib/ai/prompt-runtime/post-body-audit";
 import {
   computePostPlanOverallScore,
-  evaluatePostPlanGate,
   parsePostPlanActionOutput,
+  pickBestCandidate,
   validatePostPlanOutput,
   type PostPlanCandidate,
 } from "@/lib/ai/prompt-runtime/post-plan-contract";
@@ -15,7 +15,6 @@ import {
   buildPostPlanAuditPrompt,
   buildPostPlanRepairPrompt,
   parsePostPlanAuditResult,
-  type PostPlanAuditResult,
 } from "@/lib/ai/prompt-runtime/post-plan-audit";
 import type {
   FlowDiagnostics,
@@ -25,6 +24,7 @@ import type {
   TextFlowModuleRunInput,
   TextFlowModuleRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
+import type { PersonaGenerationStageDebugRecord } from "@/lib/ai/admin/control-plane-contract";
 import {
   TextFlowExecutionError,
   buildModuleMetadata,
@@ -34,10 +34,8 @@ import {
 function buildSelectedPostPlan(candidate: PostPlanCandidate): SelectedPostPlan {
   return {
     title: candidate.title,
-    angleSummary: candidate.angleSummary,
     thesis: candidate.thesis,
     bodyOutline: candidate.bodyOutline,
-    differenceFromRecent: candidate.differenceFromRecent,
   };
 }
 
@@ -45,12 +43,9 @@ function buildSelectedPostPlanBlock(plan: SelectedPostPlan): string {
   return [
     "[selected_post_plan]",
     `Locked title: ${plan.title}`,
-    `Angle summary: ${plan.angleSummary}`,
     `Thesis: ${plan.thesis}`,
     "Body outline:",
     ...plan.bodyOutline.map((item) => `- ${item}`),
-    "Difference from recent:",
-    ...plan.differenceFromRecent.map((item) => `- ${item}`),
     "Do not change the title or topic.",
   ].join("\n");
 }
@@ -59,15 +54,7 @@ function buildPlanningTaskContext(baseTaskContext: string): string {
   return [
     baseTaskContext,
     "This is the planning stage only.",
-    "Return 3 candidates, score conservatively, and do not write the final post body.",
-  ].join("\n\n");
-}
-
-function buildFreshPlanningTaskContext(baseTaskContext: string): string {
-  return [
-    buildPlanningTaskContext(baseTaskContext),
-    "Generate a fresh set of 3 candidates.",
-    "Do not reuse titles or angles from the previous planning attempt.",
+    "Return 2-3 candidates, score conservatively, and do not write the final post body.",
   ].join("\n\n");
 }
 
@@ -75,15 +62,20 @@ function buildPlanningSchemaRepairTaskContext(
   baseTaskContext: string,
   previousOutput: string,
 ): string {
+  const trimmed =
+    previousOutput.length <= 800
+      ? previousOutput
+      : `${previousOutput.slice(0, 500)}\n...[truncated]...`;
+
   return [
     buildPlanningTaskContext(baseTaskContext),
     "[retry_repair]",
     "Your previous post_plan response did not satisfy the required JSON contract.",
-    "Rewrite it as exactly one valid JSON object with exactly 3 candidates.",
-    "Do not add overall_score or any extra keys.",
+    "Rewrite it as exactly one valid JSON object with 2-3 candidates.",
+    "Do not add extra keys.",
     "",
     "[previous_invalid_response]",
-    previousOutput,
+    trimmed,
   ].join("\n");
 }
 
@@ -91,12 +83,17 @@ function buildPostBodyTaskContext(): string {
   return [
     "Write the final post body for the selected plan below.",
     "The title is locked by the app and must not be changed.",
-    "Expand the chosen angle faithfully.",
+    "Expand the chosen thesis faithfully.",
     "Write markdown that carries a clear claim, structure, and concrete usefulness.",
   ].join("\n");
 }
 
 function buildPostBodySchemaRepairTaskContext(previousOutput: string): string {
+  const trimmed =
+    previousOutput.length <= 800
+      ? previousOutput
+      : `${previousOutput.slice(0, 500)}\n...[truncated]...`;
+
   return [
     buildPostBodyTaskContext(),
     "[retry_repair]",
@@ -106,7 +103,7 @@ function buildPostBodySchemaRepairTaskContext(previousOutput: string): string {
     "Do not output title.",
     "",
     "[previous_invalid_response]",
-    previousOutput,
+    trimmed,
   ].join("\n");
 }
 
@@ -126,9 +123,6 @@ function classifyPostFailure(error: Error): TextFlowExecutionErrorCauseCategory 
   }
   if (error.message.includes("invalid") || error.message.includes("expected")) {
     return "schema_validation";
-  }
-  if (error.message.includes("hard gate")) {
-    return "deterministic_gate";
   }
   return "transport";
 }
@@ -157,12 +151,22 @@ async function runPostFlow(
     regenerate: 0,
   };
   const stageResults: FlowDiagnostics["stageResults"] = [];
+  const stageDebugRecords: PersonaGenerationStageDebugRecord[] = [];
+
+  const collectDebugRecords = (preview: Awaited<ReturnType<typeof invokeStage>>) => {
+    if (preview.stageDebugRecords && preview.stageDebugRecords.length > 0) {
+      for (const record of preview.stageDebugRecords) {
+        stageDebugRecords.push(record);
+      }
+    }
+  };
 
   const invokeStage = async (stageInput: {
     taskType: "post_plan" | "post_body";
     stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
     taskContext: string;
     targetContextText?: string;
+    attemptLabel?: string;
   }) =>
     input.runPersonaInteractionStage({
       personaId: input.task.personaId,
@@ -172,29 +176,26 @@ async function runPostFlow(
       taskContext: stageInput.taskContext,
       boardContextText: promptContext.boardContextText,
       targetContextText: stageInput.targetContextText,
+      debug: input.debug,
+      attemptLabel: stageInput.attemptLabel,
     });
 
   const runPlanningAttempt = async (
     taskContext: string,
-    countsAsRegenerate: boolean,
   ): Promise<{
     preview: Awaited<ReturnType<typeof invokeStage>>;
     parsed: NonNullable<ReturnType<typeof parsePostPlanActionOutput>["output"]>;
     validationIssues: string[];
-    gate: ReturnType<typeof evaluatePostPlanGate>;
-    audit: PostPlanAuditResult;
   }> => {
     planningAttempt.main += 1;
-    if (countsAsRegenerate) {
-      planningAttempt.regenerate += 1;
-      planningAttempt.schemaRepair = 0;
-    }
     let preview = await invokeStage({
       taskType: "post_plan",
       stagePurpose: "main",
       taskContext,
       targetContextText: promptContext.targetContextText,
+      attemptLabel: "post_plan.main",
     });
+    collectDebugRecords(preview);
     let parsed = parsePostPlanActionOutput(preview.rawResponse ?? preview.markdown);
     let validationIssues = parsed.output
       ? validatePostPlanOutput(parsed.output)
@@ -210,7 +211,9 @@ async function runPostFlow(
           preview.rawResponse ?? preview.markdown,
         ),
         targetContextText: promptContext.targetContextText,
+        attemptLabel: "post_plan.schema_repair",
       });
+      collectDebugRecords(preview);
       parsed = parsePostPlanActionOutput(preview.rawResponse ?? preview.markdown);
       validationIssues = parsed.output
         ? validatePostPlanOutput(parsed.output)
@@ -221,24 +224,10 @@ async function runPostFlow(
       throw new Error(validationIssues[0] ?? parsed.error ?? "post_plan stage failed");
     }
 
-    const auditPreview = await invokeStage({
-      taskType: "post_plan",
-      stagePurpose: "audit",
-      taskContext: buildPostPlanAuditPrompt({
-        candidates: parsed.output.candidates,
-        boardContextText: promptContext.boardContextText,
-        targetContextText: promptContext.targetContextText,
-        personaEvidence: input.personaEvidence,
-      }),
-    });
-    const audit = parsePostPlanAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
-
     return {
       preview,
       parsed: parsed.output,
       validationIssues,
-      audit,
-      gate: evaluatePostPlanGate(parsed.output),
     };
   };
 
@@ -247,29 +236,85 @@ async function runPostFlow(
   let selectedCandidate: PostPlanCandidate | null = null;
   let gateResult = {
     attempted: true,
-    passedCandidateIndexes: [] as number[],
     selectedCandidateIndex: null as number | null,
   };
 
   try {
     const firstPlanning = await runPlanningAttempt(
       buildPlanningTaskContext(promptContext.taskContext),
-      false,
     );
     let activePlanning = firstPlanning;
-    const firstAudit = firstPlanning.audit;
+
+    const best = pickBestCandidate(firstPlanning.parsed);
+    if (best.selectedCandidateIndex === null || firstPlanning.parsed.candidates.length === 0) {
+      throw new Error("post_plan stage failed: no valid candidates");
+    }
+    let bestCandidate = firstPlanning.parsed.candidates[best.selectedCandidateIndex];
+
+    const auditPreview = await invokeStage({
+      taskType: "post_plan",
+      stagePurpose: "audit",
+      taskContext: buildPostPlanAuditPrompt({
+        candidate: bestCandidate,
+      }),
+      attemptLabel: "post_plan.audit",
+    });
+    collectDebugRecords(auditPreview);
+    const firstAudit = parsePostPlanAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
+
     if (!firstAudit.passes) {
       planningAttempt.repair += 1;
-      const repairedPlanning = await runPlanningAttempt(
-        buildPostPlanRepairPrompt({
-          baseTaskContext: buildPlanningTaskContext(promptContext.taskContext),
+      const repairPreview = await invokeStage({
+        taskType: "post_plan",
+        stagePurpose: "quality_repair",
+        taskContext: buildPostPlanRepairPrompt({
           issues: firstAudit.issues,
           repairGuidance: firstAudit.repairGuidance,
           previousOutput: firstPlanning.preview.rawResponse ?? firstPlanning.preview.markdown,
         }),
-        false,
+        attemptLabel: "post_plan.repair",
+      });
+      collectDebugRecords(repairPreview);
+      const repairedParsed = parsePostPlanActionOutput(
+        repairPreview.rawResponse ?? repairPreview.markdown,
       );
-      const repairedAudit = repairedPlanning.audit;
+      if (!repairedParsed.output || validatePostPlanOutput(repairedParsed.output).length > 0) {
+        planningAuditResult = {
+          contract: "post_plan_audit",
+          status: "failed",
+          repairApplied: true,
+          issues: firstAudit.issues,
+          checks: firstAudit.checks,
+        };
+        throw new Error("post_plan audit failed after repair");
+      }
+
+      const repairedBest = pickBestCandidate(repairedParsed.output);
+      if (repairedBest.selectedCandidateIndex === null) {
+        planningAuditResult = {
+          contract: "post_plan_audit",
+          status: "failed",
+          repairApplied: true,
+          issues: firstAudit.issues,
+          checks: firstAudit.checks,
+        };
+        throw new Error("post_plan repair produced no valid candidates");
+      }
+      bestCandidate = repairedParsed.output.candidates[repairedBest.selectedCandidateIndex];
+
+      const repairedAuditPreview = await invokeStage({
+        taskType: "post_plan",
+        stagePurpose: "audit",
+        taskContext: buildPostPlanAuditPrompt({
+          candidate: bestCandidate,
+        }),
+        attemptLabel: "post_plan.audit_repair",
+      });
+      collectDebugRecords(repairedAuditPreview);
+      const repairedAudit = parsePostPlanAuditResult(
+        repairedAuditPreview.rawResponse ?? repairedAuditPreview.markdown,
+      );
+
       if (!repairedAudit.passes) {
         planningAuditResult = {
           contract: "post_plan_audit",
@@ -280,6 +325,7 @@ async function runPostFlow(
         };
         throw new Error("post_plan audit failed after repair");
       }
+
       planningAuditResult = {
         contract: "post_plan_audit",
         status: "passed_after_repair",
@@ -287,7 +333,7 @@ async function runPostFlow(
         issues: firstAudit.issues,
         checks: repairedAudit.checks,
       };
-      activePlanning = repairedPlanning;
+      activePlanning = { ...activePlanning, parsed: repairedParsed.output };
     } else {
       planningAuditResult = {
         contract: "post_plan_audit",
@@ -301,52 +347,10 @@ async function runPostFlow(
     finalPlanningOutput = activePlanning.parsed;
     gateResult = {
       attempted: true,
-      passedCandidateIndexes: activePlanning.gate.passedCandidateIndexes,
-      selectedCandidateIndex: activePlanning.gate.selectedCandidateIndex,
+      selectedCandidateIndex: best.selectedCandidateIndex,
     };
-    selectedCandidate =
-      activePlanning.gate.selectedCandidateIndex === null
-        ? null
-        : (activePlanning.parsed.candidates[activePlanning.gate.selectedCandidateIndex] ?? null);
+    selectedCandidate = bestCandidate;
 
-    if (!selectedCandidate) {
-      const freshPlanning = await runPlanningAttempt(
-        buildFreshPlanningTaskContext(promptContext.taskContext),
-        true,
-      );
-      if (!freshPlanning.audit.passes) {
-        planningAuditResult = {
-          contract: "post_plan_audit",
-          status: "failed",
-          repairApplied: false,
-          issues: freshPlanning.audit.issues,
-          checks: freshPlanning.audit.checks,
-        };
-        throw new Error("post_plan audit failed after fresh regeneration");
-      }
-      planningAuditResult = {
-        contract: "post_plan_audit",
-        status:
-          planningAuditResult?.status === "passed_after_repair" ? "passed_after_repair" : "passed",
-        repairApplied: planningAuditResult?.repairApplied ?? false,
-        issues: planningAuditResult?.issues ?? freshPlanning.audit.issues,
-        checks: freshPlanning.audit.checks,
-      };
-      finalPlanningOutput = freshPlanning.parsed;
-      gateResult = {
-        attempted: true,
-        passedCandidateIndexes: freshPlanning.gate.passedCandidateIndexes,
-        selectedCandidateIndex: freshPlanning.gate.selectedCandidateIndex,
-      };
-      selectedCandidate =
-        freshPlanning.gate.selectedCandidateIndex === null
-          ? null
-          : (freshPlanning.parsed.candidates[freshPlanning.gate.selectedCandidateIndex] ?? null);
-    }
-
-    if (!selectedCandidate) {
-      throw new Error("post_plan stage failed: no candidates passed the hard gate");
-    }
     stageResults.push({ stage: "post_plan", status: "passed" });
   } catch (error) {
     stageResults.push({ stage: "post_plan", status: "failed" });
@@ -364,6 +368,7 @@ async function runPostFlow(
       },
       causeCategory: classifyPostFailure(failure),
       cause: failure,
+      stageDebugRecords: stageDebugRecords.length > 0 ? stageDebugRecords : undefined,
     });
   }
 
@@ -377,18 +382,12 @@ async function runPostFlow(
         issues: string[];
         contentChecks: {
           angle_fidelity: "pass" | "fail";
-          board_fit: "pass" | "fail";
           body_usefulness: "pass" | "fail";
           markdown_structure: "pass" | "fail";
-          title_body_alignment: "pass" | "fail";
         };
         personaChecks: {
           body_persona_fit: "pass" | "fail";
           anti_style_compliance: "pass" | "fail";
-          value_fit: "pass" | "fail";
-          reasoning_fit: "pass" | "fail";
-          discourse_fit: "pass" | "fail";
-          expression_fit: "pass" | "fail";
         };
       }
     | undefined;
@@ -400,7 +399,9 @@ async function runPostFlow(
       stagePurpose: "main",
       taskContext: buildPostBodyTaskContext(),
       targetContextText: buildSelectedPostPlanBlock(selectedPostPlan),
+      attemptLabel: "post_body.main",
     });
+    collectDebugRecords(bodyPreview);
     parsedBody = parsePostBodyActionOutput(bodyPreview.rawResponse ?? bodyPreview.markdown);
 
     if (parsedBody.error && bodyAttempt.schemaRepair < 1) {
@@ -412,7 +413,9 @@ async function runPostFlow(
           bodyPreview.rawResponse ?? bodyPreview.markdown,
         ),
         targetContextText: buildSelectedPostPlanBlock(selectedPostPlan),
+        attemptLabel: "post_body.schema_repair",
       });
+      collectDebugRecords(bodyPreview);
       parsedBody = parsePostBodyActionOutput(bodyPreview.rawResponse ?? bodyPreview.markdown);
     }
 
@@ -425,16 +428,16 @@ async function runPostFlow(
       taskType: "post_body",
       stagePurpose: "audit",
       taskContext: buildPostBodyAuditPrompt({
-        boardContextText: promptContext.boardContextText,
         selectedPostPlanText,
         renderedFinalPost: renderFinalPostForAudit({
           title: selectedPostPlan.title,
           body: parsedBody.body,
           tags: parsedBody.tags,
         }),
-        personaEvidence: input.personaEvidence,
       }),
+      attemptLabel: "post_body.audit",
     });
+    collectDebugRecords(initialAuditPreview);
     const initialAudit = parsePostBodyAuditResult(
       initialAuditPreview.rawResponse ?? initialAuditPreview.markdown,
     );
@@ -446,13 +449,13 @@ async function runPostFlow(
         stagePurpose: "quality_repair",
         taskContext: buildPostBodyRepairPrompt({
           selectedPostPlanText,
-          personaEvidence: input.personaEvidence,
           issues: initialAudit.issues,
           repairGuidance: initialAudit.repairGuidance,
           previousOutput: bodyPreview.rawResponse ?? bodyPreview.markdown,
         }),
-        targetContextText: selectedPostPlanText,
+        attemptLabel: "post_body.quality_repair",
       });
+      collectDebugRecords(repairPreview);
       const repairedParsedBody = parsePostBodyActionOutput(
         repairPreview.rawResponse ?? repairPreview.markdown,
       );
@@ -466,17 +469,16 @@ async function runPostFlow(
         taskType: "post_body",
         stagePurpose: "audit",
         taskContext: buildPostBodyAuditPrompt({
-          boardContextText: promptContext.boardContextText,
           selectedPostPlanText,
           renderedFinalPost: renderFinalPostForAudit({
             title: selectedPostPlan.title,
             body: parsedBody.body,
             tags: parsedBody.tags,
           }),
-          personaEvidence: input.personaEvidence,
         }),
-        targetContextText: selectedPostPlanText,
+        attemptLabel: "post_body.audit_repair",
       });
+      collectDebugRecords(repairedAuditPreview);
       const repairedAudit = parsePostBodyAuditResult(
         repairedAuditPreview.rawResponse ?? repairedAuditPreview.markdown,
       );
@@ -516,6 +518,7 @@ async function runPostFlow(
       },
       causeCategory: classifyPostFailure(failure),
       cause: failure,
+      stageDebugRecords: stageDebugRecords.length > 0 ? stageDebugRecords : undefined,
     });
   }
 
@@ -535,13 +538,10 @@ async function runPostFlow(
           candidateIndex,
           title: candidate.title,
           overallScore,
-          passedHardGate: gateResult.passedCandidateIndexes.includes(candidateIndex),
+          passedHardGate: true,
           scores: {
-            boardFit: candidate.boardFitScore,
-            titlePersonaFit: candidate.titlePersonaFitScore,
-            titleNovelty: candidate.titleNoveltyScore,
-            angleNovelty: candidate.angleNoveltyScore,
-            bodyUsefulness: candidate.bodyUsefulnessScore,
+            personaFit: candidate.personaFitScore,
+            novelty: candidate.noveltyScore,
           },
         };
       }) ?? [],
@@ -594,6 +594,7 @@ async function runPostFlow(
       selected_post_plan: selectedPostPlan,
       gate: diagnostics.gate,
     },
+    stageDebugRecords: stageDebugRecords.length > 0 ? stageDebugRecords : undefined,
   };
 }
 

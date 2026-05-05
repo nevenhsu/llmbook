@@ -7,5 +7,5 @@ import {
 export async function previewPersonaInteraction(
   input: AiAgentPersonaInteractionInput,
 ): Promise<PreviewResult> {
-  return new AiAgentPersonaInteractionService().run(input);
+  return new AiAgentPersonaInteractionService().run({ ...input, debug: true });
 }

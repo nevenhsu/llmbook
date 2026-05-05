@@ -19,6 +19,7 @@ import type {
   AiControlPlaneDocument,
   AiModelConfig,
   AiProviderConfig,
+  PersonaGenerationStageDebugRecord,
   PersonaProfile,
   PreviewResult,
   PromptBoardContext,
@@ -27,10 +28,7 @@ import type {
 import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import {
-  buildPlannerPostingLens,
-  derivePromptPersonaDirectives,
-} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import { derivePromptPersonaDirectives } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 
 export type PersonaInteractionStagePurpose = "main" | "schema_repair" | "audit" | "quality_repair";
 
@@ -41,6 +39,7 @@ export type PersonaInteractionStageResult = {
   tokenBudget: PreviewResult["tokenBudget"];
   providerId: string | null;
   modelId: string | null;
+  debugRecord?: PersonaGenerationStageDebugRecord;
 };
 
 export type PersonaInteractionStageInput = {
@@ -68,6 +67,8 @@ export type PersonaInteractionStageInput = {
       body?: string;
     };
   }) => Promise<void>;
+  debug?: boolean;
+  attemptLabel?: string;
 };
 
 function mapDirectiveActionType(taskType: PromptActionType): "post" | "comment" | "reply" {
@@ -159,6 +160,7 @@ export class AiAgentPersonaInteractionStageService {
       actionType: input.taskType,
       stagePurpose: input.stagePurpose,
     });
+    const isPostBody = input.taskType === "post_body";
     const blocks = includeExpandedContext
       ? buildPromptBlocks({
           actionType: input.taskType,
@@ -176,18 +178,7 @@ export class AiAgentPersonaInteractionStageService {
           agentCore: [personaCoreSummary, defaultStance ? `default_stance: ${defaultStance}` : null]
             .filter((item): item is string => Boolean(item))
             .join("\n\n"),
-          agentPostingLens:
-            input.taskType === "post_plan"
-              ? buildPlannerPostingLens({
-                  profile: runtimePersonaProfile,
-                  personaCore: effectivePersonaCore,
-                }).join("\n")
-              : undefined,
-          planningScoringContract:
-            input.taskType === "post_plan"
-              ? "Return exactly 3 candidates with conservative scores."
-              : undefined,
-          agentVoiceContract: personaPromptDirectives.voiceContract.join("\n"),
+          agentVoiceContract: isPostBody ? "" : personaPromptDirectives.voiceContract.join("\n"),
           boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
           targetContext:
             input.targetContextText ??
@@ -195,13 +186,20 @@ export class AiAgentPersonaInteractionStageService {
               taskType: input.taskType,
               targetContext: input.targetContext,
             }),
-          agentEnactmentRules: personaPromptDirectives.enactmentRules.join("\n"),
-          agentAntiStyleRules: personaPromptDirectives.antiStyleRules.join("\n"),
-          agentExamples: personaPromptDirectives.inCharacterExamples
-            .map((example) =>
-              [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"),
-            )
-            .join("\n\n"),
+          agentEnactmentRules: isPostBody
+            ? [
+                ...personaPromptDirectives.enactmentRules.slice(0, 4),
+                ...personaPromptDirectives.antiStyleRules.slice(0, 4),
+              ].join("\n")
+            : personaPromptDirectives.enactmentRules.join("\n"),
+          agentAntiStyleRules: isPostBody ? "" : personaPromptDirectives.antiStyleRules.join("\n"),
+          agentExamples: isPostBody
+            ? ""
+            : personaPromptDirectives.inCharacterExamples
+                .map((example) =>
+                  [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"),
+                )
+                .join("\n\n"),
           taskContext: input.taskContext,
         })
       : buildLeanStageBlocks({
@@ -252,6 +250,25 @@ export class AiAgentPersonaInteractionStageService {
       tokenBudget,
       providerId: llmResult.providerId,
       modelId: llmResult.modelId,
+      ...(input.debug
+        ? {
+            debugRecord: {
+              name: input.attemptLabel ?? `${input.taskType}:${input.stagePurpose}`,
+              displayPrompt: assembledPrompt,
+              outputMaxTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
+              attempts: [
+                {
+                  attempt: input.attemptLabel ?? `attempt_1`,
+                  text: rawText,
+                  finishReason: llmResult.finishReason ?? null,
+                  providerId: llmResult.providerId,
+                  modelId: llmResult.modelId,
+                  hadError: false,
+                },
+              ],
+            },
+          }
+        : {}),
     };
   }
 }
@@ -259,12 +276,16 @@ export class AiAgentPersonaInteractionStageService {
 export async function runPersonaInteractionStage(
   input: Omit<PersonaInteractionStageInput, "stagePurpose"> & {
     stagePurpose?: PersonaInteractionStagePurpose;
+    debug?: boolean;
+    attemptLabel?: string;
   },
 ): Promise<PreviewResult> {
   const stageService = new AiAgentPersonaInteractionStageService();
   const stageResult = await stageService.runStage({
     ...input,
     stagePurpose: input.stagePurpose ?? "main",
+    debug: input.debug,
+    attemptLabel: input.attemptLabel,
   });
 
   return {
@@ -275,5 +296,6 @@ export async function runPersonaInteractionStage(
     renderError: null,
     tokenBudget: stageResult.tokenBudget,
     auditDiagnostics: null,
+    stageDebugRecords: stageResult.debugRecord ? [stageResult.debugRecord] : undefined,
   };
 }

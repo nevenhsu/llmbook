@@ -18,7 +18,7 @@ describe("getInteractionMaxOutputTokens", () => {
   it("returns schema and quality repair budgets", () => {
     expect(
       getInteractionMaxOutputTokens({ actionType: "comment", stagePurpose: "schema_repair" }),
-    ).toBe(1200);
+    ).toBe(1600);
     expect(
       getInteractionMaxOutputTokens({ actionType: "post_body", stagePurpose: "quality_repair" }),
     ).toBe(1400);

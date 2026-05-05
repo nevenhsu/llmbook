@@ -589,8 +589,6 @@ export function buildInteractionCoreSummary(input: {
 }): string {
   const actionType = input.actionType === "reply" ? "comment" : input.actionType;
   const identitySummary = asRecord(input.personaCore?.identity_summary);
-  const values = asRecord(input.personaCore?.values);
-  const aestheticProfile = asRecord(input.personaCore?.aesthetic_profile);
   const interactionDefaults = asRecord(input.personaCore?.interaction_defaults);
   const guardrails = asRecord(input.personaCore?.guardrails);
   const voiceFingerprint = input.profile.voiceFingerprint;
@@ -609,56 +607,27 @@ export function buildInteractionCoreSummary(input: {
     `Core motivation: ${input.profile.identityCore.coreMotivation}`,
   ]).slice(0, 3);
 
-  const priorityLines = uniqueStrings([
-    ...input.profile.valueHierarchy
-      .slice()
-      .sort((a, b) => a.priority - b.priority)
-      .slice(0, 3)
-      .map((entry) => `${entry.value} (priority ${String(entry.priority)})`),
-    ...normalizeStringArray(values?.worldview, []).slice(0, 2),
-  ]).slice(0, 5);
-
   const referenceLines = readCompactReferenceSources(input.personaCore);
 
   if (actionType === "post") {
-    const aestheticLines = uniqueStrings([
-      ...normalizeStringArray(aestheticProfile?.creative_preferences, []).slice(0, 2),
-      ...normalizeStringArray(aestheticProfile?.narrative_preferences, []).slice(0, 2),
-      ...normalizeStringArray(aestheticProfile?.humor_preferences, []).slice(0, 1),
-    ]).slice(0, 4);
     const interactionLines = uniqueStrings([
       `Default stance: ${discussionDefaultStance}`,
       ...normalizeStringArray(interactionDefaults?.discussion_strengths, []).slice(0, 2),
-      ...normalizeStringArray(interactionDefaults?.non_generic_traits, []).slice(0, 2),
-    ]).slice(0, 5);
+    ]).slice(0, 3);
 
     return [
       "Compact persona summary for post generation:",
       formatCompactSummarySection("Identity", identityLines),
-      formatCompactSummarySection("Values and worldview pressure", priorityLines),
-      formatCompactSummarySection(
-        "Aesthetic and storytelling pull",
-        aestheticLines.length > 0
-          ? aestheticLines
-          : input.profile.responseStyle.patterns.slice(0, 3),
-      ),
       formatCompactSummarySection("Posting stance", interactionLines),
+      formatCompactSummarySection("Reference roles", referenceLines),
       formatCompactSummarySection("Voice fingerprint", [
         `Opening move: ${voiceFingerprint.openingMove}`,
-        `Attack style: ${voiceFingerprint.attackStyle}`,
-        `Praise style: ${voiceFingerprint.praiseStyle}`,
         `Metaphor domains: ${voiceFingerprint.metaphorDomains.join(", ")}`,
       ]),
-      formatCompactSummarySection("Post shape expectations", [
+      formatCompactSummarySection("Post shape", [
         `Entry: ${taskStyle.post.entryShape}`,
         `Body: ${taskStyle.post.bodyShape}`,
         `Close: ${taskStyle.post.closeShape}`,
-        `Avoid: ${taskStyle.post.forbiddenShapes.join(", ")}`,
-      ]),
-      formatCompactSummarySection("Reference roles", referenceLines),
-      formatCompactSummarySection("Language signature", [
-        `Rhythm: ${input.profile.languageSignature.rhythm}`,
-        ...input.profile.responseStyle.tone.slice(0, 3),
       ]),
     ].join("\n\n");
   }

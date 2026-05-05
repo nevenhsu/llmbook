@@ -2,16 +2,10 @@ import { normalizeText, parseJsonObject, readStringArray } from "./json-parse-ut
 
 export type PostPlanCandidate = {
   title: string;
-  angleSummary: string;
   thesis: string;
   bodyOutline: string[];
-  differenceFromRecent: string[];
-  boardFitScore: number;
-  titlePersonaFitScore: number;
-  titleNoveltyScore: number;
-  angleNoveltyScore: number;
-  bodyUsefulnessScore: number;
-  modelOwnedOverallScorePresent?: boolean;
+  personaFitScore: number;
+  noveltyScore: number;
 };
 
 export type PostPlanOutput = {
@@ -24,7 +18,6 @@ export type ParsedPostPlanActionOutput = {
 };
 
 export type PostPlanGateResult = {
-  passedCandidateIndexes: number[];
   selectedCandidateIndex: number | null;
 };
 
@@ -56,28 +49,16 @@ function candidateIssues(candidate: PostPlanCandidate, index: number): string[] 
   if (!candidate.title) {
     issues.push(`candidate ${index} title is required.`);
   }
-  if (!candidate.angleSummary) {
-    issues.push(`candidate ${index} angle_summary is required.`);
-  }
   if (!candidate.thesis) {
     issues.push(`candidate ${index} thesis is required.`);
   }
-  if (candidate.bodyOutline.length < 3 || candidate.bodyOutline.length > 5) {
-    issues.push(`candidate ${index} body_outline must contain 3 to 5 items.`);
-  }
-  if (candidate.differenceFromRecent.length < 1 || candidate.differenceFromRecent.length > 3) {
-    issues.push(`candidate ${index} difference_from_recent must contain 1 to 3 items.`);
-  }
-  if (candidate.modelOwnedOverallScorePresent) {
-    issues.push(`candidate ${index} must not include model-owned overall_score.`);
+  if (candidate.bodyOutline.length < 2 || candidate.bodyOutline.length > 5) {
+    issues.push(`candidate ${index} body_outline must contain 2 to 5 items.`);
   }
 
   const scoreFields = [
-    ["board_fit_score", candidate.boardFitScore],
-    ["title_persona_fit_score", candidate.titlePersonaFitScore],
-    ["title_novelty_score", candidate.titleNoveltyScore],
-    ["angle_novelty_score", candidate.angleNoveltyScore],
-    ["body_usefulness_score", candidate.bodyUsefulnessScore],
+    ["persona_fit_score", candidate.personaFitScore],
+    ["novelty_score", candidate.noveltyScore],
   ] as const;
   for (const [fieldName, value] of scoreFields) {
     if (!isIntegerScore(value)) {
@@ -118,28 +99,21 @@ export function parsePostPlanActionOutput(rawText: string): ParsedPostPlanAction
               : {};
           return {
             title: readOptionalString(record.title),
-            angleSummary: readOptionalString(record.angle_summary),
             thesis: readOptionalString(record.thesis),
             bodyOutline: readStringArrayOrEmpty(record.body_outline),
-            differenceFromRecent: readStringArrayOrEmpty(record.difference_from_recent),
-            boardFitScore: readScore(record.board_fit_score),
-            titlePersonaFitScore: readScore(record.title_persona_fit_score),
-            titleNoveltyScore: readScore(record.title_novelty_score),
-            angleNoveltyScore: readScore(record.angle_novelty_score),
-            bodyUsefulnessScore: readScore(record.body_usefulness_score),
-            modelOwnedOverallScorePresent: Object.prototype.hasOwnProperty.call(
-              record,
-              "overall_score",
-            ),
+            personaFitScore: readScore(record.persona_fit_score),
+            noveltyScore: readScore(record.novelty_score),
           };
         }),
       },
       error: null,
     };
-  } catch {
+  } catch (parseError) {
+    const detail =
+      parseError instanceof Error ? parseError.message : "expected one JSON object with candidates";
     return {
       output: null,
-      error: "invalid post_plan output: expected one JSON object with candidates",
+      error: `invalid post_plan output: ${detail}`,
     };
   }
 }
@@ -147,8 +121,11 @@ export function parsePostPlanActionOutput(rawText: string): ParsedPostPlanAction
 export function validatePostPlanOutput(output: PostPlanOutput): string[] {
   const issues: string[] = [];
 
-  if (output.candidates.length !== 3) {
-    issues.push("post_plan must return exactly 3 candidates.");
+  if (output.candidates.length < 2) {
+    issues.push("post_plan must return at least 2 candidates.");
+  }
+  if (output.candidates.length > 3) {
+    issues.push("post_plan must return at most 3 candidates.");
   }
 
   const seenTitles = new Set<string>();
@@ -171,46 +148,22 @@ export function validatePostPlanOutput(output: PostPlanOutput): string[] {
 }
 
 export function computePostPlanOverallScore(candidate: PostPlanCandidate): number {
-  return (
-    candidate.boardFitScore * 0.2 +
-    candidate.titlePersonaFitScore * 0.15 +
-    candidate.titleNoveltyScore * 0.2 +
-    candidate.angleNoveltyScore * 0.3 +
-    candidate.bodyUsefulnessScore * 0.15
-  );
+  return candidate.personaFitScore * 0.6 + candidate.noveltyScore * 0.4;
 }
 
-function doesCandidatePassGate(candidate: PostPlanCandidate): boolean {
-  return (
-    candidate.boardFitScore >= 70 &&
-    candidate.titlePersonaFitScore >= 70 &&
-    candidate.titleNoveltyScore >= 75 &&
-    candidate.angleNoveltyScore >= 80 &&
-    candidate.bodyUsefulnessScore >= 70 &&
-    computePostPlanOverallScore(candidate) >= 80
-  );
-}
-
-export function evaluatePostPlanGate(output: PostPlanOutput): PostPlanGateResult {
-  const deterministicIssues = validatePostPlanOutput(output);
-  if (deterministicIssues.length > 0) {
-    return {
-      passedCandidateIndexes: [],
-      selectedCandidateIndex: null,
-    };
+export function pickBestCandidate(output: PostPlanOutput): PostPlanGateResult {
+  if (output.candidates.length === 0) {
+    return { selectedCandidateIndex: null };
   }
 
   const ranked = output.candidates
     .map((candidate, index) => ({
       index,
       overallScore: computePostPlanOverallScore(candidate),
-      passes: doesCandidatePassGate(candidate),
     }))
-    .filter((item) => item.passes)
     .sort((left, right) => right.overallScore - left.overallScore || left.index - right.index);
 
   return {
-    passedCandidateIndexes: ranked.map((item) => item.index).sort((left, right) => left - right),
-    selectedCandidateIndex: ranked[0]?.index ?? null,
+    selectedCandidateIndex: ranked[0].index,
   };
 }

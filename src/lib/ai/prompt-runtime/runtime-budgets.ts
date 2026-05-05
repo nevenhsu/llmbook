@@ -18,23 +18,23 @@ export type InteractionStageBudgetProfile =
 
 export const INTERACTION_RUNTIME_BUDGETS = {
   generic: {
-    initial: 900,
-    schemaRepair: 900,
-    personaAudit: 900,
+    initial: 1000,
+    schemaRepair: 1000,
+    personaAudit: 1000,
     compactPersonaAudit: 1200,
-    personaRepair: 1400,
+    personaRepair: 1800,
   },
   comment: {
-    initial: 900,
-    schemaRepair: 900,
-    personaAudit: 900,
+    initial: 1000,
+    schemaRepair: 1000,
+    personaAudit: 1000,
     compactPersonaAudit: 1200,
-    personaRepair: 1400,
+    personaRepair: 1800,
   },
   post: {
-    initial: 1400,
-    schemaRepair: 1800,
-    personaAudit: 900,
+    initial: 2000,
+    schemaRepair: 2000,
+    personaAudit: 1000,
     compactPersonaAudit: 1200,
     personaRepair: 1800,
   },
@@ -45,7 +45,7 @@ export const INTERACTION_STAGE_BUDGETS = {
   post_body_audit: 900,
   comment_audit: 900,
   reply_audit: 900,
-  text_schema_repair: 1200,
+  text_schema_repair: 1600,
   text_quality_repair: 1400,
 } as const satisfies Record<InteractionStageBudgetProfile, number>;
 

@@ -12,6 +12,7 @@ import {
 import type {
   CommentOutput,
   FlowDiagnostics,
+  PersonaGenerationStageDebugRecord,
   ReplyOutput,
   TextFlowExecutionErrorCauseCategory,
   TextFlowKind,
@@ -109,12 +110,23 @@ async function runAuditRepairLoop(input: {
   moduleInput: TextFlowModuleRunInput;
   modelId: string;
   attempt: { repair: number };
+  stageDebugRecords: PersonaGenerationStageDebugRecord[];
 }): Promise<{
   parsed: ReturnType<typeof parseMarkdownActionOutput>;
   audit: FlowDiagnostics["audit"];
 }> {
-  const sharedAuditCall = async (taskContext: string) =>
-    input.moduleInput.runPersonaInteractionStage({
+  const collectDebugRecords = (
+    preview: Awaited<ReturnType<typeof input.moduleInput.runPersonaInteractionStage>>,
+  ) => {
+    if (preview.stageDebugRecords && preview.stageDebugRecords.length > 0) {
+      for (const record of preview.stageDebugRecords) {
+        input.stageDebugRecords.push(record);
+      }
+    }
+  };
+
+  const sharedAuditCall = async (taskContext: string, attemptLabel?: string) => {
+    const result = await input.moduleInput.runPersonaInteractionStage({
       personaId: input.moduleInput.task.personaId,
       modelId: input.modelId,
       taskType: input.flowKind,
@@ -122,7 +134,12 @@ async function runAuditRepairLoop(input: {
       taskContext,
       boardContextText: input.promptContext.boardContextText,
       targetContextText: input.promptContext.targetContextText,
+      debug: input.moduleInput.debug,
+      attemptLabel,
     });
+    collectDebugRecords(result);
+    return result;
+  };
 
   if (input.flowKind === "comment") {
     const auditPrompt = buildCommentAuditPrompt({
@@ -134,7 +151,7 @@ async function runAuditRepairLoop(input: {
       ),
       generatedComment: input.parsed.output?.markdown ?? "",
     });
-    const auditPreview = await sharedAuditCall(auditPrompt);
+    const auditPreview = await sharedAuditCall(auditPrompt, "comment.audit");
     const audit = parseCommentAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
     if (audit.passes) {
       return {
@@ -161,6 +178,7 @@ async function runAuditRepairLoop(input: {
         repairGuidance: audit.repairGuidance,
         previousOutput: input.parsed.output?.markdown ?? "",
       }),
+      "comment.repair",
     );
     const repairedParsed = parseMarkdownActionOutput(
       repairPreview.rawResponse ?? repairPreview.markdown,
@@ -183,6 +201,7 @@ async function runAuditRepairLoop(input: {
         ),
         generatedComment: repairedOutput.markdown,
       }),
+      "comment.audit_repair",
     );
     const repairedAudit = parseCommentAuditResult(
       repairedAuditPreview.rawResponse ?? repairedAuditPreview.markdown,
@@ -211,7 +230,7 @@ async function runAuditRepairLoop(input: {
     ),
     generatedReply: input.parsed.output?.markdown ?? "",
   });
-  const auditPreview = await sharedAuditCall(auditPrompt);
+  const auditPreview = await sharedAuditCall(auditPrompt, "reply.audit");
   const audit = parseReplyAuditResult(auditPreview.rawResponse ?? auditPreview.markdown);
   if (audit.passes) {
     return {
@@ -241,6 +260,7 @@ async function runAuditRepairLoop(input: {
       repairGuidance: audit.repairGuidance,
       previousOutput: input.parsed.output?.markdown ?? "",
     }),
+    "reply.repair",
   );
   const repairedParsed = parseMarkdownActionOutput(
     repairPreview.rawResponse ?? repairPreview.markdown,
@@ -266,6 +286,7 @@ async function runAuditRepairLoop(input: {
       ),
       generatedReply: repairedOutput.markdown,
     }),
+    "reply.audit_repair",
   );
   const repairedAudit = parseReplyAuditResult(
     repairedAuditPreview.rawResponse ?? repairedAuditPreview.markdown,
@@ -323,6 +344,34 @@ export async function runSingleStageWriterFlow(input: {
     repair: 0,
     regenerate: 0,
   };
+  const stageDebugRecords: PersonaGenerationStageDebugRecord[] = [];
+
+  const collectDebugRecords = (
+    preview: Awaited<ReturnType<typeof input.moduleInput.runPersonaInteractionStage>>,
+  ) => {
+    if (preview.stageDebugRecords && preview.stageDebugRecords.length > 0) {
+      for (const record of preview.stageDebugRecords) {
+        stageDebugRecords.push(record);
+      }
+    }
+  };
+
+  const runStage = (stageInput: {
+    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
+    taskContext: string;
+    attemptLabel?: string;
+  }) =>
+    input.moduleInput.runPersonaInteractionStage({
+      personaId: input.moduleInput.task.personaId,
+      modelId: modelSelection.modelId,
+      taskType: input.taskType,
+      stagePurpose: stageInput.stagePurpose,
+      taskContext: stageInput.taskContext,
+      boardContextText: promptContext.boardContextText,
+      targetContextText: promptContext.targetContextText,
+      debug: input.moduleInput.debug,
+      attemptLabel: stageInput.attemptLabel,
+    });
   let lastError: Error | null = null;
 
   for (const regenerateAttempt of [false, true] as const) {
@@ -332,24 +381,18 @@ export async function runSingleStageWriterFlow(input: {
     }
 
     try {
-      let preview = await input.moduleInput.runPersonaInteractionStage({
-        personaId: input.moduleInput.task.personaId,
-        modelId: modelSelection.modelId,
-        taskType: input.taskType,
+      let preview = await runStage({
         stagePurpose: "main",
         taskContext: regenerateAttempt
           ? buildFreshRegenerateTaskContext(promptContext.taskContext, input.flowKind)
           : promptContext.taskContext,
-        boardContextText: promptContext.boardContextText,
-        targetContextText: promptContext.targetContextText,
+        attemptLabel: `${input.flowKind}.main`,
       });
+      collectDebugRecords(preview);
       let parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);
       if ((!parsed.output?.markdown?.trim() || parsed.error) && attempt.schemaRepair < 1) {
         attempt.schemaRepair += 1;
-        preview = await input.moduleInput.runPersonaInteractionStage({
-          personaId: input.moduleInput.task.personaId,
-          modelId: modelSelection.modelId,
-          taskType: input.taskType,
+        preview = await runStage({
           stagePurpose: "schema_repair",
           taskContext: buildSchemaRepairTaskContext({
             baseTaskContext: promptContext.taskContext,
@@ -357,9 +400,9 @@ export async function runSingleStageWriterFlow(input: {
             previousOutput: preview.rawResponse ?? preview.markdown,
             error: parsed.error,
           }),
-          boardContextText: promptContext.boardContextText,
-          targetContextText: promptContext.targetContextText,
+          attemptLabel: `${input.flowKind}.schema_repair`,
         });
+        collectDebugRecords(preview);
         parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);
       }
       const parsedOutput = requireMarkdownOutput(parsed, input.flowKind);
@@ -371,6 +414,7 @@ export async function runSingleStageWriterFlow(input: {
         moduleInput: input.moduleInput,
         modelId: modelSelection.modelId,
         attempt,
+        stageDebugRecords,
       });
 
       const diagnostics: FlowDiagnostics = {
@@ -414,6 +458,7 @@ export async function runSingleStageWriterFlow(input: {
           }),
           stage_mode: input.mode,
         },
+        stageDebugRecords: stageDebugRecords.length > 0 ? stageDebugRecords : undefined,
       };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));

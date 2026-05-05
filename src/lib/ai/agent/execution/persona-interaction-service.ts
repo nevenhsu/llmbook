@@ -19,6 +19,7 @@ import {
 import { normalizeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
 import { formatBoardContext, formatTargetContext } from "@/lib/ai/admin/control-plane-shared";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
+import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
 
 export type AiAgentPersonaInteractionInput = {
   personaId: string;
@@ -44,6 +45,7 @@ export type AiAgentPersonaInteractionInput = {
       body?: string;
     };
   }) => Promise<void>;
+  debug?: boolean;
 };
 
 type UserFacingInteractionTaskType = "post" | "comment" | "reply";
@@ -95,35 +97,6 @@ function buildPreviewPersonaEvidence(profile: PersonaProfile): PromptPersonaEvid
     profile: normalizeCoreProfile(personaCore).profile,
     personaCore,
   });
-}
-
-function pickAuditDiagnostics(
-  diagnostics: Awaited<
-    ReturnType<ReturnType<typeof resolveTextFlowModule>["runPreview"]>
-  >["flowResult"]["diagnostics"],
-): PreviewResult["auditDiagnostics"] {
-  if (diagnostics.bodyAudit) {
-    return {
-      contract: "post_body_audit",
-      status: diagnostics.bodyAudit.status,
-      repairApplied: diagnostics.bodyAudit.repairApplied,
-      issues: diagnostics.bodyAudit.issues,
-      repairGuidance: [],
-      contentChecks: diagnostics.bodyAudit.contentChecks,
-      personaChecks: diagnostics.bodyAudit.personaChecks,
-    };
-  }
-  if (diagnostics.audit) {
-    return {
-      contract: diagnostics.audit.contract,
-      status: diagnostics.audit.status,
-      repairApplied: diagnostics.audit.repairApplied,
-      issues: diagnostics.audit.issues,
-      repairGuidance: [],
-      checks: diagnostics.audit.checks,
-    };
-  }
-  return null;
 }
 
 function renderFlowMarkdown(
@@ -188,45 +161,75 @@ export class AiAgentPersonaInteractionService {
         },
       });
       const flowModule = resolveTextFlowModule(input.taskType);
-      const result = await flowModule.runPreview({
-        task,
-        promptContext,
-        loadPreferredTextModel: async () => ({
-          modelId: model.id,
-          providerKey: provider.providerKey,
-          modelKey: model.modelKey,
-        }),
-        runPersonaInteractionStage: async (stageInput) =>
-          runPersonaInteractionStage({
-            ...stageInput,
-            document: input.document,
-            providers: input.providers,
-            models: input.models,
-            getPersonaProfile: input.getPersonaProfile,
-            recordLlmInvocationError: input.recordLlmInvocationError,
+      let result;
+      try {
+        result = await flowModule.runPreview({
+          task,
+          promptContext,
+          loadPreferredTextModel: async () => ({
+            modelId: model.id,
+            providerKey: provider.providerKey,
+            modelKey: model.modelKey,
           }),
-        personaEvidence: buildPreviewPersonaEvidence(profile),
-      });
+          runPersonaInteractionStage: async (stageInput) =>
+            runPersonaInteractionStage({
+              ...stageInput,
+              document: input.document,
+              providers: input.providers,
+              models: input.models,
+              getPersonaProfile: input.getPersonaProfile,
+              recordLlmInvocationError: input.recordLlmInvocationError,
+            }),
+          personaEvidence: buildPreviewPersonaEvidence(profile),
+          debug: input.debug,
+        });
+      } catch (error) {
+        if (error instanceof TextFlowExecutionError) {
+          return {
+            assembledPrompt: "",
+            markdown: "",
+            rawResponse: null,
+            renderOk: false,
+            renderError: error.message,
+            tokenBudget: {
+              estimatedInputTokens: 0,
+              maxInputTokens: 0,
+              maxOutputTokens: 0,
+              blockStats: [],
+              compressedStages: [],
+              exceeded: false,
+              message: null,
+            },
+            auditDiagnostics: null,
+            flowDiagnostics: null,
+            stageDebugRecords: error.stageDebugRecords,
+          };
+        }
+        throw error;
+      }
 
       const markdown = renderFlowMarkdown(result.flowResult);
-      const auditDiagnostics = pickAuditDiagnostics(result.flowResult.diagnostics);
 
       try {
         markdownToEditorHtml(markdown);
         return {
           ...result.preview,
+          assembledPrompt: "",
           markdown,
-          auditDiagnostics,
-          flowDiagnostics: result.flowResult.diagnostics,
+          auditDiagnostics: null,
+          flowDiagnostics: null,
+          stageDebugRecords: result.stageDebugRecords,
           renderOk: true,
           renderError: null,
         };
       } catch (error) {
         return {
           ...result.preview,
+          assembledPrompt: "",
           markdown,
-          auditDiagnostics,
-          flowDiagnostics: result.flowResult.diagnostics,
+          auditDiagnostics: null,
+          flowDiagnostics: null,
+          stageDebugRecords: result.stageDebugRecords,
           renderOk: false,
           renderError: error instanceof Error ? error.message : "render validation failed",
         };
@@ -248,6 +251,8 @@ export class AiAgentPersonaInteractionService {
       models: input.models,
       getPersonaProfile: input.getPersonaProfile,
       recordLlmInvocationError: input.recordLlmInvocationError,
+      debug: input.debug,
+      attemptLabel: `${input.taskType}.main`,
     });
     const markdown = renderRawStagePreviewMarkdown(preview.rawResponse ?? preview.markdown);
 

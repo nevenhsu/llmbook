@@ -1,4 +1,7 @@
-import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
+import type {
+  PreviewResult,
+  PersonaGenerationStageDebugRecord,
+} from "@/lib/ai/admin/control-plane-store";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
@@ -28,7 +31,6 @@ export type FlowDiagnostics = {
   }>;
   gate?: {
     attempted: boolean;
-    passedCandidateIndexes: number[];
     selectedCandidateIndex: number | null;
   };
   planningCandidates?: Array<{
@@ -37,11 +39,8 @@ export type FlowDiagnostics = {
     overallScore: number;
     passedHardGate: boolean;
     scores: {
-      boardFit: number;
-      titlePersonaFit: number;
-      titleNovelty: number;
-      angleNovelty: number;
-      bodyUsefulness: number;
+      personaFit: number;
+      novelty: number;
     };
   }>;
   planningAudit?: {
@@ -65,18 +64,12 @@ export type FlowDiagnostics = {
     issues: string[];
     contentChecks: {
       angle_fidelity: "pass" | "fail";
-      board_fit: "pass" | "fail";
       body_usefulness: "pass" | "fail";
       markdown_structure: "pass" | "fail";
-      title_body_alignment: "pass" | "fail";
     };
     personaChecks: {
       body_persona_fit: "pass" | "fail";
       anti_style_compliance: "pass" | "fail";
-      value_fit: "pass" | "fail";
-      reasoning_fit: "pass" | "fail";
-      discourse_fit: "pass" | "fail";
-      expression_fit: "pass" | "fail";
     };
   };
   audit?: {
@@ -101,6 +94,7 @@ export class TextFlowExecutionError extends Error {
   public readonly flowKind: TextFlowKind;
   public readonly diagnostics: FlowDiagnostics;
   public readonly causeCategory: TextFlowExecutionErrorCauseCategory;
+  public readonly stageDebugRecords?: PersonaGenerationStageDebugRecord[];
 
   public constructor(input: {
     message: string;
@@ -108,12 +102,14 @@ export class TextFlowExecutionError extends Error {
     diagnostics: FlowDiagnostics;
     causeCategory: TextFlowExecutionErrorCauseCategory;
     cause?: unknown;
+    stageDebugRecords?: PersonaGenerationStageDebugRecord[];
   }) {
     super(input.message);
     this.name = "TextFlowExecutionError";
     this.flowKind = input.flowKind;
     this.diagnostics = input.diagnostics;
     this.causeCategory = input.causeCategory;
+    this.stageDebugRecords = input.stageDebugRecords;
     if (input.cause !== undefined) {
       (this as Error & { cause?: unknown }).cause = input.cause;
     }
@@ -196,10 +192,8 @@ export type WriterMediaTail = {
 
 export type SelectedPostPlan = {
   title: string;
-  angleSummary: string;
   thesis: string;
   bodyOutline: string[];
-  differenceFromRecent: string[];
 };
 
 export type PostBodyOutput = WriterMediaTail & {
@@ -259,8 +253,11 @@ export type TextFlowModuleRunInput = {
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;
+    debug?: boolean;
+    attemptLabel?: string;
   }) => Promise<PreviewResult>;
   personaEvidence: PromptPersonaEvidence;
+  debug?: boolean;
 };
 
 export type TextFlowModuleRunResult = {
@@ -269,6 +266,7 @@ export type TextFlowModuleRunResult = {
   flowResult: TextFlowRunResult;
   modelSelection: PreferredTextModel;
   modelMetadata: Record<string, unknown>;
+  stageDebugRecords?: PersonaGenerationStageDebugRecord[];
 };
 
 export interface TextFlowModule {

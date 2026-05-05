@@ -9,6 +9,7 @@ import {
   type PersonaGenerationModalPhase,
 } from "./persona-generation-modal-utils";
 import { PersonaInfoCard } from "./PersonaInfoCard";
+import { PersonaGenerationDebugCard } from "./PersonaGenerationDebugCard";
 import { PreviewPanel } from "./PreviewPanel";
 
 type Props = {
@@ -108,6 +109,7 @@ export function InteractionPreviewModal({
                   preview={preview}
                   emptyLabel="Run interaction preview to inspect the generated response."
                 />
+                <PersonaGenerationDebugCard records={preview.stageDebugRecords ?? undefined} />
               </div>
             ) : null}
           </div>
@@ -124,6 +126,7 @@ export function InteractionPreviewModal({
               preview={preview}
               emptyLabel="Run interaction preview to inspect the generated response."
             />
+            <PersonaGenerationDebugCard records={preview?.stageDebugRecords ?? undefined} />
           </div>
         )}
       </ModalShell>

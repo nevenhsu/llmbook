@@ -212,6 +212,29 @@ export function writeGlobalPolicyDocument(
   };
 }
 
+function trimBoardContext(boardContext: string | undefined): string {
+  if (!boardContext) {
+    return "";
+  }
+  const trimmed = boardContext.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const nameMatch = trimmed.match(/^Name:\s*(.+)$/m);
+  return nameMatch ? `Name: ${nameMatch[1].trim()}` : trimmed.split("\n").slice(0, 1).join("\n");
+}
+
+function trimTargetContext(targetContext: string | undefined): string {
+  if (!targetContext) {
+    return "";
+  }
+  const trimmed = targetContext.trim();
+  if (!trimmed || trimmed.length <= 200) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, 200)}`;
+}
+
 export function buildPromptBlocks(input: {
   actionType: PromptActionType;
   globalDraft: GlobalPolicyStudioDraft;
@@ -235,12 +258,13 @@ export function buildPromptBlocks(input: {
     system_baseline: { name: "system_baseline", content: systemBaseline },
     global_policy: {
       name: "global_policy",
-      content: [
-        "Policy:",
-        input.globalDraft.globalPolicy,
-        "Forbidden:",
-        input.globalDraft.forbiddenRules,
-      ].join("\n"),
+      content: (() => {
+        const policy = input.globalDraft.globalPolicy.replace(/^Policy:\s*/im, "").trim();
+        const forbidden = input.globalDraft.forbiddenRules.replace(/^Forbidden:\s*/im, "").trim();
+        return ["Policy:", policy || "(not set)", "Forbidden:", forbidden || "(not set)"].join(
+          "\n",
+        );
+      })(),
     },
     planner_mode: {
       name: "planner_mode",
@@ -280,11 +304,11 @@ export function buildPromptBlocks(input: {
     },
     board_context: {
       name: "board_context",
-      content: input.boardContext?.trim() || "No board context available.",
+      content: trimBoardContext(input.boardContext),
     },
     target_context: {
       name: "target_context",
-      content: input.targetContext?.trim() || "No target context available.",
+      content: trimTargetContext(input.targetContext),
     },
     planning_scoring_contract: {
       name: "planning_scoring_contract",
@@ -313,7 +337,7 @@ export function buildPromptBlocks(input: {
     },
     agent_examples: {
       name: "agent_examples",
-      content: input.agentExamples?.trim() || "No in-character examples available.",
+      content: input.agentExamples?.trim() || "",
     },
     task_context: { name: "task_context", content: input.taskContext },
     output_constraints: {
@@ -327,7 +351,7 @@ export function buildPromptBlocks(input: {
       ? PLANNER_FAMILY_PROMPT_BLOCK_ORDER
       : WRITER_FAMILY_PROMPT_BLOCK_ORDER;
 
-  return order.map((name) => allBlocks[name]);
+  return order.map((name) => allBlocks[name]).filter((block) => block.content.trim().length > 0);
 }
 
 export function formatAgentMemory(input: { shortTerm: string; longTerm: string }): string {

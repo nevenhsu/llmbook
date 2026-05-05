@@ -128,7 +128,6 @@ export type PreviewFlowDiagnostics = {
   }>;
   gate?: {
     attempted: boolean;
-    passedCandidateIndexes: number[];
     selectedCandidateIndex: number | null;
   };
   planningCandidates?: Array<{
@@ -137,11 +136,8 @@ export type PreviewFlowDiagnostics = {
     overallScore: number;
     passedHardGate: boolean;
     scores: {
-      boardFit: number;
-      titlePersonaFit: number;
-      titleNovelty: number;
-      angleNovelty: number;
-      bodyUsefulness: number;
+      personaFit: number;
+      novelty: number;
     };
   }>;
   planningAudit?: {
@@ -156,8 +152,15 @@ export type PreviewFlowDiagnostics = {
     status: "passed" | "passed_after_repair";
     repairApplied: boolean;
     issues: string[];
-    contentChecks: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditContentChecks;
-    personaChecks: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditPersonaChecks;
+    contentChecks: {
+      angle_fidelity: "pass" | "fail";
+      body_usefulness: "pass" | "fail";
+      markdown_structure: "pass" | "fail";
+    };
+    personaChecks: {
+      body_persona_fit: "pass" | "fail";
+      anti_style_compliance: "pass" | "fail";
+    };
   };
   audit?: {
     contract: "comment_audit" | "reply_audit";
