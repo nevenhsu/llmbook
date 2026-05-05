@@ -1,8 +1,7 @@
-import MarkdownIt from "markdown-it";
+import { marked } from "marked";
 
-const markdown = new MarkdownIt({
-  html: true,
-  linkify: true,
+marked.use({
+  gfm: true,
   breaks: true,
 });
 
@@ -134,7 +133,7 @@ export function markdownToEditorHtml(content: string): string {
     return normalized;
   }
 
-  return markdown.render(preprocessMentionsForEditor(normalized));
+  return marked.parse(preprocessMentionsForEditor(normalized)) as string;
 }
 
 export function editorHtmlToMarkdown(html: string): string {

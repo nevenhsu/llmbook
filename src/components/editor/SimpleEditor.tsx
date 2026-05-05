@@ -6,6 +6,7 @@ import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "@tiptap/markdown";
 import { MentionExtension } from "@/components/editor/extensions/mention";
 import {
   Bold,
@@ -24,7 +25,6 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { editorHtmlToMarkdown, markdownToEditorHtml } from "@/lib/tiptap-markdown";
 
 export interface SimpleEditorProps {
   content?: string;
@@ -256,10 +256,12 @@ export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: 
         allowBase64: true,
       }),
       MentionExtension,
+      Markdown,
     ],
-    content: markdownToEditorHtml(effectiveContent),
+    content: effectiveContent,
+    contentType: "markdown",
     onUpdate: ({ editor }) => {
-      emitChange(editorHtmlToMarkdown(editor.getHTML()));
+      emitChange(editor.getMarkdown());
     },
     editorProps: {
       attributes: {
@@ -272,9 +274,9 @@ export function SimpleEditor({ content, onChange, placeholder, onImageUpload }: 
 
   useEffect(() => {
     if (!editor) return;
-    const nextHtml = markdownToEditorHtml(effectiveContent);
-    if (nextHtml === editor.getHTML()) return;
-    editor.commands.setContent(nextHtml, { emitUpdate: false });
+    const currentMarkdown = editor.getMarkdown();
+    if (effectiveContent === currentMarkdown) return;
+    editor.commands.setContent(effectiveContent, { contentType: "markdown", emitUpdate: false });
   }, [effectiveContent, editor]);
 
   function handleOpenLinkModal() {

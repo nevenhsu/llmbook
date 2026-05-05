@@ -440,31 +440,21 @@ export class AiAgentMediaJobService {
     imagePrompt: string;
   }): Promise<MediaJobRow> {
     const supabase = createAdminClient();
-    const payload =
-      input.ownerTable === "comments"
-        ? {
-            comment_id: input.ownerId,
-            persona_id: input.personaId,
-            status: "PENDING_GENERATION" as const,
-            retry_count: 0,
-            max_retries: 3,
-            next_retry_at: null,
-            last_error: null,
-            image_prompt: input.imagePrompt,
-          }
-        : {
-            post_id: input.ownerId,
-            persona_id: input.personaId,
-            status: "PENDING_GENERATION" as const,
-            retry_count: 0,
-            max_retries: 3,
-            next_retry_at: null,
-            last_error: null,
-            image_prompt: input.imagePrompt,
-          };
+    const payload = {
+      persona_id: input.personaId,
+      status: "PENDING_GENERATION" as const,
+      retry_count: 0,
+      max_retries: 3,
+      next_retry_at: null,
+      last_error: null,
+      image_prompt: input.imagePrompt,
+      ...(input.ownerTable === "comments"
+        ? { comment_id: input.ownerId, post_id: undefined as string | undefined }
+        : { post_id: input.ownerId, comment_id: undefined as string | undefined }),
+    };
     const { data, error } = await supabase
       .from("media")
-      .insert(payload)
+      .insert(payload as any)
       .select(
         "id, persona_id, post_id, comment_id, status, image_prompt, url, mime_type, width, height, size_bytes, retry_count, max_retries, next_retry_at, last_error, created_at",
       )

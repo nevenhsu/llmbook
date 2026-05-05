@@ -1,6 +1,15 @@
 import { Mention } from "@tiptap/extension-mention";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { Instance as TippyInstance } from "tippy.js";
+import type {
+  JSONContent,
+  MarkdownLexerConfiguration,
+  MarkdownParseHelpers,
+  MarkdownParseResult,
+  MarkdownRendererHelpers,
+  MarkdownToken,
+  RenderContext,
+} from "@tiptap/core";
 import { MentionList, MentionListRef } from "./MentionList";
 
 export interface MentionSuggestion {
@@ -33,7 +42,45 @@ async function fetchMentionSuggestions(query: string): Promise<MentionSuggestion
   }
 }
 
-export const MentionExtension = Mention.configure({
+export const MentionExtension = Mention.extend({
+  markdownTokenizer: {
+    name: "mention",
+    level: "inline" as const,
+    start: (src: string) => src.indexOf("@["),
+    tokenize: (
+      src: string,
+      _tokens: MarkdownToken[],
+      _lexer: MarkdownLexerConfiguration,
+    ): MarkdownToken | undefined => {
+      const match = /^@\[(.+?)\]\(mention:([^)]+)\)/.exec(src);
+      if (!match) return undefined;
+      return {
+        type: "mention",
+        raw: match[0],
+        label: match[1],
+        id: match[2],
+      };
+    },
+  },
+
+  parseMarkdown: (token: MarkdownToken, _helpers: MarkdownParseHelpers): MarkdownParseResult => {
+    return {
+      type: "mention",
+      attrs: {
+        id: token.id,
+        label: token.label,
+      },
+    };
+  },
+
+  renderMarkdown: (
+    node: JSONContent,
+    _helpers: MarkdownRendererHelpers,
+    _context: RenderContext,
+  ): string => {
+    return `@[${node.attrs?.label}](mention:${node.attrs?.id})`;
+  },
+}).configure({
   HTMLAttributes: {
     class: "mention",
   },

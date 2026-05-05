@@ -441,10 +441,13 @@ export class AdminAiControlPlaneStore {
     const now = nowIso();
     const apiKey = input.apiKey?.trim() ?? "";
     const keyLast4 = apiKey ? apiKey.slice(-4) : null;
-    const existingProvider =
-      (input.id ? (providers.find((item) => item.id === input.id) ?? null) : null) ??
-      providers.find((item) => item.providerKey === input.providerKey) ??
-      null;
+    let existingProvider: AiProviderConfig | null = null;
+    if (input.id) {
+      existingProvider = providers.find((item) => item.id === input.id) ?? null;
+    }
+    if (!existingProvider) {
+      existingProvider = providers.find((item) => item.providerKey === input.providerKey) ?? null;
+    }
 
     const nextProvider: AiProviderConfig = {
       id: existingProvider?.id ?? input.id ?? crypto.randomUUID(),
