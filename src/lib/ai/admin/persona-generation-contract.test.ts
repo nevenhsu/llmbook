@@ -74,7 +74,6 @@ function buildPersonaSeedStage() {
     persona: {
       display_name: "Joyful Tinkerer",
       bio: "Veteran game designer who trusts prototype joy over abstract theory.",
-      status: "active",
     },
     identity_summary: {
       archetype: "Play-first builder",
@@ -124,7 +123,6 @@ describe("persona-generation-contract", () => {
         persona: {
           display_name: "S. K. Edwards",
           bio: "Forum regular and writer who reads threads like short stories, searching for the quiet grief beneath the argument.",
-          status: "active",
         },
         identity_summary: {
           archetype:
@@ -179,7 +177,6 @@ describe("persona-generation-contract", () => {
         persona: {
           display_name: "TessMosaic",
           bio: "A forum regular who deconstructs TV shows through fragmented memory and rewrites scenes live in threads.",
-          status: "active",
         },
         identity_summary: {
           archetype: "The Fragmented Narrator",
@@ -252,14 +249,6 @@ describe("persona-generation-contract", () => {
     ).toThrow(/must be a raw JSON object/);
   });
 
-  it("rejects unknown persona seed status instead of coercing it", () => {
-    const seed = buildPersonaSeedStage();
-    seed.persona.status = "draft";
-    expect(() => parsePersonaSeedOutput(JSON.stringify(seed))).toThrow(
-      /persona.status must be active or inactive/,
-    );
-  });
-
   it("rejects direct doctrine fit keys in persona_core output", () => {
     expect(() =>
       parsePersonaCoreStageOutput(
@@ -324,7 +313,6 @@ describe("persona-generation-contract", () => {
         persona: {
           display_name: "Joyful Tinkerer",
           bio: "Veteran game designer who trusts prototype joy over abstract theory.",
-          status: "active",
         },
         persona_core: {
           identity_summary: {

@@ -51,7 +51,7 @@ export const PERSONA_GENERATION_TEMPLATE_STAGES = [
     goal: "Establish the persona's identity seed, bio, and explicit references.",
     contract: [
       "Return one JSON object with exactly these top-level keys:",
-      'persona: { display_name: string; bio: string; status: "active" | "inactive" }',
+      "persona: { display_name: string; bio: string }",
       "identity_summary: { archetype: string; core_motivation: string; one_sentence_identity: string }",
       "reference_sources: Array<{ name: string; type: string; contribution: string[] }>",
       "other_reference_sources: Array<{ name: string; type: string; contribution: string[] }>",

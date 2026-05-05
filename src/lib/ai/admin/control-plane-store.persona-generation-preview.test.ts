@@ -102,7 +102,6 @@ function buildSeedStage() {
     persona: {
       display_name: "AI Critic",
       bio: "Sharp but fair.",
-      status: "active",
     },
     identity_summary: {
       archetype: "sharp but fair critic",
@@ -220,9 +219,7 @@ function mockSuccessfulPersonaGenerationPreview() {
         repairGuidance: [],
       }),
     )
-    .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
     .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
-    .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
     .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
 }
 
@@ -262,7 +259,7 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       .map((call) => call[0] as { entityId?: string; modelInput?: { prompt?: string } })
       .filter((call) => call.entityId?.includes("semantic-audit"))
       .map((call) => call.modelInput?.prompt ?? "");
-    expect(semanticAuditPrompts).toHaveLength(4);
+    expect(semanticAuditPrompts).toHaveLength(2);
     expect(semanticAuditPrompts.every((prompt) => prompt.includes("[output_constraints]"))).toBe(
       true,
     );
@@ -274,53 +271,6 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
     expect(
       semanticAuditPrompts.some((prompt) => prompt.includes('"keptReferenceNames": ["string"]')),
     ).toBe(true);
-  });
-
-  it("gives persona_core semantic audits enough visible output budget for reasoning models", async () => {
-    mockSuccessfulPersonaGenerationPreview();
-
-    await mockStore().previewPersonaGeneration({
-      modelId: "model-1",
-      extraPrompt: "Build a sharp forum critic.",
-    });
-
-    const personaCoreAuditCall = invokeLLM.mock.calls.find((call) => {
-      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
-      return entityId.includes("persona_core:persona_core_quality_audit:semantic-audit-1");
-    });
-    const maxOutputTokens = (
-      personaCoreAuditCall?.[0] as { modelInput?: { maxOutputTokens?: number } }
-    ).modelInput?.maxOutputTokens;
-
-    expect(maxOutputTokens).toBeGreaterThanOrEqual(2048);
-  });
-
-  it("keeps persona_core quality audit context narrow and uses low reasoning effort", async () => {
-    mockSuccessfulPersonaGenerationPreview();
-
-    await mockStore().previewPersonaGeneration({
-      modelId: "model-1",
-      extraPrompt: "Build a sharp forum critic.",
-    });
-
-    const personaCoreAuditCall = invokeLLM.mock.calls.find((call) => {
-      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
-      return entityId.includes("persona_core:persona_core_quality_audit:semantic-audit-1");
-    });
-    const callInput = personaCoreAuditCall?.[0] as {
-      modelInput?: {
-        prompt?: string;
-        providerOptions?: { xai?: { reasoningEffort?: string } };
-      };
-    };
-    const parsedStage = callInput.modelInput?.prompt?.split("[parsed_stage]\n")[1] ?? "";
-
-    expect(parsedStage).toContain("identity_anchor");
-    expect(parsedStage).toContain("persona_core_focus");
-    expect(parsedStage).not.toContain("reference_sources");
-    expect(parsedStage).not.toContain("other_reference_sources");
-    expect(parsedStage).not.toContain("reference_derivation");
-    expect(callInput.modelInput?.providerOptions?.xai?.reasoningEffort).toBe("low");
   });
 
   it("throws a typed parse error when persona_core is missing required fields", async () => {
@@ -394,84 +344,6 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
       );
     },
   );
-
-  it("keeps the first seed quality repair compact enough to close JSON", async () => {
-    invokeLLM
-      .mockResolvedValueOnce(llmText(buildSeedStage()))
-      .mockResolvedValueOnce(
-        llmText({
-          passes: true,
-          keptReferenceNames: ["Kotaro Isaka"],
-          issues: [],
-          repairGuidance: [],
-        }),
-      )
-      .mockResolvedValueOnce(
-        llmText({
-          passes: false,
-          issues: ["originalization_note stays too close to the named references."],
-          repairGuidance: ["Rewrite the note as a forum-native original identity."],
-        }),
-      )
-      .mockResolvedValueOnce(llmRepairDelta(buildSeedStage()))
-      .mockResolvedValueOnce(
-        llmText({
-          passes: true,
-          keptReferenceNames: ["Kotaro Isaka"],
-          issues: [],
-          repairGuidance: [],
-        }),
-      )
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
-      .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
-
-    await mockStore().previewPersonaGeneration({
-      modelId: "model-1",
-      extraPrompt: "Build a literary forum critic.",
-    });
-
-    const qualityRepairCall = invokeLLM.mock.calls.find((call) => {
-      const entityId = (call[0] as { entityId?: string }).entityId ?? "";
-      return entityId.includes("seed:quality-repair-1");
-    });
-    const prompt = (qualityRepairCall?.[0] as { modelInput?: { prompt?: string } }).modelInput
-      ?.prompt;
-
-    expect(prompt).toContain("[output]");
-    expect(prompt).toContain('"repair"');
-    expect(prompt).toContain("originalization_note stays too close to the named references.");
-  });
-
-  it("surfaces the parser reason when quality repair delta returns invalid JSON", async () => {
-    invokeLLM
-      .mockResolvedValueOnce(llmText(buildSeedStage()))
-      .mockResolvedValueOnce(
-        llmText({
-          passes: true,
-          keptReferenceNames: ["Kotaro Isaka"],
-          issues: [],
-          repairGuidance: [],
-        }),
-      )
-      .mockResolvedValueOnce(
-        llmText({
-          passes: false,
-          issues: ["originalization_note stays too close to the named references."],
-          repairGuidance: ["Rewrite the note as a forum-native original identity."],
-        }),
-      )
-      .mockResolvedValueOnce(llmText("not json"))
-      .mockResolvedValueOnce(llmText("still not json"));
-
-    await expect(
-      mockStore().previewPersonaGeneration({
-        modelId: "model-1",
-        extraPrompt: "Build a literary forum critic.",
-      }),
-    ).rejects.toThrow(/quality repair delta/);
-  });
 
   it.each([
     ["empty", ""],
@@ -604,7 +476,6 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           repairGuidance: [],
         }),
       )
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
       .mockResolvedValueOnce(llmText(buildPersonaCoreStage()))
       .mockResolvedValueOnce(
         llmText({
@@ -615,10 +486,8 @@ describe("AdminAiControlPlaneStore.previewPersonaGeneration", () => {
           repairGuidance: ["Rewrite as compact but coherent persona guidance."],
         }),
       )
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
       .mockResolvedValueOnce(llmText("not valid json"))
       .mockResolvedValueOnce(llmRepairDelta(buildPersonaCoreStage()))
-      .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }))
       .mockResolvedValueOnce(llmText({ passes: true, issues: [], repairGuidance: [] }));
 
     const preview = await mockStore().previewPersonaGeneration({

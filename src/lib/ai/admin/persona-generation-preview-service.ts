@@ -355,43 +355,6 @@ export async function previewPersonaGeneration(input: {
     }
   };
 
-  const auditSeedOriginalizationSemantics = async (
-    stage: PersonaGenerationSeedStage,
-  ): Promise<{
-    issues: string[];
-    repairGuidance: string[];
-  }> =>
-    runPersonaGenerationSemanticAudit({
-      stageName: "seed",
-      auditLabel: "seed_originalization_audit",
-      instructions: [
-        "You are judging whether the seed-stage output has been adapted into a new forum-native identity rather than staying as literal roleplay, direct copy, or reference-world transplant.",
-        "PASS when the persona has its own distinct name, describes original forum-native behavior, and the originalization_note explains how the adaptation was done.",
-        "FAIL only when the persona is unmistakably the reference character placed in the forum with no meaningful adaptation.",
-        "In every issue and repairGuidance, name the exact field that needs rewriting (e.g., persona.bio, originalization_note, reference_derivation[0]).",
-        "Examples:",
-        "  PASS: 'Inspired by Sherlock Holmes's analytical rigor but grounded as a data science forum moderator.'",
-        "  FAIL: 'Sherlock Holmes has joined the forum. He solves cases at 221B Baker Street.' → issue: 'persona.bio directly copies the reference character without adaptation.'",
-        "Legitimate inspiration that recontextualizes traits for forum-native behavior should pass.",
-        "If in doubt, pass.",
-      ],
-      parsedOutput: {
-        persona: stage.persona,
-        identity_summary: stage.identity_summary,
-        reference_sources: stage.reference_sources,
-        other_reference_sources: stage.other_reference_sources,
-        reference_derivation: stage.reference_derivation,
-        originalization_note: stage.originalization_note,
-      },
-      defaultIssue:
-        "originalization_note must explain how the persona was adapted into a forum-native identity distinct from the named references.",
-      failClosedOnTransport: false,
-      fallbackRepairGuidance: [
-        "Rewrite originalization_note to explicitly describe the adaptation: name the reference traits that were kept, explain what was changed, and state the resulting forum-native identity.",
-        "Ensure persona.bio does not copy the reference character's name, context, or in-universe details.",
-      ],
-    });
-
   const auditSeedReferenceClassification = async (
     stage: PersonaGenerationSeedStage,
   ): Promise<{
@@ -466,69 +429,8 @@ export async function previewPersonaGeneration(input: {
     repairGuidance: string[];
     normalizedParsedOutput?: PersonaGenerationSeedStage;
   }> => {
-    const referenceAudit = await auditSeedReferenceClassification(stage);
-    if (referenceAudit.issues.length > 0) {
-      return referenceAudit;
-    }
-
-    const normalizedStage = referenceAudit.normalizedParsedOutput ?? stage;
-    const originalizationAudit = await auditSeedOriginalizationSemantics(normalizedStage);
-    if (originalizationAudit.issues.length > 0) {
-      return {
-        issues: originalizationAudit.issues,
-        repairGuidance: originalizationAudit.repairGuidance,
-        normalizedParsedOutput: normalizedStage,
-      };
-    }
-
-    return {
-      issues: [],
-      repairGuidance: [],
-      normalizedParsedOutput: normalizedStage,
-    };
+    return auditSeedReferenceClassification(stage);
   };
-
-  const auditPersonaCoreSemantics = async (
-    stage: PersonaGenerationCoreStage,
-    seedStage: PersonaGenerationSeedStage,
-  ): Promise<{
-    issues: string[];
-    repairGuidance: string[];
-  }> =>
-    runPersonaGenerationSemanticAudit({
-      stageName: "persona_core",
-      auditLabel: "persona_core_quality_audit",
-      instructions: [
-        "You are judging a compact review packet for persona_core quality.",
-        "The packet is intentionally compact. Do not fail only because omitted background is missing.",
-        "Judge whether values, interaction_defaults, voice_fingerprint, and task_style_matrix describe the same persona without internal contradictions.",
-        "Flag only concrete problems. In every issue, include the exact field path (e.g., voice_fingerprint.opening_move):",
-        "  - A field directly contradicts another field (e.g., 'voice_fingerprint.opening_move says aggressive but interaction_defaults.default_stance says deferential').",
-        "  - A field uses single-word labels that provide no actionable guidance (e.g., 'interaction_defaults.default_stance is just \"skeptic\"').",
-        "  - Two fields repeat identical long-form text verbatim (e.g., 'voice_fingerprint.closing_move copies task_style_matrix.post.close_shape').",
-        "  - A required behavioral dimension is entirely absent (e.g., 'voice_fingerprint.praise_style is missing').",
-        "In repairGuidance, name the exact field(s) to rewrite and suggest the target tone or approach.",
-        "Do not flag reasonable stylistic variation or thematically coherent but differently-phrased guidance.",
-      ],
-      parsedOutput: {
-        identity_summary: {
-          archetype: seedStage.identity_summary.archetype,
-          core_motivation: seedStage.identity_summary.core_motivation,
-          one_sentence_identity: seedStage.identity_summary.one_sentence_identity,
-        },
-        values: stage.values,
-        interaction_defaults: stage.interaction_defaults,
-        voice_fingerprint: stage.voice_fingerprint,
-        task_style_matrix: stage.task_style_matrix,
-      },
-      defaultIssue:
-        "persona_core coherence could not be verified — check voice_fingerprint.opening_move against interaction_defaults.default_stance for consistency.",
-      failClosedOnTransport: false,
-      fallbackRepairGuidance: [
-        "Ensure voice_fingerprint.opening_move describes how the persona starts interactions, distinct from interaction_defaults.default_stance which describes the overall posture.",
-        "Expand any compressed single-word labels into reusable natural-language guidance.",
-      ],
-    });
 
   const auditPersonaCoreDistinctSignals = async (
     stage: PersonaGenerationCoreStage,
@@ -564,26 +466,17 @@ export async function previewPersonaGeneration(input: {
 
   const auditPersonaCoreStageSemantics = async (
     stage: PersonaGenerationCoreStage,
-    seedStage: PersonaGenerationSeedStage,
+    _seedStage: PersonaGenerationSeedStage,
   ): Promise<{
     issues: string[];
     repairGuidance: string[];
     normalizedParsedOutput?: PersonaGenerationCoreStage;
   }> => {
-    const coherenceAudit = await auditPersonaCoreSemantics(stage, seedStage);
-    const distinctSignalsAudit = await auditPersonaCoreDistinctSignals(stage);
-
-    const issues = [...coherenceAudit.issues, ...distinctSignalsAudit.issues];
-    const repairGuidance = [
-      ...coherenceAudit.repairGuidance,
-      ...distinctSignalsAudit.repairGuidance,
-    ];
-
-    if (issues.length === 0) {
+    const distinctAudit = await auditPersonaCoreDistinctSignals(stage);
+    if (distinctAudit.issues.length === 0) {
       return { issues: [], repairGuidance: [] };
     }
-
-    return { issues, repairGuidance };
+    return distinctAudit;
   };
 
   const deriveRepairType = (val: unknown): string => deriveJsonLeafType(val);

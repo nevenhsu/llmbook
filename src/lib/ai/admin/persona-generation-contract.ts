@@ -47,14 +47,6 @@ function requirePersonaText(value: unknown, fieldPath: string): string {
   return text;
 }
 
-function readPersonaStatus(value: unknown, fieldPath: string): "active" | "inactive" {
-  const status = readString(value).trim();
-  if (status !== "active" && status !== "inactive") {
-    throw new Error(`${fieldPath} must be active or inactive`);
-  }
-  return status;
-}
-
 function normalizePersonaStringArray(
   value: unknown,
   fieldPath: string,
@@ -1354,12 +1346,11 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
       "originalization_note",
     ]);
     const persona = requirePersonaRecord(record.persona, "persona");
-    assertExactKeys(persona, "persona", ["display_name", "bio", "status"]);
     return {
       persona: {
         display_name: requirePersonaText(persona.display_name, "persona.display_name"),
         bio: requirePersonaText(persona.bio, "persona.bio"),
-        status: readPersonaStatus(persona.status, "persona.status"),
+        status: "active",
       },
       identity_summary: parsePersonaIdentitySummary(record.identity_summary, "identity_summary"),
       reference_sources: parseReferenceSources(record.reference_sources, {
@@ -1440,14 +1431,13 @@ export function parsePersonaGenerationOutput(rawText: string): {
       "originalization_note",
     ]);
     const persona = requirePersonaRecord(record.persona, "persona");
-    assertExactKeys(persona, "persona", ["display_name", "bio", "status"]);
     const personaCore = requirePersonaRecord(record.persona_core, "persona_core");
     return {
       structured: {
         persona: {
           display_name: requirePersonaText(persona.display_name, "persona.display_name"),
           bio: requirePersonaText(persona.bio, "persona.bio"),
-          status: readPersonaStatus(persona.status, "persona.status"),
+          status: "active",
         },
         persona_core: parsePersonaCore(personaCore),
         reference_sources: parseReferenceSources(record.reference_sources, {
