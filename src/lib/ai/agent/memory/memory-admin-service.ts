@@ -82,6 +82,8 @@ type MemoryAdminServiceDeps = {
     content: string;
     metadata: Record<string, unknown>;
     importance: number;
+    threadId?: string | null;
+    boardId?: string | null;
   }) => Promise<PersistedMemoryInsertRow>;
   deleteShortMemories: (ids: string[]) => Promise<void>;
   touchPersonaCompressedAt: (input: { personaId: string; compressedAt: string }) => Promise<void>;
@@ -144,6 +146,8 @@ export class AiAgentMemoryAdminService {
               content: input.content,
               metadata: input.metadata,
               importance: input.importance,
+              ...(input.threadId ? { thread_id: input.threadId } : {}),
+              ...(input.boardId ? { board_id: input.boardId } : {}),
             })
             .select("id, updated_at")
             .single<PersistedMemoryInsertRow>();
@@ -240,12 +244,45 @@ export class AiAgentMemoryAdminService {
       };
     }
 
+    const threadId =
+      latestWritePreview.rowPreview.scope === "thread"
+        ? (latestWritePreview.selectedTask?.sourceId ?? null)
+        : null;
+    const boardId =
+      latestWritePreview.rowPreview.scope === "board"
+        ? (latestWritePreview.selectedTask?.sourceId ?? null)
+        : null;
+
+    const sourceTaskId =
+      typeof latestWritePreview.rowPreview.metadata.source_task_id === "string"
+        ? latestWritePreview.rowPreview.metadata.source_task_id
+        : null;
+
+    if (sourceTaskId) {
+      const duplicate = preview.recentShortMemories.find(
+        (entry) =>
+          typeof entry.metadata?.source_task_id === "string" &&
+          entry.metadata.source_task_id === sourceTaskId,
+      );
+      if (duplicate) {
+        return {
+          mode: "guarded_persist",
+          personaId,
+          summary: `Latest write already persisted for source task ${sourceTaskId}.`,
+          blocker: "duplicate_source_task",
+          latestWritePreview,
+        };
+      }
+    }
+
     const persistedMemory = await this.deps.insertShortMemory({
       personaId,
       scope: latestWritePreview.rowPreview.scope,
       content: latestWritePreview.rowPreview.content,
       metadata: latestWritePreview.rowPreview.metadata,
       importance: latestWritePreview.rowPreview.importance,
+      threadId,
+      boardId,
     });
 
     return {
@@ -264,14 +301,8 @@ export class AiAgentMemoryAdminService {
           displayName: preview.persona.displayName,
           memoryType: "memory",
           scope: latestWritePreview.rowPreview.scope,
-          threadId:
-            latestWritePreview.rowPreview.scope === "thread"
-              ? (latestWritePreview.selectedTask?.sourceId ?? null)
-              : null,
-          boardId:
-            latestWritePreview.rowPreview.scope === "board"
-              ? (latestWritePreview.selectedTask?.sourceId ?? null)
-              : null,
+          threadId,
+          boardId,
           content: latestWritePreview.rowPreview.content,
           metadata: latestWritePreview.rowPreview.metadata,
           expiresAt: null,

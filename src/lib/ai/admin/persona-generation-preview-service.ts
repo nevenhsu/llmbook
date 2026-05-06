@@ -667,9 +667,32 @@ export async function previewPersonaGeneration(input: {
       );
       const output = repairInput.previousParsedOutput as Record<string, unknown>;
       const mentionedKeys = Object.keys(output).filter((key) => allText.includes(key));
+      const mappedKeys =
+        mentionedKeys.length === 0
+          ? Object.keys(output).filter((key) => {
+              const lower = allText.toLowerCase();
+              const keywordMap: Record<string, string> = {
+                voice_fingerprint: "voice tone flat personality",
+                identity_summary: "generic identity archetype",
+                values: "values principle judgment value_hierarchy",
+                interaction_defaults: "interaction stance discussion",
+                aesthetic_profile: "creative narrative humor",
+                lived_context: "lived context experience",
+                creator_affinity: "creator admired preference",
+                task_style_matrix: "task post comment write",
+                guardrails: "guardrail boundary hard_no",
+              };
+              const keywords = keywordMap[key];
+              if (!keywords) {
+                return false;
+              }
+              return keywords.split(" ").some((word) => lower.includes(word));
+            })
+          : [];
+      const targetedKeys = mappedKeys.length > 0 ? mappedKeys : mentionedKeys;
       const targetedSchema =
-        mentionedKeys.length > 0 && mentionedKeys.length < Object.keys(output).length
-          ? mentionedKeys
+        targetedKeys.length > 0 && targetedKeys.length < Object.keys(output).length
+          ? targetedKeys
               .map((key) => {
                 const schema = deriveRepairSchema(output[key], key);
                 return schema

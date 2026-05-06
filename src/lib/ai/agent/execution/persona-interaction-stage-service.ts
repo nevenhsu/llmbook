@@ -25,7 +25,6 @@ import type {
   PromptBoardContext,
   PromptTargetContext,
 } from "@/lib/ai/admin/control-plane-contract";
-import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { derivePromptPersonaDirectives } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
@@ -41,6 +40,8 @@ export type PersonaInteractionStageResult = {
   modelId: string | null;
   debugRecord?: StageDebugRecord;
 };
+
+export type PersonaInteractionStageExecutionMode = "admin_preview" | "runtime";
 
 export type PersonaInteractionStageInput = {
   personaId: string;
@@ -69,6 +70,7 @@ export type PersonaInteractionStageInput = {
   }) => Promise<void>;
   debug?: boolean;
   attemptLabel?: string;
+  executionMode?: PersonaInteractionStageExecutionMode;
 };
 
 function mapDirectiveActionType(taskType: PromptActionType): "post" | "comment" | "reply" {
@@ -224,7 +226,7 @@ export class AiAgentPersonaInteractionStageService {
       },
       entityId: `persona-interaction-stage:${model.id}`,
       timeoutMs: invocationConfig.timeoutMs,
-      retries: Math.min(invocationConfig.retries ?? 0, ADMIN_UI_LLM_PROVIDER_RETRIES),
+      retries: input.executionMode === "admin_preview" ? 0 : (invocationConfig.retries ?? 0),
       onProviderError: async (event) => {
         await input.recordLlmInvocationError({
           providerKey: event.providerId,

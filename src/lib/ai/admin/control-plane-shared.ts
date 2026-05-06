@@ -201,9 +201,11 @@ export function writeGlobalPolicyDocument(
   globalPolicyDoc: AiControlPlaneDocument,
 ): Record<string, unknown> {
   const root = asRecord(policy) ?? {};
+  const existingGlobal = asRecord(root.global) ?? {};
   return {
     ...root,
     global: {
+      ...existingGlobal,
       systemBaseline: globalPolicyDoc.globalPolicyDraft.systemBaseline,
       globalPolicy: globalPolicyDoc.globalPolicyDraft.globalPolicy,
       styleGuide: globalPolicyDoc.globalPolicyDraft.styleGuide,

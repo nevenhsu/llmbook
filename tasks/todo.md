@@ -2,11 +2,11 @@
 
 ## Active
 
-- [ ] Review the shared stage-debug UI refactor plan:
+- [x] Review the shared stage-debug UI refactor plan:
       `plans/2026-05-05-shared-stage-debug-ui-refactor.md`
-- [ ] Review the flow-code loophole bugfix plan:
+- [x] Review the flow-code loophole bugfix plan:
       `plans/2026-05-05-flow-code-loophole-bugfix-plan.md`
-- [ ] After approval, implement the selected plan task-by-task with focused verification.
+- [x] After approval, implement the selected plan task-by-task with focused verification.
 
 ## Current References
 

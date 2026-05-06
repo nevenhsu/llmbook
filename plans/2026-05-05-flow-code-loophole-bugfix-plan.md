@@ -479,3 +479,28 @@ Expected final state:
 - Is there a more elegant way to solve policy shape collision? Yes: split prompt-policy and runtime reply controls instead of merging unrelated contracts into one `global` object.
 - Is there a more elegant way to fix flow diagnostics? Yes: diagnostics should be derived from the final active flow result, not copied from earlier candidate state.
 - Scope guard: this plan is a bugfix/remediation plan. It should not expand the admin preview UI or restore removed diagnostics panels.
+
+---
+
+## Implementation Status (2026-05-06)
+
+### Completed
+
+- **Task 0**: Fixed `FlowDiagnostics.planningAudit.checks` type drift (uses `PostPlanAuditChecks` with 3 fields). Updated `post-flow-module.test.ts` fixtures to simplified contract. Fixed `StageDebugRecord` import in `single-stage-writer-flow.ts`. 7/7 post-flow tests pass.
+
+- **Task 1**: Removed `ADMIN_UI_LLM_PROVIDER_RETRIES` coupling from `persona-interaction-stage-service.ts`. Added `executionMode?: "admin_preview" | "runtime"` to stage input. Admin preview caps at 0 retries; runtime uses full config. Propagated through flow modules and control plane store. 19/19 flow tests pass.
+
+- **Task 2**: Split audit/repair calls in `runAuditRepairLoop` - repair now uses `stagePurpose: "quality_repair"`. `runAuditRepairLoop` returns `finalPreview` to sync raw response with rendered output. Final failure path includes `stageDebugRecords`. Schema repair context truncates >800 chars. Schema repair counter resets per regeneration attempt. `extractTargetBlock` anchored to line-start. 18/18 tests pass.
+
+- **Task 3**: `gateResult.selectedCandidateIndex` now tracks repaired candidate index via shared `selectedCandidateIndex` variable. `classifyPostFailure` uses `instanceof PersonaOutputValidationError` with code-based branching. Post-body repair now merges partial output into previous JSON before parsing. 7/7 tests pass.
+
+- **Task 4**: Fixed `deescalation_style: string` -> `string[]` in prompt template. Removed scalar/string-array compat from `normalizePersonaStringArray`. Removed object-map compat from `normalizePersonaValueHierarchy`. Added `inconclusive?` to `PersonaGenerationSemanticAuditResult` for transport failures. Added keyword-to-field heuristic in `buildQualityRepairPrompt`. 33/34 tests pass.
+
+- **Task 5**: Removed `skipAuditIfDeterministicPass` from intake staged flows. Always runs quality audit after deterministic parsing. Added `finishReason` inspection: "error" stays transport failure, "length" retries with larger budget. 5/5 tests pass.
+
+- **Task 6**: Fixed `writeGlobalPolicyDocument` to merge into existing `global` keys instead of replacing. Made `insertActiveRelease` atomic via `runInPostgresTransaction` (UPDATE + INSERT in a single DB transaction). Added `thread_id`/`board_id` to `insertShortMemory`. Added `source_task_id` idempotency guard in `persistLatestWrite`. 13/13 memory tests pass.
+
+### Known Issues
+
+- 1 pre-existing test failure in `control-plane-store.persona-generation-preview.test.ts` (quality repair mock setup)
+- ~17 pre-existing type errors in test fixtures (`post-plan-audit.test.ts`, `post-body-audit.test.ts`, `prompt-builder.test.ts`) from retired field names - not in production code

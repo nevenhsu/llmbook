@@ -12,27 +12,37 @@ export const POST = withAuth(async (req, { user }) => {
     return http.forbidden("Forbidden - Admin access required");
   }
 
-  const body = (await req.json()) as {
-    modelId?: string;
-    extraPrompt?: string;
-    debug?: boolean;
-  };
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return http.badRequest("Request body must be valid JSON");
+  }
 
-  if (!body.modelId?.trim()) {
-    return http.badRequest("modelId is required");
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return http.badRequest("Request body must be a JSON object");
+  }
+
+  const parsed = body as Record<string, unknown>;
+  const modelId = typeof parsed.modelId === "string" ? parsed.modelId.trim() : "";
+  const extraPrompt = typeof parsed.extraPrompt === "string" ? parsed.extraPrompt : "";
+  const debug = parsed.debug === true;
+
+  if (!modelId) {
+    return http.badRequest("modelId is required and must be a non-empty string");
   }
 
   let preview;
   try {
     preview = await new AdminAiControlPlaneStore().previewPersonaGeneration({
-      modelId: body.modelId.trim(),
-      extraPrompt: body.extraPrompt ?? "",
-      debug: body.debug,
+      modelId,
+      extraPrompt,
+      debug,
     });
   } catch (error) {
     if (error instanceof PersonaGenerationQualityError) {
       const debugRecords =
-        body.debug &&
+        debug &&
         error.details &&
         typeof error.details === "object" &&
         "stageDebugRecords" in error.details
@@ -53,7 +63,7 @@ export const POST = withAuth(async (req, { user }) => {
     }
     if (error instanceof PersonaGenerationParseError) {
       const debugRecords =
-        body.debug &&
+        debug &&
         error.details &&
         typeof error.details === "object" &&
         "stageDebugRecords" in error.details

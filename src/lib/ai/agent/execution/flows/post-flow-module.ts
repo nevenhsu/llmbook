@@ -4,6 +4,7 @@ import {
   buildPostBodyRepairPrompt,
   parsePostBodyAuditResult,
 } from "@/lib/ai/prompt-runtime/post-body-audit";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
 import {
   computePostPlanOverallScore,
   parsePostPlanActionOutput,
@@ -115,6 +116,19 @@ function renderFinalPostForAudit(input: { title: string; body: string; tags: str
 }
 
 function classifyPostFailure(error: Error): TextFlowExecutionErrorCauseCategory {
+  if (error instanceof PersonaOutputValidationError) {
+    switch (error.code) {
+      case "persona_audit_invalid":
+        return "semantic_audit";
+      case "persona_repair_failed":
+      case "persona_repair_invalid":
+        return "quality_repair";
+      case "schema_validation_failed":
+        return "schema_validation";
+      default:
+        return "transport";
+    }
+  }
   if (error.message.includes("quality repair")) {
     return "quality_repair";
   }
@@ -178,6 +192,7 @@ async function runPostFlow(
       targetContextText: stageInput.targetContextText,
       debug: input.debug,
       attemptLabel: stageInput.attemptLabel,
+      executionMode: mode === "runtime" ? "runtime" : "admin_preview",
     });
 
   const runPlanningAttempt = async (
@@ -234,6 +249,7 @@ async function runPostFlow(
   let finalPlanningOutput: { candidates: PostPlanCandidate[] } | null = null;
   let planningAuditResult: FlowDiagnostics["planningAudit"] | undefined;
   let selectedCandidate: PostPlanCandidate | null = null;
+  let selectedCandidateIndex: number | null = null;
   let gateResult = {
     attempted: true,
     selectedCandidateIndex: null as number | null,
@@ -250,6 +266,7 @@ async function runPostFlow(
       throw new Error("post_plan stage failed: no valid candidates");
     }
     let bestCandidate = firstPlanning.parsed.candidates[best.selectedCandidateIndex];
+    selectedCandidateIndex = best.selectedCandidateIndex;
 
     const auditPreview = await invokeStage({
       taskType: "post_plan",
@@ -301,6 +318,7 @@ async function runPostFlow(
         throw new Error("post_plan repair produced no valid candidates");
       }
       bestCandidate = repairedParsed.output.candidates[repairedBest.selectedCandidateIndex];
+      selectedCandidateIndex = repairedBest.selectedCandidateIndex;
 
       const repairedAuditPreview = await invokeStage({
         taskType: "post_plan",
@@ -347,7 +365,7 @@ async function runPostFlow(
     finalPlanningOutput = activePlanning.parsed;
     gateResult = {
       attempted: true,
-      selectedCandidateIndex: best.selectedCandidateIndex,
+      selectedCandidateIndex,
     };
     selectedCandidate = bestCandidate;
 
@@ -456,9 +474,19 @@ async function runPostFlow(
         attemptLabel: "post_body.quality_repair",
       });
       collectDebugRecords(repairPreview);
-      const repairedParsedBody = parsePostBodyActionOutput(
-        repairPreview.rawResponse ?? repairPreview.markdown,
-      );
+      const previousJson = bodyPreview.rawResponse ?? bodyPreview.markdown;
+      const repairText = repairPreview.rawResponse ?? repairPreview.markdown;
+      let repairedParsedBody = parsePostBodyActionOutput(repairText);
+      if (repairedParsedBody.error) {
+        try {
+          const prevParsed = JSON.parse(previousJson);
+          const repairParsed = JSON.parse(repairText);
+          const merged = { ...prevParsed, ...repairParsed };
+          repairedParsedBody = parsePostBodyActionOutput(JSON.stringify(merged));
+        } catch {
+          throw new Error(`post_body quality repair output invalid: ${repairedParsedBody.error}`);
+        }
+      }
       if (repairedParsedBody.error) {
         throw new Error(`post_body quality repair output invalid: ${repairedParsedBody.error}`);
       }

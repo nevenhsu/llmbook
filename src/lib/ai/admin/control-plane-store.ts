@@ -1,6 +1,7 @@
 import { generateImage } from "ai";
 import { createXai } from "@ai-sdk/xai";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runInPostgresTransaction } from "@/lib/supabase/postgres";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import {
   derivePersonaUsername,
@@ -1553,6 +1554,9 @@ export class AdminAiControlPlaneStore {
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;
+    debug?: boolean;
+    attemptLabel?: string;
+    executionMode?: "admin_preview" | "runtime";
   }): Promise<PreviewResult> {
     const { document, providers, models } = await this.getActiveControlPlane();
     return runPersonaInteractionStage({
@@ -1675,29 +1679,22 @@ export class AdminAiControlPlaneStore {
     actorId: string,
     note: string,
   ): Promise<PolicyReleaseRow> {
-    const { error: deactivateError } = await this.supabase
-      .from("ai_policy_releases")
-      .update({ is_active: false })
-      .eq("is_active", true);
-    if (deactivateError) {
-      throw new Error(`deactivate active release failed: ${deactivateError.message}`);
-    }
+    return runInPostgresTransaction(async (client) => {
+      await client.query(`UPDATE ai_policy_releases SET is_active = false WHERE is_active = true`);
 
-    const { data, error } = await this.supabase
-      .from("ai_policy_releases")
-      .insert({
-        policy,
-        is_active: true,
-        created_by: actorId,
-        change_note: note,
-      })
-      .select("version, policy, is_active, created_by, change_note, created_at")
-      .single<PolicyReleaseRow>();
+      const result = await client.query(
+        `INSERT INTO ai_policy_releases (policy, is_active, created_by, change_note)
+         VALUES ($1, true, $2, $3)
+         RETURNING version, policy, is_active, created_by, change_note, created_at`,
+        [JSON.stringify(policy), actorId, note],
+      );
 
-    if (error || !data) {
-      throw new Error(`insert active release failed: ${error?.message ?? "unknown"}`);
-    }
+      const inserted = result.rows[0] as PolicyReleaseRow | undefined;
+      if (!inserted) {
+        throw new Error("insert active release failed: no row returned");
+      }
 
-    return data;
+      return inserted;
+    });
   }
 }

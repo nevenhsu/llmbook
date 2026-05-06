@@ -12,13 +12,13 @@ import {
 import type {
   CommentOutput,
   FlowDiagnostics,
-  StageDebugRecord,
   ReplyOutput,
   TextFlowExecutionErrorCauseCategory,
   TextFlowKind,
   TextFlowModuleRunInput,
   TextFlowModuleRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import {
   TextFlowExecutionError,
   buildModuleMetadata,
@@ -70,6 +70,10 @@ function buildSchemaRepairTaskContext(input: {
   previousOutput: string;
   error: string | null;
 }) {
+  const trimmed =
+    input.previousOutput.length <= 800
+      ? input.previousOutput
+      : `${input.previousOutput.slice(0, 500)}\n...[truncated]...`;
   return [
     input.baseTaskContext,
     "[retry_repair]",
@@ -80,7 +84,7 @@ function buildSchemaRepairTaskContext(input: {
     input.error ? `Parser error: ${input.error}` : null,
     "",
     "[previous_invalid_response]",
-    input.previousOutput,
+    trimmed,
   ]
     .filter((part): part is string => part !== null)
     .join("\n");
@@ -97,7 +101,7 @@ function extractTargetBlock(
     return null;
   }
   const rest = source.slice(start + marker.length);
-  const nextOffset = rest.search(/\[[^\n]+\]/);
+  const nextOffset = rest.search(/\n\[[^\n]+]/);
   return nextOffset === -1
     ? source.slice(start).trim()
     : source.slice(start, start + marker.length + nextOffset).trim();
@@ -111,9 +115,11 @@ async function runAuditRepairLoop(input: {
   modelId: string;
   attempt: { repair: number };
   stageDebugRecords: StageDebugRecord[];
+  mode: "preview" | "runtime";
 }): Promise<{
   parsed: ReturnType<typeof parseMarkdownActionOutput>;
   audit: FlowDiagnostics["audit"];
+  finalPreview: Awaited<ReturnType<typeof input.moduleInput.runPersonaInteractionStage>>;
 }> {
   const collectDebugRecords = (
     preview: Awaited<ReturnType<typeof input.moduleInput.runPersonaInteractionStage>>,
@@ -136,6 +142,24 @@ async function runAuditRepairLoop(input: {
       targetContextText: input.promptContext.targetContextText,
       debug: input.moduleInput.debug,
       attemptLabel,
+      executionMode: input.mode === "runtime" ? "runtime" : "admin_preview",
+    });
+    collectDebugRecords(result);
+    return result;
+  };
+
+  const sharedRepairCall = async (taskContext: string, attemptLabel?: string) => {
+    const result = await input.moduleInput.runPersonaInteractionStage({
+      personaId: input.moduleInput.task.personaId,
+      modelId: input.modelId,
+      taskType: input.flowKind,
+      stagePurpose: "quality_repair",
+      taskContext,
+      boardContextText: input.promptContext.boardContextText,
+      targetContextText: input.promptContext.targetContextText,
+      debug: input.moduleInput.debug,
+      attemptLabel,
+      executionMode: input.mode === "runtime" ? "runtime" : "admin_preview",
     });
     collectDebugRecords(result);
     return result;
@@ -163,10 +187,11 @@ async function runAuditRepairLoop(input: {
           issues: audit.issues,
           checks: audit.checks,
         },
+        finalPreview: auditPreview,
       };
     }
     input.attempt.repair += 1;
-    const repairPreview = await sharedAuditCall(
+    const repairPreview = await sharedRepairCall(
       buildCommentRepairPrompt({
         personaEvidence: input.moduleInput.personaEvidence,
         rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
@@ -218,6 +243,7 @@ async function runAuditRepairLoop(input: {
         issues: audit.issues,
         checks: repairedAudit.checks,
       },
+      finalPreview: repairPreview,
     };
   }
 
@@ -242,10 +268,11 @@ async function runAuditRepairLoop(input: {
         issues: audit.issues,
         checks: audit.checks,
       },
+      finalPreview: auditPreview,
     };
   }
   input.attempt.repair += 1;
-  const repairPreview = await sharedAuditCall(
+  const repairPreview = await sharedRepairCall(
     buildReplyRepairPrompt({
       personaEvidence: input.moduleInput.personaEvidence,
       sourceCommentText: extractTargetBlock(
@@ -303,6 +330,7 @@ async function runAuditRepairLoop(input: {
       issues: audit.issues,
       checks: repairedAudit.checks,
     },
+    finalPreview: repairPreview,
   };
 }
 
@@ -371,6 +399,7 @@ export async function runSingleStageWriterFlow(input: {
       targetContextText: promptContext.targetContextText,
       debug: input.moduleInput.debug,
       attemptLabel: stageInput.attemptLabel,
+      executionMode: input.mode === "runtime" ? "runtime" : "admin_preview",
     });
   let lastError: Error | null = null;
 
@@ -378,6 +407,7 @@ export async function runSingleStageWriterFlow(input: {
     attempt.main += 1;
     if (regenerateAttempt) {
       attempt.regenerate += 1;
+      attempt.schemaRepair = 0;
     }
 
     try {
@@ -415,6 +445,7 @@ export async function runSingleStageWriterFlow(input: {
         modelId: modelSelection.modelId,
         attempt,
         stageDebugRecords,
+        mode: input.mode,
       });
 
       const diagnostics: FlowDiagnostics = {
@@ -427,7 +458,7 @@ export async function runSingleStageWriterFlow(input: {
 
       return {
         promptContext,
-        preview,
+        preview: audited.finalPreview,
         flowResult:
           input.flowKind === "comment"
             ? {
@@ -452,7 +483,7 @@ export async function runSingleStageWriterFlow(input: {
         modelMetadata: {
           ...buildModuleMetadata({
             modelSelection,
-            preview,
+            preview: audited.finalPreview,
             task: input.moduleInput.task,
             flowKind: input.flowKind,
           }),
@@ -481,5 +512,6 @@ export async function runSingleStageWriterFlow(input: {
     diagnostics,
     causeCategory: classifySingleStageFailure(failure),
     cause: failure,
+    stageDebugRecords: stageDebugRecords.length > 0 ? stageDebugRecords : undefined,
   });
 }

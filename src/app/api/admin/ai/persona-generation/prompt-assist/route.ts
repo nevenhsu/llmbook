@@ -8,19 +8,29 @@ export const POST = withAuth(async (req, { user }) => {
     return http.forbidden("Forbidden - Admin access required");
   }
 
-  const body = (await req.json()) as {
-    modelId?: string;
-    inputPrompt?: string;
-  };
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return http.badRequest("Request body must be valid JSON");
+  }
 
-  if (!body.modelId?.trim()) {
-    return http.badRequest("modelId is required");
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return http.badRequest("Request body must be a JSON object");
+  }
+
+  const parsed = body as Record<string, unknown>;
+  const modelId = typeof parsed.modelId === "string" ? parsed.modelId.trim() : "";
+  const inputPrompt = typeof parsed.inputPrompt === "string" ? parsed.inputPrompt : "";
+
+  if (!modelId) {
+    return http.badRequest("modelId is required and must be a non-empty string");
   }
 
   try {
     const text = await new AdminAiControlPlaneStore().assistPersonaPrompt({
-      modelId: body.modelId.trim(),
-      inputPrompt: body.inputPrompt ?? "",
+      modelId,
+      inputPrompt,
     });
 
     return http.ok({ text });

@@ -52,15 +52,10 @@ function normalizePersonaStringArray(
   fieldPath: string,
   allowEmpty = false,
 ): string[] {
-  const items =
-    typeof value === "string"
-      ? [value]
-      : Array.isArray(value)
-        ? value.filter((item): item is string => typeof item === "string")
-        : null;
-  if (!items) {
+  if (!Array.isArray(value)) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
+  const items = value.filter((item): item is string => typeof item === "string");
   const normalized = items.map((item) => item.trim()).filter((item) => item.length > 0);
   if (normalized.length === 0 && !allowEmpty) {
     throw new Error(`persona generation output missing ${fieldPath}`);
@@ -487,48 +482,29 @@ function normalizePersonaValueHierarchy(
   value: unknown,
   fieldPath: string,
 ): Array<{ value: string; priority: number }> {
-  const arrayRows = Array.isArray(value)
-    ? value
-        .map((item, index) => {
-          const row = asRecord(item);
-          if (!row) {
-            return null;
-          }
-          const label = readString(row.value).trim();
-          const explicitPriority = readPositiveInt(row.priority, 0);
-          const priority = explicitPriority >= 1 ? explicitPriority : index + 1;
-          if (!label) {
-            return null;
-          }
-          return { value: label, priority };
-        })
-        .filter((item): item is { value: string; priority: number } => item !== null)
-    : [];
-
-  if (arrayRows.length > 0) {
-    return arrayRows.sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
-  }
-
-  const recordRows = asRecord(value);
-  if (!recordRows) {
+  if (!Array.isArray(value)) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
-  const normalized = Object.entries(recordRows)
-    .map(([priorityRaw, labelValue]) => {
-      const label = readString(labelValue).trim();
-      const priority = readPositiveInt(priorityRaw, 0);
-      if (!label || priority < 1) {
+  const arrayRows = value
+    .map((item, index) => {
+      const row = asRecord(item);
+      if (!row) {
+        return null;
+      }
+      const label = readString(row.value).trim();
+      const explicitPriority = readPositiveInt(row.priority, 0);
+      const priority = explicitPriority >= 1 ? explicitPriority : index + 1;
+      if (!label) {
         return null;
       }
       return { value: label, priority };
     })
-    .filter((item): item is { value: string; priority: number } => item !== null)
-    .sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
+    .filter((item): item is { value: string; priority: number } => item !== null);
 
-  if (normalized.length === 0) {
+  if (arrayRows.length === 0) {
     throw new Error(`persona generation output missing ${fieldPath}`);
   }
-  return normalized;
+  return arrayRows.sort((a, b) => a.priority - b.priority || a.value.localeCompare(b.value));
 }
 
 function parsePersonaIdentitySummary(
@@ -1261,48 +1237,49 @@ export function parsePersonaGenerationSemanticAuditResult(
 ): PersonaGenerationSemanticAuditResult {
   const trimmed = rawText.trim();
   if (!trimmed) {
-    throw new PersonaGenerationParseError(
-      "persona generation semantic audit returned empty output",
-      rawText,
-    );
+    return {
+      passes: false,
+      inconclusive: true,
+      issues: ["Semantic audit returned empty output"],
+      repairGuidance: [],
+    };
   }
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
-    throw new PersonaGenerationParseError(
-      "persona generation semantic audit must be a raw JSON object",
-      rawText,
-    );
+    return {
+      passes: false,
+      inconclusive: true,
+      issues: ["Semantic audit output was not a valid JSON object"],
+      repairGuidance: [],
+    };
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    throw new PersonaGenerationParseError(
-      "persona generation semantic audit returned invalid JSON",
-      rawText,
-    );
+    return {
+      passes: false,
+      inconclusive: true,
+      issues: ["Semantic audit returned invalid JSON"],
+      repairGuidance: [],
+    };
   }
 
   const record = asRecord(parsed);
   if (!record) {
-    throw new PersonaGenerationParseError(
-      "persona generation semantic audit must return a JSON object",
-      rawText,
-    );
+    return {
+      passes: false,
+      inconclusive: true,
+      issues: ["Semantic audit must return a JSON object"],
+      repairGuidance: [],
+    };
   }
-  try {
-    assertExactKeys(record, "semantic audit", [
-      "passes",
-      "issues",
-      "repairGuidance",
-      "keptReferenceNames",
-    ]);
-  } catch (error) {
-    throw new PersonaGenerationParseError(
-      error instanceof Error ? error.message : "persona generation semantic audit is invalid",
-      rawText,
-    );
-  }
+  assertExactKeys(record, "semantic audit", [
+    "passes",
+    "issues",
+    "repairGuidance",
+    "keptReferenceNames",
+  ]);
 
   const issuesRaw = Array.isArray(record.issues) ? record.issues : null;
   const repairGuidanceRaw = Array.isArray(record.repairGuidance) ? record.repairGuidance : null;

@@ -74,7 +74,7 @@ export const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "lived_context: { familiar_scenes_of_life: string[]; personal_experience_flavors: string[]; cultural_contexts: string[]; topics_with_confident_grounding: string[]; topics_requiring_runtime_retrieval: string[] }",
       "creator_affinity: { admired_creator_types: string[]; structural_preferences: string[]; detail_selection_habits: string[]; creative_biases: string[] }",
       "interaction_defaults: { default_stance: string; discussion_strengths: string[]; friction_triggers: string[]; non_generic_traits: string[] }",
-      "guardrails: { hard_no: string[]; deescalation_style: string }",
+      "guardrails: { hard_no: string[]; deescalation_style: string[] }",
       "voice_fingerprint: { opening_move: string; metaphor_domains: string[]; attack_style: string; praise_style: string; closing_move: string; forbidden_shapes: string[] }",
       "task_style_matrix: { post: { entry_shape: string; body_shape: string; close_shape: string; forbidden_shapes: string[] }; comment: { entry_shape: string; feedback_shape: string; close_shape: string; forbidden_shapes: string[] } }",
       "Every field marked string[] must be a JSON array of strings, even if it contains only one item.",

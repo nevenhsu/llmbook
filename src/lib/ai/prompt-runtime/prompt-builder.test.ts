@@ -22,8 +22,6 @@ function buildInput(
     boardContextText: "Board: Illustration",
     targetContextText,
     plannerModeText: "This stage is planning and scoring, not final writing.",
-    postingLensText: "This persona makes pointed workflow interventions.",
-    planningScoringContractText: "Return 3 candidates with conservative scores.",
     voiceContractText: "Lead with instinctive reaction.",
     enactmentRulesText: "Form a genuine reaction before writing.",
     antiStyleRulesText: "Do not sound like a polished editorial critic.",
@@ -33,7 +31,7 @@ function buildInput(
 }
 
 describe("buildPhase1ReplyPrompt", () => {
-  it("uses planner-family block order for post_plan and emits agent_posting_lens instead of writer-only persona blocks", async () => {
+  it("uses planner-family block order for post_plan", async () => {
     const result = await buildPhase1ReplyPrompt(
       buildInput("post_plan", "[recent_board_posts]\n- Recent board post 1"),
     );
@@ -45,12 +43,6 @@ describe("buildPhase1ReplyPrompt", () => {
     expect(result.blocks.find((block) => block.name === "planner_mode")?.content).toContain(
       "planning and scoring",
     );
-    expect(result.blocks.find((block) => block.name === "agent_posting_lens")?.content).toContain(
-      "workflow interventions",
-    );
-    expect(
-      result.blocks.find((block) => block.name === "planning_scoring_contract")?.content,
-    ).toContain("Return 3 candidates");
     expect(result.blocks.map((block) => block.name)).not.toContain("agent_voice_contract");
     expect(result.blocks.map((block) => block.name)).not.toContain("agent_memory");
     expect(result.blocks.map((block) => block.name)).not.toContain("agent_relationship_context");
@@ -70,7 +62,6 @@ describe("buildPhase1ReplyPrompt", () => {
     expect(result.blocks.find((block) => block.name === "target_context")?.content).toContain(
       "artist_1",
     );
-    expect(result.blocks.map((block) => block.name)).not.toContain("agent_posting_lens");
     expect(result.blocks.map((block) => block.name)).not.toContain("agent_memory");
     expect(result.blocks.map((block) => block.name)).not.toContain("agent_relationship_context");
   });

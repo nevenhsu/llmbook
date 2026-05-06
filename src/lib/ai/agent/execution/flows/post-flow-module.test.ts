@@ -73,11 +73,8 @@ function buildPostPlanAuditResult(passes = true) {
     repairGuidance: passes ? [] : ["Make each candidate's angle more distinct."],
     checks: {
       candidate_count: "pass",
-      board_fit: "pass",
+      persona_fit: "pass",
       novelty_evidence: passes ? "pass" : "fail",
-      persona_posting_lens_fit: "pass",
-      body_outline_usefulness: "pass",
-      no_model_owned_final_selection: "pass",
     },
   };
 }
@@ -89,18 +86,12 @@ function buildPostBodyAuditResult(passes = true) {
     repairGuidance: passes ? [] : ["Rewrite the body to match the locked plan."],
     contentChecks: {
       angle_fidelity: passes ? "pass" : "fail",
-      board_fit: "pass",
       body_usefulness: "pass",
       markdown_structure: "pass",
-      title_body_alignment: "pass",
     },
     personaChecks: {
       body_persona_fit: "pass",
       anti_style_compliance: "pass",
-      value_fit: "pass",
-      reasoning_fit: "pass",
-      discourse_fit: "pass",
-      expression_fit: "pass",
     },
   };
 }
@@ -110,43 +101,28 @@ function buildPassingPostPlanResponse(title = "Passing semantic plan") {
     candidates: [
       {
         title,
-        angle_summary: "A distinct execution-boundary perspective.",
         thesis: "Separate malformed-output repair from policy enforcement.",
         body_outline: [
           "Show the mistaken blame pattern.",
           "Name the boundary.",
           "Give the operator move.",
         ],
-        difference_from_recent: ["Fresh execution-boundary framing."],
-        board_fit_score: 88,
-        title_persona_fit_score: 84,
-        title_novelty_score: 86,
-        angle_novelty_score: 89,
-        body_usefulness_score: 82,
+        persona_fit_score: 84,
+        novelty_score: 86,
       },
       {
         title: `${title} backup`,
-        angle_summary: "Another distinct workflow perspective.",
         thesis: "Treat validation and enforcement as different operating steps.",
         body_outline: ["A", "B", "C"],
-        difference_from_recent: ["Different enough."],
-        board_fit_score: 82,
-        title_persona_fit_score: 80,
-        title_novelty_score: 81,
-        angle_novelty_score: 83,
-        body_usefulness_score: 79,
+        persona_fit_score: 80,
+        novelty_score: 81,
       },
       {
         title: `${title} third`,
-        angle_summary: "A third usable angle.",
         thesis: "Post-processing boundaries matter more than prompt polish.",
         body_outline: ["A", "B", "C"],
-        difference_from_recent: ["Another framing."],
-        board_fit_score: 84,
-        title_persona_fit_score: 82,
-        title_novelty_score: 83,
-        angle_novelty_score: 85,
-        body_usefulness_score: 81,
+        persona_fit_score: 82,
+        novelty_score: 83,
       },
     ],
   };
@@ -163,19 +139,13 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "A weaker pass",
-                angle_summary: "Still okay",
                 thesis: "A passable idea.",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Different title"],
-                board_fit_score: 77,
-                title_persona_fit_score: 75,
-                title_novelty_score: 76,
-                angle_novelty_score: 81,
-                body_usefulness_score: 72,
+                persona_fit_score: 75,
+                novelty_score: 76,
               },
               {
                 title: "The workflow bug people keep mislabeling as a prompt bug",
-                angle_summary: "Show that many prompt bugs are execution-boundary bugs.",
                 thesis:
                   "Teams keep over-editing prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
                 body_outline: [
@@ -183,24 +153,15 @@ describe("createPostFlowModule", () => {
                   "Contrast malformed-output repair with policy enforcement.",
                   "Give one operator-facing workflow example.",
                 ],
-                difference_from_recent: ["Workflow anti-patterns"],
-                board_fit_score: 89,
-                title_persona_fit_score: 82,
-                title_novelty_score: 85,
-                angle_novelty_score: 90,
-                body_usefulness_score: 79,
+                persona_fit_score: 82,
+                novelty_score: 85,
               },
               {
                 title: "Another valid option",
-                angle_summary: "A different perspective",
                 thesis: "Yet another idea",
                 body_outline: ["#option1", "#option2", "#option3"],
-                difference_from_recent: ["#different"],
-                board_fit_score: 75,
-                title_persona_fit_score: 70,
-                title_novelty_score: 76,
-                angle_novelty_score: 76,
-                body_usefulness_score: 73,
+                persona_fit_score: 70,
+                novelty_score: 76,
               },
             ],
           }),
@@ -272,14 +233,13 @@ describe("createPostFlowModule", () => {
     });
     expect(result.flowResult.diagnostics.gate).toEqual({
       attempted: true,
-      passedCandidateIndexes: [1],
       selectedCandidateIndex: 1,
     });
     expect(result.flowResult.diagnostics.planningCandidates).toEqual([
       expect.objectContaining({
         candidateIndex: 0,
         title: "A weaker pass",
-        passedHardGate: false,
+        passedHardGate: true,
       }),
       expect.objectContaining({
         candidateIndex: 1,
@@ -289,7 +249,7 @@ describe("createPostFlowModule", () => {
       expect.objectContaining({
         candidateIndex: 2,
         title: "Another valid option",
-        passedHardGate: false,
+        passedHardGate: true,
       }),
     ]);
     expect(result.flowResult.diagnostics.bodyAudit).toEqual({
@@ -299,23 +259,17 @@ describe("createPostFlowModule", () => {
       issues: [],
       contentChecks: {
         angle_fidelity: "pass",
-        board_fit: "pass",
         body_usefulness: "pass",
         markdown_structure: "pass",
-        title_body_alignment: "pass",
       },
       personaChecks: {
         body_persona_fit: "pass",
         anti_style_compliance: "pass",
-        value_fit: "pass",
-        reasoning_fit: "pass",
-        discourse_fit: "pass",
-        expression_fit: "pass",
       },
     });
   });
 
-  it("regenerates post_plan candidates once when the first planning pass fails the hard gate", async () => {
+  it("selects the best candidate and runs post_body when candidates pass validation", async () => {
     const flowModule = createPostFlowModule();
     const runPersonaInteractionStage = vi
       .fn()
@@ -324,40 +278,25 @@ describe("createPostFlowModule", () => {
           JSON.stringify({
             candidates: [
               {
-                title: "Too weak 1",
-                angle_summary: "Too weak",
-                thesis: "Too weak",
+                title: "Low score candidate",
+                thesis: "Still valid content.",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Not enough"],
-                board_fit_score: 64,
-                title_persona_fit_score: 63,
-                title_novelty_score: 66,
-                angle_novelty_score: 67,
-                body_usefulness_score: 64,
+                persona_fit_score: 63,
+                novelty_score: 66,
               },
               {
-                title: "Too weak 2",
-                angle_summary: "Too weak",
-                thesis: "Too weak",
+                title: "Better candidate",
+                thesis: "Stronger thesis.",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Not enough"],
-                board_fit_score: 68,
-                title_persona_fit_score: 69,
-                title_novelty_score: 70,
-                angle_novelty_score: 71,
-                body_usefulness_score: 68,
+                persona_fit_score: 80,
+                novelty_score: 82,
               },
               {
-                title: "Too weak 3",
-                angle_summary: "Too weak",
-                thesis: "Too weak",
+                title: "Third candidate",
+                thesis: "Decent idea.",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Not enough"],
-                board_fit_score: 66,
-                title_persona_fit_score: 65,
-                title_novelty_score: 67,
-                angle_novelty_score: 69,
-                body_usefulness_score: 66,
+                persona_fit_score: 70,
+                novelty_score: 72,
               },
             ],
           }),
@@ -367,52 +306,7 @@ describe("createPostFlowModule", () => {
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
-            candidates: [
-              {
-                title: "Fresh passing plan",
-                angle_summary: "A genuinely new workflow critique angle.",
-                thesis: "Fresh regenerate pass.",
-                body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Fresh generation"],
-                board_fit_score: 86,
-                title_persona_fit_score: 82,
-                title_novelty_score: 84,
-                angle_novelty_score: 90,
-                body_usefulness_score: 81,
-              },
-              {
-                title: "Another pass",
-                angle_summary: "Also fine.",
-                thesis: "Also fine.",
-                body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Different enough"],
-                board_fit_score: 80,
-                title_persona_fit_score: 78,
-                title_novelty_score: 79,
-                angle_novelty_score: 82,
-                body_usefulness_score: 74,
-              },
-              {
-                title: "Still failing",
-                angle_summary: "Weak",
-                thesis: "Weak",
-                body_outline: ["A", "B", "C"],
-                difference_from_recent: ["Weak"],
-                board_fit_score: 72,
-                title_persona_fit_score: 70,
-                title_novelty_score: 76,
-                angle_novelty_score: 76,
-                body_usefulness_score: 71,
-              },
-            ],
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(buildPreviewResult(JSON.stringify(buildPostPlanAuditResult())))
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            body: "A regenerated body.",
+            body: "Post body from the best candidate.",
             tags: ["#ai"],
             need_image: false,
             image_prompt: null,
@@ -440,37 +334,22 @@ describe("createPostFlowModule", () => {
       personaEvidence: buildPersonaEvidence(),
     });
 
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(6);
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(4);
     expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
       taskType: "post_plan",
       stagePurpose: "audit",
     });
     expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
-      taskType: "post_plan",
+      taskType: "post_body",
       stagePurpose: "main",
     });
     expect(runPersonaInteractionStage.mock.calls[3]?.[0]).toMatchObject({
-      taskType: "post_plan",
+      taskType: "post_body",
       stagePurpose: "audit",
     });
-    expect(result.flowResult.diagnostics.attempts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          stage: "post_plan",
-          main: 2,
-          repair: 0,
-          regenerate: 1,
-        }),
-        expect.objectContaining({
-          stage: "post_body",
-          main: 1,
-        }),
-      ]),
-    );
     expect(result.flowResult.diagnostics.gate).toEqual({
       attempted: true,
-      passedCandidateIndexes: [0],
-      selectedCandidateIndex: 0,
+      selectedCandidateIndex: 1,
     });
   });
 
@@ -484,39 +363,24 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "Weak novelty candidate",
-                angle_summary: "Not distinct enough",
                 thesis: "Too generic",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["minimal"],
-                board_fit_score: 82,
-                title_persona_fit_score: 81,
-                title_novelty_score: 60,
-                angle_novelty_score: 61,
-                body_usefulness_score: 78,
+                persona_fit_score: 81,
+                novelty_score: 60,
               },
               {
                 title: "Another weak novelty candidate",
-                angle_summary: "Still generic",
                 thesis: "Also generic",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["minimal"],
-                board_fit_score: 80,
-                title_persona_fit_score: 80,
-                title_novelty_score: 62,
-                angle_novelty_score: 63,
-                body_usefulness_score: 77,
+                persona_fit_score: 80,
+                novelty_score: 62,
               },
               {
                 title: "Third weak novelty candidate",
-                angle_summary: "Again generic",
                 thesis: "Again generic",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["minimal"],
-                board_fit_score: 79,
-                title_persona_fit_score: 79,
-                title_novelty_score: 64,
-                angle_novelty_score: 65,
-                body_usefulness_score: 76,
+                persona_fit_score: 79,
+                novelty_score: 64,
               },
             ],
           }),
@@ -529,39 +393,24 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "Repaired passing plan",
-                angle_summary: "Distinct execution-boundary perspective.",
                 thesis: "Separate malformed-output repair from policy enforcement.",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["fresh framing"],
-                board_fit_score: 88,
-                title_persona_fit_score: 84,
-                title_novelty_score: 86,
-                angle_novelty_score: 89,
-                body_usefulness_score: 82,
+                persona_fit_score: 84,
+                novelty_score: 86,
               },
               {
                 title: "Backup passing plan",
-                angle_summary: "Another fresh angle",
                 thesis: "Different but valid",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["another framing"],
-                board_fit_score: 82,
-                title_persona_fit_score: 80,
-                title_novelty_score: 81,
-                angle_novelty_score: 83,
-                body_usefulness_score: 79,
+                persona_fit_score: 80,
+                novelty_score: 81,
               },
               {
                 title: "Failing candidate",
-                angle_summary: "Weak",
                 thesis: "Weak",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["weak"],
-                board_fit_score: 72,
-                title_persona_fit_score: 70,
-                title_novelty_score: 76,
-                angle_novelty_score: 76,
-                body_usefulness_score: 71,
+                persona_fit_score: 70,
+                novelty_score: 76,
               },
             ],
           }),
@@ -604,10 +453,10 @@ describe("createPostFlowModule", () => {
     });
     expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
       taskType: "post_plan",
-      stagePurpose: "main",
+      stagePurpose: "quality_repair",
     });
     expect(runPersonaInteractionStage.mock.calls[2]?.[0].taskContext).toContain(
-      "[planning_audit_repair]",
+      "[planning_repair]",
     );
     expect(runPersonaInteractionStage.mock.calls[3]?.[0]).toMatchObject({
       taskType: "post_plan",
@@ -623,11 +472,8 @@ describe("createPostFlowModule", () => {
       issues: expect.any(Array),
       checks: {
         candidate_count: "pass",
-        board_fit: "pass",
+        persona_fit: "pass",
         novelty_evidence: "pass",
-        persona_posting_lens_fit: "pass",
-        body_outline_usefulness: "pass",
-        no_model_owned_final_selection: "pass",
       },
     });
   });
@@ -680,7 +526,7 @@ describe("createPostFlowModule", () => {
       stagePurpose: "audit",
     });
     expect(runPersonaInteractionStage.mock.calls[2]?.[0].taskContext).toContain(
-      "[planning_audit_repair]",
+      "[planning_repair]",
     );
   });
 
@@ -779,39 +625,24 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "Passing plan A",
-                angle_summary: "Distinct angle A",
                 thesis: "Thesis A",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["fresh"],
-                board_fit_score: 82,
-                title_persona_fit_score: 80,
-                title_novelty_score: 81,
-                angle_novelty_score: 83,
-                body_usefulness_score: 79,
+                persona_fit_score: 80,
+                novelty_score: 81,
               },
               {
                 title: "Passing plan B",
-                angle_summary: "Distinct angle B",
                 thesis: "Thesis B",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["fresh"],
-                board_fit_score: 83,
-                title_persona_fit_score: 81,
-                title_novelty_score: 82,
-                angle_novelty_score: 84,
-                body_usefulness_score: 80,
+                persona_fit_score: 81,
+                novelty_score: 82,
               },
               {
                 title: "Passing plan C",
-                angle_summary: "Distinct angle C",
                 thesis: "Thesis C",
                 body_outline: ["A", "B", "C"],
-                difference_from_recent: ["fresh"],
-                board_fit_score: 84,
-                title_persona_fit_score: 82,
-                title_novelty_score: 83,
-                angle_novelty_score: 85,
-                body_usefulness_score: 81,
+                persona_fit_score: 82,
+                novelty_score: 83,
               },
             ],
           }),

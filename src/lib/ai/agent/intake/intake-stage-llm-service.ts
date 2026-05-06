@@ -515,7 +515,6 @@ export class AiAgentIntakeStageLlmService {
     parse: (rawText: string) => T;
     validateDeterministic: (parsed: T) => string[];
     buildAuditContext: () => { label: string; content: string };
-    skipAuditIfDeterministicPass?: boolean;
   }): Promise<StageRunResult<T>> {
     const mainResult = await this.deps.invokeStage({
       stageName: input.stageName,
@@ -529,10 +528,34 @@ export class AiAgentIntakeStageLlmService {
       entityId: `ai-agent-intake:${input.stageName}:main`,
     });
 
+    if (mainResult.finishReason === "error") {
+      throw new Error(
+        `${input.stageName} stage provider failed: ${mainResult.error ?? "unknown provider error"}`,
+      );
+    }
+
     let parsedFrom = mainResult;
     let parsed: T | null = null;
     let lastParseError: IntakeStageParseError | null = null;
     let currentRawOutput = mainResult.text;
+
+    if (mainResult.finishReason === "length") {
+      const retryResult = await this.deps.invokeStage({
+        stageName: input.stageName,
+        phase: "main",
+        prompt: input.basePrompt,
+        maxOutputTokens: Math.min(
+          (input.stageName === "opportunities"
+            ? OPPORTUNITY_OUTPUT_MAX_TOKENS
+            : CANDIDATE_OUTPUT_MAX_TOKENS) * 2,
+          16384,
+        ),
+        temperature: 0.2,
+        entityId: `ai-agent-intake:${input.stageName}:main:length-retry`,
+      });
+      parsedFrom = retryResult;
+      currentRawOutput = retryResult.text;
+    }
 
     for (let attempt = 0; attempt <= MAX_SCHEMA_REPAIR_ATTEMPTS; attempt += 1) {
       try {
@@ -576,15 +599,11 @@ export class AiAgentIntakeStageLlmService {
     let deterministicIssues = input.validateDeterministic(parsed);
     let audit: JsonAuditResult;
 
-    if (input.skipAuditIfDeterministicPass && deterministicIssues.length === 0) {
-      audit = { pass: true, issues: [], repairInstructions: [] };
-    } else {
-      audit = await this.runQualityAudit({
-        stageName: input.stageName,
-        parsedOutput: parsed,
-        ...input.buildAuditContext(),
-      });
-    }
+    audit = await this.runQualityAudit({
+      stageName: input.stageName,
+      parsedOutput: parsed,
+      ...input.buildAuditContext(),
+    });
 
     for (let attempt = 0; attempt <= MAX_QUALITY_REPAIR_ATTEMPTS; attempt += 1) {
       if (deterministicIssues.length === 0 && audit.pass) {
@@ -616,15 +635,11 @@ export class AiAgentIntakeStageLlmService {
       parsed = input.parse(repairResult.text);
       parsedFrom = repairResult;
       deterministicIssues = input.validateDeterministic(parsed);
-      if (input.skipAuditIfDeterministicPass && deterministicIssues.length === 0) {
-        audit = { pass: true, issues: [], repairInstructions: [] };
-      } else {
-        audit = await this.runQualityAudit({
-          stageName: input.stageName,
-          parsedOutput: parsed,
-          ...input.buildAuditContext(),
-        });
-      }
+      audit = await this.runQualityAudit({
+        stageName: input.stageName,
+        parsedOutput: parsed,
+        ...input.buildAuditContext(),
+      });
     }
 
     throw new Error(
@@ -765,7 +780,6 @@ export class AiAgentIntakeStageLlmService {
             .map((row) => `${row.opportunityKey}: ${row.contentType} / ${row.summary}`)
             .join("\n") || "(empty)",
       }),
-      skipAuditIfDeterministicPass: true,
     });
 
     const validation = validateOpportunityProbabilities(stage.parsed, expectedKeys);
@@ -858,7 +872,6 @@ export class AiAgentIntakeStageLlmService {
           2,
         ),
       }),
-      skipAuditIfDeterministicPass: true,
     });
 
     const validation = validateSpeakerCandidates(stage.parsed, expectedKeys, input.referenceBatch);

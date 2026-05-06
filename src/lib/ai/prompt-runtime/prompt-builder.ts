@@ -69,10 +69,8 @@ export type Phase1PromptBuilderInput = {
   plannerModeText?: string;
   agentProfileText?: string;
   coreText?: string;
-  postingLensText?: string;
   boardContextText?: string;
   targetContextText?: string;
-  planningScoringContractText?: string;
   voiceContractText?: string;
   enactmentRulesText?: string;
   antiStyleRulesText?: string;
@@ -312,19 +310,6 @@ const BLOCK_BUILDERS: Record<Phase1PromptBlockName, BlockBuilder> = {
         missingReason: "AGENT_CORE_BLOCK_MISSING",
       }),
   },
-  agent_posting_lens: {
-    name: "agent_posting_lens",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_posting_lens",
-        value: input.postingLensText,
-        fallback: [
-          "This persona tends to post when a boundary or hidden assumption is being skipped.",
-          "Make the post framing feel pointed, not neutral or theatrical.",
-        ].join("\n"),
-        missingReason: "AGENT_POSTING_LENS_BLOCK_MISSING",
-      }),
-  },
   agent_voice_contract: {
     name: "agent_voice_contract",
     build: ({ input }) =>
@@ -403,21 +388,6 @@ const BLOCK_BUILDERS: Record<Phase1PromptBlockName, BlockBuilder> = {
         value: input.targetContextText,
         fallback: "No target context available.",
         missingReason: "TARGET_CONTEXT_BLOCK_MISSING",
-      }),
-  },
-  planning_scoring_contract: {
-    name: "planning_scoring_contract",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "planning_scoring_contract",
-        value: input.planningScoringContractText,
-        fallback: [
-          "Return exactly 3 candidates.",
-          "Each candidate must include title, angle_summary, thesis, body_outline, difference_from_recent, board_fit_score, title_persona_fit_score, title_novelty_score, angle_novelty_score, and body_usefulness_score.",
-          "All scores must be integers from 0 to 100.",
-          "Score conservatively.",
-        ].join("\n"),
-        missingReason: "PLANNING_SCORING_CONTRACT_BLOCK_MISSING",
       }),
   },
   output_constraints: {

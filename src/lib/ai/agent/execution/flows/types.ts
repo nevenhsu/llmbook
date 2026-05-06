@@ -4,6 +4,7 @@ import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overv
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import type { PostPlanAuditChecks } from "@/lib/ai/prompt-runtime/post-plan-audit";
 
 export type TextFlowKind = "post" | "comment" | "reply";
 
@@ -46,14 +47,7 @@ export type FlowDiagnostics = {
     status: "passed" | "passed_after_repair" | "failed";
     repairApplied: boolean;
     issues: string[];
-    checks: {
-      candidate_count: "pass" | "fail";
-      board_fit: "pass" | "fail";
-      novelty_evidence: "pass" | "fail";
-      persona_posting_lens_fit: "pass" | "fail";
-      body_outline_usefulness: "pass" | "fail";
-      no_model_owned_final_selection: "pass" | "fail";
-    };
+    checks: PostPlanAuditChecks;
   };
   bodyAudit?: {
     contract: "post_body_audit";
@@ -253,6 +247,7 @@ export type TextFlowModuleRunInput = {
     targetContextText?: string;
     debug?: boolean;
     attemptLabel?: string;
+    executionMode?: "admin_preview" | "runtime";
   }) => Promise<PreviewResult>;
   personaEvidence: PromptPersonaEvidence;
   debug?: boolean;

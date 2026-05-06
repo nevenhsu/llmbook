@@ -187,6 +187,7 @@ export type PreviewResult = {
 
 export type PersonaGenerationSemanticAuditResult = {
   passes: boolean;
+  inconclusive?: boolean;
   keptReferenceNames?: string[];
   issues: string[];
   repairGuidance: string[];
