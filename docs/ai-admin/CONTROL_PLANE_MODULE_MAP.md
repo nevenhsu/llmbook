@@ -29,6 +29,11 @@
   - 例如 `PreviewResult`、`PersonaProfile`、`PromptAssistError`
   - 新功能若需要共用型別，優先加在這裡，不要再從 store re-export 當 source of truth
 
+- [stage-debug-records.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/stage-debug-records.ts)
+  - shared staged-LLM debug payload types
+  - `StageDebugRecord` / `StageDebugAttemptRecord` 供 runtime flow modules、admin preview services、and shared debug UI 共用
+  - 不限定 persona generation，interaction flow 也 emit 相同 shape
+
 - [control-plane-types.tsx](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-types.tsx)
   - admin UI 專用展示型別與 section metadata
   - 像 `PersonaItem`、section icons、section items
@@ -189,13 +194,12 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
 - [ApiErrorDetailModal.tsx](/Users/neven/Documents/projects/llmbook/src/components/shared/ApiErrorDetailModal.tsx)
 - [PersonaDataModal.tsx](/Users/neven/Documents/projects/llmbook/src/components/shared/PersonaDataModal.tsx)
 - [TaskStatusBadge.tsx](/Users/neven/Documents/projects/llmbook/src/components/shared/TaskStatusBadge.tsx)
+- [StageDebugCard.tsx](/Users/neven/Documents/projects/llmbook/src/components/shared/StageDebugCard.tsx)
   - shared modal/status UI，不限定 admin
   - 之後若別的 agent flow 也要 debug API payload/raw response 或看 structured persona，優先重用這層
-
-- [PersonaGenerationDebugCard.tsx](/Users/neven/Documents/projects/llmbook/src/components/admin/control-plane/PersonaGenerationDebugCard.tsx)
-  - current stage prompt/attempt debug UI reused by persona generation preview and interaction preview
-  - 名稱仍偏 persona-generation；active refactor plan tracks moving this to shared `StageDebugCard`
-  - 不要再新增第二個 flow-specific debug card；先執行或更新 [shared stage-debug UI plan](/Users/neven/Documents/projects/llmbook/plans/2026-05-05-shared-stage-debug-ui-refactor.md)
+  - `StageDebugCard` 是 generic staged-LLM debug card，供 persona generation preview 與 interaction preview 共用
+  - type payload 來自 [stage-debug-records.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/stage-debug-records.ts) 的 `StageDebugRecord` / `StageDebugAttemptRecord`
+  - 不要再新增第二個 flow-specific debug card
 
 - `control-plane-store.*.test.ts`
   - store facade 與 service orchestration 的 focused regression tests

@@ -20,6 +20,7 @@ import {
   type PreviewResult,
   type PreviewTokenBudget,
 } from "@/lib/ai/admin/control-plane-contract";
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import {
   buildTokenBudgetSignal,
@@ -65,19 +66,7 @@ export async function previewPersonaGeneration(input: {
 }): Promise<
   PreviewResult & {
     structured: PersonaGenerationStructured;
-    stageDebugRecords: Array<{
-      name: string;
-      displayPrompt: string;
-      outputMaxTokens: number;
-      attempts: Array<{
-        attempt: string;
-        text: string;
-        finishReason: string | null;
-        providerId: string | null;
-        modelId: string | null;
-        hadError: boolean;
-      }>;
-    }>;
+    stageDebugRecords: StageDebugRecord[];
   }
 > {
   const { model, provider } = resolvePersonaTextModel({
@@ -133,19 +122,7 @@ export async function previewPersonaGeneration(input: {
     outputMaxTokens: number;
   }> = [];
 
-  const stageDebugRecords: Array<{
-    name: string;
-    displayPrompt: string;
-    outputMaxTokens: number;
-    attempts: Array<{
-      attempt: string;
-      text: string;
-      finishReason: string | null;
-      providerId: string | null;
-      modelId: string | null;
-      hadError: boolean;
-    }>;
-  }> = [];
+  const stageDebugRecords: StageDebugRecord[] = [];
 
   const recordStageAttempt = (
     stageName: string,

@@ -97,15 +97,8 @@ describe("PreviewPanel", () => {
     expect(container.textContent).toContain(
       "Cthulhu stuff hits different because it makes you feel SMALL.",
     );
-    expect(container.textContent).toContain("Audit Diagnostics");
-    expect(container.textContent).toContain("Audit Result");
-    expect(container.textContent).toContain("Passed After Repair");
-    expect(container.textContent).toContain("Repair Applied");
-    expect(container.textContent).toContain("yes");
-    expect(container.textContent).toContain("Audit Mode");
-    expect(container.textContent).toContain("compact");
-    expect(container.textContent).toContain("Missing Signals");
-    expect(container.textContent).toContain("immediate reaction");
+    expect(container.textContent).not.toContain("Audit Diagnostics");
+    expect(container.textContent).not.toContain("Flow Diagnostics");
     expect(container.innerHTML).not.toContain("xl:grid-cols-2");
     expect(container.innerHTML).not.toContain("md:grid-cols-2");
   });
@@ -156,7 +149,7 @@ describe("PreviewPanel", () => {
     expect(container.textContent).not.toContain("Audit Diagnostics");
   });
 
-  it("surfaces flow diagnostics when provided by interaction preview", async () => {
+  it("stays lean when audit or flow diagnostics exist in the preview data", async () => {
     const preview: PreviewResult = {
       assembledPrompt: "prompt",
       markdown: "This is a direct forum reply about Cthulhu creature design.",
@@ -211,11 +204,9 @@ describe("PreviewPanel", () => {
       );
     });
 
-    expect(container.textContent).toContain("Flow Diagnostics");
-    expect(container.textContent).toContain("Final Status");
-    expect(container.textContent).toContain("passed");
-    expect(container.textContent).toContain("Terminal Stage");
-    expect(container.textContent).toContain("reply.main");
-    expect(container.textContent).toContain("Attempts");
+    expect(container.textContent).toContain("Rendered Preview");
+    expect(container.textContent).not.toContain("Flow Diagnostics");
+    expect(container.textContent).not.toContain("Audit Diagnostics");
+    expect(container.textContent).not.toContain("Prompt Assembly");
   });
 });

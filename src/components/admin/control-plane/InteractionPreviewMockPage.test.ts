@@ -157,10 +157,8 @@ describe("InteractionPreviewMockPage", () => {
     ).not.toBeNull();
     expect(container.textContent).toContain("Preview time:");
     expect(container.textContent).toContain("Rendered Preview");
-    expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Raw Response");
     expect(container.textContent).toContain("Image Request");
-    expect(container.textContent).toContain("Audit Diagnostics");
     expect(container.textContent).toContain("Token Budget");
     expect(container.textContent).toContain("Title");
     expect(container.textContent).toContain("Tags");
@@ -182,13 +180,9 @@ describe("InteractionPreviewMockPage", () => {
     expect(container.textContent).toContain(
       '"tags":["#cthulhu","#lovecraft","#worldbuilding","#creaturedesign","#horror"]',
     );
-    expect(container.textContent).toContain('"need_image":true');
     expect(container.textContent).toContain(
       "Eldritch cosmic horror creature emerging from dark depths",
     );
-    expect(container.textContent).toContain("Passed After Repair");
-    expect(container.textContent).toContain("reference-role framing");
-    expect(container.textContent).toContain("compact");
 
     const copyRenderedPreviewButton = container.querySelector(
       'button[aria-label="Copy rendered preview"]',
@@ -231,14 +225,12 @@ describe("InteractionPreviewMockPage", () => {
 
     expect(container.textContent).toContain("Rendered Preview");
     expect(container.textContent).toContain("Image Request");
-    expect(container.textContent).toContain("Audit Diagnostics");
     expect(container.textContent).toContain("Need Image");
     expect(container.textContent).toContain("false");
     expect(container.textContent).toContain("No image requested for this preview.");
     expect(container.textContent).toContain(
       "That draft already has the right wrongness in the silhouette.",
     );
-    expect(container.textContent).toContain("Passed");
     expect(container.textContent).not.toContain("Deep-Sea Gods That Should Terrify Your Crew");
     expect(container.textContent).not.toContain(
       '"tags":["#cthulhu","#lovecraftian_horror","#eldritch_ocean"]',

@@ -6,6 +6,8 @@ export type ModelTestStatus = "untested" | "success" | "failed";
 export type ModelLifecycleStatus = "active" | "retired";
 export type ModelErrorKind = "provider_api" | "model_retired" | "other";
 
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
+
 export type AiProviderConfig = {
   id: string;
   providerKey: string;
@@ -180,23 +182,7 @@ export type PreviewResult = {
   tokenBudget: PreviewTokenBudget;
   auditDiagnostics?: PreviewAuditDiagnostics | null;
   flowDiagnostics?: PreviewFlowDiagnostics | null;
-  stageDebugRecords?: PersonaGenerationStageDebugRecord[] | null;
-};
-
-export type PersonaGenerationStageDebugRecord = {
-  name: string;
-  displayPrompt: string;
-  outputMaxTokens: number;
-  attempts: PersonaGenerationStageAttemptRecord[];
-};
-
-export type PersonaGenerationStageAttemptRecord = {
-  attempt: string;
-  text: string;
-  finishReason: string | null;
-  providerId: string | null;
-  modelId: string | null;
-  hadError: boolean;
+  stageDebugRecords?: StageDebugRecord[] | null;
 };
 
 export type PersonaGenerationSemanticAuditResult = {

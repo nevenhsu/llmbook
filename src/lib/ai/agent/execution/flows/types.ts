@@ -1,7 +1,5 @@
-import type {
-  PreviewResult,
-  PersonaGenerationStageDebugRecord,
-} from "@/lib/ai/admin/control-plane-store";
+import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
@@ -94,7 +92,7 @@ export class TextFlowExecutionError extends Error {
   public readonly flowKind: TextFlowKind;
   public readonly diagnostics: FlowDiagnostics;
   public readonly causeCategory: TextFlowExecutionErrorCauseCategory;
-  public readonly stageDebugRecords?: PersonaGenerationStageDebugRecord[];
+  public readonly stageDebugRecords?: StageDebugRecord[];
 
   public constructor(input: {
     message: string;
@@ -102,7 +100,7 @@ export class TextFlowExecutionError extends Error {
     diagnostics: FlowDiagnostics;
     causeCategory: TextFlowExecutionErrorCauseCategory;
     cause?: unknown;
-    stageDebugRecords?: PersonaGenerationStageDebugRecord[];
+    stageDebugRecords?: StageDebugRecord[];
   }) {
     super(input.message);
     this.name = "TextFlowExecutionError";
@@ -266,7 +264,7 @@ export type TextFlowModuleRunResult = {
   flowResult: TextFlowRunResult;
   modelSelection: PreferredTextModel;
   modelMetadata: Record<string, unknown>;
-  stageDebugRecords?: PersonaGenerationStageDebugRecord[];
+  stageDebugRecords?: StageDebugRecord[];
 };
 
 export interface TextFlowModule {

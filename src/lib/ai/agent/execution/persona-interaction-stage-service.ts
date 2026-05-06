@@ -15,11 +15,11 @@ import {
   formatTargetContext,
   buildPromptBlocks,
 } from "@/lib/ai/admin/control-plane-shared";
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import type {
   AiControlPlaneDocument,
   AiModelConfig,
   AiProviderConfig,
-  PersonaGenerationStageDebugRecord,
   PersonaProfile,
   PreviewResult,
   PromptBoardContext,
@@ -39,7 +39,7 @@ export type PersonaInteractionStageResult = {
   tokenBudget: PreviewResult["tokenBudget"];
   providerId: string | null;
   modelId: string | null;
-  debugRecord?: PersonaGenerationStageDebugRecord;
+  debugRecord?: StageDebugRecord;
 };
 
 export type PersonaInteractionStageInput = {

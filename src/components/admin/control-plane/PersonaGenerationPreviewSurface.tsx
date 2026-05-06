@@ -21,7 +21,7 @@ import {
 import { ModalShell } from "@/components/ui/ModalShell";
 import { PersonaStructuredPreview } from "./PersonaStructuredPreview";
 import { PersonaInfoCard } from "./PersonaInfoCard";
-import { PersonaGenerationDebugCard } from "./PersonaGenerationDebugCard";
+import { StageDebugCard } from "@/components/shared/StageDebugCard";
 
 type Props = {
   mode?: "modal" | "page";
@@ -248,7 +248,7 @@ export function PersonaGenerationPreviewSurface({
               No preview response available.
             </div>
           )}
-          <PersonaGenerationDebugCard
+          <StageDebugCard
             records={preview?.stageDebugRecords ?? undefined}
             errorMessage={errorMessage}
             errorDetails={errorDetails}

@@ -12,7 +12,7 @@ import {
 import type {
   CommentOutput,
   FlowDiagnostics,
-  PersonaGenerationStageDebugRecord,
+  StageDebugRecord,
   ReplyOutput,
   TextFlowExecutionErrorCauseCategory,
   TextFlowKind,
@@ -110,7 +110,7 @@ async function runAuditRepairLoop(input: {
   moduleInput: TextFlowModuleRunInput;
   modelId: string;
   attempt: { repair: number };
-  stageDebugRecords: PersonaGenerationStageDebugRecord[];
+  stageDebugRecords: StageDebugRecord[];
 }): Promise<{
   parsed: ReturnType<typeof parseMarkdownActionOutput>;
   audit: FlowDiagnostics["audit"];
@@ -344,7 +344,7 @@ export async function runSingleStageWriterFlow(input: {
     repair: 0,
     regenerate: 0,
   };
-  const stageDebugRecords: PersonaGenerationStageDebugRecord[] = [];
+  const stageDebugRecords: StageDebugRecord[] = [];
 
   const collectDebugRecords = (
     preview: Awaited<ReturnType<typeof input.moduleInput.runPersonaInteractionStage>>,

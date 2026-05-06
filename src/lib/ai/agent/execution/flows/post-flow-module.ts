@@ -24,7 +24,7 @@ import type {
   TextFlowModuleRunInput,
   TextFlowModuleRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
-import type { PersonaGenerationStageDebugRecord } from "@/lib/ai/admin/control-plane-contract";
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import {
   TextFlowExecutionError,
   buildModuleMetadata,
@@ -151,7 +151,7 @@ async function runPostFlow(
     regenerate: 0,
   };
   const stageResults: FlowDiagnostics["stageResults"] = [];
-  const stageDebugRecords: PersonaGenerationStageDebugRecord[] = [];
+  const stageDebugRecords: StageDebugRecord[] = [];
 
   const collectDebugRecords = (preview: Awaited<ReturnType<typeof invokeStage>>) => {
     if (preview.stageDebugRecords && preview.stageDebugRecords.length > 0) {

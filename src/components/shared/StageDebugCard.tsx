@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";
-import type { PersonaGenerationStageDebugRecord } from "@/lib/ai/admin/control-plane-contract";
+import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 
 async function copyToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -68,7 +68,7 @@ function StageAttemptBlock({
   );
 }
 
-function StageBlock({ record }: { record: PersonaGenerationStageDebugRecord }) {
+function StageBlock({ record }: { record: StageDebugRecord }) {
   const [expanded, setExpanded] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
 
@@ -168,22 +168,17 @@ function StageBlock({ record }: { record: PersonaGenerationStageDebugRecord }) {
 }
 
 type Props = {
-  records?: PersonaGenerationStageDebugRecord[];
+  records?: StageDebugRecord[];
   errorMessage?: string | null;
   errorDetails?: Record<string, unknown> | null;
   rawOutput?: string | null;
 };
 
-export function PersonaGenerationDebugCard({
-  records,
-  errorMessage,
-  errorDetails,
-  rawOutput,
-}: Props) {
+export function StageDebugCard({ records, errorMessage, errorDetails, rawOutput }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   const effectiveRecords =
-    records ?? (errorDetails?.stageDebugRecords as PersonaGenerationStageDebugRecord[] | undefined);
+    records ?? (errorDetails?.stageDebugRecords as StageDebugRecord[] | undefined);
 
   const hasRecords = effectiveRecords && effectiveRecords.length > 0;
   const hasError = errorMessage || errorDetails || (rawOutput !== undefined && rawOutput !== null);
