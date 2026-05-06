@@ -2,21 +2,13 @@
 
 ## Active
 
-- [x] Review the shared stage-debug UI refactor plan:
-      `plans/2026-05-05-shared-stage-debug-ui-refactor.md`
-- [x] Review the flow-code loophole bugfix plan:
-      `plans/2026-05-05-flow-code-loophole-bugfix-plan.md`
-- [x] After approval, implement the selected plan task-by-task with focused verification.
-
 ## Current References
 
-- Active refactor plan: `plans/2026-05-05-shared-stage-debug-ui-refactor.md`
-- Active flow audit plan: `plans/2026-05-05-flow-code-loophole-bugfix-plan.md`
 - LLM-flow docs target folder: `docs/ai-agent/llm-flows`
 - LLM JSON contract: `docs/dev-guidelines/08-llm-json-stage-contract.md`
 
 ## Review
 
-- 2026-05-05: Cleaned `tasks/todo.md` and `tasks/lessons.md` down to current active work and durable guidance. Updated admin control-plane and prompt-runtime docs to match the simplified interaction preview surface and registered post/comment/reply flow-module architecture.
-- 2026-05-05: Created and revised the shared stage-debug UI refactor plan from commit `bb6f372a3986032b36223b2de26d5e5e6652fa6c`. The plan treats `Prompt Assembly`, `Audit Diagnostics`, and `Flow Diagnostics` as intentionally removed simplifications, updates stale tests instead of restoring those sections, and scopes implementation to `StageDebugCard` plus `StageDebugRecord`.
-- 2026-05-05: Audited staged flow code across text interaction, persona generation, prompt assist, intake, memory, and policy/release paths. Created `plans/2026-05-05-flow-code-loophole-bugfix-plan.md` with prioritized remediation tasks for type drift, retry-policy coupling, repair diagnostics, strict JSON contracts, intake audit bypass, policy shape collision, memory scoping, and API validation.
+- 2026-05-06: Updated Phase 1 and Phase 2 Persona Core v2 plans with compact persona-specific thinking procedures. Phase 1 now adds `PersonaThinkingProcedure` under `mind`, runtime packet procedure rendering, validation, derivation, flow-specific discussion/story procedure rules, audit procedure-fit targets, and differentiation tests. Phase 2 now places the procedure inside `persona_runtime_packet`, preserves final-output-only behavior, adds procedure non-exposure rules, adds `procedure_fit` audit coverage, and documents three same-context persona examples. No code, schema, or prompt implementation files were changed.
+- 2026-05-06: Created `plans/persona-v2/2026-05-06-persona-core-v2-prompt-family-integration-plan.md` as Phase 2 of Persona Core v2. The plan maps current prompt blocks to keep/replace/merge/remove decisions, defines the new block order around `PersonaRuntimePacket.renderedText`, covers discussion and story mode for post/comment/reply flows, preserves audit/schema-repair/quality-repair behavior, proposes files and function signatures, lays out the migration sequence, and includes risk analysis plus focused tests. No code, schema, or prompt implementation files were changed.
+- 2026-05-06: Updated `plans/persona-v2/2026-05-06-persona-core-v2-runtime-projection-plan.md` with compact narrative support for story content. The update uses flexible short string narrative fields, adds `ContentMode = "discussion" | "story"`, content-mode-specific runtime packet rules for post planning, post bodies, comments, replies, and audit, strict compactness validation, v1 narrative mapping, required generation prompt changes, story-mode implementation phases, and three-persona same-prompt differentiation tests. No code, schema, or prompt implementation files were changed.

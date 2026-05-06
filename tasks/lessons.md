@@ -30,6 +30,7 @@
 - Repeated `finishReason: length` in quality repair is a repair-shape failure, not proof every stage budget is too low.
 - Repeated `finishReason: length` with empty visible output in semantic audits is an audit transport failure; use deterministic checks or pass open with diagnostics rather than only raising output tokens.
 - If an audit or repair prompt judges persona fit, feed compact persona evidence from canonical persona fields.
+- For creative persona subprofiles that need expressive range, prefer strict compact string validation over closed enums unless the user explicitly asks for taxonomy control.
 
 ## Archive
 
