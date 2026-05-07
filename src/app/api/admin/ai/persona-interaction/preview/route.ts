@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin";
 import type { PromptBoardContext, PromptTargetContext } from "@/lib/ai/admin/control-plane-store";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
-import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 export const POST = withAuth(async (req, { user }) => {
   if (!(await isAdmin(user.id))) {

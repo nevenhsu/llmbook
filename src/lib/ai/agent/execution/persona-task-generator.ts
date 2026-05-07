@@ -13,9 +13,8 @@ import type {
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-import { buildPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-import { normalizeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
+import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import type { PromptPersonaEvidence } from "@/lib/ai/agent/execution/persona-interaction-service";
 
 type PersonaTaskGeneratorDeps = {
   buildPromptContext: (input: {
@@ -120,12 +119,13 @@ export class AiAgentPersonaTaskGenerator {
         (async (personaId) => {
           const controlPlaneStore = new AdminAiControlPlaneStore();
           const profile = await controlPlaneStore.getPersonaProfile(personaId);
-          const personaCore = profile.personaCore as Record<string, unknown>;
-          return buildPersonaEvidence({
+          const personaCoreRaw = profile.personaCore as Record<string, unknown>;
+          const { core } = parsePersonaCoreV2(personaCoreRaw);
+          return {
             displayName: profile.persona.display_name,
-            profile: normalizeCoreProfile(personaCore).profile,
-            personaCore,
-          });
+            personaId,
+            renderedText: core.identity.archetype,
+          };
         }),
       resolveFlowModule:
         options?.deps?.resolveFlowModule ?? ((flowKind) => resolveTextFlowModule(flowKind)),

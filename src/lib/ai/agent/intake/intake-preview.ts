@@ -1,5 +1,12 @@
 export type IntakeFixtureMode = "mixed-public-opportunity" | "notification-intake";
 
+export type PersonaCandidateCard = {
+  referenceName: string;
+  abstractTraits: string[];
+  participationMode: string;
+  topForumIntents: string[];
+};
+
 export type IntakeOpportunityFixture = {
   source: string;
   contentType: string;
@@ -54,6 +61,7 @@ export type TaskCandidatePreview = {
   cooldownUntil: string;
   payload: {
     contentType: string;
+    contentMode: string;
     source: string;
     summary: string;
     fixtureMode: IntakeFixtureMode;
@@ -225,9 +233,9 @@ export function buildOpportunityStagePrompt(input: SelectorInputPreview) {
   const outputSchema = [
     "{",
     '  "scores": [',
-    '    { "opportunity_key": "O01", "probability": 0.82 },',
-    '    { "opportunity_key": "O02", "probability": 0.61 },',
-    '    { "opportunity_key": "O03", "probability": 0.24 }',
+    '    { "opportunity_key": "O01", "probability": 0.82, "contentMode": "discussion" },',
+    '    { "opportunity_key": "O02", "probability": 0.61, "contentMode": "story" },',
+    '    { "opportunity_key": "O03", "probability": 0.24, "contentMode": "discussion" }',
     "  ]",
     "}",
   ].join("\n");
@@ -287,8 +295,9 @@ export function buildOpportunityStagePrompt(input: SelectorInputPreview) {
         "Requirements:",
         "- Return exactly one JSON object.",
         "- `scores` must be an array with one object for every provided opportunity.",
-        "- Each object must contain exactly `opportunity_key` and `probability`.",
+        "- Each object must contain exactly `opportunity_key`, `probability`, and `contentMode`.",
         "- `probability` must be a number between 0 and 1.",
+        "- `contentMode` must be 'discussion' (for forum-native analysis, opinions, questions) or 'story' (for story writing, narrative fragments, scene-like responses).",
         "- Each opportunity_key must match one provided prompt-local opportunity key exactly.",
         "- The application will treat `probability > 0.5` as selected and `probability <= 0.5` as not selected.",
         "- Do not output markdown, prose, reasons, reference names, selection codes, or any extra fields.",
@@ -306,6 +315,7 @@ export function buildCandidateStagePrompt(input: {
     summary: string;
   }>;
   referenceBatch: string[];
+  personaCards?: PersonaCandidateCard[];
 }) {
   const outputSchema = [
     "{",
@@ -336,6 +346,24 @@ export function buildCandidateStagePrompt(input: {
       )
       .join("\n") || "(empty)";
 
+  const cardsByName = new Map<string, PersonaCandidateCard>();
+  if (input.personaCards && input.personaCards.length > 0) {
+    for (const card of input.personaCards) {
+      cardsByName.set(card.referenceName, card);
+    }
+  }
+
+  const speakerBatchLines = input.referenceBatch.map((name) => {
+    const card = cardsByName.get(name);
+    if (!card) return name;
+    return [
+      name,
+      `  traits: ${card.abstractTraits.join(", ")}`,
+      `  mode: ${card.participationMode}`,
+      `  intents: ${card.topForumIntents.join(", ")}`,
+    ].join("\n");
+  });
+
   const blocks: IntakePromptBlock[] = [
     {
       name: "stage",
@@ -352,12 +380,13 @@ export function buildCandidateStagePrompt(input: {
     },
     {
       name: "speaker_batch",
-      content: input.referenceBatch.join("\n") || "(empty)",
+      content: speakerBatchLines.join("\n") || "(empty)",
     },
     {
       name: "selection_rules",
       content: [
         "Pick speakers only from the provided speaker batch.",
+        "Use the abstract traits, participation mode, and forum intents of each speaker to judge fit.",
         "Return only the selected speakers in the output.",
         "For each selected opportunity, choose at least 1 speaker and at most 3 speakers.",
         "Do not invent names outside the batch.",
@@ -394,6 +423,48 @@ export function buildCandidateStagePrompt(input: {
   ];
 
   return formatIntakePrompt(blocks);
+}
+
+export function buildPersonaCandidateCards(input: {
+  referenceNames: string[];
+  coresByName: Record<string, Record<string, unknown>>;
+}): PersonaCandidateCard[] {
+  return input.referenceNames
+    .map((name) => {
+      const core = input.coresByName[name];
+      if (!core) return null;
+
+      const referenceStyle = core.reference_style as Record<string, unknown> | undefined;
+      const forum = core.forum as Record<string, unknown> | undefined;
+
+      const abstractTraits = Array.isArray(referenceStyle?.abstract_traits)
+        ? (referenceStyle!.abstract_traits.filter(
+            (t: unknown) => typeof t === "string",
+          ) as string[])
+        : [];
+      const participationMode =
+        typeof forum?.participation_mode === "string" ? (forum.participation_mode as string) : "";
+      const topForumIntents = [
+        ...(Array.isArray(forum?.preferred_post_intents)
+          ? (forum!.preferred_post_intents as unknown[])
+              .filter((i: unknown) => typeof i === "string")
+              .slice(0, 2)
+          : []),
+        ...(Array.isArray(forum?.preferred_comment_intents)
+          ? (forum!.preferred_comment_intents as unknown[])
+              .filter((i: unknown) => typeof i === "string")
+              .slice(0, 2)
+          : []),
+      ] as string[];
+
+      return {
+        referenceName: name,
+        abstractTraits,
+        participationMode,
+        topForumIntents,
+      };
+    })
+    .filter((card): card is PersonaCandidateCard => card !== null);
 }
 
 function getOpportunityPrefix(fixtureMode: IntakeFixtureMode) {

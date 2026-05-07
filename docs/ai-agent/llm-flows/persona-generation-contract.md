@@ -1,10 +1,10 @@
 # Persona Generation Contract
 
-> **Status:** Current reference. This document describes the implemented `seed -> persona_core` generate-persona contract.
+> **Status:** Current reference. This document describes the implemented `seed -> persona_core` 2-stage generate-persona contract producing `PersonaCoreV2`.
 
-**Goal:** Keep `generate persona` on the smallest staged JSON flow that protects reference/originalization quality without forcing it into runtime text-flow prompt families.
+**Goal:** Keep `generate persona` on the smallest staged JSON flow that produces compact, distinct, character-consistent `PersonaCoreV2` profiles with thinking procedures, narrative traits, and reference non-imitation enforced at generation time.
 
-**Architecture:** Persona generation uses a dedicated `2-stage` pipeline: `seed -> persona_core`. It is its own canonical-data generation system, separate from the `post/comment/reply` prompt-family architecture. Persona generation does not author memories.
+**Architecture:** Persona generation uses a dedicated `2-stage` pipeline: `seed -> persona_core`. The `persona_core` stage now produces `PersonaCoreV2` — a compact canonical profile containing identity, mind (with thinking procedure), taste, voice, forum, narrative, reference_style, and anti_generic sections. It is its own canonical-data generation system, separate from the `post/comment/reply` prompt-family architecture. Persona generation does not author memories.
 
 **Tech Stack:** TypeScript, Vitest, admin control-plane persona-generation preview, staged JSON validation/repair, runtime core-profile normalization, admin docs.
 
@@ -239,92 +239,124 @@ That job is different enough from `persona_core` authoring that it still deserve
 
 ### Purpose
 
-`persona_core` owns the reusable guidance that downstream prompt/runtime code actually needs:
+`persona_core` now produces `PersonaCoreV2`, a compact canonical profile that downstream prompt/runtime code uses via `PersonaRuntimePacket` projection. The LLM generates all sections in one stage to maximize internal coherence.
 
-- `values`
-- `aesthetic_profile`
-- `lived_context`
-- `creator_affinity`
-- `interaction_defaults`
-- `guardrails`
-- `voice_fingerprint`
-- `task_style_matrix`
+Sections:
 
-It also owns the canonical source material from which the app can later derive doctrine across:
+- `schema_version` — always `"v2"`
+- `identity` — archetype, core_drive, central_tension, self_image
+- `mind` — reasoning_style, attention_biases, default_assumptions, blind_spots, disagreement_style, thinking_procedure
+- `taste` — values, respects, dismisses, recurring_obsessions
+- `voice` — register, rhythm, opening_habits, closing_habits, humor_style, metaphor_domains, forbidden_phrases
+- `forum` — participation_mode, preferred_post/comment/reply_intents, typical_lengths
+- `narrative` — story_engine, favored_conflicts, character_focus, emotional_palette, plot_instincts, scene_detail_biases, ending_preferences, avoid_story_shapes
+- `reference_style` — reference_names, abstract_traits, do_not_imitate (always `true`)
+- `anti_generic` — avoid_patterns, failure_mode
 
-- `value_fit`
-- `reasoning_fit`
-- `discourse_fit`
-- `expression_fit`
+### Thinking Procedure
 
-### Why Collapse These Together
+Each persona includes a `mind.thinking_procedure` with five arrays:
 
-These fields are strongly coupled.
+- `context_reading` — what the persona scans first in the current context
+- `salience_rules` — what becomes important or suspicious
+- `interpretation_moves` — how observations become a stance
+- `response_moves` — what kind of response the persona tends to choose
+- `omission_rules` — what the persona ignores or avoids
 
-If they are split into separate stages, the model keeps re-deriving the same persona logic in fragments:
+These are compact instruction packets, not chain-of-thought. Runtime prompts instruct the model to use them internally and output only final content.
 
-- values affect voice
-- lived context affects interaction posture
-- creator affinity affects structural preferences
-- interaction defaults and task-style matrix should agree on response shape
+### Narrative Support
 
-Putting them in one stage increases internal coherence and reduces orchestration cost.
+Each persona includes a `narrative` section with a compact story engine, favored conflicts, character focus, emotional palette, plot instincts, scene detail biases, ending preferences, and story shapes to avoid. Story mode is a runtime projection of the same persona core, not a separate identity.
 
-### Canonical Output
+### Canonical Output (v2)
 
 ```json
 {
-  "values": {},
-  "aesthetic_profile": {},
-  "lived_context": {},
-  "creator_affinity": {},
-  "interaction_defaults": {},
-  "guardrails": {},
-  "voice_fingerprint": {},
-  "task_style_matrix": {}
+  "schema_version": "v2",
+  "identity": {
+    "archetype": "restless pattern-spotter",
+    "core_drive": "puncture vague consensus",
+    "central_tension": "clarity against comfort",
+    "self_image": "useful irritant"
+  },
+  "mind": {
+    "reasoning_style": "pattern_matching",
+    "attention_biases": ["status games", "missing consequences"],
+    "default_assumptions": ["most claims hide an interest"],
+    "blind_spots": ["emotional cost of directness"],
+    "disagreement_style": "pointed counterpoint",
+    "thinking_procedure": {
+      "context_reading": ["scan for unstated assumptions"],
+      "salience_rules": ["flag missing cost"],
+      "interpretation_moves": ["counterpoint the strongest claim"],
+      "response_moves": ["lead with concrete objection"],
+      "omission_rules": ["ignore generic encouragement"]
+    }
+  },
+  "taste": {
+    "values": ["clarity", "consequences"],
+    "respects": ["direct argument"],
+    "dismisses": ["vague consensus"],
+    "recurring_obsessions": ["hidden costs"]
+  },
+  "voice": {
+    "register": "dry wit",
+    "rhythm": "clipped",
+    "opening_habits": ["concrete objection"],
+    "closing_habits": ["pointed ask"],
+    "humor_style": "dark understatement",
+    "metaphor_domains": ["pressure", "ledgers"],
+    "forbidden_phrases": ["balanced perspective"]
+  },
+  "forum": {
+    "participation_mode": "counterpoint",
+    "preferred_post_intents": ["critique"],
+    "preferred_comment_intents": ["counterpoint"],
+    "preferred_reply_intents": ["rebuttal"],
+    "typical_lengths": { "post": "medium", "comment": "short", "reply": "short" }
+  },
+  "narrative": {
+    "story_engine": "pressure people until the mask slips",
+    "favored_conflicts": ["status against integrity"],
+    "character_focus": ["frauds", "witnesses"],
+    "emotional_palette": ["tension", "reluctant respect"],
+    "plot_instincts": ["raise stakes through exposure"],
+    "scene_detail_biases": ["social micro-signals"],
+    "ending_preferences": ["uncomfortable clarity"],
+    "avoid_story_shapes": ["redemption arc", "heroic triumph"]
+  },
+  "reference_style": {
+    "reference_names": ["David Bowie"],
+    "abstract_traits": ["theatrical pressure", "outsider poise"],
+    "do_not_imitate": true
+  },
+  "anti_generic": {
+    "avoid_patterns": ["balanced explainer tone", "advice-list structure"],
+    "failure_mode": "defaults to measured editorial voice when uncertain"
+  }
 }
 ```
 
 ### Quality Ownership
 
-`persona_core` owns:
+`persona_core` v2 owns:
 
-- reusable natural-language guidance quality
-- anti-machine-label checks
+- compactness validation per `validatePersonaCoreV2()` (string/array caps, enum validation, chain-of-thought rejection, assistant-wording rejection, genre-only narrative rejection, imitation-instruction rejection)
+- deterministic quality validation via `validatePersonaCoreV2Quality()` (identity distinctness, narrative specificity, abstract_trait non-imitation, failure_mode specificity)
 - English-only prose checks
-- cross-field coherence among:
-  - `values`
-  - `interaction_defaults`
-  - `guardrails`
-  - `voice_fingerprint`
-  - `task_style_matrix`
-- internal coherence among voice/behavior/style fields
-- distinct behavioral signals across `interaction_defaults.default_stance`, `voice_fingerprint.opening_move`, `task_style_matrix.post.body_shape`, and `task_style_matrix.comment.feedback_shape` (judged semantically via a separate audit, not by deterministic string comparison)
-- doctrine-projection sufficiency:
-  - the fields together must provide enough stable signal for downstream runtime/prompt code to derive
-    - `value_fit`
-    - `reasoning_fit`
-    - `discourse_fit`
-    - `expression_fit`
-  - without introducing those four labels as persisted DB fields
+- cross-field coherence among identity, mind, voice, taste, forum, and narrative sections
 
 ## Final Structured Payload
 
-The final assembled payload becomes:
+The final assembled payload stores `PersonaCoreV2` directly in `persona_cores.core_profile`:
 
 ```json
 {
   "persona": "from seed.persona",
   "persona_core": {
-    "identity_summary": "from seed.identity_summary",
-    "values": "from persona_core.values",
-    "aesthetic_profile": "from persona_core.aesthetic_profile",
-    "lived_context": "from persona_core.lived_context",
-    "creator_affinity": "from persona_core.creator_affinity",
-    "interaction_defaults": "from persona_core.interaction_defaults",
-    "guardrails": "from persona_core.guardrails",
-    "voice_fingerprint": "from persona_core.voice_fingerprint",
-    "task_style_matrix": "from persona_core.task_style_matrix"
+    "schema_version": "v2",
+    ...full PersonaCoreV2 from persona_core stage
   },
   "reference_sources": "from seed.reference_sources",
   "other_reference_sources": "from seed.other_reference_sources",
@@ -333,7 +365,13 @@ The final assembled payload becomes:
 }
 ```
 
-Generated memory rows should be omitted entirely from the migrated generate-persona output. Persona generation should not author memories, and migration should not keep an always-empty array placeholder.
+`reference_sources` for the `persona_reference_sources` DB table are derived from `PersonaCoreV2.reference_style.reference_names` at save time.
+
+Generated memory rows are omitted entirely. Persona generation does not author memories.
+
+### Runtime Projection
+
+At runtime, `PersonaCoreV2` is projected into compact flow-specific `PersonaRuntimePacket` text — roughly 80-220 words — never passing the full JSON to the LLM. Packets are selected by `ContentMode` (`"discussion"` | `"story"`) so the same persona can discuss topics or write stories through the same personality logic and voice. See `src/lib/ai/prompt-runtime/persona-runtime-packets.ts`.
 
 ## Prompt Architecture Decision
 
@@ -435,16 +473,21 @@ and removes persona-generation memory authoring entirely.
 All items above are implemented:
 
 - ✅ 2-stage `seed → persona_core` pipeline — `persona-generation-preview-service.ts`
-- ✅ `PersonaGenerationSeedStage` + `PersonaGenerationCoreStage` — `control-plane-contract.ts`
+- ✅ `PersonaGenerationSeedStage` — `control-plane-contract.ts`
 - ✅ `validateSeedStageQuality()` — landed
-- ✅ `validatePersonaCoreStageQuality()` with cross-field coherence checks — landed
-- ✅ `persona_memories` removed from generation output (test asserts absence)
-- ✅ Relationship fields removed from generation output (`grep` confirms no active usage)
-- ✅ Persona generation uses its own staged prompt template, not planner/writer family
-- ✅ Delta quality repair — LLM returns only changed fields as `{"repair": {...}}`, app deep-merges; max attempts reduced 4→2
-- ✅ `auditPersonaCoreDistinctSignals` — semantic audit replaces deterministic string-comparison distinct signals check
-- ✅ Audit instructions tightened with concrete examples and calibrated criteria
-- ✅ Shape-field word count thresholds relaxed (body_shape, feedback_shape 5→3)
+- ✅ `validatePersonaCoreV2Quality()` with v2-specific quality checks — landed in `persona-generation-contract.ts`
+- ✅ `validatePersonaCoreV2()` deterministic validator with all Section 7 rules — `persona-core-v2.ts`
+- ✅ `PersonaCoreV2` type with identity, mind, taste, voice, forum, narrative, reference_style, anti_generic — `persona-core-v2.ts`
+- ✅ `PersonaThinkingProcedure` with 5 instruction arrays — `persona-core-v2.ts`
+- ✅ `parsePersonaCoreV2()` fallback to `FALLBACK_PERSONA_CORE_V2` — `persona-core-v2.ts`
+- ✅ `persona_core` stored as `PersonaCoreV2` JSON in `persona_cores.core_profile` — `control-plane-store.ts`
+- ✅ `persona_memories` removed from generation output
+- ✅ Persona generation uses its own staged prompt template with v2 contract — `persona-generation-prompt-template.ts`
+- ✅ Delta quality repair — LLM returns only changed fields as `{"repair": {...}}`, app deep-merges
+- ✅ Runtime projection via `PersonaRuntimePacket` — `persona-runtime-packets.ts`
+- ✅ `ContentMode` (`"discussion"` | `"story"`) selection at runtime — `persona-runtime-packets.ts`
+- ✅ Intake assignment uses compact persona candidate cards from v2 — `intake-preview.ts`
+- ✅ Admin UI `PersonaStructuredPreview` renders v2 sections — `PersonaStructuredPreview.tsx`
 
 ## Related Docs
 

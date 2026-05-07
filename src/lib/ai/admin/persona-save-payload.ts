@@ -1,5 +1,6 @@
 import type { PersonaGenerationStructured } from "@/lib/ai/admin/control-plane-contract";
 import { derivePersonaUsername, normalizeUsernameInput } from "@/lib/username-validation";
+import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 
 type PersonaSavePayloadBase = {
   bio: string;
@@ -26,10 +27,22 @@ function resolvePersonaIdentity(input: {
 function buildPersonaSavePayloadBase(input: {
   structured: PersonaGenerationStructured;
 }): PersonaSavePayloadBase {
+  const personaCore = input.structured.persona_core as Record<string, unknown>;
+  const parsed = parsePersonaCoreV2(personaCore);
+  const referenceNames = parsed.core.reference_style.reference_names;
+
+  const referenceSources: PersonaGenerationStructured["reference_sources"] = referenceNames.map(
+    (name) => ({
+      name,
+      type: "iconic_persona",
+      contribution: [],
+    }),
+  );
+
   return {
     bio: input.structured.persona.bio,
     personaCore: input.structured.persona_core,
-    referenceSources: input.structured.reference_sources,
+    referenceSources,
     otherReferenceSources: input.structured.other_reference_sources,
     referenceDerivation: input.structured.reference_derivation,
     originalizationNote: input.structured.originalization_note,

@@ -7,7 +7,7 @@ import {
 import {
   formatPersonaEvidenceForAudit,
   type PromptPersonaEvidence,
-} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+} from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 const PERSONA_EVIDENCE: PromptPersonaEvidence = {
   displayName: "Marlowe",

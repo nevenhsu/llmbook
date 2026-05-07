@@ -1,62 +1,20 @@
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import type { PromptPersonaDirectives } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-
-export type PersonaOutputValidationErrorCode =
-  | "schema_validation_failed"
-  | "persona_audit_invalid"
-  | "persona_repair_failed"
-  | "persona_repair_invalid";
-
-export type PersonaAuditSeverity = "low" | "medium" | "high";
-
-export type PersonaAuditResult = {
-  passes: boolean;
-  issues: string[];
-  repairGuidance: string[];
-  severity: PersonaAuditSeverity;
-  confidence: number;
-  missingSignals: string[];
-};
-
-export type PersonaOutputAuditPromptMode = "default" | "compact";
-
-export function isRetryablePersonaAuditParseFailure(error: unknown): boolean {
-  return error instanceof PersonaOutputValidationError && error.code === "persona_audit_invalid";
-}
-
-export class PersonaOutputValidationError extends Error {
-  public readonly code: PersonaOutputValidationErrorCode;
-  public readonly issues: string[];
-  public readonly repairGuidance: string[];
-  public readonly rawOutput: string | null;
-  public readonly severity: PersonaAuditSeverity | null;
-  public readonly confidence: number | null;
-  public readonly missingSignals: string[];
-
-  public constructor(input: {
-    code: PersonaOutputValidationErrorCode;
-    message: string;
-    issues?: string[];
-    repairGuidance?: string[];
-    rawOutput?: string | null;
-    severity?: PersonaAuditSeverity | null;
-    confidence?: number | null;
-    missingSignals?: string[];
-  }) {
-    super(input.message);
-    this.name = "PersonaOutputValidationError";
-    this.code = input.code;
-    this.issues = input.issues ?? [];
-    this.repairGuidance = input.repairGuidance ?? [];
-    this.rawOutput = input.rawOutput ?? null;
-    this.severity = input.severity ?? null;
-    this.confidence =
-      typeof input.confidence === "number" && Number.isFinite(input.confidence)
-        ? input.confidence
-        : null;
-    this.missingSignals = input.missingSignals ?? [];
-  }
-}
+import type {
+  PromptPersonaDirectives,
+  PersonaAuditSeverity,
+  PersonaAuditResult,
+  PersonaOutputAuditPromptMode,
+} from "@/lib/ai/prompt-runtime/persona-audit-shared";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
+export {
+  PersonaOutputValidationError,
+  isRetryablePersonaAuditParseFailure,
+} from "@/lib/ai/prompt-runtime/persona-audit-shared";
+export type {
+  PersonaAuditResult,
+  PersonaAuditSeverity,
+  PersonaOutputAuditPromptMode,
+} from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 function normalizeText(value: string): string {
   return value.replace(/\r\n/g, "\n").trim();

@@ -4,7 +4,7 @@ import {
   buildPostBodyRepairPrompt,
   parsePostBodyAuditResult,
 } from "@/lib/ai/prompt-runtime/post-body-audit";
-import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import {
   computePostPlanOverallScore,
   parsePostPlanActionOutput,

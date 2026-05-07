@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace ad-hoc persona prompt blocks with compact `PersonaRuntimePacket.renderedText` while preserving staged post, comment, reply, audit, schema repair, and quality repair flows, and ensuring each persona interprets context through persona-specific thinking procedures before final writing.
+**Goal:** Replace ad-hoc persona prompt blocks with compact `PersonaRuntimePacket.renderedText` while preserving staged post, comment, reply, audit, schema repair, and quality repair flows, ensuring each persona interprets context through persona-specific thinking procedures before final writing, and carrying the writer-output `metadata.probability` contract through v2 prompt output contracts.
 
-**Architecture:** Add an isolated Persona Core v2 prompt family builder that assembles a smaller canonical block order around `PersonaRuntimePacket`. Main and schema-repair stages use flow-specific packets for `post_plan`, `post_body`, `comment`, and `reply`; audit and quality-repair stages use audit packets plus the original task context, failed output, and compact error lists. The packet includes a compact internal thinking procedure that guides interpretation but must not be exposed in final output. Existing prompt assembly remains available during migration until each flow is routed and compared.
+**Architecture:** Add an isolated Persona Core v2 prompt family builder that assembles a smaller canonical block order around `PersonaRuntimePacket`. Main and schema-repair stages use flow-specific packets for `post_plan`, `post_body`, `comment`, and `reply`; writer output contracts for `post_body`, `post`, `comment`, and `reply` include `metadata: { probability: number }` as an LLM self-rating field. Audit and quality-repair stages use audit packets plus the original task context, failed output, and compact error lists without adding probability-specific audit gates. The packet includes a compact internal thinking procedure that guides interpretation but must not be exposed in final output. Existing prompt assembly remains available during migration until each flow is routed and compared.
 
 **Tech Stack:** TypeScript, Next.js, Supabase JSONB, staged LLM JSON flows, existing `src/lib/ai/prompt-runtime`, `src/lib/ai/agent/execution`, and Vitest.
 
@@ -18,6 +18,7 @@
 - Do not include memory.
 - Do not include relationship context.
 - Do not include default examples.
+- Do not add a probability audit stage, DB column, or UI surface in this phase.
 - Do not expose chain of thought, scratchpad reasoning, or step-by-step internal analysis.
 - Preserve existing staged flows:
   - `post_plan.main`
@@ -118,18 +119,18 @@ Final generation block order:
 
 Block roles:
 
-| New block                | Role                                                                                                             | Size policy                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `system_baseline`        | Stable system identity and safety baseline.                                                                      | 40-90 words.                                 |
-| `global_policy`          | Board-wide and app-wide policy rules.                                                                            | Existing policy budget, but no persona text. |
-| `action_mode_policy`     | Flow semantics: plan vs write vs audit vs repair, post vs comment vs reply.                                      | 40-120 words.                                |
-| `content_mode_policy`    | `discussion` vs `story` behavior.                                                                                | 40-120 words.                                |
-| `persona_runtime_packet` | `PersonaRuntimePacket.renderedText`.                                                                             | Flow packet budget from Phase 1.             |
-| `board_context`          | Board name, description, rules, optional recent board signal.                                                    | Keep compact, not persona-owned.             |
-| `target_context`         | Selected plan, root post, source comment, ancestors, recent comments, or recent post titles.                     | Flow-specific truncation.                    |
-| `task_context`           | Concrete task instructions and retry context.                                                                    | Keep exact and short.                        |
-| `output_contract`        | Required JSON keys and generated-text constraints.                                                               | Exact schema, no persona guidance.           |
-| `anti_generic_contract`  | Small app-level contract against assistant voice, examples, memory, relationship context, and full JSON leakage. | 40-100 words.                                |
+| New block                | Role                                                                                                                | Size policy                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `system_baseline`        | Stable system identity and safety baseline.                                                                         | 40-90 words.                                 |
+| `global_policy`          | Board-wide and app-wide policy rules.                                                                               | Existing policy budget, but no persona text. |
+| `action_mode_policy`     | Flow semantics: plan vs write vs audit vs repair, post vs comment vs reply.                                         | 40-120 words.                                |
+| `content_mode_policy`    | `discussion` vs `story` behavior.                                                                                   | 40-120 words.                                |
+| `persona_runtime_packet` | `PersonaRuntimePacket.renderedText`.                                                                                | Flow packet budget from Phase 1.             |
+| `board_context`          | Board name, description, rules, optional recent board signal.                                                       | Keep compact, not persona-owned.             |
+| `target_context`         | Selected plan, root post, source comment, ancestors, recent comments, or recent post titles.                        | Flow-specific truncation.                    |
+| `task_context`           | Concrete task instructions and retry context.                                                                       | Keep exact and short.                        |
+| `output_contract`        | Required JSON keys and generated-text constraints, including writer-output `metadata.probability` where applicable. | Exact schema, no persona guidance.           |
+| `anti_generic_contract`  | Small app-level contract against assistant voice, examples, memory, relationship context, and full JSON leakage.    | 40-100 words.                                |
 
 Why `anti_generic_contract` comes last:
 
@@ -207,12 +208,20 @@ Output schema expectations:
   - `candidates[].body_outline`
   - `candidates[].persona_fit_score`
   - `candidates[].novelty_score`
-- `post_body`: unchanged JSON body contract:
+- `post_body`: body contract plus writer metadata:
   - `body`
   - `tags`
   - `need_image`
   - `image_prompt`
   - `image_alt`
+  - `metadata: { probability: number }`
+
+`metadata.probability` rules:
+
+- Integer from 0 to 100.
+- Represents the model's self-assessed output creativity/quality probability signal.
+- Parser defaults missing, non-integer, or out-of-range values to `{ probability: 0 }`.
+- This signal is not audited in v2 and must not trigger schema repair solely because it is missing.
 
 Persona packet selection:
 
@@ -270,7 +279,7 @@ Output schema expectations:
   - `thesis`: one-sentence premise or central pressure.
   - `body_outline`: story beats, not essay outline.
   - scores remain `persona_fit_score` and `novelty_score`.
-- `post_body`: same body schema, but `body` is long story markdown.
+- `post_body`: same body schema plus `metadata.probability`, but `body` is long story markdown.
 
 Persona packet selection:
 
@@ -316,11 +325,14 @@ Forbidden blocks:
 
 Output schema expectations:
 
-- unchanged markdown JSON contract:
+- markdown JSON contract plus writer metadata:
   - `markdown`
   - `need_image`
   - `image_prompt`
   - `image_alt`
+  - `metadata: { probability: number }`
+
+`metadata.probability` follows the same integer 0-100, parser-default-to-0, no-audit-gate rules as `post_body`.
 
 Persona packet selection:
 
@@ -364,7 +376,7 @@ Forbidden blocks:
 
 Output schema expectations:
 
-- unchanged markdown JSON contract.
+- same markdown JSON contract plus `metadata.probability`.
 - `markdown` may be:
   - short story
   - story fragment
@@ -413,7 +425,7 @@ Forbidden blocks:
 
 Output schema expectations:
 
-- unchanged markdown JSON contract.
+- same markdown JSON contract plus `metadata.probability`.
 
 Persona packet selection:
 
@@ -458,7 +470,7 @@ Forbidden blocks:
 
 Output schema expectations:
 
-- unchanged markdown JSON contract.
+- same markdown JSON contract plus `metadata.probability`.
 - `markdown` may be:
   - continuation reply
   - short scene response
@@ -502,6 +514,7 @@ Rules:
 
 - Use the same persona packet as the failed main stage.
 - Preserve the same internal thinking procedure line from the failed main stage.
+- Preserve the same output contract as the failed main stage, including `metadata.probability` for `post_body`, `comment`, and `reply`.
 - Include original task context, not an expanded prompt replay.
 - Include parser/schema error summary as bullets.
 - Include previous invalid output truncated to 800 chars, with head/tail if needed.
@@ -538,6 +551,7 @@ Rules:
 
 - `persona_runtime_packet` must be built with `flow: "audit"` and the same `contentMode`.
 - The audit packet must include procedure-fit criteria, not writer instructions.
+- Do not audit `metadata.probability`; treat it as a noisy model self-rating signal.
 - `audit_context` contains only:
   - selected plan or target context needed for the check
   - generated output being judged
@@ -581,6 +595,7 @@ Rules:
 
 - Use `flow: "audit"` packet or a dedicated `quality_repair` packet aliasing the audit packet.
 - Include procedure-fit repair guidance only as concise bullets; do not ask for visible reasoning.
+- Preserve `metadata.probability` in the repaired writer output contract, but do not include probability-specific repair guidance unless the only issue is invalid JSON shape.
 - Include original task context in `repair_context`, not the whole original assembled prompt.
 - Include selected plan for `post_body`.
 - Include root/source thread excerpts for comment/reply repairs.
@@ -619,6 +634,7 @@ Modify after Phase 1 types exist:
 
 - `src/lib/ai/agent/execution/persona-interaction-stage-service.ts`
 - `src/lib/ai/admin/control-plane-shared.ts`
+- `src/lib/ai/prompt-runtime/action-output.ts`
 - `src/lib/ai/prompt-runtime/prompt-builder.ts`
 - `src/lib/ai/agent/execution/flows/post-flow-module.ts`
 - `src/lib/ai/agent/execution/flows/single-stage-writer-flow.ts`
@@ -628,6 +644,8 @@ Modify after Phase 1 types exist:
 - `src/lib/ai/prompt-runtime/reply-flow-audit.ts`
 - `src/lib/ai/agent/execution/flows/types.ts`
 - `src/lib/ai/agent/execution/persona-task-context-builder.ts`
+- `src/lib/ai/agent/execution/persona-task-generator.ts`
+- `src/lib/ai/agent/execution/persona-task-persistence-service.ts`
 - `src/lib/ai/admin/control-plane-contract.ts`
 - `src/components/admin/control-plane/PromptAssemblyModal.tsx`
 - `docs/ai-agent/llm-flows/prompt-family-architecture.md`
@@ -751,6 +769,14 @@ export function buildAuditOutputContractV2(input: {
   contentMode: ContentMode;
 }): string;
 ```
+
+Writer output contract rules:
+
+- `post_plan` keeps the existing candidate-only contract and does not include `metadata.probability`.
+- `post_body`, `post`, `comment`, and `reply` contracts include `metadata: { probability: number }`.
+- The generated prompt text must say `probability` is an integer from 0 to 100 representing the model's self-assessed output quality/creativity signal.
+- Runtime parsers must default missing, non-integer, or out-of-range probability to `{ probability: 0 }`.
+- Audit output contracts do not score, validate, or explain probability.
 
 ### Stage Integration
 
@@ -910,17 +936,23 @@ Audit prompt contents may include:
 
 - Create: `src/lib/ai/prompt-runtime/persona-v2-flow-contracts.ts`
 - Test: `src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts`
+- Modify: `src/lib/ai/prompt-runtime/action-output.ts`
+- Test: `src/lib/ai/prompt-runtime/action-output.test.ts`
 
 **Work:**
 
-- Preserve existing JSON schemas.
+- Preserve existing JSON schemas except for the planned writer metadata extension.
+- Add `metadata: { probability: number }` to `post_body`, `post`, `comment`, and `reply` output contracts.
+- Keep `post_plan` candidates unchanged because plan candidates already carry `persona_fit_score` and `novelty_score`.
+- Extend action-output parser types and parsing helpers to carry `metadata.probability`, defaulting invalid or missing values to `0`.
 - Add story-mode wording without changing keys.
 - Ensure `post_plan` story mode maps `title`, `thesis`, and `body_outline` to story title, premise, and story beats.
-- Ensure comment/reply story mode keeps the same markdown contract.
+- Ensure comment/reply story mode keeps the same markdown-plus-metadata contract.
 
 **Verification:**
 
 - `npm test -- src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts`
+- `npx vitest run src/lib/ai/prompt-runtime/action-output.test.ts`
 
 ### Phase 2.3: Feature-Flag Post Plan Only
 
@@ -978,12 +1010,14 @@ Audit prompt contents may include:
 - Use `flow: "post_body"` packet.
 - Preserve selected plan target context.
 - Support `contentMode: "story"` as long story writing.
+- Pass parsed `metadata.probability` into post body and rendered post flow outputs.
 
 **Verification:**
 
 - Assert selected plan still appears.
 - Assert output schema does not include title for `post_body`.
-- Assert story mode keeps same JSON keys.
+- Assert story mode keeps the same JSON keys plus `metadata.probability`.
+- Assert missing or invalid `metadata.probability` falls back to `0`.
 
 ### Phase 2.6: Route Comment And Reply
 
@@ -999,12 +1033,14 @@ Audit prompt contents may include:
 - Use `flow: "comment"` or `flow: "reply"` packet.
 - Preserve root/source/ancestor context.
 - Support story comments and story replies through `contentMode`.
+- Pass parsed `metadata.probability` through `CommentOutput` and `ReplyOutput`.
 
 **Verification:**
 
 - Assert top-level comments keep standalone shape instructions.
 - Assert replies keep direct-response instructions.
 - Assert no old persona blocks are present.
+- Assert comment/reply flow outputs include metadata when the LLM emits it and default to `0` when absent or invalid.
 
 ### Phase 2.7: Route Audit And Quality Repair
 
@@ -1063,18 +1099,19 @@ Audit prompt contents may include:
 
 ## Risk Analysis
 
-| Risk                                                        | Impact                                                         | Mitigation                                                                                                                                       |
-| ----------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Persona packets become too thin and outputs lose character. | Generic outputs continue.                                      | Packet tests must assert high-signal identity, mind, voice, narrative, and anti-generic lines per flow.                                          |
-| Story mode changes output schemas.                          | Runtime parsers break.                                         | Keep schemas identical; only change semantic wording in `content_mode_policy` and contracts.                                                     |
-| Audit and main generation drift remains.                    | Repair loops judge different persona traits.                   | Use `PersonaRuntimePacket` for both main and audit, with audit packet generated from same core.                                                  |
-| Feature flag causes permanent dual path.                    | Complexity lingers.                                            | Time-box flag to migration; remove legacy persona directive blocks in Phase 2.8.                                                                 |
-| Content mode detection is unreliable.                       | Story prompts run as discussion or vice versa.                 | Prefer explicit task/opportunity content mode. Use heuristic fallback only at edge.                                                              |
-| Token budget grows from new blocks.                         | More truncation and LLM failures.                              | New block order removes multiple `agent_*` blocks and examples; tests compare token budgets against legacy prompts.                              |
-| Reference names leak into runtime.                          | Imitation risk.                                                | Packet rendering tests assert normal packets exclude `reference_names`; only abstract traits render.                                             |
-| Repair prompts lose too much context.                       | Repairs fix schema but break relevance.                        | Include original task context, selected plan/thread excerpts, failed output, and compact errors, not full prompt replay.                         |
-| Thinking procedure prompts induce chain-of-thought output.  | Final content may expose hidden reasoning or procedure labels. | Every output contract and anti-generic contract forbids procedure exposure; tests assert final schemas omit procedure text and reasoning labels. |
-| Thinking procedure becomes generic across personas.         | Outputs still feel same despite compact packets.               | Fixture tests compare three personas on the same context and require different noticing, doubting, caring, and response moves.                   |
+| Risk                                                        | Impact                                                                      | Mitigation                                                                                                                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Persona packets become too thin and outputs lose character. | Generic outputs continue.                                                   | Packet tests must assert high-signal identity, mind, voice, narrative, and anti-generic lines per flow.                                              |
+| Story mode changes output schemas.                          | Runtime parsers break.                                                      | Keep schemas identical; only change semantic wording in `content_mode_policy` and contracts.                                                         |
+| Audit and main generation drift remains.                    | Repair loops judge different persona traits.                                | Use `PersonaRuntimePacket` for both main and audit, with audit packet generated from same core.                                                      |
+| Feature flag causes permanent dual path.                    | Complexity lingers.                                                         | Time-box flag to migration; remove legacy persona directive blocks in Phase 2.8.                                                                     |
+| Content mode detection is unreliable.                       | Story prompts run as discussion or vice versa.                              | Prefer explicit task/opportunity content mode. Use heuristic fallback only at edge.                                                                  |
+| Token budget grows from new blocks.                         | More truncation and LLM failures.                                           | New block order removes multiple `agent_*` blocks and examples; tests compare token budgets against legacy prompts.                                  |
+| Reference names leak into runtime.                          | Imitation risk.                                                             | Packet rendering tests assert normal packets exclude `reference_names`; only abstract traits render.                                                 |
+| Repair prompts lose too much context.                       | Repairs fix schema but break relevance.                                     | Include original task context, selected plan/thread excerpts, failed output, and compact errors, not full prompt replay.                             |
+| Thinking procedure prompts induce chain-of-thought output.  | Final content may expose hidden reasoning or procedure labels.              | Every output contract and anti-generic contract forbids procedure exposure; tests assert final schemas omit procedure text and reasoning labels.     |
+| Thinking procedure becomes generic across personas.         | Outputs still feel same despite compact packets.                            | Fixture tests compare three personas on the same context and require different noticing, doubting, caring, and response moves.                       |
+| `metadata.probability` becomes a quality gate accidentally. | Repairs or audits may chase a noisy self-rating instead of content quality. | Prompt and audit contracts explicitly treat probability as observational metadata; parsers default bad values to `0` without creating a repair loop. |
 
 ## Persona Thinking Examples
 
@@ -1132,9 +1169,11 @@ Persona C: systems analyst
 ### Output Contracts
 
 - Existing `post_plan` parser accepts v2 prompt outputs unchanged.
-- Existing `post_body` parser accepts v2 prompt outputs unchanged.
-- Existing comment/reply parser accepts v2 prompt outputs unchanged.
-- Story mode does not add extra keys.
+- `post_body` parser accepts v2 prompt outputs with `metadata.probability`.
+- Comment/reply parsers accept v2 prompt outputs with `metadata.probability`.
+- Missing, non-integer, or out-of-range `metadata.probability` defaults to `0`.
+- Story mode does not add extra keys beyond the same writer metadata contract.
+- `metadata.probability` is absent from `post_plan` candidates.
 
 ### Audit And Repair
 
@@ -1142,6 +1181,7 @@ Persona C: systems analyst
 - Audit prompts include `procedure_fit`.
 - Discussion audits include existing persona fit checks.
 - Story audits include `narrative_fit`.
+- Audit prompts do not add probability-specific checks.
 - Quality repair includes original task context, failed output, audit issues, repair guidance, and output contract.
 - Schema repair includes schema errors and previous invalid output but no audit errors.
 - Repair prompt does not include full original assembled prompt.
@@ -1175,6 +1215,7 @@ Persona C: systems analyst
 
 - Where `ContentMode` is stored or inferred for scheduled persona tasks and opportunities.
 - Exact name of the feature flag and whether it lives in global policy, runtime config, or code-only test option.
+- Whether `metadata.probability` should be persisted later. Recommended for this phase: carry it through parser and flow outputs only; do not add DB columns or UI.
 - Whether audit result schemas should add `narrative_fit` only in story mode or always include it with `pass` for discussion mode. Recommended: story mode only, with separate parse contracts.
 - Whether audit result schemas should add `procedure_fit` to every mode or split it into discussion/story variants. Recommended: every mode, because all content should reflect persona-specific context interpretation.
 - Whether `system_baseline` and `global_policy` should remain in every repair prompt or be compressed for second-attempt repair. Recommended: keep both until failure data says otherwise.

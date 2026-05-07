@@ -55,7 +55,6 @@ export const mockPersonaGenerationGlobalPolicyContent = globalPolicy;
 
 const seedContext = {
   persona: fixture.structured.persona,
-  identity_summary: fixture.structured.persona_core.identity_summary,
   reference_sources: fixture.structured.reference_sources,
   other_reference_sources: fixture.structured.other_reference_sources,
   reference_derivation: fixture.structured.reference_derivation,

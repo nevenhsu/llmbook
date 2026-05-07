@@ -1,6 +1,6 @@
 # Prompt Family Architecture
 
-> **Status:** Current reference. This document describes the implemented prompt-family split for staged LLM text flows.
+> **Status:** Current reference. Updated for `PersonaCoreV2` runtime projection. The five old persona blocks (`agent_core`, `agent_voice_contract`, `agent_enactment_rules`, `agent_anti_style_rules`, `agent_examples`) have been replaced by a single `persona_packet` block.
 
 **Goal:** Maintain two explicit prompt families: one for `post_plan` selection/scoring work and one for final writing work (`post_body`, `comment`, `reply`), with no relationship-context block in active prompt architecture.
 
@@ -60,14 +60,14 @@ The distinction is architectural, not cosmetic:
 - title persona fit judgment
 - body usefulness pre-check
 
-## Block Order
+## Block Order (v2)
 
 ```text
 [system_baseline]
 [global_policy]
 [planner_mode]
 [agent_profile]
-[agent_core]
+[persona_packet]
 [agent_posting_lens]
 [task_context]
 [board]
@@ -431,11 +431,7 @@ External audits still remain necessary, but writer-family main generation should
 [global_policy]
 [output_style]
 [agent_profile]
-[agent_core]
-[agent_voice_contract]
-[agent_enactment_rules]
-[agent_anti_style_rules]
-[agent_examples]
+[persona_packet]
 [task_context]
 [board]
 [flow_specific_context]
@@ -646,6 +642,16 @@ That means:
 - do not design downstream prompt families under the assumption that relationship fields must exist
 - delete remaining relationship-oriented runtime/prompt fields during cleanup rather than treating them as passive background data
 
-## Implementation Status
+## Implementation Status (v2)
 
-Implemented in prompt-runtime and shared AI-agent flow code.
+- ✅ Two-family architecture (`planner_family` / `writer_family`) — `prompt-builder.ts`
+- ✅ `persona_packet` block replaces 5 old persona blocks — `prompt-builder.ts`, `control-plane-shared.ts`
+- ✅ Persona packets built from `PersonaCoreV2` via `buildPersonaRuntimePacket()` — `persona-runtime-packets.ts`
+- ✅ `ContentMode` (`"discussion"` | `"story"`) per-packet selection
+- ✅ Flow-specific section selection, word budgets, hard max enforcement
+- ✅ Thinking procedure line always included with "internally" instruction
+- ✅ Reference names excluded from rendered packets; examples disabled
+- ✅ Audit evidence uses `buildAuditPersonaPacket()` with procedure_fit and narrative_fit targets
+- ✅ Persona generation uses dedicated prompt template (not planner/writer family)
+- ✅ Memory and relationship blocks removed from active prompt families
+- ✅ Intake candidate cards use v2 abstract traits + forum intents

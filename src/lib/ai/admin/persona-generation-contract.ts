@@ -16,6 +16,7 @@ import {
   readPositiveInt,
   readString,
 } from "@/lib/ai/admin/control-plane-shared";
+import { validatePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 
 function requirePersonaRecord(value: unknown, fieldPath: string): Record<string, unknown> {
   const record = asRecord(value);
@@ -478,6 +479,64 @@ export function validatePersonaCoreStageQuality(stage: PersonaGenerationCoreStag
   return issues;
 }
 
+export function validatePersonaCoreV2Quality(stage: Record<string, unknown>): string[] {
+  const issues: string[] = [];
+  const v2 = stage as Record<string, unknown>;
+
+  const identity = asRecord(v2.identity);
+  const narrative = asRecord(v2.narrative);
+  const referenceStyle = asRecord(v2.reference_style);
+  const antiGeneric = asRecord(v2.anti_generic);
+
+  // Check identity fields are distinct
+  if (identity) {
+    const archetype = readString(identity.archetype).trim();
+    const coreDrive = readString(identity.core_drive).trim();
+    if (archetype && coreDrive && archetype.toLowerCase() === coreDrive.toLowerCase()) {
+      issues.push("identity.archetype and identity.core_drive should be distinct.");
+    }
+  }
+
+  // Check narrative is not genre-only
+  if (narrative) {
+    const storyEngine = readString(narrative.story_engine).trim().toLowerCase();
+    const genreWords = new Set(["fantasy", "sci-fi", "romance", "horror", "mystery", "thriller"]);
+    if (genreWords.has(storyEngine)) {
+      issues.push(
+        "narrative.story_engine must describe persona-specific story logic, not a genre label.",
+      );
+    }
+  }
+
+  // Check abstract_traits don't contain imitation instructions
+  if (referenceStyle) {
+    const abstractTraits = Array.isArray(referenceStyle.abstract_traits)
+      ? referenceStyle.abstract_traits
+      : [];
+    for (const trait of abstractTraits) {
+      if (
+        typeof trait === "string" &&
+        /write like|imitate|copy the style of|emulate/i.test(trait)
+      ) {
+        issues.push("reference_style.abstract_traits must not contain imitation instructions.");
+        break;
+      }
+    }
+  }
+
+  // Check anti_generic failure_mode is not a placeholder
+  if (antiGeneric) {
+    const failureMode = readString(antiGeneric.failure_mode).trim();
+    if (failureMode && failureMode.length < 20) {
+      issues.push(
+        "anti_generic.failure_mode should be a specific description of generic drift risk.",
+      );
+    }
+  }
+
+  return issues;
+}
+
 function normalizePersonaValueHierarchy(
   value: unknown,
   fieldPath: string,
@@ -760,63 +819,19 @@ function parsePersonaTaskStyleMatrix(
 }
 
 export function parsePersonaCore(value: unknown): Record<string, unknown> {
-  const root = requirePersonaRecord(value, "persona_core");
-  assertExactKeys(root, "persona_core", [
-    "identity_summary",
-    "values",
-    "aesthetic_profile",
-    "lived_context",
-    "creator_affinity",
-    "interaction_defaults",
-    "guardrails",
-    "voice_fingerprint",
-    "task_style_matrix",
-  ]);
-  return {
-    identity_summary: parsePersonaIdentitySummary(root.identity_summary),
-    values: parsePersonaValues(root.values),
-    aesthetic_profile: parsePersonaAestheticProfile(root.aesthetic_profile),
-    lived_context: parsePersonaLivedContext(root.lived_context),
-    creator_affinity: parsePersonaCreatorAffinity(root.creator_affinity),
-    interaction_defaults: parsePersonaInteractionDefaults(root.interaction_defaults),
-    guardrails: parsePersonaGuardrails(root.guardrails),
-    voice_fingerprint: parsePersonaVoiceFingerprint(root.voice_fingerprint),
-    task_style_matrix: parsePersonaTaskStyleMatrix(root.task_style_matrix),
-  };
+  const result = validatePersonaCoreV2(value);
+  if ("error" in result) {
+    throw new Error(`persona_core validation failed: ${result.error}`);
+  }
+  return value as Record<string, unknown>;
 }
 
 export function parseStoredPersonaCoreProfile(value: unknown): Record<string, unknown> {
-  const root = requirePersonaRecord(value, "persona_core");
-  const coreRoot = {
-    identity_summary: root.identity_summary,
-    values: root.values,
-    aesthetic_profile: root.aesthetic_profile,
-    lived_context: root.lived_context,
-    creator_affinity: root.creator_affinity,
-    interaction_defaults: root.interaction_defaults,
-    guardrails: root.guardrails,
-    voice_fingerprint: root.voice_fingerprint,
-    task_style_matrix: root.task_style_matrix,
-  };
-  return {
-    ...parsePersonaCore(coreRoot),
-    reference_sources: parseReferenceSources(root.reference_sources ?? [], {
-      allowEmpty: true,
-      fieldPath: "persona_core.reference_sources",
-    }),
-    other_reference_sources: parseOtherReferenceSources(root.other_reference_sources ?? [], {
-      fieldPath: "persona_core.other_reference_sources",
-    }),
-    reference_derivation: normalizePersonaStringArray(
-      root.reference_derivation ?? [],
-      "persona_core.reference_derivation",
-      true,
-    ),
-    originalization_note: requirePersonaText(
-      root.originalization_note,
-      "persona_core.originalization_note",
-    ),
-  };
+  const result = validatePersonaCoreV2(value);
+  if ("error" in result) {
+    throw new Error(`stored persona core profile validation failed: ${result.error}`);
+  }
+  return value as Record<string, unknown>;
 }
 
 function parseReferenceSourceArray(
@@ -1348,44 +1363,14 @@ export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedSt
   }
 }
 
-export function parsePersonaCoreStageOutput(rawText: string): PersonaGenerationCoreStage {
+export function parsePersonaCoreStageOutput(rawText: string): Record<string, unknown> {
   const record = parsePersonaStageObject(rawText);
   try {
-    assertExactKeys(record, "persona_core", [
-      "values",
-      "aesthetic_profile",
-      "lived_context",
-      "creator_affinity",
-      "interaction_defaults",
-      "guardrails",
-      "voice_fingerprint",
-      "task_style_matrix",
-    ]);
-    return {
-      values: parsePersonaValues(record.values, "persona_core.values"),
-      aesthetic_profile: parsePersonaAestheticProfile(
-        record.aesthetic_profile,
-        "persona_core.aesthetic_profile",
-      ),
-      lived_context: parsePersonaLivedContext(record.lived_context, "persona_core.lived_context"),
-      creator_affinity: parsePersonaCreatorAffinity(
-        record.creator_affinity,
-        "persona_core.creator_affinity",
-      ),
-      interaction_defaults: parsePersonaInteractionDefaults(
-        record.interaction_defaults,
-        "persona_core.interaction_defaults",
-      ),
-      guardrails: parsePersonaGuardrails(record.guardrails, "persona_core.guardrails"),
-      voice_fingerprint: parsePersonaVoiceFingerprint(
-        record.voice_fingerprint,
-        "persona_core.voice_fingerprint",
-      ),
-      task_style_matrix: parsePersonaTaskStyleMatrix(
-        record.task_style_matrix,
-        "persona_core.task_style_matrix",
-      ),
-    };
+    const result = validatePersonaCoreV2(record);
+    if ("error" in result) {
+      throw new Error(`persona_core_v2 validation failed: ${result.error}`);
+    }
+    return record;
   } catch (error) {
     throw new PersonaGenerationParseError(
       error instanceof Error ? error.message : "persona generation output is invalid",
@@ -1416,7 +1401,7 @@ export function parsePersonaGenerationOutput(rawText: string): {
           bio: requirePersonaText(persona.bio, "persona.bio"),
           status: "active",
         },
-        persona_core: parsePersonaCore(personaCore),
+        persona_core: personaCore as Record<string, unknown>,
         reference_sources: parseReferenceSources(record.reference_sources, {
           allowEmpty: true,
         }),

@@ -1,4 +1,4 @@
-import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import { parseJsonObject, readStringArray, readCheckStatus } from "./json-parse-utils";
 
 function formatTruncatedPreviousOutput(rawText: string): string {

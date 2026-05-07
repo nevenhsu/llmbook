@@ -9,7 +9,7 @@ import type {
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
 import { TextFlowExecutionError as TextFlowExecutionErrorClass } from "@/lib/ai/agent/execution/flows/types";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 
 function buildTask(overrides: Partial<AiAgentRecentTaskSnapshot> = {}): AiAgentRecentTaskSnapshot {

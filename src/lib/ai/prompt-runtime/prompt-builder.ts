@@ -10,7 +10,7 @@ export const PLANNER_FAMILY_PROMPT_BLOCK_ORDER = [
   "global_policy",
   "planner_mode",
   "agent_profile",
-  "agent_core",
+  "persona_packet",
   "task_context",
   "board_context",
   "target_context",
@@ -22,11 +22,7 @@ export const WRITER_FAMILY_PROMPT_BLOCK_ORDER = [
   "global_policy",
   "output_style",
   "agent_profile",
-  "agent_core",
-  "agent_voice_contract",
-  "agent_enactment_rules",
-  "agent_anti_style_rules",
-  "agent_examples",
+  "persona_packet",
   "task_context",
   "board_context",
   "target_context",
@@ -68,13 +64,9 @@ export type Phase1PromptBuilderInput = {
   outputStyleText?: string;
   plannerModeText?: string;
   agentProfileText?: string;
-  coreText?: string;
+  personaPacketText?: string;
   boardContextText?: string;
   targetContextText?: string;
-  voiceContractText?: string;
-  enactmentRulesText?: string;
-  antiStyleRulesText?: string;
-  agentExamplesText?: string;
   taskContextText: string;
   now?: Date;
 };
@@ -300,64 +292,17 @@ const BLOCK_BUILDERS: Record<Phase1PromptBlockName, BlockBuilder> = {
         missingReason: "AGENT_PROFILE_BLOCK_MISSING",
       }),
   },
-  agent_core: {
-    name: "agent_core",
+  persona_packet: {
+    name: "persona_packet",
     build: ({ input }) =>
       buildTextBlock({
-        name: "agent_core",
-        value: input.coreText,
-        fallback: "Core fallback: balanced tone, factual, collaborative, no overclaiming.",
-        missingReason: "AGENT_CORE_BLOCK_MISSING",
-      }),
-  },
-  agent_voice_contract: {
-    name: "agent_voice_contract",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_voice_contract",
-        value: input.voiceContractText,
+        name: "persona_packet",
+        value: input.personaPacketText,
         fallback: [
-          "Respond as a distinct persona, not as a neutral assistant.",
-          "Lead with the agent's first reaction before polished explanation.",
+          "Persona: thoughtful contributor.",
+          "Internally apply persona procedure, output only final content.",
         ].join("\n"),
-        missingReason: "AGENT_VOICE_CONTRACT_BLOCK_MISSING",
-      }),
-  },
-  agent_enactment_rules: {
-    name: "agent_enactment_rules",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_enactment_rules",
-        value: input.enactmentRulesText,
-        fallback: [
-          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, task_context, and target_context.",
-          "Internally self-check value_fit, reasoning_fit, discourse_fit, and expression_fit before emitting the final JSON.",
-          "Do not produce a generic assistant-style reply.",
-        ].join("\n"),
-        missingReason: "AGENT_ENACTMENT_RULES_BLOCK_MISSING",
-      }),
-  },
-  agent_anti_style_rules: {
-    name: "agent_anti_style_rules",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_anti_style_rules",
-        value: input.antiStyleRulesText,
-        fallback: [
-          "Do not sound like a generic assistant or polished editorial explainer.",
-          "Avoid tutorial framing and advice-list structure unless the task explicitly requires it.",
-        ].join("\n"),
-        missingReason: "AGENT_ANTI_STYLE_RULES_BLOCK_MISSING",
-      }),
-  },
-  agent_examples: {
-    name: "agent_examples",
-    build: ({ input }) =>
-      buildTextBlock({
-        name: "agent_examples",
-        value: input.agentExamplesText,
-        fallback: "No in-character examples available.",
-        missingReason: "AGENT_EXAMPLES_BLOCK_MISSING",
+        missingReason: "PERSONA_PACKET_BLOCK_MISSING",
       }),
   },
   task_context: {

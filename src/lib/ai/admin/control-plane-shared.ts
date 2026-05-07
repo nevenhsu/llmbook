@@ -4,7 +4,6 @@ import {
   buildActionOutputConstraints,
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
-import type { RuntimeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
 import {
   PERSONA_GENERATION_MAX_INPUT_TOKENS,
   PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
@@ -246,12 +245,8 @@ export function buildPromptBlocks(input: {
   agentCore: string;
   agentPostingLens?: string;
   planningScoringContract?: string;
-  agentVoiceContract?: string;
   boardContext?: string;
   targetContext?: string;
-  agentEnactmentRules?: string;
-  agentAntiStyleRules?: string;
-  agentExamples?: string;
   taskContext: string;
 }): Array<{ name: string; content: string }> {
   const baseline = input.globalDraft.systemBaseline.trim();
@@ -285,7 +280,15 @@ export function buildPromptBlocks(input: {
       name: "agent_profile",
       content: input.agentProfile?.trim() || "No agent profile available.",
     },
-    agent_core: { name: "agent_core", content: input.agentCore },
+    persona_packet: {
+      name: "persona_packet",
+      content:
+        input.agentCore ||
+        [
+          "Persona: thoughtful contributor.",
+          "Internally apply persona procedure, output only final content.",
+        ].join("\n"),
+    },
     agent_posting_lens: {
       name: "agent_posting_lens",
       content:
@@ -293,15 +296,6 @@ export function buildPromptBlocks(input: {
         [
           "This persona tends to post when a workflow distinction is being blurred.",
           "Make the framing feel pointed, not neutral or theatrical.",
-        ].join("\n"),
-    },
-    agent_voice_contract: {
-      name: "agent_voice_contract",
-      content:
-        input.agentVoiceContract?.trim() ||
-        [
-          "Respond as a distinct persona, not as a neutral assistant.",
-          "Lead with the agent's first reaction before polished explanation.",
         ].join("\n"),
     },
     board_context: {
@@ -317,29 +311,6 @@ export function buildPromptBlocks(input: {
       content:
         input.planningScoringContract?.trim() ||
         ["Return exactly 3 candidates.", "Score conservatively."].join("\n"),
-    },
-    agent_enactment_rules: {
-      name: "agent_enactment_rules",
-      content:
-        input.agentEnactmentRules?.trim() ||
-        [
-          "Before responding, infer how this agent would genuinely react based on agent_profile, agent_core, task_context, and target_context.",
-          "Internally self-check value_fit, reasoning_fit, discourse_fit, and expression_fit before emitting the final JSON.",
-          "Do not produce a generic assistant-style reply.",
-        ].join("\n"),
-    },
-    agent_anti_style_rules: {
-      name: "agent_anti_style_rules",
-      content:
-        input.agentAntiStyleRules?.trim() ||
-        [
-          "Do not sound like a generic assistant or polished editorial explainer.",
-          "Avoid tutorial framing and advice-list structure unless the task explicitly requires it.",
-        ].join("\n"),
-    },
-    agent_examples: {
-      name: "agent_examples",
-      content: input.agentExamples?.trim() || "",
     },
     task_context: { name: "task_context", content: input.taskContext },
     output_constraints: {
@@ -426,66 +397,6 @@ export function formatAgentProfile(input: {
     `username: ${input.username}`,
     `bio: ${input.bio}`,
   ].join("\n");
-}
-
-export function formatAgentRelationshipContext(input: {
-  runtimePersonaProfile?: RuntimeCoreProfile | Record<string, unknown> | null;
-  targetContext?: PromptTargetContext | null;
-}): string {
-  const profile = asRecord(input.runtimePersonaProfile);
-  const targetContext = input.targetContext;
-  const relationshipBias = readString(profile?.relationshipBias).trim();
-  const trustSignals = Array.isArray(profile?.trustSignals)
-    ? profile?.trustSignals.map((item) => readString(item).trim()).filter((item) => item.length > 0)
-    : [];
-  const cautionSignals = Array.isArray(profile?.cautionSignals)
-    ? profile?.cautionSignals
-        .map((item) => readString(item).trim())
-        .filter((item) => item.length > 0)
-    : [];
-
-  return [
-    relationshipBias ? `Relationship bias: ${relationshipBias}` : null,
-    trustSignals.length > 0 ? `Trust signals: ${trustSignals.join("; ")}` : null,
-    cautionSignals.length > 0 ? `Caution signals: ${cautionSignals.join("; ")}` : null,
-    targetContext?.targetAuthor ? `Current counterpart: ${targetContext.targetAuthor}` : null,
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join("\n");
-}
-
-export function formatAgentEnactmentRules(
-  runtimePersonaProfile?: RuntimeCoreProfile | Record<string, unknown> | null,
-): string {
-  const record = asRecord(runtimePersonaProfile);
-  const rules = Array.isArray(record?.enactmentRules)
-    ? record.enactmentRules.map((item) => readString(item).trim()).filter((item) => item.length > 0)
-    : [];
-
-  return rules.join("\n");
-}
-
-export function formatAgentExamples(
-  runtimePersonaProfile?: RuntimeCoreProfile | Record<string, unknown> | null,
-): string {
-  const record = asRecord(runtimePersonaProfile);
-  const examples = Array.isArray(record?.inCharacterExamples) ? record.inCharacterExamples : [];
-  const lines = examples
-    .map((item) => {
-      const row = asRecord(item);
-      if (!row) {
-        return null;
-      }
-      const scenario = readString(row.scenario).trim();
-      const response = readString(row.response).trim();
-      if (!scenario || !response) {
-        return null;
-      }
-      return [`Scenario: ${scenario}`, `Response: ${response}`].join("\n");
-    })
-    .filter((item): item is string => Boolean(item));
-
-  return lines.join("\n\n");
 }
 
 export function formatPrompt(blocks: Array<{ name: string; content: string }>): string {

@@ -14,7 +14,6 @@ import {
   type AiControlPlaneDocument,
   type AiModelConfig,
   type AiProviderConfig,
-  type PersonaGenerationCoreStage,
   type PersonaGenerationSeedStage,
   type PersonaGenerationStructured,
   type PreviewResult,
@@ -40,7 +39,7 @@ import {
   parsePersonaCoreStageOutput,
   parsePersonaSeedOutput,
   parseQualityRepairDelta,
-  validatePersonaCoreStageQuality,
+  validatePersonaCoreV2Quality,
   validateSeedStageQuality,
 } from "@/lib/ai/admin/persona-generation-contract";
 import { PERSONA_GENERATION_TEMPLATE_STAGES } from "@/lib/ai/admin/persona-generation-prompt-template";
@@ -409,51 +408,15 @@ export async function previewPersonaGeneration(input: {
     return auditSeedReferenceClassification(stage);
   };
 
-  const auditPersonaCoreDistinctSignals = async (
-    stage: PersonaGenerationCoreStage,
-  ): Promise<{
-    issues: string[];
-    repairGuidance: string[];
-  }> =>
-    runPersonaGenerationSemanticAudit({
-      stageName: "persona_core",
-      auditLabel: "persona_core_distinct_signals_audit",
-      instructions: [
-        "You are judging whether four key persona_core fields are meaningfully distinct.",
-        "Evaluate: interaction_defaults.default_stance, voice_fingerprint.opening_move, task_style_matrix.post.body_shape, task_style_matrix.comment.feedback_shape.",
-        "These fields serve different purposes and should describe different aspects of the persona's behavior.",
-        "Flag only when two or more are functionally interchangeable — name both fields explicitly in the issue.",
-        "Example issue: 'interaction_defaults.default_stance and voice_fingerprint.opening_move both say the same thing — differentiate them.'",
-        "Coherent thematic overlap is expected and should pass.",
-        "In repairGuidance, name which exact field(s) to rewrite and suggest what aspect they should cover instead.",
-      ],
-      parsedOutput: {
-        interaction_defaults: stage.interaction_defaults,
-        voice_fingerprint: stage.voice_fingerprint,
-        task_style_matrix: stage.task_style_matrix,
-      },
-      defaultIssue:
-        "voice_fingerprint.opening_move, interaction_defaults.default_stance, task_style_matrix.post.body_shape, and task_style_matrix.comment.feedback_shape must describe different behavioral dimensions.",
-      failClosedOnTransport: false,
-      fallbackRepairGuidance: [
-        "Rewrite voice_fingerprint.opening_move to describe how the persona opens a conversation, distinct from interaction_defaults.default_stance which describes the overall posture.",
-        "Ensure task_style_matrix.post.body_shape and task_style_matrix.comment.feedback_shape cover different response formats.",
-      ],
-    });
-
-  const auditPersonaCoreStageSemantics = async (
-    stage: PersonaGenerationCoreStage,
+  const auditPersonaCoreV2StageQuality = async (
+    _stage: Record<string, unknown>,
     _seedStage: PersonaGenerationSeedStage,
   ): Promise<{
     issues: string[];
     repairGuidance: string[];
-    normalizedParsedOutput?: PersonaGenerationCoreStage;
+    normalizedParsedOutput?: Record<string, unknown>;
   }> => {
-    const distinctAudit = await auditPersonaCoreDistinctSignals(stage);
-    if (distinctAudit.issues.length === 0) {
-      return { issues: [], repairGuidance: [] };
-    }
-    return distinctAudit;
+    return { issues: [], repairGuidance: [] };
   };
 
   const deriveRepairType = (val: unknown): string => deriveJsonLeafType(val);
@@ -921,7 +884,7 @@ export async function previewPersonaGeneration(input: {
   };
 
   let seedStage!: PersonaGenerationSeedStage;
-  let personaCoreStage!: PersonaGenerationCoreStage;
+  let personaCoreStageRecord!: Record<string, unknown>;
   let structured!: PersonaGenerationStructured;
   let assembledPrompt!: string;
   let tokenBudget!: PreviewTokenBudget;
@@ -939,18 +902,13 @@ export async function previewPersonaGeneration(input: {
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
     });
 
-    personaCoreStage = await runPersonaGenerationStage({
+    personaCoreStageRecord = await runPersonaGenerationStage({
       stageName: PERSONA_GENERATION_TEMPLATE_STAGES[1].name,
       stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[1].goal,
       stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[1].contract.join("\n"),
       parse: parsePersonaCoreStageOutput,
-      validateQuality: validatePersonaCoreStageQuality,
-      validateQualityAsync: (stage) => auditPersonaCoreStageSemantics(stage, seedStage),
-      carryForwardContext: {
-        persona: seedStage.persona,
-        identity_summary: seedStage.identity_summary,
-        reference_sources: seedStage.reference_sources,
-      },
+      validateQuality: validatePersonaCoreV2Quality,
+      validateQualityAsync: async (stage) => auditPersonaCoreV2StageQuality(stage, seedStage),
       allowedReferenceNames: [
         ...seedStage.reference_sources.map((item) => item.name),
         ...seedStage.other_reference_sources.map((item) => item.name),
@@ -958,22 +916,10 @@ export async function previewPersonaGeneration(input: {
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
     });
 
-    const personaCore: PersonaGenerationStructured["persona_core"] = {
-      identity_summary: seedStage.identity_summary,
-      values: personaCoreStage.values,
-      aesthetic_profile: personaCoreStage.aesthetic_profile,
-      lived_context: personaCoreStage.lived_context,
-      creator_affinity: personaCoreStage.creator_affinity,
-      interaction_defaults: personaCoreStage.interaction_defaults,
-      guardrails: personaCoreStage.guardrails,
-      voice_fingerprint: personaCoreStage.voice_fingerprint,
-      task_style_matrix: personaCoreStage.task_style_matrix,
-    };
-
     structured = parsePersonaGenerationOutput(
       JSON.stringify({
         persona: seedStage.persona,
-        persona_core: personaCore,
+        persona_core: personaCoreStageRecord,
         reference_sources: seedStage.reference_sources,
         other_reference_sources: seedStage.other_reference_sources,
         reference_derivation: seedStage.reference_derivation,

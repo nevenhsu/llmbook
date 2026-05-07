@@ -18,14 +18,11 @@ function buildInput(
     policyText: "policy",
     outputStyleText: "Use short paragraphs.",
     agentProfileText: "display_name: AI Planner\nusername: ai_planner\nbio: Practical and blunt.",
-    coreText: "core",
+    personaPacketText:
+      "Identity: test persona\nProcedure: internally scan context; output only content.",
     boardContextText: "Board: Illustration",
     targetContextText,
     plannerModeText: "This stage is planning and scoring, not final writing.",
-    voiceContractText: "Lead with instinctive reaction.",
-    enactmentRulesText: "Form a genuine reaction before writing.",
-    antiStyleRulesText: "Do not sound like a polished editorial critic.",
-    agentExamplesText: "Scenario: vague claim\nResponse: show the trade-offs.",
     taskContextText: "task context",
   };
 }
@@ -56,8 +53,8 @@ describe("buildPhase1ReplyPrompt", () => {
     );
 
     expect(result.blocks.map((block) => block.name)).toEqual(WRITER_FAMILY_PROMPT_BLOCK_ORDER);
-    expect(result.blocks.find((block) => block.name === "agent_voice_contract")?.content).toContain(
-      "Lead with instinctive reaction.",
+    expect(result.blocks.find((block) => block.name === "persona_packet")?.content).toContain(
+      "test persona",
     );
     expect(result.blocks.find((block) => block.name === "target_context")?.content).toContain(
       "artist_1",
@@ -68,25 +65,18 @@ describe("buildPhase1ReplyPrompt", () => {
 
   it("keeps explicit empty fallback when flow-specific context is missing", async () => {
     const input = buildInput("comment");
-    delete input.agentExamplesText;
     delete input.agentProfileText;
-    delete input.antiStyleRulesText;
-    delete input.enactmentRulesText;
-    delete input.voiceContractText;
+    delete input.personaPacketText;
 
     const result = await buildPhase1ReplyPrompt(input);
 
     const targetContext = result.blocks.find((block) => block.name === "target_context");
-    const voiceContractBlock = result.blocks.find((block) => block.name === "agent_voice_contract");
-    const antiStyleBlock = result.blocks.find((block) => block.name === "agent_anti_style_rules");
-    const examplesBlock = result.blocks.find((block) => block.name === "agent_examples");
+    const packetBlock = result.blocks.find((block) => block.name === "persona_packet");
     const profileBlock = result.blocks.find((block) => block.name === "agent_profile");
 
     expect(targetContext?.degraded).toBe(true);
     expect(targetContext?.content).toContain("No target context available.");
-    expect(voiceContractBlock?.content).toContain("Respond as a distinct persona");
-    expect(antiStyleBlock?.content).toContain("Avoid tutorial framing");
-    expect(examplesBlock?.content).toContain("No in-character examples available.");
+    expect(packetBlock?.content).toContain("thoughtful contributor");
     expect(profileBlock?.content).toContain("No agent profile available.");
   });
 
@@ -97,9 +87,9 @@ describe("buildPhase1ReplyPrompt", () => {
 
     expect(output).toContain("Return exactly one JSON object.");
     expect(output).toContain('"candidates": [');
-    expect(output).toContain('"title_persona_fit_score": 0');
-    expect(output).toContain('"angle_novelty_score": 0');
-    expect(output).toContain('"body_usefulness_score": 0');
+    expect(output).toContain('"persona_fit_score": 0');
+    expect(output).toContain('"novelty_score": 0');
+    expect(output).toContain("All scores must be integers from 0 to 100.");
     expect(output).toContain("Do not output any text outside the JSON object.");
     expect(output).toContain("Do not mention prompt instructions or system blocks in the output.");
   });

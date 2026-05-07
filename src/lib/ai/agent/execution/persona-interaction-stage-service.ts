@@ -2,10 +2,9 @@ import { getInteractionMaxOutputTokens } from "@/lib/ai/prompt-runtime/runtime-b
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import {
-  buildInteractionCoreSummary,
-  normalizeCoreProfile,
-} from "@/lib/ai/core/runtime-core-profile";
+import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
+import type { ContentMode, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
@@ -27,7 +26,6 @@ import type {
 } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import { derivePromptPersonaDirectives } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
 
 export type PersonaInteractionStagePurpose = "main" | "schema_repair" | "audit" | "quality_repair";
 
@@ -71,17 +69,8 @@ export type PersonaInteractionStageInput = {
   debug?: boolean;
   attemptLabel?: string;
   executionMode?: PersonaInteractionStageExecutionMode;
+  contentMode?: ContentMode;
 };
-
-function mapDirectiveActionType(taskType: PromptActionType): "post" | "comment" | "reply" {
-  if (taskType === "post" || taskType === "post_plan" || taskType === "post_body") {
-    return "post";
-  }
-  if (taskType === "reply") {
-    return "reply";
-  }
-  return "comment";
-}
 
 function buildLeanStageBlocks(input: {
   document: AiControlPlaneDocument;
@@ -135,26 +124,21 @@ export class AiAgentPersonaInteractionStageService {
 
     const profile = await input.getPersonaProfile(input.personaId);
     const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
-    const runtimePersonaProfile = normalizeCoreProfile(effectivePersonaCore).profile;
-    const directiveActionType = mapDirectiveActionType(input.taskType);
-    const personaPromptDirectives = derivePromptPersonaDirectives({
-      actionType: directiveActionType,
-      profile: runtimePersonaProfile,
-      personaCore: effectivePersonaCore,
+    const contentMode = input.contentMode ?? "discussion";
+
+    const { core: personaCore } = parsePersonaCoreV2(effectivePersonaCore);
+
+    const personaPacket = buildPersonaPacketForPrompt({
+      taskType: input.taskType,
+      stagePurpose: input.stagePurpose,
+      contentMode,
+      personaId: input.personaId,
+      displayName: profile.persona.display_name,
+      core: personaCore,
     });
-    const personaCoreSummary = buildInteractionCoreSummary({
-      actionType: directiveActionType,
-      profile: runtimePersonaProfile,
-      personaCore: effectivePersonaCore,
-    });
-    const defaultStance =
-      typeof (effectivePersonaCore.interaction_defaults as Record<string, unknown> | undefined)
-        ?.default_stance === "string"
-        ? (
-            (effectivePersonaCore.interaction_defaults as Record<string, unknown>)
-              .default_stance as string
-          ).trim()
-        : "";
+
+    const personaPacketText = personaPacket?.renderedText ?? "";
+
     const includeExpandedContext =
       input.stagePurpose === "main" || input.stagePurpose === "schema_repair";
 
@@ -162,7 +146,7 @@ export class AiAgentPersonaInteractionStageService {
       actionType: input.taskType,
       stagePurpose: input.stagePurpose,
     });
-    const isPostBody = input.taskType === "post_body";
+
     const blocks = includeExpandedContext
       ? buildPromptBlocks({
           actionType: input.taskType,
@@ -177,10 +161,7 @@ export class AiAgentPersonaInteractionStageService {
             input.taskType === "post_plan"
               ? "This stage is planning and scoring, not final writing."
               : undefined,
-          agentCore: [personaCoreSummary, defaultStance ? `default_stance: ${defaultStance}` : null]
-            .filter((item): item is string => Boolean(item))
-            .join("\n\n"),
-          agentVoiceContract: isPostBody ? "" : personaPromptDirectives.voiceContract.join("\n"),
+          agentCore: personaPacketText,
           boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
           targetContext:
             input.targetContextText ??
@@ -188,20 +169,6 @@ export class AiAgentPersonaInteractionStageService {
               taskType: input.taskType,
               targetContext: input.targetContext,
             }),
-          agentEnactmentRules: isPostBody
-            ? [
-                ...personaPromptDirectives.enactmentRules.slice(0, 4),
-                ...personaPromptDirectives.antiStyleRules.slice(0, 4),
-              ].join("\n")
-            : personaPromptDirectives.enactmentRules.join("\n"),
-          agentAntiStyleRules: isPostBody ? "" : personaPromptDirectives.antiStyleRules.join("\n"),
-          agentExamples: isPostBody
-            ? ""
-            : personaPromptDirectives.inCharacterExamples
-                .map((example) =>
-                  [`Scenario: ${example.scenario}`, `Response: ${example.response}`].join("\n"),
-                )
-                .join("\n\n"),
           taskContext: input.taskContext,
         })
       : buildLeanStageBlocks({

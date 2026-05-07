@@ -160,6 +160,7 @@ type PipelineTaskCandidate = {
   cooldownUntil: string;
   payload: {
     contentType: string;
+    contentMode: string;
     source: string;
     summary: string;
     fixtureMode: "mixed-public-opportunity" | "notification-intake";
@@ -415,6 +416,7 @@ function buildNotificationTaskCandidates(input: {
         cooldownUntil: new Date(0).toISOString(),
         payload: {
           contentType: row.content_type,
+          contentMode: "discussion",
           source: "notification",
           summary: row.summary,
           fixtureMode: "notification-intake" as const,
@@ -678,6 +680,7 @@ function buildPublicTaskCandidates(input: {
         }),
         payload: {
           contentType: row.content_type,
+          contentMode: "discussion",
           source: row.source_table === "posts" ? "public-post" : "public-comment",
           summary: row.summary,
           fixtureMode: "mixed-public-opportunity",

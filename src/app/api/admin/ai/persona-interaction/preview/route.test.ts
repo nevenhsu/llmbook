@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-output-audit";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 const { isAdmin, previewPersonaInteraction } = vi.hoisted(() => ({
   isAdmin: vi.fn(),

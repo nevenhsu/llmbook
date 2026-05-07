@@ -43,6 +43,7 @@ type OpportunityProbabilityOutput = {
   scores: Array<{
     opportunityKey: string;
     probability: number;
+    contentMode: string;
   }>;
 };
 
@@ -721,6 +722,12 @@ export class AiAgentIntakeStageLlmService {
   public async selectPublicSpeakerCandidates(input: {
     rows: AiOppRow[];
     referenceBatch: string[];
+    personaCards?: Array<{
+      referenceName: string;
+      abstractTraits: string[];
+      participationMode: string;
+      topForumIntents: string[];
+    }>;
   }): Promise<CandidateSelectionResult[]> {
     if (input.rows.length === 0 || input.referenceBatch.length === 0) {
       return [];
@@ -737,6 +744,7 @@ export class AiAgentIntakeStageLlmService {
           rows,
           referenceBatch: input.referenceBatch,
           subsetRetryBudget: MAX_SUBSET_REPAIR_ATTEMPTS,
+          personaCards: input.personaCards,
         }),
       );
     }
@@ -833,6 +841,12 @@ export class AiAgentIntakeStageLlmService {
     rows: AiOppRow[];
     referenceBatch: string[];
     subsetRetryBudget: number;
+    personaCards?: Array<{
+      referenceName: string;
+      abstractTraits: string[];
+      participationMode: string;
+      topForumIntents: string[];
+    }>;
   }): Promise<
     StageRunResult<SpeakerCandidatesOutput> & {
       keyToOppId: Map<string, string>;
@@ -857,6 +871,7 @@ export class AiAgentIntakeStageLlmService {
       basePrompt: buildCandidateStagePrompt({
         selectedOpportunities,
         referenceBatch: input.referenceBatch,
+        personaCards: input.personaCards,
       }),
       parse: parseSpeakerCandidatesOutput,
       validateDeterministic: (parsed) =>

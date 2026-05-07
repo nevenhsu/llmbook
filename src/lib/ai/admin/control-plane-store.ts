@@ -1282,13 +1282,7 @@ export class AdminAiControlPlaneStore {
     const { error: personaCoreError } = await this.supabase.from("persona_cores").upsert(
       {
         persona_id: personaId,
-        core_profile: {
-          ...canonicalPersonaCore,
-          reference_sources: input.referenceSources,
-          other_reference_sources: input.otherReferenceSources,
-          reference_derivation: input.referenceDerivation,
-          originalization_note: input.originalizationNote,
-        },
+        core_profile: canonicalPersonaCore,
         updated_at: nowIso(),
       },
       {

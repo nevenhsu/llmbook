@@ -8,18 +8,21 @@ import type {
   PromptTargetContext,
 } from "@/lib/ai/admin/control-plane-contract";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
+import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
 import { resolveTextFlowModule } from "@/lib/ai/agent/execution/flows/registry";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
-import {
-  buildPersonaEvidence,
-  type PromptPersonaEvidence,
-} from "@/lib/ai/prompt-runtime/persona-prompt-directives";
-import { normalizeCoreProfile } from "@/lib/ai/core/runtime-core-profile";
 import { formatBoardContext, formatTargetContext } from "@/lib/ai/admin/control-plane-shared";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
+
+export type PromptPersonaEvidence = {
+  displayName: string | null;
+  personaId: string;
+  renderedText: string;
+};
 
 export type AiAgentPersonaInteractionInput = {
   personaId: string;
@@ -46,6 +49,7 @@ export type AiAgentPersonaInteractionInput = {
     };
   }) => Promise<void>;
   debug?: boolean;
+  contentMode?: ContentMode;
 };
 
 type UserFacingInteractionTaskType = "post" | "comment" | "reply";
@@ -91,12 +95,13 @@ function buildPreviewTask(input: {
 }
 
 function buildPreviewPersonaEvidence(profile: PersonaProfile): PromptPersonaEvidence {
-  const personaCore = profile.personaCore as Record<string, unknown>;
-  return buildPersonaEvidence({
+  const personaCoreRaw = profile.personaCore as Record<string, unknown>;
+  const { core } = parsePersonaCoreV2(personaCoreRaw);
+  return {
     displayName: profile.persona.display_name,
-    profile: normalizeCoreProfile(personaCore).profile,
-    personaCore,
-  });
+    personaId: profile.persona.id,
+    renderedText: core.identity.archetype,
+  };
 }
 
 function renderFlowMarkdown(
@@ -253,6 +258,7 @@ export class AiAgentPersonaInteractionService {
       recordLlmInvocationError: input.recordLlmInvocationError,
       debug: input.debug,
       attemptLabel: `${input.taskType}.main`,
+      contentMode: input.contentMode,
     });
     const markdown = renderRawStagePreviewMarkdown(preview.rawResponse ?? preview.markdown);
 

@@ -872,3 +872,54 @@ Compatibility boundary:
 ## Staff-Engineer Check
 
 The elegant boundary is `PersonaCoreV2 -> PersonaRuntimePacket`, not bigger prompts. Narrative support strengthens that boundary: the DB stores compact story logic, while runtime passes only content-mode-specific packet lines. Thinking procedure support strengthens it again: each persona gets a compact, differentiated way to read context before writing, but the prompt still forbids exposed reasoning and final output remains schema-only. This avoids repeating the current failure mode where rich persona JSON exists but prompt code selects inconsistent pieces or loses context to truncation. It also lets future memory or relationship context become separate packet sources later without contaminating the compact persona identity contract now.
+
+---
+
+## Implementation Progress (2026-05-07)
+
+### Phase 1 ✓ — Contract & Validator
+
+- **File:** `src/lib/ai/core/persona-core-v2.ts`
+- All types: `PersonaCoreV2`, `PersonaThinkingProcedure`, `ContentMode`, `PersonaFlowKind`, `PersonaRuntimePacket`, `PersonaAuditEvidencePacket`
+- `validatePersonaCoreV2()` — all Section 7 rules (string/array caps, enum validation, chain-of-thought rejection, assistant-wording rejection, genre-only narrative rejection, etc.)
+- `parsePersonaCoreV2()` — parse valid v2 or return `FALLBACK_PERSONA_CORE_V2`
+- `FALLBACK_PERSONA_CORE_V2` — functional default persona with thinking procedure, narrative, non-imitation
+- No v1 adapter (dropped per decision)
+- **Test:** 28 tests pass
+
+### Phase 2 ✓ — Runtime Packet Builder
+
+- **File:** `src/lib/ai/prompt-runtime/persona-runtime-packets.ts`
+- `normalizePersonaCoreV2()` — parse with source tracking (v2 | fallback)
+- `buildPersonaRuntimePacket()` — generic flow+mode-aware builder
+- 5 convenience builders: `buildPostPlanPersonaPacket`, `buildPostBodyPersonaPacket`, `buildCommentPersonaPacket`, `buildReplyPersonaPacket`, `buildAuditPersonaPacket`
+- `buildPersonaPacketForPrompt()` — integration point mapping PromptActionType + stagePurpose
+- Word budget enforcement with section priority ordering and hard max truncation
+- Procedure line: always present, under 55 words, includes "internally"
+- Story mode: includes narrative traits (engine, conflicts, characters, scene details, endings)
+- Reference names excluded from renderedText; examples disabled by default
+- **Test:** 35 tests pass
+
+### Phase 3 ✓ — Wiring & contentMode
+
+- **Modified:** `persona-interaction-stage-service.ts` — replaced 5 old directive blocks with single `persona_packet` block containing `renderedText`
+- **Modified:** `prompt-builder.ts` — updated block orders (PLANNER/WRITER), removed `agent_voice_contract`, `agent_enactment_rules`, `agent_anti_style_rules`, `agent_examples`, added `persona_packet`
+- **Modified:** `control-plane-shared.ts` — removed dead v1 functions, added `persona_packet` to allBlocks
+- **Modified:** `persona-interaction-service.ts` — uses v2 `parsePersonaCoreV2`, added `contentMode` param
+- **Modified:** `persona-task-generator.ts` — uses v2 parse
+- **Modified:** `intake-preview.ts`, `opportunity-pipeline-service.ts`, `intake-stage-llm-service.ts` — `contentMode` added to payload types, pipeline task candidates, and LLM scoring contract
+- **Modified:** `flows/types.ts` — `PromptPersonaEvidence` import from new location
+- **Modified:** `comment-flow-audit.ts`, `reply-flow-audit.ts`, `post-body-audit.ts`, `post-flow-module.ts`, route files — import paths updated
+
+### Deleted v1 Code
+
+- `src/lib/ai/core/runtime-core-profile.ts` + test
+- `src/lib/ai/prompt-runtime/persona-prompt-directives.ts` + test
+- `src/lib/ai/prompt-runtime/persona-output-audit.test.ts`
+- `src/lib/ai/prompt-runtime/prompt-builder.agent-enactment.test.ts`
+- Shared types (`PersonaOutputValidationError`, `PromptPersonaEvidence`, `formatPersonaEvidenceForAudit`, `PromptPersonaDirectives`) moved to `persona-audit-shared.ts`
+
+### Verification
+
+- TypeScript: compiles clean
+- Tests: 89/89 passing across core-v2, runtime-packets, prompt-builder, audit flows, action output

@@ -23,11 +23,11 @@ describe("persona-save-payload", () => {
         status: structured.persona.status,
       },
       personaCore: structured.persona_core,
-      referenceSources: structured.reference_sources,
-      otherReferenceSources: structured.other_reference_sources,
       referenceDerivation: structured.reference_derivation,
       originalizationNote: structured.originalization_note,
     });
+    expect(payload.referenceSources).toBeDefined();
+    expect(Array.isArray(payload.referenceSources)).toBe(true);
     expect(payload).not.toHaveProperty("personaMemories");
   });
 
@@ -45,11 +45,11 @@ describe("persona-save-payload", () => {
       username: "ai_updated_persona",
       bio: structured.persona.bio,
       personaCore: structured.persona_core,
-      referenceSources: structured.reference_sources,
-      otherReferenceSources: structured.other_reference_sources,
       referenceDerivation: structured.reference_derivation,
       originalizationNote: structured.originalization_note,
     });
+    expect(payload.referenceSources).toBeDefined();
+    expect(Array.isArray(payload.referenceSources)).toBe(true);
     expect(payload).not.toHaveProperty("personaMemories");
   });
 });

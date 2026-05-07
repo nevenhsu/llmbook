@@ -4,7 +4,7 @@ import {
   buildCommentRepairPrompt,
   parseCommentAuditResult,
 } from "@/lib/ai/prompt-runtime/comment-flow-audit";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-prompt-directives";
+import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 const PERSONA_EVIDENCE: PromptPersonaEvidence = {
   displayName: "Marlowe",
