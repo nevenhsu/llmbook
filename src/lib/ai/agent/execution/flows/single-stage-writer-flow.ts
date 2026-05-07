@@ -167,7 +167,6 @@ async function runAuditRepairLoop(input: {
 
   if (input.flowKind === "comment") {
     const auditPrompt = buildCommentAuditPrompt({
-      personaEvidence: input.moduleInput.personaEvidence,
       rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
       recentTopLevelCommentsText: extractTargetBlock(
         input.promptContext.targetContextText,
@@ -193,7 +192,6 @@ async function runAuditRepairLoop(input: {
     input.attempt.repair += 1;
     const repairPreview = await sharedRepairCall(
       buildCommentRepairPrompt({
-        personaEvidence: input.moduleInput.personaEvidence,
         rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
         recentTopLevelCommentsText: extractTargetBlock(
           input.promptContext.targetContextText,
@@ -218,7 +216,6 @@ async function runAuditRepairLoop(input: {
     const repairedOutput = repairedParsed.output;
     const repairedAuditPreview = await sharedAuditCall(
       buildCommentAuditPrompt({
-        personaEvidence: input.moduleInput.personaEvidence,
         rootPostText: extractTargetBlock(input.promptContext.targetContextText, "root_post"),
         recentTopLevelCommentsText: extractTargetBlock(
           input.promptContext.targetContextText,
@@ -248,7 +245,6 @@ async function runAuditRepairLoop(input: {
   }
 
   const auditPrompt = buildReplyAuditPrompt({
-    personaEvidence: input.moduleInput.personaEvidence,
     sourceCommentText: extractTargetBlock(input.promptContext.targetContextText, "source_comment"),
     ancestorCommentsText: extractTargetBlock(
       input.promptContext.targetContextText,
@@ -274,7 +270,6 @@ async function runAuditRepairLoop(input: {
   input.attempt.repair += 1;
   const repairPreview = await sharedRepairCall(
     buildReplyRepairPrompt({
-      personaEvidence: input.moduleInput.personaEvidence,
       sourceCommentText: extractTargetBlock(
         input.promptContext.targetContextText,
         "source_comment",
@@ -302,7 +297,6 @@ async function runAuditRepairLoop(input: {
   const repairedOutput = repairedParsed.output;
   const repairedAuditPreview = await sharedAuditCall(
     buildReplyAuditPrompt({
-      personaEvidence: input.moduleInput.personaEvidence,
       sourceCommentText: extractTargetBlock(
         input.promptContext.targetContextText,
         "source_comment",
@@ -342,12 +336,14 @@ function mapParsedOutput(
     imagePrompt: string | null;
     imageAlt: string | null;
   },
+  metadata: { probability: number },
 ): { comment: CommentOutput } | { reply: ReplyOutput } {
   const shared = {
     markdown,
     needImage: imageRequest.needImage,
     imagePrompt: imageRequest.imagePrompt,
     imageAlt: imageRequest.imageAlt,
+    metadata,
   };
 
   return flowKind === "comment" ? { comment: shared } : { reply: shared };
@@ -467,6 +463,7 @@ export async function runSingleStageWriterFlow(input: {
                   "comment",
                   audited.parsed.output?.markdown ?? parsedOutput.markdown,
                   audited.parsed.output?.imageRequest ?? parsedOutput.imageRequest,
+                  audited.parsed.output?.metadata ?? { probability: 0 },
                 ) as { comment: CommentOutput },
                 diagnostics,
               }
@@ -476,6 +473,7 @@ export async function runSingleStageWriterFlow(input: {
                   "reply",
                   audited.parsed.output?.markdown ?? parsedOutput.markdown,
                   audited.parsed.output?.imageRequest ?? parsedOutput.imageRequest,
+                  audited.parsed.output?.metadata ?? { probability: 0 },
                 ) as { reply: ReplyOutput },
                 diagnostics,
               },

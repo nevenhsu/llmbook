@@ -1,9 +1,6 @@
-import {
-  PersonaOutputValidationError,
-  formatPersonaEvidenceForAudit,
-  type PromptPersonaEvidence,
-} from "@/lib/ai/prompt-runtime/persona-audit-shared";
+import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import { parseJsonObject, readStringArray, readCheckStatus } from "./json-parse-utils";
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
 
 export type ReplyAuditCheckStatus = "pass" | "fail";
 
@@ -16,6 +13,8 @@ export type ReplyAuditChecks = {
   reasoning_fit: ReplyAuditCheckStatus;
   discourse_fit: ReplyAuditCheckStatus;
   expression_fit: ReplyAuditCheckStatus;
+  procedure_fit: ReplyAuditCheckStatus;
+  narrative_fit?: ReplyAuditCheckStatus;
 };
 
 export type ReplyAuditResult = {
@@ -49,7 +48,7 @@ function parseAuditJsonObject(text: string): Record<string, unknown> {
   });
 }
 
-function parseChecks(value: unknown): ReplyAuditChecks | null {
+function parseChecks(value: unknown, contentMode: ContentMode): ReplyAuditChecks | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
@@ -62,6 +61,7 @@ function parseChecks(value: unknown): ReplyAuditChecks | null {
   const reasoning_fit = readCheckStatus(record.reasoning_fit);
   const discourse_fit = readCheckStatus(record.discourse_fit);
   const expression_fit = readCheckStatus(record.expression_fit);
+  const procedure_fit = readCheckStatus(record.procedure_fit);
 
   if (
     !source_comment_responsiveness ||
@@ -71,12 +71,13 @@ function parseChecks(value: unknown): ReplyAuditChecks | null {
     !value_fit ||
     !reasoning_fit ||
     !discourse_fit ||
-    !expression_fit
+    !expression_fit ||
+    !procedure_fit
   ) {
     return null;
   }
 
-  return {
+  const checks: ReplyAuditChecks = {
     source_comment_responsiveness,
     thread_continuity,
     forward_motion,
@@ -85,16 +86,29 @@ function parseChecks(value: unknown): ReplyAuditChecks | null {
     reasoning_fit,
     discourse_fit,
     expression_fit,
+    procedure_fit,
   };
+
+  if (contentMode === "story") {
+    const narrative_fit = readCheckStatus(record.narrative_fit);
+    if (!narrative_fit) {
+      return null;
+    }
+    checks.narrative_fit = narrative_fit;
+  }
+
+  return checks;
 }
 
 export function buildReplyAuditPrompt(input: {
-  personaEvidence: PromptPersonaEvidence;
   sourceCommentText?: string | null;
   ancestorCommentsText?: string | null;
   generatedReply: string;
+  contentMode?: ContentMode;
+  personaPacketText?: string | null;
 }): string {
-  return [
+  const contentMode = input.contentMode ?? "discussion";
+  const lines = [
     "[reply_audit]",
     "You are auditing a thread reply before persistence.",
     "You are reviewing a compact app-owned review packet, not the full generation prompt.",
@@ -109,12 +123,31 @@ export function buildReplyAuditPrompt(input: {
     "- reasoning_fit",
     "- discourse_fit",
     "- expression_fit",
+    "- procedure_fit",
+  ];
+
+  if (contentMode === "story") {
+    lines.push("- narrative_fit");
+  }
+
+  if (input.personaPacketText) {
+    lines.push("", "[persona_packet]", input.personaPacketText);
+  }
+
+  lines.push(
     "",
     "Rules:",
     "- Do not complain that unrelated generation background is absent; judge only the checks supported by this packet.",
-    "",
-    "[persona_evidence]",
-    formatPersonaEvidenceForAudit(input.personaEvidence),
+    "- Fail procedure_fit if the reply tone matches the persona but the context interpretation logic is missing or generic.",
+  );
+
+  if (contentMode === "story") {
+    lines.push(
+      "- Fail narrative_fit if the story continuation does not match the persona's narrative engine.",
+    );
+  }
+
+  lines.push(
     "",
     input.sourceCommentText?.trim() ?? "[source_comment]\nNo source comment available.",
     "",
@@ -138,30 +171,41 @@ export function buildReplyAuditPrompt(input: {
     '    "value_fit": "pass | fail",',
     '    "reasoning_fit": "pass | fail",',
     '    "discourse_fit": "pass | fail",',
-    '    "expression_fit": "pass | fail"',
-    "  }",
-    "}",
-  ].join("\n");
+    '    "expression_fit": "pass | fail",',
+    '    "procedure_fit": "pass | fail",',
+  );
+
+  if (contentMode === "story") {
+    lines.push('    "narrative_fit": "pass | fail",');
+  }
+
+  lines.push("  }", "}");
+
+  return lines.join("\n");
 }
 
 export function buildReplyRepairPrompt(input: {
-  personaEvidence: PromptPersonaEvidence;
   sourceCommentText?: string | null;
   ancestorCommentsText?: string | null;
   issues: string[];
   repairGuidance: string[];
   previousOutput: string;
+  personaPacketText?: string | null;
 }): string {
-  return [
+  const lines = [
     "[reply_repair]",
     "Repair the generated thread reply below.",
     "You are receiving a fuller rewrite packet than the audit saw.",
     "Keep the same output schema.",
     "Respond directly to the source comment.",
     "Do not write a top-level essay.",
-    "",
-    "[persona_evidence]",
-    formatPersonaEvidenceForAudit(input.personaEvidence),
+  ];
+
+  if (input.personaPacketText) {
+    lines.push("", "[persona_packet]", input.personaPacketText);
+  }
+
+  lines.push(
     "",
     input.sourceCommentText?.trim() ?? "[source_comment]\nNo source comment available.",
     "",
@@ -183,14 +227,19 @@ export function buildReplyRepairPrompt(input: {
     "",
     "[output_constraints]",
     "Return exactly one JSON object with the same reply schema.",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }
 
-export function parseReplyAuditResult(rawText: string): ReplyAuditResult {
+export function parseReplyAuditResult(
+  rawText: string,
+  contentMode: ContentMode = "discussion",
+): ReplyAuditResult {
   const parsed = parseAuditJsonObject(rawText);
   const issues = readStringArray(parsed.issues);
   const repairGuidance = readStringArray(parsed.repairGuidance);
-  const checks = parseChecks(parsed.checks);
+  const checks = parseChecks(parsed.checks, contentMode);
 
   if (typeof parsed.passes !== "boolean" || issues === null || repairGuidance === null || !checks) {
     throw new PersonaOutputValidationError({

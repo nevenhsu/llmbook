@@ -75,6 +75,7 @@ function buildPostPlanAuditResult(passes = true) {
       candidate_count: "pass",
       persona_fit: "pass",
       novelty_evidence: passes ? "pass" : "fail",
+      procedure_fit: "pass",
     },
   };
 }
@@ -92,6 +93,7 @@ function buildPostBodyAuditResult(passes = true) {
     personaChecks: {
       body_persona_fit: "pass",
       anti_style_compliance: "pass",
+      procedure_fit: "pass",
     },
   };
 }
@@ -230,6 +232,7 @@ describe("createPostFlowModule", () => {
       needImage: false,
       imagePrompt: null,
       imageAlt: null,
+      metadata: { probability: 0 },
     });
     expect(result.flowResult.diagnostics.gate).toEqual({
       attempted: true,
@@ -265,6 +268,7 @@ describe("createPostFlowModule", () => {
       personaChecks: {
         body_persona_fit: "pass",
         anti_style_compliance: "pass",
+        procedure_fit: "pass",
       },
     });
   });
@@ -474,6 +478,7 @@ describe("createPostFlowModule", () => {
         candidate_count: "pass",
         persona_fit: "pass",
         novelty_evidence: "pass",
+        procedure_fit: "pass",
       },
     });
   });

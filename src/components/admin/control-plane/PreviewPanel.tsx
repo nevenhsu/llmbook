@@ -60,6 +60,30 @@ function extractImageRequest(preview: PreviewResult): {
   return { needImage: false, imagePrompt: null, imageAlt: null };
 }
 
+function extractProbability(preview: PreviewResult): number | null {
+  const raw = preview.rawResponse;
+  if (!raw) {
+    return null;
+  }
+
+  const postOutput = parsePostActionOutput(raw);
+  if (!postOutput.error && postOutput.title) {
+    return postOutput.metadata.probability;
+  }
+
+  const bodyOutput = parsePostBodyActionOutput(raw);
+  if (!bodyOutput.error) {
+    return bodyOutput.metadata.probability;
+  }
+
+  const markdownOutput = parseMarkdownActionOutput(raw);
+  if (markdownOutput.output?.metadata?.probability !== undefined) {
+    return markdownOutput.output.metadata.probability;
+  }
+
+  return null;
+}
+
 export function PreviewPanel({ preview, emptyLabel }: PreviewPanelProps) {
   if (!preview) {
     return (
@@ -82,6 +106,7 @@ export function PreviewPanel({ preview, emptyLabel }: PreviewPanelProps) {
     postOutput.body.trim().length > 0 &&
     postOutput.tags.length > 0;
   const imageRequest = extractImageRequest(preview);
+  const probability = extractProbability(preview);
   const usagePercent = budget.maxInputTokens
     ? Math.round((budget.estimatedInputTokens / budget.maxInputTokens) * 100)
     : 0;
@@ -118,6 +143,9 @@ export function PreviewPanel({ preview, emptyLabel }: PreviewPanelProps) {
           <span className="badge badge-warning gap-1">
             Compressed: {budget.compressedStages.join(" → ")}
           </span>
+        )}
+        {probability !== null && probability > 0 && (
+          <span className="badge badge-info gap-1">Probability {probability}%</span>
         )}
         {budget.exceeded && (
           <span className="badge badge-error">{budget.message ?? "Token budget exceeded"}</span>

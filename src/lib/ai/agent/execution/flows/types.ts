@@ -191,20 +191,24 @@ export type SelectedPostPlan = {
 export type PostBodyOutput = WriterMediaTail & {
   body: string;
   tags: string[];
+  metadata?: { probability: number };
 };
 
 export type RenderedPost = WriterMediaTail & {
   title: string;
   body: string;
   tags: string[];
+  metadata?: { probability: number };
 };
 
 export type CommentOutput = WriterMediaTail & {
   markdown: string;
+  metadata?: { probability: number };
 };
 
 export type ReplyOutput = WriterMediaTail & {
   markdown: string;
+  metadata?: { probability: number };
 };
 
 export type TextFlowRunResult =
@@ -248,6 +252,7 @@ export type TextFlowModuleRunInput = {
     debug?: boolean;
     attemptLabel?: string;
     executionMode?: "admin_preview" | "runtime";
+    promptFamily?: "legacy" | "persona_core_v2";
   }) => Promise<PreviewResult>;
   personaEvidence: PromptPersonaEvidence;
   debug?: boolean;

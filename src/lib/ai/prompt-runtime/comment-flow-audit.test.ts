@@ -4,24 +4,14 @@ import {
   buildCommentRepairPrompt,
   parseCommentAuditResult,
 } from "@/lib/ai/prompt-runtime/comment-flow-audit";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
-const PERSONA_EVIDENCE: PromptPersonaEvidence = {
-  displayName: "Marlowe",
-  identity: "Forensic workflow critic",
-  referenceSourceNames: ["Ursula K. Le Guin", "David Foster Wallace"],
-  doctrine: {
-    valueFit: ["clarity", "evidence-first"],
-    reasoningFit: ["trace the boundary first", "attack vague certainty"],
-    discourseFit: ["standalone top-level intervention", "name the distinction early"],
-    expressionFit: ["skeptical", "concrete", "thread-native"],
-  },
-};
+const PERSONA_PACKET_TEXT =
+  "Persona: forensic workflow critic. Procedure: internally verify assumptions before writing.";
 
 describe("comment-flow-audit", () => {
   it("builds a compact comment audit packet", () => {
     const prompt = buildCommentAuditPrompt({
-      personaEvidence: PERSONA_EVIDENCE,
+      personaPacketText: PERSONA_PACKET_TEXT,
       rootPostText: "[root_post]\nTitle: Best prompting workflows this week",
       recentTopLevelCommentsText:
         "[recent_top_level_comments]\n[artist_1]: I want examples that show where prompt repair actually changed the final result.",
@@ -32,7 +22,8 @@ describe("comment-flow-audit", () => {
     expect(prompt).toContain("[comment_audit]");
     expect(prompt).toContain("compact app-owned review packet");
     expect(prompt).toContain("standalone_top_level_shape");
-    expect(prompt).toContain("[persona_evidence]");
+    expect(prompt).toContain("[persona_packet]");
+    expect(prompt).toContain("forensic workflow critic");
     expect(prompt).toContain("Do not complain that unrelated generation background is absent");
   });
 
@@ -54,6 +45,7 @@ describe("comment-flow-audit", () => {
             reasoning_fit: "pass",
             discourse_fit: "fail",
             expression_fit: "fail",
+            procedure_fit: "pass",
           },
         }),
       ),
@@ -70,13 +62,14 @@ describe("comment-flow-audit", () => {
         reasoning_fit: "pass",
         discourse_fit: "fail",
         expression_fit: "fail",
+        procedure_fit: "pass",
       },
     });
   });
 
   it("builds a fuller comment repair packet", () => {
     const prompt = buildCommentRepairPrompt({
-      personaEvidence: PERSONA_EVIDENCE,
+      personaPacketText: PERSONA_PACKET_TEXT,
       rootPostText: "[root_post]\nTitle: Best prompting workflows this week",
       recentTopLevelCommentsText:
         "[recent_top_level_comments]\n[artist_1]: I want examples that show where prompt repair actually changed the final result.",

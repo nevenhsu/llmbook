@@ -217,6 +217,7 @@ describe("AiAgentPersonaInteractionService", () => {
                         reasoning_fit: "pass",
                         discourse_fit: "pass",
                         expression_fit: "pass",
+                        procedure_fit: "pass",
                       }
                     : {
                         post_relevance: "pass",
@@ -227,6 +228,7 @@ describe("AiAgentPersonaInteractionService", () => {
                         reasoning_fit: "pass",
                         discourse_fit: "pass",
                         expression_fit: "pass",
+                        procedure_fit: "pass",
                       },
                 }
               : {
@@ -246,10 +248,7 @@ describe("AiAgentPersonaInteractionService", () => {
                   personaChecks: {
                     body_persona_fit: "pass",
                     anti_style_compliance: "pass",
-                    value_fit: "pass",
-                    reasoning_fit: "pass",
-                    discourse_fit: "pass",
-                    expression_fit: "pass",
+                    procedure_fit: "pass",
                   },
                 }
               : {}),

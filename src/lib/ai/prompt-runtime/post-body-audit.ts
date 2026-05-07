@@ -1,5 +1,6 @@
 import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import { parseJsonObject, readStringArray, readCheckStatus } from "./json-parse-utils";
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
 
 function formatTruncatedPreviousOutput(rawText: string): string {
   const trimmed = rawText.trim();
@@ -25,6 +26,8 @@ export type PostBodyAuditContentChecks = {
 export type PostBodyAuditPersonaChecks = {
   body_persona_fit: PostBodyAuditCheckStatus;
   anti_style_compliance: PostBodyAuditCheckStatus;
+  procedure_fit: PostBodyAuditCheckStatus;
+  narrative_fit?: PostBodyAuditCheckStatus;
 };
 
 export type PostBodyAuditResult = {
@@ -79,29 +82,47 @@ function parseContentChecks(value: unknown): PostBodyAuditContentChecks | null {
   };
 }
 
-function parsePersonaChecks(value: unknown): PostBodyAuditPersonaChecks | null {
+function parsePersonaChecks(
+  value: unknown,
+  contentMode: ContentMode,
+): PostBodyAuditPersonaChecks | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
   const record = value as Record<string, unknown>;
   const body_persona_fit = readCheckStatus(record.body_persona_fit);
   const anti_style_compliance = readCheckStatus(record.anti_style_compliance);
+  const procedure_fit = readCheckStatus(record.procedure_fit);
 
-  if (!body_persona_fit || !anti_style_compliance) {
+  if (!body_persona_fit || !anti_style_compliance || !procedure_fit) {
     return null;
   }
 
-  return {
+  const result: PostBodyAuditPersonaChecks = {
     body_persona_fit,
     anti_style_compliance,
+    procedure_fit,
   };
+
+  if (contentMode === "story") {
+    const narrative_fit = readCheckStatus(record.narrative_fit);
+    if (!narrative_fit) {
+      return null;
+    }
+    result.narrative_fit = narrative_fit;
+  }
+
+  return result;
 }
 
 export function buildPostBodyAuditPrompt(input: {
   selectedPostPlanText: string;
   renderedFinalPost: string;
+  contentMode?: ContentMode;
+  personaPacketText?: string | null;
 }): string {
-  return [
+  const contentMode = input.contentMode ?? "discussion";
+  const lines = [
     "[post_body_audit]",
     "You are auditing a rendered final post before persistence.",
     "Judge content quality and persona fit.",
@@ -113,12 +134,34 @@ export function buildPostBodyAuditPrompt(input: {
     "- markdown_structure",
     "- body_persona_fit",
     "- anti_style_compliance",
+    "- procedure_fit",
+  ];
+
+  if (contentMode === "story") {
+    lines.push("- narrative_fit");
+  }
+
+  if (input.personaPacketText) {
+    lines.push("", "[persona_packet]", input.personaPacketText);
+  }
+
+  lines.push(
     "",
     "Rules:",
     "- The selected title is locked and cannot be changed at this stage.",
     "- Fail angle_fidelity if the body drifts away from the selected thesis.",
     "- Fail body_usefulness if the body stays generic, empty, or structureless.",
     "- Fail body_persona_fit if the prose sounds generic instead of persona-specific.",
+    "- Fail procedure_fit if the output matches the persona tone but ignores persona-specific context interpretation logic.",
+  );
+
+  if (contentMode === "story") {
+    lines.push(
+      "- Fail narrative_fit if the story output conflicts with the persona's narrative engine or avoids the persona's favored conflicts.",
+    );
+  }
+
+  lines.push(
     "",
     input.selectedPostPlanText,
     "",
@@ -138,10 +181,17 @@ export function buildPostBodyAuditPrompt(input: {
     "  },",
     '  "personaChecks": {',
     '    "body_persona_fit": "pass | fail",',
-    '    "anti_style_compliance": "pass | fail"',
-    "  }",
-    "}",
-  ].join("\n");
+    '    "anti_style_compliance": "pass | fail",',
+    '    "procedure_fit": "pass | fail",',
+  );
+
+  if (contentMode === "story") {
+    lines.push('    "narrative_fit": "pass | fail",');
+  }
+
+  lines.push("  }", "}");
+
+  return lines.join("\n");
 }
 
 export function buildPostBodyRepairPrompt(input: {
@@ -185,12 +235,15 @@ export function buildPostBodyRepairPrompt(input: {
   ].join("\n");
 }
 
-export function parsePostBodyAuditResult(rawText: string): PostBodyAuditResult {
+export function parsePostBodyAuditResult(
+  rawText: string,
+  contentMode: ContentMode = "discussion",
+): PostBodyAuditResult {
   const parsed = parseAuditJsonObject(rawText);
   const issues = readStringArray(parsed.issues);
   const repairGuidance = readStringArray(parsed.repairGuidance);
   const contentChecks = parseContentChecks(parsed.contentChecks);
-  const personaChecks = parsePersonaChecks(parsed.personaChecks);
+  const personaChecks = parsePersonaChecks(parsed.personaChecks, contentMode);
 
   if (
     typeof parsed.passes !== "boolean" ||

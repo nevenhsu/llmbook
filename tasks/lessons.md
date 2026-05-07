@@ -25,9 +25,22 @@
 
 - Before implementing runtime/admin LLM JSON used by persistence, ranking, cleanup, or automation, read `docs/dev-guidelines/08-llm-json-stage-contract.md`.
 - `[output_constraints]` prompt blocks must include the concrete JSON key/type shape, not only prose instructions.
+- In Persona v2 prompt-family docs, `task_context`, `audit_context`, and `output_contract` are static prompt constants; dynamic values belong in named placeholders or separate dynamic context blocks.
+- Persona v2 main static prompt blocks should provide exact action/content/task wording for every flow/contentMode, with stage boundaries clear enough for the model but no dynamic persona, board, post, comment, or example text embedded.
+- Audit prompt examples must define check standards and key/type audit JSON, not repeat the generation task.
+- Persona v2 prompt-family static constants should be explicit by flow and `contentMode`; audit and quality repair need discussion/story variants, not one generic conditional prompt.
+- Persona v2 audits are quality-only because schema parsing and schema repair run before audit; do not add audit checks for required keys, field types, candidate count, parseability, or metadata shape.
+- Persona v2 quality audits should inspect at most two aspects for budget control: one flow/content-quality aspect and `persona_fit`; fold board, novelty, markdown, thread, procedure, and story/narrative concerns into those aspects instead of adding more audit keys.
+- Schema repair prompt examples should reference the shared JSON finish/field-patch repair framework instead of inventing standalone repair templates.
+- Schema repair must be a shared framework for every LLM JSON output, not a Persona-only or prompt-family-specific repair path.
+- JSON schema repair should be a bounded loop: finish repair returns to parse/schema validation, and parseable-but-schema-invalid finish output can continue into field-patch repair.
+- Missing JSON fields are first-class schema repair targets when their paths are allowlisted; this includes Persona Core v2 generation output.
+- Writer output contracts for `post_body`, `comment`, and `reply` must explicitly mark generated content fields as markdown strings.
 - Spell nested leaf types explicitly; shorthand like `values{value_hierarchy,...}` is too ambiguous.
 - Quality-repair prompts for large JSON objects must be compact on the first repair attempt.
 - Repeated `finishReason: length` in quality repair is a repair-shape failure, not proof every stage budget is too low.
+- For invalid JSON caused by `finishReason: length`, try schema-grounded finish-output repair with the full schema and previous output context before falling back to field patches.
+- Reliable length repair needs a response-finishing framework: preserve the prefix, derive the open path and remaining schema fields, request append-only continuation, reject prefix rewrites, then validate before patch fallback.
 - Repeated `finishReason: length` with empty visible output in semantic audits is an audit transport failure; use deterministic checks or pass open with diagnostics rather than only raising output tokens.
 - If an audit or repair prompt judges persona fit, feed compact persona evidence from canonical persona fields.
 - For creative persona subprofiles that need expressive range, prefer strict compact string validation over closed enums unless the user explicitly asks for taxonomy control.

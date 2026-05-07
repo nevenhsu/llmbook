@@ -1,5 +1,6 @@
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { normalizeText } from "./json-parse-utils";
+import { normalizeMetadataProbability } from "./persona-v2-flow-contracts";
 
 export type MarkdownImageRequest = {
   needImage: boolean;
@@ -11,6 +12,7 @@ export type ActionOutput = {
   output: {
     markdown: string;
     imageRequest: MarkdownImageRequest;
+    metadata: { probability: number };
   } | null;
   error: string | null;
 };
@@ -21,6 +23,7 @@ export type PostActionOutput = {
   tags: string[];
   normalizedTags: string[];
   imageRequest: MarkdownImageRequest;
+  metadata: { probability: number };
   error: string | null;
 };
 
@@ -29,6 +32,7 @@ export type PostBodyActionOutput = {
   tags: string[];
   normalizedTags: string[];
   imageRequest: MarkdownImageRequest;
+  metadata: { probability: number };
   error: string | null;
 };
 
@@ -67,7 +71,13 @@ export function parseMarkdownActionOutput(rawText: string): ActionOutput {
     const keys = Object.keys(parsed);
 
     // Validate no extra top-level keys
-    const allowedKeys = new Set(["markdown", "need_image", "image_prompt", "image_alt"]);
+    const allowedKeys = new Set([
+      "markdown",
+      "need_image",
+      "image_prompt",
+      "image_alt",
+      "metadata",
+    ]);
     const hasExtraKeys = keys.some((key) => !allowedKeys.has(key));
     if (hasExtraKeys) {
       return {
@@ -131,6 +141,7 @@ export function parseMarkdownActionOutput(rawText: string): ActionOutput {
           imagePrompt,
           imageAlt,
         },
+        metadata: normalizeMetadataProbability(parsed.metadata),
       },
       error: null,
     };
@@ -195,6 +206,7 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
         imagePrompt: null,
         imageAlt: null,
       },
+      metadata: { probability: 0 },
       error: "invalid post output: response is empty",
     };
   }
@@ -234,6 +246,7 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
         imagePrompt: readOptionalString(parsed.image_prompt),
         imageAlt: readOptionalString(parsed.image_alt),
       },
+      metadata: normalizeMetadataProbability(parsed.metadata),
       error:
         missingFields.length > 0
           ? `invalid post output: missing required field${missingFields.length > 1 ? "s" : ""} ${missingFields.join(", ")}`
@@ -250,6 +263,7 @@ export function parsePostActionOutput(rawText: string): PostActionOutput {
         imagePrompt: null,
         imageAlt: null,
       },
+      metadata: { probability: 0 },
       error: "invalid post output: expected one JSON object with title, body, and tags",
     };
   }
@@ -267,6 +281,7 @@ export function parsePostBodyActionOutput(rawText: string): PostBodyActionOutput
         imagePrompt: null,
         imageAlt: null,
       },
+      metadata: { probability: 0 },
       error: "invalid post_body output: response is empty",
     };
   }
@@ -304,6 +319,7 @@ export function parsePostBodyActionOutput(rawText: string): PostBodyActionOutput
         imagePrompt: readOptionalString(parsed.image_prompt),
         imageAlt: readOptionalString(parsed.image_alt),
       },
+      metadata: normalizeMetadataProbability(parsed.metadata),
       error:
         issues.length > 0
           ? `invalid post_body output: invalid or forbidden field${issues.length > 1 ? "s" : ""} ${issues.join(", ")}`
@@ -319,6 +335,7 @@ export function parsePostBodyActionOutput(rawText: string): PostBodyActionOutput
         imagePrompt: null,
         imageAlt: null,
       },
+      metadata: { probability: 0 },
       error: "invalid post_body output: expected one JSON object with body and tags",
     };
   }

@@ -97,6 +97,7 @@ describe("createCommentFlowModule", () => {
               reasoning_fit: "pass",
               discourse_fit: "pass",
               expression_fit: "pass",
+              procedure_fit: "pass",
             },
           }),
         ),
@@ -131,6 +132,7 @@ describe("createCommentFlowModule", () => {
       needImage: false,
       imagePrompt: null,
       imageAlt: null,
+      metadata: { probability: 0 },
     });
     expect(result.flowResult.diagnostics.audit).toEqual({
       contract: "comment_audit",
@@ -146,6 +148,7 @@ describe("createCommentFlowModule", () => {
         reasoning_fit: "pass",
         discourse_fit: "pass",
         expression_fit: "pass",
+        procedure_fit: "pass",
       },
     });
     expect(result.flowResult.diagnostics.attempts).toEqual([
@@ -190,6 +193,7 @@ describe("createCommentFlowModule", () => {
               reasoning_fit: "pass",
               discourse_fit: "pass",
               expression_fit: "pass",
+              procedure_fit: "pass",
             },
           }),
         ),
@@ -260,6 +264,7 @@ describe("createCommentFlowModule", () => {
               reasoning_fit: "pass",
               discourse_fit: "pass",
               expression_fit: "pass",
+              procedure_fit: "pass",
             },
           }),
         ),
@@ -333,6 +338,7 @@ describe("createCommentFlowModule", () => {
               reasoning_fit: "fail",
               discourse_fit: "fail",
               expression_fit: "fail",
+              procedure_fit: "pass",
             },
           }),
         ),
@@ -364,6 +370,7 @@ describe("createCommentFlowModule", () => {
               reasoning_fit: "fail",
               discourse_fit: "fail",
               expression_fit: "fail",
+              procedure_fit: "pass",
             },
           }),
         ),
@@ -396,6 +403,7 @@ describe("createCommentFlowModule", () => {
               reasoning_fit: "pass",
               discourse_fit: "pass",
               expression_fit: "pass",
+              procedure_fit: "pass",
             },
           }),
         ),

@@ -4,24 +4,14 @@ import {
   buildReplyRepairPrompt,
   parseReplyAuditResult,
 } from "@/lib/ai/prompt-runtime/reply-flow-audit";
-import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
-const PERSONA_EVIDENCE: PromptPersonaEvidence = {
-  displayName: "Marlowe",
-  identity: "Forensic workflow critic",
-  referenceSourceNames: ["Ursula K. Le Guin", "David Foster Wallace"],
-  doctrine: {
-    valueFit: ["clarity", "evidence-first"],
-    reasoningFit: ["trace the pressure point first", "answer direct ambiguity"],
-    discourseFit: ["direct thread answer", "avoid reset essay shape"],
-    expressionFit: ["skeptical", "concrete", "thread-native"],
-  },
-};
+const PERSONA_PACKET_TEXT =
+  "Persona: forensic workflow critic. Procedure: internally trace the pressure point first before writing.";
 
 describe("reply-flow-audit", () => {
   it("builds a compact reply audit packet", () => {
     const prompt = buildReplyAuditPrompt({
-      personaEvidence: PERSONA_EVIDENCE,
+      personaPacketText: PERSONA_PACKET_TEXT,
       sourceCommentText:
         "[source_comment]\n[artist_3]: This still sounds too vague. What exactly changes in the workflow if you add a repair step?",
       ancestorCommentsText:
@@ -54,6 +44,7 @@ describe("reply-flow-audit", () => {
             reasoning_fit: "pass",
             discourse_fit: "fail",
             expression_fit: "fail",
+            procedure_fit: "pass",
           },
         }),
       ),
@@ -72,13 +63,14 @@ describe("reply-flow-audit", () => {
         reasoning_fit: "pass",
         discourse_fit: "fail",
         expression_fit: "fail",
+        procedure_fit: "pass",
       },
     });
   });
 
   it("builds a fuller reply repair packet", () => {
     const prompt = buildReplyRepairPrompt({
-      personaEvidence: PERSONA_EVIDENCE,
+      personaPacketText: PERSONA_PACKET_TEXT,
       sourceCommentText:
         "[source_comment]\n[artist_3]: This still sounds too vague. What exactly changes in the workflow if you add a repair step?",
       ancestorCommentsText:

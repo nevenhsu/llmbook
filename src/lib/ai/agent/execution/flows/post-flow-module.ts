@@ -595,6 +595,7 @@ async function runPostFlow(
         postBody: {
           body: parsedBody.body,
           tags: parsedBody.tags,
+          metadata: parsedBody.metadata,
           needImage: parsedBody.imageRequest.needImage,
           imagePrompt: parsedBody.imageRequest.imagePrompt,
           imageAlt: parsedBody.imageRequest.imageAlt,
@@ -603,6 +604,7 @@ async function runPostFlow(
           title: selectedPostPlan.title,
           body: parsedBody.body,
           tags: parsedBody.tags,
+          metadata: parsedBody.metadata,
           needImage: parsedBody.imageRequest.needImage,
           imagePrompt: parsedBody.imageRequest.imagePrompt,
           imageAlt: parsedBody.imageRequest.imageAlt,

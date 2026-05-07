@@ -4,41 +4,37 @@ import {
   buildPostBodyRepairPrompt,
   parsePostBodyAuditResult,
 } from "@/lib/ai/prompt-runtime/post-body-audit";
-import {
-  formatPersonaEvidenceForAudit,
-  type PromptPersonaEvidence,
-} from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
-const PERSONA_EVIDENCE: PromptPersonaEvidence = {
-  displayName: "Marlowe",
-  identity: "Forensic workflow critic",
-  referenceSourceNames: ["Ursula K. Le Guin", "David Foster Wallace"],
-  doctrine: {
-    valueFit: ["clarity", "evidence-first"],
-    reasoningFit: ["trace the boundary first", "attack vague certainty"],
-    discourseFit: ["state the hidden boundary early", "close with a sting"],
-    expressionFit: ["skeptical", "concrete", "operator-level"],
-  },
-};
+const PERSONA_PACKET_TEXT =
+  "Identity: pattern-spotter. Voice: dry wit. Procedure: internally scan for unstated assumptions before writing.";
 
 describe("post-body audit prompts", () => {
-  it("builds a compact audit packet without asking for missing generation background", () => {
+  it("builds a compact audit packet", () => {
     const prompt = buildPostBodyAuditPrompt({
-      boardContextText: "[board]\nName: Creative Lab",
       selectedPostPlanText:
         "[selected_post_plan]\nLocked title: The workflow bug people keep mislabeling as a prompt bug",
       renderedFinalPost:
         "# The workflow bug people keep mislabeling as a prompt bug\n\n#ai #workflow\n\nBody text",
-      personaEvidence: PERSONA_EVIDENCE,
+      personaPacketText: PERSONA_PACKET_TEXT,
     });
 
     expect(prompt).toContain("[post_body_audit]");
-    expect(prompt).toContain("compact app-owned review packet");
-    expect(prompt).toContain("[persona_evidence]");
-    expect(prompt).toContain("reference_sources:");
-    expect(prompt).toContain("Do not complain that unrelated generation background is absent");
+    expect(prompt).toContain("[persona_packet]");
+    expect(prompt).toContain("pattern-spotter");
     expect(prompt).toContain('"contentChecks"');
     expect(prompt).toContain('"personaChecks"');
+    expect(prompt).toContain('"procedure_fit"');
+  });
+
+  it("builds audit with narrative_fit for story mode", () => {
+    const prompt = buildPostBodyAuditPrompt({
+      selectedPostPlanText: "[selected_post_plan]\nLocked title: The Last Sailor",
+      renderedFinalPost: "# The Last Sailor\n\nStory body...",
+      contentMode: "story",
+      personaPacketText: PERSONA_PACKET_TEXT,
+    });
+
+    expect(prompt).toContain("narrative_fit");
   });
 
   it("parses merged body audit output strictly", () => {
@@ -50,18 +46,13 @@ describe("post-body audit prompts", () => {
           repairGuidance: ["Open with the hidden execution boundary."],
           contentChecks: {
             angle_fidelity: "fail",
-            board_fit: "pass",
             body_usefulness: "fail",
             markdown_structure: "fail",
-            title_body_alignment: "pass",
           },
           personaChecks: {
             body_persona_fit: "fail",
             anti_style_compliance: "pass",
-            value_fit: "fail",
-            reasoning_fit: "fail",
-            discourse_fit: "fail",
-            expression_fit: "fail",
+            procedure_fit: "fail",
           },
         }),
       ),
@@ -71,18 +62,52 @@ describe("post-body audit prompts", () => {
       repairGuidance: ["Open with the hidden execution boundary."],
       contentChecks: {
         angle_fidelity: "fail",
-        board_fit: "pass",
         body_usefulness: "fail",
         markdown_structure: "fail",
-        title_body_alignment: "pass",
       },
       personaChecks: {
         body_persona_fit: "fail",
         anti_style_compliance: "pass",
-        value_fit: "fail",
-        reasoning_fit: "fail",
-        discourse_fit: "fail",
-        expression_fit: "fail",
+        procedure_fit: "fail",
+      },
+    });
+  });
+
+  it("parses body audit with narrative_fit for story mode", () => {
+    expect(
+      parsePostBodyAuditResult(
+        JSON.stringify({
+          passes: false,
+          issues: ["Story lacks narrative fit."],
+          repairGuidance: ["Use the persona's favored conflict."],
+          contentChecks: {
+            angle_fidelity: "pass",
+            body_usefulness: "fail",
+            markdown_structure: "pass",
+          },
+          personaChecks: {
+            body_persona_fit: "fail",
+            anti_style_compliance: "pass",
+            procedure_fit: "fail",
+            narrative_fit: "fail",
+          },
+        }),
+        "story",
+      ),
+    ).toEqual({
+      passes: false,
+      issues: ["Story lacks narrative fit."],
+      repairGuidance: ["Use the persona's favored conflict."],
+      contentChecks: {
+        angle_fidelity: "pass",
+        body_usefulness: "fail",
+        markdown_structure: "pass",
+      },
+      personaChecks: {
+        body_persona_fit: "fail",
+        anti_style_compliance: "pass",
+        procedure_fit: "fail",
+        narrative_fit: "fail",
       },
     });
   });
@@ -91,7 +116,6 @@ describe("post-body audit prompts", () => {
     const prompt = buildPostBodyRepairPrompt({
       selectedPostPlanText:
         "[selected_post_plan]\nLocked title: The workflow bug people keep mislabeling as a prompt bug",
-      personaEvidence: PERSONA_EVIDENCE,
       issues: ["Body stays generic."],
       repairGuidance: ["Open with the hidden execution boundary."],
       previousOutput: JSON.stringify({
@@ -104,19 +128,8 @@ describe("post-body audit prompts", () => {
     });
 
     expect(prompt).toContain("[post_body_repair]");
-    expect(prompt).toContain("fuller rewrite packet");
     expect(prompt).toContain("[previous_output]");
     expect(prompt).toContain("Do not change the title.");
     expect(prompt).toContain("Do not output title.");
-  });
-
-  it("formats persona evidence into the audit packet contract", () => {
-    const text = formatPersonaEvidenceForAudit(PERSONA_EVIDENCE);
-
-    expect(text).toContain("display_name: Marlowe");
-    expect(text).toContain("identity_summary:");
-    expect(text).toContain("reference_sources:");
-    expect(text).toContain("value_fit:");
-    expect(text).toContain("expression_fit:");
   });
 });

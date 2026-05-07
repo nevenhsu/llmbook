@@ -19,6 +19,7 @@ describe("parseMarkdownActionOutput", () => {
         imagePrompt: "Cinematic ink illustration",
         imageAlt: "Ink illustration",
       },
+      metadata: { probability: 0 },
     });
   });
 

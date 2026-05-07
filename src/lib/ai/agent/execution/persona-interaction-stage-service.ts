@@ -4,7 +4,15 @@ import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
-import type { ContentMode, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import type { ContentMode, PersonaFlowKind, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import {
+  buildPersonaPromptFamilyV2,
+  buildActionModePolicy,
+  buildContentModePolicy,
+  buildAntiGenericContract,
+  type PersonaPromptFamilyV2StagePurpose,
+} from "@/lib/ai/prompt-runtime/persona-v2-prompt-family";
+import { buildOutputContractV2 } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
 import {
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
@@ -41,6 +49,8 @@ export type PersonaInteractionStageResult = {
 
 export type PersonaInteractionStageExecutionMode = "admin_preview" | "runtime";
 
+export type PersonaPromptFamilyMode = "legacy" | "persona_core_v2";
+
 export type PersonaInteractionStageInput = {
   personaId: string;
   modelId: string;
@@ -70,6 +80,7 @@ export type PersonaInteractionStageInput = {
   attemptLabel?: string;
   executionMode?: PersonaInteractionStageExecutionMode;
   contentMode?: ContentMode;
+  promptFamily?: PersonaPromptFamilyMode;
 };
 
 function buildLeanStageBlocks(input: {
@@ -95,6 +106,67 @@ function buildLeanStageBlocks(input: {
       content: input.taskContext,
     },
   ];
+}
+
+type ActionTypeToFlowMap = Record<string, Exclude<PersonaFlowKind, "audit"> | null>;
+
+const ACTION_TYPE_TO_FLOW: ActionTypeToFlowMap = {
+  post_plan: "post_plan",
+  post_body: "post_body",
+  post: "post_body",
+  comment: "comment",
+  reply: "reply",
+  vote: null,
+  poll_post: null,
+  poll_vote: null,
+};
+
+function buildV2Blocks(input: {
+  input: PersonaInteractionStageInput;
+  personaCore: PersonaCoreV2;
+  contentMode: ContentMode;
+  personaPacket: ReturnType<typeof buildPersonaPacketForPrompt>;
+  personaPacketText: string;
+}): Array<{ name: string; content: string }> {
+  const flow = ACTION_TYPE_TO_FLOW[input.input.taskType];
+  if (!flow || !input.personaPacket) {
+    return buildLeanStageBlocks({
+      document: input.input.document,
+      taskContext: input.input.taskContext,
+    });
+  }
+
+  const boardContextText =
+    input.input.boardContextText ?? formatBoardContext(input.input.boardContext);
+  const targetContextText =
+    input.input.targetContextText ??
+    formatTargetContext({
+      taskType: input.input.taskType,
+      targetContext: input.input.targetContext,
+    });
+
+  const result = buildPersonaPromptFamilyV2({
+    flow,
+    contentMode: input.contentMode,
+    stagePurpose: input.input.stagePurpose as PersonaPromptFamilyV2StagePurpose,
+    systemBaseline: input.input.document.globalPolicyDraft.systemBaseline,
+    globalPolicy: [
+      "Policy:",
+      input.input.document.globalPolicyDraft.globalPolicy,
+      "Forbidden:",
+      input.input.document.globalPolicyDraft.forbiddenRules,
+    ].join("\n"),
+    personaPacket: input.personaPacket,
+    boardContext: boardContextText || null,
+    targetContext: targetContextText || null,
+    taskContext: input.input.taskContext,
+    outputContract: buildOutputContractV2({ flow, contentMode: input.contentMode }),
+  });
+
+  return result.blocks.map((block) => ({
+    name: block.name,
+    content: block.content,
+  }));
 }
 
 export class AiAgentPersonaInteractionStageService {
@@ -147,34 +219,44 @@ export class AiAgentPersonaInteractionStageService {
       stagePurpose: input.stagePurpose,
     });
 
-    const blocks = includeExpandedContext
-      ? buildPromptBlocks({
-          actionType: input.taskType,
-          globalDraft: input.document.globalPolicyDraft,
-          outputStyle: input.document.globalPolicyDraft.styleGuide,
-          agentProfile: formatAgentProfile({
-            displayName: profile.persona.display_name,
-            username: profile.persona.username,
-            bio: profile.persona.bio,
-          }),
-          plannerMode:
-            input.taskType === "post_plan"
-              ? "This stage is planning and scoring, not final writing."
-              : undefined,
-          agentCore: personaPacketText,
-          boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
-          targetContext:
-            input.targetContextText ??
-            formatTargetContext({
-              taskType: input.taskType,
-              targetContext: input.targetContext,
-            }),
-          taskContext: input.taskContext,
+    const useV2 = input.promptFamily === "persona_core_v2";
+
+    const blocks = useV2
+      ? buildV2Blocks({
+          input,
+          personaCore,
+          contentMode,
+          personaPacket,
+          personaPacketText,
         })
-      : buildLeanStageBlocks({
-          document: input.document,
-          taskContext: input.taskContext,
-        });
+      : includeExpandedContext
+        ? buildPromptBlocks({
+            actionType: input.taskType,
+            globalDraft: input.document.globalPolicyDraft,
+            outputStyle: input.document.globalPolicyDraft.styleGuide,
+            agentProfile: formatAgentProfile({
+              displayName: profile.persona.display_name,
+              username: profile.persona.username,
+              bio: profile.persona.bio,
+            }),
+            plannerMode:
+              input.taskType === "post_plan"
+                ? "This stage is planning and scoring, not final writing."
+                : undefined,
+            agentCore: personaPacketText,
+            boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
+            targetContext:
+              input.targetContextText ??
+              formatTargetContext({
+                taskType: input.taskType,
+                targetContext: input.targetContext,
+              }),
+            taskContext: input.taskContext,
+          })
+        : buildLeanStageBlocks({
+            document: input.document,
+            taskContext: input.taskContext,
+          });
     const assembledPrompt = formatPrompt(blocks);
     const tokenBudget = buildTokenBudgetSignal({
       blocks,
