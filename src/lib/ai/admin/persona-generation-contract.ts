@@ -1283,13 +1283,6 @@ export function parsePersonaGenerationSemanticAuditResult(
       repairGuidance: [],
     };
   }
-  assertExactKeys(record, "semantic audit", [
-    "passes",
-    "issues",
-    "repairGuidance",
-    "keptReferenceNames",
-  ]);
-
   const issuesRaw = Array.isArray(record.issues) ? record.issues : null;
   const repairGuidanceRaw = Array.isArray(record.repairGuidance) ? record.repairGuidance : null;
   const keptReferenceNamesRaw = Array.isArray(record.keptReferenceNames)
@@ -1378,14 +1371,6 @@ export function parsePersonaGenerationOutput(rawText: string): {
 } {
   const record = parsePersonaStageObject(rawText);
   try {
-    assertExactKeys(record, "persona_generation", [
-      "persona",
-      "persona_core",
-      "reference_sources",
-      "other_reference_sources",
-      "reference_derivation",
-      "originalization_note",
-    ]);
     const persona = requirePersonaRecord(record.persona, "persona");
     const personaCore = requirePersonaRecord(record.persona_core, "persona_core");
     return {

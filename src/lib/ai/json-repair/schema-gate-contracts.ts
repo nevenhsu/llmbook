@@ -84,8 +84,13 @@ export interface FieldPatchInvocationInput {
   validationSummary: string;
 }
 
+export type FieldPatchOperation = {
+  path: string;
+  value: unknown;
+};
+
 export interface FieldPatchInvocationResult {
-  patch: Record<string, unknown>;
+  repair: FieldPatchOperation[];
   rawText?: string | null;
   finishReason?: string | null;
 }
@@ -101,6 +106,7 @@ export interface FinishContinuationInvocationInput {
 }
 
 export interface FinishContinuationInvocationResult {
-  text: string;
+  suffix: string;
+  completed_fragment?: unknown;
   finishReason?: string | null;
 }

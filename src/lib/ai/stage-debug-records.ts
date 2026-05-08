@@ -1,3 +1,5 @@
+import type { SchemaGateDebug } from "@/lib/ai/json-repair/schema-gate-contracts";
+
 export type StageDebugRecord = {
   name: string;
   displayPrompt: string;
@@ -12,4 +14,5 @@ export type StageDebugAttemptRecord = {
   providerId: string | null;
   modelId: string | null;
   hadError: boolean;
+  schemaGateDebug?: SchemaGateDebug;
 };

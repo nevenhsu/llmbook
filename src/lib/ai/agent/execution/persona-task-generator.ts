@@ -14,7 +14,7 @@ import type {
 } from "@/lib/ai/agent/execution/flows/types";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
-import type { PromptPersonaEvidence } from "@/lib/ai/agent/execution/persona-interaction-service";
+import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 type PersonaTaskGeneratorDeps = {
   buildPromptContext: (input: {
@@ -123,8 +123,20 @@ export class AiAgentPersonaTaskGenerator {
           const { core } = parsePersonaCoreV2(personaCoreRaw);
           return {
             displayName: profile.persona.display_name,
-            personaId,
-            renderedText: core.identity.archetype,
+            identity: core.identity.archetype,
+            referenceSourceNames: core.reference_style.reference_names,
+            doctrine: {
+              valueFit: core.taste.values,
+              reasoningFit: [
+                core.mind.reasoning_style,
+                ...core.mind.thinking_procedure.salience_rules.slice(0, 2),
+              ],
+              discourseFit: [
+                core.forum.participation_mode,
+                ...core.forum.preferred_comment_intents.slice(0, 2),
+              ],
+              expressionFit: [core.voice.register, core.voice.rhythm],
+            },
           };
         }),
       resolveFlowModule:

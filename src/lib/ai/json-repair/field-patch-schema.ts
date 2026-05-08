@@ -1,12 +1,17 @@
 import { z } from "zod";
 
 const FieldPatchOperationSchema = z.object({
-  path: z.string(),
+  path: z.string().min(1),
   value: z.unknown(),
 });
 
 export const FieldPatchRepairSchema = z.object({
   repair: z.array(FieldPatchOperationSchema).min(1).max(20),
+});
+
+export const FinishContinuationSchema = z.object({
+  suffix: z.string().default(""),
+  completed_fragment: z.unknown().optional(),
 });
 
 export function matchesAllowedPath(failingPath: string, allowedPattern: string): boolean {
@@ -64,6 +69,15 @@ export function buildFieldPatchSchema(input: {
   return FieldPatchRepairSchema;
 }
 
+function isPollutionSegment(segment: string): boolean {
+  const lower = segment.toLowerCase();
+  return lower === "__proto__" || lower === "prototype" || lower === "constructor";
+}
+
+function isArrayIndex(segment: string): boolean {
+  return /^(0|[1-9]\d*)$/.test(segment);
+}
+
 export function applyFieldPatch(
   original: Record<string, unknown>,
   patchOps: Array<{ path: string; value: unknown }>,
@@ -76,37 +90,77 @@ export function applyFieldPatch(
   for (const op of patchOps) {
     const path = op.path;
 
-    if (path.includes("__proto__") || path === "prototype" || path === "constructor") {
+    // Check every segment for prototype pollution
+    const segments = path.split(".");
+    if (segments.some((seg) => isPollutionSegment(seg))) {
       rejected.push({ path, reason: "prototype pollution" });
       continue;
     }
-
-    const isAllowed = allowedPaths.some((allowed) => matchesAllowedPath(path, allowed));
-    if (!isAllowed) {
-      rejected.push({ path, reason: `not in allowed repair paths` });
+    if (segments.some((seg) => seg === "*")) {
+      rejected.push({ path, reason: "wildcard write path" });
       continue;
     }
 
+    // Check path is allowed
+    const isAllowed = allowedPaths.some((allowed) => matchesAllowedPath(path, allowed));
+    if (!isAllowed) {
+      rejected.push({ path, reason: "not in allowed repair paths" });
+      continue;
+    }
+
+    // Check path is not immutable
     const isImmutable = immutablePaths.some(
       (immutable) => path === immutable || path.startsWith(`${immutable}.`),
     );
     if (isImmutable) {
-      rejected.push({ path, reason: `immutable path` });
+      rejected.push({ path, reason: "immutable path" });
       continue;
     }
 
+    // Navigate to target, creating intermediate objects as needed
     const parts = path.split(".");
-    let target: Record<string, unknown> = merged;
+    let target: Record<string, unknown> | unknown[] = merged;
+    let rejectedPath = false;
     for (let i = 0; i < parts.length - 1; i++) {
       const key = parts[i];
-      if (key === "*") continue;
-      if (!target[key] || typeof target[key] !== "object" || Array.isArray(target[key])) {
-        target[key] = {};
+      const nextKey = parts[i + 1];
+
+      if (Array.isArray(target)) {
+        if (!isArrayIndex(key)) {
+          rejected.push({ path, reason: "non-numeric array path segment" });
+          rejectedPath = true;
+          break;
+        }
+        const index = Number(key);
+        if (!target[index] || typeof target[index] !== "object") {
+          target[index] = isArrayIndex(nextKey) ? [] : {};
+        }
+        target = target[index] as Record<string, unknown> | unknown[];
+        continue;
       }
-      target = target[key] as Record<string, unknown>;
+
+      if (!target[key] || typeof target[key] !== "object") {
+        target[key] = isArrayIndex(nextKey) ? [] : {};
+      }
+      target = target[key] as Record<string, unknown> | unknown[];
+    }
+    if (rejectedPath) {
+      continue;
     }
     const lastKey = parts[parts.length - 1];
-    target[lastKey] = op.value;
+    if (Array.isArray(target)) {
+      if (!isArrayIndex(lastKey)) {
+        rejected.push({ path, reason: "non-numeric array path segment" });
+        continue;
+      }
+      target[Number(lastKey)] = op.value;
+    } else {
+      if (isPollutionSegment(lastKey)) {
+        rejected.push({ path, reason: "prototype pollution" });
+        continue;
+      }
+      target[lastKey] = op.value;
+    }
   }
 
   return { merged, rejected };

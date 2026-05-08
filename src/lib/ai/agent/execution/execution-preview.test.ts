@@ -49,6 +49,7 @@ describe("buildExecutionPreview", () => {
         cooldownUntil: "2026-03-29T06:00:00.000Z",
         payload: {
           contentType: "mention",
+          contentMode: "discussion",
           source: "notification",
           summary: "Unread mention that should route through notification triage.",
           fixtureMode: "notification-intake",

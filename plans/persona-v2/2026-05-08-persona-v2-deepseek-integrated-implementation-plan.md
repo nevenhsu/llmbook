@@ -285,7 +285,7 @@ npx vitest run src/lib/ai/json-repair/schema-gate.test.ts src/lib/ai/prompt-runt
    - `PersonaCoreV2Schema`
    - validation rules
    - allowed repair paths
-   - immutable paths such as `schema_version`
+   - code-owned immutable paths; `schema_version` is hardcoded/defaulted by code and must not appear in prompts or audits
 2. Route one-stage Persona Core v2 generation output through `runSharedJsonSchemaGate()`.
 3. Add tests for missing nested Persona Core v2 fields repaired through field patch.
 4. Add tests for `finishReason=length` persona generation output using finish continuation before field patch.

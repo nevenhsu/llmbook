@@ -417,3 +417,143 @@ export function getFlowSchemaMeta(flow: string): SchemaMetadata {
       throw new Error(`Unknown flow: ${flow}`);
   }
 }
+
+// ---- Audit schema metadata ----
+
+export const POST_PLAN_DISCUSSION_AUDIT_META: SchemaMetadata = {
+  schemaName: "PostPlanDiscussionAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.candidate_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const POST_PLAN_STORY_AUDIT_META: SchemaMetadata = {
+  schemaName: "PostPlanStoryAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.story_candidate_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const POST_BODY_DISCUSSION_AUDIT_META: SchemaMetadata = {
+  schemaName: "PostBodyDiscussionAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.content_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const POST_BODY_STORY_AUDIT_META: SchemaMetadata = {
+  schemaName: "PostBodyStoryAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.story_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const COMMENT_DISCUSSION_AUDIT_META: SchemaMetadata = {
+  schemaName: "CommentDiscussionAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.comment_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const COMMENT_STORY_AUDIT_META: SchemaMetadata = {
+  schemaName: "CommentStoryAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.story_comment_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const REPLY_DISCUSSION_AUDIT_META: SchemaMetadata = {
+  schemaName: "ReplyDiscussionAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.reply_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export const REPLY_STORY_AUDIT_META: SchemaMetadata = {
+  schemaName: "ReplyStoryAuditSchema",
+  validationRules: [
+    "passes must be boolean",
+    "issues must be array of strings",
+    "repairGuidance must be array of strings",
+    "checks.story_reply_quality must be pass|fail",
+    "checks.persona_fit must be pass|fail",
+  ],
+  allowedRepairPaths: ["issues", "repairGuidance", "passes", "checks"],
+  immutablePaths: [],
+};
+
+export function getAuditSchemaMeta(flow: string, contentMode: ContentMode): SchemaMetadata {
+  const isStory = contentMode === "story";
+  switch (flow) {
+    case "post_plan":
+      return isStory ? POST_PLAN_STORY_AUDIT_META : POST_PLAN_DISCUSSION_AUDIT_META;
+    case "post_body":
+    case "post":
+      return isStory ? POST_BODY_STORY_AUDIT_META : POST_BODY_DISCUSSION_AUDIT_META;
+    case "comment":
+      return isStory ? COMMENT_STORY_AUDIT_META : COMMENT_DISCUSSION_AUDIT_META;
+    case "reply":
+      return isStory ? REPLY_STORY_AUDIT_META : REPLY_DISCUSSION_AUDIT_META;
+    default:
+      throw new Error(`Unknown flow: ${flow}`);
+  }
+}
+
+export function getAuditSchema(flow: string, contentMode: ContentMode) {
+  const isStory = contentMode === "story";
+  switch (flow) {
+    case "post_plan":
+      return isStory ? PostPlanStoryAuditSchema : PostPlanDiscussionAuditSchema;
+    case "post_body":
+    case "post":
+      return isStory ? PostBodyStoryAuditSchema : PostBodyDiscussionAuditSchema;
+    case "comment":
+      return isStory ? CommentStoryAuditSchema : CommentDiscussionAuditSchema;
+    case "reply":
+      return isStory ? ReplyStoryAuditSchema : ReplyDiscussionAuditSchema;
+    default:
+      throw new Error(`Unknown flow: ${flow}`);
+  }
+}

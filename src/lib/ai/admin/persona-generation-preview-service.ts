@@ -1,8 +1,10 @@
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
+import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
 import { Output } from "ai";
+import { z } from "zod";
 import { PersonaCoreV2Schema } from "@/lib/ai/core/persona-core-v2";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
@@ -17,7 +19,6 @@ import {
   type AiControlPlaneDocument,
   type AiModelConfig,
   type AiProviderConfig,
-  type PersonaGenerationSeedStage,
   type PersonaGenerationStructured,
   type PreviewResult,
   type PreviewTokenBudget,
@@ -33,19 +34,26 @@ import {
   deepMergeJson,
   deriveJsonLeafType,
   deriveJsonSchema,
-  buildRepairSchemaHint,
 } from "@/lib/ai/admin/llm-flow-shared";
 import {
   collectEnglishOnlyIssues,
-  parsePersonaGenerationOutput,
   parsePersonaGenerationSemanticAuditResult,
   parsePersonaCoreStageOutput,
-  parsePersonaSeedOutput,
   parseQualityRepairDelta,
   validatePersonaCoreV2Quality,
-  validateSeedStageQuality,
 } from "@/lib/ai/admin/persona-generation-contract";
 import { PERSONA_GENERATION_TEMPLATE_STAGES } from "@/lib/ai/admin/persona-generation-prompt-template";
+
+const PersonaGenerationSemanticAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()).default([]),
+  repairGuidance: z.array(z.string()).default([]),
+  keptReferenceNames: z.array(z.string()).optional(),
+});
+
+const PersonaGenerationQualityRepairDeltaSchema = z.object({
+  repair: z.record(z.string(), z.unknown()),
+});
 
 export async function previewPersonaGeneration(input: {
   modelId: string;
@@ -100,7 +108,7 @@ export async function previewPersonaGeneration(input: {
     {
       name: "generator_instruction",
       content: [
-        "Generate the canonical persona payload in smaller validated stages.",
+        "Generate the canonical PersonaCoreV2 payload as one validated JSON object.",
         "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
         "Use snake_case keys exactly as provided.",
         "Preserve named references when they clarify the persona.",
@@ -135,6 +143,7 @@ export async function previewPersonaGeneration(input: {
       providerId?: string | null;
       modelId?: string | null;
       error?: string | null;
+      schemaGateDebug?: StageDebugRecord["attempts"][number]["schemaGateDebug"];
     },
   ) => {
     let record = stageDebugRecords.find((r) => r.name === stageName);
@@ -154,6 +163,7 @@ export async function previewPersonaGeneration(input: {
       providerId: result.providerId ?? null,
       modelId: result.modelId ?? null,
       hadError: Boolean(result.error),
+      ...(result.schemaGateDebug ? { schemaGateDebug: result.schemaGateDebug } : {}),
     });
   };
 
@@ -265,6 +275,7 @@ export async function previewPersonaGeneration(input: {
             reasoningEffort: "low",
           },
         },
+        output: Output.object({ schema: PersonaGenerationSemanticAuditSchema }),
       },
       entityId: `persona-generation-preview:${model.id}:${auditInput.stageName}:${auditInput.auditLabel}:semantic-audit-1`,
       timeoutMs: invocationConfig.timeoutMs,
@@ -281,7 +292,7 @@ export async function previewPersonaGeneration(input: {
 
     recordStageAttempt(auditInput.stageName, auditInput.auditLabel, auditResult);
 
-    if (!auditResult.text.trim()) {
+    if (!auditResult.text.trim() && !auditResult.object) {
       if (!auditInput.failClosedOnTransport) {
         return { passes: true, issues: [], repairGuidance: [] };
       }
@@ -293,7 +304,8 @@ export async function previewPersonaGeneration(input: {
     }
 
     try {
-      const parsed = parsePersonaGenerationSemanticAuditResult(auditResult.text);
+      const auditText = auditResult.text.trim() || JSON.stringify(auditResult.object ?? {});
+      const parsed = parsePersonaGenerationSemanticAuditResult(auditText);
       if (parsed.passes) {
         return {
           passes: true,
@@ -320,86 +332,8 @@ export async function previewPersonaGeneration(input: {
     }
   };
 
-  const auditSeedReferenceClassification = async (
-    stage: PersonaGenerationSeedStage,
-  ): Promise<{
-    issues: string[];
-    repairGuidance: string[];
-    normalizedParsedOutput?: PersonaGenerationSeedStage;
-  }> => {
-    const auditResult = await runPersonaGenerationSemanticAudit({
-      stageName: "seed",
-      auditLabel: "seed_reference_source_audit",
-      instructions: [
-        "You are judging whether reference_sources contains only personality-bearing named references.",
-        "A personality-bearing reference must be a person-like entity with a distinct persona, such as a real person, historical figure, fictional character, mythic figure, or iconic persona.",
-        "Concepts, methods, principles, works, films, movements, groups, locations, and abstract nouns do not belong in reference_sources.",
-        "If some entries are valid personality-bearing references and others are not, set passes=true and return keptReferenceNames containing only the valid reference_sources names to keep.",
-        "If none of the entries are valid personality-bearing references, set passes=false.",
-        "Do not invent new names. Only keep names that already exist in parsed_stage.reference_sources.",
-        "Ignore other_reference_sources except as context; you are only filtering reference_sources.",
-      ],
-      parsedOutput: {
-        reference_sources: stage.reference_sources,
-        other_reference_sources: stage.other_reference_sources,
-      },
-      defaultIssue:
-        "reference_sources must contain at least one personality-bearing named reference.",
-      failClosedOnTransport: true,
-      fallbackRepairGuidance: [
-        "Keep only personality-bearing named references inside reference_sources.",
-        "Move concepts, works, principles, groups, and other non-personality references into other_reference_sources.",
-        "Ensure at least one personality-bearing named reference remains in reference_sources.",
-      ],
-    });
-
-    const keptReferenceNames =
-      auditResult.keptReferenceNames && auditResult.keptReferenceNames.length > 0
-        ? new Set(auditResult.keptReferenceNames)
-        : null;
-    const filteredReferenceSources = keptReferenceNames
-      ? stage.reference_sources.filter((item) => keptReferenceNames.has(item.name))
-      : stage.reference_sources;
-
-    if (filteredReferenceSources.length === 0) {
-      return {
-        issues:
-          auditResult.issues.length > 0
-            ? auditResult.issues
-            : ["reference_sources must contain at least one personality-bearing named reference."],
-        repairGuidance:
-          auditResult.repairGuidance.length > 0
-            ? auditResult.repairGuidance
-            : [
-                "Keep only personality-bearing named references in reference_sources.",
-                "Add at least one real person, historical figure, fictional character, mythic figure, or iconic persona to reference_sources.",
-              ],
-      };
-    }
-
-    return {
-      issues: [],
-      repairGuidance: [],
-      normalizedParsedOutput: {
-        ...stage,
-        reference_sources: filteredReferenceSources,
-      },
-    };
-  };
-
-  const auditSeedStageSemantics = async (
-    stage: PersonaGenerationSeedStage,
-  ): Promise<{
-    issues: string[];
-    repairGuidance: string[];
-    normalizedParsedOutput?: PersonaGenerationSeedStage;
-  }> => {
-    return auditSeedReferenceClassification(stage);
-  };
-
   const auditPersonaCoreV2StageQuality = async (
     _stage: Record<string, unknown>,
-    _seedStage: PersonaGenerationSeedStage,
   ): Promise<{
     issues: string[];
     repairGuidance: string[];
@@ -457,6 +391,95 @@ export async function previewPersonaGeneration(input: {
     }
 
     const invokeStageAttempt = async (prompt: string, attempt: 1 | 2) => {
+      if (stageInput.stageName === "persona_core_v2" && attempt === 1) {
+        const structuredResult = await invokeStructuredLLM({
+          registry,
+          taskType: "generic",
+          routeOverride: invocationConfig.route,
+          modelInput: {
+            prompt,
+            maxOutputTokens: Math.min(stageInput.outputMaxTokens, maxOutputTokens),
+            temperature: 0.4,
+          },
+          entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:attempt-${attempt}`,
+          timeoutMs: invocationConfig.timeoutMs,
+          retries: previewProviderRetries,
+          onProviderError: async (event) => {
+            await input.recordLlmInvocationError({
+              providerKey: event.providerId,
+              modelKey: event.modelId,
+              error: event.error,
+              errorDetails: event.errorDetails,
+            });
+          },
+          schemaGate: {
+            schemaName: "PersonaCoreV2Schema",
+            schema: PersonaCoreV2Schema,
+            validationRules: [
+              "persona_fit_probability must be integer 0-100",
+              "reference_style.reference_names must contain 1-5 items",
+              "mind.thinking_procedure is required",
+              "narrative is required",
+            ],
+            allowedRepairPaths: [
+              "persona_fit_probability",
+              "identity",
+              "identity.*",
+              "mind",
+              "mind.*",
+              "mind.thinking_procedure",
+              "mind.thinking_procedure.*",
+              "taste",
+              "taste.*",
+              "voice",
+              "voice.*",
+              "forum",
+              "forum.*",
+              "narrative",
+              "narrative.*",
+              "reference_style",
+              "reference_style.reference_names",
+              "reference_style.other_references",
+              "reference_style.abstract_traits",
+              "anti_generic",
+              "anti_generic.avoid_patterns",
+              "anti_generic.failure_mode",
+            ],
+            immutablePaths: ["schema_version"],
+          },
+        });
+
+        if (structuredResult.status === "schema_failure") {
+          const rawOutput = structuredResult.raw.text.trim();
+          recordStageAttempt(stageInput.stageName, `attempt-${attempt}`, {
+            ...structuredResult.raw,
+            schemaGateDebug: structuredResult.schemaGateDebug,
+            error: structuredResult.error,
+          });
+          const error = new PersonaGenerationParseError(structuredResult.error, rawOutput, {
+            stageName: stageInput.stageName,
+            details: {
+              attemptStage: `attempt-${attempt}`,
+              schemaGateDebug: structuredResult.schemaGateDebug,
+              ...buildStageAttemptDetails({
+                attemptStage: `attempt-${attempt}`,
+                llmResult: structuredResult.raw,
+              }),
+            },
+          });
+          throw error;
+        }
+
+        const result = {
+          ...structuredResult.raw,
+          text: structuredResult.raw.text.trim() || JSON.stringify(structuredResult.value),
+          object: structuredResult.value,
+          schemaGateDebug: structuredResult.schemaGateDebug,
+        };
+        recordStageAttempt(stageInput.stageName, `attempt-${attempt}`, result);
+        return result;
+      }
+
       const result = await invokeLLM({
         registry,
         taskType: "generic",
@@ -468,9 +491,6 @@ export async function previewPersonaGeneration(input: {
               ? Math.min(stageInput.outputMaxTokens, maxOutputTokens)
               : Math.min(PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap, maxOutputTokens),
           temperature: attempt === 1 ? 0.4 : 0.2,
-          ...(stageInput.stageName === "persona_core_v2" && attempt === 1
-            ? { output: Output.object({ schema: PersonaCoreV2Schema }) }
-            : {}),
         },
         entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:attempt-${attempt}`,
         timeoutMs: invocationConfig.timeoutMs,
@@ -500,6 +520,7 @@ export async function previewPersonaGeneration(input: {
             maxOutputTokens,
           ),
           temperature: attempt === 1 ? 0.2 : 0.1,
+          output: Output.object({ schema: PersonaGenerationQualityRepairDeltaSchema }),
         },
         entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:quality-repair-${attempt}`,
         timeoutMs: invocationConfig.timeoutMs,
@@ -516,9 +537,6 @@ export async function previewPersonaGeneration(input: {
       recordStageAttempt(stageInput.stageName, `quality-repair-${attempt}`, result);
       return result;
     };
-
-    const isLengthTruncated = (result: { text: string; finishReason?: string | null }) =>
-      result.finishReason === "length" && result.text.trim().length > 0;
 
     const buildStageAttemptDetails = (input: {
       attemptStage: string;
@@ -546,66 +564,6 @@ export async function previewPersonaGeneration(input: {
         ...(input.llmResult.errorDetails ? { errorDetails: input.llmResult.errorDetails } : {}),
       };
     };
-
-    const formatTruncatedOutputForRepair = (rawText: string) => {
-      const text = rawText.trim();
-      if (!text) {
-        return "";
-      }
-      if (text.length <= 1600) {
-        return text;
-      }
-      const head = text.slice(0, 1000).trimEnd();
-      const tail = text.slice(-500).trimStart();
-      return `${head}\n...[middle omitted for repair context]...\n${tail}`;
-    };
-
-    const buildTruncatedOutputContext = (rawText: string | null | undefined) => {
-      const formatted = formatTruncatedOutputForRepair(rawText ?? "");
-      if (!formatted) {
-        return "";
-      }
-      return [
-        "",
-        "[previous_truncated_output]",
-        formatted,
-        "",
-        "Use the partial output only as repair context.",
-        "Do not continue token-by-token.",
-        "Do not copy the broken JSON verbatim.",
-        "Rewrite a complete valid JSON object from scratch that preserves the same intended meaning in a shorter form.",
-      ].join("\n");
-    };
-
-    const buildStageSpecificTruncationGuidance = () => {
-      if (stageInput.stageName === "seed") {
-        return [
-          "For seed, keep reference_derivation to at most 2 short items.",
-          "Keep each contribution array to at most 2 short items.",
-          "Keep originalization_note to one short sentence.",
-        ].join("\n");
-      }
-      if (stageInput.stageName === "persona_core") {
-        return [
-          "For persona_core, keep value_hierarchy to at most 4 items.",
-          "value_hierarchy must be a JSON array of objects, never a plain string.",
-          "Keep worldview to 1 short item.",
-          "Keep every array field to at most 2 short items unless the schema requires more.",
-          "Keep every task_style_matrix shape field to one short sentence.",
-          "Keep voice_fingerprint opening_move, attack_style, praise_style, and closing_move to one short sentence each.",
-        ].join("\n");
-      }
-      return "";
-    };
-
-    const buildRetryRepairPrompt = (repairInput: {
-      mode: "generic" | "truncated";
-      previousTruncatedOutput?: string | null;
-      parsedOutput?: Record<string, unknown> | null;
-    }) =>
-      repairInput.mode === "truncated"
-        ? `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${stageInput.stageName} was truncated before the JSON object was complete.\nRewrite it from scratch in a shorter form.\nReturn strictly valid JSON only.\nKeep every string to one short sentence.\nLimit arrays to at most 2 items unless the schema requires more.\nPrioritize finishing the full JSON object over richness.\nvalue_hierarchy must be a JSON array of {value, priority} objects — never a plain string.\nDo not collapse array fields into strings.${buildTruncatedOutputContext(repairInput.previousTruncatedOutput)}\n${buildStageSpecificTruncationGuidance()}\n${buildRepairSchemaHint(repairInput.parsedOutput ?? null)}\nDo not add commentary.\nDo not omit required keys.`
-        : `${basePrompt}\n\n[retry_repair]\nYour previous response for stage ${stageInput.stageName} was invalid or incomplete JSON. Retry once with a shorter response.\nReturn strictly valid JSON only.\nKeep every string concise.\nLimit arrays to at most 3 items.\nvalue_hierarchy must be a JSON array of {value, priority} objects — never a plain string.\nDo not collapse array fields into strings.\n${buildRepairSchemaHint(repairInput.parsedOutput ?? null)}\nDo not add commentary.\nDo not omit required keys.`;
 
     const buildQualityRepairPrompt = (repairInput: {
       qualityIssues: string[];
@@ -720,7 +678,21 @@ export async function previewPersonaGeneration(input: {
       attemptStage: string,
     ) => {
       if (result.object && stageInput.stageName === "persona_core_v2") {
-        return result.object as T;
+        const parsedObject = PersonaCoreV2Schema.safeParse(result.object);
+        if (parsedObject.success) {
+          return parsedObject.data as T;
+        }
+        throw new PersonaGenerationParseError(
+          `persona_core_v2 validation failed: ${parsedObject.error.message}`,
+          result.text,
+          {
+            stageName: stageInput.stageName,
+            details: buildStageAttemptDetails({
+              attemptStage,
+              llmResult: result,
+            }),
+          },
+        );
       }
       if (!result.text.trim()) {
         throw new PersonaGenerationParseError(
@@ -753,21 +725,7 @@ export async function previewPersonaGeneration(input: {
 
     const resolveParsedStage = async (): Promise<T> => {
       const first = await invokeStageAttempt(basePrompt, 1);
-      const firstWasTruncated = isLengthTruncated(first);
-      try {
-        return attemptParse(first, "attempt-1");
-      } catch (error) {
-        if (!(error instanceof PersonaGenerationParseError)) {
-          throw error;
-        }
-        const repairPrompt = buildRetryRepairPrompt({
-          mode: firstWasTruncated ? "truncated" : "generic",
-          previousTruncatedOutput: firstWasTruncated ? first.text : null,
-          parsedOutput: null,
-        });
-        const second = await invokeStageAttempt(repairPrompt, 2);
-        return attemptParse(second, "attempt-2");
-      }
+      return attemptParse(first, "attempt-1");
     };
 
     const collectStageQualityResult = async (candidateStage: T) => {
@@ -822,7 +780,9 @@ export async function previewPersonaGeneration(input: {
       const attemptStage = `quality-repair-${attempt}` as const;
 
       try {
-        const delta = parseQualityRepairDelta(qualityRepaired.text);
+        const qualityRepairText =
+          qualityRepaired.text.trim() || JSON.stringify(qualityRepaired.object ?? {});
+        const delta = parseQualityRepairDelta(qualityRepairText);
         const rawMerged = deepMergeJson(
           previousParsedOutput as Record<string, unknown>,
           delta.repair,
@@ -879,49 +839,45 @@ export async function previewPersonaGeneration(input: {
     });
   };
 
-  let seedStage!: PersonaGenerationSeedStage;
-  let personaCoreStageRecord!: Record<string, unknown>;
+  let personaCore!: PersonaCoreV2;
   let structured!: PersonaGenerationStructured;
   let assembledPrompt!: string;
   let tokenBudget!: PreviewTokenBudget;
   let markdown!: string;
 
   try {
-    seedStage = await runPersonaGenerationStage({
-      stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
-      stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
-      stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[0].contract.join("\n"),
-      parse: parsePersonaSeedOutput,
-      validateQuality: validateSeedStageQuality,
-      validateQualityAsync: auditSeedStageSemantics,
+    const personaCoreStage = PERSONA_GENERATION_TEMPLATE_STAGES[0];
+    personaCore = await runPersonaGenerationStage<PersonaCoreV2>({
+      stageName: personaCoreStage.name,
+      stageGoal: personaCoreStage.goal,
+      stageContract: personaCoreStage.contract.join("\n"),
+      parse: (rawText) => PersonaCoreV2Schema.parse(parsePersonaCoreStageOutput(rawText)),
+      validateQuality: (stage) =>
+        validatePersonaCoreV2Quality(stage as unknown as Record<string, unknown>),
       allowedReferenceNames: [],
-      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed,
-    });
-
-    personaCoreStageRecord = await runPersonaGenerationStage({
-      stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
-      stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
-      stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[0].contract.join("\n"),
-      parse: parsePersonaCoreStageOutput,
-      validateQuality: validatePersonaCoreV2Quality,
-      validateQualityAsync: async (stage) => auditPersonaCoreV2StageQuality(stage, seedStage),
-      allowedReferenceNames: [
-        ...seedStage.reference_sources.map((item) => item.name),
-        ...seedStage.other_reference_sources.map((item) => item.name),
-      ],
       outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
     });
 
-    structured = parsePersonaGenerationOutput(
-      JSON.stringify({
-        persona: seedStage.persona,
-        persona_core: personaCoreStageRecord,
-        reference_sources: seedStage.reference_sources,
-        other_reference_sources: seedStage.other_reference_sources,
-        reference_derivation: seedStage.reference_derivation,
-        originalization_note: seedStage.originalization_note,
-      }),
-    ).structured;
+    structured = {
+      persona: {
+        display_name: personaCore.identity.archetype,
+        status: "active",
+        bio: personaCore.identity.core_drive,
+      },
+      persona_core: personaCore as unknown as Record<string, unknown>,
+      reference_sources: personaCore.reference_style.reference_names.map((name) => ({
+        name,
+        type: "core_reference",
+        contribution: [],
+      })),
+      other_reference_sources: personaCore.reference_style.other_references.map((name) => ({
+        name,
+        type: "supporting_reference",
+        contribution: [],
+      })),
+      reference_derivation: personaCore.reference_style.abstract_traits,
+      originalization_note: personaCore.identity.central_tension,
+    };
     assembledPrompt = stagePromptRecords
       .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.displayPrompt}`)
       .join("\n\n");

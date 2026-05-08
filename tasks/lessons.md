@@ -37,6 +37,7 @@
 - JSON schema repair should be a bounded loop: finish repair returns to parse/schema validation, and parseable-but-schema-invalid finish output can continue into field-patch repair.
 - Missing JSON fields are first-class schema repair targets when their paths are allowlisted; this includes Persona Core v2 generation output.
 - Persona v2 generated-output schema checks should normalize rather than exact-key fail: strip extra keys, truncate overlong arrays to the first allowed items, and reserve invalidation for missing or malformed required fields.
+- Keep `schema_version` entirely code-owned for Persona v2: hardcode/default it in schemas or normalization code, and do not mention or audit it in prompts, validation instructions, semantic audits, or quality-audit guidance.
 - Writer output schemas for `post_body`, `comment`, and `reply` must mark generated content fields as markdown strings in code-owned Zod schemas.
 - Spell nested leaf constraints explicitly in Zod schemas and schema-derived validation metadata; shorthand like `values{value_hierarchy,...}` is too ambiguous.
 - Quality-repair prompts for large JSON objects must be compact on the first repair attempt.

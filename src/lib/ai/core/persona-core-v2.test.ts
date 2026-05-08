@@ -91,10 +91,13 @@ describe("validatePersonaCoreV2", () => {
     }
   });
 
-  it("rejects missing schema_version", () => {
+  it("hardcodes missing schema_version to v2", () => {
     const input = { ...makeValidV2(), schema_version: undefined };
     const result = PersonaCoreV2Schema.safeParse(input);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schema_version).toBe("v2");
+    }
   });
 
   it("rejects wrong schema_version", () => {
@@ -357,7 +360,7 @@ describe("reference_style.other_references", () => {
 
   it("defaults to empty array when missing", () => {
     const valid = makeValidV2();
-    delete valid.reference_style.other_references;
+    delete (valid.reference_style as Partial<typeof valid.reference_style>).other_references;
     // validator treats missing other_references as empty array
     const result = validatePersonaCoreV2(valid);
     expect("core" in result).toBe(true);

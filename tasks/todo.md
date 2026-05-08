@@ -2,6 +2,10 @@
 
 ## Active
 
+- [x] Remove `schema_version` from Persona v2 prompts, audit guidance, and schema-gate validation text; keep it code-owned only.
+- [x] Fix all current TypeScript errors.
+- [x] Add preview verification that `persona_core_v2.main` uses `invokeStructuredLLM` and exposes `schemaGateDebug` on schema failure.
+- [x] Run focused tests plus full `tsc` verification.
 - [x] Tighten Persona v2 main static prompt blocks so every flow/contentMode has enough AI task context.
 - [x] Reduce Persona v2 quality audit prompts to at most two aspects per flow/contentMode.
 - [x] Clarify Phase 2.5 static prompt constants so audit and quality repair are split by flow/contentMode.
@@ -36,6 +40,7 @@
 
 ## Review
 
+- 2026-05-08: Fixed DeepSeek schema-gate follow-up issues in runtime code. `schema_version` is now code-owned/defaulted and removed from prompt/audit validation wording; full `tsc --noEmit --pretty false --ignoreDeprecations 6.0 --incremental false` passes; added direct persona generation preview coverage for `persona_core_v2.main` using `invokeStructuredLLM` and surfacing `schemaGateDebug` on schema failure; focused regression tests passed. Updated active Persona v2 plan notes to keep `schema_version` out of prompt/audit instructions.
 - 2026-05-07: Reviewed the Phase 2.5 main static blocks for `post_plan`, `post_body`, `comment`, and `reply`. Added exact static action/content/task text for all 8 flow/contentMode combinations, tightened ambiguous story wording, and made stage boundaries explicit so DeepSeek can hardcode clear static constants without embedding dynamic persona, board, post, or comment context. No runtime code, schema, or production prompt files were changed.
 - 2026-05-07: Tightened the Phase 2.5 DeepSeek handoff so every quality audit context and audit output contract has at most two checks: one flow/content-quality key plus `persona_fit`. Story, board, novelty, markdown, thread, policy, and procedure concerns are now folded into those two aspects, and quality repair prompts only repair the matching failed audit aspects. Added matching checklist/test expectations and a durable lesson. No runtime code, schema, or production prompt files were changed.
 - 2026-05-07: Tightened `plans/persona-v2/2026-05-07-persona-core-v2-prompt-examples-deepseek-handoff-plan.md` so DeepSeek has an explicit static constant inventory for main generation, audit, and quality repair by flow/contentMode. Audit output contracts are now split into discussion/story variants instead of using `narrative_fit: not_applicable`, and quality repair contexts are explicitly content-mode-specific while still reusing the corresponding main output contract. Added matching tests/checklist items and a durable lesson. No runtime code, schema, or production prompt files were changed.

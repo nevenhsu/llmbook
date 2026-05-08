@@ -1,8 +1,7 @@
 import { getInteractionMaxOutputTokens } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
-import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
+import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import { Output } from "ai";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
 import type { ContentMode, PersonaFlowKind, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
@@ -23,8 +22,11 @@ import {
   POST_BODY_SCHEMA_META,
   COMMENT_SCHEMA_META,
   REPLY_SCHEMA_META,
+  getAuditSchema,
+  getAuditSchemaMeta,
   type SchemaMetadata,
 } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
+import type { z } from "zod";
 import {
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
@@ -134,27 +136,6 @@ const ACTION_TYPE_TO_FLOW: ActionTypeToFlowMap = {
   poll_vote: null,
 };
 
-function resolveOutputSchema(
-  taskType: string,
-  stagePurpose: string,
-): ReturnType<typeof Output.object> | undefined {
-  if (stagePurpose === "audit") return undefined;
-
-  switch (taskType) {
-    case "post_plan":
-      return Output.object({ schema: PostPlanOutputSchema });
-    case "post_body":
-    case "post":
-      return Output.object({ schema: PostBodyOutputSchema });
-    case "comment":
-      return Output.object({ schema: CommentOutputSchema });
-    case "reply":
-      return Output.object({ schema: ReplyOutputSchema });
-    default:
-      return undefined;
-  }
-}
-
 function resolveFlowSchemaMeta(taskType: string): SchemaMetadata | undefined {
   switch (taskType) {
     case "post_plan":
@@ -166,6 +147,22 @@ function resolveFlowSchemaMeta(taskType: string): SchemaMetadata | undefined {
       return COMMENT_SCHEMA_META;
     case "reply":
       return REPLY_SCHEMA_META;
+    default:
+      return undefined;
+  }
+}
+
+function resolveStageSchema(taskType: string) {
+  switch (taskType) {
+    case "post_plan":
+      return PostPlanOutputSchema;
+    case "post_body":
+    case "post":
+      return PostBodyOutputSchema;
+    case "comment":
+      return CommentOutputSchema;
+    case "reply":
+      return ReplyOutputSchema;
     default:
       return undefined;
   }
@@ -314,6 +311,152 @@ export class AiAgentPersonaInteractionStageService {
       maxOutputTokens,
     });
 
+    // Determine if this stage should use structured invocation
+    const isAudit = input.stagePurpose === "audit";
+    const isJsonStage =
+      input.stagePurpose === "main" ||
+      input.stagePurpose === "quality_repair" ||
+      input.stagePurpose === "schema_repair" ||
+      isAudit;
+
+    if (isJsonStage) {
+      // Resolve the appropriate schema and metadata
+      let stageSchema: z.ZodTypeAny;
+      let schemaMeta: SchemaMetadata;
+
+      if (isAudit) {
+        stageSchema = getAuditSchema(input.taskType, contentMode);
+        schemaMeta = getAuditSchemaMeta(input.taskType, contentMode);
+      } else {
+        const resolved = resolveStageSchema(input.taskType);
+        if (!resolved) {
+          return this.invokeRawAndReturn(
+            assembledPrompt,
+            tokenBudget,
+            maxOutputTokens,
+            model,
+            provider,
+            invocationConfig,
+            registry,
+            input,
+          );
+        }
+        stageSchema = resolved;
+        schemaMeta =
+          resolveFlowSchemaMeta(input.taskType) ??
+          ({
+            schemaName: "Unknown",
+            validationRules: [],
+            allowedRepairPaths: [],
+            immutablePaths: [],
+          } satisfies SchemaMetadata);
+      }
+
+      const structuredResult = await invokeStructuredLLM({
+        registry,
+        taskType: "generic",
+        routeOverride: invocationConfig.route,
+        modelInput: {
+          prompt: assembledPrompt,
+          maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
+          temperature: isAudit ? 0 : 0.3,
+          metadata: {
+            _m: {
+              stagePurpose: input.stagePurpose,
+              taskType: input.taskType,
+              schemaName: schemaMeta.schemaName,
+            },
+          },
+        },
+        entityId: `persona-interaction-stage:${input.stagePurpose}:${model.id}`,
+        timeoutMs: invocationConfig.timeoutMs,
+        retries: input.executionMode === "admin_preview" ? 0 : (invocationConfig.retries ?? 0),
+        onProviderError: async (event) => {
+          await input.recordLlmInvocationError({
+            providerKey: event.providerId,
+            modelKey: event.modelId,
+            error: event.error,
+            errorDetails: event.errorDetails,
+          });
+        },
+        schemaGate: {
+          schemaName: schemaMeta.schemaName,
+          schema: stageSchema,
+          validationRules: schemaMeta.validationRules,
+          allowedRepairPaths: schemaMeta.allowedRepairPaths,
+          immutablePaths: schemaMeta.immutablePaths,
+        },
+      });
+
+      if (structuredResult.status === "schema_failure") {
+        throw new Error(structuredResult.error);
+      }
+
+      const rawText = structuredResult.raw.text.trim() || JSON.stringify(structuredResult.value);
+      if (!rawText) {
+        throw new Error(
+          structuredResult.raw.error ??
+            `persona interaction stage returned empty output (finishReason=${String(structuredResult.raw.finishReason ?? "unknown")})`,
+        );
+      }
+
+      return {
+        assembledPrompt,
+        rawText,
+        finishReason: structuredResult.raw.finishReason ?? null,
+        tokenBudget,
+        providerId: structuredResult.raw.providerId,
+        modelId: structuredResult.raw.modelId,
+        object: structuredResult.value,
+        ...(input.debug
+          ? {
+              debugRecord: {
+                name: input.attemptLabel ?? `${input.taskType}:${input.stagePurpose}`,
+                displayPrompt: assembledPrompt,
+                outputMaxTokens: Math.min(
+                  model.maxOutputTokens ?? maxOutputTokens,
+                  maxOutputTokens,
+                ),
+                attempts: [
+                  {
+                    attempt: input.attemptLabel ?? "attempt_1",
+                    text: rawText,
+                    finishReason: structuredResult.raw.finishReason ?? null,
+                    providerId: structuredResult.raw.providerId,
+                    modelId: structuredResult.raw.modelId,
+                    hadError: false,
+                    schemaGateDebug: structuredResult.schemaGateDebug,
+                  },
+                ],
+              },
+            }
+          : {}),
+      };
+    }
+
+    return this.invokeRawAndReturn(
+      assembledPrompt,
+      tokenBudget,
+      maxOutputTokens,
+      model,
+      provider,
+      invocationConfig,
+      registry,
+      input,
+    );
+  }
+
+  private async invokeRawAndReturn(
+    assembledPrompt: string,
+    tokenBudget: PreviewResult["tokenBudget"],
+    maxOutputTokens: number,
+    model: AiModelConfig,
+    provider: AiProviderConfig,
+    invocationConfig: Awaited<ReturnType<typeof resolveLlmInvocationConfig>>,
+    registry: Awaited<ReturnType<typeof createDbBackedLlmProviderRegistry>>,
+    input: PersonaInteractionStageInput,
+  ): Promise<PersonaInteractionStageResult> {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     const llmResult = await invokeLLM({
       registry,
       taskType: "generic",
@@ -322,11 +465,8 @@ export class AiAgentPersonaInteractionStageService {
         prompt: assembledPrompt,
         maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
         temperature: input.stagePurpose === "audit" ? 0 : 0.3,
-        ...(input.stagePurpose === "main" || input.stagePurpose === "quality_repair"
-          ? { output: resolveOutputSchema(input.taskType, input.stagePurpose) }
-          : {}),
       },
-      entityId: `persona-interaction-stage:${model.id}`,
+      entityId: `persona-interaction-stage:${input.stagePurpose}:${model.id}`,
       timeoutMs: invocationConfig.timeoutMs,
       retries: input.executionMode === "admin_preview" ? 0 : (invocationConfig.retries ?? 0),
       onProviderError: async (event) => {
@@ -363,7 +503,7 @@ export class AiAgentPersonaInteractionStageService {
               outputMaxTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
               attempts: [
                 {
-                  attempt: input.attemptLabel ?? `attempt_1`,
+                  attempt: input.attemptLabel ?? "attempt_1",
                   text: rawText,
                   finishReason: llmResult.finishReason ?? null,
                   providerId: llmResult.providerId,

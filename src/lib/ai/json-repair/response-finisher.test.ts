@@ -16,10 +16,9 @@ describe("classifyTruncation", () => {
     expect(classifyTruncation('{"name":"Alice","age":30}')).toBe("tail_closable");
   });
 
-  it("classifies trailing-colon as tail_closable (can add closing brace)", () => {
+  it("classifies trailing-colon as continuation_needed", () => {
     const result = classifyTruncation('{"name":"Alice","age":');
-    // Trailing colon is closable by adding "}"
-    expect(result).toBe("tail_closable");
+    expect(result).toBe("continuation_needed");
   });
 
   it("classifies trailing-comma as continuation_needed", () => {

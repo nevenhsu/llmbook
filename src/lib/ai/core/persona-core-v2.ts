@@ -12,21 +12,6 @@ export type PersonaPacketBudget = {
   hardMaxWords: number;
 };
 
-const stripUnknown = <T extends z.ZodTypeAny>(schema: T): T =>
-  schema.transform((val) => {
-    if (val && typeof val === "object" && !Array.isArray(val)) {
-      const allowed = new Set(Object.keys((schema as z.ZodObject<any>).shape ?? {}));
-      const cleaned: Record<string, unknown> = {};
-      for (const key of Object.keys(val as Record<string, unknown>)) {
-        if (allowed.has(key)) {
-          cleaned[key] = (val as Record<string, unknown>)[key];
-        }
-      }
-      return cleaned;
-    }
-    return val;
-  });
-
 function truncatedArray(maxItems: number) {
   return z.array(z.string()).transform((arr) => arr.slice(0, maxItems));
 }
@@ -111,7 +96,7 @@ const AntiGenericSchema = z.object({
 });
 
 export const PersonaCoreV2Schema = z.object({
-  schema_version: z.literal("v2"),
+  schema_version: z.literal("v2").default("v2"),
   persona_fit_probability: z.number().int().min(0).max(100),
   identity: IdentitySchema,
   mind: MindSchema,

@@ -171,8 +171,7 @@ describe("classifyTruncation", () => {
 
   it("classifies string truncation", () => {
     const result = classifyTruncation('{"name":"Alice","bio":"unfinished');
-    // Should be either tail_closable (if string can be closed) or prefix_too_broken
-    expect(["tail_closable", "prefix_too_broken"]).toContain(result);
+    expect(result).toBe("continuation_needed");
   });
 
   it("classifies trailing comma as continuation_needed", () => {
@@ -283,10 +282,8 @@ describe("normalized failure reason", () => {
         schema: SimpleSchema,
       }),
     );
-    // Should attempt tail closure
-    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
-      true,
-    );
+    // Should attempt finish continuation (colon-ending is continuation_needed)
+    expect(result.debug.attempts.some((a) => a.attemptStage === "finish_continuation")).toBe(true);
   });
 
   it("normalizes object generation error", async () => {
@@ -299,10 +296,8 @@ describe("normalized failure reason", () => {
         schema: SimpleSchema,
       }),
     );
-    // Should attempt tail closure (length-equivalent)
-    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
-      true,
-    );
+    // Should attempt finish continuation (colon-ending is continuation_needed)
+    expect(result.debug.attempts.some((a) => a.attemptStage === "finish_continuation")).toBe(true);
   });
 });
 
@@ -424,6 +419,27 @@ describe("wildcard path matching", () => {
       }),
     );
     expect(result.status).toBe("schema_failure");
+  });
+
+  it("applies field patch operations to array item paths", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: JSON.stringify({
+          candidates: [{ title: "A" }],
+        }),
+        schema: ArraySchema,
+        allowedRepairPaths: ["candidates.*.thesis"],
+        immutablePaths: [],
+        invokeFieldPatch: async () => ({
+          repair: [{ path: "candidates.0.thesis", value: "A concrete thesis" }],
+        }),
+      }),
+    );
+
+    expect(result.status).toBe("valid");
+    if (result.status === "valid") {
+      expect(result.value.candidates[0].thesis).toBe("A concrete thesis");
+    }
   });
 });
 
@@ -547,9 +563,7 @@ describe("object_generation_unparseable routing", () => {
         schema: SimpleSchema,
       }),
     );
-    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
-      true,
-    );
+    expect(result.debug.attempts.some((a) => a.attemptStage === "finish_continuation")).toBe(true);
   });
 
   it("returns typed diagnostic for empty text with object generation error", async () => {

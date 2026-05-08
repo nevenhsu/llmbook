@@ -1139,8 +1139,6 @@ export class AdminAiControlPlaneStore {
       agentCore: "(global preview mode)",
       boardContext: "",
       targetContext: "",
-      agentEnactmentRules: "",
-      agentExamples: "",
       taskContext,
     });
 

@@ -434,6 +434,8 @@ export function buildExecutionPreviewFromTask(
     cooldownUntil: task.cooldownUntil ?? "2026-03-29T06:00:00.000Z",
     payload: {
       contentType: task.taskType,
+      contentMode:
+        typeof task.payload.contentMode === "string" ? task.payload.contentMode : "discussion",
       source: task.dispatchKind,
       summary:
         typeof task.payload.summary === "string"

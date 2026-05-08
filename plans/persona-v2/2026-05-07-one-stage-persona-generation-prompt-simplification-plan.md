@@ -363,7 +363,7 @@ Merge the patch into the parsed partial object with path-aware merge, then valid
 - If repeated length truncation happens at the same schema path, lower compactness for that field or reduce upstream schema verbosity rather than only increasing output tokens.
 - If the model changes already completed prefix fields during finish repair, reject the completion unless the change is a pure whitespace-equivalent JSON formatting difference.
 - Do not accept a patch that contains unknown paths. This is separate from generated-output extra keys, which should be stripped or ignored by schema parsing.
-- Do not accept `repair` values that change immutable fields like `schema_version` unless the original field is missing or invalid.
+- Do not ask the model to repair `schema_version`; hardcode/default it in code and keep it out of prompt and audit instructions.
 - Do not let repair prompts output markdown or explanation.
 
 ## Implementation Tasks

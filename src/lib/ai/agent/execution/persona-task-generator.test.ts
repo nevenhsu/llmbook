@@ -86,10 +86,8 @@ function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
       parsed: {
         selectedPostPlan: {
           title: "Plan title",
-          angleSummary: "Angle",
           thesis: "Thesis",
           bodyOutline: ["A", "B", "C"],
-          differenceFromRecent: ["New angle"],
         },
         postBody: {
           body: "Post body",

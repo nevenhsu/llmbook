@@ -1,6 +1,7 @@
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { SharedV3ProviderOptions } from "@ai-sdk/provider";
 import type { SchemaGateDebug } from "@/lib/ai/json-repair/schema-gate-contracts";
+import type { Output as AiOutput } from "ai";
 
 export type LlmTaskType = "reply" | "vote" | "poll_vote" | "dispatch" | "generic";
 
@@ -68,7 +69,7 @@ export type LlmGenerateTextInput = {
   metadata?: Record<string, unknown>;
   tools?: LlmToolSchema[];
   toolResults?: LlmToolResult[];
-  output?: any;
+  output?: AiOutput.Output;
 };
 
 export type LlmGenerateTextOutput = {

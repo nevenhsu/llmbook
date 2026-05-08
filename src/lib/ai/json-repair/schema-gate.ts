@@ -10,7 +10,12 @@ import {
   tryDeterministicTailClosure,
   deriveOpenPath,
 } from "./response-finisher";
-import { buildFieldPatchSchema, applyFieldPatch } from "./field-patch-schema";
+import {
+  buildFieldPatchSchema,
+  applyFieldPatch,
+  matchesAllowedPath,
+  FinishContinuationSchema,
+} from "./field-patch-schema";
 import type { z } from "zod";
 
 function zodInnerDef(schema: z.ZodTypeAny): Record<string, unknown> | null {
@@ -84,32 +89,16 @@ function normalizeFailureReason(
   return "other";
 }
 
-function stripExtraKeys(
-  obj: Record<string, unknown>,
-  _allowedSchema: unknown,
-): Record<string, unknown> {
-  return obj;
-}
-
-function normalizeOverlongArrays(
-  obj: Record<string, unknown>,
-  _schema: unknown,
-): Record<string, unknown> {
-  return obj;
-}
-
 function extractJson(rawText: string): { json: string | null; error: string | null } {
   const trimmed = rawText.trim();
   if (!trimmed) {
     return { json: null, error: "empty input" };
   }
 
-  // Try direct parse first
   try {
     JSON.parse(trimmed);
     return { json: trimmed, error: null };
   } catch {
-    // Try to extract JSON from markdown code blocks
     const jsonMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     if (jsonMatch) {
       const inner = jsonMatch[1].trim();
@@ -121,10 +110,8 @@ function extractJson(rawText: string): { json: string | null; error: string | nu
       }
     }
 
-    // Try to find JSON object boundaries
     const firstBrace = trimmed.indexOf("{");
     if (firstBrace !== -1) {
-      // Find matching closing brace
       let depth = 0;
       let inString = false;
       let lastValidClose = -1;
@@ -228,7 +215,7 @@ export async function runSharedJsonSchemaGate<T>(
     }
   }
 
-  // Step 1: Extract and parse JSON
+  // Step 1: Extract and parse JSON from raw text
   const extraction = extractJson(input.rawText);
   debug.attempts.push({
     attemptStage: "initial_parse",
@@ -245,13 +232,15 @@ export async function runSharedJsonSchemaGate<T>(
       return { status: "valid", value: parseResult.data, debug };
     }
 
-    const parseError = parseResult.success ? null : (parseResult as { error: string }).error;
+    const parseError = (parseResult as { error: string }).error;
 
-    // Step 2: If length/truncation, try deterministic tail closure
-    if (normalizedReason === "length" || normalizedReason === "object_generation_unparseable") {
+    // Step 2: For length/truncation, try deterministic tail closure
+    const isLengthLike =
+      normalizedReason === "length" || normalizedReason === "object_generation_unparseable";
+
+    if (isLengthLike) {
       const classification = classifyTruncation(extraction.json);
 
-      // Try deterministic tail closure
       if (classification === "tail_closable") {
         const closed = tryDeterministicTailClosure(extraction.json);
         debug.attempts.push({
@@ -260,6 +249,7 @@ export async function runSharedJsonSchemaGate<T>(
           likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json)),
           requiredRemainingPaths: [],
           errorSummary: closed ? "closure candidate generated" : "closure failed",
+          repairablePaths: undefined,
         });
 
         if (closed) {
@@ -269,25 +259,20 @@ export async function runSharedJsonSchemaGate<T>(
             return { status: "valid", value: closedResult.data, debug };
           }
 
-          // Closure produced parseable but schema-invalid - try field patch
-          const fieldPatchResult = await tryFieldPatch(closed, input, debug, input.finishReason);
-          if (fieldPatchResult) {
-            return fieldPatchResult;
-          }
+          // Closure produced parseable but schema-invalid — try FieldPatch
+          const patchResult = await tryFieldPatch(closed, input, debug, input.finishReason);
+          if (patchResult) return patchResult;
         }
       }
 
-      // Step 3: Try continuation if callback provided
-      if (
-        (classification === "continuation_needed" || !extraction.json) &&
-        input.invokeFinishContinuation
-      ) {
+      // Step 3: For continuation_needed, try finish continuation
+      if (classification === "continuation_needed" && input.invokeFinishContinuation) {
         const contInput = {
           schemaName: input.schemaName,
           flowId: input.flowId,
           stageId: input.stageId,
-          partialJsonText: extraction.json || "",
-          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json || "")),
+          partialJsonText: extraction.json,
+          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json)),
           requiredRemainingPaths: schemaRequiredPaths,
           validationSummary: parseError ?? "schema validation failed",
         };
@@ -297,29 +282,41 @@ export async function runSharedJsonSchemaGate<T>(
           finishReason: input.finishReason,
           likelyOpenPath: contInput.likelyOpenPath,
           requiredRemainingPaths: schemaRequiredPaths,
-          errorSummary: contResult.text ? "continuation received" : "continuation empty",
+          errorSummary: contResult.suffix ? "continuation suffix received" : "continuation empty",
+          repairablePaths: undefined,
         });
 
-        if (contResult.text) {
-          const completed = extraction.json + contResult.text;
+        if (contResult.suffix) {
+          const completed = extraction.json + contResult.suffix;
           const completedResult = parseAndValidate(completed, input.schema);
           if (completedResult.success) {
             debug.status = "repaired";
+            debug.attempts.push({
+              attemptStage: "final_validate",
+              finishReason: input.finishReason,
+              likelyOpenPath: null,
+              requiredRemainingPaths: [],
+              errorSummary: "finish continuation succeeded",
+            });
             return { status: "valid", value: completedResult.data, debug };
           }
+
+          // Continuation produced parseable but schema-invalid — route to FieldPatch
+          const patchResult = await tryFieldPatch(completed, input, debug, input.finishReason);
+          if (patchResult) return patchResult;
         }
       } else if (classification === "continuation_needed") {
         debug.attempts.push({
           attemptStage: "finish_continuation",
           finishReason: input.finishReason,
-          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json || "")),
+          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json)),
           requiredRemainingPaths: schemaRequiredPaths,
           errorSummary: "continuation callback not available",
         });
       }
     }
 
-    // Step 4: For non-length errors or after closure fails, try field patch
+    // Step 4: FieldPatch for schema-invalid but parseable JSON
     if (parseError) {
       const fieldPatchResult = await tryFieldPatch(
         extraction.json,
@@ -327,13 +324,11 @@ export async function runSharedJsonSchemaGate<T>(
         debug,
         input.finishReason,
       );
-      if (fieldPatchResult) {
-        return fieldPatchResult;
-      }
+      if (fieldPatchResult) return fieldPatchResult;
     }
   }
 
-  // No usable text and length-like error
+  // Step 5: Empty output with length-like error — transport/token diagnostic
   if (
     (normalizedReason === "length" || normalizedReason === "object_generation_unparseable") &&
     (!input.rawText || input.rawText.trim().length === 0)
@@ -343,7 +338,7 @@ export async function runSharedJsonSchemaGate<T>(
       finishReason: input.finishReason,
       likelyOpenPath: null,
       requiredRemainingPaths: [],
-      errorSummary: "empty output with length finish - transport/token diagnostic",
+      errorSummary: "empty output with length finish — transport/token diagnostic",
     });
     return {
       status: "schema_failure",
@@ -392,6 +387,7 @@ async function tryFieldPatch<T>(
     if (path) failingPaths.add(path);
   }
 
+  // Check immutable failures
   const immutableFailures = [...failingPaths].filter((p) =>
     input.immutablePaths.some((immutable) => p === immutable || p.startsWith(`${immutable}.`)),
   );
@@ -406,13 +402,9 @@ async function tryFieldPatch<T>(
     return null;
   }
 
+  // Filter to allowed, non-immutable, actually failing paths
   const repairable = [...failingPaths].filter((p) =>
-    input.allowedRepairPaths.some((allowed) => {
-      const fp = p.split(".");
-      const ap = allowed.split(".");
-      if (fp.length !== ap.length) return false;
-      return ap.every((part, i) => part === "*" || part === fp[i]);
-    }),
+    input.allowedRepairPaths.some((allowed) => matchesAllowedPath(p, allowed)),
   );
 
   if (repairable.length === 0) {
@@ -454,7 +446,7 @@ async function tryFieldPatch<T>(
     validationSummary: `Schema validation failed. Failing paths: ${repairable.join(", ")}. Only these paths may be repaired.`,
   });
 
-  if (!patchResult.patch || Object.keys(patchResult.patch).length === 0) {
+  if (!patchResult.repair || patchResult.repair.length === 0) {
     debug.attempts.push({
       attemptStage: "field_patch",
       finishReason,
@@ -465,11 +457,9 @@ async function tryFieldPatch<T>(
     return null;
   }
 
-  // Convert patch to operations
-  const ops = flattenPatch(patchResult.patch);
   const { merged, rejected } = applyFieldPatch(
     parsed,
-    ops,
+    patchResult.repair,
     input.allowedRepairPaths,
     input.immutablePaths,
   );
@@ -506,23 +496,7 @@ async function tryFieldPatch<T>(
     likelyOpenPath: null,
     requiredRemainingPaths: repairable,
     repairablePaths: repairable,
-    errorSummary: `field-patch produced invalid result`,
+    errorSummary: "field-patch produced invalid result",
   });
   return null;
-}
-
-function flattenPatch(
-  obj: Record<string, unknown>,
-  prefix = "",
-): Array<{ path: string; value: unknown }> {
-  const result: Array<{ path: string; value: unknown }> = [];
-  for (const [key, value] of Object.entries(obj)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      result.push(...flattenPatch(value as Record<string, unknown>, path));
-    } else {
-      result.push({ path, value });
-    }
-  }
-  return result;
 }

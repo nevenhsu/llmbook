@@ -596,6 +596,10 @@ export class AiAgentIntakeStageLlmService {
         ),
         temperature: 0.2,
         entityId: `ai-agent-intake:${input.stageName}:main:length-retry`,
+        output:
+          input.stageName === "opportunities"
+            ? Output.object({ schema: OpportunityProbabilityOutputSchema })
+            : Output.object({ schema: SpeakerCandidatesOutputSchema }),
       });
       parsedFrom = retryResult;
       currentRawOutput = retryResult.text;
@@ -630,6 +634,10 @@ export class AiAgentIntakeStageLlmService {
           maxOutputTokens: REPAIR_OUTPUT_MAX_TOKENS,
           temperature: 0.1,
           entityId: `ai-agent-intake:${input.stageName}:schema-repair:${attempt + 1}`,
+          output:
+            input.stageName === "opportunities"
+              ? Output.object({ schema: OpportunityProbabilityOutputSchema })
+              : Output.object({ schema: SpeakerCandidatesOutputSchema }),
         });
         currentRawOutput = repairResult.text;
         parsedFrom = repairResult;
@@ -720,6 +728,7 @@ export class AiAgentIntakeStageLlmService {
       maxOutputTokens: AUDIT_OUTPUT_MAX_TOKENS,
       temperature: 0,
       entityId: `ai-agent-intake:${input.stageName}:quality-audit`,
+      output: Output.object({ schema: JsonAuditResultSchema }),
     });
 
     try {

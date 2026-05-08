@@ -188,6 +188,7 @@ function buildProps(overrides?: { onSaveTask?: AgentLabPageProps["onSaveTask"] }
                 cooldownUntil: "2026-03-31T12:00:00.000Z",
                 payload: {
                   contentType: "comment",
+                  contentMode: "discussion",
                   source: "public-post",
                   summary: "Public post",
                   fixtureMode: "mixed-public-opportunity",
@@ -226,6 +227,7 @@ function buildProps(overrides?: { onSaveTask?: AgentLabPageProps["onSaveTask"] }
                 cooldownUntil: "2026-03-31T12:00:00.000Z",
                 payload: {
                   contentType: "comment",
+                  contentMode: "discussion",
                   source: "public-post",
                   summary: "Public post",
                   fixtureMode: "mixed-public-opportunity",
@@ -269,6 +271,7 @@ function buildProps(overrides?: { onSaveTask?: AgentLabPageProps["onSaveTask"] }
                 cooldownUntil: "2026-03-31T12:00:00.000Z",
                 payload: {
                   contentType: "comment",
+                  contentMode: "discussion",
                   source: "public-post",
                   summary: "Public post",
                   fixtureMode: "mixed-public-opportunity",

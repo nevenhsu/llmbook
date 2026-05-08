@@ -21,15 +21,11 @@ export function scanJsonState(rawText: string): BracketState {
         const top = stack[stack.length - 1];
         if (top === "string") {
           stack.pop();
-          // This was a string value after a key
         } else if (top === '"') {
           stack.pop();
-          // This was a key, next should be ':'
-          // Skip whitespace to check for ':'
           let j = i + 1;
           while (j < rawText.length && /\s/.test(rawText[j])) j++;
           if (j < rawText.length && rawText[j] === ":") {
-            // This was a key - record it
             const keyStart = findKeyStart(rawText, i);
             lastKey = rawText.slice(keyStart, i).replace(/^"/, "").replace(/"$/, "");
             if (lastPath) {
@@ -47,16 +43,12 @@ export function scanJsonState(rawText: string): BracketState {
     switch (ch) {
       case '"':
         openString = true;
-        // Determine if this is a key or value based on context
-        // If the last non-whitespace was '{' or ',' -> it's a key
-        // If the last non-whitespace was ':' -> it's a value
         const prev = getLastNonWhitespace(rawText, i);
         if (prev === "{" || prev === ",") {
-          stack.push('"'); // key
+          stack.push('"');
         } else if (prev === ":" || prev === "[" || prev === null) {
-          stack.push("string"); // value
+          stack.push("string");
         } else {
-          // Default: treat as value
           stack.push("string");
         }
         break;
@@ -68,13 +60,11 @@ export function scanJsonState(rawText: string): BracketState {
       case "[":
         stack.push("[");
         depth++;
-        // If this array is a value of a key, don't reset path
         break;
       case "}":
         if (stack[stack.length - 1] === "{") {
           stack.pop();
           depth--;
-          // Navigate up one level in path
           if (lastPath) {
             const dotIdx = lastPath.lastIndexOf(".");
             lastPath = dotIdx > -1 ? lastPath.slice(0, dotIdx) : null;
@@ -109,7 +99,6 @@ function getLastNonWhitespace(text: string, beforeIdx: number): string | null {
 }
 
 function findKeyStart(text: string, quoteEndIdx: number): number {
-  // Go backwards from the closing quote to find the opening quote
   for (let i = quoteEndIdx - 1; i >= 0; i--) {
     if (text[i] === '"' && (i === 0 || text[i - 1] !== "\\")) {
       return i;
@@ -126,28 +115,32 @@ export function classifyTruncation(rawText: string): TruncationClassification {
   const state = scanJsonState(rawText);
   const trimmed = rawText.trimEnd();
 
+  // Dangling comma: needs continuation to supply the next value/key
+  if (trimmed.endsWith(",")) {
+    return "continuation_needed";
+  }
+
+  // Trailing colon: needs continuation to supply a value
+  const lastNonWs = getLastNonWhitespace(rawText, rawText.length);
+  if (lastNonWs === ":") {
+    return "continuation_needed";
+  }
+
   if (state.openString) {
     const closeTest = tryCloseString(rawText);
     if (closeTest) {
       return "tail_closable";
     }
-    return "prefix_too_broken";
+    return "continuation_needed";
   }
 
   if (state.stack.length === 0) {
-    if (trimmed.endsWith(",")) {
-      return "continuation_needed";
-    }
     return "tail_closable";
   }
 
-  const closable = stackIsClosable(state.stack);
-  if (closable && !trimmed.endsWith(",")) {
+  // Check if stack is closable with only `}` and `]`
+  if (stackIsClosable(state.stack)) {
     return "tail_closable";
-  }
-
-  if (trimmed.endsWith(",")) {
-    return "continuation_needed";
   }
 
   return "continuation_needed";
@@ -156,8 +149,8 @@ export function classifyTruncation(rawText: string): TruncationClassification {
 function stackIsClosable(stack: BracketState["stack"]): boolean {
   if (stack.length === 0) return false;
 
-  // We can close arrays and objects, but not broken strings
   for (const item of stack) {
+    // String markers mean we need more than just closers
     if (item === '"' || item === "string") {
       return false;
     }
@@ -167,7 +160,7 @@ function stackIsClosable(stack: BracketState["stack"]): boolean {
 }
 
 function tryCloseString(rawText: string): string | null {
-  const alternatives = [rawText + '"', rawText + '\\"'];
+  const alternatives = [rawText + '"'];
 
   for (const candidate of alternatives) {
     try {
@@ -192,38 +185,18 @@ export function tryDeterministicTailClosure(rawText: string): string | null {
   }
 
   if (state.stack.length === 0) {
-    // No open stack - nothing to close
     return null;
   }
 
-  // Build suffix from stack
-  const suffix = reverseStack(state.stack);
-  if (!suffix) return null;
-
-  const candidate = rawText + suffix;
-  try {
-    JSON.parse(candidate);
-    return candidate;
-  } catch {
-    // Try a few more suffix candidates
-    const alternatives = buildSuffixAlternatives(state.stack);
-    for (const alt of alternatives) {
-      try {
-        JSON.parse(rawText + alt);
-        return rawText + alt;
-      } catch {
-        // continue
-      }
-    }
+  if (!stackIsClosable(state.stack)) {
     return null;
   }
-}
 
-function reverseStack(stack: BracketState["stack"]): string | null {
-  const reversed = [...stack].reverse();
+  // Build syntax-only suffix from stack
+  const reversed = [...state.stack].reverse();
   let suffix = "";
   for (const item of reversed) {
-    if (item === "{" || item === '"' || item === "string") {
+    if (item === "{") {
       suffix += "}";
     } else if (item === "[") {
       suffix += "]";
@@ -231,32 +204,17 @@ function reverseStack(stack: BracketState["stack"]): string | null {
       return null;
     }
   }
-  return suffix;
-}
 
-function buildSuffixAlternatives(stack: BracketState["stack"]): string[] {
-  const reversed = [...stack].reverse();
-  const results: string[] = [];
-  const suffixes: string[] = [];
+  // Reject any suffix that contains non-syntax content
+  if (suffix === "") return null;
 
-  for (const item of reversed) {
-    if (item === "{" || item === '"' || item === "string") {
-      suffixes.push("}");
-    } else if (item === "[") {
-      suffixes.push("]");
-    }
+  const candidate = rawText + suffix;
+  try {
+    JSON.parse(candidate);
+    return candidate;
+  } catch {
+    return null;
   }
-
-  if (suffixes.length === 2) {
-    results.push(suffixes.join(""));
-    results.push('"",\n  ' + suffixes.join(""));
-  } else if (suffixes.length === 1) {
-    results.push(suffixes[0]);
-  } else {
-    results.push(suffixes.join(""));
-  }
-
-  return results;
 }
 
 export function deriveOpenPath(state: BracketState): string | null {

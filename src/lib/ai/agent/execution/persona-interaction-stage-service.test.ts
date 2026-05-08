@@ -7,23 +7,43 @@ import type {
   PersonaProfile,
 } from "@/lib/ai/admin/control-plane-contract";
 
-const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM } = vi.hoisted(
-  () => ({
+const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeStructuredLLM } =
+  vi.hoisted(() => ({
     createDbBackedLlmProviderRegistry: vi.fn(async () => ({ providers: new Map() })),
     resolveLlmInvocationConfig: vi.fn(async () => ({
       route: { targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }] },
       timeoutMs: 30_000,
       retries: 0,
     })),
-    invokeLLM: vi.fn(async () => ({
-      text: '{"markdown":"Raw stage response","need_image":false,"image_prompt":null,"image_alt":null}',
-      finishReason: "stop",
-      providerId: "xai",
-      modelId: "grok-4-1-fast-reasoning",
-      error: null,
+    invokeStructuredLLM: vi.fn(async () => ({
+      status: "valid" as const,
+      value: {
+        markdown: "Raw stage response",
+        need_image: false,
+        image_prompt: null,
+        image_alt: null,
+      },
+      raw: {
+        text: '{"markdown":"Raw stage response","need_image":false,"image_prompt":null,"image_alt":null}',
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        error: null,
+        object: null,
+        usedFallback: false,
+        attempts: 1,
+        path: ["xai:grok-4-1-fast-reasoning"],
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, normalized: false },
+      },
+      schemaGateDebug: {
+        flowId: "test",
+        stageId: "structured",
+        schemaName: "TestSchema",
+        status: "passed" as const,
+        attempts: [],
+      },
     })),
-  }),
-);
+  }));
 
 vi.mock("@/lib/ai/llm/default-registry", () => ({
   createDbBackedLlmProviderRegistry,
@@ -33,8 +53,8 @@ vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
   resolveLlmInvocationConfig,
 }));
 
-vi.mock("@/lib/ai/llm/invoke-llm", () => ({
-  invokeLLM,
+vi.mock("@/lib/ai/llm/invoke-structured-llm", () => ({
+  invokeStructuredLLM,
 }));
 
 function sampleDocument(): AiControlPlaneDocument {
@@ -168,25 +188,25 @@ describe("AiAgentPersonaInteractionStageService", () => {
     vi.clearAllMocks();
   });
 
-  it("invokes the selected LLM and returns raw output with metadata without parsing", async () => {
+  it("invokes invokeStructuredLLM and returns raw output with metadata without parsing", async () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
     expect(result.rawText).toBe(
       '{"markdown":"Raw stage response","need_image":false,"image_prompt":null,"image_alt":null}',
     );
     expect(result.providerId).toBe("xai");
     expect(result.modelId).toBe("grok-4-1-fast-reasoning");
     expect(result.finishReason).toBe("stop");
-    expect(result.assembledPrompt).toContain("[agent_voice_contract]");
+    expect(result.assembledPrompt).toContain("[system_baseline]");
     expect(result.assembledPrompt).toContain("[board_context]");
     expect(result.assembledPrompt).toContain("[target_context]");
   });
 
-  it("maps reply stages to reply-native directives", async () => {
+  it("maps reply stages with output constraints", async () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
@@ -194,8 +214,8 @@ describe("AiAgentPersonaInteractionStageService", () => {
       taskContext: "Generate a reply inside the active thread below.",
     });
 
-    expect(result.assembledPrompt).toContain("thread reply");
-    expect(result.assembledPrompt).toContain("top-level essay");
+    expect(result.assembledPrompt).toContain("[output_constraints]");
+    expect(result.assembledPrompt).toContain("[target_context]");
     expect(result.assembledPrompt).not.toContain("standalone top-level contribution");
   });
 
@@ -213,5 +233,118 @@ describe("AiAgentPersonaInteractionStageService", () => {
     expect(result.assembledPrompt).toContain("[task_context]");
     expect(result.assembledPrompt).not.toContain("[board_context]");
     expect(result.assembledPrompt).not.toContain("[target_context]");
+  });
+
+  it("passes schemaGate config to invokeStructuredLLM for JSON stages", async () => {
+    const service = new AiAgentPersonaInteractionStageService();
+    await service.runStage({
+      ...baseInput(),
+      taskType: "post_plan",
+      stagePurpose: "main",
+    });
+
+    expect(invokeStructuredLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaGate: expect.objectContaining({
+          schemaName: "PostPlanOutputSchema",
+        }),
+      }),
+    );
+  });
+
+  it("passes audit schema for audit stages", async () => {
+    const service = new AiAgentPersonaInteractionStageService();
+    await service.runStage({
+      ...baseInput(),
+      taskType: "comment",
+      stagePurpose: "audit",
+    });
+
+    expect(invokeStructuredLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaGate: expect.objectContaining({
+          schemaName: "CommentDiscussionAuditSchema",
+        }),
+      }),
+    );
+  });
+
+  it("throws when structured schema gate fails", async () => {
+    invokeStructuredLLM.mockResolvedValueOnce({
+      status: "schema_failure",
+      error: "Schema gate failed for CommentOutputSchema",
+      raw: {
+        text: '{"markdown":123}',
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        error: undefined,
+        object: null,
+        usedFallback: false,
+        attempts: 1,
+        path: ["xai:grok-4-1-fast-reasoning"],
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, normalized: false },
+      },
+      schemaGateDebug: {
+        flowId: "test",
+        stageId: "structured",
+        schemaName: "CommentOutputSchema",
+        status: "failed",
+        attempts: [],
+      },
+    } as any);
+
+    const service = new AiAgentPersonaInteractionStageService();
+
+    await expect(service.runStage({ ...baseInput() })).rejects.toThrow(
+      "Schema gate failed for CommentOutputSchema",
+    );
+  });
+
+  it("uses the validated structured value when provider returns object without text", async () => {
+    invokeStructuredLLM.mockResolvedValueOnce({
+      status: "valid",
+      value: {
+        markdown: "Object-only structured response",
+        need_image: false,
+        image_prompt: null,
+        image_alt: null,
+      },
+      raw: {
+        text: "",
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        error: undefined,
+        object: {
+          markdown: "Object-only structured response",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+        },
+        usedFallback: false,
+        attempts: 1,
+        path: ["xai:grok-4-1-fast-reasoning"],
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, normalized: false },
+      },
+      schemaGateDebug: {
+        flowId: "test",
+        stageId: "structured",
+        schemaName: "CommentOutputSchema",
+        status: "passed",
+        attempts: [],
+      },
+    } as any);
+
+    const service = new AiAgentPersonaInteractionStageService();
+    const result = await service.runStage({ ...baseInput() });
+
+    expect(result.rawText).toContain("Object-only structured response");
+    expect(result.object).toEqual({
+      markdown: "Object-only structured response",
+      need_image: false,
+      image_prompt: null,
+      image_alt: null,
+    });
   });
 });

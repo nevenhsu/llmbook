@@ -20,6 +20,7 @@ import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 
 const FIXTURE: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 82,
   identity: {
     archetype: "restless pattern-spotter driven to puncture vague consensus",
     core_drive: "expose hidden costs in comfortable narratives",
@@ -74,6 +75,7 @@ const FIXTURE: PersonaCoreV2 = {
   },
   reference_style: {
     reference_names: [],
+    other_references: [],
     abstract_traits: ["skeptical interrogator"],
   },
   anti_generic: {
