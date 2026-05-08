@@ -75,8 +75,9 @@ describe("PersonaGenerationPreviewMockPage", () => {
 
   it("reuses the full generate persona flow with mock prompt assist and mock preview output", async () => {
     const personaCore = mockPersonaGenerationPreview.structured.persona_core as {
-      voice_fingerprint: { opening_move: string };
-      task_style_matrix: { post: { entry_shape: string } };
+      identity: { core_drive: string; self_image: string };
+      mind: { thinking_procedure: { context_reading: string[] } };
+      narrative: { story_engine: string };
     };
 
     await act(async () => {
@@ -160,32 +161,21 @@ describe("PersonaGenerationPreviewMockPage", () => {
 
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Token Budget");
-    expect(container.textContent).toContain("Stage 1: seed");
-    expect(container.textContent).toContain("Stage 2: persona_core");
+    expect(container.textContent).toContain("Stage 1: persona_core_v2");
+    expect(container.textContent).toContain("Generate one compact PersonaCoreV2 JSON object.");
+    expect(container.textContent).toContain("[persona_core_v2]");
+    expect(container.textContent).toContain("mind.thinking_procedure:");
     expect(container.textContent).toContain(
-      "voice_fingerprint: { opening_move: string; metaphor_domains: string[]; attack_style: string; praise_style: string; closing_move: string; forbidden_shapes: string[] }",
+      "persona_fit_probability must be an integer from 0 to 100.",
     );
-    expect(container.textContent).toContain(
-      "task_style_matrix: { post: { entry_shape: string; body_shape: string; close_shape: string; forbidden_shapes: string[] }; comment: { entry_shape: string; feedback_shape: string; close_shape: string; forbidden_shapes: string[] } }",
-    );
-    expect(container.textContent).toContain(
-      "The final persona must be reference-inspired, not reference-cosplay.",
-    );
-    expect(container.textContent).toContain(
-      "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
-    );
-    expect(container.textContent).toContain(
-      "Provide enough signal for downstream doctrine derivation across value_fit, reasoning_fit, discourse_fit, and expression_fit.",
-    );
-    expect(container.textContent).toContain(
-      "Use natural-language behavioral descriptions, not enum labels or taxonomy tokens.",
-    );
+    expect(container.textContent).toContain("Perform internally only. Do not reveal.");
     expect(container.textContent).not.toContain("[validated_context]");
-    expect(container.textContent).toContain("[admin_extra_prompt]");
-    expect(container.textContent).toContain("(from Context / Extra Prompt input)");
+    expect(container.textContent).not.toContain("[admin_extra_prompt]");
+    expect(container.textContent).toContain("user_input_context:");
+    expect(container.textContent).toContain(mockPersonaGenerationAdminExtraPrompt);
 
     const personaCoreStageCollapse = Array.from(container.querySelectorAll(".collapse-title")).find(
-      (node) => node.textContent?.includes("Stage 2: persona_core"),
+      (node) => node.textContent?.includes("Stage 1: persona_core_v2"),
     ) as HTMLElement | undefined;
     expect(personaCoreStageCollapse).toBeDefined();
 
@@ -228,12 +218,14 @@ describe("PersonaGenerationPreviewMockPage", () => {
       mockPersonaGenerationPreview.structured.persona.display_name,
     );
     expect(container.textContent).toContain("Archetype");
-    expect(container.textContent).toContain("Core Motivation");
-    expect(container.textContent).toContain("One-Sentence Identity");
-    expect(container.textContent).toContain("Voice Fingerprint");
-    expect(container.textContent).toContain("Task Style Matrix");
-    expect(container.textContent).toContain(personaCore.voice_fingerprint.opening_move);
-    expect(container.textContent).toContain(personaCore.task_style_matrix.post.entry_shape);
+    expect(container.textContent).toContain("Core Drive");
+    expect(container.textContent).toContain("Self Image");
+    expect(container.textContent).toContain("Thinking Procedure");
+    expect(container.textContent).toContain("Story Engine");
+    expect(container.textContent).toContain(personaCore.identity.core_drive);
+    expect(container.textContent).toContain(personaCore.identity.self_image);
+    expect(container.textContent).toContain(personaCore.mind.thinking_procedure.context_reading[0]);
+    expect(container.textContent).toContain(personaCore.narrative.story_engine);
     expect(container.querySelector('[data-testid="generated-persona-identity"]')).not.toBeNull();
     expect(
       container.querySelector('[data-testid="generated-persona-reference-section"]'),
@@ -300,7 +292,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Token Budget");
     expect(container.textContent).not.toContain("Markdown Output");
-    expect(container.textContent).toContain("Stage 2: persona_core");
+    expect(container.textContent).toContain("Stage 1: persona_core_v2");
     expect(
       Array.from(container.querySelectorAll("button")).some(
         (button) => button.textContent?.trim() === "Close",

@@ -42,7 +42,7 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isAdmin.mockResolvedValue(true);
-    assistPersonaPrompt.mockResolvedValue("Prompt text");
+    assistPersonaPrompt.mockResolvedValue({ text: "Prompt text", referenceNames: [] });
   });
 
   it("requires modelId", async () => {
@@ -65,7 +65,7 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ text: "Prompt text" });
+    expect(await res.json()).toEqual({ text: "Prompt text", referenceNames: [] });
     expect(assistPersonaPrompt).toHaveBeenCalledWith({
       modelId: "model-1",
       inputPrompt: "hello",

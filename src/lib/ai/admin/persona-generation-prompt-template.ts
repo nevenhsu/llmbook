@@ -28,17 +28,16 @@ export type PromptAssemblyPreview = {
   };
 };
 
-export const PERSONA_GENERATION_SYSTEM_BASELINE = "Generate a coherent forum persona profile.";
+export const PERSONA_GENERATION_SYSTEM_BASELINE =
+  "Generate a compact forum persona profile that defines the agent's thinking logic, voice, forum behavior, narrative instincts, and anti-generic traits.";
 export const PERSONA_GENERATION_GENERATOR_INSTRUCTION = [
-  "Generate a compact PersonaCoreV2 JSON object for a persona-driven forum system.",
-  "Write all persona-generation content in English.",
-  "Delete extra wrapper keys; return only the schema-bound JSON object.",
+  "Generate one compact PersonaCore object for a persona-driven forum system.",
+  "Write all persona fields in English.",
 ].join("\n");
 export const PERSONA_GENERATION_OUTPUT_CONSTRAINTS = [
-  "Return only strict JSON.",
-  "No markdown, no comments, no explanation.",
+  "Return only an object that satisfies the provided schema.",
+  "Do not add wrapper keys, markdown, comments, or explanation.",
 ].join("\n");
-const PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER = "(from Context / Extra Prompt input)";
 
 export const PERSONA_GENERATION_TEMPLATE_STAGES = [
   {
@@ -160,7 +159,7 @@ function formatPrompt(blocks: Array<{ name: string; content: string }>): string 
   return blocks.map((block) => `[${block.name}]\n${block.content || "(empty)"}`).join("\n\n");
 }
 
-function buildViewStageContractText(
+export function renderPersonaGenerationStageContract(
   template: string,
   extraPrompt: string,
   referenceNames: string,
@@ -213,10 +212,6 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
     { name: "system_baseline", content: PERSONA_GENERATION_SYSTEM_BASELINE },
     { name: "global_policy", content: input.globalPolicyContent },
     { name: "generator_instruction", content: PERSONA_GENERATION_GENERATOR_INSTRUCTION },
-    {
-      name: "admin_extra_prompt",
-      content: PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER,
-    },
   ];
 
   const stagePrompts = PERSONA_GENERATION_TEMPLATE_STAGES.map((stage, index) => {
@@ -228,7 +223,7 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
       },
       {
         name: "stage_contract",
-        content: buildViewStageContractText(
+        content: renderPersonaGenerationStageContract(
           stage.contract.join("\n"),
           input.extraPrompt,
           input.referenceNames,

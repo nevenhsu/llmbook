@@ -145,6 +145,7 @@ describe("ProvidersModelsSection", () => {
           reorderModels: vi.fn(),
           runModelTest: vi.fn(),
           setModelActive: vi.fn(),
+          setProviderActive: vi.fn(),
         }),
       );
     });

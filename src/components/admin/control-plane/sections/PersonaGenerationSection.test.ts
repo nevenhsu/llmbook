@@ -32,6 +32,7 @@ describe("PersonaGenerationSection", () => {
           personaGeneration: {
             modelId: "model-1",
             extraPrompt: "Generate a witty but respectful creator persona.",
+            referenceNames: "",
           },
           setPersonaGeneration: vi.fn(),
           personaUpdate: {

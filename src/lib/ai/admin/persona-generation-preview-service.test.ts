@@ -5,6 +5,7 @@ import type {
   AiProviderConfig,
 } from "@/lib/ai/admin/control-plane-contract";
 import { PersonaGenerationParseError } from "@/lib/ai/admin/control-plane-contract";
+import { FALLBACK_PERSONA_CORE_V2 } from "@/lib/ai/core/persona-core-v2";
 
 const { invokeStructuredLLM, invokeLLM } = vi.hoisted(() => ({
   invokeStructuredLLM: vi.fn(),
@@ -167,5 +168,46 @@ describe("previewPersonaGeneration", () => {
     );
     const prompt = invokeStructuredLLM.mock.calls[0][0].modelInput.prompt;
     expect(prompt).not.toContain("schema_version");
+  });
+
+  it("inserts the admin extra prompt once through user_input_context instead of duplicating it in the top-level prompt blocks", async () => {
+    const extraPrompt = "Make a severe but useful systems critic.";
+    invokeStructuredLLM.mockResolvedValueOnce({
+      status: "valid",
+      value: FALLBACK_PERSONA_CORE_V2,
+      raw: {
+        text: JSON.stringify(FALLBACK_PERSONA_CORE_V2),
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, normalized: false },
+        usedFallback: false,
+        attempts: 1,
+        path: ["xai:grok-4-1-fast-reasoning"],
+        object: FALLBACK_PERSONA_CORE_V2,
+      },
+      schemaGateDebug: {
+        flowId: "persona-generation-preview:model-xai:persona_core_v2:attempt-1",
+        stageId: "structured",
+        schemaName: "PersonaCoreV2Schema",
+        status: "valid",
+        attempts: [],
+      },
+    });
+
+    await previewPersonaGeneration({
+      modelId: "model-xai",
+      extraPrompt,
+      document,
+      providers,
+      models,
+      debug: true,
+      recordLlmInvocationError: vi.fn(),
+    });
+
+    const prompt = invokeStructuredLLM.mock.calls[0][0].modelInput.prompt as string;
+    expect(prompt).toContain(`user_input_context:\n${extraPrompt}`);
+    expect(prompt).not.toContain(`[admin_extra_prompt]\n${extraPrompt}`);
+    expect(prompt.split(extraPrompt)).toHaveLength(2);
   });
 });

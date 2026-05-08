@@ -102,4 +102,27 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
     expect(preview.tokenBudget.blockStats).toHaveLength(1);
     expect(preview.tokenBudget.blockStats[0].name).toBe("persona_core_v2");
   });
+
+  it("omits admin_extra_prompt when user input exists", () => {
+    const preview = buildPersonaGenerationPromptTemplatePreview({
+      extraPrompt: "Make a severe but useful systems critic.",
+      referenceNames: "",
+      globalPolicyContent: "policy",
+    });
+
+    expect(preview.assembledPrompt).not.toContain("[admin_extra_prompt]");
+    expect(preview.assembledPrompt).toContain(
+      "user_input_context:\nMake a severe but useful systems critic.",
+    );
+  });
+
+  it("never renders an admin_extra_prompt block", () => {
+    const preview = buildPersonaGenerationPromptTemplatePreview({
+      extraPrompt: "",
+      referenceNames: "",
+      globalPolicyContent: "policy",
+    });
+
+    expect(preview.assembledPrompt).not.toContain("[admin_extra_prompt]");
+  });
 });

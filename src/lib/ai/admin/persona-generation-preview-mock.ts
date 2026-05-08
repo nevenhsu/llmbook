@@ -3,6 +3,7 @@ import { PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/per
 import {
   buildPersonaGenerationPromptTemplatePreview,
   PERSONA_GENERATION_TEMPLATE_STAGES,
+  renderPersonaGenerationStageContract,
 } from "@/lib/ai/admin/persona-generation-prompt-template";
 import type {
   PreviewResult,
@@ -63,7 +64,7 @@ function buildStageSection(input: {
   index: number;
   stageName: string;
   stageGoal: string;
-  stageContract: string[];
+  stageContract: string;
   carryForwardContext?: Record<string, unknown>;
 }) {
   return [
@@ -77,9 +78,6 @@ function buildStageSection(input: {
     "[generator_instruction]",
     generatorInstruction,
     "",
-    "[admin_extra_prompt]",
-    fixture.adminExtraPrompt,
-    "",
     "[persona_generation_stage]",
     `stage_name: ${input.stageName}`,
     `stage_goal: ${input.stageGoal}`,
@@ -88,7 +86,7 @@ function buildStageSection(input: {
       : []),
     "",
     "[stage_contract]",
-    ...input.stageContract,
+    input.stageContract,
     "",
     "[output_constraints]",
     "Return only strict JSON.",
@@ -102,7 +100,11 @@ const assembledPrompt = [
     index: 1,
     stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
     stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
-    stageContract: [...PERSONA_GENERATION_TEMPLATE_STAGES[0].contract],
+    stageContract: renderPersonaGenerationStageContract(
+      PERSONA_GENERATION_TEMPLATE_STAGES[0].contract.join("\n"),
+      fixture.adminExtraPrompt,
+      "",
+    ),
   }),
 ].join("\n\n");
 

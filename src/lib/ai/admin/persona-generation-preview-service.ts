@@ -42,7 +42,10 @@ import {
   parseQualityRepairDelta,
   validatePersonaCoreV2Quality,
 } from "@/lib/ai/admin/persona-generation-contract";
-import { PERSONA_GENERATION_TEMPLATE_STAGES } from "@/lib/ai/admin/persona-generation-prompt-template";
+import {
+  PERSONA_GENERATION_TEMPLATE_STAGES,
+  renderPersonaGenerationStageContract,
+} from "@/lib/ai/admin/persona-generation-prompt-template";
 
 const PersonaGenerationSemanticAuditSchema = z.object({
   passes: z.boolean(),
@@ -54,50 +57,6 @@ const PersonaGenerationSemanticAuditSchema = z.object({
 const PersonaGenerationQualityRepairDeltaSchema = z.object({
   repair: z.record(z.string(), z.unknown()),
 });
-
-function buildStageContractText(
-  template: string,
-  extraPrompt: string,
-  referenceNames: string,
-): string {
-  const hasExtra = extraPrompt.trim().length > 0;
-  const hasRefs = referenceNames.trim().length > 0;
-
-  if (!hasExtra && !hasRefs) {
-    return template
-      .replace(/^\[input\]\n/, "")
-      .replace(/user_input_context:\n\{\{USER_INPUT_CONTEXT\}\}\n(\n)?/, "")
-      .replace(
-        /reference_names:\n\{\{USER_REFERENCE_NAMES\}\}[^]*?Each core reference should contribute a distinct dimension of the persona\.\n(\n)?/,
-        "",
-      );
-  }
-
-  let result = template.replace("{{USER_INPUT_CONTEXT}}", hasExtra ? extraPrompt.trim() : "");
-  if (hasRefs) {
-    result = result.replace(
-      "{{USER_REFERENCE_NAMES}}",
-      [
-        referenceNames.trim(),
-        "",
-        "Use reference_names as the persona's core identity anchors.",
-        "They should drive the persona's thinking procedure, voice rhythm, forum behavior, narrative logic, and anti-generic traits.",
-        "Each core reference should contribute a distinct dimension of the persona.",
-      ].join("\n"),
-    );
-  } else {
-    result = result.replace(
-      /reference_names:\n\{\{USER_REFERENCE_NAMES\}\}[^]*?Each core reference should contribute a distinct dimension of the persona\.\n(\n)?/,
-      "",
-    );
-  }
-
-  if (!hasExtra) {
-    result = result.replace(/user_input_context:\n\{\{USER_INPUT_CONTEXT\}\}\n(\n)?/, "");
-  }
-
-  return result;
-}
 
 export async function previewPersonaGeneration(input: {
   modelId: string;
@@ -160,7 +119,6 @@ export async function previewPersonaGeneration(input: {
         "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
       ].join("\n"),
     },
-    { name: "admin_extra_prompt", content: input.extraPrompt },
   ];
   const maxOutputTokens = Math.min(
     model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
@@ -892,7 +850,7 @@ export async function previewPersonaGeneration(input: {
 
   try {
     const personaCoreStage = PERSONA_GENERATION_TEMPLATE_STAGES[0];
-    const contractText = buildStageContractText(
+    const contractText = renderPersonaGenerationStageContract(
       personaCoreStage.contract.join("\n"),
       input.extraPrompt,
       input.referenceNames ?? "",

@@ -53,6 +53,18 @@ function hasNonEmptyText(value: string): boolean {
   return value.trim().length > 0;
 }
 
+export function stripPromptAssistReferenceSuffix(text: string, referenceNames: string[]): string {
+  const normalizedReferenceNames = referenceNames
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  if (normalizedReferenceNames.length === 0) {
+    return text;
+  }
+
+  const suffix = ` Reference sources: ${normalizedReferenceNames.join(", ")}.`;
+  return text.endsWith(suffix) ? text.slice(0, -suffix.length).trim() : text;
+}
+
 export function isEligiblePersonaGenerationModel(
   model: AiModelConfig,
   provider: AiProviderConfig | undefined,
@@ -1140,7 +1152,7 @@ export function useAiControlPlane({
       } else {
         setPersonaGeneration((prev) => ({
           ...prev,
-          extraPrompt: res.text,
+          extraPrompt: stripPromptAssistReferenceSuffix(res.text, res.referenceNames),
           referenceNames: res.referenceNames.join(", "),
         }));
       }
