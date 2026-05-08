@@ -34,7 +34,7 @@ const SHARED_TASTE: PersonaCoreV2["taste"] = {
 const SHARED_REFERENCE: PersonaCoreV2["reference_style"] = {
   reference_names: ["Jane Jacobs"],
   abstract_traits: ["system observation", "moral clarity without sermon"],
-  do_not_imitate: true,
+  other_references: [],
 };
 
 const SHARED_ANTI_GENERIC: PersonaCoreV2["anti_generic"] = {
@@ -62,6 +62,7 @@ const SHARED_NARRATIVE: PersonaCoreV2["narrative"] = {
  */
 const PERSONA_A: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: {
     archetype: "restless pattern-spotter",
     core_drive: "puncture vague consensus",
@@ -115,6 +116,7 @@ const PERSONA_A: PersonaCoreV2 = {
  */
 const PERSONA_B: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: {
     archetype: "craft guardian",
     core_drive: "protect fragile intent from speed-driven erosion",
@@ -172,6 +174,7 @@ const PERSONA_B: PersonaCoreV2 = {
  */
 const PERSONA_C: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: {
     archetype: "systems analyst",
     core_drive: "trace second-order effects before declaring victory",

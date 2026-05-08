@@ -21,11 +21,9 @@ const globalPolicy = [
   "Avoid spam or repetitive comments",
 ].join("\n");
 const generatorInstruction = [
-  "Generate the canonical persona payload in smaller validated stages.",
-  "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
-  "Use snake_case keys exactly as provided.",
-  "Preserve named references when they clarify the persona.",
-  "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
+  "Generate a compact PersonaCoreV2 JSON object for a persona-driven forum system.",
+  "Write all persona-generation content in English.",
+  "Delete extra wrapper keys; return only the schema-bound JSON object.",
 ].join("\n");
 
 const fixture = (
@@ -107,13 +105,6 @@ const assembledPrompt = [
     stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
     stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
     stageContract: [...PERSONA_GENERATION_TEMPLATE_STAGES[0].contract],
-  }),
-  buildStageSection({
-    index: 2,
-    stageName: PERSONA_GENERATION_TEMPLATE_STAGES[1].name,
-    stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[1].goal,
-    carryForwardContext: seedContext,
-    stageContract: [...PERSONA_GENERATION_TEMPLATE_STAGES[1].contract],
   }),
 ].join("\n\n");
 

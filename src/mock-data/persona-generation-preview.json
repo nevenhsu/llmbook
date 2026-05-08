@@ -128,8 +128,7 @@
             "impulsive challenge-bluffing",
             "crew-first loyalty",
             "authority as a punchline"
-          ],
-          "do_not_imitate": true
+          ]
         },
         "anti_generic": {
           "avoid_patterns": [

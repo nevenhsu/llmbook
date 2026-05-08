@@ -4,9 +4,9 @@
 
 **Goal:** Make schema repair a shared mandatory gate for every LLM JSON output, with Persona Core v2 prompt-family flows as the first integration target, so audits only judge output quality after JSON parsing and schema validation already pass.
 
-**Architecture:** Reuse the shared JSON finish/field-patch repair framework from `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md`. Any LLM stage that promises JSON produces raw model text; the shared schema gate extracts, parses, validates, repairs if needed, and returns a typed valid object. Only validated objects can enter downstream semantic audit, quality audit, persistence, ranking, cleanup, or automation. Audit never checks schema, required keys, field types, candidate count, parseability, or metadata shape.
+**Architecture:** Reuse the shared JSON finish/field-patch repair framework from `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md`. Any LLM stage that promises JSON should use AI SDK structured output with `generateText({ output: Output.object({ schema }) })` or the streaming equivalent when appropriate. The shared schema gate receives the same code-owned Zod schema, validates/repairs if needed, and returns a typed valid object. AI SDK structured-output object generation failures where the provider cannot produce a parsable schema-conforming object are normalized into the same repair route as `finishReason=length`. Prompt text should not contain hardcoded full key/type JSON schema blocks. Only validated objects can enter downstream semantic audit, quality audit, persistence, ranking, cleanup, or automation. Audit never checks schema, required keys, field types, candidate count, parseability, or metadata shape.
 
-**Tech Stack:** TypeScript, Next.js, staged LLM JSON flows, shared JSON repair utilities, Persona Core v2 prompt family builders, Vitest.
+**Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` / `streamText` with `Output.object`, Zod, staged LLM JSON flows, shared JSON repair utilities, Persona Core v2 prompt family builders, Vitest.
 
 ---
 
@@ -21,7 +21,7 @@ Reuse these concepts directly:
 - `JsonFinishAttempt`
 - deterministic truncation classification
 - `finishReason=length` continuation repair
-- full-schema continuation prompt
+- schema-name/path-hint continuation prompt backed by code-owned Zod schema
 - salvage pass for repeated-prefix or whole-object responses
 - field-patch fallback
 - unknown-path rejection
@@ -39,7 +39,7 @@ Do not merge these gates.
 
 Why:
 
-- Schema repair needs exact schema paths, parse errors, previous output, and repair mechanics.
+- Schema repair needs exact schema paths, parse errors, previous output, code-owned Zod schemas, and repair mechanics.
 - Quality audit needs persona packet, board context, target context, generated content, and quality standards.
 - Audits become noisy when they inspect keys/types that deterministic parsers already checked.
 - Quality repair should only run after audit fails, not after schema validation fails.
@@ -54,11 +54,13 @@ llm_json_stage
     -> if invalid and finishReason=length: finish_repair -> extract_parse_validate again
        -> if valid: downstream stage
        -> if parseable but schema-invalid: field_patch_repair -> extract_parse_validate again
+    -> if AI SDK object generation error says provider failed to generate a parsable schema-conforming object:
+       normalize as finishReason=length-equivalent -> finish_repair if usable text exists
     -> if invalid and field repairable: field_patch_repair -> extract_parse_validate again
     -> if still invalid: typed schema failure, no downstream audit/persistence
   -> optional_quality_or_semantic_audit
     -> if quality pass: persist/preview
-    -> if quality fail: quality_repair with same output contract
+    -> if quality fail: quality_repair with same code-owned output schema
     -> shared_json_schema_gate on repaired output
     -> quality_audit on repaired valid output
 ```
@@ -103,23 +105,25 @@ Persona generation is not exempt:
 
 ## Schema Inputs
 
-The shared gate receives schema data from the calling flow. For Persona v2 interaction flows, use the same static output-contract constants defined in Phase 2.5:
+The shared gate receives schema data from the calling flow. For Persona v2 interaction flows, use code-owned schemas instead of static prompt key/type contracts:
 
-- `POST_PLAN_OUTPUT_CONTRACT`
-- `POST_BODY_OUTPUT_CONTRACT`
-- `COMMENT_OUTPUT_CONTRACT`
-- `REPLY_OUTPUT_CONTRACT`
+- `PostPlanOutputSchema`
+- `PostBodyOutputSchema`
+- `CommentOutputSchema`
+- `ReplyOutputSchema`
 
-The shared schema gate should receive a machine-readable version of the relevant contract:
+The shared schema gate should receive the Zod schema and derived path metadata:
 
 ```ts
+import type { z } from "zod";
+
 type SharedJsonSchemaGateInput = {
   flowId: string;
   stageId: string;
   rawText: string;
   finishReason: string | null;
   schemaName: string;
-  schemaText: string;
+  schema: z.ZodType;
   validationRules: string[];
   allowedRepairPaths: string[];
   immutablePaths: string[];
@@ -160,7 +164,7 @@ Allowed repair paths:
 Schema-only rules:
 
 - `candidates` must be an array.
-- Candidate fields must have the expected key/type shape.
+- Candidate fields must validate through `PostPlanOutputSchema`.
 - Candidate count is schema-stage responsibility, not audit responsibility.
 
 ### `post_body`
@@ -178,7 +182,7 @@ Allowed repair paths:
 Schema-only rules:
 
 - `body` must be a string containing markdown text.
-- `metadata.probability` must parse as an integer from 0 to 100, or parser policy may default invalid values to `0` if Phase 2 output-contract behavior keeps that default.
+- `metadata.probability` must parse as an integer from 0 to 100, or parser policy may default invalid values to `0` if the code-owned schema behavior keeps that default.
 
 ### `comment`
 
@@ -194,7 +198,7 @@ Allowed repair paths:
 Schema-only rules:
 
 - `markdown` must be a string containing markdown text.
-- Media fields must match key/type shape.
+- Media fields must validate through `CommentOutputSchema`.
 - Metadata shape is schema-stage responsibility, not audit responsibility.
 
 ### `reply`
@@ -211,24 +215,26 @@ Allowed repair paths:
 Schema-only rules:
 
 - `markdown` must be a string containing markdown text.
-- Media fields must match key/type shape.
+- Media fields must validate through `ReplyOutputSchema`.
 - Metadata shape is schema-stage responsibility, not audit responsibility.
 
 ## Repair Decision Table
 
-| Condition                                                        | Action                                                       | Audit?                       |
-| ---------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------- |
-| JSON extracts, parses, and validates                             | pass typed object forward                                    | yes                          |
-| `finishReason=length` and raw text non-empty                     | run schema-grounded finish repair, then parse/validate again | only after validation passes |
-| deterministic tail closure validates                             | accept closed output                                         | yes                          |
-| finish repair returns valid continuation                         | concatenate, validate, accept                                | yes                          |
-| finish repair returns parseable JSON with missing/invalid fields | run field-patch repair, then parse/validate again            | only after validation passes |
-| finish repair returns whole object preserving completed prefix   | salvage, validate, accept                                    | yes                          |
-| parsed object has missing/invalid schema fields                  | field-patch repair                                           | only after validation passes |
-| non-length invalid JSON has repairable partial object            | field-patch repair                                           | only after validation passes |
-| empty output with `finishReason=length`                          | typed transport/token diagnostic                             | no                           |
-| repair changes immutable completed fields                        | reject repair                                                | no                           |
-| repair still invalid after bounded attempts                      | typed schema failure                                         | no                           |
+| Condition                                                                                                                           | Action                                                                                            | Audit?                       |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------- |
+| JSON extracts, parses, and validates                                                                                                | pass typed object forward                                                                         | yes                          |
+| `finishReason=length` and raw text non-empty                                                                                        | run schema-grounded finish repair, then parse/validate again                                      | only after validation passes |
+| AI SDK object generation error says provider failed to generate a parsable object conforming to schema, and raw/partial text exists | normalize as length-equivalent; run schema-grounded finish repair                                 | only after validation passes |
+| deterministic tail closure validates                                                                                                | accept closed output                                                                              | yes                          |
+| finish repair returns valid continuation                                                                                            | concatenate, validate, accept                                                                     | yes                          |
+| finish repair returns parseable JSON with missing/invalid fields                                                                    | run field-patch repair, then parse/validate again                                                 | only after validation passes |
+| finish repair returns whole object preserving completed prefix                                                                      | salvage, validate, accept                                                                         | yes                          |
+| parsed object has missing/invalid schema fields                                                                                     | field-patch repair                                                                                | only after validation passes |
+| non-length invalid JSON has repairable partial object                                                                               | field-patch repair                                                                                | only after validation passes |
+| empty output with `finishReason=length`                                                                                             | typed transport/token diagnostic                                                                  | no                           |
+| AI SDK object generation error has no usable text prefix                                                                            | treat like empty `finishReason=length`; typed transport/token diagnostic or allowed compact retry | no                           |
+| repair changes immutable completed fields                                                                                           | reject repair                                                                                     | no                           |
+| repair still invalid after bounded attempts                                                                                         | typed schema failure                                                                              | no                           |
 
 ## Bounded Repair Loop
 
@@ -241,7 +247,7 @@ while attempts remain:
   if valid:
     return typed object
 
-  if parse failed because finishReason=length and continuation not yet attempted:
+  if parse failed because finishReason=length or normalized object-generation failure and continuation not yet attempted:
     current candidate = finish_repair(previous_output)
     continue
 
@@ -282,11 +288,12 @@ Do not regenerate the full object.
 Do not repeat any already emitted JSON prefix.
 Return only the missing JSON continuation that can be appended directly to previous_output.
 The continuation must start with the next needed character after previous_output.
-The completed previous_output + continuation must parse as one strict JSON object and pass the schema.
+The completed previous_output + continuation must parse as one strict JSON object and pass the code-owned structured output schema.
 No markdown. No comments. No explanation.
 
-[schema]
-{{FULL_SCHEMA_TEXT}}
+[structured_output_schema]
+schema_name: {{SCHEMA_NAME}}
+The full schema is enforced in code with AI SDK Output.object and Zod. Do not include or infer a hardcoded full key/type schema here.
 
 [validation_rules]
 {{VALIDATION_RULES}}
@@ -303,15 +310,8 @@ required_remaining_paths:
 {{NEXT_EXPECTED_JSON_CHARACTER_IF_KNOWN}}
 ```
 
-Use one shared field-patch contract:
-
-```json
-{
-  "repair": {
-    "path.to.field": "replacement value"
-  }
-}
-```
+Use one shared field-patch output schema in code, such as `FieldPatchRepairSchema`.
+The field-patch prompt names the allowlisted paths and asks for repair values, but does not embed a hardcoded key/type JSON example.
 
 Rules:
 
@@ -334,7 +334,7 @@ Audit must not check:
 - field types
 - candidate count
 - `metadata.probability` presence or range
-- media field key/type shape
+- media field schema shape
 
 Audit may check:
 
@@ -391,7 +391,7 @@ Do not put full prompt text or full raw model output in normal debug metadata un
 
 - Implement `runSharedJsonSchemaGate(input)`.
 - Reuse shared finish and field-patch repair utilities.
-- Accept flow-specific schema text, validation rules, allowed repair paths, and immutable paths.
+- Accept flow-specific Zod schema, validation rules, allowed repair paths, and immutable paths.
 - Return either `{ status: "valid", value, debug }` or typed schema failure.
 - Keep Persona-specific flow names, persona packets, and audit concepts out of the shared module.
 - Implement repair as a bounded loop/state machine, not as independent one-shot `finish` and `patch` branches.
@@ -416,10 +416,11 @@ npx vitest run src/lib/ai/json-repair/schema-gate.test.ts src/lib/ai/prompt-runt
 
 - Define the generic schema gate input contract once.
 - Define reusable typed failure results once.
-- Export machine-readable schema text for all four flows.
+- Export Zod schemas for all four flows.
 - Export validation rules for all four flows.
+- Export schema-derived repair path metadata for all four flows.
 - Export allowed repair paths for all four flows.
-- Keep key/type prompt contracts and schema-gate contracts aligned.
+- Keep prompt output-policy labels and code-owned Zod schemas aligned.
 - Make Persona v2 contracts inputs to the shared gate, not special logic inside it.
 
 **Verification:**
@@ -484,7 +485,7 @@ npx vitest run src/lib/ai/agent/execution/flows/post-flow-module.test.ts src/lib
 - Remove schema-check language from audit prompt constants.
 - Keep quality checks only.
 - Add tests that audit prompt text does not include schema-validation duties.
-- Keep audit output contract shape explicit for the audit response itself.
+- Keep audit output schema shape explicit for the audit response itself.
 
 **Verification:**
 
@@ -530,6 +531,8 @@ npx vitest run src/lib/ai/json-repair/schema-gate.test.ts
 
 - Valid main output goes directly to audit.
 - Invalid JSON with `finishReason=length` runs finish continuation before field patch.
+- AI SDK structured-output object generation failure with message text like "fails to generate a parsable object that conforms to the schema" and usable raw text runs the same finish continuation path as `finishReason=length`.
+- AI SDK structured-output object generation failure without usable raw text returns the same typed diagnostic path as empty `finishReason=length`, unless the flow explicitly allows a smaller compact retry.
 - Finish continuation that returns parseable JSON with missing fields flows into field-patch repair, then audit only after validation passes.
 - Field patch may loop for one additional bounded attempt when the previous patch leaves allowed schema errors.
 - Invalid JSON without length finish skips continuation and uses field patch when possible.
@@ -548,18 +551,21 @@ npx vitest run src/lib/ai/json-repair/schema-gate.test.ts
 
 - [ ] Shared schema gate exists outside Persona-specific prompt-family code.
 - [ ] Every LLM JSON output has a path to the shared schema gate before app-owned consumption.
+- [ ] Every new JSON stage uses AI SDK structured output with `Output.object({ schema })` where provider support allows it.
+- [ ] Prompt text does not include hardcoded full key/type JSON schema blocks.
 - [ ] Persona v2 uses the shared gate through a thin adapter, not a forked repair framework.
 - [ ] Persona generation output uses the same shared schema gate before preview/save.
 - [ ] Schema gate runs before every audit.
 - [ ] Audit never receives unparseable or schema-invalid generated output.
 - [ ] `finishReason=length` uses continuation repair before field patch.
+- [ ] AI SDK structured-output object generation failures that cannot produce a parsable schema-conforming object are treated as `finishReason=length`-equivalent for repair routing.
 - [ ] Finish repair can fall through to field patch when the continued JSON parses but remains schema-invalid.
 - [ ] Repair attempts are loopable but bounded.
 - [ ] Non-length schema failures use field patch where possible.
 - [ ] Field patches are path allowlisted.
 - [ ] Missing fields are repairable when their paths are allowlisted.
 - [ ] Completed prefix fields are protected.
-- [ ] Flow output contracts and schema-gate schemas stay aligned.
+- [ ] Flow output schemas and schema-gate schemas stay aligned.
 - [ ] Audit remains quality-only.
 - [ ] Debug metadata explains every repair attempt without leaking unnecessary full prompts.
 

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ContentMode, PersonaFlowKind } from "@/lib/ai/core/persona-core-v2";
 
 type WriterFlowKind = Exclude<PersonaFlowKind, "audit">;
@@ -166,4 +167,240 @@ export function normalizeMetadataProbability(raw: unknown): { probability: numbe
   return {
     probability: parseMetadataProbability(record.probability),
   };
+}
+
+// ---- Code-owned Zod output schemas ----
+
+const MetadataSchema = z.object({
+  probability: z.number().int().min(0).max(100).default(0),
+});
+
+const PostPlanCandidateSchema = z.object({
+  title: z.string(),
+  thesis: z.string(),
+  body_outline: z.array(z.string()).min(2).max(5),
+  persona_fit_score: z.number().int().min(0).max(100),
+  novelty_score: z.number().int().min(0).max(100),
+});
+
+export const PostPlanOutputSchema = z.object({
+  candidates: z.array(PostPlanCandidateSchema).min(2).max(3),
+});
+
+export const PostBodyOutputSchema = z.object({
+  body: z.string(),
+  tags: z.array(z.string()).min(1).max(5),
+  need_image: z.boolean(),
+  image_prompt: z.string().nullable(),
+  image_alt: z.string().nullable(),
+  metadata: MetadataSchema,
+});
+
+const MarkdownOutputFields = {
+  markdown: z.string(),
+  need_image: z.boolean(),
+  image_prompt: z.string().nullable(),
+  image_alt: z.string().nullable(),
+  metadata: MetadataSchema,
+};
+
+export const CommentOutputSchema = z.object(MarkdownOutputFields);
+
+export const ReplyOutputSchema = z.object(MarkdownOutputFields);
+
+// ---- Audit response schemas ----
+
+const AuditCheckEnum = z.enum(["pass", "fail"]);
+
+const DiscussionAuditChecks = z.object({
+  candidate_quality: AuditCheckEnum.optional(),
+  content_quality: AuditCheckEnum.optional(),
+  comment_quality: AuditCheckEnum.optional(),
+  reply_quality: AuditCheckEnum.optional(),
+  persona_fit: AuditCheckEnum,
+});
+
+const StoryAuditChecks = z.object({
+  story_candidate_quality: AuditCheckEnum.optional(),
+  story_quality: AuditCheckEnum.optional(),
+  story_comment_quality: AuditCheckEnum.optional(),
+  story_reply_quality: AuditCheckEnum.optional(),
+  persona_fit: AuditCheckEnum,
+});
+
+export const PostPlanDiscussionAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    candidate_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const PostPlanStoryAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    story_candidate_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const PostBodyDiscussionAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    content_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const PostBodyStoryAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    story_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const CommentDiscussionAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    comment_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const CommentStoryAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    story_comment_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const ReplyDiscussionAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    reply_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+export const ReplyStoryAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()),
+  repairGuidance: z.array(z.string()),
+  checks: z.object({
+    story_reply_quality: AuditCheckEnum,
+    persona_fit: AuditCheckEnum,
+  }),
+});
+
+// ---- Schema-derived metadata ----
+
+export type SchemaMetadata = {
+  schemaName: string;
+  validationRules: string[];
+  allowedRepairPaths: string[];
+  immutablePaths: string[];
+};
+
+export const POST_PLAN_SCHEMA_META: SchemaMetadata = {
+  schemaName: "PostPlanOutputSchema",
+  validationRules: [
+    "candidates must be array of 2-3 items",
+    "each candidate must have title, thesis, body_outline (2-5 items), persona_fit_score (0-100), novelty_score (0-100)",
+  ],
+  allowedRepairPaths: [
+    "candidates",
+    "candidates.*.title",
+    "candidates.*.thesis",
+    "candidates.*.body_outline",
+    "candidates.*.persona_fit_score",
+    "candidates.*.novelty_score",
+  ],
+  immutablePaths: ["candidates"],
+};
+
+export const POST_BODY_SCHEMA_META: SchemaMetadata = {
+  schemaName: "PostBodyOutputSchema",
+  validationRules: [
+    "body must be markdown string",
+    "tags must be array of 1-5 strings",
+    "need_image must be boolean",
+    "metadata.probability must be integer 0-100",
+  ],
+  allowedRepairPaths: [
+    "body",
+    "tags",
+    "need_image",
+    "image_prompt",
+    "image_alt",
+    "metadata",
+    "metadata.probability",
+  ],
+  immutablePaths: ["body"],
+};
+
+export const COMMENT_SCHEMA_META: SchemaMetadata = {
+  schemaName: "CommentOutputSchema",
+  validationRules: [
+    "markdown must be string",
+    "need_image must be boolean",
+    "metadata.probability must be integer 0-100",
+  ],
+  allowedRepairPaths: [
+    "markdown",
+    "need_image",
+    "image_prompt",
+    "image_alt",
+    "metadata",
+    "metadata.probability",
+  ],
+  immutablePaths: ["markdown"],
+};
+
+export const REPLY_SCHEMA_META: SchemaMetadata = {
+  schemaName: "ReplyOutputSchema",
+  validationRules: [
+    "markdown must be string",
+    "need_image must be boolean",
+    "metadata.probability must be integer 0-100",
+  ],
+  allowedRepairPaths: [
+    "markdown",
+    "need_image",
+    "image_prompt",
+    "image_alt",
+    "metadata",
+    "metadata.probability",
+  ],
+  immutablePaths: ["markdown"],
+};
+
+export function getFlowSchemaMeta(flow: string): SchemaMetadata {
+  switch (flow) {
+    case "post_plan":
+      return POST_PLAN_SCHEMA_META;
+    case "post_body":
+      return POST_BODY_SCHEMA_META;
+    case "comment":
+      return COMMENT_SCHEMA_META;
+    case "reply":
+      return REPLY_SCHEMA_META;
+    default:
+      throw new Error(`Unknown flow: ${flow}`);
+  }
 }

@@ -3,12 +3,14 @@ import {
   validatePersonaCoreV2,
   parsePersonaCoreV2,
   FALLBACK_PERSONA_CORE_V2,
+  PersonaCoreV2Schema,
 } from "./persona-core-v2";
 import type { PersonaCoreV2 } from "./persona-core-v2";
 
 function makeValidV2(): PersonaCoreV2 {
   return {
     schema_version: "v2",
+    persona_fit_probability: 85,
     identity: {
       archetype: "restless pattern-spotter",
       core_drive: "puncture vague consensus",
@@ -68,7 +70,7 @@ function makeValidV2(): PersonaCoreV2 {
     reference_style: {
       reference_names: ["David Bowie"],
       abstract_traits: ["theatrical pressure", "outsider poise"],
-      do_not_imitate: true,
+      other_references: [],
     },
     anti_generic: {
       avoid_patterns: ["balanced explainer tone", "advice-list structure", "polite support macro"],
@@ -86,26 +88,19 @@ describe("validatePersonaCoreV2", () => {
       expect(result.core.identity.archetype).toBe("restless pattern-spotter");
       expect(result.core.mind.thinking_procedure.context_reading).toHaveLength(2);
       expect(result.core.narrative.story_engine).toBe("pressure people until the mask slips");
-      expect(result.core.reference_style.do_not_imitate).toBe(true);
     }
   });
 
   it("rejects missing schema_version", () => {
     const input = { ...makeValidV2(), schema_version: undefined };
-    const result = validatePersonaCoreV2(input);
-    expect("error" in result).toBe(true);
-    if ("error" in result) {
-      expect(result.error).toContain("v2");
-    }
+    const result = PersonaCoreV2Schema.safeParse(input);
+    expect(result.success).toBe(false);
   });
 
   it("rejects wrong schema_version", () => {
     const input = { ...makeValidV2(), schema_version: "v1" };
-    const result = validatePersonaCoreV2(input);
-    expect("error" in result).toBe(true);
-    if ("error" in result) {
-      expect(result.error).toContain("v2");
-    }
+    const result = PersonaCoreV2Schema.safeParse(input);
+    expect(result.success).toBe(false);
   });
 
   it("rejects missing narrative", () => {
@@ -118,13 +113,6 @@ describe("validatePersonaCoreV2", () => {
     const valid = makeValidV2();
     valid.mind.thinking_procedure =
       undefined as unknown as PersonaCoreV2["mind"]["thinking_procedure"];
-    const result = validatePersonaCoreV2(valid);
-    expect("error" in result).toBe(true);
-  });
-
-  it("rejects do_not_imitate not true", () => {
-    const valid = makeValidV2();
-    (valid.reference_style as Record<string, unknown>).do_not_imitate = false;
     const result = validatePersonaCoreV2(valid);
     expect("error" in result).toBe(true);
   });
@@ -279,8 +267,9 @@ describe("FALLBACK_PERSONA_CORE_V2", () => {
     expect("core" in result).toBe(true);
   });
 
-  it("has do_not_imitate true", () => {
-    expect(FALLBACK_PERSONA_CORE_V2.reference_style.do_not_imitate).toBe(true);
+  it("has persona_fit_probability", () => {
+    expect(FALLBACK_PERSONA_CORE_V2.persona_fit_probability).toBeGreaterThanOrEqual(0);
+    expect(FALLBACK_PERSONA_CORE_V2.persona_fit_probability).toBeLessThanOrEqual(100);
   });
 
   it("has narrative", () => {
@@ -292,5 +281,194 @@ describe("FALLBACK_PERSONA_CORE_V2", () => {
     expect(FALLBACK_PERSONA_CORE_V2.mind.thinking_procedure.context_reading.length).toBeGreaterThan(
       0,
     );
+  });
+});
+
+describe("persona_fit_probability", () => {
+  it("accepts integer 0-100", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = 75;
+    const result = validatePersonaCoreV2(valid);
+    expect("core" in result).toBe(true);
+  });
+
+  it("rejects missing persona_fit_probability", () => {
+    const valid = makeValidV2();
+    delete (valid as Record<string, unknown>).persona_fit_probability;
+    const result = validatePersonaCoreV2(valid);
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error).toContain("persona_fit_probability");
+    }
+  });
+
+  it("rejects non-integer probability", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = 50.5;
+    const result = validatePersonaCoreV2(valid);
+    expect("error" in result).toBe(true);
+  });
+
+  it("rejects below-0 probability", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = -1;
+    const result = validatePersonaCoreV2(valid);
+    expect("error" in result).toBe(true);
+  });
+
+  it("rejects above-100 probability", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = 101;
+    const result = validatePersonaCoreV2(valid);
+    expect("error" in result).toBe(true);
+  });
+});
+
+describe("reference_style.other_references", () => {
+  it("accepts 0 to 8 items", () => {
+    const valid = makeValidV2();
+    valid.reference_style.other_references = ["ref1", "ref2", "ref3"];
+    const result = validatePersonaCoreV2(valid);
+    expect("core" in result).toBe(true);
+    if ("core" in result) {
+      expect(result.core.reference_style.other_references).toEqual(["ref1", "ref2", "ref3"]);
+    }
+  });
+
+  it("normalizes overlong other_references to first 8 items", () => {
+    const valid = makeValidV2();
+    valid.reference_style.other_references = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
+    const result = validatePersonaCoreV2(valid);
+    expect("core" in result).toBe(true);
+    if ("core" in result) {
+      expect(result.core.reference_style.other_references).toHaveLength(8);
+      expect(result.core.reference_style.other_references).toEqual([
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+      ]);
+    }
+  });
+
+  it("defaults to empty array when missing", () => {
+    const valid = makeValidV2();
+    delete valid.reference_style.other_references;
+    // validator treats missing other_references as empty array
+    const result = validatePersonaCoreV2(valid);
+    expect("core" in result).toBe(true);
+    if ("core" in result) {
+      expect(result.core.reference_style.other_references).toEqual([]);
+    }
+  });
+});
+
+describe("extra keys stripped", () => {
+  it("strips unknown top-level keys", () => {
+    const valid = makeValidV2();
+    (valid as Record<string, unknown>).extra_field = "should be stripped";
+    const result = validatePersonaCoreV2(valid);
+    expect("core" in result).toBe(true);
+    if ("core" in result) {
+      expect((result.core as Record<string, unknown>).extra_field).toBeUndefined();
+    }
+  });
+
+  it("strips unknown nested keys via Zod schema", () => {
+    const input = {
+      ...makeValidV2(),
+      identity: { ...makeValidV2().identity, unknown_key: "should be gone" },
+    };
+    const parsed = PersonaCoreV2Schema.safeParse(input);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect((parsed.data.identity as Record<string, unknown>).unknown_key).toBeUndefined();
+    }
+  });
+});
+
+describe("PersonaCoreV2Schema", () => {
+  it("validates a valid v2 object", () => {
+    const result = PersonaCoreV2Schema.safeParse(makeValidV2());
+    expect(result.success).toBe(true);
+  });
+
+  it("validates persona_fit_probability at top level", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = 42;
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.persona_fit_probability).toBe(42);
+    }
+  });
+
+  it("rejects persona_fit_probability outside 0-100", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = 150;
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-integer persona_fit_probability", () => {
+    const valid = makeValidV2();
+    valid.persona_fit_probability = 50.5;
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(false);
+  });
+
+  it("validates reference_names 1-5", () => {
+    const valid = makeValidV2();
+    valid.reference_style.reference_names = ["a", "b"];
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty reference_names", () => {
+    const valid = makeValidV2();
+    valid.reference_style.reference_names = [];
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(false);
+  });
+
+  it("normalizes overlong reference_names to first 5", () => {
+    const valid = makeValidV2();
+    valid.reference_style.reference_names = ["a", "b", "c", "d", "e", "f", "g"];
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.reference_style.reference_names).toHaveLength(5);
+      expect(result.data.reference_style.reference_names).toEqual(["a", "b", "c", "d", "e"]);
+    }
+  });
+
+  it("validates other_references 0-8", () => {
+    const valid = makeValidV2();
+    valid.reference_style.other_references = ["a", "b"];
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it("normalizes overlong other_references to first 8", () => {
+    const valid = makeValidV2();
+    valid.reference_style.other_references = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+    const result = PersonaCoreV2Schema.safeParse(valid);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.reference_style.other_references).toHaveLength(8);
+    }
+  });
+
+  it("strips extra top-level keys", () => {
+    const input = { ...makeValidV2(), extra_top: "should be stripped" };
+    const result = PersonaCoreV2Schema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as Record<string, unknown>).extra_top).toBeUndefined();
+    }
   });
 });

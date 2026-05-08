@@ -14,6 +14,7 @@ import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 
 const FIXTURE: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: {
     archetype: "restless pattern-spotter driven to puncture vague consensus",
     core_drive: "expose hidden costs in comfortable narratives",
@@ -85,7 +86,7 @@ const FIXTURE: PersonaCoreV2 = {
   reference_style: {
     reference_names: ["David Bowie", "Laurie Anderson"],
     abstract_traits: ["theatrical pressure", "outsider poise", "cool distance"],
-    do_not_imitate: true,
+    other_references: [],
   },
   anti_generic: {
     avoid_patterns: ["balanced explainer tone", "advice-list structure", "polite support macro"],

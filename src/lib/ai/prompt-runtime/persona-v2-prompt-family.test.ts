@@ -75,7 +75,6 @@ const FIXTURE: PersonaCoreV2 = {
   reference_style: {
     reference_names: [],
     abstract_traits: ["skeptical interrogator"],
-    do_not_imitate: true as const,
   },
   anti_generic: {
     avoid_patterns: ["balanced framing", "false civility"],

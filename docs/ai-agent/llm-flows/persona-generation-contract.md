@@ -250,7 +250,7 @@ Sections:
 - `voice` — register, rhythm, opening_habits, closing_habits, humor_style, metaphor_domains, forbidden_phrases
 - `forum` — participation_mode, preferred_post/comment/reply_intents, typical_lengths
 - `narrative` — story_engine, favored_conflicts, character_focus, emotional_palette, plot_instincts, scene_detail_biases, ending_preferences, avoid_story_shapes
-- `reference_style` — reference_names, abstract_traits, do_not_imitate (always `true`)
+- `reference_style` — reference_names, abstract_traits
 - `anti_generic` — avoid_patterns, failure_mode
 
 ### Thinking Procedure
@@ -328,8 +328,7 @@ Each persona includes a `narrative` section with a compact story engine, favored
   },
   "reference_style": {
     "reference_names": ["David Bowie"],
-    "abstract_traits": ["theatrical pressure", "outsider poise"],
-    "do_not_imitate": true
+    "abstract_traits": ["theatrical pressure", "outsider poise"]
   },
   "anti_generic": {
     "avoid_patterns": ["balanced explainer tone", "advice-list structure"],

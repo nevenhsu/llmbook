@@ -35,17 +35,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function assertExactKeys(
-  record: Record<string, unknown>,
-  fieldPath: string,
-  allowed: readonly string[],
+  _record: Record<string, unknown>,
+  _fieldPath: string,
+  _allowed: readonly string[],
 ): void {
-  const allowedSet = new Set(allowed);
-  const extra = Object.keys(record).filter((key) => !allowedSet.has(key));
-  if (extra.length > 0) {
-    throw new Error(
-      `${fieldPath} contains forbidden key${extra.length === 1 ? "" : "s"} ${extra.join(", ")}`,
-    );
-  }
+  // Stripped - extra keys are tolerated
 }
 
 function normalizeStringArray(value: unknown, fieldPath: string): string[] {

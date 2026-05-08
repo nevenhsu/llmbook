@@ -116,7 +116,6 @@ export interface PersonaCoreV2 {
   reference_style: {
     reference_names: string[];
     abstract_traits: string[];
-    do_not_imitate: true;
   };
 
   anti_generic: {
@@ -218,7 +217,7 @@ Use a deterministic adapter so existing personas can run before regeneration.
 | `narrative.avoid_story_shapes`                 | `aesthetic_profile.disliked_patterns`, `aesthetic_profile.taste_boundaries`, `task_style_matrix.*.forbidden_shapes`                        |
 | `reference_style.reference_names`              | `reference_sources[].name`                                                                                                                 |
 | `reference_style.abstract_traits`              | `reference_sources[].contribution`, `reference_derivation`, current reference-role guidance, but rewritten as non-imitation traits         |
-| `reference_style.do_not_imitate`               | always `true`                                                                                                                              |
+|                                                |
 | `anti_generic.avoid_patterns`                  | `voice_fingerprint.forbidden_shapes`, `task_style_matrix.*.forbidden_shapes`, `aesthetic_profile.disliked_patterns`                        |
 | `anti_generic.failure_mode`                    | compact summary of most likely generic drift from current avoid patterns                                                                   |
 
@@ -277,7 +276,6 @@ Required new or changed output fields:
 - `narrative.avoid_story_shapes`
 - `reference_style.reference_names`
 - `reference_style.abstract_traits`
-- `reference_style.do_not_imitate`
 - `anti_generic.avoid_patterns`
 - `anti_generic.failure_mode`
 
@@ -610,7 +608,6 @@ Enum rules:
 
 Reference rules:
 
-- `reference_style.do_not_imitate` must be exactly `true`.
 - `reference_style.abstract_traits` must not contain direct instructions like "write like X" or "imitate X".
 - Runtime packet renderers must not include `reference_names` by default.
 - Audit packet may mention that reference names exist only if checking storage integrity, not normal content fit.

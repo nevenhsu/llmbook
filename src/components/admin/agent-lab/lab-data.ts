@@ -600,6 +600,7 @@ function buildTaskCandidatePayloads(input: {
       cooldownUntil: new Date(0).toISOString(),
       payload: {
         contentType,
+        contentMode: "discussion",
         source: lookup.source,
         summary: lookup.summary,
         fixtureMode: input.selectorInput.fixtureMode,

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type ContentLength = "one_liner" | "short" | "medium" | "long";
 
 export type ContentMode = "discussion" | "story";
@@ -10,83 +12,125 @@ export type PersonaPacketBudget = {
   hardMaxWords: number;
 };
 
+const stripUnknown = <T extends z.ZodTypeAny>(schema: T): T =>
+  schema.transform((val) => {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const allowed = new Set(Object.keys((schema as z.ZodObject<any>).shape ?? {}));
+      const cleaned: Record<string, unknown> = {};
+      for (const key of Object.keys(val as Record<string, unknown>)) {
+        if (allowed.has(key)) {
+          cleaned[key] = (val as Record<string, unknown>)[key];
+        }
+      }
+      return cleaned;
+    }
+    return val;
+  });
+
+function truncatedArray(maxItems: number) {
+  return z.array(z.string()).transform((arr) => arr.slice(0, maxItems));
+}
+
+const PersonaThinkingProcedureSchema = z.object({
+  context_reading: z.array(z.string()).min(2).max(4),
+  salience_rules: z.array(z.string()).min(2).max(4),
+  interpretation_moves: z.array(z.string()).min(2).max(4),
+  response_moves: z.array(z.string()).min(2).max(4),
+  omission_rules: z.array(z.string()).min(2).max(4),
+});
+
+const IdentitySchema = z.object({
+  archetype: z.string(),
+  core_drive: z.string(),
+  central_tension: z.string(),
+  self_image: z.string(),
+});
+
+const MindSchema = z.object({
+  reasoning_style: z.string(),
+  attention_biases: z.array(z.string()).min(2).max(4),
+  default_assumptions: z.array(z.string()).min(2).max(4),
+  blind_spots: z.array(z.string()).min(1).max(3),
+  disagreement_style: z.string(),
+  thinking_procedure: PersonaThinkingProcedureSchema,
+});
+
+const TasteSchema = z.object({
+  values: z.array(z.string()).min(3).max(5),
+  respects: z.array(z.string()).min(2).max(4),
+  dismisses: z.array(z.string()).min(2).max(4),
+  recurring_obsessions: z.array(z.string()).min(2).max(4),
+});
+
+const VoiceSchema = z.object({
+  register: z.string(),
+  rhythm: z.string(),
+  opening_habits: z.array(z.string()).min(1).max(3),
+  closing_habits: z.array(z.string()).min(1).max(3),
+  humor_style: z.string(),
+  metaphor_domains: z.array(z.string()).min(2).max(5),
+  forbidden_phrases: z.array(z.string()).min(3).max(8),
+});
+
+const ContentLengthSchema = z.enum(["one_liner", "short", "medium", "long"]);
+
+const TypicalLengthsSchema = z.object({
+  post: ContentLengthSchema,
+  comment: ContentLengthSchema,
+  reply: ContentLengthSchema,
+});
+
+const ForumSchema = z.object({
+  participation_mode: z.string(),
+  preferred_post_intents: z.array(z.string()).min(1).max(4),
+  preferred_comment_intents: z.array(z.string()).min(1).max(4),
+  preferred_reply_intents: z.array(z.string()).min(1).max(4),
+  typical_lengths: TypicalLengthsSchema,
+});
+
+const NarrativeSchema = z.object({
+  story_engine: z.string(),
+  favored_conflicts: z.array(z.string()).min(2).max(4),
+  character_focus: z.array(z.string()).min(2).max(4),
+  emotional_palette: z.array(z.string()).min(2).max(5),
+  plot_instincts: z.array(z.string()).min(2).max(4),
+  scene_detail_biases: z.array(z.string()).min(2).max(5),
+  ending_preferences: z.array(z.string()).min(1).max(3),
+  avoid_story_shapes: z.array(z.string()).min(3).max(6),
+});
+
+const ReferenceStyleSchema = z.object({
+  reference_names: truncatedArray(5).pipe(z.array(z.string()).min(1).max(5)),
+  abstract_traits: z.array(z.string()).min(2).max(6),
+  other_references: truncatedArray(8).pipe(z.array(z.string()).min(0).max(8)),
+});
+
+const AntiGenericSchema = z.object({
+  avoid_patterns: z.array(z.string()).min(3).max(8),
+  failure_mode: z.string(),
+});
+
+export const PersonaCoreV2Schema = z.object({
+  schema_version: z.literal("v2"),
+  persona_fit_probability: z.number().int().min(0).max(100),
+  identity: IdentitySchema,
+  mind: MindSchema,
+  taste: TasteSchema,
+  voice: VoiceSchema,
+  forum: ForumSchema,
+  narrative: NarrativeSchema,
+  reference_style: ReferenceStyleSchema,
+  anti_generic: AntiGenericSchema,
+});
+
+export type PersonaCoreV2 = z.infer<typeof PersonaCoreV2Schema>;
+
 export interface PersonaThinkingProcedure {
   context_reading: string[];
   salience_rules: string[];
   interpretation_moves: string[];
   response_moves: string[];
   omission_rules: string[];
-}
-
-export interface PersonaCoreV2 {
-  schema_version: "v2";
-
-  identity: {
-    archetype: string;
-    core_drive: string;
-    central_tension: string;
-    self_image: string;
-  };
-
-  mind: {
-    reasoning_style: string;
-    attention_biases: string[];
-    default_assumptions: string[];
-    blind_spots: string[];
-    disagreement_style: string;
-    thinking_procedure: PersonaThinkingProcedure;
-  };
-
-  taste: {
-    values: string[];
-    respects: string[];
-    dismisses: string[];
-    recurring_obsessions: string[];
-  };
-
-  voice: {
-    register: string;
-    rhythm: string;
-    opening_habits: string[];
-    closing_habits: string[];
-    humor_style: string;
-    metaphor_domains: string[];
-    forbidden_phrases: string[];
-  };
-
-  forum: {
-    participation_mode: string;
-    preferred_post_intents: string[];
-    preferred_comment_intents: string[];
-    preferred_reply_intents: string[];
-    typical_lengths: {
-      post: Exclude<ContentLength, "one_liner">;
-      comment: Extract<ContentLength, "one_liner" | "short" | "medium">;
-      reply: Extract<ContentLength, "short" | "medium">;
-    };
-  };
-
-  narrative: {
-    story_engine: string;
-    favored_conflicts: string[];
-    character_focus: string[];
-    emotional_palette: string[];
-    plot_instincts: string[];
-    scene_detail_biases: string[];
-    ending_preferences: string[];
-    avoid_story_shapes: string[];
-  };
-
-  reference_style: {
-    reference_names: string[];
-    abstract_traits: string[];
-    do_not_imitate: true;
-  };
-
-  anti_generic: {
-    avoid_patterns: string[];
-    failure_mode: string;
-  };
 }
 
 export type PersonaRuntimePacketSections = {
@@ -132,6 +176,7 @@ export type PersonaAuditEvidencePacket = PersonaRuntimePacket & {
 
 const ALLOWED_TOP_LEVEL_KEYS = new Set([
   "schema_version",
+  "persona_fit_probability",
   "identity",
   "mind",
   "taste",
@@ -409,9 +454,16 @@ export function validatePersonaCoreV2(
     return { error: "input must be an object" };
   }
 
-  // schema_version
-  if (source.schema_version !== "v2") {
-    return { error: "schema_version must be 'v2'" };
+  const errors: string[] = [];
+
+  // persona_fit_probability
+  if (source.persona_fit_probability !== undefined) {
+    const prob = source.persona_fit_probability;
+    if (typeof prob !== "number" || !Number.isInteger(prob) || prob < 0 || prob > 100) {
+      errors.push("persona_fit_probability: must be integer from 0 to 100");
+    }
+  } else {
+    errors.push("persona_fit_probability: required");
   }
 
   // Check for disallowed top-level keys
@@ -428,8 +480,6 @@ export function validatePersonaCoreV2(
       }
     }
   }
-
-  const errors: string[] = [];
 
   // --- identity ---
   const identity = asRecord(source.identity);
@@ -852,10 +902,6 @@ export function validatePersonaCoreV2(
     return { error: "reference_style must be an object" };
   }
 
-  if (referenceStyle.do_not_imitate !== true) {
-    return { error: "reference_style.do_not_imitate must be true" };
-  }
-
   const referenceNames = validateStringArray(
     referenceStyle,
     "reference_names",
@@ -874,10 +920,27 @@ export function validatePersonaCoreV2(
     warnings,
     "reference_style",
   );
+  const otherReferences = validateStringArray(
+    referenceStyle,
+    "other_references",
+    0,
+    8,
+    90,
+    warnings,
+    "reference_style",
+  );
 
   if (!referenceNames || !abstractTraits) {
     errors.push("reference_style: required fields missing or invalid");
   }
+
+  // Normalize overlong arrays to first allowed items
+  const normalizedReferenceNames = Array.isArray(referenceStyle.reference_names)
+    ? (referenceStyle.reference_names as string[]).slice(0, 5)
+    : (referenceNames ?? []);
+  const normalizedOtherReferences = Array.isArray(referenceStyle.other_references)
+    ? (referenceStyle.other_references as string[]).slice(0, 8)
+    : (otherReferences ?? []);
 
   // Check abstract_traits for direct imitation instructions
   if (abstractTraits) {
@@ -927,6 +990,13 @@ export function validatePersonaCoreV2(
   // Build canonical v2
   const core: PersonaCoreV2 = {
     schema_version: "v2",
+    persona_fit_probability:
+      typeof source.persona_fit_probability === "number" &&
+      Number.isInteger(source.persona_fit_probability) &&
+      source.persona_fit_probability >= 0 &&
+      source.persona_fit_probability <= 100
+        ? source.persona_fit_probability
+        : 50,
     identity: {
       archetype: identityArchetype!,
       core_drive: identityCoreDrive!,
@@ -1002,9 +1072,9 @@ export function validatePersonaCoreV2(
       avoid_story_shapes: avoidStoryShapes!,
     },
     reference_style: {
-      reference_names: referenceNames!,
+      reference_names: normalizedReferenceNames,
       abstract_traits: abstractTraits!,
-      do_not_imitate: true,
+      other_references: normalizedOtherReferences,
     },
     anti_generic: {
       avoid_patterns: avoidPatterns!,
@@ -1017,6 +1087,7 @@ export function validatePersonaCoreV2(
 
 export const FALLBACK_PERSONA_CORE_V2: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 80,
   identity: {
     archetype: "restless pattern-spotter",
     core_drive: "puncture vague consensus",
@@ -1076,7 +1147,7 @@ export const FALLBACK_PERSONA_CORE_V2: PersonaCoreV2 = {
   reference_style: {
     reference_names: ["(none)"],
     abstract_traits: ["theatrical pressure", "outsider poise"],
-    do_not_imitate: true,
+    other_references: [],
   },
   anti_generic: {
     avoid_patterns: ["balanced explainer tone", "advice-list structure", "polite support macro"],

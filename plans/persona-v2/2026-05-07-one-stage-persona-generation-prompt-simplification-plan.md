@@ -4,22 +4,25 @@
 
 **Goal:** Replace the current multi-stage persona generation prompt with one compact prompt that returns exactly one complete `PersonaCoreV2` JSON object from `user_input_context` and optional user-provided reference names.
 
-**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the required prompt blocks: `task_context`, `input_context`, `reference_resolution_rules`, `persona_generation_rules`, `internal_design_procedure`, `output_schema_and_validation`, and `prefilled_response`. The generated v2 data owns reference resolution, abstract non-imitation traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. Shared invalid-JSON repair should move away from full regeneration: `finishReason=length` first gets schema-grounded output completion, while other invalid or incomplete JSON uses field-patch repair.
+**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by AI SDK structured output using `generateText({ output: Output.object({ schema: PersonaCoreV2Schema }) })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair should move away from full regeneration: `finishReason=length` and equivalent AI SDK structured-output object generation failures first get schema-grounded output completion, while other invalid or incomplete JSON uses field-patch repair.
 
-**Tech Stack:** TypeScript, Next.js, existing persona generation admin flow, `PersonaCoreV2`, staged LLM JSON parsing and repair, Vitest.
+**Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` with `Output.object`, Zod, existing persona generation admin flow, `PersonaCoreV2`, staged LLM JSON parsing and repair, Vitest.
 
 ---
 
 ## Scope
 
 - Simplify persona generation to one LLM stage that outputs only `PersonaCoreV2`.
-- Keep only the seven requested prompt blocks.
+- Keep only the eight compact requested prompt blocks.
 - Generate or select 1 to 5 core reference names inside `reference_style.reference_names`.
 - Add `reference_style.other_references`.
 - Add top-level `persona_fit_probability`.
 - Delete `reference_style.do_not_imitate` from Persona v2 data.
 - Keep non-imitation as prompt and validation behavior, not a stored boolean field.
+- Use `PersonaCoreV2Schema` as the code-owned structured output contract.
+- Delete hardcoded key/type JSON schema text from the generation prompt.
 - Update invalid JSON and `finishReason=length` repair behavior so length truncation first tries schema-grounded output completion, then falls back to field patches instead of regenerating the full object.
+- Treat AI SDK structured-output errors that say the provider failed to generate a parsable object conforming to the schema as `finishReason=length`-equivalent for repair routing.
 
 ## Non-Goals
 
@@ -38,8 +41,6 @@ The current persona generation preview code is still staged:
 - `src/lib/ai/admin/persona-generation-prompt-template.ts` defines `seed` and `persona_core`.
 - `src/lib/ai/admin/persona-generation-preview-service.ts` runs both stages and carries seed output into core generation.
 - `src/lib/ai/admin/persona-generation-contract.ts` parses seed/core outputs and uses delta repair for quality repair.
-- `src/lib/ai/core/persona-core-v2.ts` currently requires `reference_style.do_not_imitate: true`.
-- Several fixtures and tests also expect `do_not_imitate`.
 
 This plan treats `do_not_imitate` as deleted from the v2 data contract. The stale validation requirement that says `reference_style.do_not_imitate must be true` must be removed, even though non-imitation remains mandatory behavior.
 
@@ -48,59 +49,31 @@ This plan treats `do_not_imitate` as deleted from the v2 data contract. The stal
 The implementation should store the template as a single canonical constant, preserving this block order and these block names exactly.
 
 ```text
-[task_context]
+[task]
 Generate one compact PersonaCoreV2 JSON object for a persona-driven forum system.
 
-This persona will later be used to:
-- write forum posts
-- write long stories
-- comment on posts
-- reply in threads
-- write short story fragments
+The persona will later be used to write forum posts, long stories, comments, replies, and short story fragments.
 
-Do not write sample content.
-Generate the persona's compact operating system: how it thinks, notices, judges, speaks, participates, and builds stories.
+Do not write sample content. Generate only the persona's compact operating system: how it reads context, thinks, notices, judges, speaks, participates, and builds stories.
 
-[input_context]
-User input context:
+[input]
+user_input_context:
 {{USER_INPUT_CONTEXT}}
 
-Optional user-provided reference names:
+optional_reference_names:
 {{USER_REFERENCE_NAMES}}
 
-[reference_resolution_rules]
-Core reference selection:
-- The final JSON must contain 1 to 5 core reference names in reference_style.reference_names.
-- If the user provides 1 to 5 usable reference names, use them as the core references.
-- If the user provides no usable reference names, generate 1 to 5 highly relevant reference names from user_input_context.
-- If the user provides more than 5 usable reference names, select the strongest 1 to 5 as core references.
-- Choose references that strongly support distinct thinking logic, voice, forum behavior, and narrative behavior.
+[reference_rules]
+reference_style.reference_names must contain 1 to 5 core references.
 
-What can be a reference:
-- real people
-- fictional characters
-- historical figures
-- mythic figures
-- archetypes
-- animals with personifiable traits
-- brands or institutions with recognizable personality
-- occupations or social roles
-- story types or persona-like public images
-- other personifiable sources
+Use provided references if usable. If none are usable, generate 1 to 5 relevant references from user_input_context. If more than 5 are usable, select the strongest 1 to 5. Choose references that support distinct thinking logic, voice, forum behavior, and narrative behavior.
 
-Other references:
-- Put supporting works, motifs, scenes, style traits, cultural contexts, related characters, secondary inspirations, voice texture sources, and traits associated with references in reference_style.other_references.
-- other_references must support the persona but must not become the core identity.
-- reference_style.other_references may contain 0 to 8 items.
+References may be any personifiable source: people, characters, archetypes, animals, brands, institutions, roles, or persona-like public image.
 
-Non-imitation:
-- Reference names are design inputs, not imitation targets.
-- Do not copy catchphrases, exact wording, biography, signature format, exact opinions, canon identity, or public identity.
-- Convert references into abstract traits only.
-- reference_style.abstract_traits must contain only abstracted traits.
+Put secondary inspirations in reference_style.other_references: works, motifs, scenes, cultural contexts, related figures, voice textures, or linked traits. They must support the persona but not become the core identity. Limit: 0 to 8 items.
 
-[persona_generation_rules]
-Generate compact PersonaCoreV2 data.
+[persona_rules]
+Generate compact PersonaCore data.
 
 The persona must be distinct in:
 - thinking logic
@@ -113,149 +86,83 @@ The persona must be distinct in:
 - narrative construction
 - anti-generic failure modes
 
-thinking_procedure rules:
-- Must describe how the persona interprets context before writing.
-- Must be different from persona to persona.
-- Must not describe only tone.
-- Must not contain chain-of-thought instructions.
-- Must not say "think step by step", "show reasoning", "scratchpad", or "hidden thoughts".
+mind.thinking_procedure:
+- Required.
+- Describe how the persona interprets context before writing.
+- Must be persona-specific and not only about tone.
+- Must not reveal hidden reasoning or ask to show reasoning.
+- Must not include: "think step by step", "show reasoning", "scratchpad", or "hidden thoughts".
 
-narrative rules:
-- Must describe story logic, not genre labels.
+narrative:
+- Required.
+- Describe story logic, not genre labels.
 - story_engine describes how this persona turns pressure into story.
 - favored_conflicts are tensions, not genres.
 - scene_detail_biases describe what this persona notices in scenes.
 - ending_preferences describe ending logic.
 
-Probability rule:
-- persona_fit_probability is a 0 to 100 integer.
-- It estimates how strongly this generated persona matches user_input_context and selected reference_names.
-- Higher score requires stronger conceptual alignment, more coherent traits, and less generic filler.
-- Do not set 100 unless the fit is exceptionally direct and all fields strongly reinforce the same persona.
+forum behavior:
+- Derive from the persona's participation instinct.
+- Specify how the persona enters a thread, challenges ideas, agrees, disagrees, adds value, and avoids generic comments.
 
-Compactness rules:
-- Use compact JSON only.
-- Keep strings short and behavior-specific.
-- Prefer 2 to 5 concrete items in arrays unless validation gives a different limit.
-- Do not include memory, relationship context, default examples, markdown, comments, explanations, or extra keys.
+anti_generic:
+- anti_generic.avoid_patterns must contain at least 1 concrete failure mode.
+- Avoid bland traits, generic intelligence, vague warmth, empty wit, and style-only personas.
 
-[internal_design_procedure]
-Internally perform this design process before outputting JSON.
-Do not reveal this process.
+[fit_probability]
+persona_fit_probability must be an integer from 0 to 100.
+
+It estimates how strongly the generated persona matches user_input_context and selected reference_names.
+
+Higher score requires:
+- strong conceptual alignment
+- coherent behavior across all fields
+- concrete, non-generic traits
+- references that reinforce the same persona
+
+[compactness]
+Use compact JSON only.
+Keep strings short and behavior-specific.
+Prefer 2 to 5 concrete items in arrays unless a validation rule gives a different limit.
+
+[internal_design_process]
+Perform internally only. Do not reveal.
 
 1. Read user_input_context.
 2. Resolve 1 to 5 core reference_names.
 3. Move secondary inspirations into other_references.
-4. Convert all references into abstract personality traits.
+4. Convert references into abstract personality traits.
 5. Derive identity and core tension.
-6. Derive mind.thinking_procedure before deriving voice.
+6. Derive mind.thinking_procedure before voice.
 7. Derive forum behavior from the persona's participation instinct.
 8. Derive narrative logic from the same mind and values.
 9. Remove generic filler.
 10. Estimate persona_fit_probability.
 11. Output only the final JSON object.
 
-[output_schema_and_validation]
+[output_validation]
 Return only strict JSON.
 No markdown.
 No comments.
 No explanation.
-The first character must be "{".
-The last character must be "}".
 
-Schema:
-{
-  "schema_version": "v2",
-  "persona_fit_probability": 0,
-  "identity": {
-    "archetype": "string",
-    "core_drive": "string",
-    "central_tension": "string",
-    "self_image": "string"
-  },
-  "mind": {
-    "reasoning_style": "string",
-    "attention_biases": ["string"],
-    "default_assumptions": ["string"],
-    "blind_spots": ["string"],
-    "disagreement_style": "string",
-    "thinking_procedure": {
-      "context_reading": ["string"],
-      "salience_rules": ["string"],
-      "interpretation_moves": ["string"],
-      "response_moves": ["string"],
-      "omission_rules": ["string"]
-    }
-  },
-  "taste": {
-    "values": ["string"],
-    "respects": ["string"],
-    "dismisses": ["string"],
-    "recurring_obsessions": ["string"]
-  },
-  "voice": {
-    "register": "string",
-    "rhythm": "string",
-    "opening_habits": ["string"],
-    "closing_habits": ["string"],
-    "humor_style": "string",
-    "metaphor_domains": ["string"],
-    "forbidden_phrases": ["string"]
-  },
-  "forum": {
-    "participation_mode": "string",
-    "preferred_post_intents": ["string"],
-    "preferred_comment_intents": ["string"],
-    "preferred_reply_intents": ["string"],
-    "typical_lengths": {
-      "post": "string",
-      "comment": "string",
-      "reply": "string"
-    }
-  },
-  "narrative": {
-    "story_engine": "string",
-    "favored_conflicts": ["string"],
-    "character_focus": ["string"],
-    "emotional_palette": ["string"],
-    "plot_instincts": ["string"],
-    "scene_detail_biases": ["string"],
-    "ending_preferences": ["string"],
-    "avoid_story_shapes": ["string"]
-  },
-  "reference_style": {
-    "reference_names": ["string"],
-    "other_references": ["string"],
-    "abstract_traits": ["string"]
-  },
-  "anti_generic": {
-    "avoid_patterns": ["string"],
-    "failure_mode": "string"
-  }
-}
-
-Validation rules:
-- schema_version must be "v2".
+Required validation:
 - persona_fit_probability must be an integer from 0 to 100.
 - reference_style.reference_names must contain 1 to 5 items.
 - reference_style.other_references must contain 0 to 8 items.
-- reference_style.abstract_traits must contain only abstracted traits, not reference imitation instructions.
-- reference_style must not contain do_not_imitate.
 - mind.thinking_procedure is required.
 - narrative is required.
 - anti_generic.avoid_patterns must contain at least 1 item.
-- Do not add memory, relationship_context, examples, persona_id, id, timestamps, markdown, comments, or wrapper keys.
-
-[prefilled_response]
-{
 ```
 
-Implementation note: if the active model adapter supports assistant-prefill, send the `prefilled_response` value as the assistant prefix rather than plain user prompt text. If it does not, keep the block in the prompt preview but require the parser to accept the first generated character as `{`.
+Implementation note: the prompt carries only compact behavioral instructions and validation reminders. The exact JSON shape is code-owned by `PersonaCoreV2Schema` and enforced through AI SDK structured output; do not reintroduce hardcoded key/type schema text or JSON examples into this prompt.
 
 ## Data Contract Changes
 
 Modify `src/lib/ai/core/persona-core-v2.ts`:
 
+- Export `PersonaCoreV2Schema` as the canonical Zod schema.
+- Derive the TypeScript `PersonaCoreV2` type from the schema where practical, or keep the existing interface and add a compile-time compatibility check.
 - Add top-level `persona_fit_probability: number`.
 - Add `reference_style.other_references: string[]`.
 - Remove `reference_style.do_not_imitate`.
@@ -277,13 +184,17 @@ Modify `src/lib/ai/admin/persona-generation-prompt-template.ts`:
 
 - Replace `PERSONA_GENERATION_TEMPLATE_STAGES` with one stage, likely named `persona_core_v2`.
 - Remove seed-stage-specific contract text.
-- Remove broad common blocks from the template preview if they are not part of the seven required blocks.
+- Remove broad common blocks from the template preview if they are not part of the eight compact required blocks.
 - Add placeholders for `{{USER_INPUT_CONTEXT}}` and `{{USER_REFERENCE_NAMES}}`.
-- Ensure preview block stats show only the seven required blocks.
+- Ensure preview block stats show only the eight required blocks.
+- Ensure `[output_validation]` stays a short validation reminder and does not include hardcoded JSON key/type schema text.
 
 Modify `src/lib/ai/admin/persona-generation-preview-service.ts`:
 
 - Replace the two-stage `seed` then `persona_core` orchestration with a single `persona_core_v2` invocation.
+- Invoke the model through AI SDK structured output:
+  - `generateText({ output: Output.object({ schema: PersonaCoreV2Schema }) })`.
+  - Do not use deprecated `generateObject` / `streamObject` for new code.
 - Stop carrying prior-stage JSON.
 - Stop using seed-stage reference audit as a separate LLM stage.
 - Validate generated references directly from `reference_style.reference_names`.
@@ -316,9 +227,12 @@ Represent each JSON LLM attempt as:
 type JsonFinishAttempt = {
   rawText: string;
   finishReason: string | null;
+  normalizedFinishReason: "length" | "object_generation_unparseable" | "other" | null;
   parseError: string | null;
+  generationErrorName: string | null;
+  generationErrorMessage: string | null;
   schemaName: string;
-  schemaText: string;
+  schema: ZodSchema;
   validationRules: string[];
   allowedRepairPaths: string[];
   requiredRemainingPaths: string[];
@@ -333,34 +247,49 @@ type JsonFinishAttempt = {
 - If the output ends inside a known object, list all required sibling paths that have not appeared yet.
 - If path detection is uncertain, use the nearest known parent path and include all remaining required leaf paths.
 
+### Structured Output Error Normalization
+
+AI SDK structured output may fail before returning a typed object with an error equivalent to:
+
+`This error occurs when the AI provider fails to generate a parsable object that conforms to the schema.`
+
+Treat that class of error as `finishReason=length` for repair routing, even when the provider did not expose `finishReason: "length"` directly.
+
+Rules:
+
+- If the error exposes raw text, partial text, response text, or a provider payload containing text, preserve it as `rawText` and set `normalizedFinishReason` to `object_generation_unparseable`.
+- Run the same deterministic tail-closure and continuation repair path used for `finishReason=length`.
+- If no usable text prefix is available, handle it like empty `finishReason=length`: return a typed transport/token diagnostic or use a smaller compact retry policy when the flow explicitly allows it.
+- Do not route this error directly to full regeneration or semantic audit.
+- Do not treat it as a quality failure; schema repair still owns it.
+
 ### Finish Pipeline
 
-1. Try to extract and parse the raw JSON object.
-2. If parsing fails and `finishReason === "length"` with non-empty text, classify the truncation:
+1. Try to extract and parse the raw JSON object.,2. If parsing fails and either `finishReason === "length"` or `normalizedFinishReason === "object_generation_unparseable"` with non-empty text, classify the truncation:
    - `tail_closable`: deterministic closure might produce valid JSON.
    - `continuation_needed`: the object clearly stops before required fields are complete.
    - `prefix_too_broken`: the prefix cannot be trusted enough for continuation.
-3. For `tail_closable`, attempt deterministic tail closure before asking the model again:
+2. For `tail_closable`, attempt deterministic tail closure before asking the model again:
    - close an open string with `"`;
    - close open arrays and objects in reverse stack order;
    - try a small set of candidate suffixes such as `"]}`, `"]}}`, `"}`, `"}}`, `"}]}`, and `"}]}}` based on the bracket stack;
    - use the closed candidate only if `JSON.parse` succeeds and schema validation passes or gives field-level missing/invalid paths.
-4. For `continuation_needed`, ask the repair model to finish the prior output:
+3. For `continuation_needed`, ask the repair model to finish the prior output:
    - provide a clear instruction that this is a continuation/finish repair, not full regeneration;
-   - provide the full expected schema and validation rules;
+   - provide the schema name, validation rules, likely open path, and remaining required paths derived from the code-owned Zod schema;
    - provide the previous raw output as context, or a compact head plus the exact trailing segment if the raw output is too large;
    - identify `likelyOpenPath` and `requiredRemainingPaths`;
    - ask for only the missing JSON continuation needed to make the previous output complete and valid;
    - forbid repeating already emitted prefix content;
    - concatenate the continuation to the previous raw output, then parse and validate the result.
-5. If continuation output repeats the prefix, returns a whole object, or includes markdown, run a salvage pass:
+4. If continuation output repeats the prefix, returns a whole object, or includes markdown, run a salvage pass:
    - if it returns a full valid object that preserves the original parsed prefix exactly for already completed paths, accept it;
    - otherwise extract only the suffix after the longest common prefix or first valid continuation token;
    - reject if completed prefix fields are silently changed.
-6. If the completed candidate parses but fails schema validation only on missing or invalid fields, ask for a field patch.
-7. If the original invalid JSON was not caused by `finishReason === "length"`, skip continuation repair and ask for a field patch.
-8. If `finishReason === "length"` produced empty text, do not run continuation repair because there is no prefix to preserve; treat it as a transport or token-budget failure and return a typed diagnostic unless the flow has a smaller compact retry policy.
-9. Fail with a typed error only after deterministic closure, continuation repair, salvage, and field-patch repair all fail where applicable.
+5. If the completed candidate parses but fails schema validation only on missing or invalid fields, ask for a field patch.
+6. If the original invalid JSON was not caused by `finishReason === "length"` or a length-equivalent structured-output object generation failure, skip continuation repair and ask for a field patch.
+7. If `finishReason === "length"` or a length-equivalent structured-output object generation failure produced empty text, do not run continuation repair because there is no prefix to preserve; treat it as a transport or token-budget failure and return a typed diagnostic unless the flow has a smaller compact retry policy.
+8. Fail with a typed error only after deterministic closure, continuation repair, salvage, and field-patch repair all fail where applicable.
 
 ### Finish Prompt Contract
 
@@ -373,11 +302,12 @@ Do not regenerate the full object.
 Do not repeat any already emitted JSON prefix.
 Return only the missing JSON continuation that can be appended directly to previous_output.
 The continuation must start with the next needed character after previous_output.
-The completed previous_output + continuation must parse as one strict JSON object and pass the schema.
+The completed previous_output + continuation must parse as one strict JSON object and pass the code-owned structured output schema.
 No markdown. No comments. No explanation.
 
-[schema]
-{{FULL_SCHEMA_TEXT}}
+[structured_output_schema]
+schema_name: {{SCHEMA_NAME}}
+The full schema is enforced in code with AI SDK Output.object and Zod. Do not infer or rewrite the full schema here.
 
 [validation_rules]
 {{VALIDATION_RULES}}
@@ -399,24 +329,14 @@ Rules:
 - Prefer append-only continuation over full-object rewrite.
 - The repair model must never be asked to "try again" or "rewrite from scratch" for `finishReason=length`.
 - The previous output is source of truth for already completed paths.
-- The full schema must be present because the model needs to know how to finish the final fields, not only how to close braces.
+- The prompt must not include hardcoded key/type schema text. Use schema-derived path hints, validation rules, and previous output context instead.
 - The prompt may prefill the next expected character when deterministic state can infer it, such as `,`, `]`, `}`, or `"`.
 - The continuation max output budget should be smaller than the original stage budget but large enough for all remaining leaf fields. Estimate it from `requiredRemainingPaths`.
 
 ### Field-Patch Fallback
 
-The field-patch repair output contract is:
-
-```json
-{
-  "repair": {
-    "reference_style.reference_names": ["..."],
-    "reference_style.other_references": ["..."],
-    "persona_fit_probability": 87,
-    "mind.thinking_procedure.context_reading": ["..."]
-  }
-}
-```
+The field-patch repair output is also schema-bound in code, using a small Zod schema such as `FieldPatchRepairSchema`.
+The prompt should ask for a repair object with allowlisted field paths, but it must not embed a hardcoded key/type JSON example.
 
 The field-patch repair prompt must include:
 
@@ -432,6 +352,7 @@ Merge the patch into the parsed partial object with path-aware merge, then valid
 
 - Do not ask the model to regenerate the full JSON object after invalid JSON or `finishReason=length`.
 - For `finishReason=length`, prefer schema-grounded continuation repair before field patch repair.
+- For AI SDK structured-output errors where the provider failed to generate a parsable object conforming to the schema, use the same continuation repair path as `finishReason=length`.
 - Bound continuation attempts to 1 or 2 attempts per stage to avoid loops.
 - Record each finish attempt in stage debug output with `attemptStage`, `finishReason`, `likelyOpenPath`, `requiredRemainingPaths`, and whether deterministic closure, continuation, salvage, or patch repair succeeded.
 - If repeated length truncation happens at the same schema path, lower compactness for that field or reduce upstream schema verbosity rather than only increasing output tokens.
@@ -477,10 +398,11 @@ npm test -- src/lib/ai/core/persona-core-v2.test.ts src/lib/ai/prompt-runtime/pe
 **Steps:**
 
 1. Add a test that the template has exactly one stage.
-2. Add a test that rendered prompt blocks are exactly `task_context`, `input_context`, `reference_resolution_rules`, `persona_generation_rules`, `internal_design_procedure`, `output_schema_and_validation`, and `prefilled_response`.
+2. Add a test that rendered prompt blocks are exactly `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`.
 3. Add a test that the template contains no `memory`, `relationship`, `examples`, or `do_not_imitate`.
-4. Replace the template with the target prompt.
-5. Verify token budget preview reports one stage.
+4. Add a test that `[output_validation]` does not contain a hardcoded JSON key/type schema block.
+5. Replace the template with the target prompt.
+6. Verify token budget preview reports one stage.
 
 **Verification:**
 
@@ -531,17 +453,19 @@ npm test -- src/app/api/admin/ai/persona-generation/preview/route.test.ts src/li
 1. Add unit tests for truncation classification: `tail_closable`, `continuation_needed`, and `prefix_too_broken`.
 2. Add unit tests for deterministic tail closure on truncated JSON.
 3. Add unit tests for likely open path and required remaining path derivation from partial JSON.
-4. Add unit tests for continuation prompt assembly with full schema, validation rules, previous output, likely open path, and required remaining fields.
-5. Add unit tests for append-only continuation merge.
-6. Add unit tests that reject continuation output that rewrites completed prefix fields.
-7. Add unit tests for salvage when the continuation model returns a repeated prefix or whole object.
-8. Add unit tests for rejected impossible closures.
-9. Add unit tests for field-path patch merge.
-10. Add unit tests that unknown repair paths are rejected.
-11. Update persona generation repair prompts to use finish repair for `finishReason=length`.
-12. Update persona generation repair prompts to ask for `{"repair":{...}}` only after finish repair fails or for non-length invalid JSON.
-13. Update audit/repair flows to use the same finish/patch repair pattern where their JSON parse fails.
-14. Ensure `finishReason=length` never triggers full JSON regeneration.
+4. Add unit tests that normalize AI SDK structured-output object generation failures with message text like "fails to generate a parsable object that conforms to the schema" into the length-style finish repair path.
+5. Add unit tests for continuation prompt assembly with schema name, validation rules, previous output, likely open path, and required remaining fields, while excluding hardcoded key/type schema text.
+6. Add unit tests for append-only continuation merge.
+7. Add unit tests that reject continuation output that rewrites completed prefix fields.
+8. Add unit tests for salvage when the continuation model returns a repeated prefix or whole object.
+9. Add unit tests for rejected impossible closures.
+10. Add unit tests for field-path patch merge.
+11. Add unit tests that unknown repair paths are rejected.
+12. Update persona generation repair prompts to use finish repair for `finishReason=length` and length-equivalent structured-output failures.
+13. Update persona generation repair prompts to ask for `{"repair":{...}}` only after finish repair fails or for non-length invalid JSON.
+14. Update audit/repair flows to use the same finish/patch repair pattern where their JSON parse fails.
+15. Ensure `finishReason=length` and length-equivalent structured-output failures never trigger full JSON regeneration.
+16. Ensure repair prompts use code-owned schemas and schema-derived path hints, not hardcoded full key/type schema text.
 
 **Verification:**
 
@@ -576,11 +500,14 @@ Expected:
 - Typecheck passes.
 - `do_not_imitate` has no Persona v2 data-contract references.
 - Persona generation prompt has no memory, relationship context, default examples, markdown requirement leakage, or chain-of-thought output request.
+- Persona generation prompt has no hardcoded full JSON key/type schema; structure comes from `PersonaCoreV2Schema` through AI SDK `Output.object`.
 
 ## Review Checklist
 
-- [ ] Prompt uses exactly the seven requested blocks.
+- [ ] Prompt uses exactly the eight compact requested blocks.
 - [ ] Prompt produces one compact `PersonaCoreV2` JSON object.
+- [ ] Output structure is enforced through AI SDK `Output.object({ schema: PersonaCoreV2Schema })`.
+- [ ] Prompt does not include hardcoded full JSON key/type schema text.
 - [ ] `reference_style.reference_names` contains 1 to 5 core references.
 - [ ] Missing user references cause generation of 1 to 5 relevant personifiable references.
 - [ ] Supporting references go to `reference_style.other_references`.
@@ -590,4 +517,5 @@ Expected:
 - [ ] `persona_fit_probability` is required and validated as integer 0 to 100.
 - [ ] No memory, relationship context, default examples, markdown, or chain-of-thought output.
 - [ ] `finishReason=length` repair first tries schema-grounded output completion, then falls back to field patches if needed.
+- [ ] AI SDK structured-output object generation failures that cannot produce a parsable schema-conforming object are routed like `finishReason=length`.
 - [ ] Other invalid JSON repair uses field patches, not full regeneration.

@@ -65,7 +65,7 @@ const SHARED_VOICE: PersonaCoreV2["voice"] = {
 const SHARED_REFERENCE: PersonaCoreV2["reference_style"] = {
   reference_names: ["Jane Jacobs", "James Baldwin"],
   abstract_traits: ["system-level observation", "moral clarity without sermon"],
-  do_not_imitate: true,
+  other_references: [],
 };
 
 const SHARED_ANTI_GENERIC: PersonaCoreV2["anti_generic"] = {
@@ -83,6 +83,7 @@ const SHARED_ANTI_GENERIC: PersonaCoreV2["anti_generic"] = {
  */
 const PERSONA_A: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: SHARED_IDENTITY,
   mind: SHARED_MIND,
   taste: SHARED_TASTE,
@@ -107,6 +108,7 @@ const PERSONA_A: PersonaCoreV2 = {
  */
 const PERSONA_B: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: SHARED_IDENTITY,
   mind: SHARED_MIND,
   taste: SHARED_TASTE,
@@ -131,6 +133,7 @@ const PERSONA_B: PersonaCoreV2 = {
  */
 const PERSONA_C: PersonaCoreV2 = {
   schema_version: "v2",
+  persona_fit_probability: 85,
   identity: SHARED_IDENTITY,
   mind: SHARED_MIND,
   taste: SHARED_TASTE,

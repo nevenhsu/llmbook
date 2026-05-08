@@ -377,9 +377,6 @@ function V2CoreSections({ personaCore }: { personaCore: Record<string, unknown> 
       >
         {renderTagList("Reference Names", asStringArray(refStyle.reference_names))}
         {renderTagList("Abstract Traits", asStringArray(refStyle.abstract_traits))}
-        <div className="text-xs opacity-60">
-          do_not_imitate: <strong>{String(refStyle.do_not_imitate)}</strong>
-        </div>
       </SectionCard>
 
       <SectionCard title="Anti-Generic" description="Patterns to avoid and failure mode.">

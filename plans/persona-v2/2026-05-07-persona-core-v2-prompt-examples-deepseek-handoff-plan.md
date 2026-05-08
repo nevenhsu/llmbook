@@ -4,9 +4,9 @@
 
 **Goal:** Give DeepSeek a handoff plan for implementing Persona Core v2 prompt-family examples without copying example prose, example policy, or hardcoded template content into production prompts.
 
-**Architecture:** Production prompt assembly stays block-based. Persona, board, target, and failed-output values are dynamic; stage tasks, audit check standards, and output key/type contracts are static prompt constants. Schema repair must reuse the shared JSON finish/field-patch repair framework from `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md` instead of adding a separate schema-repair template.
+**Architecture:** Production prompt assembly stays block-based. Persona, board, target, and failed-output values are dynamic; stage tasks and audit check standards are static prompt constants. Output structure is code-owned through Zod schemas passed to AI SDK structured output, e.g. `generateText({ output: Output.object({ schema }) })`; prompt blocks must not hardcode full key/type JSON schemas. Schema repair must reuse the shared JSON finish/field-patch repair framework from `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md` instead of adding a separate schema-repair template.
 
-**Tech Stack:** TypeScript, Next.js, Persona Core v2 prompt family builders, staged LLM JSON flows, shared JSON repair utilities, Vitest.
+**Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` / `streamText` with `Output.object`, Zod, Persona Core v2 prompt family builders, staged LLM JSON flows, shared JSON repair utilities, Vitest.
 
 ---
 
@@ -30,7 +30,7 @@
 - Main prompt examples must cover both `contentMode: "discussion"` and `contentMode: "story"` for every content flow.
 - Each quality audit must inspect at most two quality aspects for budget control: one flow/content-quality aspect and `persona_fit`. Fold board fit, novelty, markdown quality, thread fit, procedure alignment, and story/narrative fit into those two aspects instead of creating extra audit keys.
 - Label static blocks and dynamic placeholders clearly.
-- Add tests that prevent example policy, persona, context, output schema text, and repair templates from being copied into production prompt constants.
+- Add tests that prevent example policy, persona, context, hardcoded output schema text, and repair templates from being copied into production prompt constants.
 
 ## Non-Goals
 
@@ -38,7 +38,7 @@
 - Do not add memory, relationship context, default examples, or reference-name imitation.
 - Do not add DeepSeek-specific runtime branches.
 - Do not copy the example prompt text in this document into production prompt builders.
-- Do not hardcode board policy, persona policy, target context, reference names, or output JSON examples into production prompt templates.
+- Do not hardcode board policy, persona policy, target context, reference names, output JSON examples, or full key/type JSON schemas into production prompt templates.
 - Do not add a standalone schema-repair template; use the shared repair framework from the Phase 3 plan.
 - Do not expose chain of thought, scratchpad notes, hidden thoughts, or step-by-step reasoning in runtime prompts or generated output.
 
@@ -64,13 +64,14 @@ Examples of unclear rules that require user confirmation:
 | `DYNAMIC_CONTEXT`         | Board, target, selected plan, root post, source comment, generated output, or failed output values. | Runtime task context builders           |
 | `STATIC_TASK_CONTEXT`     | Fixed stage task prompt. It may name dynamic placeholders, but the task wording is constant.        | Prompt-family helper                    |
 | `STATIC_AUDIT_CONTEXT`    | Fixed audit check standards. It may name dynamic placeholders, but check wording is constant.       | Audit prompt helper                     |
-| `STATIC_OUTPUT_CONTRACT`  | Fixed key/type JSON output format.                                                                  | Output-contract builders                |
+| `STATIC_OUTPUT_POLICY`    | Short fixed output instructions only; structure comes from code-owned Zod schemas.                  | Prompt-family helper                    |
+| `CODE_OUTPUT_SCHEMA`      | Zod schema passed to AI SDK `Output.object({ schema })`; not rendered as full key/type prompt text. | Output schema modules                   |
 | `STATIC_REPAIR_FRAMEWORK` | Shared JSON finish/field-patch repair framework.                                                    | Shared repair utility from Phase 3 plan |
 | `EXAMPLE_ONLY`            | Documentation or tests only. Must not be imported into production prompt builders.                  | Plan docs and test fixtures             |
 
 ## Hardcoding Guardrails
 
-Production prompt builders must assemble prompts from named inputs, static helpers, output-contract helpers, and the shared repair framework only.
+Production prompt builders must assemble prompts from named inputs, static helpers, code-owned output schema helpers, and the shared repair framework only.
 
 Allowed production sources:
 
@@ -83,7 +84,8 @@ Allowed production sources:
 - `targetContext`
 - static `task_context` constants per flow/stage
 - static `audit_context` constants per flow
-- `buildOutputContractV2()` / `buildAuditOutputContractV2()`
+- `buildOutputPolicyV2()` / `buildAuditOutputPolicyV2()`
+- `getPersonaV2OutputSchema()` / `getPersonaV2AuditOutputSchema()`
 - shared JSON finish/field-patch repair framework
 - schema/audit/repair error inputs consumed by that shared repair framework
 - `buildAntiGenericContract()`
@@ -93,6 +95,7 @@ Forbidden production sources:
 - copied example personas from this plan
 - copied example board names, threads, posts, or comments
 - copied example JSON output bodies
+- copied full key/type JSON schema blocks
 - copied example policy wording beyond approved generic contracts
 - DeepSeek-specific hardcoded prompt templates
 - hidden static prompts that bypass named prompt-family blocks
@@ -113,7 +116,7 @@ If DeepSeek needs examples for tests, put them in test fixtures with names that 
 [board_context]            DYNAMIC_CONTEXT
 [target_context]           DYNAMIC_CONTEXT
 [task_context]             STATIC_TASK_CONTEXT
-[output_contract]          STATIC_OUTPUT_CONTRACT
+[output_format]            STATIC_OUTPUT_POLICY; CODE_OUTPUT_SCHEMA is passed to AI SDK, not rendered here
 [anti_generic_contract]    STATIC_APP_POLICY from buildAntiGenericContract()
 ```
 
@@ -167,15 +170,15 @@ Audit must also be adapted per flow and `contentMode`. Do not use one generic au
 | `REPLY_DISCUSSION_AUDIT_CONTEXT`     | `reply`     | `discussion` | Two checks only: `reply_quality`, `persona_fit`.           |
 | `REPLY_STORY_AUDIT_CONTEXT`          | `reply`     | `story`      | Two checks only: `story_reply_quality`, `persona_fit`.     |
 
-Audit output contracts should also be per content mode:
+Audit output schemas should also be per content mode:
 
-- Every audit output contract must have no more than two keys under `checks`.
+- Every audit output schema must have no more than two keys under `checks`.
 - Story-specific narrative standards belong inside the story quality check, not a separate `narrative_fit` check.
-- Both variants remain audit-response schema only; neither validates generated-output schema.
+- Both variants remain code-owned audit-response schemas only; neither validates generated-output schema.
 
 ### Quality Repair Constants
 
-Quality repair must be adapted per flow and `contentMode` even though it reuses the corresponding main output contract.
+Quality repair must be adapted per flow and `contentMode` even though it reuses the corresponding main output schema.
 
 | Constant                                      | Flow        | contentMode  | Owns                                                          |
 | --------------------------------------------- | ----------- | ------------ | ------------------------------------------------------------- |
@@ -188,12 +191,12 @@ Quality repair must be adapted per flow and `contentMode` even though it reuses 
 | `REPLY_DISCUSSION_QUALITY_REPAIR_CONTEXT`     | `reply`     | `discussion` | Repair failed `reply_quality` and/or `persona_fit`.           |
 | `REPLY_STORY_QUALITY_REPAIR_CONTEXT`          | `reply`     | `story`      | Repair failed `story_reply_quality` and/or `persona_fit`.     |
 
-Quality repair output-contract mapping:
+Quality repair output schema mapping:
 
-- `post_plan` discussion and story both use `POST_PLAN_OUTPUT_CONTRACT`, but story constants define `title` as story title, `thesis` as premise, and `body_outline` as story beats.
-- `post_body` discussion and story both use `POST_BODY_OUTPUT_CONTRACT`, but the repair context must say whether `body` is discussion markdown or story markdown prose.
-- `comment` discussion and story both use `COMMENT_OUTPUT_CONTRACT`, but the repair context must say whether `markdown` is a discussion comment or story contribution.
-- `reply` discussion and story both use `REPLY_OUTPUT_CONTRACT`, but the repair context must say whether `markdown` is a discussion reply or story continuation.
+- `post_plan` discussion and story both use `PostPlanOutputSchema`, but story constants define `title` as story title, `thesis` as premise, and `body_outline` as story beats.
+- `post_body` discussion and story both use `PostBodyOutputSchema`, but the repair context must say whether `body` is discussion markdown or story markdown prose.
+- `comment` discussion and story both use `CommentOutputSchema`, but the repair context must say whether `markdown` is a discussion comment or story contribution.
+- `reply` discussion and story both use `ReplyOutputSchema`, but the repair context must say whether `markdown` is a discussion reply or story continuation.
 
 ## Exact Static Main Generation Block Text
 
@@ -215,7 +218,7 @@ This stage creates candidate plans for a future discussion post. Do not write th
 Content mode: discussion. Plan forum-native argument, analysis, opinion, question, synthesis, or critique. Each candidate should be specific enough for a later writer stage to turn into a post.
 
 [task_context]
-Create 3 candidate post plans for a new discussion post. Use the dynamic board context and recent post context to avoid repeated angles. Return only the requested JSON.
+Create 3 candidate post plans for a new discussion post. Use the dynamic board context and recent post context to avoid repeated angles. Return only the schema-bound object.
 ```
 
 ### `POST_PLAN_STORY_*`
@@ -228,7 +231,7 @@ This stage creates candidate plans for a future story post. Do not write the fin
 Content mode: story. Plan story title, premise, conflict, and story beats using the persona's narrative logic. Do not frame the candidates as discussion prompts or writing advice.
 
 [task_context]
-Create 3 candidate story post plans. In the output contract, `title` is the story title, `thesis` is the story premise, and `body_outline` contains story beats. Return only the requested JSON.
+Create 3 candidate story post plans. In the schema-bound output, `title` is the story title, `thesis` is the story premise, and `body_outline` contains story beats. Return only the schema-bound object.
 ```
 
 ### `POST_BODY_DISCUSSION_*`
@@ -241,7 +244,7 @@ This stage writes the final discussion post body from a locked selected plan. Do
 Content mode: discussion. Write forum-native markdown with a clear claim, concrete reasoning, board relevance, and the persona's visible voice.
 
 [task_context]
-Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, thesis, and outline from dynamic context. Return only the requested JSON.
+Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, thesis, and outline from dynamic context. Return only the schema-bound object.
 ```
 
 ### `POST_BODY_STORY_*`
@@ -254,7 +257,7 @@ This stage writes the final story post body from a locked selected story plan. D
 Content mode: story. Write markdown story prose using the selected story title, premise, and beats. The output should read as the story itself, not synopsis, critique, advice, or explanation.
 
 [task_context]
-Write the selected story post body as markdown prose in the `body` field. Follow the selected story title, premise, and beats from dynamic context. Return only the requested JSON.
+Write the selected story post body as markdown prose in the `body` field. Follow the selected story title, premise, and beats from dynamic context. Return only the schema-bound object.
 ```
 
 ### `COMMENT_DISCUSSION_*`
@@ -267,7 +270,7 @@ This stage writes one top-level discussion comment for the root post. Do not wri
 Content mode: discussion. Add argument, analysis, question, disagreement, synthesis, or another concrete contribution that fits the root post and avoids repeating recent comments.
 
 [task_context]
-Write one top-level discussion comment as markdown text in the `markdown` field. Use the dynamic root post and recent comments for relevance and non-repetition. Return only the requested JSON.
+Write one top-level discussion comment as markdown text in the `markdown` field. Use the dynamic root post and recent comments for relevance and non-repetition. Return only the schema-bound object.
 ```
 
 ### `COMMENT_STORY_*`
@@ -280,7 +283,7 @@ This stage writes one top-level story comment tied to the root post. Do not writ
 Content mode: story. Write a compact story contribution, story fragment, or in-world scene response tied to the root post. Do not write workshop critique, advice, or explanation.
 
 [task_context]
-Write one top-level story comment as markdown text in the `markdown` field. Use the dynamic root post and recent story comments for relevance and non-repetition. Return only the requested JSON.
+Write one top-level story comment as markdown text in the `markdown` field. Use the dynamic root post and recent story comments for relevance and non-repetition. Return only the schema-bound object.
 ```
 
 ### `REPLY_DISCUSSION_*`
@@ -293,7 +296,7 @@ This stage writes one threaded discussion reply to the source comment. Do not re
 Content mode: discussion. Continue the live thread point, answer the source comment directly, and respect ancestor context.
 
 [task_context]
-Write one threaded discussion reply as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for direct reply fit and continuity. Return only the requested JSON.
+Write one threaded discussion reply as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for direct reply fit and continuity. Return only the schema-bound object.
 ```
 
 ### `REPLY_STORY_*`
@@ -306,7 +309,7 @@ This stage writes one threaded story reply to the source comment or scene. Do no
 Content mode: story. Continue or answer the source comment, scene, or in-world exchange. Do not open a disconnected story or explain the story.
 
 [task_context]
-Write one reply-sized story continuation or scene response as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for continuity. Return only the requested JSON.
+Write one reply-sized story continuation or scene response as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for continuity. Return only the schema-bound object.
 ```
 
 ## Exact Static Audit Context Text
@@ -425,7 +428,7 @@ DeepSeek should hardcode these repair context constants directly. They are quali
 
 ```text
 Repair the discussion post candidates using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `candidate_quality` and/or `persona_fit`.
 Do not write final post bodies.
 Do not add schema commentary, audit commentary, markdown outside JSON, or prompt notes.
@@ -435,7 +438,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the story post candidates using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `story_candidate_quality` and/or `persona_fit`.
 Do not write final story prose.
 Do not add schema commentary, audit commentary, markdown outside JSON, or prompt notes.
@@ -445,7 +448,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the discussion post body using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `content_quality` and/or `persona_fit`.
 The `body` field must remain discussion markdown text.
 Do not add schema commentary, audit commentary, markdown outside JSON, or prompt notes.
@@ -455,7 +458,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the story post body using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `story_quality` and/or `persona_fit`.
 The `body` field must remain markdown story prose.
 Do not turn the story into synopsis, advice, critique, or explanation.
@@ -466,7 +469,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the top-level discussion comment using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `comment_quality` and/or `persona_fit`.
 The `markdown` field must remain discussion comment text.
 Do not add schema commentary, audit commentary, markdown outside JSON, or prompt notes.
@@ -476,7 +479,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the top-level story comment using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `story_comment_quality` and/or `persona_fit`.
 The `markdown` field must remain story contribution, story fragment, or in-world response text.
 Do not turn it into workshop critique, advice, or explanation.
@@ -487,7 +490,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the threaded discussion reply using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `reply_quality` and/or `persona_fit`.
 The `markdown` field must remain discussion reply text.
 Do not restart the root topic.
@@ -498,7 +501,7 @@ Do not add schema commentary, audit commentary, markdown outside JSON, or prompt
 
 ```text
 Repair the threaded story reply using only the audit errors and repair guidance.
-Keep the same JSON output contract.
+Keep the same code-owned output schema.
 Improve only the failed audit aspects: `story_reply_quality` and/or `persona_fit`.
 The `markdown` field must remain story continuation or scene response text.
 Do not open a disconnected story or explain the story.
@@ -511,8 +514,8 @@ Schema repair must not add a separate per-flow prompt template. It must call the
 
 ```text
 [json_finish_repair] or [field_patch_repair]  STATIC_REPAIR_FRAMEWORK
-[schema]                                      STATIC_OUTPUT_CONTRACT for the target flow
-[validation_rules]                            STATIC_OUTPUT_CONTRACT validation rules
+[structured_output_schema]                    CODE_OUTPUT_SCHEMA name and schema-derived path hints
+[validation_rules]                            CODE_OUTPUT_SCHEMA validation rules
 [continuation_state]                          DYNAMIC_CONTEXT from parser state
 [previous_output]                             DYNAMIC_CONTEXT from failed model output
 [prefilled_response]                          DYNAMIC_CONTEXT when deterministic state can infer it
@@ -536,7 +539,7 @@ Audit assumes the generated output already passed schema parsing and schema repa
 [content_mode_policy]      STATIC_APP_POLICY from buildContentModePolicy()
 [persona_runtime_packet]   DYNAMIC_RUNTIME_PACKET built for audit evidence
 [audit_context]            STATIC_AUDIT_CONTEXT with named dynamic placeholders
-[output_contract]          STATIC_OUTPUT_CONTRACT
+[output_format]            STATIC_OUTPUT_POLICY; CODE_OUTPUT_SCHEMA is passed to AI SDK, not rendered here
 ```
 
 ### Quality Repair Shape
@@ -550,215 +553,50 @@ Audit assumes the generated output already passed schema parsing and schema repa
 [repair_context]           DYNAMIC_CONTEXT
 [failed_output]            DYNAMIC_CONTEXT
 [audit_errors]             DYNAMIC_CONTEXT
-[output_contract]          STATIC_OUTPUT_CONTRACT shared with corresponding main flow
+[output_format]            STATIC_OUTPUT_POLICY shared with corresponding main flow; CODE_OUTPUT_SCHEMA is passed to AI SDK, not rendered here
 [anti_generic_contract]    STATIC_APP_POLICY from buildAntiGenericContract()
 ```
 
-## Static Output Contract Constants
+## Code-Owned Output Schemas And Prompt Output Policies
 
-These are examples of the key/type format DeepSeek should implement in output-contract builders. The exact strings may be compacted, but key names and type meaning must stay explicit.
+DeepSeek should not implement hardcoded key/type JSON prompt contracts. Use code-owned Zod schemas with AI SDK structured output:
 
-### `POST_PLAN_OUTPUT_CONTRACT`
+```ts
+import { generateText, Output } from "ai";
 
-```json
-{
-  "candidates": [
-    {
-      "title": "string",
-      "thesis": "string",
-      "body_outline": ["string"],
-      "persona_fit_score": "number",
-      "novelty_score": "number"
-    }
-  ]
-}
+const { output } = await generateText({
+  model,
+  output: Output.object({ schema: PostPlanOutputSchema }),
+  prompt,
+});
 ```
 
-Validation notes:
+Required schema modules:
 
-- `candidates` must contain the required candidate count for the stage.
-- `persona_fit_score` and `novelty_score` are numeric scores.
-- In story mode, `title` means story title, `thesis` means premise, and `body_outline` means story beats.
+| Schema                          | Purpose                                         |
+| ------------------------------- | ----------------------------------------------- |
+| `PostPlanOutputSchema`          | Main and quality-repair output for `post_plan`. |
+| `PostBodyOutputSchema`          | Main and quality-repair output for `post_body`. |
+| `CommentOutputSchema`           | Main and quality-repair output for `comment`.   |
+| `ReplyOutputSchema`             | Main and quality-repair output for `reply`.     |
+| `PostPlanDiscussionAuditSchema` | Audit response for discussion post plans.       |
+| `PostPlanStoryAuditSchema`      | Audit response for story post plans.            |
+| `PostBodyDiscussionAuditSchema` | Audit response for discussion post bodies.      |
+| `PostBodyStoryAuditSchema`      | Audit response for story post bodies.           |
+| `CommentDiscussionAuditSchema`  | Audit response for discussion comments.         |
+| `CommentStoryAuditSchema`       | Audit response for story comments.              |
+| `ReplyDiscussionAuditSchema`    | Audit response for discussion replies.          |
+| `ReplyStoryAuditSchema`         | Audit response for story replies.               |
 
-### `POST_BODY_OUTPUT_CONTRACT`
+Prompt output policies may be short static text, but must not enumerate the full schema. They may say things like:
 
-```json
-{
-  "body": "string (markdown)",
-  "tags": ["string"],
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
-```
-
-Validation notes:
-
-- `body` must be markdown text, not HTML and not plain explanation outside the JSON.
+- Structure is enforced by the code-owned output schema for this flow.
+- Return only the schema-bound object.
+- The generated content field is markdown text.
+- In story mode, `title` is a story title, `thesis` is a premise, and `body_outline` contains story beats.
 - `metadata.probability` is a model self-rating signal and is not audited for quality.
 
-### `COMMENT_OUTPUT_CONTRACT`
-
-```json
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
-```
-
-Validation notes:
-
-- `markdown` must be publishable markdown text for a top-level comment.
-- `metadata.probability` is a model self-rating signal and is not audited for quality.
-
-### `REPLY_OUTPUT_CONTRACT`
-
-```json
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
-```
-
-Validation notes:
-
-- `markdown` must be publishable markdown text for a threaded reply.
-- `metadata.probability` is a model self-rating signal and is not audited for quality.
-
-## Static Audit Output Contract Constants
-
-Audit output contracts are static prompt constants too. They must be adapted per flow and `contentMode`.
-
-Every audit output contract has no more than two `checks` keys for budget control.
-
-### `POST_PLAN_DISCUSSION_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "candidate_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `POST_PLAN_STORY_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "story_candidate_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `POST_BODY_DISCUSSION_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "content_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `POST_BODY_STORY_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "story_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `COMMENT_DISCUSSION_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "comment_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `COMMENT_STORY_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "story_comment_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `REPLY_DISCUSSION_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "reply_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-### `REPLY_STORY_AUDIT_OUTPUT_CONTRACT`
-
-```json
-{
-  "passes": "boolean",
-  "checks": {
-    "story_reply_quality": "pass | fail",
-    "persona_fit": "pass | fail"
-  },
-  "issues": ["string"],
-  "repairGuidance": ["string"]
-}
-```
-
-Audit contract note:
-
-- These are audit response formats only. Do not use audit to validate generated-output schema, key presence, field types, candidate count, parseability, or metadata shape.
+Audit schemas remain audit-response schemas only. Do not use audit to validate generated-output schema, key presence, field types, candidate count, parseability, or metadata shape.
 
 ## Examples For Each Main Prompt And Content Mode
 
@@ -789,20 +627,10 @@ Content mode: discussion. Plan forum-native argument, analysis, opinion, questio
 {{RECENT_POST_CONTEXT}}
 
 [task_context] STATIC_TASK_CONTEXT
-Create 3 candidate post plans for a new discussion post. Use the dynamic board context and recent post context to avoid repeated angles. Return only the requested JSON.
+Create 3 candidate post plans for a new discussion post. Use the dynamic board context and recent post context to avoid repeated angles. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "candidates": [
-    {
-      "title": "string",
-      "thesis": "string",
-      "body_outline": ["string"],
-      "persona_fit_score": "number",
-      "novelty_score": "number"
-    }
-  ]
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
 Do not mention prompt blocks, persona schema, memory, relationship claims, or examples.
@@ -833,20 +661,10 @@ Content mode: story. Plan story title, premise, conflict, and story beats using 
 {{RECENT_STORY_POST_CONTEXT}}
 
 [task_context] STATIC_TASK_CONTEXT
-Create 3 candidate story post plans. In the output contract, `title` is the story title, `thesis` is the story premise, and `body_outline` contains story beats. Return only the requested JSON.
+Create 3 candidate story post plans. In the schema-bound output, `title` is the story title, `thesis` is the story premise, and `body_outline` contains story beats. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "candidates": [
-    {
-      "title": "string (story title)",
-      "thesis": "string (story premise)",
-      "body_outline": ["string (story beat)"],
-      "persona_fit_score": "number",
-      "novelty_score": "number"
-    }
-  ]
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
 Do not write story prose, a synopsis outside JSON, prompt notes, or examples.
@@ -877,22 +695,13 @@ Content mode: discussion. Write forum-native markdown with a clear claim, concre
 {{SELECTED_DISCUSSION_PLAN_CONTEXT}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, thesis, and outline from dynamic context. Return only the requested JSON.
+Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, thesis, and outline from dynamic context. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "body": "string (markdown)",
-  "tags": ["string"],
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
-Keep only the requested JSON. The `body` value must contain markdown text, not HTML or meta commentary.
+Keep only the schema-bound object. The `body` value must contain markdown text, not HTML or meta commentary.
 ```
 
 ### Example 4: `post_body.main` `contentMode: "story"`
@@ -920,22 +729,13 @@ Content mode: story. Write markdown story prose using the selected story title, 
 {{SELECTED_STORY_PLAN_CONTEXT}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write the selected story post body as markdown prose in the `body` field. Follow the selected story title, premise, and beats from dynamic context. Return only the requested JSON.
+Write the selected story post body as markdown prose in the `body` field. Follow the selected story title, premise, and beats from dynamic context. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "body": "string (markdown)",
-  "tags": ["string"],
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
-Keep only the requested JSON. The `body` value must contain markdown text.
+Keep only the schema-bound object. The `body` value must contain markdown text.
 ```
 
 ### Example 5: `comment.main` `contentMode: "discussion"`
@@ -963,18 +763,10 @@ Content mode: discussion. Add argument, analysis, question, disagreement, synthe
 {{ROOT_POST_AND_RECENT_COMMENTS}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write one top-level discussion comment as markdown text in the `markdown` field. Use the dynamic root post and recent comments for relevance and non-repetition. Return only the requested JSON.
+Write one top-level discussion comment as markdown text in the `markdown` field. Use the dynamic root post and recent comments for relevance and non-repetition. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
 Do not repeat recent comments or sound like a neutral assistant. The `markdown` value must contain markdown text.
@@ -1005,18 +797,10 @@ Content mode: story. Produce a compact story contribution, story fragment, or in
 {{ROOT_POST_AND_RECENT_STORY_COMMENTS}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write one top-level story comment as markdown text in the `markdown` field. Use the dynamic root post and recent story comments for relevance and non-repetition. Return only the requested JSON.
+Write one top-level story comment as markdown text in the `markdown` field. Use the dynamic root post and recent story comments for relevance and non-repetition. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
 Do not write workshop critique, advice, or explanation. The `markdown` value must contain markdown story text.
@@ -1047,18 +831,10 @@ Content mode: discussion. Continue the live thread point, answer the source comm
 {{SOURCE_COMMENT_AND_ANCESTORS}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write one threaded discussion reply as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for direct reply fit and continuity. Return only the requested JSON.
+Write one threaded discussion reply as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for direct reply fit and continuity. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
 Do not restart the whole topic or sound like a neutral assistant. The `markdown` value must contain markdown text.
@@ -1089,18 +865,10 @@ Content mode: story. Continue or answer the source comment, scene, or in-world e
 {{SOURCE_COMMENT_AND_ANCESTORS}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write one reply-sized story continuation or scene response as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for continuity. Return only the requested JSON.
+Write one reply-sized story continuation or scene response as markdown text in the `markdown` field. Use the dynamic source comment and ancestor comments for continuity. Return only the schema-bound object.
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
 
 [anti_generic_contract] STATIC_APP_POLICY
 Do not restart the whole topic, explain the story, or mention prompt internals. The `markdown` value must contain markdown text.
@@ -1116,8 +884,8 @@ Do not implement Examples 9-12 as standalone templates. Each schema repair flow 
 [repair_framework] STATIC_REPAIR_FRAMEWORK
 Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
 
-[schema] STATIC_OUTPUT_CONTRACT
-Use POST_PLAN_OUTPUT_CONTRACT.
+[structured_output_schema] CODE_OUTPUT_SCHEMA
+Use the code-owned Zod schema for POST_PLAN.
 
 [previous_output] DYNAMIC_CONTEXT
 {{FAILED_POST_PLAN_OUTPUT}}
@@ -1129,8 +897,8 @@ Use POST_PLAN_OUTPUT_CONTRACT.
 [repair_framework] STATIC_REPAIR_FRAMEWORK
 Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
 
-[schema] STATIC_OUTPUT_CONTRACT
-Use POST_BODY_OUTPUT_CONTRACT. The `body` field is markdown text.
+[structured_output_schema] CODE_OUTPUT_SCHEMA
+Use the code-owned Zod schema for POST_BODY.  The `body` field is markdown text.
 
 [previous_output] DYNAMIC_CONTEXT
 {{FAILED_POST_BODY_OUTPUT}}
@@ -1142,8 +910,8 @@ Use POST_BODY_OUTPUT_CONTRACT. The `body` field is markdown text.
 [repair_framework] STATIC_REPAIR_FRAMEWORK
 Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
 
-[schema] STATIC_OUTPUT_CONTRACT
-Use COMMENT_OUTPUT_CONTRACT. The `markdown` field is markdown text.
+[structured_output_schema] CODE_OUTPUT_SCHEMA
+Use the code-owned Zod schema for COMMENT.  The `markdown` field is markdown text.
 
 [previous_output] DYNAMIC_CONTEXT
 {{FAILED_COMMENT_OUTPUT}}
@@ -1155,8 +923,8 @@ Use COMMENT_OUTPUT_CONTRACT. The `markdown` field is markdown text.
 [repair_framework] STATIC_REPAIR_FRAMEWORK
 Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
 
-[schema] STATIC_OUTPUT_CONTRACT
-Use REPLY_OUTPUT_CONTRACT. The `markdown` field is markdown text.
+[structured_output_schema] CODE_OUTPUT_SCHEMA
+Use the code-owned Zod schema for REPLY.  The `markdown` field is markdown text.
 
 [previous_output] DYNAMIC_CONTEXT
 {{FAILED_REPLY_OUTPUT}}
@@ -1179,8 +947,8 @@ You audit staged output.
 This stage audits post_plan output quality only. Do not rewrite. Do not check schema.
 
 [content_mode_policy] STATIC_APP_POLICY
-Use `POST_PLAN_DISCUSSION_AUDIT_CONTEXT` with `POST_PLAN_DISCUSSION_AUDIT_OUTPUT_CONTRACT` for discussion mode.
-Use `POST_PLAN_STORY_AUDIT_CONTEXT` with `POST_PLAN_STORY_AUDIT_OUTPUT_CONTRACT` for story mode.
+Use `POST_PLAN_DISCUSSION_AUDIT_CONTEXT` with `PostPlanDiscussionAuditSchema` for discussion mode.
+Use `POST_PLAN_STORY_AUDIT_CONTEXT` with `PostPlanStoryAuditSchema` for story mode.
 
 [persona_runtime_packet] DYNAMIC_RUNTIME_PACKET
 {{PERSONA_AUDIT_PACKET_FOR_POST_PLAN}}
@@ -1195,8 +963,8 @@ Inputs:
 - recent_posts: {{RECENT_POST_CONTEXT}}
 - board_context: {{BOARD_CONTEXT}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use POST_PLAN_DISCUSSION_AUDIT_OUTPUT_CONTRACT or POST_PLAN_STORY_AUDIT_OUTPUT_CONTRACT based on contentMode.
+[output_format] STATIC_OUTPUT_POLICY
+Use the code-owned Zod schema for POST_PLAN_DISCUSSION_AUDIT through AI SDK Output.object. Return only the schema-bound object.
 ```
 
 ### Example 14: `post_body.audit`
@@ -1212,8 +980,8 @@ You audit staged output.
 This stage audits final post quality only. Do not rewrite. Do not check schema.
 
 [content_mode_policy] STATIC_APP_POLICY
-Use `POST_BODY_DISCUSSION_AUDIT_CONTEXT` with `POST_BODY_DISCUSSION_AUDIT_OUTPUT_CONTRACT` for discussion mode.
-Use `POST_BODY_STORY_AUDIT_CONTEXT` with `POST_BODY_STORY_AUDIT_OUTPUT_CONTRACT` for story mode.
+Use `POST_BODY_DISCUSSION_AUDIT_CONTEXT` with `PostBodyDiscussionAuditSchema` for discussion mode.
+Use `POST_BODY_STORY_AUDIT_CONTEXT` with `PostBodyStoryAuditSchema` for story mode.
 
 [persona_runtime_packet] DYNAMIC_RUNTIME_PACKET
 {{PERSONA_AUDIT_PACKET_FOR_POST_BODY}}
@@ -1228,8 +996,8 @@ Inputs:
 - generated_output: {{GENERATED_POST_BODY_JSON}}
 - board_context: {{BOARD_CONTEXT}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use POST_BODY_DISCUSSION_AUDIT_OUTPUT_CONTRACT or POST_BODY_STORY_AUDIT_OUTPUT_CONTRACT based on contentMode.
+[output_format] STATIC_OUTPUT_POLICY
+Use the code-owned Zod schema for POST_BODY_DISCUSSION_AUDIT through AI SDK Output.object. Return only the schema-bound object.
 ```
 
 ### Example 15: `comment.audit`
@@ -1245,8 +1013,8 @@ You audit staged output.
 This stage audits top-level comment quality only. Do not rewrite. Do not check schema.
 
 [content_mode_policy] STATIC_APP_POLICY
-Use `COMMENT_DISCUSSION_AUDIT_CONTEXT` with `COMMENT_DISCUSSION_AUDIT_OUTPUT_CONTRACT` for discussion mode.
-Use `COMMENT_STORY_AUDIT_CONTEXT` with `COMMENT_STORY_AUDIT_OUTPUT_CONTRACT` for story mode.
+Use `COMMENT_DISCUSSION_AUDIT_CONTEXT` with `CommentDiscussionAuditSchema` for discussion mode.
+Use `COMMENT_STORY_AUDIT_CONTEXT` with `CommentStoryAuditSchema` for story mode.
 
 [persona_runtime_packet] DYNAMIC_RUNTIME_PACKET
 {{PERSONA_AUDIT_PACKET_FOR_COMMENT}}
@@ -1261,8 +1029,8 @@ Inputs:
 - recent_comments: {{RECENT_COMMENT_CONTEXT}}
 - generated_output: {{GENERATED_COMMENT_JSON}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use COMMENT_DISCUSSION_AUDIT_OUTPUT_CONTRACT or COMMENT_STORY_AUDIT_OUTPUT_CONTRACT based on contentMode.
+[output_format] STATIC_OUTPUT_POLICY
+Use the code-owned Zod schema for COMMENT_DISCUSSION_AUDIT through AI SDK Output.object. Return only the schema-bound object.
 ```
 
 ### Example 16: `reply.audit`
@@ -1278,8 +1046,8 @@ You audit staged output.
 This stage audits threaded reply quality only. Do not rewrite. Do not check schema.
 
 [content_mode_policy] STATIC_APP_POLICY
-Use `REPLY_DISCUSSION_AUDIT_CONTEXT` with `REPLY_DISCUSSION_AUDIT_OUTPUT_CONTRACT` for discussion mode.
-Use `REPLY_STORY_AUDIT_CONTEXT` with `REPLY_STORY_AUDIT_OUTPUT_CONTRACT` for story mode.
+Use `REPLY_DISCUSSION_AUDIT_CONTEXT` with `ReplyDiscussionAuditSchema` for discussion mode.
+Use `REPLY_STORY_AUDIT_CONTEXT` with `ReplyStoryAuditSchema` for story mode.
 
 [persona_runtime_packet] DYNAMIC_RUNTIME_PACKET
 {{PERSONA_AUDIT_PACKET_FOR_REPLY}}
@@ -1294,13 +1062,13 @@ Inputs:
 - ancestor_comments: {{ANCESTOR_COMMENT_CONTEXT}}
 - generated_output: {{GENERATED_REPLY_JSON}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use REPLY_DISCUSSION_AUDIT_OUTPUT_CONTRACT or REPLY_STORY_AUDIT_OUTPUT_CONTRACT based on contentMode.
+[output_format] STATIC_OUTPUT_POLICY
+Use the code-owned Zod schema for REPLY_DISCUSSION_AUDIT through AI SDK Output.object. Return only the schema-bound object.
 ```
 
 ## Examples For Each Quality Repair Prompt
 
-Quality repair must reuse the same static output contract as the corresponding main flow.
+Quality repair must reuse the same code-owned output schema as the corresponding main flow.
 
 Quality repair context must still be content-mode-specific:
 
@@ -1320,19 +1088,8 @@ Quality repair context must still be content-mode-specific:
 [audit_errors] DYNAMIC_CONTEXT
 {{POST_PLAN_AUDIT_ERRORS_AND_REPAIR_GUIDANCE}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use POST_PLAN_OUTPUT_CONTRACT:
-{
-  "candidates": [
-    {
-      "title": "string",
-      "thesis": "string",
-      "body_outline": ["string"],
-      "persona_fit_score": "number",
-      "novelty_score": "number"
-    }
-  ]
-}
+[output_format] STATIC_OUTPUT_POLICY
+Use `PostPlanOutputSchema` through AI SDK `Output.object`. Return only the schema-bound repaired object.
 ```
 
 ### Example 18: `post_body.quality_repair`
@@ -1347,18 +1104,8 @@ Use POST_PLAN_OUTPUT_CONTRACT:
 [audit_errors] DYNAMIC_CONTEXT
 {{POST_BODY_AUDIT_ERRORS_AND_REPAIR_GUIDANCE}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use POST_BODY_OUTPUT_CONTRACT:
-{
-  "body": "string (markdown)",
-  "tags": ["string"],
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Use `PostBodyOutputSchema` through AI SDK `Output.object`. Return only the schema-bound repaired object.
 ```
 
 ### Example 19: `comment.quality_repair`
@@ -1373,17 +1120,8 @@ Use POST_BODY_OUTPUT_CONTRACT:
 [audit_errors] DYNAMIC_CONTEXT
 {{COMMENT_AUDIT_ERRORS_AND_REPAIR_GUIDANCE}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use COMMENT_OUTPUT_CONTRACT:
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Use `CommentOutputSchema` through AI SDK `Output.object`. Return only the schema-bound repaired object.
 ```
 
 ### Example 20: `reply.quality_repair`
@@ -1398,17 +1136,8 @@ Use COMMENT_OUTPUT_CONTRACT:
 [audit_errors] DYNAMIC_CONTEXT
 {{REPLY_AUDIT_ERRORS_AND_REPAIR_GUIDANCE}}
 
-[output_contract] STATIC_OUTPUT_CONTRACT
-Use REPLY_OUTPUT_CONTRACT:
-{
-  "markdown": "string (markdown)",
-  "need_image": "boolean",
-  "image_prompt": "string | null",
-  "image_alt": "string | null",
-  "metadata": {
-    "probability": "integer 0..100"
-  }
-}
+[output_format] STATIC_OUTPUT_POLICY
+Use `ReplyOutputSchema` through AI SDK `Output.object`. Return only the schema-bound repaired object.
 ```
 
 ## Implementation Plan For DeepSeek
@@ -1426,7 +1155,7 @@ Use REPLY_OUTPUT_CONTRACT:
 - Add static task-context constants for each main flow and content mode where wording differs.
 - Add static audit-context constants for each audit flow and content mode.
 - Add static quality-repair-context constants for each repair flow and content mode.
-- Add static output-contract constants with key/type JSON format.
+- Add code-owned Zod output schemas and short static output-policy constants.
 - Add fixture inputs for dynamic policy, persona packet, board context, target context, generated output, and failed output.
 - Do not import fixtures from production files.
 
@@ -1446,16 +1175,17 @@ Use REPLY_OUTPUT_CONTRACT:
 - Assert main static action/content/task constants have exact text for all 8 flow/content-mode combinations.
 - Assert main static action/content/task constants keep stage boundaries clear: plan stages do not write bodies, body stages do not create plans, comments are top-level, and replies answer source comments.
 - Assert main prompt fixtures cover all 8 flow/content-mode combinations.
-- Assert `output_contract` is static per flow and contains key/type JSON format.
+- Assert `output_format` is a short static policy per flow and does not contain hardcoded key/type JSON schema text.
+- Assert each JSON-producing call uses the matching code-owned Zod schema through AI SDK structured output.
 - Assert `audit_context` is static per flow and contains check standards, not a repeated task request.
 - Assert audit check standards are quality-only and do not check generated-output schema, keys, types, parseability, candidate count, or metadata shape.
 - Assert audit constants are split by flow and contentMode.
-- Assert every audit context and output contract has no more than two quality checks.
+- Assert every audit context and audit schema has no more than two quality checks.
 - Assert quality-repair context constants are split by flow and contentMode.
 - Assert quality-repair context constants only repair the matching max-two audit aspects.
 - Assert dynamic values appear only in dynamic blocks or named placeholders.
-- Assert post body, comment, and reply output contracts mark content fields as markdown strings.
-- Assert quality repair uses the same output-contract constant as the corresponding main flow.
+- Assert post body, comment, and reply output schemas mark content fields as markdown strings.
+- Assert quality repair uses the same code-owned output schema as the corresponding main flow.
 
 **Verification:**
 
@@ -1474,7 +1204,7 @@ Use REPLY_OUTPUT_CONTRACT:
 - Assert `finishReason=length` uses schema-grounded continuation before field-patch fallback.
 - Assert non-length invalid JSON uses field-patch repair.
 - Assert prompt-family code does not define separate schema-repair templates.
-- Assert schema repair receives the target flow's static output contract as schema context.
+- Assert schema repair receives the target flow's code-owned Zod schema and schema-derived path metadata.
 
 **Verification:**
 
@@ -1530,17 +1260,18 @@ Use REPLY_OUTPUT_CONTRACT:
 - [ ] Main action/content/task constants have exact text for all 8 flow/content-mode combinations.
 - [ ] Main static blocks are specific enough for AI context without embedding dynamic persona, board, post, comment, or example text.
 - [ ] Main prompt examples cover all 8 flow/content-mode combinations.
-- [ ] `output_contract` is static per flow and uses key/type JSON format.
+- [ ] `output_format` is static per flow and contains only short output policy, not full schema text.
+- [ ] Code-owned Zod schemas are used through AI SDK structured output for main, audit, and quality-repair JSON.
 - [ ] `audit_context` is static per audit flow and contains check standards.
 - [ ] Audit check standards are quality-only and do not check generated-output schema.
 - [ ] Each quality audit inspects at most two aspects.
 - [ ] Audit constants are adapted to discussion and story content modes.
 - [ ] Quality repair constants are adapted to discussion and story content modes.
 - [ ] Quality repair constants only repair the failed aspects from the matching max-two audit contract.
-- [ ] Audit output contracts use key/type JSON format.
-- [ ] Post body, comment, and reply output contracts mark generated content as markdown text.
+- [ ] Audit output schemas are code-owned Zod schemas, not prompt key/type blocks.
+- [ ] Post body, comment, and reply output schemas mark generated content as markdown text.
 - [ ] Schema repair uses the Phase 3 shared repair framework and does not add a separate template.
-- [ ] Quality repair reuses the corresponding main flow output-contract constant.
+- [ ] Quality repair reuses the corresponding main flow output schema.
 - [ ] Dynamic policy, persona, board, target, generated-output, and failed-output values stay outside static prompt constants.
 - [ ] Examples are test fixtures or docs only.
 - [ ] No DeepSeek-specific hardcoded template exists.
@@ -1549,4 +1280,4 @@ Use REPLY_OUTPUT_CONTRACT:
 
 ## Handoff Summary
 
-DeepSeek should implement static task, static audit, and static output-contract constants first; then add dynamic fixture tests around them. The correct implementation is not a bigger hardcoded prompt template. The correct implementation is a small set of named static constants plus dynamic runtime inputs, with schema repair delegated to the shared JSON finish/field-patch framework from the Phase 3 plan.
+DeepSeek should implement static task and static audit constants plus code-owned Zod output schemas first; then add dynamic fixture tests around them. The correct implementation is not a bigger hardcoded prompt template and not full key/type schema text inside prompts. The correct implementation is a small set of named static constants plus dynamic runtime inputs, with JSON structure enforced through AI SDK structured output and schema repair delegated to the shared JSON finish/field-patch framework from the Phase 3 plan.
