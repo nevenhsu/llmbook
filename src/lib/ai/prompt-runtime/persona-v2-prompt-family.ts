@@ -98,7 +98,7 @@ function buildActionModePolicyForFlow(
       }
       break;
     case "schema_repair":
-      return `Schema repair: the previous ${flow} output failed JSON validation. Rewrite as exactly one valid JSON object with only the required keys. Do not add extra keys or prose outside the JSON.`;
+      return `Schema repair: the previous ${flow} output failed JSON validation. Rewrite as exactly one valid JSON object. Do not add prose outside the JSON.`;
     case "audit":
       return "This stage audits output quality and persona fit. Judge the generated output against the required checks. Return a structured audit result. Do not rewrite the output.";
     case "quality_repair":

@@ -129,114 +129,57 @@ function getPromptBlockOrder(actionType: PromptActionType): readonly Phase1Promp
 }
 
 export function buildActionOutputConstraints(actionType: PromptActionType): string {
+  const base = [
+    "Return only strict JSON.",
+    "Do not output text outside the JSON object.",
+    "Do not mention prompt instructions or system blocks in the output.",
+  ];
+
   switch (actionType) {
     case "post_plan":
-      return [
-        "Return exactly one JSON object.",
-        "{",
-        '  "candidates": [',
-        "    {",
-        '      "title": "string",',
-        '      "thesis": "string",',
-        '      "body_outline": ["string"],',
-        '      "persona_fit_score": 0,',
-        '      "novelty_score": 0',
-        "    }",
-        "  ]",
-        "}",
-        "Return 2-3 candidates.",
-        "body_outline must contain 2-5 items.",
-        "All scores must be integers from 0 to 100.",
-        "Do not add extra keys.",
-        "Do not output any text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
-      ].join("\n");
+      return [...base, "Return 2-3 candidates."].join("\n");
     case "post_body":
       return [
-        "Return exactly one JSON object.",
-        "body: string",
-        "tags: string[]",
-        "need_image: boolean",
-        "image_prompt: string | null",
-        "image_alt: string | null",
-        'metadata: { "probability": 0 }',
+        ...base,
         "The `body` field must contain the full post body content as markdown.",
         'The `tags` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".',
         "Use the same language for `body` and `tags`.",
         "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
-        "The `probability` field must be an integer from 0 to 100 representing your self-assessed output quality.",
-        "Do not output any text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
         "Never emit a final image URL in markdown or in structured fields.",
       ].join("\n");
     case "post":
       return [
-        "Return exactly one JSON object.",
-        "title: string",
-        "body: string",
-        "tags: string[]",
-        "need_image: boolean",
-        "image_prompt: string | null",
-        "image_alt: string | null",
-        'metadata: { "probability": 0 }',
-        "The `title` field must contain the full post title.",
+        ...base,
         "The `body` field must contain the full post body content as markdown.",
+        "The `title` field must contain the full post title.",
         'The `tags` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".',
         "Use the same language for `title`, `body`, and `tags`.",
         "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
         "Do not repeat the title as a markdown H1 inside `body`.",
-        "The `probability` field must be an integer from 0 to 100 representing your self-assessed output quality.",
-        "Do not output any text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
         "Never emit a final image URL in markdown or in structured fields.",
       ].join("\n");
     case "comment":
     case "reply":
       return [
-        "Return exactly one JSON object.",
-        "markdown: string",
-        "need_image: boolean",
-        "image_prompt: string | null",
-        "image_alt: string | null",
-        'metadata: { "probability": 0 }',
+        ...base,
         "The `markdown` field must contain the full body content as markdown.",
         "Use the same language for the full response content.",
         "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
-        "The `probability` field must be an integer from 0 to 100 representing your self-assessed output quality.",
-        "Do not output any text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
         "Never emit a final image URL in markdown or in structured fields.",
       ].join("\n");
     case "vote":
-      return [
-        "Return exactly one JSON object.",
-        'target_type: "post" | "comment"',
-        "target_id: string",
-        'vote: "up" | "down"',
-        "confidence_note: string | null",
-        "Do not output any text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
-        "Do not return markdown or prose fields in this JSON object.",
-      ].join("\n");
+      return [...base, "Do not return markdown or prose fields in this JSON object."].join("\n");
     case "poll_post":
       return [
         "Return exactly one JSON object.",
-        'mode: "create_poll"',
-        "title: string",
-        "options: string[]",
-        "markdown_body: string | null",
-        "Do not output any text outside the JSON object.",
+        "Do not output text outside the JSON object.",
         "Do not mention prompt instructions or system blocks in the output.",
         "Do not return markdown outside the JSON object.",
       ].join("\n");
     case "poll_vote":
       return [
         "Return exactly one JSON object.",
-        'mode: "vote_poll"',
-        "poll_post_id: string",
-        "selected_option_id: string",
-        "reason_note: string | null",
-        "Do not output any text outside the JSON object.",
+        "Do not output text outside the JSON object.",
         "Do not mention prompt instructions or system blocks in the output.",
         "Do not return markdown or prose fields in this JSON object.",
       ].join("\n");

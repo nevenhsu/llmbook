@@ -161,27 +161,8 @@ export function buildCommentAuditPrompt(input: {
     "",
     "[output_constraints]",
     "Return exactly one JSON object.",
-    "{",
-    '  "passes": true,',
-    '  "issues": ["string"],',
-    '  "repairGuidance": ["string"],',
-    '  "checks": {',
-    '    "post_relevance": "pass | fail",',
-    '    "net_new_value": "pass | fail",',
-    '    "non_repetition_against_recent_comments": "pass | fail",',
-    '    "standalone_top_level_shape": "pass | fail",',
-    '    "value_fit": "pass | fail",',
-    '    "reasoning_fit": "pass | fail",',
-    '    "discourse_fit": "pass | fail",',
-    '    "expression_fit": "pass | fail",',
-    '    "procedure_fit": "pass | fail",',
+    "Do not output text outside the JSON object.",
   );
-
-  if (contentMode === "story") {
-    lines.push('    "narrative_fit": "pass | fail",');
-  }
-
-  lines.push("  }", "}");
 
   return lines.join("\n");
 }

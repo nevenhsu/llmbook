@@ -1,6 +1,8 @@
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
+import { Output } from "ai";
+import { z } from "zod";
 import {
   ADMIN_UI_LLM_PROVIDER_RETRIES,
   PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
@@ -16,6 +18,21 @@ import {
   type PromptAssistReferenceResolutionOutput,
 } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
+
+const PromptAssistReferenceOutputSchema = z.object({
+  namedReferences: z.array(
+    z.object({
+      name: z.string(),
+      type: z.enum([
+        "real_person",
+        "historical_figure",
+        "fictional_character",
+        "mythic_figure",
+        "iconic_persona",
+      ]),
+    }),
+  ),
+});
 import {
   assemblePromptAssistText,
   buildExplicitSourceReferenceInstruction,
@@ -118,7 +135,7 @@ export async function assistPersonaPrompt(input: {
     temperature: number,
     stage: PromptAssistAttemptStage,
     maxOutputTokens = PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
-  ): Promise<{ text: string; details: Record<string, unknown> }> => {
+  ): Promise<{ text: string; details: Record<string, unknown>; object?: unknown }> => {
     const llmResult = await invokeLLM({
       registry,
       taskType: "generic",
@@ -127,6 +144,9 @@ export async function assistPersonaPrompt(input: {
         prompt: promptText,
         maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
         temperature,
+        ...(stage === "reference_resolution" || stage === "reference_presence_audit"
+          ? { output: Output.object({ schema: PromptAssistReferenceOutputSchema }) }
+          : {}),
       },
       entityId: `persona-prompt-assist:${model.id}`,
       timeoutMs: invocationConfig.timeoutMs,

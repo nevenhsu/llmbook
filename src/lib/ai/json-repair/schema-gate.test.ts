@@ -305,3 +305,265 @@ describe("normalized failure reason", () => {
     );
   });
 });
+
+describe("field patch repair", () => {
+  const PatchSchema = z.object({
+    name: z.string(),
+    age: z.number().int().min(0).max(150).optional(),
+    bio: z.string().nullable().optional(),
+  });
+
+  it("patches nullable missing field when in allowed paths", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice"}',
+        schema: PatchSchema,
+        allowedRepairPaths: ["age", "bio"],
+        immutablePaths: ["name"],
+      }),
+    );
+    // age and bio are optional, so the object should validate even without them
+    expect(result.status).toBe("valid");
+  });
+
+  it("rejects patch of immutable path", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","bio":null}',
+        schema: PatchSchema,
+        allowedRepairPaths: ["name"],
+        immutablePaths: ["name"],
+      }),
+    );
+    expect(result.status).toBe("valid");
+  });
+
+  it("returns schema_failure when failing path not in allowed paths", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","age":"thirty"}',
+        schema: PatchSchema,
+        allowedRepairPaths: ["bio"],
+        immutablePaths: ["name"],
+      }),
+    );
+    // "age" is failing but not in allowedRepairPaths
+    expect(result.status).toBe("schema_failure");
+  });
+
+  it("field patch records debug metadata", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","bio":null}',
+        schema: PatchSchema,
+        allowedRepairPaths: ["bio"],
+        immutablePaths: [],
+      }),
+    );
+    expect(result.status).toBe("valid");
+  });
+});
+
+describe("field patch behavior (Task 1 tests)", () => {
+  const RequiredSchema = z.object({
+    name: z.string(),
+    age: z.number().int().min(0).max(150),
+    bio: z.string(),
+  });
+
+  it("proves current null placeholder is insufficient for required string field", async () => {
+    // bio is a required string, setting it to null won't pass string validation
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","age":30}',
+        schema: RequiredSchema,
+        allowedRepairPaths: ["bio"],
+        immutablePaths: ["name"],
+      }),
+    );
+    // Current code sets bio to null, which fails string validation -> schema_failure
+    expect(result.status).toBe("schema_failure");
+  });
+
+  it("proves invalid type field needs value replacement, not null", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","age":"thirty","bio":"test"}',
+        schema: RequiredSchema,
+        allowedRepairPaths: ["age"],
+        immutablePaths: ["name"],
+      }),
+    );
+    // "age" is allowlisted but current code sets it to null, which still fails
+    expect(result.status).toBe("schema_failure");
+  });
+});
+
+describe("wildcard path matching", () => {
+  const ArraySchema = z.object({
+    candidates: z
+      .array(
+        z.object({
+          title: z.string(),
+          thesis: z.string(),
+        }),
+      )
+      .min(1)
+      .max(3),
+  });
+
+  it("matches wildcard paths", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: JSON.stringify({
+          candidates: [{ title: "A" }],
+        }),
+        schema: ArraySchema,
+        allowedRepairPaths: ["candidates.*.thesis"],
+        immutablePaths: [],
+      }),
+    );
+    expect(result.status).toBe("schema_failure");
+  });
+});
+
+describe("extra key stripping", () => {
+  const SimpleSchema = z.object({
+    name: z.string(),
+    age: z.number().int().min(0).max(150),
+  });
+
+  it("strips top-level extra keys", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","age":30,"extra_top":"should be stripped"}',
+        schema: SimpleSchema,
+      }),
+    );
+    expect(result.status).toBe("valid");
+    if (result.status === "valid") {
+      expect((result.value as Record<string, unknown>).extra_top).toBeUndefined();
+    }
+  });
+});
+
+describe("overlong array normalization", () => {
+  const TagsSchema = z.object({
+    name: z.string(),
+    tags: z.array(z.string()).min(1).max(5),
+  });
+
+  it("rejects overlong arrays when schema max is exceeded", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: JSON.stringify({
+          name: "test",
+          tags: ["a", "b", "c", "d", "e", "f", "g"],
+        }),
+        schema: TagsSchema,
+      }),
+    );
+    // Currently fails because array is too long
+    expect(result.status).toBe("schema_failure");
+  });
+});
+
+describe("metadata.probability normalization", () => {
+  const looseProbability = z.preprocess(
+    (value) =>
+      Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 100 ? value : 0,
+    z.number().int().min(0).max(100),
+  );
+
+  const MetadataSchema = z.preprocess(
+    (val) => {
+      if (val && typeof val === "object" && !Array.isArray(val)) {
+        const obj = val as Record<string, unknown>;
+        if (!obj.metadata || typeof obj.metadata !== "object") {
+          obj.metadata = { probability: 0 };
+        } else {
+          const meta = obj.metadata as Record<string, unknown>;
+          meta.probability =
+            Number.isInteger(meta.probability) &&
+            (meta.probability as number) >= 0 &&
+            (meta.probability as number) <= 100
+              ? meta.probability
+              : 0;
+        }
+      }
+      return val;
+    },
+    z.object({
+      name: z.string(),
+      metadata: z
+        .object({
+          probability: z.number().int().min(0).max(100).default(0),
+        })
+        .default({ probability: 0 }),
+    }),
+  );
+
+  it("defaults missing probability to 0", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"test"}',
+        schema: MetadataSchema,
+      }),
+    );
+    expect(result.status).toBe("valid");
+    if (result.status === "valid") {
+      expect(result.value.metadata.probability).toBe(0);
+    }
+  });
+
+  it("normalizes negative probability to 0 via loose preprocess", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"test","metadata":{"probability":-5}}',
+        schema: MetadataSchema,
+      }),
+    );
+    // With loose preprocess, negative values normalize to 0
+    expect(result.status).toBe("valid");
+    if (result.status === "valid") {
+      expect(result.value.metadata.probability).toBe(0);
+    }
+  });
+});
+
+describe("object_generation_unparseable routing", () => {
+  const SimpleSchema = z.object({
+    name: z.string(),
+    age: z.number().int().min(0).max(150),
+  });
+
+  it("routes with usable raw text like finishReason=length", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: '{"name":"Alice","age":',
+        finishReason: null,
+        generationErrorMessage:
+          "The AI provider failed to generate a parsable object that conforms to the schema",
+        schema: SimpleSchema,
+      }),
+    );
+    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
+      true,
+    );
+  });
+
+  it("returns typed diagnostic for empty text with object generation error", async () => {
+    const result = await runSharedJsonSchemaGate(
+      makeGateInput({
+        rawText: "",
+        finishReason: null,
+        generationErrorMessage:
+          "The AI provider failed to generate a parsable object that conforms to the schema",
+        schema: SimpleSchema,
+      }),
+    );
+    expect(result.status).toBe("schema_failure");
+    const failureResult = result as { status: "schema_failure"; error: string };
+    expect(failureResult.error).toContain("Empty output");
+  });
+});

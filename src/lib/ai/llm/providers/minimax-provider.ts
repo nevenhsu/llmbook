@@ -141,6 +141,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
           prompt,
           maxOutputTokens: input.maxOutputTokens,
           temperature: input.temperature,
+          ...(input.output ? { output: input.output } : {}),
         });
         const usage = payload.usage as
           | {
@@ -180,6 +181,7 @@ export function createMinimaxProvider(options?: MinimaxProviderOptions): LlmProv
             outputTokens: usage?.outputTokens,
             totalTokens: usage?.totalTokens,
           },
+          ...(payload.output ? { object: payload.output } : {}),
         };
       };
 

@@ -101,21 +101,12 @@ export function buildPostPlanAuditPrompt(input: {
   lines.push(
     "",
     "[output_constraints]",
-    "Return exactly one raw JSON object with keys: passes, issues, repairGuidance, checks.",
-    `checks must contain exactly: ${checks.join(", ")}.`,
-    "Each check value must be pass or fail.",
-    "{",
-    '  "passes": true,',
-    '  "issues": ["string"],',
-    '  "repairGuidance": ["string"],',
-    '  "checks": {',
+    "Return exactly one raw JSON object.",
+    "Do not output text outside the JSON object.",
+    "",
+    "[post_plan_candidate]",
+    JSON.stringify(input.candidate, null, 2),
   );
-
-  for (const check of checks) {
-    lines.push(`    "${check}": "pass | fail",`);
-  }
-
-  lines.push("  }", "}", "", "[post_plan_candidate]", JSON.stringify(input.candidate, null, 2));
 
   return lines.join("\n");
 }
@@ -143,19 +134,6 @@ export function buildPostPlanRepairPrompt(input: {
     "",
     "[output_constraints]",
     "Return exactly one JSON object.",
-    "{",
-    '  "candidates": [',
-    "    {",
-    '      "title": "string",',
-    '      "thesis": "string",',
-    '      "body_outline": ["string"],',
-    '      "persona_fit_score": 0,',
-    '      "novelty_score": 0',
-    "    }",
-    "  ]",
-    "}",
-    "Return 2-3 candidates.",
-    "Do not add extra keys.",
     "Do not output any text outside the JSON object.",
   ].join("\n");
 }

@@ -2,6 +2,9 @@ import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
+import { Output } from "ai";
+import { PersonaCoreV2Schema } from "@/lib/ai/core/persona-core-v2";
+import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
   ADMIN_UI_LLM_PROVIDER_RETRIES,
   PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
@@ -184,11 +187,9 @@ export async function previewPersonaGeneration(input: {
       {
         name: "output_constraints",
         content: [
-          "Output strictly valid JSON.",
-          "No markdown, wrapper text, or explanatory prose outside the JSON object.",
-          "Use English for prose fields; explicit named references may stay in their original names.",
-          "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
-          "Do not add extra keys.",
+          "Return only strict JSON.",
+          "No markdown, no comments, no explanation.",
+          "Do not output text outside the JSON object.",
         ].join("\n"),
       },
     ];
@@ -218,21 +219,9 @@ export async function previewPersonaGeneration(input: {
       "[output_constraints]",
       "Return exactly one JSON object.",
       "Return raw JSON only. Do not use markdown fences.",
-      'If the stage passes, return exactly {"passes":true,"issues":[],"repairGuidance":[]}.',
+      "If the stage passes, return passes=true with empty issues and repairGuidance arrays.",
       "If the stage fails, keep the whole JSON response under 120 words.",
       "Do not include analysis, reasoning, or explanatory prose.",
-      "passes: boolean",
-      "issues: string[]",
-      "repairGuidance: string[]",
-      "keptReferenceNames?: string[]",
-      "{",
-      '  "passes": true,',
-      '  "issues": ["string"],',
-      '  "repairGuidance": ["string"],',
-      '  "keptReferenceNames": ["string"]',
-      "}",
-      "Omit keptReferenceNames unless the audit instructions ask you to filter kept reference names.",
-      "If the note is already sufficient, set passes=true and return empty arrays.",
       "Keep every issue and repairGuidance item short and functional.",
       "",
       "[parsed_stage]",
@@ -479,6 +468,9 @@ export async function previewPersonaGeneration(input: {
               ? Math.min(stageInput.outputMaxTokens, maxOutputTokens)
               : Math.min(PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap, maxOutputTokens),
           temperature: attempt === 1 ? 0.4 : 0.2,
+          ...(stageInput.stageName === "persona_core_v2" && attempt === 1
+            ? { output: Output.object({ schema: PersonaCoreV2Schema }) }
+            : {}),
         },
         entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:attempt-${attempt}`,
         timeoutMs: invocationConfig.timeoutMs,
@@ -723,9 +715,13 @@ export async function previewPersonaGeneration(input: {
         attempts?: number | null;
         usedFallback?: boolean | null;
         errorDetails?: unknown;
+        object?: unknown;
       },
       attemptStage: string,
     ) => {
+      if (result.object && stageInput.stageName === "persona_core_v2") {
+        return result.object as T;
+      }
       if (!result.text.trim()) {
         throw new PersonaGenerationParseError(
           result.error ?? "persona generation model returned empty output",
@@ -903,9 +899,9 @@ export async function previewPersonaGeneration(input: {
     });
 
     personaCoreStageRecord = await runPersonaGenerationStage({
-      stageName: PERSONA_GENERATION_TEMPLATE_STAGES[1].name,
-      stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[1].goal,
-      stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[1].contract.join("\n"),
+      stageName: PERSONA_GENERATION_TEMPLATE_STAGES[0].name,
+      stageGoal: PERSONA_GENERATION_TEMPLATE_STAGES[0].goal,
+      stageContract: PERSONA_GENERATION_TEMPLATE_STAGES[0].contract.join("\n"),
       parse: parsePersonaCoreStageOutput,
       validateQuality: validatePersonaCoreV2Quality,
       validateQualityAsync: async (stage) => auditPersonaCoreV2StageQuality(stage, seedStage),

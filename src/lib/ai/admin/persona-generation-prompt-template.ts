@@ -37,7 +37,6 @@ export const PERSONA_GENERATION_GENERATOR_INSTRUCTION = [
 export const PERSONA_GENERATION_OUTPUT_CONSTRAINTS = [
   "Return only strict JSON.",
   "No markdown, no comments, no explanation.",
-  "Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object.",
 ].join("\n");
 const PERSONA_GENERATION_ADMIN_EXTRA_PROMPT_PLACEHOLDER = "(from Context / Extra Prompt input)";
 
@@ -142,14 +141,6 @@ export const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "No markdown.",
       "No comments.",
       "No explanation.",
-      "",
-      "Required validation:",
-      "- persona_fit_probability must be an integer from 0 to 100.",
-      "- reference_style.reference_names must contain 1 to 5 items.",
-      "- reference_style.other_references must contain 0 to 8 items.",
-      "- mind.thinking_procedure is required.",
-      "- narrative is required.",
-      "- anti_generic.avoid_patterns must contain at least 1 item.",
     ],
   },
 ] as const;

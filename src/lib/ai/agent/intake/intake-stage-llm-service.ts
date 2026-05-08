@@ -17,8 +17,34 @@ import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
 import type { InvokeLlmOutput } from "@/lib/ai/llm/types";
+import { Output } from "ai";
+import { z } from "zod";
 
 const OPPORTUNITY_PROMPT_VERSION = "runtime-opportunities-v2";
+
+const OpportunityScoreSchema = z.object({
+  opportunityKey: z.string(),
+  probability: z.number().min(0).max(100),
+  contentMode: z.string(),
+});
+
+const OpportunityProbabilityOutputSchema = z.object({
+  scores: z.array(OpportunityScoreSchema),
+});
+
+const SelectedSpeakerSchema = z.object({
+  name: z.string(),
+  probability: z.number().min(0).max(100),
+});
+
+const SpeakerCandidateEntrySchema = z.object({
+  opportunityKey: z.string(),
+  selectedSpeakers: z.array(SelectedSpeakerSchema),
+});
+
+const SpeakerCandidatesOutputSchema = z.object({
+  speakerCandidates: z.array(SpeakerCandidateEntrySchema),
+});
 const OPPORTUNITY_OUTPUT_MAX_TOKENS = 900;
 const CANDIDATE_OUTPUT_MAX_TOKENS = 900;
 const AUDIT_OUTPUT_MAX_TOKENS = 400;
@@ -33,11 +59,13 @@ const MAX_SUBSET_REPAIR_ATTEMPTS = 1;
 type StageName = "opportunities" | "candidates";
 type StagePhase = "main" | "schema_repair" | "quality_audit" | "quality_repair";
 
-type JsonAuditResult = {
-  pass: boolean;
-  issues: string[];
-  repairInstructions: string[];
-};
+const JsonAuditResultSchema = z.object({
+  pass: z.boolean(),
+  issues: z.array(z.string()),
+  repairInstructions: z.array(z.string()),
+});
+
+type JsonAuditResult = z.infer<typeof JsonAuditResultSchema>;
 
 type OpportunityProbabilityOutput = {
   scores: Array<{
@@ -64,6 +92,7 @@ type StageInvokeInput = {
   maxOutputTokens: number;
   temperature: number;
   entityId: string;
+  output?: ReturnType<typeof Output.object>;
 };
 
 export type CandidateSelectionResult = {
@@ -186,6 +215,7 @@ function parseOpportunityProbabilityOutput(rawText: string): OpportunityProbabil
       return {
         opportunityKey,
         probability: Number(probability.toFixed(2)),
+        contentMode: "discussion",
       };
     }),
   };
@@ -500,6 +530,7 @@ export class AiAgentIntakeStageLlmService {
                   phase: input.phase,
                 },
               },
+              ...(input.output ? { output: input.output } : {}),
             },
             entityId: input.entityId,
             timeoutMs: invocationConfig.timeoutMs,
@@ -527,12 +558,24 @@ export class AiAgentIntakeStageLlmService {
           : CANDIDATE_OUTPUT_MAX_TOKENS,
       temperature: 0.2,
       entityId: `ai-agent-intake:${input.stageName}:main`,
+      output:
+        input.stageName === "opportunities"
+          ? Output.object({ schema: OpportunityProbabilityOutputSchema })
+          : Output.object({ schema: SpeakerCandidatesOutputSchema }),
     });
 
     if (mainResult.finishReason === "error") {
       throw new Error(
         `${input.stageName} stage provider failed: ${mainResult.error ?? "unknown provider error"}`,
       );
+    }
+
+    // Use structured output if available
+    if (mainResult.object) {
+      return {
+        parsed: mainResult.object as T,
+        modelKey: mainResult.modelId,
+      };
     }
 
     let parsedFrom = mainResult;
@@ -631,9 +674,17 @@ export class AiAgentIntakeStageLlmService {
         maxOutputTokens: REPAIR_OUTPUT_MAX_TOKENS,
         temperature: 0.1,
         entityId: `ai-agent-intake:${input.stageName}:quality-repair:${attempt + 1}`,
+        output:
+          input.stageName === "opportunities"
+            ? Output.object({ schema: OpportunityProbabilityOutputSchema })
+            : Output.object({ schema: SpeakerCandidatesOutputSchema }),
       });
 
-      parsed = input.parse(repairResult.text);
+      if (repairResult.object) {
+        parsed = repairResult.object as T;
+      } else {
+        parsed = input.parse(repairResult.text);
+      }
       parsedFrom = repairResult;
       deterministicIssues = input.validateDeterministic(parsed);
       audit = await this.runQualityAudit({
@@ -822,6 +873,7 @@ export class AiAgentIntakeStageLlmService {
         merged.set(originalKey, {
           opportunityKey: originalKey,
           probability: row.probability,
+          contentMode: row.contentMode,
         });
       }
     }
@@ -830,7 +882,10 @@ export class AiAgentIntakeStageLlmService {
       parsed: {
         scores: expectedKeys
           .map((key) => merged.get(key))
-          .filter((row): row is { opportunityKey: string; probability: number } => Boolean(row)),
+          .filter(
+            (row): row is { opportunityKey: string; probability: number; contentMode: string } =>
+              Boolean(row),
+          ),
       },
       modelKey: stage.modelKey ?? missingResult.modelKey,
       keyToOppId,

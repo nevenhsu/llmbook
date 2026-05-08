@@ -124,10 +124,9 @@ export function classifyTruncation(rawText: string): TruncationClassification {
   }
 
   const state = scanJsonState(rawText);
+  const trimmed = rawText.trimEnd();
 
-  // If we ended inside a string, try deterministic close
   if (state.openString) {
-    // Check if the string has valid structure - at least has content
     const closeTest = tryCloseString(rawText);
     if (closeTest) {
       return "tail_closable";
@@ -135,21 +134,20 @@ export function classifyTruncation(rawText: string): TruncationClassification {
     return "prefix_too_broken";
   }
 
-  // If stack is empty, JSON might be complete or broken
   if (state.stack.length === 0) {
-    // Check if the text looks like it might be incomplete
-    const trimmed = rawText.trimEnd();
     if (trimmed.endsWith(",")) {
       return "continuation_needed";
     }
-    // Might be complete - try parsing
     return "tail_closable";
   }
 
-  // Check if we can close the stack deterministically
   const closable = stackIsClosable(state.stack);
-  if (closable) {
+  if (closable && !trimmed.endsWith(",")) {
     return "tail_closable";
+  }
+
+  if (trimmed.endsWith(",")) {
+    return "continuation_needed";
   }
 
   return "continuation_needed";
@@ -194,23 +192,7 @@ export function tryDeterministicTailClosure(rawText: string): string | null {
   }
 
   if (state.stack.length === 0) {
-    if (rawText.trimEnd().endsWith(",")) {
-      // Try to complete truncated trailing comma
-      const lastComma = rawText.lastIndexOf(",");
-      if (lastComma > -1) {
-        const candidate = rawText.slice(0, lastComma).trimEnd();
-        const suffixCandidates = ['"",\n  }\n}', '""\n}\n}', "]\n}", '"placeholder"\n}\n}'];
-        for (const suffix of suffixCandidates) {
-          const full = candidate + "," + suffix;
-          try {
-            JSON.parse(full);
-            return full;
-          } catch {
-            // continue
-          }
-        }
-      }
-    }
+    // No open stack - nothing to close
     return null;
   }
 

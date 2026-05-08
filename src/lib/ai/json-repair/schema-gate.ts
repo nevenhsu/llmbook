@@ -3,15 +3,62 @@ import type {
   SchemaGateResult,
   SchemaGateDebug,
   NormalizedJsonFailureReason,
-  TruncationClassification,
 } from "./schema-gate-contracts";
 import {
   scanJsonState,
   classifyTruncation,
   tryDeterministicTailClosure,
   deriveOpenPath,
-  deriveRequiredRemainingPaths,
 } from "./response-finisher";
+import { buildFieldPatchSchema, applyFieldPatch } from "./field-patch-schema";
+import type { z } from "zod";
+
+function zodInnerDef(schema: z.ZodTypeAny): Record<string, unknown> | null {
+  return (schema as unknown as Record<string, unknown>)?._def as Record<string, unknown> | null;
+}
+
+function zodInnerShape(def: Record<string, unknown> | null): Record<string, z.ZodTypeAny> | null {
+  if (!def) return null;
+  const shape = def.shape as
+    | Record<string, z.ZodTypeAny>
+    | (() => Record<string, z.ZodTypeAny>)
+    | undefined;
+  if (!shape) return null;
+  if (typeof shape === "function") {
+    return shape() ?? null;
+  }
+  return shape as Record<string, z.ZodTypeAny> | null;
+}
+
+function zodIsOptional(field: z.ZodTypeAny): boolean {
+  try {
+    return field.isOptional?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+function extractRequiredPaths(schema: z.ZodTypeAny, prefix = ""): string[] {
+  const def = zodInnerDef(schema);
+  const shape = zodInnerShape(def);
+  if (!shape) return [];
+
+  const paths: string[] = [];
+
+  for (const [key, field] of Object.entries(shape)) {
+    const currentPath = prefix ? `${prefix}.${key}` : key;
+    if (!zodIsOptional(field)) {
+      paths.push(currentPath);
+    }
+
+    const fieldDef = zodInnerDef(field);
+    if (fieldDef?.typeName === "ZodObject") {
+      paths.push(...extractRequiredPaths(field, currentPath));
+    }
+  }
+
+  return paths;
+}
 
 function normalizeFailureReason(
   input: Pick<SharedJsonSchemaGateInput, "finishReason" | "generationErrorMessage">,
@@ -39,10 +86,8 @@ function normalizeFailureReason(
 
 function stripExtraKeys(
   obj: Record<string, unknown>,
-  allowedSchema: unknown,
+  _allowedSchema: unknown,
 ): Record<string, unknown> {
-  // Strip extra keys from object - simple pass-through for now
-  // Zod schema handles this during validation with .strip()
   return obj;
 }
 
@@ -50,8 +95,6 @@ function normalizeOverlongArrays(
   obj: Record<string, unknown>,
   _schema: unknown,
 ): Record<string, unknown> {
-  // Zod handles array normalization via transforms
-  // This is a safety net for manual parsing
   return obj;
 }
 
@@ -155,6 +198,35 @@ export async function runSharedJsonSchemaGate<T>(
   };
 
   const normalizedReason = normalizeFailureReason(input);
+  const schemaRequiredPaths = extractRequiredPaths(input.schema as z.ZodTypeAny);
+
+  // Step 0: Try rawObject first if available
+  if (input.rawObject) {
+    const objResult = input.schema.safeParse(input.rawObject);
+    if (objResult.success) {
+      debug.status = "passed";
+      debug.attempts.push({
+        attemptStage: "initial_parse",
+        finishReason: input.finishReason,
+        likelyOpenPath: null,
+        requiredRemainingPaths: [],
+        errorSummary: "raw object validated directly",
+      });
+      return { status: "valid", value: objResult.data, debug };
+    }
+    if (objResult.error) {
+      debug.attempts.push({
+        attemptStage: "loose_normalize",
+        finishReason: input.finishReason,
+        likelyOpenPath: null,
+        requiredRemainingPaths: [],
+        errorSummary: `raw object failed validation: ${objResult.error.issues
+          .slice(0, 3)
+          .map((i) => i.message)
+          .join("; ")}`,
+      });
+    }
+  }
 
   // Step 1: Extract and parse JSON
   const extraction = extractJson(input.rawText);
@@ -198,37 +270,60 @@ export async function runSharedJsonSchemaGate<T>(
           }
 
           // Closure produced parseable but schema-invalid - try field patch
-          const fieldPatchResult = tryFieldPatch(
-            closed,
-            input.schema,
-            input.allowedRepairPaths,
-            debug,
-            input.finishReason,
-          );
+          const fieldPatchResult = await tryFieldPatch(closed, input, debug, input.finishReason);
           if (fieldPatchResult) {
             return fieldPatchResult;
           }
         }
       }
 
-      // Step 3: Try continuation
-      if (classification === "continuation_needed" || !extraction.json) {
+      // Step 3: Try continuation if callback provided
+      if (
+        (classification === "continuation_needed" || !extraction.json) &&
+        input.invokeFinishContinuation
+      ) {
+        const contInput = {
+          schemaName: input.schemaName,
+          flowId: input.flowId,
+          stageId: input.stageId,
+          partialJsonText: extraction.json || "",
+          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json || "")),
+          requiredRemainingPaths: schemaRequiredPaths,
+          validationSummary: parseError ?? "schema validation failed",
+        };
+        const contResult = await input.invokeFinishContinuation(contInput);
+        debug.attempts.push({
+          attemptStage: "finish_continuation",
+          finishReason: input.finishReason,
+          likelyOpenPath: contInput.likelyOpenPath,
+          requiredRemainingPaths: schemaRequiredPaths,
+          errorSummary: contResult.text ? "continuation received" : "continuation empty",
+        });
+
+        if (contResult.text) {
+          const completed = extraction.json + contResult.text;
+          const completedResult = parseAndValidate(completed, input.schema);
+          if (completedResult.success) {
+            debug.status = "repaired";
+            return { status: "valid", value: completedResult.data, debug };
+          }
+        }
+      } else if (classification === "continuation_needed") {
         debug.attempts.push({
           attemptStage: "finish_continuation",
           finishReason: input.finishReason,
           likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json || "")),
-          requiredRemainingPaths: input.validationRules,
-          errorSummary: "continuation not yet implemented - would require LLM call",
+          requiredRemainingPaths: schemaRequiredPaths,
+          errorSummary: "continuation callback not available",
         });
       }
     }
 
     // Step 4: For non-length errors or after closure fails, try field patch
     if (parseError) {
-      const fieldPatchResult = tryFieldPatch(
+      const fieldPatchResult = await tryFieldPatch(
         extraction.json,
-        input.schema,
-        input.allowedRepairPaths,
+        input,
         debug,
         input.finishReason,
       );
@@ -264,19 +359,170 @@ export async function runSharedJsonSchemaGate<T>(
   };
 }
 
-function tryFieldPatch<T>(
-  _json: string,
-  _schema: SharedJsonSchemaGateInput<T>["schema"],
-  _allowedRepairPaths: string[],
+async function tryFieldPatch<T>(
+  json: string,
+  input: SharedJsonSchemaGateInput<T>,
   debug: SchemaGateDebug,
   finishReason: string | null,
-): SchemaGateResult<T> | null {
+): Promise<SchemaGateResult<T> | null> {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: [],
+      errorSummary: "cannot field-patch unparseable JSON",
+    });
+    return null;
+  }
+
+  const result = input.schema.safeParse(parsed);
+  if (result.success) {
+    return { status: "valid", value: result.data, debug };
+  }
+
+  const error = result.error;
+  const failingPaths = new Set<string>();
+
+  for (const issue of error.issues) {
+    const path = issue.path.join(".");
+    if (path) failingPaths.add(path);
+  }
+
+  const immutableFailures = [...failingPaths].filter((p) =>
+    input.immutablePaths.some((immutable) => p === immutable || p.startsWith(`${immutable}.`)),
+  );
+  if (immutableFailures.length > 0) {
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: [],
+      errorSummary: `immutable path(s) failed: ${immutableFailures.join(", ")}`,
+    });
+    return null;
+  }
+
+  const repairable = [...failingPaths].filter((p) =>
+    input.allowedRepairPaths.some((allowed) => {
+      const fp = p.split(".");
+      const ap = allowed.split(".");
+      if (fp.length !== ap.length) return false;
+      return ap.every((part, i) => part === "*" || part === fp[i]);
+    }),
+  );
+
+  if (repairable.length === 0) {
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: [],
+      errorSummary: `no allowed repair paths for failures: ${[...failingPaths].join(", ")}`,
+    });
+    return null;
+  }
+
+  if (!input.invokeFieldPatch) {
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: [],
+      repairablePaths: repairable,
+      errorSummary: "field patch callback unavailable",
+    });
+    return null;
+  }
+
+  const patchSessions = buildFieldPatchSchema({
+    rootSchema: input.schema as z.ZodTypeAny,
+    repairablePaths: repairable,
+  });
+
+  const patchResult = await input.invokeFieldPatch({
+    schemaName: input.schemaName,
+    flowId: input.flowId,
+    stageId: input.stageId,
+    originalJson: parsed,
+    failingPaths: [...failingPaths],
+    repairablePaths: repairable,
+    patchSchema: patchSessions,
+    validationSummary: `Schema validation failed. Failing paths: ${repairable.join(", ")}. Only these paths may be repaired.`,
+  });
+
+  if (!patchResult.patch || Object.keys(patchResult.patch).length === 0) {
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: repairable,
+      errorSummary: "patch callback returned empty result",
+    });
+    return null;
+  }
+
+  // Convert patch to operations
+  const ops = flattenPatch(patchResult.patch);
+  const { merged, rejected } = applyFieldPatch(
+    parsed,
+    ops,
+    input.allowedRepairPaths,
+    input.immutablePaths,
+  );
+
+  if (rejected.length > 0) {
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: repairable,
+      repairablePaths: repairable,
+      errorSummary: `patch rejected paths: ${rejected.map((r) => r.path).join(", ")}`,
+    });
+    return null;
+  }
+
+  const repaired = input.schema.safeParse(merged);
+  if (repaired.success) {
+    debug.status = "repaired";
+    debug.attempts.push({
+      attemptStage: "field_patch",
+      finishReason,
+      likelyOpenPath: null,
+      requiredRemainingPaths: repairable,
+      repairablePaths: repairable,
+      errorSummary: `field-patched: ${repairable.join(", ")}`,
+    });
+    return { status: "valid", value: repaired.data, debug };
+  }
+
   debug.attempts.push({
     attemptStage: "field_patch",
     finishReason,
     likelyOpenPath: null,
-    requiredRemainingPaths: [],
-    errorSummary: "field patch not implemented - requires LLM call for repair values",
+    requiredRemainingPaths: repairable,
+    repairablePaths: repairable,
+    errorSummary: `field-patch produced invalid result`,
   });
   return null;
+}
+
+function flattenPatch(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Array<{ path: string; value: unknown }> {
+  const result: Array<{ path: string; value: unknown }> = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      result.push(...flattenPatch(value as Record<string, unknown>, path));
+    } else {
+      result.push({ path, value });
+    }
+  }
+  return result;
 }

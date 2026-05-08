@@ -1,5 +1,6 @@
 import type { PromptMessage } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { SharedV3ProviderOptions } from "@ai-sdk/provider";
+import type { SchemaGateDebug } from "@/lib/ai/json-repair/schema-gate-contracts";
 
 export type LlmTaskType = "reply" | "vote" | "poll_vote" | "dispatch" | "generic";
 
@@ -67,6 +68,7 @@ export type LlmGenerateTextInput = {
   metadata?: Record<string, unknown>;
   tools?: LlmToolSchema[];
   toolResults?: LlmToolResult[];
+  output?: any;
 };
 
 export type LlmGenerateTextOutput = {
@@ -80,7 +82,22 @@ export type LlmGenerateTextOutput = {
   toolCalls?: LlmToolCall[];
   error?: string;
   errorDetails?: LlmErrorDetails;
+  object?: unknown;
 };
+
+export type InvokeStructuredLlmOutput<T = unknown> =
+  | {
+      status: "valid";
+      value: T;
+      raw: InvokeLlmOutput;
+      schemaGateDebug: SchemaGateDebug;
+    }
+  | {
+      status: "schema_failure";
+      error: string;
+      raw: InvokeLlmOutput;
+      schemaGateDebug: SchemaGateDebug;
+    };
 
 export type LlmProvider = {
   providerId: string;
@@ -110,6 +127,7 @@ export type InvokeLlmOutput = {
   usedFallback: boolean;
   attempts: number;
   path: string[];
+  object?: unknown;
 };
 
 export type LlmProviderErrorEvent = {

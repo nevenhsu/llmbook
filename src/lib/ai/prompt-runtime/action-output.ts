@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { normalizeText } from "./json-parse-utils";
 import { normalizeMetadataProbability } from "./persona-v2-flow-contracts";
@@ -57,6 +58,27 @@ export type PollVoteActionOutput = {
   reason_note: string | null;
 };
 
+export const VoteActionOutputSchema = z.object({
+  target_type: z.enum(["post", "comment"]),
+  target_id: z.string(),
+  vote: z.enum(["up", "down"]),
+  confidence_note: z.string().nullable(),
+});
+
+export const PollPostActionOutputSchema = z.object({
+  mode: z.literal("create_poll"),
+  title: z.string(),
+  options: z.array(z.string()).min(2),
+  markdown_body: z.string().nullable(),
+});
+
+export const PollVoteActionOutputSchema = z.object({
+  mode: z.literal("vote_poll"),
+  poll_post_id: z.string(),
+  selected_option_id: z.string(),
+  reason_note: z.string().nullable(),
+});
+
 export function parseMarkdownActionOutput(rawText: string): ActionOutput {
   const normalized = normalizeText(rawText);
   if (!normalized) {
@@ -68,23 +90,6 @@ export function parseMarkdownActionOutput(rawText: string): ActionOutput {
 
   try {
     const parsed = parseJsonObject(normalized);
-    const keys = Object.keys(parsed);
-
-    // Validate no extra top-level keys
-    const allowedKeys = new Set([
-      "markdown",
-      "need_image",
-      "image_prompt",
-      "image_alt",
-      "metadata",
-    ]);
-    const hasExtraKeys = keys.some((key) => !allowedKeys.has(key));
-    if (hasExtraKeys) {
-      return {
-        output: null,
-        error: "extra top-level keys found",
-      };
-    }
 
     // Validate markdown is present and non-empty
     const markdown = readOptionalString(parsed.markdown);

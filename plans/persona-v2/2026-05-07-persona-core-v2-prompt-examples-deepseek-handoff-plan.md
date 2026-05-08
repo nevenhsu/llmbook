@@ -4,7 +4,7 @@
 
 **Goal:** Give DeepSeek a handoff plan for implementing Persona Core v2 prompt-family examples without copying example prose, example policy, or hardcoded template content into production prompts.
 
-**Architecture:** Production prompt assembly stays block-based. Persona, board, target, and failed-output values are dynamic; stage tasks and audit check standards are static prompt constants. Output structure is code-owned through Zod schemas passed to AI SDK structured output, e.g. `generateText({ output: Output.object({ schema }) })`; prompt blocks must not hardcode full key/type JSON schemas. Schema repair must reuse the shared JSON finish/field-patch repair framework from `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md` instead of adding a separate schema-repair template.
+**Architecture:** Production prompt assembly stays block-based. Persona, board, target, and failed-output values are dynamic; stage tasks and audit check standards are static prompt constants. Output structure is code-owned through Zod schemas passed to AI SDK structured output, e.g. `Output.object({ schema })`; prompt blocks must not hardcode full key/type JSON schemas. Schema repair must reuse the shared `invokeStructuredLLM` / schema-gate framework from `docs/dev-guidelines/08-llm-json-stage-contract.md` instead of adding a separate schema-repair prompt template.
 
 **Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` / `streamText` with `Output.object`, Zod, Persona Core v2 prompt family builders, staged LLM JSON flows, shared JSON repair utilities, Vitest.
 
@@ -18,7 +18,7 @@
 - Use this handoff as an implementation guardrail for DeepSeek.
 - Cover these prompt stages:
   - `main`
-  - `schema_repair`
+  - `schema_gate` / structured repair boundary
   - `audit`
   - `quality_repair`
 - Make audit stages quality-only. Schema validity, required keys, field types, candidate count, parseability, and metadata presence are checked and repaired before audit.
@@ -39,7 +39,7 @@
 - Do not add DeepSeek-specific runtime branches.
 - Do not copy the example prompt text in this document into production prompt builders.
 - Do not hardcode board policy, persona policy, target context, reference names, output JSON examples, or full key/type JSON schemas into production prompt templates.
-- Do not add a standalone schema-repair template; use the shared repair framework from the Phase 3 plan.
+- Do not add a standalone schema-repair template; use the shared `invokeStructuredLLM` / schema-gate framework from the LLM JSON Stage Contract.
 - Do not expose chain of thought, scratchpad notes, hidden thoughts, or step-by-step reasoning in runtime prompts or generated output.
 
 ## Rule For Unclear Prompt Behavior
@@ -56,18 +56,18 @@ Examples of unclear rules that require user confirmation:
 
 ## Static And Dynamic Block Legend
 
-| Label                     | Meaning                                                                                             | Production owner                        |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `STATIC_APP_POLICY`       | Stable app-level prompt constant.                                                                   | Prompt-family helper                    |
-| `DYNAMIC_POLICY_DOCUMENT` | User/admin configured policy text.                                                                  | Control-plane policy document           |
-| `DYNAMIC_RUNTIME_PACKET`  | Rendered persona packet from Persona Core v2.                                                       | `PersonaRuntimePacket.renderedText`     |
-| `DYNAMIC_CONTEXT`         | Board, target, selected plan, root post, source comment, generated output, or failed output values. | Runtime task context builders           |
-| `STATIC_TASK_CONTEXT`     | Fixed stage task prompt. It may name dynamic placeholders, but the task wording is constant.        | Prompt-family helper                    |
-| `STATIC_AUDIT_CONTEXT`    | Fixed audit check standards. It may name dynamic placeholders, but check wording is constant.       | Audit prompt helper                     |
-| `STATIC_OUTPUT_POLICY`    | Short fixed output instructions only; structure comes from code-owned Zod schemas.                  | Prompt-family helper                    |
-| `CODE_OUTPUT_SCHEMA`      | Zod schema passed to AI SDK `Output.object({ schema })`; not rendered as full key/type prompt text. | Output schema modules                   |
-| `STATIC_REPAIR_FRAMEWORK` | Shared JSON finish/field-patch repair framework.                                                    | Shared repair utility from Phase 3 plan |
-| `EXAMPLE_ONLY`            | Documentation or tests only. Must not be imported into production prompt builders.                  | Plan docs and test fixtures             |
+| Label                     | Meaning                                                                                             | Production owner                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `STATIC_APP_POLICY`       | Stable app-level prompt constant.                                                                   | Prompt-family helper                          |
+| `DYNAMIC_POLICY_DOCUMENT` | User/admin configured policy text.                                                                  | Control-plane policy document                 |
+| `DYNAMIC_RUNTIME_PACKET`  | Rendered persona packet from Persona Core v2.                                                       | `PersonaRuntimePacket.renderedText`           |
+| `DYNAMIC_CONTEXT`         | Board, target, selected plan, root post, source comment, generated output, or failed output values. | Runtime task context builders                 |
+| `STATIC_TASK_CONTEXT`     | Fixed stage task prompt. It may name dynamic placeholders, but the task wording is constant.        | Prompt-family helper                          |
+| `STATIC_AUDIT_CONTEXT`    | Fixed audit check standards. It may name dynamic placeholders, but check wording is constant.       | Audit prompt helper                           |
+| `STATIC_OUTPUT_POLICY`    | Short fixed output instructions only; structure comes from code-owned Zod schemas.                  | Prompt-family helper                          |
+| `CODE_OUTPUT_SCHEMA`      | Zod schema passed to AI SDK `Output.object({ schema })`; not rendered as full key/type prompt text. | Output schema modules                         |
+| `STATIC_REPAIR_FRAMEWORK` | Shared schema-gate finish-continuation/FieldPatch repair framework.                                 | `invokeStructuredLLM` / shared repair utility |
+| `EXAMPLE_ONLY`            | Documentation or tests only. Must not be imported into production prompt builders.                  | Plan docs and test fixtures                   |
 
 ## Hardcoding Guardrails
 
@@ -86,7 +86,7 @@ Allowed production sources:
 - static `audit_context` constants per flow
 - `buildOutputPolicyV2()` / `buildAuditOutputPolicyV2()`
 - `getPersonaV2OutputSchema()` / `getPersonaV2AuditOutputSchema()`
-- shared JSON finish/field-patch repair framework
+- shared `invokeStructuredLLM` / schema-gate repair framework
 - schema/audit/repair error inputs consumed by that shared repair framework
 - `buildAntiGenericContract()`
 
@@ -99,7 +99,7 @@ Forbidden production sources:
 - copied example policy wording beyond approved generic contracts
 - DeepSeek-specific hardcoded prompt templates
 - hidden static prompts that bypass named prompt-family blocks
-- standalone schema-repair templates that duplicate the Phase 3 repair framework
+- standalone schema-repair templates that duplicate the shared schema-gate framework
 
 If DeepSeek needs examples for tests, put them in test fixtures with names that include `fixture`, `example`, or `testOnly`, and assert they are not imported by production files.
 
@@ -322,7 +322,7 @@ DeepSeek should hardcode these audit context constants directly. The `Inputs:` l
 Check standards:
 - candidate_quality: candidates are concrete, distinct, usable discussion post plans; they fit board context, respect active policy, and avoid repeating recent discussion post titles or angles.
 - persona_fit: candidates reflect the persona packet and its context-reading logic in final choices without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, candidate count, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, candidate count, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - generated_output: {{GENERATED_POST_PLAN_JSON}}
 - recent_posts: {{RECENT_POST_CONTEXT}}
@@ -335,7 +335,7 @@ Inputs:
 Check standards:
 - story_candidate_quality: candidates are concrete, distinct, usable story post plans; they use story title, premise, conflict, and beat logic, fit board context, respect active policy, and avoid repeating recent story titles, premises, or beats.
 - persona_fit: candidates reflect the persona packet, narrative instincts, and context-reading logic in final choices without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, candidate count, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, candidate count, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - generated_output: {{GENERATED_POST_PLAN_JSON}}
 - recent_posts: {{RECENT_STORY_POST_CONTEXT}}
@@ -348,7 +348,7 @@ Inputs:
 Check standards:
 - content_quality: body follows the selected discussion title, thesis, and outline; it is publishable discussion markdown that respects active policy and board rules.
 - persona_fit: body reflects the persona packet and uses persona interpretation logic without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - selected_plan: {{SELECTED_PLAN_CONTEXT}}
 - generated_output: {{GENERATED_POST_BODY_JSON}}
@@ -361,7 +361,7 @@ Inputs:
 Check standards:
 - story_quality: body follows the selected story title, premise, and beats; it is publishable markdown story prose with conflict, scene detail, ending motion, active policy fit, and no synopsis, advice, or meta explanation.
 - persona_fit: body reflects the persona packet and uses persona interpretation logic without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - selected_plan: {{SELECTED_PLAN_CONTEXT}}
 - generated_output: {{GENERATED_POST_BODY_JSON}}
@@ -374,7 +374,7 @@ Inputs:
 Check standards:
 - comment_quality: comment responds to the root post, stands alone as a top-level comment, adds net-new discussion value, uses publishable markdown, and respects active policy and board rules.
 - persona_fit: comment reflects the persona packet and uses persona context-reading logic without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - root_post: {{ROOT_POST_CONTEXT}}
 - recent_comments: {{RECENT_COMMENT_CONTEXT}}
@@ -387,7 +387,7 @@ Inputs:
 Check standards:
 - story_comment_quality: comment is tied to the root post, stands alone as a top-level story contribution, adds a net-new fragment, scene, or in-world response, uses publishable markdown, respects active policy and board rules, and avoids workshop critique or advice.
 - persona_fit: comment reflects the persona packet and uses persona context-reading logic without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - root_post: {{ROOT_POST_CONTEXT}}
 - recent_comments: {{RECENT_STORY_COMMENT_CONTEXT}}
@@ -400,7 +400,7 @@ Inputs:
 Check standards:
 - reply_quality: reply responds directly to the source comment, continues the thread with respect for ancestors, uses publishable discussion markdown, and respects active policy and board rules.
 - persona_fit: reply reflects the persona packet and uses persona context-reading logic without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - source_comment: {{SOURCE_COMMENT_CONTEXT}}
 - ancestor_comments: {{ANCESTOR_COMMENT_CONTEXT}}
@@ -413,7 +413,7 @@ Inputs:
 Check standards:
 - story_reply_quality: reply responds directly to the source comment or scene, continues the thread or in-world exchange with respect for ancestors, uses publishable story markdown, respects active policy and board rules, and avoids explanation or disconnected story openings.
 - persona_fit: reply reflects the persona packet and uses persona context-reading logic without exposing reasoning.
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - source_comment: {{SOURCE_COMMENT_CONTEXT}}
 - ancestor_comments: {{ANCESTOR_COMMENT_CONTEXT}}
@@ -422,7 +422,7 @@ Inputs:
 
 ## Exact Static Quality Repair Context Text
 
-DeepSeek should hardcode these repair context constants directly. They are quality repair prompts, not schema repair prompts; schema repair is handled by the shared JSON schema gate before and after quality repair.
+DeepSeek should hardcode these repair context constants directly. They are quality repair prompts, not schema repair prompts; schema validation and repair are handled by the shared schema gate before and after quality repair.
 
 ### `POST_PLAN_DISCUSSION_QUALITY_REPAIR_CONTEXT`
 
@@ -508,12 +508,12 @@ Do not open a disconnected story or explain the story.
 Do not add schema commentary, audit commentary, markdown outside JSON, or prompt notes.
 ```
 
-### Schema Repair Shape
+### Schema Gate Repair Shape
 
-Schema repair must not add a separate per-flow prompt template. It must call the shared repair framework from the Phase 3 plan:
+Schema repair must not add a separate per-flow prompt template or prompt-family stage. It must run through the shared `invokeStructuredLLM` / schema-gate repair framework from `docs/dev-guidelines/08-llm-json-stage-contract.md`:
 
 ```text
-[json_finish_repair] or [field_patch_repair]  STATIC_REPAIR_FRAMEWORK
+[finish_continuation] or [field_patch_repair] STATIC_REPAIR_FRAMEWORK
 [structured_output_schema]                    CODE_OUTPUT_SCHEMA name and schema-derived path hints
 [validation_rules]                            CODE_OUTPUT_SCHEMA validation rules
 [continuation_state]                          DYNAMIC_CONTEXT from parser state
@@ -523,14 +523,14 @@ Schema repair must not add a separate per-flow prompt template. It must call the
 
 Rules:
 
-- Use schema-grounded finish repair for `finishReason=length` before field-patch fallback.
-- Use field-patch repair for non-length invalid JSON or after finish repair fails.
+- Use deterministic syntactic closure and finish continuation for `finishReason=length` before FieldPatch fallback.
+- Use FieldPatch repair for parseable non-length schema failures or after finish continuation yields parseable but schema-invalid JSON.
 - Do not ask the model to regenerate the full JSON object.
 - Do not duplicate this framework inside `persona-v2-prompt-family.ts`.
 
 ### Audit Shape
 
-Audit assumes the generated output already passed schema parsing and schema repair. Audit must judge output quality only.
+Audit assumes the generated output already passed schema parsing and schema-gate repair. Audit must judge output quality only.
 
 ```text
 [system_baseline]          STATIC_APP_POLICY or DYNAMIC_POLICY_DOCUMENT
@@ -876,13 +876,13 @@ Do not restart the whole topic, explain the story, or mention prompt internals. 
 
 ## Schema Repair Handoff For Each Flow
 
-Do not implement Examples 9-12 as standalone templates. Each schema repair flow must call the shared repair pipeline defined in the Phase 3 plan under "Shared Length-Finish And Field-Patch Repair Framework".
+Do not implement Examples 9-12 as standalone templates. Each schema repair flow must call the shared schema-gate pipeline defined in `docs/dev-guidelines/08-llm-json-stage-contract.md`.
 
 ### Example 9: `post_plan.schema_repair`
 
 ```text
 [repair_framework] STATIC_REPAIR_FRAMEWORK
-Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
+Use shared schema gate: deterministic closure / finish continuation for finishReason=length, then FieldPatch when parseable fields are missing or invalid.
 
 [structured_output_schema] CODE_OUTPUT_SCHEMA
 Use the code-owned Zod schema for POST_PLAN.
@@ -895,7 +895,7 @@ Use the code-owned Zod schema for POST_PLAN.
 
 ```text
 [repair_framework] STATIC_REPAIR_FRAMEWORK
-Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
+Use shared schema gate: deterministic closure / finish continuation for finishReason=length, then FieldPatch when parseable fields are missing or invalid.
 
 [structured_output_schema] CODE_OUTPUT_SCHEMA
 Use the code-owned Zod schema for POST_BODY.  The `body` field is markdown text.
@@ -908,7 +908,7 @@ Use the code-owned Zod schema for POST_BODY.  The `body` field is markdown text.
 
 ```text
 [repair_framework] STATIC_REPAIR_FRAMEWORK
-Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
+Use shared schema gate: deterministic closure / finish continuation for finishReason=length, then FieldPatch when parseable fields are missing or invalid.
 
 [structured_output_schema] CODE_OUTPUT_SCHEMA
 Use the code-owned Zod schema for COMMENT.  The `markdown` field is markdown text.
@@ -921,7 +921,7 @@ Use the code-owned Zod schema for COMMENT.  The `markdown` field is markdown tex
 
 ```text
 [repair_framework] STATIC_REPAIR_FRAMEWORK
-Use Phase 3 shared JSON finish repair for finishReason=length; otherwise use field-patch repair.
+Use shared schema gate: deterministic closure / finish continuation for finishReason=length, then FieldPatch when parseable fields are missing or invalid.
 
 [structured_output_schema] CODE_OUTPUT_SCHEMA
 Use the code-owned Zod schema for REPLY.  The `markdown` field is markdown text.
@@ -957,7 +957,7 @@ Use `POST_PLAN_STORY_AUDIT_CONTEXT` with `PostPlanStoryAuditSchema` for story mo
 Use the matching discussion/story audit context. It must contain only two check standards:
 - discussion: `candidate_quality`, `persona_fit`
 - story: `story_candidate_quality`, `persona_fit`
-Do not check schema, JSON parseability, required keys, field types, candidate count, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, candidate count, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - generated_output: {{GENERATED_POST_PLAN_JSON}}
 - recent_posts: {{RECENT_POST_CONTEXT}}
@@ -990,7 +990,7 @@ Use `POST_BODY_STORY_AUDIT_CONTEXT` with `PostBodyStoryAuditSchema` for story mo
 Use the matching discussion/story audit context. It must contain only two check standards:
 - discussion: `content_quality`, `persona_fit`
 - story: `story_quality`, `persona_fit`
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - selected_plan: {{SELECTED_PLAN_CONTEXT}}
 - generated_output: {{GENERATED_POST_BODY_JSON}}
@@ -1023,7 +1023,7 @@ Use `COMMENT_STORY_AUDIT_CONTEXT` with `CommentStoryAuditSchema` for story mode.
 Use the matching discussion/story audit context. It must contain only two check standards:
 - discussion: `comment_quality`, `persona_fit`
 - story: `story_comment_quality`, `persona_fit`
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - root_post: {{ROOT_POST_CONTEXT}}
 - recent_comments: {{RECENT_COMMENT_CONTEXT}}
@@ -1056,7 +1056,7 @@ Use `REPLY_STORY_AUDIT_CONTEXT` with `ReplyStoryAuditSchema` for story mode.
 Use the matching discussion/story audit context. It must contain only two check standards:
 - discussion: `reply_quality`, `persona_fit`
 - story: `story_reply_quality`, `persona_fit`
-Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema repair already handled those before audit.
+Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
 - source_comment: {{SOURCE_COMMENT_CONTEXT}}
 - ancestor_comments: {{ANCESTOR_COMMENT_CONTEXT}}
@@ -1195,12 +1195,12 @@ Use `ReplyOutputSchema` through AI SDK `Output.object`. Return only the schema-b
 
 **Files:**
 
-- Modify or create: shared JSON repair tests from Phase 3.
+- Modify or create: shared schema-gate repair tests from the LLM JSON Stage Contract.
 - Modify: `src/lib/ai/prompt-runtime/persona-v2-prompt-family.test.ts`
 
 **Work:**
 
-- Assert schema repair routes through the shared JSON finish/field-patch repair framework.
+- Assert schema repair routes through the shared `invokeStructuredLLM` / schema-gate finish-continuation and FieldPatch framework.
 - Assert `finishReason=length` uses schema-grounded continuation before field-patch fallback.
 - Assert non-length invalid JSON uses field-patch repair.
 - Assert prompt-family code does not define separate schema-repair templates.
@@ -1209,7 +1209,7 @@ Use `ReplyOutputSchema` through AI SDK `Output.object`. Return only the schema-b
 **Verification:**
 
 - `npx vitest run src/lib/ai/prompt-runtime/persona-v2-prompt-family.test.ts`
-- Run the focused shared repair tests defined by the Phase 3 implementation.
+- Run the focused shared repair tests defined by the LLM JSON Stage Contract implementation.
 
 ### Task 4: Add Hardcoded Template Regression Tests
 
@@ -1270,7 +1270,7 @@ Use `ReplyOutputSchema` through AI SDK `Output.object`. Return only the schema-b
 - [ ] Quality repair constants only repair the failed aspects from the matching max-two audit contract.
 - [ ] Audit output schemas are code-owned Zod schemas, not prompt key/type blocks.
 - [ ] Post body, comment, and reply output schemas mark generated content as markdown text.
-- [ ] Schema repair uses the Phase 3 shared repair framework and does not add a separate template.
+- [ ] Schema repair uses the shared schema-gate framework and does not add a separate template.
 - [ ] Quality repair reuses the corresponding main flow output schema.
 - [ ] Dynamic policy, persona, board, target, generated-output, and failed-output values stay outside static prompt constants.
 - [ ] Examples are test fixtures or docs only.
@@ -1280,4 +1280,4 @@ Use `ReplyOutputSchema` through AI SDK `Output.object`. Return only the schema-b
 
 ## Handoff Summary
 
-DeepSeek should implement static task and static audit constants plus code-owned Zod output schemas first; then add dynamic fixture tests around them. The correct implementation is not a bigger hardcoded prompt template and not full key/type schema text inside prompts. The correct implementation is a small set of named static constants plus dynamic runtime inputs, with JSON structure enforced through AI SDK structured output and schema repair delegated to the shared JSON finish/field-patch framework from the Phase 3 plan.
+DeepSeek should implement static task and static audit constants plus code-owned Zod output schemas first; then add dynamic fixture tests around them. The correct implementation is not a bigger hardcoded prompt template and not full key/type schema text inside prompts. The correct implementation is a small set of named static constants plus dynamic runtime inputs, with JSON structure enforced through AI SDK structured output and schema repair delegated to the shared `invokeStructuredLLM` / schema-gate framework from the LLM JSON Stage Contract.

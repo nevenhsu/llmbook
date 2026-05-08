@@ -2,6 +2,7 @@ import { getInteractionMaxOutputTokens } from "@/lib/ai/prompt-runtime/runtime-b
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
+import { Output } from "ai";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
 import type { ContentMode, PersonaFlowKind, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
@@ -12,7 +13,18 @@ import {
   buildAntiGenericContract,
   type PersonaPromptFamilyV2StagePurpose,
 } from "@/lib/ai/prompt-runtime/persona-v2-prompt-family";
-import { buildOutputContractV2 } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
+import {
+  buildOutputContractV2,
+  PostPlanOutputSchema,
+  PostBodyOutputSchema,
+  CommentOutputSchema,
+  ReplyOutputSchema,
+  POST_PLAN_SCHEMA_META,
+  POST_BODY_SCHEMA_META,
+  COMMENT_SCHEMA_META,
+  REPLY_SCHEMA_META,
+  type SchemaMetadata,
+} from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
 import {
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
@@ -45,6 +57,7 @@ export type PersonaInteractionStageResult = {
   providerId: string | null;
   modelId: string | null;
   debugRecord?: StageDebugRecord;
+  object?: unknown;
 };
 
 export type PersonaInteractionStageExecutionMode = "admin_preview" | "runtime";
@@ -120,6 +133,43 @@ const ACTION_TYPE_TO_FLOW: ActionTypeToFlowMap = {
   poll_post: null,
   poll_vote: null,
 };
+
+function resolveOutputSchema(
+  taskType: string,
+  stagePurpose: string,
+): ReturnType<typeof Output.object> | undefined {
+  if (stagePurpose === "audit") return undefined;
+
+  switch (taskType) {
+    case "post_plan":
+      return Output.object({ schema: PostPlanOutputSchema });
+    case "post_body":
+    case "post":
+      return Output.object({ schema: PostBodyOutputSchema });
+    case "comment":
+      return Output.object({ schema: CommentOutputSchema });
+    case "reply":
+      return Output.object({ schema: ReplyOutputSchema });
+    default:
+      return undefined;
+  }
+}
+
+function resolveFlowSchemaMeta(taskType: string): SchemaMetadata | undefined {
+  switch (taskType) {
+    case "post_plan":
+      return POST_PLAN_SCHEMA_META;
+    case "post_body":
+    case "post":
+      return POST_BODY_SCHEMA_META;
+    case "comment":
+      return COMMENT_SCHEMA_META;
+    case "reply":
+      return REPLY_SCHEMA_META;
+    default:
+      return undefined;
+  }
+}
 
 function buildV2Blocks(input: {
   input: PersonaInteractionStageInput;
@@ -272,6 +322,9 @@ export class AiAgentPersonaInteractionStageService {
         prompt: assembledPrompt,
         maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
         temperature: input.stagePurpose === "audit" ? 0 : 0.3,
+        ...(input.stagePurpose === "main" || input.stagePurpose === "quality_repair"
+          ? { output: resolveOutputSchema(input.taskType, input.stagePurpose) }
+          : {}),
       },
       entityId: `persona-interaction-stage:${model.id}`,
       timeoutMs: invocationConfig.timeoutMs,
@@ -301,6 +354,7 @@ export class AiAgentPersonaInteractionStageService {
       tokenBudget,
       providerId: llmResult.providerId,
       modelId: llmResult.modelId,
+      object: llmResult.object,
       ...(input.debug
         ? {
             debugRecord: {

@@ -8,15 +8,10 @@ import type { PostPlanCandidate } from "@/lib/ai/prompt-runtime/post-plan-contra
 function validCandidate(): PostPlanCandidate {
   return {
     title: "The workflow bug people keep mislabeling",
-    angleSummary: "Workflow vs prompt distinction",
     thesis: "Most prompt issues are really workflow issues",
     bodyOutline: ["#point1", "#point2", "#point3"],
-    differenceFromRecent: ["#diff1"],
-    boardFitScore: 80,
-    titlePersonaFitScore: 85,
-    titleNoveltyScore: 90,
-    angleNoveltyScore: 88,
-    bodyUsefulnessScore: 75,
+    personaFitScore: 85,
+    noveltyScore: 90,
   };
 }
 
@@ -34,12 +29,6 @@ describe("postPlanAudit", () => {
     expect(prompt).toContain("[post_plan_candidate]");
     expect(prompt).toContain("[persona_packet]");
     expect(prompt).toContain("[output_constraints]");
-    expect(prompt).toContain('"passes": true');
-    expect(prompt).toContain('"issues": ["string"]');
-    expect(prompt).toContain('"candidate_count": "pass | fail"');
-    expect(prompt).toContain('"persona_fit": "pass | fail"');
-    expect(prompt).toContain('"novelty_evidence": "pass | fail"');
-    expect(prompt).toContain('"procedure_fit": "pass | fail"');
     expect(prompt).toContain("pattern-spotter");
   });
 
@@ -50,7 +39,7 @@ describe("postPlanAudit", () => {
       personaPacketText: PERSONA_PACKET_TEXT,
     });
 
-    expect(prompt).toContain('"narrative_fit": "pass | fail"');
+    expect(prompt).toContain("Story mode");
   });
 
   it("builds prompt for discussion mode without narrative_fit", () => {

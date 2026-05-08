@@ -21,9 +21,8 @@ describe("post-body audit prompts", () => {
     expect(prompt).toContain("[post_body_audit]");
     expect(prompt).toContain("[persona_packet]");
     expect(prompt).toContain("pattern-spotter");
-    expect(prompt).toContain('"contentChecks"');
-    expect(prompt).toContain('"personaChecks"');
-    expect(prompt).toContain('"procedure_fit"');
+    expect(prompt).toContain("[output_constraints]");
+    expect(prompt).toContain("procedure_fit");
   });
 
   it("builds audit with narrative_fit for story mode", () => {

@@ -11,6 +11,7 @@ export type SharedJsonSchemaGateInput<T = unknown> = {
   flowId: string;
   stageId: string;
   rawText: string;
+  rawObject?: unknown;
   finishReason: string | null;
   generationErrorName?: string | null;
   generationErrorMessage?: string | null;
@@ -19,19 +20,27 @@ export type SharedJsonSchemaGateInput<T = unknown> = {
   validationRules: string[];
   allowedRepairPaths: string[];
   immutablePaths: string[];
+  invokeFieldPatch?: (input: FieldPatchInvocationInput) => Promise<FieldPatchInvocationResult>;
+  invokeFinishContinuation?: (
+    input: FinishContinuationInvocationInput,
+  ) => Promise<FinishContinuationInvocationResult>;
 };
 
+export type SchemaGateAttemptStage =
+  | "initial_parse"
+  | "loose_normalize"
+  | "deterministic_tail_closure"
+  | "finish_continuation"
+  | "field_patch"
+  | "final_validate";
+
 export type SchemaGateDebugAttempt = {
-  attemptStage:
-    | "initial_parse"
-    | "deterministic_tail_closure"
-    | "finish_continuation"
-    | "finish_salvage"
-    | "field_patch";
+  attemptStage: SchemaGateAttemptStage;
   finishReason: string | null;
   likelyOpenPath: string | null;
   requiredRemainingPaths: string[];
   errorSummary: string | null;
+  repairablePaths?: string[];
 };
 
 export type SchemaGateDebug = {
@@ -63,3 +72,35 @@ export type BracketState = {
   lastPath: string | null;
   depth: number;
 };
+
+export interface FieldPatchInvocationInput {
+  schemaName: string;
+  flowId: string;
+  stageId: string;
+  originalJson: Record<string, unknown>;
+  failingPaths: string[];
+  repairablePaths: string[];
+  patchSchema: z.ZodTypeAny;
+  validationSummary: string;
+}
+
+export interface FieldPatchInvocationResult {
+  patch: Record<string, unknown>;
+  rawText?: string | null;
+  finishReason?: string | null;
+}
+
+export interface FinishContinuationInvocationInput {
+  schemaName: string;
+  flowId: string;
+  stageId: string;
+  partialJsonText: string;
+  likelyOpenPath: string | null;
+  requiredRemainingPaths: string[];
+  validationSummary: string;
+}
+
+export interface FinishContinuationInvocationResult {
+  text: string;
+  finishReason?: string | null;
+}

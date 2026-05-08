@@ -138,6 +138,7 @@ export function createXaiProvider(options?: XaiProviderOptions): LlmProvider {
           maxOutputTokens: input.maxOutputTokens,
           temperature: input.temperature,
           providerOptions: input.providerOptions,
+          ...(input.output ? { output: input.output } : {}),
         });
         const usage = payload.usage as
           | {
@@ -160,6 +161,7 @@ export function createXaiProvider(options?: XaiProviderOptions): LlmProvider {
             outputTokens: usage?.outputTokens,
             totalTokens: usage?.totalTokens,
           },
+          ...(payload.output ? { object: payload.output } : {}),
         };
       } catch (error) {
         const errorDetails = extractErrorDetails(error);

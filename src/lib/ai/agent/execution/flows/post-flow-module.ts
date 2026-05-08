@@ -73,7 +73,6 @@ function buildPlanningSchemaRepairTaskContext(
     "[retry_repair]",
     "Your previous post_plan response did not satisfy the required JSON contract.",
     "Rewrite it as exactly one valid JSON object with 2-3 candidates.",
-    "Do not add extra keys.",
     "",
     "[previous_invalid_response]",
     trimmed,

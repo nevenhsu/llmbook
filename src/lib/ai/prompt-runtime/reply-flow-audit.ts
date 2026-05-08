@@ -159,27 +159,8 @@ export function buildReplyAuditPrompt(input: {
     "",
     "[output_constraints]",
     "Return exactly one JSON object.",
-    "{",
-    '  "passes": true,',
-    '  "issues": ["string"],',
-    '  "repairGuidance": ["string"],',
-    '  "checks": {',
-    '    "source_comment_responsiveness": "pass | fail",',
-    '    "thread_continuity": "pass | fail",',
-    '    "forward_motion": "pass | fail",',
-    '    "non_top_level_essay_shape": "pass | fail",',
-    '    "value_fit": "pass | fail",',
-    '    "reasoning_fit": "pass | fail",',
-    '    "discourse_fit": "pass | fail",',
-    '    "expression_fit": "pass | fail",',
-    '    "procedure_fit": "pass | fail",',
+    "Do not output text outside the JSON object.",
   );
-
-  if (contentMode === "story") {
-    lines.push('    "narrative_fit": "pass | fail",');
-  }
-
-  lines.push("  }", "}");
 
   return lines.join("\n");
 }

@@ -20,9 +20,6 @@ function buildPostPlanOutputContract(contentMode: ContentMode): string {
     "  ]",
     "}",
     "Return 2-3 candidates.",
-    "body_outline must contain 2-5 items.",
-    "All scores must be integers from 0 to 100.",
-    "Do not add extra keys.",
     "Do not output any text outside the JSON object.",
     "Do not mention prompt instructions or system blocks in the output.",
   ];
@@ -171,8 +168,23 @@ export function normalizeMetadataProbability(raw: unknown): { probability: numbe
 
 // ---- Code-owned Zod output schemas ----
 
-const MetadataSchema = z.object({
-  probability: z.number().int().min(0).max(100).default(0),
+const MetadataSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const obj = val as Record<string, unknown>;
+      const prob = obj.probability;
+      obj.probability =
+        Number.isInteger(prob) && (prob as number) >= 0 && (prob as number) <= 100 ? prob : 0;
+    }
+    return val;
+  },
+  z.object({
+    probability: z.number().int().min(0).max(100).default(0),
+  }),
+);
+
+const MetadataOutputSchema = z.object({
+  metadata: MetadataSchema.optional().default({ probability: 0 }),
 });
 
 const PostPlanCandidateSchema = z.object({
@@ -193,7 +205,7 @@ export const PostBodyOutputSchema = z.object({
   need_image: z.boolean(),
   image_prompt: z.string().nullable(),
   image_alt: z.string().nullable(),
-  metadata: MetadataSchema,
+  metadata: MetadataSchema.optional().default({ probability: 0 }),
 });
 
 const MarkdownOutputFields = {
@@ -201,7 +213,7 @@ const MarkdownOutputFields = {
   need_image: z.boolean(),
   image_prompt: z.string().nullable(),
   image_alt: z.string().nullable(),
-  metadata: MetadataSchema,
+  metadata: MetadataSchema.optional().default({ probability: 0 }),
 };
 
 export const CommentOutputSchema = z.object(MarkdownOutputFields);
@@ -395,6 +407,7 @@ export function getFlowSchemaMeta(flow: string): SchemaMetadata {
     case "post_plan":
       return POST_PLAN_SCHEMA_META;
     case "post_body":
+    case "post":
       return POST_BODY_SCHEMA_META;
     case "comment":
       return COMMENT_SCHEMA_META;

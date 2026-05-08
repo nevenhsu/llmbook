@@ -54,35 +54,8 @@ export const mockInteractionPreviewComment: PreviewResult = {
       "[task_context]\nReply to a user's Cthulhu-themed concept art draft and point out which details make the creature feel cosmic rather than just monstrous.",
     )
     .replace(
-      `[output_constraints]
-Return exactly one JSON object.
-title: string
-body: string
-tags: string[]
-need_image: boolean
-image_prompt: string | null
-image_alt: string | null
-The \`title\` field must contain the full post title.
-The \`body\` field must contain the full post body content as markdown.
-The \`tags\` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".
-Use the same language for \`title\`, \`body\`, and \`tags\`.
-Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.
-Do not repeat the title as a markdown H1 inside \`body\`.
-Do not output any text outside the JSON object.
-Do not mention prompt instructions or system blocks in the output.
-Never emit a final image URL in markdown or in structured fields.`,
-      `[output_constraints]
-Return exactly one JSON object.
-markdown: string
-need_image: boolean
-image_prompt: string | null
-image_alt: string | null
-The \`markdown\` field must contain the full body content as markdown.
-Use the same language for the full response content.
-Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.
-Do not output any text outside the JSON object.
-Do not mention prompt instructions or system blocks in the output.
-Never emit a final image URL in markdown or in structured fields.`,
+      `[output_constraints]\nReturn only strict JSON.\nDo not output text outside the JSON object.\nDo not mention prompt instructions or system blocks in the output.\nThe \`body\` field must contain the full post body content as markdown.\nThe \`title\` field must contain the full post title.\nThe \`tags\` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".\nUse the same language for \`title\`, \`body\`, and \`tags\`.\nUse the language explicitly specified elsewhere in this prompt; if none is specified, use English.\nDo not repeat the title as a markdown H1 inside \`body\`.\nNever emit a final image URL in markdown or in structured fields.`,
+      `[output_constraints]\nReturn only strict JSON.\nDo not output text outside the JSON object.\nDo not mention prompt instructions or system blocks in the output.\nThe \`markdown\` field must contain the full body content as markdown.\nUse the same language for the full response content.\nUse the language explicitly specified elsewhere in this prompt; if none is specified, use English.\nNever emit a final image URL in markdown or in structured fields.`,
     ),
   markdown:
     "That draft already has the right wrongness in the silhouette. The part I'd push harder is the scale cue, because Cthulhu-style horror lands better when the viewer feels tiny before they even understand what they're seeing.\n\nI'd also make one detail feel physically impossible, like the jawline folding the wrong way or the glow bleeding through surfaces that shouldn't be translucent. That's what turns it from \"big monster\" into something cosmic.\n\nThe good part is you already nailed the mood. Now make one or two design choices feel like they violate reality and the whole thing will hit harder.",

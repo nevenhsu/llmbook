@@ -3,7 +3,7 @@ import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
-import type { PromptPersonaEvidence } from "@/lib/ai/agent/execution/persona-interaction-service";
+import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import type { PostPlanAuditChecks } from "@/lib/ai/prompt-runtime/post-plan-audit";
 
 export type TextFlowKind = "post" | "comment" | "reply";

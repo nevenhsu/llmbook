@@ -4,7 +4,7 @@
 
 **Goal:** Replace the current multi-stage persona generation prompt with one compact prompt that returns exactly one complete `PersonaCoreV2` JSON object from `user_input_context` and optional user-provided reference names.
 
-**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by AI SDK structured output using `generateText({ output: Output.object({ schema: PersonaCoreV2Schema }) })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair should move away from full regeneration: `finishReason=length` and equivalent AI SDK structured-output object generation failures first get schema-grounded output completion, while other invalid or incomplete JSON uses field-patch repair.
+**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by `invokeStructuredLLM` using AI SDK structured output `Output.object({ schema: PersonaCoreV2Schema })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair follows `docs/dev-guidelines/08-llm-json-stage-contract.md`: `invokeLLMRaw` may pass the provider output schema, while the structured wrapper owns schema-gate validation, `finishReason=length` continuation, length-equivalent object-generation failure routing, and FieldPatch.
 
 **Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` with `Output.object`, Zod, existing persona generation admin flow, `PersonaCoreV2`, staged LLM JSON parsing and repair, Vitest.
 
@@ -21,7 +21,8 @@
 - Keep non-imitation as prompt and validation behavior, not a stored boolean field.
 - Use `PersonaCoreV2Schema` as the code-owned structured output contract.
 - Delete hardcoded key/type JSON schema text from the generation prompt.
-- Update invalid JSON and `finishReason=length` repair behavior so length truncation first tries schema-grounded output completion, then falls back to field patches instead of regenerating the full object.
+- Route persona generation through `invokeStructuredLLM`; raw provider invocation still passes `Output.object({ schema: PersonaCoreV2Schema })`, but schema validation and repair live in the shared schema gate.
+- Update invalid JSON and `finishReason=length` repair behavior so length truncation first tries deterministic syntactic closure or finish continuation, then falls back to FieldPatch instead of regenerating the full object.
 - Treat AI SDK structured-output errors that say the provider failed to generate a parsable object conforming to the schema as `finishReason=length`-equivalent for repair routing.
 
 ## Non-Goals
@@ -206,11 +207,13 @@ Modify `src/lib/ai/admin/persona-generation-contract.ts`:
 - Replace seed/core output parsing with single `PersonaCoreV2` parsing.
 - Keep quality validation focused on compactness, abstract traits, procedure differentiation, narrative logic, and persona fit.
 - Remove validation that expects seed keys, `reference_sources`, `other_reference_sources`, `reference_derivation`, or `originalization_note` from the LLM.
-- Ensure rejected extra keys include `memory`, `relationship_context`, `examples`, `do_not_imitate`, and markdown wrapper artifacts.
+- Ensure retired or forbidden generated keys such as `memory`, `relationship_context`, `examples`, `do_not_imitate`, and markdown wrapper artifacts are stripped/ignored by schema parsing and never persist into the parsed `PersonaCoreV2` object.
 
 ## Shared Length-Finish And Field-Patch Repair Framework
 
-Repair must apply to every LLM audit/repair flow that expects JSON, including persona generation, semantic audits, interaction flow audits, quality repairs, intake scoring repairs, and schema repairs.
+Repair must apply to every app-owned structured JSON LLM flow before the output is consumed by runtime logic, including persona generation, interaction flow main outputs, quality repairs, intake scoring/selectors, and audit JSON when audit output is consumed by app logic. Pure string outputs stay on raw invocation.
+
+Use `docs/dev-guidelines/08-llm-json-stage-contract.md` as the authoritative implementation contract. The old idea of a standalone `schema_repair` prompt stage is superseded by an opt-in `invokeStructuredLLM` / shared schema-gate boundary.
 
 Create or extend a shared utility in one place, preferably:
 
@@ -221,22 +224,26 @@ The framework should make `finishReason=length` a recoverable continuation probl
 
 ### Framework State
 
-Represent each JSON LLM attempt as:
+Represent each structured JSON LLM attempt with the shared schema-gate input shape:
 
 ```ts
-type JsonFinishAttempt = {
+type SharedJsonSchemaGateInput<T> = {
+  flowId: string;
+  stageId: string;
   rawText: string;
+  rawObject?: unknown;
   finishReason: string | null;
-  normalizedFinishReason: "length" | "object_generation_unparseable" | "other" | null;
-  parseError: string | null;
-  generationErrorName: string | null;
-  generationErrorMessage: string | null;
+  generationErrorName?: string | null;
+  generationErrorMessage?: string | null;
   schemaName: string;
-  schema: ZodSchema;
+  schema: z.ZodType<T>;
   validationRules: string[];
   allowedRepairPaths: string[];
-  requiredRemainingPaths: string[];
-  likelyOpenPath: string | null;
+  immutablePaths: string[];
+  invokeFieldPatch?: (input: FieldPatchInvocationInput) => Promise<FieldPatchInvocationResult>;
+  invokeFinishContinuation?: (
+    input: FinishContinuationInvocationInput,
+  ) => Promise<FinishContinuationInvocationResult>;
 };
 ```
 
@@ -265,16 +272,19 @@ Rules:
 
 ### Finish Pipeline
 
-1. Try to extract and parse the raw JSON object.,2. If parsing fails and either `finishReason === "length"` or `normalizedFinishReason === "object_generation_unparseable"` with non-empty text, classify the truncation:
+1. Prefer provider `rawObject` when AI SDK structured output supplies one; if it validates after loose normalization, return it.
+2. Try to extract and parse the raw JSON object from text.
+3. If parsing fails and either `finishReason === "length"` or `normalizedFinishReason === "object_generation_unparseable"` with non-empty text, classify the truncation:
    - `tail_closable`: deterministic closure might produce valid JSON.
    - `continuation_needed`: the object clearly stops before required fields are complete.
    - `prefix_too_broken`: the prefix cannot be trusted enough for continuation.
-2. For `tail_closable`, attempt deterministic tail closure before asking the model again:
+4. For `tail_closable`, attempt deterministic tail closure before asking the model again:
    - close an open string with `"`;
    - close open arrays and objects in reverse stack order;
-   - try a small set of candidate suffixes such as `"]}`, `"]}}`, `"}`, `"}}`, `"}]}`, and `"}]}}` based on the bracket stack;
+   - append only syntax required by the bracket/string stack;
+   - do not invent semantic values such as `"placeholder"`, automatic `""`, fake arrays, or fake objects;
    - use the closed candidate only if `JSON.parse` succeeds and schema validation passes or gives field-level missing/invalid paths.
-3. For `continuation_needed`, ask the repair model to finish the prior output:
+5. For `continuation_needed`, ask the repair model to finish the prior output:
    - provide a clear instruction that this is a continuation/finish repair, not full regeneration;
    - provide the schema name, validation rules, likely open path, and remaining required paths derived from the code-owned Zod schema;
    - provide the previous raw output as context, or a compact head plus the exact trailing segment if the raw output is too large;
@@ -282,32 +292,27 @@ Rules:
    - ask for only the missing JSON continuation needed to make the previous output complete and valid;
    - forbid repeating already emitted prefix content;
    - concatenate the continuation to the previous raw output, then parse and validate the result.
-4. If continuation output repeats the prefix, returns a whole object, or includes markdown, run a salvage pass:
-   - if it returns a full valid object that preserves the original parsed prefix exactly for already completed paths, accept it;
-   - otherwise extract only the suffix after the longest common prefix or first valid continuation token;
-   - reject if completed prefix fields are silently changed.
-5. If the completed candidate parses but fails schema validation only on missing or invalid fields, ask for a field patch.
-6. If the original invalid JSON was not caused by `finishReason === "length"` or a length-equivalent structured-output object generation failure, skip continuation repair and ask for a field patch.
-7. If `finishReason === "length"` or a length-equivalent structured-output object generation failure produced empty text, do not run continuation repair because there is no prefix to preserve; treat it as a transport or token-budget failure and return a typed diagnostic unless the flow has a smaller compact retry policy.
-8. Fail with a typed error only after deterministic closure, continuation repair, salvage, and field-patch repair all fail where applicable.
+6. If continuation output repeats the prefix, rewrites a whole object, or includes markdown, reject it unless a suffix or minimal fragment can be merged unambiguously without changing completed prefix fields.
+7. If the completed candidate parses but fails schema validation only on missing or invalid fields, ask for a FieldPatch.
+8. If the original invalid JSON was not caused by `finishReason === "length"` or a length-equivalent structured-output object generation failure, skip continuation repair and ask for a FieldPatch when the JSON is parseable enough.
+9. If `finishReason === "length"` or a length-equivalent structured-output object generation failure produced empty text, do not run continuation repair because there is no prefix to preserve; treat it as a transport or token-budget failure and return a typed diagnostic unless the flow has a smaller compact retry policy.
+10. Fail with a typed error only after deterministic closure, continuation repair, and FieldPatch all fail where applicable.
 
 ### Finish Prompt Contract
 
 The continuation prompt should be generated from one reusable template:
 
 ```text
-[json_finish_repair]
+[finish_continuation]
 The previous response hit finishReason=length and stopped before the JSON was complete.
 Do not regenerate the full object.
-Do not repeat any already emitted JSON prefix.
-Return only the missing JSON continuation that can be appended directly to previous_output.
-The continuation must start with the next needed character after previous_output.
-The completed previous_output + continuation must parse as one strict JSON object and pass the code-owned structured output schema.
+Return only the missing JSON suffix or minimal object fragment requested by the schema gate.
+Do not repeat or rewrite already emitted JSON prefix fields.
 No markdown. No comments. No explanation.
 
 [structured_output_schema]
 schema_name: {{SCHEMA_NAME}}
-The full schema is enforced in code with AI SDK Output.object and Zod. Do not infer or rewrite the full schema here.
+The full schema is enforced in code with AI SDK Output.object and Zod. Do not infer, render, or rewrite the full schema here.
 
 [validation_rules]
 {{VALIDATION_RULES}}
@@ -326,7 +331,7 @@ required_remaining_paths:
 
 Rules:
 
-- Prefer append-only continuation over full-object rewrite.
+- Prefer suffix continuation over full-object rewrite.
 - The repair model must never be asked to "try again" or "rewrite from scratch" for `finishReason=length`.
 - The previous output is source of truth for already completed paths.
 - The prompt must not include hardcoded key/type schema text. Use schema-derived path hints, validation rules, and previous output context instead.
@@ -335,8 +340,8 @@ Rules:
 
 ### Field-Patch Fallback
 
-The field-patch repair output is also schema-bound in code, using a small Zod schema such as `FieldPatchRepairSchema`.
-The prompt should ask for a repair object with allowlisted field paths, but it must not embed a hardcoded key/type JSON example.
+The field-patch repair output is also schema-bound in code, using a small operation-list Zod schema such as `FieldPatchRepairSchema`.
+The prompt should ask for a repair object with allowlisted field paths and values, but it must not embed a hardcoded key/type JSON example.
 
 The field-patch repair prompt must include:
 
@@ -354,10 +359,10 @@ Merge the patch into the parsed partial object with path-aware merge, then valid
 - For `finishReason=length`, prefer schema-grounded continuation repair before field patch repair.
 - For AI SDK structured-output errors where the provider failed to generate a parsable object conforming to the schema, use the same continuation repair path as `finishReason=length`.
 - Bound continuation attempts to 1 or 2 attempts per stage to avoid loops.
-- Record each finish attempt in stage debug output with `attemptStage`, `finishReason`, `likelyOpenPath`, `requiredRemainingPaths`, and whether deterministic closure, continuation, salvage, or patch repair succeeded.
+- Record each finish attempt in stage debug output with `attemptStage`, `finishReason`, `likelyOpenPath`, `requiredRemainingPaths`, and whether deterministic closure, continuation, fragment merge, or patch repair succeeded.
 - If repeated length truncation happens at the same schema path, lower compactness for that field or reduce upstream schema verbosity rather than only increasing output tokens.
 - If the model changes already completed prefix fields during finish repair, reject the completion unless the change is a pure whitespace-equivalent JSON formatting difference.
-- Do not accept a patch that contains unknown paths.
+- Do not accept a patch that contains unknown paths. This is separate from generated-output extra keys, which should be stripped or ignored by schema parsing.
 - Do not accept `repair` values that change immutable fields like `schema_version` unless the original field is missing or invalid.
 - Do not let repair prompts output markdown or explanation.
 
@@ -376,7 +381,7 @@ Merge the patch into the parsed partial object with path-aware merge, then valid
 
 1. Add failing tests for required `persona_fit_probability`.
 2. Add failing tests for missing, non-integer, below-0, and above-100 probability.
-3. Add failing tests that reject `reference_style.do_not_imitate` as an extra key.
+3. Add tests that `reference_style.do_not_imitate` is stripped/ignored as a generated extra key and never appears in the parsed `PersonaCoreV2` object.
 4. Add failing tests for `reference_style.other_references` length above 8.
 5. Update the type, fallback, validators, and fixtures.
 6. Run the focused tests.
@@ -457,7 +462,7 @@ npm test -- src/app/api/admin/ai/persona-generation/preview/route.test.ts src/li
 5. Add unit tests for continuation prompt assembly with schema name, validation rules, previous output, likely open path, and required remaining fields, while excluding hardcoded key/type schema text.
 6. Add unit tests for append-only continuation merge.
 7. Add unit tests that reject continuation output that rewrites completed prefix fields.
-8. Add unit tests for salvage when the continuation model returns a repeated prefix or whole object.
+8. Add unit tests that reject continuation output that repeats the prefix or rewrites a whole object unless a suffix or minimal fragment can be merged unambiguously without changing completed fields.
 9. Add unit tests for rejected impossible closures.
 10. Add unit tests for field-path patch merge.
 11. Add unit tests that unknown repair paths are rejected.

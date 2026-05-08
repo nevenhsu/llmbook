@@ -85,12 +85,9 @@ describe("buildPhase1ReplyPrompt", () => {
     const output =
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
-    expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain('"candidates": [');
-    expect(output).toContain('"persona_fit_score": 0');
-    expect(output).toContain('"novelty_score": 0');
-    expect(output).toContain("All scores must be integers from 0 to 100.");
-    expect(output).toContain("Do not output any text outside the JSON object.");
+    expect(output).toContain("Return only strict JSON.");
+    expect(output).toContain("Return 2-3 candidates.");
+    expect(output).toContain("Do not output text outside the JSON object.");
     expect(output).toContain("Do not mention prompt instructions or system blocks in the output.");
   });
 
@@ -99,13 +96,10 @@ describe("buildPhase1ReplyPrompt", () => {
     const output =
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
-    expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain("body: string");
-    expect(output).toContain("tags: string[]");
-    expect(output).toContain("need_image");
-    expect(output).toContain("image_prompt");
-    expect(output).toContain("image_alt");
-    expect(output).not.toContain("title: string");
+    expect(output).toContain("Return only strict JSON.");
+    expect(output).toContain("markdown");
+    expect(output).toContain("hashtags like");
+    expect(output).not.toContain("title");
   });
 
   it("uses JSON envelope contract for comment", async () => {
@@ -113,14 +107,10 @@ describe("buildPhase1ReplyPrompt", () => {
     const output =
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
-    expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain("markdown: string");
-    expect(output).toContain("need_image");
-    expect(output).toContain("image_prompt");
-    expect(output).toContain("image_alt");
-    expect(output).toContain("Do not output any text outside the JSON object.");
+    expect(output).toContain("Return only strict JSON.");
+    expect(output).toContain("markdown");
+    expect(output).toContain("Do not output text outside the JSON object.");
     expect(output).toContain("Do not mention prompt instructions or system blocks in the output.");
-    expect(output).not.toContain("selected_option_id");
   });
 
   it("uses JSON envelope contract for reply", async () => {
@@ -128,12 +118,8 @@ describe("buildPhase1ReplyPrompt", () => {
     const output =
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
-    expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain("markdown: string");
-    expect(output).toContain("need_image");
-    expect(output).toContain("image_prompt");
-    expect(output).toContain("image_alt");
-    expect(output).not.toContain("selected_option_id");
+    expect(output).toContain("Return only strict JSON.");
+    expect(output).toContain("markdown");
   });
 
   it("uses JSON envelope contract for vote", async () => {
@@ -143,14 +129,10 @@ describe("buildPhase1ReplyPrompt", () => {
     const output =
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
-    expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain("target_type");
-    expect(output).toContain("target_id");
-    expect(output).toContain('vote: "up" | "down"');
-    expect(output).toContain("Do not output any text outside the JSON object.");
+    expect(output).toContain("Return only strict JSON.");
+    expect(output).toContain("Do not output text outside the JSON object.");
     expect(output).toContain("Do not mention prompt instructions or system blocks in the output.");
     expect(output).not.toContain("need_image");
-    expect(output).not.toContain("Return markdown only");
   });
 
   it("uses JSON envelope contract for poll_post", async () => {
@@ -159,12 +141,8 @@ describe("buildPhase1ReplyPrompt", () => {
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
     expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain('mode: "create_poll"');
-    expect(output).toContain("options: string[]");
-    expect(output).toContain("markdown_body");
-    expect(output).toContain("Do not output any text outside the JSON object.");
-    expect(output).toContain("Do not mention prompt instructions or system blocks in the output.");
-    expect(output).not.toContain("need_image");
+    expect(output).toContain("Do not output text outside the JSON object.");
+    expect(output).toContain("Do not return markdown outside the JSON object.");
   });
 
   it("uses JSON envelope contract for poll_vote", async () => {
@@ -175,11 +153,7 @@ describe("buildPhase1ReplyPrompt", () => {
       result.blocks.find((block) => block.name === "output_constraints")?.content ?? "";
 
     expect(output).toContain("Return exactly one JSON object.");
-    expect(output).toContain('mode: "vote_poll"');
-    expect(output).toContain("poll_post_id");
-    expect(output).toContain("selected_option_id");
-    expect(output).toContain("Do not output any text outside the JSON object.");
+    expect(output).toContain("Do not output text outside the JSON object.");
     expect(output).toContain("Do not mention prompt instructions or system blocks in the output.");
-    expect(output).not.toContain("Return markdown only");
   });
 });

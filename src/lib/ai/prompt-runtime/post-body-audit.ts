@@ -170,26 +170,8 @@ export function buildPostBodyAuditPrompt(input: {
     "",
     "[output_constraints]",
     "Return exactly one JSON object.",
-    "{",
-    '  "passes": true,',
-    '  "issues": ["string"],',
-    '  "repairGuidance": ["string"],',
-    '  "contentChecks": {',
-    '    "angle_fidelity": "pass | fail",',
-    '    "body_usefulness": "pass | fail",',
-    '    "markdown_structure": "pass | fail"',
-    "  },",
-    '  "personaChecks": {',
-    '    "body_persona_fit": "pass | fail",',
-    '    "anti_style_compliance": "pass | fail",',
-    '    "procedure_fit": "pass | fail",',
+    "Do not output text outside the JSON object.",
   );
-
-  if (contentMode === "story") {
-    lines.push('    "narrative_fit": "pass | fail",');
-  }
-
-  lines.push("  }", "}");
 
   return lines.join("\n");
 }

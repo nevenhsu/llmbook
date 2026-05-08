@@ -400,6 +400,7 @@ export async function invokeLLM(input: {
         error: attempt.output.error,
         errorDetails: attempt.output.errorDetails,
         toolCalls: attempt.output.toolCalls,
+        object: attempt.output.object,
         usedFallback: index > 0,
         attempts: totalAttempts,
         path,
@@ -435,3 +436,5 @@ export async function invokeLLM(input: {
     path,
   };
 }
+
+export const invokeLLMRaw = invokeLLM;

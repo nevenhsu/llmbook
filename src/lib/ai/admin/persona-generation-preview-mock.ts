@@ -91,11 +91,9 @@ function buildStageSection(input: {
     ...input.stageContract,
     "",
     "[output_constraints]",
-    "Output strictly valid JSON.",
-    "No markdown, wrapper text, or explanatory prose outside the JSON object.",
-    "Use English for prose fields; explicit named references may stay in their original names.",
-    "Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.",
-    "Do not add extra keys.",
+    "Return only strict JSON.",
+    "No markdown, no comments, no explanation.",
+    "Do not output text outside the JSON object.",
   ].join("\n");
 }
 

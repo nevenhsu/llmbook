@@ -1,295 +1,395 @@
 LLM JSON Stage Contract
 
-Purpose: Define the required staged pattern for any LLM flow that returns JSON used by runtime logic, persistence, or downstream automation.
+Purpose: Define the required staged pattern for any LLM flow that returns JSON used by runtime logic, persistence, ranking, cleanup, policy decisions, or downstream automation.
 
-Scope: Applies to runtime and admin flows when LLM JSON is persisted, used to drive later model calls, or used by application code for automated branching, ranking, cleanup, or policy decisions.
+Scope: Applies to runtime and admin flows when LLM JSON is persisted, reused by later prompts, or consumed by application code for automated branching.
 
 Core Rule:
 
-- If an LLM JSON result is high-value, persistent, or used by downstream automation, do not treat it as a one-shot response.
-- Use a staged contract with explicit generation, schema validation/repair, quality audit, and quality repair.
-- Do not let callers infer JSON shape or stage behavior from prompt wording alone.
+- Do not treat high-value LLM JSON as a one-shot response.
+- JSON shape is owned by code, preferably Zod schemas passed to AI SDK structured output with `Output.object({ schema })`.
+- Prompt text may describe task behavior and compact output policy, but must not carry hardcoded full key/type JSON schema blocks.
+- App code must validate and repair JSON before quality audit, persistence, ranking, cleanup, automation, or deterministic rendering.
+- Pure string outputs do not go through schema repair unless the caller explicitly opts into a code-owned JSON schema.
 
-When Staging Is Required:
+## Invocation Layers
 
-- The JSON will be written to DB.
-- The JSON will be reused by later prompts or background jobs.
-- The JSON affects selection, ranking, cleanup, routing, or policy behavior.
+Use two distinct layers:
+
+1. `invokeLLMRaw`
+   - Calls the provider.
+   - May pass `modelInput.output = Output.object({ schema })` to AI SDK `generateText`.
+   - Returns provider text, object, finish reason, usage, and provider errors.
+   - Does not run schema repair.
+   - Does not infer JSON from prompts.
+   - Is used by pure text calls and by schema repair callbacks.
+
+2. `invokeStructuredLLM`
+   - Wraps `invokeLLMRaw`.
+   - Requires a schema-gate config: schema name, Zod schema, validation rules, allowlisted repair paths, and immutable paths.
+   - Forces or preserves `Output.object({ schema })` for the first provider call.
+   - Runs the shared schema gate on the provider result.
+   - Uses raw repair calls for finish continuation and FieldPatch so repair cannot recurse.
+   - Returns either a typed valid object or a typed schema failure with debug attempts.
+
+Do not make raw invocation guess that text is JSON. Structured JSON repair is opt-in by schema config.
+
+## When Staging Is Required
+
+Use staged JSON handling when:
+
+- JSON will be written to DB.
+- JSON will be reused by later prompts or background jobs.
+- JSON affects selection, ranking, cleanup, routing, or policy behavior.
+- JSON drives persistence, rendering, notification, automation, or moderation.
 - Semantic correctness matters, not just parse validity.
-- A malformed or weak result would pollute durable state.
+- Malformed or weak output would pollute durable state.
 
-When Staging Is Usually Not Required:
+Staging is usually not required when:
 
-- The JSON is ephemeral and low-risk.
-- The result is immediately discarded if parsing fails.
-- A deterministic fallback fully replaces the LLM output.
-- The output does not affect persisted state or automated decisions.
+- The output is pure prose.
+- The JSON is low-risk and immediately discarded if invalid.
+- A deterministic fallback fully replaces invalid output.
+- The result does not affect persisted state or automated decisions.
 
-Standard Stage Model:
+## Standard Stage Model
+
+Use this model for app-owned JSON:
 
 1. `main`
-   - LLM generates canonical JSON.
-2. `schema_validate`
-   - Deterministic parse and structure validation.
-3. `schema_repair`
-   - LLM rewrites the canonical JSON when parse/schema validation fails.
-4. `deterministic_checks`
-   - App-owned checks for caps, enums, required evidence, duplicates, and other concrete constraints.
-5. `quality_audit`
-   - Separate LLM stage that evaluates semantic quality and returns audit JSON.
-6. `quality_repair`
-   - LLM rewrites canonical JSON using deterministic failures and audit failures as input.
-7. `recheck`
-   - Re-run deterministic checks and quality audit after each quality repair.
-8. `deterministic_render`
-   - Application renders final persisted text/shape deterministically from the validated canonical JSON.
+   - LLM generates the canonical JSON candidate.
+   - For structured JSON, call `invokeStructuredLLM`.
 
-Canonical JSON Rules:
+2. `schema_gate`
+   - Extracts JSON from raw text or reads provider structured `object`.
+   - Applies loose schema-owned normalization.
+   - Validates against the original Zod schema.
+   - Repairs only through bounded finish continuation or FieldPatch.
+   - Returns typed valid object or typed schema failure.
 
-- Define required top-level keys explicitly.
-- Define allowed value types explicitly.
-- Define enum values explicitly.
-- State whether extra keys are forbidden.
-- Provide at least one concrete valid JSON example.
-- Keep the canonical JSON schema stable across `main`, `schema_repair`, and `quality_repair`.
+3. `deterministic_checks`
+   - App-owned checks for concrete constraints not already normalized by schema.
+   - Examples: duplicates, missing required evidence, invalid references, impossible state.
 
-Audit JSON Rules:
+4. `quality_audit`
+   - Separate semantic audit stage.
+   - Receives only typed, schema-valid data.
+   - Judges content quality, persona fit, coherence, usefulness, and task-specific semantics.
+   - Does not check parseability, key presence, field types, extra keys, array caps, or self-rating metadata.
 
-- Audit must use a separate JSON contract from the canonical result.
-- Audit JSON should at minimum include:
-  - `passes`
-  - `issues`
-  - `repairGuidance`
-- If the canonical JSON has named sections or fields, audit JSON should also include per-section or per-field status.
-- Allowed audit status enums must be explicit, for example:
-  - `pass`
-  - `fail`
-  - `inconclusive`
-- Audit JSON should forbid extra top-level keys unless the contract says otherwise.
+5. `quality_repair`
+   - Repairs semantic quality issues as a targeted delta or schema-bound canonical JSON, depending on flow design.
+   - After quality repair, run `schema_gate` again before re-audit.
 
-Schema Validation Rules:
+6. `recheck`
+   - Re-run deterministic checks and quality audit after quality repair.
 
-- Schema validation must be deterministic.
-- Validation should reject:
-  - empty output
-  - invalid JSON
-  - missing required keys
-  - wrong types
-  - forbidden extra keys when the contract forbids them
-- Schema validation may normalize harmless alias drift only when the contract says so.
-- Schema repair must return the same canonical JSON schema again, never prose.
+7. `deterministic_render`
+   - Application renders final persisted text or derived structures from validated JSON.
 
-Deterministic Check Rules:
+Recommended template:
+
+```text
+main -> schema_gate -> deterministic_checks -> quality_audit -> quality_repair? -> schema_gate -> recheck -> deterministic_render
+```
+
+## Code-Owned Schema Rules
+
+- Define JSON shape in code with Zod.
+- Pass Zod schemas to AI SDK structured output through `Output.object({ schema })` when provider support allows it.
+- Keep prompt output policy compact:
+
+```text
+Structure is enforced by the code-owned Zod schema through AI SDK Output.object.
+Return only the schema-bound object.
+No markdown wrapper, comments, or explanation.
+```
+
+- Do not put full JSON skeletons or key/type schema examples in production prompts.
+- Do not add `assertExactKeys` for generated model JSON outputs.
+- Unknown generated-output keys should be stripped or ignored by schema parsing unless a specific internal app-authored object requires exact-key validation.
+- Patch outputs are different: unknown patch paths must be rejected because patch paths can mutate app-owned data.
+
+## Loose Generated-Output Policy
+
+Generated model JSON should be strict where correctness matters and forgiving where overflow is harmless.
+
+Default policy:
+
+- Missing required fields: invalid, then FieldPatch if the path is allowlisted.
+- Wrong field type: invalid, then FieldPatch if the path is allowlisted.
+- Extra generated keys: strip or ignore; do not fail only because extras are present.
+- Overlong arrays: truncate to the first allowed items when schema policy says overflow is harmless.
+- Too few array items: invalid if the schema minimum is not met.
+- App-owned IDs, timestamps, source IDs, row scope, and write-method flags should be deterministic, not model-authored.
+
+For writer-output self-rating metadata:
+
+- `metadata.probability` is observational AI self-rating metadata.
+- Missing, non-integer, or out-of-range values should normalize to `0`.
+- Do not audit `metadata.probability`.
+- Do not start quality repair only because `metadata.probability` is missing or invalid.
+
+## Shared Schema Gate
+
+The shared schema gate must be flow-agnostic and should receive:
+
+```ts
+type SharedJsonSchemaGateInput<T> = {
+  flowId: string;
+  stageId: string;
+  rawText: string;
+  rawObject?: unknown;
+  finishReason: string | null;
+  generationErrorName?: string | null;
+  generationErrorMessage?: string | null;
+  schemaName: string;
+  schema: z.ZodType<T>;
+  validationRules: string[];
+  allowedRepairPaths: string[];
+  immutablePaths: string[];
+  invokeFieldPatch?: (input: FieldPatchInvocationInput) => Promise<FieldPatchInvocationResult>;
+  invokeFinishContinuation?: (
+    input: FinishContinuationInvocationInput,
+  ) => Promise<FinishContinuationInvocationResult>;
+};
+```
+
+Required behavior:
+
+1. Prefer `rawObject` when provider structured output is available.
+2. If object validation succeeds, return typed value.
+3. If object validation fails and raw text exists, continue with raw text extraction/repair.
+4. Extract JSON from raw text.
+5. Apply loose schema-owned normalization before validation.
+6. Validate original schema.
+7. If valid, return typed value.
+8. If length-like truncation exists with usable prefix, try deterministic syntactic tail closure.
+9. If still incomplete, call finish continuation.
+10. If JSON is parseable but schema-invalid, call FieldPatch for allowlisted paths only.
+11. Re-run loose normalization and full schema validation after every repair.
+12. If still invalid, return typed schema failure and debug metadata.
+
+Debug metadata should include:
+
+- flow id
+- stage id
+- schema name
+- attempt stage
+- finish reason
+- normalized failure reason
+- likely open path
+- required remaining paths
+- repairable paths
+- compact error summary
+
+## Length and Object-Generation Failures
+
+Treat these as length-like:
+
+- `finishReason === "length"` with usable raw text.
+- AI SDK or provider errors whose message says the provider failed to generate a parsable object that conforms to the schema.
+- Provider object-generation errors with partial raw text.
+
+Rules:
+
+- Preserve the usable prefix.
+- Do not ask the model to rewrite the full JSON object from scratch when usable prefix text exists.
+- First try deterministic syntactic closure when the prefix only needs quote/bracket/brace closure.
+- If the prefix lacks values or required remaining fields, use finish continuation.
+- If the output can be made parseable but still misses schema fields, use FieldPatch.
+- If no usable text prefix exists, return a typed transport/token diagnostic unless the flow explicitly allows a compact retry.
+
+Deterministic tail closure may only append syntax:
+
+- closing quote for an already-open string when safe
+- `]`
+- `}`
+- combinations of brackets/braces required by the current stack
+
+It must not invent semantic values:
+
+- no `"placeholder"`
+- no automatic `""` for missing field values
+- no fake array items
+- no fake objects
+- no fabricated required fields
+
+## Finish Continuation
+
+Finish continuation is for truncated JSON with a useful prefix.
+
+Prompt policy:
+
+```text
+The previous JSON output was cut off before completion.
+Continue only the missing JSON suffix or provide the minimal missing object fragment requested by the schema gate.
+Do not rewrite the full JSON object.
+Do not add commentary.
+The full schema is enforced in code by Zod structured output.
+```
+
+Implementation rules:
+
+- Continuation repair must call raw invocation, not structured invocation.
+- Continuation output should be schema-bound by a small continuation schema, not by the full canonical schema.
+- Accept either a suffix or a minimal fragment only when merge is unambiguous.
+- Reject continuation output that repeats or rewrites already-completed prefix fields.
+- Validate with the original schema after merge.
+
+## FieldPatch Repair
+
+FieldPatch is for parseable JSON that fails schema validation on allowlisted missing or invalid fields.
+
+Rules:
+
+- FieldPatch repair must call raw invocation, not structured invocation.
+- Patch output must be schema-bound by a small patch schema, such as an operation list:
+
+```ts
+const FieldPatchRepairSchema = z.object({
+  repair: z
+    .array(
+      z.object({
+        path: z.string(),
+        value: z.unknown(),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+```
+
+- The patch prompt names only failing paths and repairable paths.
+- The patch prompt must not include a hardcoded full key/type JSON schema.
+- Each patch path must be checked against:
+  - actual failing or missing paths
+  - `allowedRepairPaths`
+  - `immutablePaths`
+  - prototype-pollution segments: `__proto__`, `prototype`, `constructor`
+- Wildcards may be used in allowlists, for example `candidates.*.title`.
+- Patch values should be validated against inferred leaf schemas when reliable.
+- Merge the patch into the original parsed object.
+- Re-run full schema validation after merge.
+
+Unknown generated-output keys are allowed to be stripped, but unknown patch paths must be rejected.
+
+## Deterministic Checks
 
 Use deterministic checks for concrete issues that should not require model judgment, such as:
 
-- item count caps
-- token or character hard caps
-- enum validation
-- duplicate entries
-- forbidden empty fields when required source evidence exists
-- forbidden top-level keys
-- malformed metadata shapes
+- duplicate items
+- invalid references
+- missing source evidence
+- invalid app-owned metadata
+- impossible state transitions
+- policy constraints that are not expressible in schema
 
-Deterministic checks do not replace semantic audit. They narrow the space before audit.
+Do not use deterministic checks for issues that are already handled by loose schema normalization:
 
-Quality Audit Rules:
+- harmless extra generated keys
+- overlong arrays that are intentionally truncated
+- missing or invalid `metadata.probability`
 
-- Quality audit is a separate LLM stage, not a parser.
-- It should judge semantic correctness, section intent, and whether the result is useful in the target workflow.
-- It should not mutate the canonical JSON directly.
-- It must produce audit JSON, not free-form prose.
-- Prefer compact review packets for audit prompts (minimal context required for judgment).
-- Prefer fuller rewrite packets for repair prompts (enough context to fix the output safely).
+## Quality Audit Rules
 
-Quality Repair Rules:
+Quality audit is a semantic review stage, not a parser.
 
-- Quality repair rewrites the canonical JSON, not the audit JSON.
-- It uses:
-  - canonical JSON candidate
-  - deterministic failure list
-  - audit JSON issues
-  - explicit repair instructions
-- After quality repair, re-run deterministic checks and then re-run quality audit.
+Quality audit should judge:
 
-## Audit / Repair Contract Pattern (from persona generation flow)
+- persona fit
+- task fit
+- coherence
+- content usefulness
+- narrative or discussion quality where applicable
+- whether the output satisfies the requested user-facing behavior
 
-The core principle: **audit tells repair exactly which keys to fix, repair returns only the changed fields as a delta**.
+Quality audit must not judge:
 
-### 1. Audit Must Name Exact Keys
+- JSON parseability
+- required key presence
+- field types
+- extra keys
+- candidate or array count that schema already enforces or normalizes
+- `metadata.probability` presence or range
 
-Every `issues` entry and `repairGuidance` entry must include the exact field path. Vague issues produce vague repairs that fix nothing or fix everything.
+Audit packets should be compact. Include only the minimum context needed for semantic judgment.
 
+For budget-sensitive Persona v2 audits, prefer at most two quality aspects unless a plan explicitly requires more.
+
+## Quality Repair Rules
+
+Quality repair fixes semantic issues, not schema issues.
+
+Rules:
+
+- Quality repair should receive typed schema-valid JSON.
+- It should use audit issues and repair guidance.
+- It may return a targeted delta or schema-bound canonical JSON, depending on flow design.
+- After quality repair, always run schema gate again.
+- If quality repair output fails schema gate, return schema failure rather than asking quality audit to diagnose schema.
+
+Targeted delta repair remains appropriate when audit names exact fields:
+
+```json
+{ "repair": { "voice": { "rhythm": "short, clipped, pressure-aware" } } }
 ```
-// Wrong
-issues: ["fields must stay coherent"]
 
-// Right
-issues: ["voice_fingerprint.opening_move contradicts interaction_defaults.default_stance — differentiate them"]
-repairGuidance: ["Rewrite voice_fingerprint.opening_move to describe how the persona opens a conversation"]
-```
+Keep context separate from output:
 
-Audit instructions must require field paths in output. Include concrete pass/fail examples calibrated to the domain.
-
-### 2. Repair Prompt Must Include Targeted Key/Type Instructions
-
-Include sub-key structure only for the keys the audit flagged, derived from the audit issues text — not the full schema. See `src/lib/ai/admin/llm-flow-shared.ts` for the reusable `deriveJsonLeafType()` and `deriveJsonSchema()` helpers.
-
-```typescript
-const allText = [...issues, ...repairGuidance].join(" ");
-const mentionedKeys = Object.keys(output).filter((key) => allText.includes(key));
-// deriveSchema only for mentionedKeys using deriveJsonSchema/deriveJsonLeafType
-```
-
-This gives the repair LLM exact sub-key names without the noise of the full stage contract.
-
-### 3. Context Must Be Separate From Output
-
-Wrap current values in clear markers so the LLM treats them as reference, not template:
-
-```
-=== CONTEXT ONLY — DO NOT INCLUDE IN OUTPUT ===
+```text
+=== CONTEXT ONLY - DO NOT INCLUDE IN OUTPUT ===
 {...current values...}
 === END CONTEXT ===
 ```
 
-Instruction: "Your repair delta must contain ONLY the changed sub-fields, not this entire output."
+## Failure Handling
 
-### 4. Delta Repair Format
+- Bound all repair attempts.
+- Do not persist malformed or weak JSON after terminal schema or quality failure.
+- Prefer a typed failure over silently fabricating fallback content.
+- Preserve distinct failure categories:
+  - transport failure
+  - empty length-like output
+  - schema failure
+  - deterministic check failure
+  - quality audit failure
+  - quality repair failure
 
-Repair returns only changed fields as `{"repair": {...}}`. App deep-merges into previous valid output using `deepMergeJson()` from `src/lib/ai/admin/llm-flow-shared.ts`.
+## Checklist
 
-```json
-{ "repair": { "voice_fingerprint": { "opening_move": "new text" } } }
-```
-
-Delta output is 50-300 tokens (vs 2000+ for full regeneration). Eliminates truncation, reduces retry attempts from 4 to 2.
-
-### 5. Audit Packets Must Be Compact
-
-Audit prompts include parsed output as context. Use compact JSON (no indentation) and truncate to avoid overwhelming the audit LLM's small output budget:
-
-```typescript
-const compact = JSON.stringify(parsedOutput);
-const snippet =
-  compact.length <= 1500 ? compact : `${compact.slice(0, 1000)}...${compact.slice(-400)}`;
-```
-
-Instruct the audit LLM that the packet is intentionally compact and omitted background is not a failure reason.
-
-### 6. `failClosedOnTransport` Should Be `false`
-
-When audit LLM returns empty or fails to parse, treat it as a pass — don't block the stage with a generic default issue that produces poor repair guidance.
-
-```typescript
-failClosedOnTransport: false; // transport failure → passes (avoids false positives)
-```
-
-### 7. Composite Audits: Merge, Don't Early-Return
-
-Run all audits and merge issues. Early return hides problems from the repair LLM:
-
-```typescript
-const a1 = await audit1(stage);
-const a2 = await audit2(stage);
-return {
-  issues: [...a1.issues, ...a2.issues],
-  repairGuidance: [...a1.repairGuidance, ...a2.repairGuidance],
-};
-```
-
-Exception: when one audit normalizes output the next depends on (e.g., reference filtering before originalization check), early return is acceptable.
-
-### 8. DeriveType / DeriveSchema Helpers
-
-Reusable utilities in `src/lib/ai/admin/llm-flow-shared.ts`:
-
-- `deriveJsonLeafType(val)` — returns `"string"`, `"number"`, `"string[]"`, `"object"`, etc.
-- `deriveJsonSchema(value, prefix)` — recursively builds `"key: { sub1: type, sub2: type[] }"` for each top-level key
-- `buildRepairSchemaHint(output)` — builds compact `[schema]` block from parsed output
-- `deepMergeJson(base, repair)` — recursively merges repair fields into base
-
-### 9. Budget: Prevent Truncation Upfront
-
-- Measure actual output sizes from debug records; use generous stage budgets
-- Increasing budget is cheaper than multiple repair retries
-- `qualityRepairCap` can be smaller since delta output is compact
-- Budget definitions in `src/lib/ai/admin/persona-generation-token-budgets.ts`
-
-Failure Handling:
-
-- `schema_repair` retries should be bounded.
-- `quality_repair` retries should be bounded.
-- If retries fail terminally, do not persist malformed or weak JSON.
-- Prefer skipping persistence over silently fabricating fallback content.
-
-Handling `finishReason=length`:
-
-- Do not blindly retry the same oversized prompt.
-- First attempt normal schema repair with the latest partial output and exact parse error.
-- If truncation repeats, run a compact schema repair with smaller context and tighter caps.
-- If truncation still repeats, reduce input/context size deterministically and rerun the `main` stage.
-- Treat repeated truncation as a sizing problem, not just a parser problem.
-
-Metadata Ownership Rules:
-
-- If rows include IDs, scope markers, source IDs, timestamps, or write-method flags, these are application-owned unless explicitly stated otherwise.
-- LLM JSON should populate semantic fields only when possible.
-- App-owned metadata keys must be deterministic and schema-stable across rows.
-
-Deterministic Render Rules:
-
-- If the persisted final representation is text or a derived structure, render it from validated canonical JSON in app code.
-- Do not ask the model for a second free-form rendering after audit.
-- Fixed headings, fixed field order, and fixed line ordering reduce drift.
-
-Diagnostics:
-
-- Preserve stage-local diagnostics where possible:
-  - stage name
-  - provider/model
-  - finish reason
-  - whether text was present
-  - parse/audit failure category
-- Do not collapse schema failure, transport failure, and semantic audit failure into one generic error.
-
-Recommended Minimum Contract Template:
-
-```text
-main -> schema_validate -> schema_repair? -> deterministic_checks -> quality_audit -> quality_repair? -> recheck -> deterministic_render
-```
-
-Checklist:
-
-- Required keys defined
-- Allowed enums defined
-- Extra-key policy defined
-- Canonical JSON example included
-- Audit JSON example included
-- Audit issues include exact field paths (not generic)
-- Audit instructions include pass/fail examples
-- Audit packets use compact JSON, truncated
-- `failClosedOnTransport: false` for semantic audits
-- Repair prompt includes targeted key/type instructions (derived from audit issue keys)
-- Repair prompt separates context from output with markers
-- Delta repair format (`{"repair": {...}}`) with deep merge
-- Composite audits merge issues (no early return unless dependency)
-- Deterministic checks listed
-- Repair retry policy listed (2 attempts for delta repair)
-- `finishReason=length` policy listed
-- App-owned vs model-owned fields listed
-- Final render path listed
-- Stage budgets calibrated from actual output sizes
+- Code-owned Zod schema exists.
+- Structured output uses `Output.object({ schema })` when provider support allows it.
+- Prompt has no hardcoded full key/type schema block.
+- Raw invocation can pass provider structured output schema.
+- Structured invocation runs the shared schema gate.
+- Repair callbacks use raw invocation only.
+- Extra generated keys are stripped or ignored.
+- Overlong generated arrays are truncated when harmless.
+- Missing or invalid required fields are repaired only through allowlisted FieldPatch.
+- Immutable paths cannot be patched.
+- Unknown patch paths are rejected.
+- `finishReason=length` policy preserves usable prefix.
+- AI SDK object-generation parse/conformance failures route like length-like failures.
+- No usable prefix returns typed transport/token diagnostic or explicit compact retry.
+- Quality audit receives typed schema-valid data only.
+- Quality audit does not inspect schema issues or `metadata.probability`.
+- Quality repair output goes through schema gate before re-audit.
+- Debug records expose schema-gate attempts compactly.
+- App-owned metadata and final render are deterministic.
+- Stage budgets are calibrated from actual output sizes.
 
 Current In-Repo Examples:
 
 - Persona generation staged flow in [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
-- Comment/reply/post-body audit+repair loops in flow modules under `src/lib/ai/agent/execution/flows/*`
+- Persona v2 implementation plans in [plans/persona-v2](/Users/neven/Documents/projects/llmbook/plans/persona-v2)
+- Comment/reply/post-body audit and repair loops in flow modules under `src/lib/ai/agent/execution/flows/*`
 - Memory compressor staged flow in [MEMORY_COMPRESSOR_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_COMPRESSOR_SUBPLAN.md)
 - Memory write staged post-memory flow in [MEMORY_WRITE_SUBPLAN.md](/Users/neven/Documents/projects/llmbook/plans/ai-agent/sub/MEMORY_WRITE_SUBPLAN.md)
 
-Last Updated: 2026-05-04
+Last Updated: 2026-05-08
 
-Verification command:
+Verification commands:
 
 - Use `npm run test:llm-flows` for the consolidated LLM-flow contract suite.
+- Use `npm run verify` before completing implementation work.

@@ -1,10 +1,10 @@
-# Phase 2.7: Shared JSON Schema Repair Before Audit Plan
+# Phase 2.7: Shared JSON Schema Gate Before Audit Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make schema repair a shared mandatory gate for every LLM JSON output, with Persona Core v2 prompt-family flows as the first integration target, so audits only judge output quality after JSON parsing and schema validation already pass.
+**Goal:** Make the shared schema gate mandatory for every app-owned structured JSON LLM output, with Persona Core v2 prompt-family flows as the first integration target, so audits only judge output quality after JSON parsing and schema validation already pass.
 
-**Architecture:** Reuse the shared JSON finish/field-patch repair framework from `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md`. Any LLM stage that promises JSON should use AI SDK structured output with `generateText({ output: Output.object({ schema }) })` or the streaming equivalent when appropriate. The shared schema gate receives the same code-owned Zod schema, validates/repairs if needed, and returns a typed valid object. AI SDK structured-output object generation failures where the provider cannot produce a parsable schema-conforming object are normalized into the same repair route as `finishReason=length`. Prompt text should not contain hardcoded full key/type JSON schema blocks. Only validated objects can enter downstream semantic audit, quality audit, persistence, ranking, cleanup, or automation. Audit never checks schema, required keys, field types, candidate count, parseability, or metadata shape.
+**Architecture:** Follow `docs/dev-guidelines/08-llm-json-stage-contract.md`: raw provider invocation may pass `Output.object({ schema })`, but schema validation and repair live in an opt-in `invokeStructuredLLM` wrapper. The wrapper calls the shared schema gate with the same code-owned Zod schema, validates/repairs if needed, and returns a typed valid object or typed schema failure. AI SDK structured-output object generation failures where the provider cannot produce a parsable schema-conforming object are normalized into the same repair route as `finishReason=length`. Prompt text must not contain hardcoded full key/type JSON schema blocks. Only validated objects can enter downstream semantic audit, quality audit, persistence, ranking, cleanup, or automation. Audit never checks schema, required keys, field types, candidate count, parseability, extra generated keys, or metadata shape.
 
 **Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` / `streamText` with `Output.object`, Zod, staged LLM JSON flows, shared JSON repair utilities, Persona Core v2 prompt family builders, Vitest.
 
@@ -14,18 +14,21 @@
 
 Read the repair section in:
 
+- `docs/dev-guidelines/08-llm-json-stage-contract.md`
 - `plans/persona-v2/2026-05-07-one-stage-persona-generation-prompt-simplification-plan.md`
+- `plans/persona-v2/2026-05-08-invokellm-structured-schema-gate-deepseek-plan.md`
 
 Reuse these concepts directly:
 
-- `JsonFinishAttempt`
+- `invokeLLMRaw` / `invokeStructuredLLM` layering
+- `SharedJsonSchemaGateInput`
 - deterministic truncation classification
 - `finishReason=length` continuation repair
 - schema-name/path-hint continuation prompt backed by code-owned Zod schema
-- salvage pass for repeated-prefix or whole-object responses
 - field-patch fallback
 - unknown-path rejection
 - immutable-field protection
+- loose generated-output handling for extra keys and harmless overlong arrays
 - debug metadata for each repair attempt
 
 ## Design Position
@@ -43,20 +46,22 @@ Why:
 - Quality audit needs persona packet, board context, target context, generated content, and quality standards.
 - Audits become noisy when they inspect keys/types that deterministic parsers already checked.
 - Quality repair should only run after audit fails, not after schema validation fails.
-- The same schema gate should serve every JSON-output stage, not only Persona v2, because parse/validate/repair mechanics are flow-agnostic.
+- The same schema gate should serve every app-owned structured JSON-output stage, not only Persona v2, because parse/validate/repair mechanics are flow-agnostic.
 
 ## Target Flow
 
 ```text
-llm_json_stage
-  -> shared_json_schema_gate.extract_parse_validate
+llm_json_stage with code-owned Zod schema
+  -> invokeStructuredLLM
+  -> invokeLLMRaw with Output.object({ schema })
+  -> shared_json_schema_gate.extract_normalize_validate
     -> if valid: downstream stage
-    -> if invalid and finishReason=length: finish_repair -> extract_parse_validate again
+    -> if invalid and finishReason=length: finish_continuation -> extract_normalize_validate again
        -> if valid: downstream stage
-       -> if parseable but schema-invalid: field_patch_repair -> extract_parse_validate again
+       -> if parseable but schema-invalid: field_patch -> extract_normalize_validate again
     -> if AI SDK object generation error says provider failed to generate a parsable schema-conforming object:
-       normalize as finishReason=length-equivalent -> finish_repair if usable text exists
-    -> if invalid and field repairable: field_patch_repair -> extract_parse_validate again
+       normalize as finishReason=length-equivalent -> finish_continuation if usable text exists
+    -> if invalid and field repairable: field_patch -> extract_normalize_validate again
     -> if still invalid: typed schema failure, no downstream audit/persistence
   -> optional_quality_or_semantic_audit
     -> if quality pass: persist/preview
@@ -69,17 +74,17 @@ Hard rule:
 
 - No invalid or unparseable model output may enter audit.
 - No audit stage may validate generated-output schema.
-- No LLM JSON output should bypass the shared schema gate before app-owned logic consumes it.
+- No app-owned structured LLM JSON output should bypass `invokeStructuredLLM` / the shared schema gate before app-owned logic consumes it.
 - Repair is loopable but bounded: every repair attempt returns to extraction, parse, and schema validation; downstream stages run only after validation passes.
 
 ## Flow Coverage
 
-The shared schema gate applies to every LLM output that claims to return JSON, including:
+The shared schema gate applies to every app-owned LLM output that declares a code-owned schema and is consumed as JSON, including:
 
 - Persona generation
 - Persona prompt-family interaction flows
-- Semantic audits
-- Interaction flow audits
+- Semantic audits when their output is consumed as app-owned audit JSON
+- Interaction flow audits when their output is consumed as app-owned audit JSON
 - Quality repairs
 - Intake scoring and selectors
 - Ranking, cleanup, and downstream automation stages
@@ -121,12 +126,19 @@ type SharedJsonSchemaGateInput = {
   flowId: string;
   stageId: string;
   rawText: string;
+  rawObject?: unknown;
   finishReason: string | null;
+  generationErrorName?: string | null;
+  generationErrorMessage?: string | null;
   schemaName: string;
   schema: z.ZodType;
   validationRules: string[];
   allowedRepairPaths: string[];
   immutablePaths: string[];
+  invokeFieldPatch?: (input: FieldPatchInvocationInput) => Promise<FieldPatchInvocationResult>;
+  invokeFinishContinuation?: (
+    input: FinishContinuationInvocationInput,
+  ) => Promise<FinishContinuationInvocationResult>;
 };
 ```
 
@@ -228,7 +240,6 @@ Schema-only rules:
 | deterministic tail closure validates                                                                                                | accept closed output                                                                              | yes                          |
 | finish repair returns valid continuation                                                                                            | concatenate, validate, accept                                                                     | yes                          |
 | finish repair returns parseable JSON with missing/invalid fields                                                                    | run field-patch repair, then parse/validate again                                                 | only after validation passes |
-| finish repair returns whole object preserving completed prefix                                                                      | salvage, validate, accept                                                                         | yes                          |
 | parsed object has missing/invalid schema fields                                                                                     | field-patch repair                                                                                | only after validation passes |
 | non-length invalid JSON has repairable partial object                                                                               | field-patch repair                                                                                | only after validation passes |
 | empty output with `finishReason=length`                                                                                             | typed transport/token diagnostic                                                                  | no                           |
@@ -248,14 +259,14 @@ while attempts remain:
     return typed object
 
   if parse failed because finishReason=length or normalized object-generation failure and continuation not yet attempted:
-    current candidate = finish_repair(previous_output)
+    current candidate = finish_continuation(previous_output)
     continue
 
   if deterministic closure can create a parseable candidate:
     current candidate = closed_candidate
     continue
 
-  if current candidate is parseable or safely salvageable and schema errors map to allowed paths:
+  if current candidate is parseable enough and schema errors map to allowed paths:
     current candidate = field_patch_repair(current_candidate, schema_errors)
     continue
 
@@ -264,13 +275,13 @@ while attempts remain:
 
 Loop rules:
 
-- `finish_repair` does not need to produce a fully schema-valid object in one step.
-- If `finish_repair` produces valid JSON that is missing required fields or has invalid field values, run `field_patch_repair`.
+- `finish_continuation` does not need to produce a fully schema-valid object in one step.
+- If `finish_continuation` produces valid JSON that is missing required fields or has invalid field values, run `field_patch_repair`.
 - Missing fields are a primary field-patch use case, not an edge case.
 - If `field_patch_repair` still leaves schema errors, the loop may run another bounded field-patch attempt if the errors map to allowed paths.
 - Bound repair attempts per stage, for example:
   - deterministic closure: at most 1 successful candidate family
-  - finish continuation: 1 attempt, with optional salvage
+  - finish continuation: 1 attempt, with optional suffix or fragment merge when unambiguous
   - field patch: 1 or 2 attempts
 - After every repair output, rerun extraction, parse, and full schema validation before deciding the next step.
 - Never send a repair output to audit just because it parses; it must validate against the flow schema.
@@ -279,44 +290,25 @@ Loop rules:
 
 Do not create per-flow schema-repair templates in the prompt-family builder.
 
-Use one shared finish prompt from the Phase 3 plan:
+Use one shared finish-continuation prompt from the current LLM JSON stage contract:
 
 ```text
-[json_finish_repair]
+[finish_continuation]
 The previous response hit finishReason=length and stopped before the JSON was complete.
 Do not regenerate the full object.
-Do not repeat any already emitted JSON prefix.
-Return only the missing JSON continuation that can be appended directly to previous_output.
-The continuation must start with the next needed character after previous_output.
-The completed previous_output + continuation must parse as one strict JSON object and pass the code-owned structured output schema.
-No markdown. No comments. No explanation.
-
-[structured_output_schema]
-schema_name: {{SCHEMA_NAME}}
-The full schema is enforced in code with AI SDK Output.object and Zod. Do not include or infer a hardcoded full key/type schema here.
-
-[validation_rules]
-{{VALIDATION_RULES}}
-
-[continuation_state]
-likely_open_path: {{LIKELY_OPEN_PATH}}
-required_remaining_paths:
-{{REQUIRED_REMAINING_PATHS}}
-
-[previous_output]
-{{RAW_OUTPUT_OR_HEAD_AND_EXACT_TAIL}}
-
-[prefilled_response]
-{{NEXT_EXPECTED_JSON_CHARACTER_IF_KNOWN}}
+Return only the missing JSON suffix or minimal object fragment requested by the schema gate.
+The full schema is enforced in code with AI SDK Output.object and Zod.
+Do not add commentary, markdown, or a full rewritten object.
 ```
 
-Use one shared field-patch output schema in code, such as `FieldPatchRepairSchema`.
+Use one shared field-patch output schema in code, such as an operation-list `FieldPatchRepairSchema`.
 The field-patch prompt names the allowlisted paths and asks for repair values, but does not embed a hardcoded key/type JSON example.
 
 Rules:
 
 - Field patch paths must be in `allowedRepairPaths`.
 - Unknown paths fail.
+- Extra generated-output keys are stripped or ignored, but unknown patch paths still fail.
 - Patch values are merged into the parsed partial object by path.
 - The merged object must validate before audit.
 - The repair prompt must not ask for a quality rewrite.
@@ -363,7 +355,6 @@ type SharedJsonSchemaGateDebug = {
       | "initial_parse"
       | "deterministic_tail_closure"
       | "finish_continuation"
-      | "finish_salvage"
       | "field_patch";
     finishReason: string | null;
     likelyOpenPath: string | null;
@@ -550,7 +541,7 @@ npx vitest run src/lib/ai/json-repair/schema-gate.test.ts
 ## Staff-Engineer Review Checklist
 
 - [ ] Shared schema gate exists outside Persona-specific prompt-family code.
-- [ ] Every LLM JSON output has a path to the shared schema gate before app-owned consumption.
+- [ ] Every app-owned structured JSON output has a path to `invokeStructuredLLM` / the shared schema gate before app-owned consumption.
 - [ ] Every new JSON stage uses AI SDK structured output with `Output.object({ schema })` where provider support allows it.
 - [ ] Prompt text does not include hardcoded full key/type JSON schema blocks.
 - [ ] Persona v2 uses the shared gate through a thin adapter, not a forked repair framework.
@@ -571,4 +562,4 @@ npx vitest run src/lib/ai/json-repair/schema-gate.test.ts
 
 ## Handoff Summary
 
-DeepSeek should implement schema repair as one shared JSON-output boundary, not as a Persona-only utility and not as another prompt family template. The correct shape is: any LLM JSON stage generates raw JSON, the shared gate repairs schema until the object is valid, then downstream app logic or quality audit may run. If schema repair cannot produce a valid object, the flow fails before audit or persistence.
+DeepSeek should implement schema repair as one shared structured JSON-output boundary, not as a Persona-only utility and not as another prompt family template. The correct shape is: app-owned JSON stages call `invokeStructuredLLM`, raw invocation still passes `Output.object({ schema })`, the shared gate repairs schema until the object is valid, then downstream app logic or quality audit may run. If schema repair cannot produce a valid object, the flow fails before audit or persistence.

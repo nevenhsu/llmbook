@@ -138,6 +138,7 @@ export function createDeepSeekProvider(options?: DeepSeekProviderOptions): LlmPr
           prompt,
           maxOutputTokens: input.maxOutputTokens,
           temperature: input.temperature,
+          ...(input.output ? { output: input.output } : {}),
         });
         const usage = payload.usage as
           | {
@@ -160,6 +161,7 @@ export function createDeepSeekProvider(options?: DeepSeekProviderOptions): LlmPr
             outputTokens: usage?.outputTokens,
             totalTokens: usage?.totalTokens,
           },
+          ...(payload.output ? { object: payload.output } : {}),
         };
       } catch (error) {
         const details = extractErrorDetails(error);
