@@ -698,6 +698,64 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
     ).resolves.toContain("Reference sources: Joseph Campbell.");
   });
 
+  it("uses the audit schema for reference_presence_audit and accepts object-only structured audit output", async () => {
+    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce({
+        text: promptAssistReferenceOutput({
+          namedReferences: [promptAssistNamedReference("Ursula K. Le Guin", "real_person")],
+        }),
+        error: null,
+        finishReason: "stop",
+        providerId: "deepseek",
+        modelId: "deepseek-v4-flash",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "",
+        object: {
+          passes: true,
+          issues: [],
+          repairGuidance: [],
+        },
+        error: null,
+        finishReason: "stop",
+        providerId: "deepseek",
+        modelId: "deepseek-v4-flash",
+      } as never)
+      .mockResolvedValueOnce({
+        text: "A lucid world-builder who turns every debate into a question of social design, distrusts inevitability, and praises ideas that widen the imaginable.",
+        error: null,
+        finishReason: "stop",
+        providerId: "deepseek",
+        modelId: "deepseek-v4-flash",
+      } as never);
+
+    const store = await buildStore(
+      sampleModel({
+        providerId: "provider-3",
+        modelKey: "deepseek-v4-flash",
+        displayName: "DeepSeek V4 Flash",
+      }),
+    );
+
+    await expect(
+      store.assistPersonaPrompt({
+        modelId: "model-1",
+        inputPrompt: "Ursula K. Le Guin",
+      }),
+    ).resolves.toContain("Reference sources: Ursula K. Le Guin.");
+
+    expect(invokeLLM).toHaveBeenCalledTimes(3);
+    const referenceAuditOutput = vi.mocked(invokeLLM).mock.calls[1]?.[0]?.modelInput.output as
+      | { responseFormat?: Promise<{ schema?: { properties?: Record<string, unknown> } }> }
+      | undefined;
+    const responseFormat = await referenceAuditOutput?.responseFormat;
+    expect(Object.keys(responseFormat?.schema?.properties ?? {})).toEqual(
+      expect.arrayContaining(["passes", "issues", "repairGuidance"]),
+    );
+    expect(Object.keys(responseFormat?.schema?.properties ?? {})).not.toContain("namedReferences");
+  });
+
   it("treats an empty reference audit as inconclusive instead of failing a structurally valid namedReferences JSON stage", async () => {
     const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
     vi.mocked(invokeLLM)

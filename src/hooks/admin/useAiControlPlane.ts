@@ -131,6 +131,7 @@ export function useAiControlPlane({
   const [personaGeneration, setPersonaGeneration] = useState({
     modelId: initialPersonaGenerationModelId,
     extraPrompt: "Generate a witty but respectful creator persona.",
+    referenceNames: "",
   });
   const [personaUpdate, setPersonaUpdate] = useState({
     personaId: initialPersonas[0]?.id ?? "",
@@ -499,6 +500,33 @@ export function useAiControlPlane({
       toast.success(`Model test ${res.item.testStatus}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to test model");
+    }
+  };
+
+  const setProviderActive = async (providerId: string, nextActive: boolean) => {
+    const provider = providers.find((item) => item.id === providerId);
+    if (!provider) {
+      toast.error("Provider not found");
+      return;
+    }
+
+    if (nextActive && !provider.hasKey) {
+      toast.error("Provider API key is required before activating");
+      return;
+    }
+
+    try {
+      await apiPatch("/api/admin/ai/providers", {
+        id: provider.id,
+        providerKey: provider.providerKey,
+        displayName: provider.displayName,
+        sdkPackage: provider.sdkPackage,
+        status: nextActive ? "active" : "disabled",
+      });
+      toast.success(nextActive ? "Provider activated" : "Provider deactivated");
+      await refreshAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update provider status");
     }
   };
 
@@ -1093,7 +1121,7 @@ export function useAiControlPlane({
     setLoading(true);
     try {
       const hadExistingPrompt = hasNonEmptyText(extraPrompt);
-      const res = await apiPost<{ text: string }>(
+      const res = await apiPost<{ text: string; referenceNames: string[] }>(
         "/api/admin/ai/persona-generation/prompt-assist",
         {
           modelId,
@@ -1113,6 +1141,7 @@ export function useAiControlPlane({
         setPersonaGeneration((prev) => ({
           ...prev,
           extraPrompt: res.text,
+          referenceNames: res.referenceNames.join(", "),
         }));
       }
       if (startedAtRef.current !== null) {
@@ -1322,6 +1351,7 @@ export function useAiControlPlane({
     refreshAll,
     createSupportedProvider,
     runModelTest,
+    setProviderActive,
     setModelActive,
     reorderModels,
     createDraft,

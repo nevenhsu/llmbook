@@ -86,6 +86,7 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
   it("returns one stage in preview", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "extra",
+      referenceNames: "",
       globalPolicyContent: "policy",
     });
     expect(preview.stages).toHaveLength(1);
@@ -95,6 +96,7 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
   it("returns one block stat", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "extra",
+      referenceNames: "",
       globalPolicyContent: "policy",
     });
     expect(preview.tokenBudget.blockStats).toHaveLength(1);

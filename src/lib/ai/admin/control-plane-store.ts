@@ -1488,6 +1488,7 @@ export class AdminAiControlPlaneStore {
   public async previewPersonaGeneration(input: {
     modelId: string;
     extraPrompt: string;
+    referenceNames?: string;
     debug?: boolean;
   }): Promise<
     PreviewResult & {
@@ -1507,7 +1508,7 @@ export class AdminAiControlPlaneStore {
   public async assistPersonaPrompt(input: {
     modelId: string;
     inputPrompt: string;
-  }): Promise<string> {
+  }): Promise<{ text: string; referenceNames: string[] }> {
     const { providers, models } = await this.getActiveControlPlane();
     return assistPersonaPrompt({
       ...input,

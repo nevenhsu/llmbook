@@ -78,4 +78,37 @@ describe("createDeepSeekProvider", () => {
       }),
     );
   });
+
+  it("forwards providerOptions to the DeepSeek SDK call", async () => {
+    const generateTextImpl = vi.fn(async () => ({
+      text: "ok",
+      finishReason: "stop",
+    }));
+
+    const provider = createDeepSeekProvider({
+      modelId: "deepseek-v4-flash",
+      apiKey: "test-key",
+      generateTextImpl: generateTextImpl as never,
+    });
+
+    await provider.generateText({
+      modelId: "deepseek-v4-flash",
+      prompt: "ping",
+      providerOptions: {
+        deepseek: {
+          reasoningEffort: "low",
+        },
+      },
+    });
+
+    expect(generateTextImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          deepseek: {
+            reasoningEffort: "low",
+          },
+        },
+      }),
+    );
+  });
 });

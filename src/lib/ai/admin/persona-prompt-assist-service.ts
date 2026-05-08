@@ -33,6 +33,12 @@ const PromptAssistReferenceOutputSchema = z.object({
     }),
   ),
 });
+
+const PromptAssistReferenceAuditSchema = z.object({
+  passes: z.boolean(),
+  issues: z.array(z.string()).default([]),
+  repairGuidance: z.array(z.string()).default([]),
+});
 import {
   assemblePromptAssistText,
   buildExplicitSourceReferenceInstruction,
@@ -78,6 +84,16 @@ function isLengthTruncatedAttempt(details: Record<string, unknown> | null | unde
   return readAttemptFinishReason(details) === "length";
 }
 
+function getPromptAssistOutputSchema(stage: PromptAssistAttemptStage): z.ZodTypeAny | null {
+  if (stage === "reference_resolution") {
+    return PromptAssistReferenceOutputSchema;
+  }
+  if (stage === "reference_presence_audit") {
+    return PromptAssistReferenceAuditSchema;
+  }
+  return null;
+}
+
 export async function assistPersonaPrompt(input: {
   modelId: string;
   inputPrompt: string;
@@ -94,7 +110,7 @@ export async function assistPersonaPrompt(input: {
       body?: string;
     };
   }) => Promise<void>;
-}): Promise<string> {
+}): Promise<{ text: string; referenceNames: string[] }> {
   const { model, provider } = resolvePersonaTextModel({
     modelId: input.modelId,
     models: input.models,
@@ -136,6 +152,7 @@ export async function assistPersonaPrompt(input: {
     stage: PromptAssistAttemptStage,
     maxOutputTokens = PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
   ): Promise<{ text: string; details: Record<string, unknown>; object?: unknown }> => {
+    const outputSchema = getPromptAssistOutputSchema(stage);
     const llmResult = await invokeLLM({
       registry,
       taskType: "generic",
@@ -144,9 +161,7 @@ export async function assistPersonaPrompt(input: {
         prompt: promptText,
         maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
         temperature,
-        ...(stage === "reference_resolution" || stage === "reference_presence_audit"
-          ? { output: Output.object({ schema: PromptAssistReferenceOutputSchema }) }
-          : {}),
+        ...(outputSchema ? { output: Output.object({ schema: outputSchema }) } : {}),
       },
       entityId: `persona-prompt-assist:${model.id}`,
       timeoutMs: invocationConfig.timeoutMs,
@@ -161,10 +176,14 @@ export async function assistPersonaPrompt(input: {
       },
     });
 
-    const text = llmResult.text.trim();
+    const objectText = llmResult.object ? JSON.stringify(llmResult.object) : "";
+    const text = llmResult.text.trim() || objectText;
     const details = buildPromptAssistAttemptDetails({
       stage,
-      llmResult,
+      llmResult: {
+        ...llmResult,
+        text,
+      },
     });
     if (llmResult.error && !text) {
       throw buildPromptAssistProviderError({
@@ -174,7 +193,7 @@ export async function assistPersonaPrompt(input: {
         errorDetails: llmResult.errorDetails,
       });
     }
-    return { text, details };
+    return { text, details, object: llmResult.object };
   };
 
   const readReferenceOutput = (
@@ -709,5 +728,8 @@ export async function assistPersonaPrompt(input: {
     },
   });
 
-  return assemblePromptAssistText(finalText, resolvedReferences);
+  return {
+    text: assemblePromptAssistText(finalText, resolvedReferences),
+    referenceNames: resolvedReferences.map((r) => r.name),
+  };
 }

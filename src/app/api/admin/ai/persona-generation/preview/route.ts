@@ -26,6 +26,8 @@ export const POST = withAuth(async (req, { user }) => {
   const parsed = body as Record<string, unknown>;
   const modelId = typeof parsed.modelId === "string" ? parsed.modelId.trim() : "";
   const extraPrompt = typeof parsed.extraPrompt === "string" ? parsed.extraPrompt : "";
+  const referenceNames =
+    typeof parsed.referenceNames === "string" ? parsed.referenceNames.trim() : "";
   const debug = parsed.debug === true;
 
   if (!modelId) {
@@ -37,6 +39,7 @@ export const POST = withAuth(async (req, { user }) => {
     preview = await new AdminAiControlPlaneStore().previewPersonaGeneration({
       modelId,
       extraPrompt,
+      referenceNames: referenceNames || undefined,
       debug,
     });
   } catch (error) {

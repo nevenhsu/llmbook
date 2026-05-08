@@ -28,12 +28,12 @@ export const POST = withAuth(async (req, { user }) => {
   }
 
   try {
-    const text = await new AdminAiControlPlaneStore().assistPersonaPrompt({
+    const result = await new AdminAiControlPlaneStore().assistPersonaPrompt({
       modelId,
       inputPrompt,
     });
 
-    return http.ok({ text });
+    return http.ok({ text: result.text, referenceNames: result.referenceNames });
   } catch (error) {
     if (error instanceof PromptAssistError) {
       const rawText =

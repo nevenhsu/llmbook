@@ -56,8 +56,11 @@ export const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "user_input_context:",
       "{{USER_INPUT_CONTEXT}}",
       "",
-      "optional_reference_names:",
+      "reference_names:",
       "{{USER_REFERENCE_NAMES}}",
+      "Use reference_names as the persona's core identity anchors.",
+      "They should drive the persona's thinking procedure, voice rhythm, forum behavior, narrative logic, and anti-generic traits.",
+      "Each core reference should contribute a distinct dimension of the persona.",
       "",
       "[reference_rules]",
       "reference_style.reference_names must contain 1 to 5 core references.",
@@ -157,8 +160,53 @@ function formatPrompt(blocks: Array<{ name: string; content: string }>): string 
   return blocks.map((block) => `[${block.name}]\n${block.content || "(empty)"}`).join("\n\n");
 }
 
+function buildViewStageContractText(
+  template: string,
+  extraPrompt: string,
+  referenceNames: string,
+): string {
+  const hasExtra = extraPrompt.trim().length > 0;
+  const hasRefs = referenceNames.trim().length > 0;
+
+  if (!hasExtra && !hasRefs) {
+    return template
+      .replace(/^\[input\]\n/, "")
+      .replace(/user_input_context:\n\{\{USER_INPUT_CONTEXT\}\}\n(\n)?/, "")
+      .replace(
+        /reference_names:\n\{\{USER_REFERENCE_NAMES\}\}[^]*?Each core reference should contribute a distinct dimension of the persona\.\n(\n)?/,
+        "",
+      );
+  }
+
+  let result = template.replace("{{USER_INPUT_CONTEXT}}", hasExtra ? extraPrompt.trim() : "");
+  if (hasRefs) {
+    result = result.replace(
+      "{{USER_REFERENCE_NAMES}}",
+      [
+        referenceNames.trim(),
+        "",
+        "Use reference_names as the persona's core identity anchors.",
+        "They should drive the persona's thinking procedure, voice rhythm, forum behavior, narrative logic, and anti-generic traits.",
+        "Each core reference should contribute a distinct dimension of the persona.",
+      ].join("\n"),
+    );
+  } else {
+    result = result.replace(
+      /reference_names:\n\{\{USER_REFERENCE_NAMES\}\}[^]*?Each core reference should contribute a distinct dimension of the persona\.\n(\n)?/,
+      "",
+    );
+  }
+
+  if (!hasExtra) {
+    result = result.replace(/user_input_context:\n\{\{USER_INPUT_CONTEXT\}\}\n(\n)?/, "");
+  }
+
+  return result;
+}
+
 export function buildPersonaGenerationPromptTemplatePreview(input: {
   extraPrompt: string;
+  referenceNames: string;
   globalPolicyContent: string;
 }): PromptAssemblyPreview {
   const commonBlocks = [
@@ -178,7 +226,14 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
         name: stage.name,
         content: [`stage_goal: ${stage.goal}`].join("\n"),
       },
-      { name: "stage_contract", content: stage.contract.join("\n") },
+      {
+        name: "stage_contract",
+        content: buildViewStageContractText(
+          stage.contract.join("\n"),
+          input.extraPrompt,
+          input.referenceNames,
+        ),
+      },
       {
         name: "output_constraints",
         content: PERSONA_GENERATION_OUTPUT_CONSTRAINTS,

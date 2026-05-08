@@ -28,6 +28,8 @@ type Props = {
   extraPrompt: string;
   onExtraPromptChange: (value: string) => void;
   extraPromptPlaceholder: string;
+  referenceNames?: string;
+  onReferenceNamesChange?: (value: string) => void;
   assistAriaLabel: string;
   assistLoading: boolean;
   assistError: string | null;
@@ -55,6 +57,8 @@ export function PersonaPromptCard({
   extraPrompt,
   onExtraPromptChange,
   extraPromptPlaceholder,
+  referenceNames,
+  onReferenceNamesChange,
   assistAriaLabel,
   assistLoading,
   assistError,
@@ -158,6 +162,24 @@ export function PersonaPromptCard({
               {promptAssistStatus ?? assistIdleDescription}
             </div>
           </div>
+
+          {onReferenceNamesChange ? (
+            <div className="form-control w-full">
+              <label className="label py-1">
+                <span className="label-text text-xs font-semibold opacity-70">Reference Names</span>
+              </label>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-full"
+                value={referenceNames ?? ""}
+                onChange={(event) => onReferenceNamesChange(event.target.value)}
+                placeholder="Comma-separated references, e.g. Studio Ghibli, David Foster Wallace"
+              />
+              <div className="mt-1 text-[10px] opacity-45">
+                Core identity anchors that drive thinking, voice, behavior, and narrative logic.
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex justify-end pt-1">
             <div className="flex flex-wrap items-center justify-end gap-2">{footerActions}</div>

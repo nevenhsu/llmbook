@@ -141,6 +141,7 @@ const markdown = [
 export const mockPersonaGenerationPromptTemplatePreview =
   buildPersonaGenerationPromptTemplatePreview({
     extraPrompt: fixture.adminExtraPrompt,
+    referenceNames: "",
     globalPolicyContent: mockPersonaGenerationGlobalPolicyContent,
   });
 

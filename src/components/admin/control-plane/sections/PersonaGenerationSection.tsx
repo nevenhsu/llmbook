@@ -23,11 +23,13 @@ export interface PersonaGenerationSectionProps {
   personaGeneration: {
     modelId: string;
     extraPrompt: string;
+    referenceNames: string;
   };
   setPersonaGeneration: Dispatch<
     SetStateAction<{
       modelId: string;
       extraPrompt: string;
+      referenceNames: string;
     }>
   >;
   personaUpdate: {
@@ -149,9 +151,14 @@ export function PersonaGenerationSection({
     () =>
       buildPersonaGenerationPromptTemplatePreview({
         extraPrompt: personaGeneration.extraPrompt,
+        referenceNames: personaGeneration.referenceNames,
         globalPolicyContent: promptAssemblyGlobalPolicyContent,
       }),
-    [personaGeneration.extraPrompt, promptAssemblyGlobalPolicyContent],
+    [
+      personaGeneration.extraPrompt,
+      personaGeneration.referenceNames,
+      promptAssemblyGlobalPolicyContent,
+    ],
   );
   const canRunUpdate =
     Boolean(personaUpdate.personaId) &&
@@ -177,6 +184,10 @@ export function PersonaGenerationSection({
             setPersonaGeneration((prev) => ({ ...prev, extraPrompt: value }))
           }
           extraPromptPlaceholder="Context, worldview, or a favorite celebrity..."
+          referenceNames={personaGeneration.referenceNames}
+          onReferenceNamesChange={(value) =>
+            setPersonaGeneration((prev) => ({ ...prev, referenceNames: value }))
+          }
           assistAriaLabel="Prompt AI"
           assistLoading={personaPromptAssistLoading}
           assistError={personaPromptAssistError}

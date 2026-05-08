@@ -2,6 +2,10 @@
 
 ## Active
 
+- [x] Inspect DeepSeek prompt-assist work, trace `reference_presence_audit`, and identify the root cause of the current provider/schema failure.
+- [x] Add a focused regression test for `/api/admin/ai/persona-generation/prompt-assist` covering DeepSeek structured-output object-generation failure in `reference_presence_audit`.
+- [x] Patch prompt-assist fallback/repair logic so DeepSeek schema-miss object-generation failures do not hard-fail the API when a bounded fallback is expected.
+- [x] Run focused verification for prompt-assist and related llm code, then update the review note with results.
 - [x] Remove `schema_version` from Persona v2 prompts, audit guidance, and schema-gate validation text; keep it code-owned only.
 - [x] Fix all current TypeScript errors.
 - [x] Add preview verification that `persona_core_v2.main` uses `invokeStructuredLLM` and exposes `schemaGateDebug` on schema failure.
@@ -40,6 +44,7 @@
 
 ## Review
 
+- 2026-05-08: Fixed DeepSeek prompt-assist reference audit wiring. `reference_presence_audit` now uses an audit-shaped structured-output schema instead of the `namedReferences` resolver schema, and prompt-assist now accepts AI SDK structured `object` results when text is empty instead of discarding them and mis-consuming the next retry/main call. Also fixed the DeepSeek provider wrapper to forward `providerOptions`, so audit-specific options like `reasoningEffort` reach the SDK. Focused prompt-assist store tests, route tests, and DeepSeek provider tests passed; `git diff --check` passed. `npm run typecheck` is still blocked by the existing `tsconfig.json` deprecation flag, and direct `tsc --noEmit --pretty false --ignoreDeprecations 6.0 --incremental false` still reports unrelated pre-existing test typing failures in `src/components/admin/control-plane/sections/PersonaGenerationSection.test.ts` and `src/components/admin/control-plane/sections/ProvidersModelsSection.test.ts`.
 - 2026-05-08: Fixed DeepSeek schema-gate follow-up issues in runtime code. `schema_version` is now code-owned/defaulted and removed from prompt/audit validation wording; full `tsc --noEmit --pretty false --ignoreDeprecations 6.0 --incremental false` passes; added direct persona generation preview coverage for `persona_core_v2.main` using `invokeStructuredLLM` and surfacing `schemaGateDebug` on schema failure; focused regression tests passed. Updated active Persona v2 plan notes to keep `schema_version` out of prompt/audit instructions.
 - 2026-05-07: Reviewed the Phase 2.5 main static blocks for `post_plan`, `post_body`, `comment`, and `reply`. Added exact static action/content/task text for all 8 flow/contentMode combinations, tightened ambiguous story wording, and made stage boundaries explicit so DeepSeek can hardcode clear static constants without embedding dynamic persona, board, post, or comment context. No runtime code, schema, or production prompt files were changed.
 - 2026-05-07: Tightened the Phase 2.5 DeepSeek handoff so every quality audit context and audit output contract has at most two checks: one flow/content-quality key plus `persona_fit`. Story, board, novelty, markdown, thread, policy, and procedure concerns are now folded into those two aspects, and quality repair prompts only repair the matching failed audit aspects. Added matching checklist/test expectations and a durable lesson. No runtime code, schema, or production prompt files were changed.

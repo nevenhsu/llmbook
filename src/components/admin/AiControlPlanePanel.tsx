@@ -83,6 +83,7 @@ export default function AiControlPlanePanel(props: Props) {
     createSupportedProvider,
     runModelTest,
     setModelActive,
+    setProviderActive,
     reorderModels,
     createDraft,
     publishNextVersion,
@@ -196,6 +197,7 @@ export default function AiControlPlanePanel(props: Props) {
               models={models}
               modelTestImageLinks={modelTestImageLinks}
               createSupportedProvider={createSupportedProvider}
+              setProviderActive={setProviderActive}
               runModelTest={runModelTest}
               setModelActive={setModelActive}
               reorderModels={reorderModels}

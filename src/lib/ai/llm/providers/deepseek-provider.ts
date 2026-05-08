@@ -138,6 +138,7 @@ export function createDeepSeekProvider(options?: DeepSeekProviderOptions): LlmPr
           prompt,
           maxOutputTokens: input.maxOutputTokens,
           temperature: input.temperature,
+          providerOptions: input.providerOptions,
           ...(input.output ? { output: input.output } : {}),
         });
         const usage = payload.usage as

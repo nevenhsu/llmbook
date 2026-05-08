@@ -33,6 +33,7 @@ export interface ProvidersModelsSectionProps {
   reorderModels: (capability: Capability, orderedModelKeys: string[]) => Promise<void>;
   runModelTest: (input: { capability: Capability; modelKey: string }) => Promise<void>;
   setModelActive: (modelId: string, nextActive: boolean) => Promise<void>;
+  setProviderActive: (providerId: string, nextActive: boolean) => Promise<void>;
 }
 
 type ModelRow = {
@@ -183,6 +184,7 @@ export function ProvidersModelsSection({
   reorderModels,
   runModelTest,
   setModelActive,
+  setProviderActive,
 }: ProvidersModelsSectionProps) {
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [providerModalKey, setProviderModalKey] =
@@ -334,6 +336,18 @@ export function ProvidersModelsSection({
     void reorderModels(capability, next);
   };
 
+  const providerErrors = useMemo(
+    () =>
+      SUPPORTED_PROVIDERS.flatMap((supported) => {
+        const provider = providerByKey.get(supported.id);
+        if (!provider?.lastApiErrorMessage || !provider.hasKey || provider.status !== "active") {
+          return [];
+        }
+        return [{ displayName: supported.displayName, errorText: provider.lastApiErrorMessage }];
+      }),
+    [providerByKey],
+  );
+
   return (
     <div className="space-y-6">
       <SectionCard title="Providers" icon={<Server className="h-4 w-4" />}>
@@ -342,7 +356,8 @@ export function ProvidersModelsSection({
             <thead>
               <tr>
                 <th>Provider</th>
-                <th>API Key</th>
+                <th>Status</th>
+                <th>Active</th>
                 <th className="text-right">Setting</th>
               </tr>
             </thead>
@@ -354,16 +369,52 @@ export function ProvidersModelsSection({
                   <tr key={supported.id} className="hover:bg-base-200/40">
                     <td className="font-medium">{supported.displayName}</td>
                     <td>
-                      <span
-                        className={`badge badge-sm ${hasKey ? "badge-success" : "badge-ghost"}`}
-                      >
-                        {hasKey ? "configured" : "missing"}
-                      </span>
-                      {provider?.lastApiErrorMessage ? (
-                        <div className="text-error mt-1 text-xs">
-                          {provider.lastApiErrorMessage}
-                        </div>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        {hasKey ? (
+                          <>
+                            <span
+                              className={`badge badge-sm ${
+                                provider?.status === "active" ? "badge-success" : "badge-ghost"
+                              }`}
+                            >
+                              {provider?.status ?? "disabled"}
+                            </span>
+                            {provider ? (
+                              <span
+                                className={`badge badge-sm ${
+                                  provider.testStatus === "success"
+                                    ? "badge-success"
+                                    : provider.testStatus === "failed"
+                                      ? "badge-error"
+                                      : "badge-ghost"
+                                }`}
+                              >
+                                {provider.testStatus}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="badge badge-ghost badge-sm">no key</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <label className="label cursor-pointer justify-start gap-2">
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-sm"
+                          checked={provider?.status === "active"}
+                          disabled={!hasKey}
+                          onChange={(event) => {
+                            if (!provider) return;
+                            if (event.target.checked && !hasKey) {
+                              toast.error("Provider API key is required before activating");
+                              return;
+                            }
+                            void setProviderActive(provider.id, event.target.checked);
+                          }}
+                        />
+                      </label>
                     </td>
                     <td className="text-right">
                       <button
@@ -380,6 +431,18 @@ export function ProvidersModelsSection({
             </tbody>
           </table>
         </div>
+        {providerErrors.length > 0 ? (
+          <div className="border-base-300 bg-base-200/30 mt-2 rounded-md border p-2">
+            <div className="text-xs font-semibold opacity-70">Provider Errors</div>
+            <div className="mt-1 space-y-1">
+              {providerErrors.map((item) => (
+                <p key={`provider-error-${item.displayName}`} className="text-error text-xs">
+                  {item.displayName}: {item.errorText}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </SectionCard>
 
       <SectionCard title="Models" icon={<Bot className="h-4 w-4" />}>
