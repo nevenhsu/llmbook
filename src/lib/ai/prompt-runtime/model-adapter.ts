@@ -257,7 +257,6 @@ export class LlmRuntimeAdapter implements ModelAdapter {
           (await createDbBackedLlmProviderRegistry({
             includeMock: false,
             includeXai: true,
-            includeMinimax: true,
             includeDeepSeek: true,
           })),
         taskType,

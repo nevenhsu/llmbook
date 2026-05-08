@@ -127,7 +127,7 @@ export async function assistPersonaPrompt(input: {
   const registry = await createDbBackedLlmProviderRegistry({
     includeMock: true,
     includeXai: true,
-    includeMinimax: true,
+    includeDeepSeek: true,
   });
 
   const invokePromptAssist = async (

@@ -15,8 +15,9 @@ import type {
 } from "@/lib/ai/agent/intake/opportunity-store";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
+import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import type { InvokeLlmOutput } from "@/lib/ai/llm/types";
+import type { InvokeLlmOutput, LlmFinishReason } from "@/lib/ai/llm/types";
 import { Output } from "ai";
 import { z } from "zod";
 
@@ -52,9 +53,6 @@ const REPAIR_OUTPUT_MAX_TOKENS = 900;
 const MAX_STAGE_BATCH_SIZE = 10;
 const MAX_PUBLIC_OPPORTUNITIES_PER_RUN = 100;
 const MAX_STAGE_PROVIDER_RETRIES = 2;
-const MAX_SCHEMA_REPAIR_ATTEMPTS = 1;
-const MAX_QUALITY_REPAIR_ATTEMPTS = 1;
-const MAX_SUBSET_REPAIR_ATTEMPTS = 1;
 
 type StageName = "opportunities" | "candidates";
 type StagePhase = "main" | "schema_repair" | "quality_audit" | "quality_repair";
@@ -410,26 +408,6 @@ function validateSpeakerCandidates(
   };
 }
 
-function buildSchemaRepairPrompt(input: {
-  basePrompt: string;
-  stageName: StageName;
-  errorMessage: string;
-  rawOutput: string;
-}) {
-  return [
-    input.basePrompt,
-    "",
-    "[retry_repair]",
-    `Your previous ${input.stageName} response was invalid JSON or failed schema validation.`,
-    `Repair target: ${input.errorMessage}`,
-    "Rewrite the full response from scratch as one complete valid JSON object using the same exact schema.",
-    "Do not add commentary, markdown, or extra keys.",
-    "",
-    "[previous_output]",
-    input.rawOutput.trim() || "(empty)",
-  ].join("\n");
-}
-
 function buildQualityAuditPrompt(input: {
   stageName: StageName;
   contextLabel: string;
@@ -495,6 +473,68 @@ function clampNonNegativeInt(value: number, max: number): number {
   return Math.min(max, Math.floor(value));
 }
 
+// ---- Schema gate metadata for intake stages ----
+
+function resolveIntakeSchemaGate(input: StageInvokeInput): {
+  schemaName: string;
+  schema: z.ZodTypeAny;
+  validationRules: string[];
+  allowedRepairPaths: string[];
+  immutablePaths: string[];
+} | null {
+  if (!input.output) return null;
+
+  // Audit phases use the audit schema regardless of stageName
+  if (input.phase === "quality_audit") {
+    return {
+      schemaName: "JsonAuditResultSchema",
+      schema: JsonAuditResultSchema,
+      validationRules: [
+        "pass must be boolean",
+        "issues must be array of strings",
+        "repairInstructions must be array of strings",
+      ],
+      allowedRepairPaths: ["pass", "issues", "repairInstructions"],
+      immutablePaths: [],
+    };
+  }
+
+  if (input.stageName === "opportunities") {
+    return {
+      schemaName: "OpportunityProbabilityOutputSchema",
+      schema: OpportunityProbabilityOutputSchema,
+      validationRules: [
+        "scores must be array",
+        "each score must have opportunityKey (string), probability (0-100), contentMode (string)",
+      ],
+      allowedRepairPaths: ["scores", "scores.*.probability", "scores.*.contentMode"],
+      immutablePaths: ["scores.*.opportunityKey"],
+    };
+  }
+
+  if (input.stageName === "candidates") {
+    return {
+      schemaName: "SpeakerCandidatesOutputSchema",
+      schema: SpeakerCandidatesOutputSchema,
+      validationRules: [
+        "speakerCandidates must be array",
+        "each entry must have opportunityKey (string), selectedSpeakers (array of {name, probability})",
+      ],
+      allowedRepairPaths: [
+        "speakerCandidates",
+        "speakerCandidates.*.selectedSpeakers",
+        "speakerCandidates.*.selectedSpeakers.*.probability",
+      ],
+      immutablePaths: [
+        "speakerCandidates.*.opportunityKey",
+        "speakerCandidates.*.selectedSpeakers.*.name",
+      ],
+    };
+  }
+
+  return null;
+}
+
 export class AiAgentIntakeStageLlmService {
   private readonly deps: IntakeStageLlmServiceDeps;
 
@@ -507,7 +547,7 @@ export class AiAgentIntakeStageLlmService {
             createDbBackedLlmProviderRegistry({
               includeMock: true,
               includeXai: true,
-              includeMinimax: true,
+              includeDeepSeek: true,
             }),
             resolveLlmInvocationConfig({
               taskType: "generic",
@@ -516,6 +556,56 @@ export class AiAgentIntakeStageLlmService {
             }),
           ]);
 
+          const structuredMeta = resolveIntakeSchemaGate(input);
+
+          // Route through invokeStructuredLLM when we have an output schema
+          if (structuredMeta) {
+            const result = await invokeStructuredLLM({
+              registry,
+              taskType: "generic",
+              routeOverride: invocationConfig.route,
+              modelInput: {
+                prompt: input.prompt,
+                maxOutputTokens: input.maxOutputTokens,
+                temperature: input.temperature,
+                metadata: {
+                  _m: {
+                    stageName: input.stageName,
+                    phase: input.phase,
+                  },
+                },
+              },
+              entityId: input.entityId,
+              timeoutMs: invocationConfig.timeoutMs,
+              retries: clampNonNegativeInt(
+                invocationConfig.retries ?? 0,
+                MAX_STAGE_PROVIDER_RETRIES,
+              ),
+              schemaGate: {
+                schemaName: structuredMeta.schemaName,
+                schema: structuredMeta.schema,
+                validationRules: structuredMeta.validationRules,
+                allowedRepairPaths: structuredMeta.allowedRepairPaths,
+                immutablePaths: structuredMeta.immutablePaths,
+              },
+            });
+
+            return {
+              text: result.raw.text,
+              finishReason: (result.raw.finishReason ?? "stop") as LlmFinishReason,
+              providerId: result.raw.providerId,
+              modelId: result.raw.modelId,
+              usage: result.raw.usage,
+              error: result.status === "schema_failure" ? result.error : result.raw.error,
+              errorDetails: result.raw.errorDetails,
+              object: result.status === "valid" ? result.value : undefined,
+              usedFallback: result.raw.usedFallback,
+              attempts: result.raw.attempts,
+              path: result.raw.path,
+            };
+          }
+
+          // No structured output — use raw invokeLLM
           return invokeLLM({
             registry,
             taskType: "generic",
@@ -570,105 +660,37 @@ export class AiAgentIntakeStageLlmService {
       );
     }
 
-    // Use structured output if available
-    if (mainResult.object) {
-      return {
-        parsed: mainResult.object as T,
-        modelKey: mainResult.modelId,
-      };
-    }
-
+    // attemptParse: prefer structured output, fall back to text parse
+    let parsed: T;
     let parsedFrom = mainResult;
-    let parsed: T | null = null;
-    let lastParseError: IntakeStageParseError | null = null;
-    let currentRawOutput = mainResult.text;
-
-    if (mainResult.finishReason === "length") {
-      const retryResult = await this.deps.invokeStage({
-        stageName: input.stageName,
-        phase: "main",
-        prompt: input.basePrompt,
-        maxOutputTokens: Math.min(
-          (input.stageName === "opportunities"
-            ? OPPORTUNITY_OUTPUT_MAX_TOKENS
-            : CANDIDATE_OUTPUT_MAX_TOKENS) * 2,
-          16384,
-        ),
-        temperature: 0.2,
-        entityId: `ai-agent-intake:${input.stageName}:main:length-retry`,
-        output:
-          input.stageName === "opportunities"
-            ? Output.object({ schema: OpportunityProbabilityOutputSchema })
-            : Output.object({ schema: SpeakerCandidatesOutputSchema }),
-      });
-      parsedFrom = retryResult;
-      currentRawOutput = retryResult.text;
-    }
-
-    for (let attempt = 0; attempt <= MAX_SCHEMA_REPAIR_ATTEMPTS; attempt += 1) {
+    if (mainResult.object) {
+      parsed = mainResult.object as T;
+    } else {
       try {
-        parsed = input.parse(currentRawOutput);
-        lastParseError = null;
-        break;
+        parsed = input.parse(mainResult.text);
       } catch (error) {
-        const parseError =
-          error instanceof IntakeStageParseError
-            ? error
-            : new IntakeStageParseError(
-                error instanceof Error ? error.message : "stage parsing failed",
-                currentRawOutput,
-              );
-        lastParseError = parseError;
-        if (attempt >= MAX_SCHEMA_REPAIR_ATTEMPTS) {
-          break;
-        }
-        const repairResult = await this.deps.invokeStage({
-          stageName: input.stageName,
-          phase: "schema_repair",
-          prompt: buildSchemaRepairPrompt({
-            basePrompt: input.basePrompt,
-            stageName: input.stageName,
-            errorMessage: parseError.message,
-            rawOutput: parseError.rawOutput,
-          }),
-          maxOutputTokens: REPAIR_OUTPUT_MAX_TOKENS,
-          temperature: 0.1,
-          entityId: `ai-agent-intake:${input.stageName}:schema-repair:${attempt + 1}`,
-          output:
-            input.stageName === "opportunities"
-              ? Output.object({ schema: OpportunityProbabilityOutputSchema })
-              : Output.object({ schema: SpeakerCandidatesOutputSchema }),
-        });
-        currentRawOutput = repairResult.text;
-        parsedFrom = repairResult;
+        const message = error instanceof Error ? error.message : "stage parsing failed";
+        throw new IntakeStageParseError(message, mainResult.text);
       }
     }
 
-    if (!parsed) {
-      throw lastParseError ?? new Error(`${input.stageName} stage parsing failed`);
-    }
-
-    let deterministicIssues = input.validateDeterministic(parsed);
-    let audit: JsonAuditResult;
-
-    audit = await this.runQualityAudit({
+    // Deterministic + semantic quality check
+    const deterministicIssues = input.validateDeterministic(parsed);
+    let audit = await this.runQualityAudit({
       stageName: input.stageName,
       parsedOutput: parsed,
       ...input.buildAuditContext(),
     });
 
-    for (let attempt = 0; attempt <= MAX_QUALITY_REPAIR_ATTEMPTS; attempt += 1) {
-      if (deterministicIssues.length === 0 && audit.pass) {
-        return {
-          parsed,
-          modelKey: buildModelKey(parsedFrom),
-        };
-      }
+    if (deterministicIssues.length === 0 && audit.pass) {
+      return {
+        parsed,
+        modelKey: buildModelKey(parsedFrom),
+      };
+    }
 
-      if (attempt >= MAX_QUALITY_REPAIR_ATTEMPTS) {
-        break;
-      }
-
+    // Quality repair: delta-based (matching persona generation pattern)
+    for (const attempt of [1, 2] as const) {
       const repairResult = await this.deps.invokeStage({
         stageName: input.stageName,
         phase: "quality_repair",
@@ -681,7 +703,7 @@ export class AiAgentIntakeStageLlmService {
         }),
         maxOutputTokens: REPAIR_OUTPUT_MAX_TOKENS,
         temperature: 0.1,
-        entityId: `ai-agent-intake:${input.stageName}:quality-repair:${attempt + 1}`,
+        entityId: `ai-agent-intake:${input.stageName}:quality-repair:${attempt}`,
         output:
           input.stageName === "opportunities"
             ? Output.object({ schema: OpportunityProbabilityOutputSchema })
@@ -691,20 +713,33 @@ export class AiAgentIntakeStageLlmService {
       if (repairResult.object) {
         parsed = repairResult.object as T;
       } else {
-        parsed = input.parse(repairResult.text);
+        try {
+          parsed = input.parse(repairResult.text);
+        } catch {
+          if (attempt === 2) break;
+          continue;
+        }
       }
       parsedFrom = repairResult;
-      deterministicIssues = input.validateDeterministic(parsed);
+
+      const newIssues = input.validateDeterministic(parsed);
       audit = await this.runQualityAudit({
         stageName: input.stageName,
         parsedOutput: parsed,
         ...input.buildAuditContext(),
       });
+
+      if (newIssues.length === 0 && audit.pass) {
+        return {
+          parsed,
+          modelKey: buildModelKey(parsedFrom),
+        };
+      }
     }
 
     throw new Error(
       `${input.stageName} stage failed validation after repair limit: ${[
-        ...deterministicIssues,
+        ...input.validateDeterministic(parsed),
         ...audit.issues,
       ].join("; ")}`,
     );
@@ -731,6 +766,10 @@ export class AiAgentIntakeStageLlmService {
       output: Output.object({ schema: JsonAuditResultSchema }),
     });
 
+    if (auditResult.object) {
+      return auditResult.object as JsonAuditResult;
+    }
+
     try {
       return parseAuditResult(auditResult.text);
     } catch {
@@ -748,35 +787,50 @@ export class AiAgentIntakeStageLlmService {
   }): Promise<AiOppProbabilityUpdateInput[]> {
     const scopedRows =
       input.kind === "public" ? input.rows.slice(0, MAX_PUBLIC_OPPORTUNITIES_PER_RUN) : input.rows;
-    if (scopedRows.length === 0) {
-      return [];
-    }
+    if (scopedRows.length === 0) return [];
 
     const evaluatedAt = this.deps.now().toISOString();
-    const batchResults: Array<
-      StageRunResult<OpportunityProbabilityOutput> & {
-        keyToOppId: Map<string, string>;
-      }
-    > = [];
+    const results: AiOppProbabilityUpdateInput[] = [];
+
     for (const rows of chunkArray(scopedRows, MAX_STAGE_BATCH_SIZE)) {
-      batchResults.push(
-        await this.scoreOpportunityBatch({
-          kind: input.kind,
-          rows,
-          subsetRetryBudget: MAX_SUBSET_REPAIR_ATTEMPTS,
-        }),
+      const selectorInput = buildOpportunityPromptInput(input.kind, rows);
+      const keyToOppId = new Map(
+        selectorInput.opportunities.map((row, index) => [
+          row.opportunityKey,
+          rows[index]?.id ?? "",
+        ]),
       );
+
+      const stage = await this.runJsonStage({
+        stageName: "opportunities",
+        basePrompt: buildOpportunityStagePrompt(selectorInput),
+        parse: parseOpportunityProbabilityOutput,
+        validateDeterministic: (parsed) =>
+          validateOpportunityProbabilities(
+            parsed,
+            selectorInput.opportunities.map((r) => r.opportunityKey),
+          ).fatalIssues,
+        buildAuditContext: () => ({
+          label: "available_opportunities",
+          content:
+            selectorInput.opportunities
+              .map((row) => `${row.opportunityKey}: ${row.contentType} / ${row.summary}`)
+              .join("\n") || "(empty)",
+        }),
+      });
+
+      for (const row of stage.parsed.scores) {
+        results.push({
+          opportunityId: keyToOppId.get(row.opportunityKey) ?? row.opportunityKey,
+          probability: row.probability,
+          probabilityModelKey: stage.modelKey,
+          probabilityPromptVersion: OPPORTUNITY_PROMPT_VERSION,
+          evaluatedAt,
+        });
+      }
     }
 
-    return batchResults.flatMap((batch) =>
-      batch.parsed.scores.map((row) => ({
-        opportunityId: batch.keyToOppId.get(row.opportunityKey) ?? row.opportunityKey,
-        probability: row.probability,
-        probabilityModelKey: batch.modelKey,
-        probabilityPromptVersion: OPPORTUNITY_PROMPT_VERSION,
-        evaluatedAt,
-      })),
-    );
+    return results;
   }
 
   public async selectPublicSpeakerCandidates(input: {
@@ -789,223 +843,56 @@ export class AiAgentIntakeStageLlmService {
       topForumIntents: string[];
     }>;
   }): Promise<CandidateSelectionResult[]> {
-    if (input.rows.length === 0 || input.referenceBatch.length === 0) {
-      return [];
-    }
+    if (input.rows.length === 0 || input.referenceBatch.length === 0) return [];
 
-    const batchResults: Array<
-      StageRunResult<SpeakerCandidatesOutput> & {
-        keyToOppId: Map<string, string>;
-      }
-    > = [];
+    const results: CandidateSelectionResult[] = [];
+
     for (const rows of chunkArray(input.rows, MAX_STAGE_BATCH_SIZE)) {
-      batchResults.push(
-        await this.selectPublicSpeakerCandidateBatch({
-          rows,
+      const selectorInput = buildOpportunityPromptInput("public", rows);
+      const selectedOpportunities = selectorInput.opportunities.map((row) => ({
+        opportunityKey: row.opportunityKey,
+        contentType: row.contentType,
+        summary: row.summary,
+      }));
+      const keyToOppId = new Map(
+        selectorInput.opportunities.map((row, index) => [
+          row.opportunityKey,
+          rows[index]?.id ?? "",
+        ]),
+      );
+
+      const stage = await this.runJsonStage({
+        stageName: "candidates",
+        basePrompt: buildCandidateStagePrompt({
+          selectedOpportunities,
           referenceBatch: input.referenceBatch,
-          subsetRetryBudget: MAX_SUBSET_REPAIR_ATTEMPTS,
           personaCards: input.personaCards,
         }),
-      );
-    }
-
-    return batchResults.flatMap((batch) =>
-      batch.parsed.speakerCandidates.map((row) => ({
-        oppId: batch.keyToOppId.get(row.opportunityKey) ?? row.opportunityKey,
-        selectedSpeakers: row.selectedSpeakers,
-      })),
-    );
-  }
-
-  private async scoreOpportunityBatch(input: {
-    kind: AiOppRow["kind"];
-    rows: AiOppRow[];
-    subsetRetryBudget: number;
-  }): Promise<
-    StageRunResult<OpportunityProbabilityOutput> & {
-      keyToOppId: Map<string, string>;
-    }
-  > {
-    const selectorInput = buildOpportunityPromptInput(input.kind, input.rows);
-    const expectedKeys = selectorInput.opportunities.map((row) => row.opportunityKey);
-    const keyToOppId = new Map(
-      selectorInput.opportunities.map((row, index) => [
-        row.opportunityKey,
-        input.rows[index]?.id ?? "",
-      ]),
-    );
-
-    const stage = await this.runJsonStage({
-      stageName: "opportunities",
-      basePrompt: buildOpportunityStagePrompt(selectorInput),
-      parse: parseOpportunityProbabilityOutput,
-      validateDeterministic: (parsed) =>
-        validateOpportunityProbabilities(parsed, expectedKeys).fatalIssues,
-      buildAuditContext: () => ({
-        label: "available_opportunities",
-        content:
-          selectorInput.opportunities
-            .map((row) => `${row.opportunityKey}: ${row.contentType} / ${row.summary}`)
-            .join("\n") || "(empty)",
-      }),
-    });
-
-    const validation = validateOpportunityProbabilities(stage.parsed, expectedKeys);
-    if (validation.missingKeys.length === 0) {
-      return { ...stage, keyToOppId };
-    }
-    if (input.subsetRetryBudget <= 0) {
-      throw new Error(
-        `opportunities stage still missing keys after subset retry: ${validation.missingKeys.join(", ")}`,
-      );
-    }
-
-    const missingRows = expectedKeys
-      .map((key, index) => ({ key, row: input.rows[index] }))
-      .filter((entry) => validation.missingKeys.includes(entry.key))
-      .map((entry) => entry.row)
-      .filter((row): row is AiOppRow => Boolean(row));
-    const missingResult = await this.scoreOpportunityBatch({
-      kind: input.kind,
-      rows: missingRows,
-      subsetRetryBudget: input.subsetRetryBudget - 1,
-    });
-
-    const merged = new Map(stage.parsed.scores.map((row) => [row.opportunityKey, row] as const));
-    const originalKeyByOppId = new Map(
-      Array.from(keyToOppId.entries()).map(([key, oppId]) => [oppId, key] as const),
-    );
-    for (const row of missingResult.parsed.scores) {
-      const retryOppId = missingResult.keyToOppId.get(row.opportunityKey);
-      const originalKey = retryOppId ? originalKeyByOppId.get(retryOppId) : null;
-      if (originalKey) {
-        merged.set(originalKey, {
-          opportunityKey: originalKey,
-          probability: row.probability,
-          contentMode: row.contentMode,
-        });
-      }
-    }
-
-    return {
-      parsed: {
-        scores: expectedKeys
-          .map((key) => merged.get(key))
-          .filter(
-            (row): row is { opportunityKey: string; probability: number; contentMode: string } =>
-              Boolean(row),
+        parse: parseSpeakerCandidatesOutput,
+        validateDeterministic: (parsed) =>
+          validateSpeakerCandidates(
+            parsed,
+            selectedOpportunities.map((r) => r.opportunityKey),
+            input.referenceBatch,
+          ).fatalIssues,
+        buildAuditContext: () => ({
+          label: "candidate_context",
+          content: JSON.stringify(
+            { selected_opportunities: selectedOpportunities, speaker_batch: input.referenceBatch },
+            null,
+            2,
           ),
-      },
-      modelKey: stage.modelKey ?? missingResult.modelKey,
-      keyToOppId,
-    };
-  }
+        }),
+      });
 
-  private async selectPublicSpeakerCandidateBatch(input: {
-    rows: AiOppRow[];
-    referenceBatch: string[];
-    subsetRetryBudget: number;
-    personaCards?: Array<{
-      referenceName: string;
-      abstractTraits: string[];
-      participationMode: string;
-      topForumIntents: string[];
-    }>;
-  }): Promise<
-    StageRunResult<SpeakerCandidatesOutput> & {
-      keyToOppId: Map<string, string>;
-    }
-  > {
-    const selectorInput = buildOpportunityPromptInput("public", input.rows);
-    const selectedOpportunities = selectorInput.opportunities.map((row) => ({
-      opportunityKey: row.opportunityKey,
-      contentType: row.contentType,
-      summary: row.summary,
-    }));
-    const expectedKeys = selectedOpportunities.map((row) => row.opportunityKey);
-    const keyToOppId = new Map(
-      selectorInput.opportunities.map((row, index) => [
-        row.opportunityKey,
-        input.rows[index]?.id ?? "",
-      ]),
-    );
-
-    const stage = await this.runJsonStage({
-      stageName: "candidates",
-      basePrompt: buildCandidateStagePrompt({
-        selectedOpportunities,
-        referenceBatch: input.referenceBatch,
-        personaCards: input.personaCards,
-      }),
-      parse: parseSpeakerCandidatesOutput,
-      validateDeterministic: (parsed) =>
-        validateSpeakerCandidates(parsed, expectedKeys, input.referenceBatch).fatalIssues,
-      buildAuditContext: () => ({
-        label: "candidate_context",
-        content: JSON.stringify(
-          {
-            selected_opportunities: selectedOpportunities,
-            speaker_batch: input.referenceBatch,
-          },
-          null,
-          2,
-        ),
-      }),
-    });
-
-    const validation = validateSpeakerCandidates(stage.parsed, expectedKeys, input.referenceBatch);
-    if (validation.missingOpportunityKeys.length === 0) {
-      return { ...stage, keyToOppId };
-    }
-    if (input.subsetRetryBudget <= 0) {
-      throw new Error(
-        `candidates stage still missing opportunities after subset retry: ${validation.missingOpportunityKeys.join(", ")}`,
-      );
-    }
-
-    const missingRows = expectedKeys
-      .map((key, index) => ({ key, row: input.rows[index] }))
-      .filter((entry) => validation.missingOpportunityKeys.includes(entry.key))
-      .map((entry) => entry.row)
-      .filter((row): row is AiOppRow => Boolean(row));
-    const missingResult = await this.selectPublicSpeakerCandidateBatch({
-      rows: missingRows,
-      referenceBatch: input.referenceBatch,
-      subsetRetryBudget: input.subsetRetryBudget - 1,
-    });
-
-    const merged = new Map(
-      stage.parsed.speakerCandidates.map((row) => [row.opportunityKey, row] as const),
-    );
-    const originalKeyByOppId = new Map(
-      Array.from(keyToOppId.entries()).map(([key, oppId]) => [oppId, key] as const),
-    );
-    for (const row of missingResult.parsed.speakerCandidates) {
-      const retryOppId = missingResult.keyToOppId.get(row.opportunityKey);
-      const originalKey = retryOppId ? originalKeyByOppId.get(retryOppId) : null;
-      if (originalKey) {
-        merged.set(originalKey, {
-          opportunityKey: originalKey,
+      for (const row of stage.parsed.speakerCandidates) {
+        results.push({
+          oppId: keyToOppId.get(row.opportunityKey) ?? row.opportunityKey,
           selectedSpeakers: row.selectedSpeakers,
         });
       }
     }
 
-    return {
-      parsed: {
-        speakerCandidates: expectedKeys
-          .map((key) => merged.get(key))
-          .filter(
-            (
-              row,
-            ): row is {
-              opportunityKey: string;
-              selectedSpeakers: Array<{ name: string; probability: number }>;
-            } => Boolean(row),
-          ),
-      },
-      modelKey: stage.modelKey ?? missingResult.modelKey,
-      keyToOppId,
-    };
+    return results;
   }
 }

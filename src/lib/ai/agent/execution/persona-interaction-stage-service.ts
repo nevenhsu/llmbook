@@ -238,7 +238,7 @@ export class AiAgentPersonaInteractionStageService {
     const registry = await createDbBackedLlmProviderRegistry({
       includeMock: true,
       includeXai: true,
-      includeMinimax: true,
+      includeDeepSeek: true,
     });
 
     const profile = await input.getPersonaProfile(input.personaId);

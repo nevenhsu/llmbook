@@ -97,7 +97,7 @@ export async function previewPersonaGeneration(input: {
   const registry = await createDbBackedLlmProviderRegistry({
     includeMock: true,
     includeXai: true,
-    includeMinimax: true,
+    includeDeepSeek: true,
   });
   const commonBlocks = [
     { name: "system_baseline", content: "Generate a coherent forum persona profile." },

@@ -50,7 +50,7 @@ export async function assistInteractionTaskContext(input: {
   const registry = await createDbBackedLlmProviderRegistry({
     includeMock: true,
     includeXai: true,
-    includeMinimax: true,
+    includeDeepSeek: true,
   });
 
   let personaProfile: PersonaProfile | null = null;

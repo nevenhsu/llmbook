@@ -33,20 +33,22 @@ function buildOpp(overrides: Partial<AiOppRow> = {}): AiOppRow {
   };
 }
 
+const makeAuditPass = () =>
+  vi.fn().mockResolvedValue({
+    text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
+    finishReason: "stop" as const,
+    providerId: "mock",
+    modelId: "mock-fallback",
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
+    usedFallback: false,
+    attempts: 1,
+    path: ["mock:mock-fallback"],
+  });
+
 describe("AiAgentIntakeStageLlmService", () => {
-  it("repairs invalid opportunities JSON and returns canonical probability updates", async () => {
+  it("returns probability updates from structured output", async () => {
     const invokeStage = vi
       .fn()
-      .mockResolvedValueOnce({
-        text: "not valid json",
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      })
       .mockResolvedValueOnce({
         text: JSON.stringify({
           scores: [
@@ -62,20 +64,7 @@ describe("AiAgentIntakeStageLlmService", () => {
         attempts: 1,
         path: ["mock:mock-fallback"],
       })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          pass: true,
-          issues: [],
-          repair_instructions: [],
-        }),
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      });
+      .mockImplementation(makeAuditPass());
 
     const service = new AiAgentIntakeStageLlmService({
       deps: {
@@ -84,22 +73,21 @@ describe("AiAgentIntakeStageLlmService", () => {
       },
     });
 
-    await expect(
-      service.scoreOpportunities({
-        kind: "public",
-        rows: [
-          buildOpp({ id: "opp-1" }),
-          buildOpp({
-            id: "opp-2",
-            source_table: "comments",
-            source_id: "comment-1",
-            content_type: "comment",
-            summary:
-              "Board: Creative Lab | Recent comment: Strong point, but this still needs examples.",
-          }),
-        ],
-      }),
-    ).resolves.toEqual([
+    const result = await service.scoreOpportunities({
+      kind: "public",
+      rows: [
+        buildOpp({ id: "opp-1" }),
+        buildOpp({
+          id: "opp-2",
+          source_table: "comments",
+          source_id: "comment-1",
+          content_type: "comment",
+          summary: "Board: Creative Lab | Recent comment: Strong point, but still needs examples.",
+        }),
+      ],
+    });
+
+    expect(result).toEqual([
       {
         opportunityId: "opp-1",
         probability: 0.74,
@@ -115,15 +103,18 @@ describe("AiAgentIntakeStageLlmService", () => {
         evaluatedAt: "2026-04-03T12:00:00.000Z",
       },
     ]);
-
-    expect(invokeStage).toHaveBeenCalledTimes(3);
+    expect(invokeStage).toHaveBeenCalledTimes(2);
+    expect(invokeStage.mock.calls[0]?.[0]).toMatchObject({
+      stageName: "opportunities",
+      phase: "main",
+    });
     expect(invokeStage.mock.calls[1]?.[0]).toMatchObject({
       stageName: "opportunities",
-      phase: "schema_repair",
+      phase: "quality_audit",
     });
   });
 
-  it("repairs candidate selections after audit failure and returns canonical selected speakers", async () => {
+  it("runs quality repair when audit fails, returns repaired selected speakers", async () => {
     const invokeStage = vi
       .fn()
       .mockResolvedValueOnce({
@@ -146,8 +137,8 @@ describe("AiAgentIntakeStageLlmService", () => {
       .mockResolvedValueOnce({
         text: JSON.stringify({
           pass: false,
-          issues: ["Selected speakers are too narrow for the opportunity."],
-          repair_instructions: ["Pick two stronger speaker candidates with clearer fit."],
+          issues: ["Selected speakers are too narrow."],
+          repair_instructions: ["Pick two stronger candidates."],
         }),
         finishReason: "stop",
         providerId: "mock",
@@ -177,33 +168,16 @@ describe("AiAgentIntakeStageLlmService", () => {
         attempts: 1,
         path: ["mock:mock-fallback"],
       })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          pass: true,
-          issues: [],
-          repair_instructions: [],
-        }),
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      });
+      .mockImplementation(makeAuditPass());
 
-    const service = new AiAgentIntakeStageLlmService({
-      deps: {
-        invokeStage,
-      },
+    const service = new AiAgentIntakeStageLlmService({ deps: { invokeStage } });
+
+    const result = await service.selectPublicSpeakerCandidates({
+      rows: [buildOpp({ id: "opp-1" })],
+      referenceBatch: ["David Bowie", "Laurie Anderson", "Grace Jones"],
     });
 
-    await expect(
-      service.selectPublicSpeakerCandidates({
-        rows: [buildOpp({ id: "opp-1" })],
-        referenceBatch: ["David Bowie", "Laurie Anderson", "Grace Jones"],
-      }),
-    ).resolves.toEqual([
+    expect(result).toEqual([
       {
         oppId: "opp-1",
         selectedSpeakers: [
@@ -212,47 +186,26 @@ describe("AiAgentIntakeStageLlmService", () => {
         ],
       },
     ]);
-
     expect(invokeStage).toHaveBeenCalledTimes(4);
-    expect(invokeStage.mock.calls[1]?.[0]).toMatchObject({
-      stageName: "candidates",
-      phase: "quality_audit",
-    });
-    expect(invokeStage.mock.calls[2]?.[0]).toMatchObject({
-      stageName: "candidates",
-      phase: "quality_repair",
-    });
+    expect(invokeStage.mock.calls[0]?.[0]).toMatchObject({ phase: "main" });
+    expect(invokeStage.mock.calls[1]?.[0]).toMatchObject({ phase: "quality_audit" });
+    expect(invokeStage.mock.calls[2]?.[0]).toMatchObject({ phase: "quality_repair" });
+    expect(invokeStage.mock.calls[3]?.[0]).toMatchObject({ phase: "quality_audit" });
   });
 
-  it("caps schema repair attempts at one retry and fails fast when repaired output is still invalid", async () => {
-    const invokeStage = vi
-      .fn()
-      .mockResolvedValueOnce({
-        text: "not valid json",
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      })
-      .mockResolvedValueOnce({
-        text: "{ still broken",
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      });
-
-    const service = new AiAgentIntakeStageLlmService({
-      deps: {
-        invokeStage,
-      },
+  it("throws when main output is unparseable and no quality repair can fix it", async () => {
+    const invokeStage = vi.fn().mockResolvedValueOnce({
+      text: "not valid json",
+      finishReason: "stop",
+      providerId: "mock",
+      modelId: "mock-fallback",
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
+      usedFallback: false,
+      attempts: 1,
+      path: ["mock:mock-fallback"],
     });
+
+    const service = new AiAgentIntakeStageLlmService({ deps: { invokeStage } });
 
     await expect(
       service.scoreOpportunities({
@@ -260,15 +213,10 @@ describe("AiAgentIntakeStageLlmService", () => {
         rows: [buildOpp({ id: "opp-1" })],
       }),
     ).rejects.toThrow(/stage returned (invalid JSON|empty output)/);
-
-    expect(invokeStage).toHaveBeenCalledTimes(2);
-    expect(invokeStage.mock.calls[1]?.[0]).toMatchObject({
-      stageName: "opportunities",
-      phase: "schema_repair",
-    });
+    expect(invokeStage).toHaveBeenCalledTimes(1);
   });
 
-  it("batches public opportunities in groups of 10 and reruns only missing local keys once", async () => {
+  it("batches in groups of 10 without subset retry", async () => {
     const batchRows = Array.from({ length: 11 }, (_, index) =>
       buildOpp({
         id: `opp-${index + 1}`,
@@ -277,15 +225,23 @@ describe("AiAgentIntakeStageLlmService", () => {
         summary: `Board: Creative Lab | Recent post title: Item ${index + 1}`,
       }),
     );
+
+    const scores10 = JSON.stringify({
+      scores: Array.from({ length: 10 }, (_, index) => ({
+        opportunity_key: `O${String(index + 1).padStart(2, "0")}`,
+        probability: 0.61,
+      })),
+    });
+    const scores1 = JSON.stringify({
+      scores: [{ opportunity_key: "O01", probability: 0.72 }],
+    });
+    const auditPass = JSON.stringify({ pass: true, issues: [], repair_instructions: [] });
+
     const invokeStage = vi
       .fn()
       .mockResolvedValueOnce({
-        text: JSON.stringify({
-          scores: Array.from({ length: 9 }, (_, index) => ({
-            opportunity_key: `O${String(index + 1).padStart(2, "0")}`,
-            probability: 0.61,
-          })),
-        }),
+        // batch 1 main
+        text: scores10,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -295,7 +251,8 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       })
       .mockResolvedValueOnce({
-        text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
+        // batch 1 audit
+        text: auditPass,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -305,9 +262,8 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       })
       .mockResolvedValueOnce({
-        text: JSON.stringify({
-          scores: [{ opportunity_key: "O01", probability: 0.72 }],
-        }),
+        // batch 2 main
+        text: scores1,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -317,29 +273,8 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       })
       .mockResolvedValueOnce({
-        text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          scores: [{ opportunity_key: "O01", probability: 0.83 }],
-        }),
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
+        // batch 2 audit
+        text: auditPass,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -350,28 +285,16 @@ describe("AiAgentIntakeStageLlmService", () => {
       });
 
     const service = new AiAgentIntakeStageLlmService({
-      deps: {
-        invokeStage,
-        now: () => new Date("2026-04-03T12:00:00.000Z"),
-      },
+      deps: { invokeStage, now: () => new Date("2026-04-03T12:00:00.000Z") },
     });
 
-    const result = await service.scoreOpportunities({
-      kind: "public",
-      rows: batchRows,
-    });
-
+    const result = await service.scoreOpportunities({ kind: "public", rows: batchRows });
     expect(result).toHaveLength(11);
-    expect(result[9]).toMatchObject({ opportunityId: "opp-10", probability: 0.72 });
-    expect(result[10]).toMatchObject({ opportunityId: "opp-11", probability: 0.83 });
-    expect(
-      invokeStage.mock.calls.filter(
-        (call) => call[0]?.stageName === "opportunities" && call[0]?.phase === "main",
-      ),
-    ).toHaveLength(3);
+    const mainCalls = invokeStage.mock.calls.filter((call) => call[0]?.phase === "main");
+    expect(mainCalls).toHaveLength(2);
   });
 
-  it("batches candidates in groups of 10 and reruns only missing opportunity keys once", async () => {
+  it("batches candidates in groups of 10", async () => {
     const batchRows = Array.from({ length: 11 }, (_, index) =>
       buildOpp({
         id: `opp-${index + 1}`,
@@ -380,15 +303,28 @@ describe("AiAgentIntakeStageLlmService", () => {
         summary: `Board: Creative Lab | Recent post title: Item ${index + 1}`,
       }),
     );
+
+    const candidates10 = JSON.stringify({
+      speaker_candidates: Array.from({ length: 10 }, (_, index) => ({
+        opportunity_key: `O${String(index + 1).padStart(2, "0")}`,
+        selected_speakers: [{ name: "David Bowie", probability: 0.71 }],
+      })),
+    });
+    const candidates1 = JSON.stringify({
+      speaker_candidates: [
+        {
+          opportunity_key: "O01",
+          selected_speakers: [{ name: "Laurie Anderson", probability: 0.83 }],
+        },
+      ],
+    });
+    const auditPass = JSON.stringify({ pass: true, issues: [], repair_instructions: [] });
+
     const invokeStage = vi
       .fn()
       .mockResolvedValueOnce({
-        text: JSON.stringify({
-          speaker_candidates: Array.from({ length: 9 }, (_, index) => ({
-            opportunity_key: `O${String(index + 1).padStart(2, "0")}`,
-            selected_speakers: [{ name: "David Bowie", probability: 0.71 }],
-          })),
-        }),
+        // batch 1 main
+        text: candidates10,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -398,7 +334,8 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       })
       .mockResolvedValueOnce({
-        text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
+        // batch 1 audit
+        text: auditPass,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -408,14 +345,8 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       })
       .mockResolvedValueOnce({
-        text: JSON.stringify({
-          speaker_candidates: [
-            {
-              opportunity_key: "O01",
-              selected_speakers: [{ name: "Laurie Anderson", probability: 0.83 }],
-            },
-          ],
-        }),
+        // batch 2 main
+        text: candidates1,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -425,34 +356,8 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       })
       .mockResolvedValueOnce({
-        text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          speaker_candidates: [
-            {
-              opportunity_key: "O01",
-              selected_speakers: [{ name: "Grace Jones", probability: 0.69 }],
-            },
-          ],
-        }),
-        finishReason: "stop",
-        providerId: "mock",
-        modelId: "mock-fallback",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, normalized: false },
-        usedFallback: false,
-        attempts: 1,
-        path: ["mock:mock-fallback"],
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({ pass: true, issues: [], repair_instructions: [] }),
+        // batch 2 audit
+        text: auditPass,
         finishReason: "stop",
         providerId: "mock",
         modelId: "mock-fallback",
@@ -462,11 +367,7 @@ describe("AiAgentIntakeStageLlmService", () => {
         path: ["mock:mock-fallback"],
       });
 
-    const service = new AiAgentIntakeStageLlmService({
-      deps: {
-        invokeStage,
-      },
-    });
+    const service = new AiAgentIntakeStageLlmService({ deps: { invokeStage } });
 
     const result = await service.selectPublicSpeakerCandidates({
       rows: batchRows,
@@ -474,18 +375,7 @@ describe("AiAgentIntakeStageLlmService", () => {
     });
 
     expect(result).toHaveLength(11);
-    expect(result[9]).toMatchObject({
-      oppId: "opp-10",
-      selectedSpeakers: [{ name: "Laurie Anderson", probability: 0.83 }],
-    });
-    expect(result[10]).toMatchObject({
-      oppId: "opp-11",
-      selectedSpeakers: [{ name: "Grace Jones", probability: 0.69 }],
-    });
-    expect(
-      invokeStage.mock.calls.filter(
-        (call) => call[0]?.stageName === "candidates" && call[0]?.phase === "main",
-      ),
-    ).toHaveLength(3);
+    const mainCalls = invokeStage.mock.calls.filter((call) => call[0]?.phase === "main");
+    expect(mainCalls).toHaveLength(2);
   });
 });

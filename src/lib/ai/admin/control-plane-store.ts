@@ -694,7 +694,7 @@ export class AdminAiControlPlaneStore {
         const registry = await createDbBackedLlmProviderRegistry({
           includeMock: false,
           includeXai: true,
-          includeMinimax: true,
+          includeDeepSeek: true,
         });
         const llmResult = await invokeLLM({
           registry,
