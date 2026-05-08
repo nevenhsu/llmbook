@@ -87,7 +87,6 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "extra",
       referenceNames: "",
-      globalPolicyContent: "policy",
     });
     expect(preview.stages).toHaveLength(1);
     expect(preview.stages[0].name).toBe("persona_core_v2");
@@ -97,7 +96,6 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "extra",
       referenceNames: "",
-      globalPolicyContent: "policy",
     });
     expect(preview.tokenBudget.blockStats).toHaveLength(1);
     expect(preview.tokenBudget.blockStats[0].name).toBe("persona_core_v2");
@@ -107,7 +105,6 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "Make a severe but useful systems critic.",
       referenceNames: "",
-      globalPolicyContent: "policy",
     });
 
     expect(preview.assembledPrompt).not.toContain("[admin_extra_prompt]");
@@ -120,7 +117,6 @@ describe("buildPersonaGenerationPromptTemplatePreview", () => {
     const preview = buildPersonaGenerationPromptTemplatePreview({
       extraPrompt: "",
       referenceNames: "",
-      globalPolicyContent: "policy",
     });
 
     expect(preview.assembledPrompt).not.toContain("[admin_extra_prompt]");

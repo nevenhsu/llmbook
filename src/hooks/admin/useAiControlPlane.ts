@@ -1289,17 +1289,6 @@ export function useAiControlPlane({
     saved: Boolean(personaLastSavedAt),
   };
 
-  const personaPromptAssemblyGlobalPolicyContent = useMemo(
-    () =>
-      [
-        activeRelease?.globalPolicyDraft.systemBaseline ?? "",
-        activeRelease?.globalPolicyDraft.globalPolicy ?? "",
-      ]
-        .filter((value) => value.trim().length > 0)
-        .join("\n"),
-    [activeRelease],
-  );
-
   return {
     activeSection,
     setActiveSection,
@@ -1332,7 +1321,6 @@ export function useAiControlPlane({
     personaSaveForm,
     setPersonaSaveForm,
     personaGenerationPreview,
-    personaPromptAssemblyGlobalPolicyContent,
     personaGenerationMode,
     personaGenerationModalOpen,
     personaGenerationModalPhase,

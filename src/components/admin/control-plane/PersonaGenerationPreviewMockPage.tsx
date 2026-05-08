@@ -18,12 +18,11 @@ import { buildPersonaUpdateExtraPrompt, derivePersonaUsername } from "./control-
 import { PersonaGenerationSection } from "./sections/PersonaGenerationSection";
 import {
   mockPersonaGenerationAdminExtraPrompt,
-  mockPersonaGenerationGlobalPolicyContent,
   mockPersonaGenerationModelDisplayName,
   mockPersonaGenerationPreview,
   mockPersonaGenerationSeedPrompt,
 } from "@/lib/ai/admin/persona-generation-preview-mock";
-import { PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS } from "@/lib/ai/admin/persona-generation-token-budgets";
+import { PERSONA_GENERATION_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 
 const mockProvider: AiProviderConfig = {
   id: "preview-provider-xai",
@@ -59,7 +58,7 @@ const mockModel: AiModelConfig = {
   supportsImageInputPrompt: false,
   supportsOutput: true,
   contextWindow: 14000,
-  maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+  maxOutputTokens: PERSONA_GENERATION_BUDGETS.previewMaxOutputTokens,
   metadata: {
     previewOnly: true,
   },
@@ -341,7 +340,6 @@ export function PersonaGenerationPreviewMockPage() {
         setPersonaSaveForm={setPersonaSaveForm}
         personaSaveLoading={personaSaveLoading}
         personaGenerationPreview={personaGenerationPreview}
-        promptAssemblyGlobalPolicyContent={mockPersonaGenerationGlobalPolicyContent}
         personaGenerationMode={personaGenerationMode}
         personaGenerationModalOpen={personaGenerationModalOpen}
         personaGenerationModalPhase={personaGenerationModalPhase}

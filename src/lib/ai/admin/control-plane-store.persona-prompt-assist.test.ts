@@ -162,9 +162,12 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
 
     const store = await buildStore();
 
-    await expect(store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" })).resolves.toBe(
-      "A razor-sharp design critic who rewards originality, distrusts trend-chasing, and replies with concise, surgical feedback grounded in craft and audience perception. Reference sources: Nora Ephron.",
-    );
+    await expect(
+      store.assistPersonaPrompt({ modelId: "model-1", inputPrompt: "" }),
+    ).resolves.toMatchObject({
+      text: "A razor-sharp design critic who rewards originality, distrusts trend-chasing, and replies with concise, surgical feedback grounded in craft and audience perception. Reference sources: Nora Ephron.",
+      referenceNames: ["Nora Ephron"],
+    });
 
     expect(invokeLLM).toHaveBeenNthCalledWith(
       1,
@@ -222,9 +225,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "想要一個像王家衛一樣疏離又敏銳的論壇人格",
       }),
-    ).resolves.toBe(
-      "一位以冷靜、疏離、但極度敏銳的語氣回應論壇討論的人格，擅長把情緒縫隙與時間錯位拆成具體觀察。 Reference sources: 王家衛.",
-    );
+    ).resolves.toMatchObject({
+      text: "一位以冷靜、疏離、但極度敏銳的語氣回應論壇討論的人格，擅長把情緒縫隙與時間錯位拆成具體觀察。 Reference sources: 王家衛.",
+      referenceNames: ["王家衛"],
+    });
 
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
@@ -283,7 +287,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "Leo Tolstoy",
       }),
-    ).resolves.toContain("Reference sources: Leo Tolstoy.");
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("Reference sources: Leo Tolstoy.") as string,
+      referenceNames: ["Leo Tolstoy"],
+    });
 
     expect(invokeLLM).toHaveBeenNthCalledWith(
       2,
@@ -353,7 +360,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "In the Mood for Love",
       }),
-    ).resolves.toContain("Reference sources: Wong Kar-wai.");
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("Reference sources: Wong Kar-wai.") as string,
+      referenceNames: ["Wong Kar-wai"],
+    });
 
     expect(invokeLLM).toHaveBeenNthCalledWith(
       2,
@@ -420,9 +430,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "Anthony Bourdain",
       }),
-    ).resolves.toBe(
-      "A globe-trotting raconteur who opens with sensory detail, distrusts polished travel posturing, and praises work only when it earns appetite, labor, and risk. Reference sources: Anthony Bourdain.",
-    );
+    ).resolves.toMatchObject({
+      text: "A globe-trotting raconteur who opens with sensory detail, distrusts polished travel posturing, and praises work only when it earns appetite, labor, and risk. Reference sources: Anthony Bourdain.",
+      referenceNames: ["Anthony Bourdain"],
+    });
 
     expect(invokeLLM).toHaveBeenCalledTimes(4);
     expect(invokeLLM).toHaveBeenNthCalledWith(
@@ -476,9 +487,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "James Baldwin",
       }),
-    ).resolves.toBe(
-      "A cutting moral witness who turns every thread into a confrontation with complicity and insists on a harder truth than comfort can tolerate. Reference sources: James Baldwin.",
-    );
+    ).resolves.toMatchObject({
+      text: "A cutting moral witness who turns every thread into a confrontation with complicity and insists on a harder truth than comfort can tolerate. Reference sources: James Baldwin.",
+      referenceNames: ["James Baldwin"],
+    });
   });
 
   it("fails with raw reference JSON when audit still cannot recover a valid personality-bearing reference", async () => {
@@ -635,7 +647,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "Sigmund Freud",
       }),
-    ).resolves.toContain("Reference sources: Sigmund Freud.");
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("Reference sources: Sigmund Freud.") as string,
+      referenceNames: ["Sigmund Freud"],
+    });
 
     expect(invokeLLM).toHaveBeenNthCalledWith(
       3,
@@ -695,7 +710,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "Joseph Campbell",
       }),
-    ).resolves.toContain("Reference sources: Joseph Campbell.");
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("Reference sources: Joseph Campbell.") as string,
+      referenceNames: ["Joseph Campbell"],
+    });
   });
 
   it("uses the audit schema for reference_presence_audit and accepts object-only structured audit output", async () => {
@@ -743,7 +761,10 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "Ursula K. Le Guin",
       }),
-    ).resolves.toContain("Reference sources: Ursula K. Le Guin.");
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("Reference sources: Ursula K. Le Guin.") as string,
+      referenceNames: ["Ursula K. Le Guin"],
+    });
 
     expect(invokeLLM).toHaveBeenCalledTimes(3);
     const referenceAuditOutput = vi.mocked(invokeLLM).mock.calls[1]?.[0]?.modelInput.output as
@@ -803,6 +824,9 @@ describe("AdminAiControlPlaneStore.assistPersonaPrompt", () => {
         modelId: "model-1",
         inputPrompt: "Joseph Campbell",
       }),
-    ).resolves.toContain("Reference sources: Joseph Campbell.");
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("Reference sources: Joseph Campbell.") as string,
+      referenceNames: ["Joseph Campbell"],
+    });
   });
 });

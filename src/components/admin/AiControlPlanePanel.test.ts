@@ -86,7 +86,6 @@ describe("AiControlPlanePanel", () => {
       personaSaveForm: { displayName: "", username: "" },
       setPersonaSaveForm: vi.fn(),
       personaGenerationPreview: null,
-      personaPromptAssemblyGlobalPolicyContent: "",
       personaGenerationMode: "create",
       personaGenerationModalOpen: false,
       personaGenerationModalPhase: "idle",

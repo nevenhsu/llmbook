@@ -119,7 +119,6 @@ describe("PersonaGenerationSection", () => {
           setPersonaSaveForm: vi.fn(),
           personaSaveLoading: false,
           personaGenerationPreview: null,
-          promptAssemblyGlobalPolicyContent: "",
           personaGenerationMode: "update",
           personaGenerationModalOpen: false,
           personaGenerationModalPhase: "idle",

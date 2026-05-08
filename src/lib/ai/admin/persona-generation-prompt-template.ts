@@ -1,7 +1,4 @@
-import {
-  PERSONA_GENERATION_MAX_INPUT_TOKENS,
-  PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
-} from "@/lib/ai/admin/persona-generation-token-budgets";
+import { PERSONA_GENERATION_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 
 export type PromptBlockStat = {
   name: string;
@@ -140,9 +137,6 @@ export const PERSONA_GENERATION_TEMPLATE_STAGES = [
       "",
       "[output_validation]",
       "Return only strict JSON.",
-      "No markdown.",
-      "No comments.",
-      "No explanation.",
     ],
   },
 ] as const;
@@ -206,11 +200,9 @@ export function renderPersonaGenerationStageContract(
 export function buildPersonaGenerationPromptTemplatePreview(input: {
   extraPrompt: string;
   referenceNames: string;
-  globalPolicyContent: string;
 }): PromptAssemblyPreview {
   const commonBlocks = [
     { name: "system_baseline", content: PERSONA_GENERATION_SYSTEM_BASELINE },
-    { name: "global_policy", content: input.globalPolicyContent },
     { name: "generator_instruction", content: PERSONA_GENERATION_GENERATOR_INSTRUCTION },
   ];
 
@@ -243,8 +235,7 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
   });
 
   const estimatedInputTokens = stagePrompts.reduce((sum, stage) => sum + stage.tokens, 0);
-  const maxInputTokens =
-    PERSONA_GENERATION_MAX_INPUT_TOKENS * PERSONA_GENERATION_TEMPLATE_STAGES.length;
+  const maxInputTokens = PERSONA_GENERATION_BUDGETS.maxInputTokens;
   const exceeded = estimatedInputTokens > maxInputTokens;
 
   return {
@@ -259,7 +250,7 @@ export function buildPersonaGenerationPromptTemplatePreview(input: {
     tokenBudget: {
       estimatedInputTokens,
       maxInputTokens,
-      maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: PERSONA_GENERATION_BUDGETS.previewMaxOutputTokens,
       blockStats: stagePrompts.map((stage) => ({ name: stage.name, tokens: stage.tokens })),
       compressedStages: [],
       exceeded,

@@ -4,10 +4,7 @@ import {
   buildActionOutputConstraints,
   type PromptActionType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
-import {
-  PERSONA_GENERATION_MAX_INPUT_TOKENS,
-  PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
-} from "@/lib/ai/admin/persona-generation-token-budgets";
+import { PERSONA_GENERATION_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 import type {
   AiControlPlaneDocument,
   GlobalPolicyStudioDraft,
@@ -29,9 +26,9 @@ export const DEFAULT_POLICY_DRAFT = {
 
 export const DEFAULT_TOKEN_LIMITS = {
   interactionMaxInputTokens: 3200,
-  interactionMaxOutputTokens: 900,
-  personaGenerationMaxInputTokens: PERSONA_GENERATION_MAX_INPUT_TOKENS,
-  personaGenerationMaxOutputTokens: PERSONA_GENERATION_MAX_OUTPUT_TOKENS,
+  interactionMaxOutputTokens: 2000,
+  personaGenerationMaxInputTokens: PERSONA_GENERATION_BUDGETS.maxInputTokens,
+  personaGenerationMaxOutputTokens: PERSONA_GENERATION_BUDGETS.maxOutputTokens,
 };
 
 export function asRecord(input: unknown): Record<string, unknown> | null {

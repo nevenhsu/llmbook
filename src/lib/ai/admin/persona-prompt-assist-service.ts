@@ -5,8 +5,7 @@ import { Output } from "ai";
 import { z } from "zod";
 import {
   ADMIN_UI_LLM_PROVIDER_RETRIES,
-  PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
-  PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
+  PROMPT_ASSIST_BUDGETS,
 } from "@/lib/ai/admin/persona-generation-token-budgets";
 import {
   PromptAssistError,
@@ -150,7 +149,7 @@ export async function assistPersonaPrompt(input: {
     promptText: string,
     temperature: number,
     stage: PromptAssistAttemptStage,
-    maxOutputTokens = PROMPT_ASSIST_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: number = PROMPT_ASSIST_BUDGETS.outputTokens,
   ): Promise<{ text: string; details: Record<string, unknown>; object?: unknown }> => {
     const outputSchema = getPromptAssistOutputSchema(stage);
     const llmResult = await invokeLLM({
@@ -255,7 +254,7 @@ export async function assistPersonaPrompt(input: {
       buildAuditPrompt(),
       0,
       "reference_presence_audit",
-      PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
+      PROMPT_ASSIST_BUDGETS.referenceAuditOutputTokens,
     );
 
     if (firstAttempt.text) {
@@ -272,7 +271,7 @@ export async function assistPersonaPrompt(input: {
       ),
       0,
       "reference_presence_audit",
-      PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS,
+      PROMPT_ASSIST_BUDGETS.referenceAuditOutputTokens,
     );
 
     if (secondAttempt.text) {

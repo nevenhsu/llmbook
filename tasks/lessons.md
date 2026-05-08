@@ -19,6 +19,8 @@
 - **Finish Repair:** For `finishReason: length`, try schema-grounded continuation before falling back to field patches.
 - **Normalization:** Strip extra keys and truncate arrays instead of failing on exact-key matches.
 - **Code-Owned State:** Keep `schema_version` and DB IDs out of prompts and audits.
+- **Audit Wiring:** If a flow defines a semantic-audit helper or `validateQualityAsync` hook, wire it into the active stage or delete it. Dead audit helpers and stale repair-key maps can leave semantic quality unchecked while tests still look green.
+- **Budget Naming:** When a flow has already been simplified to one stage, rename token budgets to match runtime purpose (`main`, `preview`, `audit`, `repair`) instead of preserving retired stage names or computing totals from dead stages.
 
 ## Archive
 

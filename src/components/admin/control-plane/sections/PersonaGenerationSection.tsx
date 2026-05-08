@@ -74,7 +74,6 @@ export interface PersonaGenerationSectionProps {
   >;
   personaSaveLoading: boolean;
   personaGenerationPreview: (PreviewResult & { structured: PersonaGenerationStructured }) | null;
-  promptAssemblyGlobalPolicyContent: string;
   personaGenerationMode: "create" | "update";
   personaGenerationModalOpen: boolean;
   personaGenerationModalPhase: PersonaGenerationModalPhase;
@@ -120,7 +119,6 @@ export function PersonaGenerationSection({
   setPersonaSaveForm,
   personaSaveLoading,
   personaGenerationPreview,
-  promptAssemblyGlobalPolicyContent,
   personaGenerationMode,
   personaGenerationModalOpen,
   personaGenerationModalPhase,
@@ -152,13 +150,8 @@ export function PersonaGenerationSection({
       buildPersonaGenerationPromptTemplatePreview({
         extraPrompt: personaGeneration.extraPrompt,
         referenceNames: personaGeneration.referenceNames,
-        globalPolicyContent: promptAssemblyGlobalPolicyContent,
       }),
-    [
-      personaGeneration.extraPrompt,
-      personaGeneration.referenceNames,
-      promptAssemblyGlobalPolicyContent,
-    ],
+    [personaGeneration.extraPrompt, personaGeneration.referenceNames],
   );
   const canRunUpdate =
     Boolean(personaUpdate.personaId) &&

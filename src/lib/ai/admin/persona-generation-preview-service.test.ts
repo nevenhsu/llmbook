@@ -91,6 +91,17 @@ const models: AiModelConfig[] = [
 describe("previewPersonaGeneration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invokeLLM.mockResolvedValue({
+      text: JSON.stringify({
+        passes: true,
+        issues: [],
+        repairGuidance: [],
+      }),
+      finishReason: "stop",
+      providerId: "xai",
+      modelId: "grok-4-1-fast-reasoning",
+      error: null,
+    });
   });
 
   it("routes persona_core_v2 main through invokeStructuredLLM and exposes schemaGateDebug on schema failure", async () => {
@@ -209,5 +220,70 @@ describe("previewPersonaGeneration", () => {
     expect(prompt).toContain(`user_input_context:\n${extraPrompt}`);
     expect(prompt).not.toContain(`[admin_extra_prompt]\n${extraPrompt}`);
     expect(prompt.split(extraPrompt)).toHaveLength(2);
+  });
+
+  it("runs persona_core_quality_audit with a compact persona-core audit packet", async () => {
+    invokeStructuredLLM.mockResolvedValueOnce({
+      status: "valid",
+      value: FALLBACK_PERSONA_CORE_V2,
+      raw: {
+        text: JSON.stringify(FALLBACK_PERSONA_CORE_V2),
+        finishReason: "stop",
+        providerId: "xai",
+        modelId: "grok-4-1-fast-reasoning",
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, normalized: false },
+        usedFallback: false,
+        attempts: 1,
+        path: ["xai:grok-4-1-fast-reasoning"],
+        object: FALLBACK_PERSONA_CORE_V2,
+      },
+      schemaGateDebug: {
+        flowId: "persona-generation-preview:model-xai:persona_core_v2:attempt-1",
+        stageId: "structured",
+        schemaName: "PersonaCoreV2Schema",
+        status: "valid",
+        attempts: [],
+      },
+    });
+    invokeLLM.mockResolvedValueOnce({
+      text: JSON.stringify({
+        passes: true,
+        issues: [],
+        repairGuidance: [],
+      }),
+      finishReason: "stop",
+      providerId: "xai",
+      modelId: "grok-4-1-fast-reasoning",
+      error: null,
+    });
+
+    await previewPersonaGeneration({
+      modelId: "model-xai",
+      extraPrompt: "Generate a witty but respectful creator persona.",
+      document,
+      providers,
+      models,
+      debug: true,
+      recordLlmInvocationError: vi.fn(),
+    });
+
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(invokeLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          providerOptions: expect.objectContaining({
+            xai: expect.objectContaining({ reasoningEffort: "low" }),
+            deepseek: expect.objectContaining({ reasoningEffort: "low" }),
+          }),
+        }),
+      }),
+    );
+    const auditPrompt = invokeLLM.mock.calls[0][0].modelInput.prompt as string;
+    expect(auditPrompt).toContain("[persona_core_quality_audit]");
+    expect(auditPrompt).toContain('"identity_anchor"');
+    expect(auditPrompt).toContain('"persona_core_focus"');
+    expect(auditPrompt).not.toContain('"taste"');
+    expect(auditPrompt).not.toContain('"voice"');
+    expect(auditPrompt).not.toContain('"other_reference_sources"');
   });
 });

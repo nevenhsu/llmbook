@@ -9,9 +9,7 @@ import { PersonaCoreV2Schema } from "@/lib/ai/core/persona-core-v2";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
   ADMIN_UI_LLM_PROVIDER_RETRIES,
-  PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
-  PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS,
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS,
+  PERSONA_GENERATION_BUDGETS,
 } from "@/lib/ai/admin/persona-generation-token-budgets";
 import {
   PersonaGenerationParseError,
@@ -57,6 +55,34 @@ const PersonaGenerationSemanticAuditSchema = z.object({
 const PersonaGenerationQualityRepairDeltaSchema = z.object({
   repair: z.record(z.string(), z.unknown()),
 });
+
+function buildPersonaCoreV2AuditPacket(stage: PersonaCoreV2): Record<string, unknown> {
+  return {
+    identity_anchor: {
+      archetype: stage.identity.archetype,
+      core_drive: stage.identity.core_drive,
+      central_tension: stage.identity.central_tension,
+      self_image: stage.identity.self_image,
+      reference_names: stage.reference_style.reference_names,
+      abstract_traits: stage.reference_style.abstract_traits,
+    },
+    persona_core_focus: {
+      thinking_procedure: stage.mind.thinking_procedure,
+      forum: {
+        participation_mode: stage.forum.participation_mode,
+        preferred_post_intents: stage.forum.preferred_post_intents,
+        preferred_comment_intents: stage.forum.preferred_comment_intents,
+        preferred_reply_intents: stage.forum.preferred_reply_intents,
+      },
+      narrative: {
+        story_engine: stage.narrative.story_engine,
+        favored_conflicts: stage.narrative.favored_conflicts,
+        ending_preferences: stage.narrative.ending_preferences,
+      },
+      anti_generic: stage.anti_generic,
+    },
+  };
+}
 
 export async function previewPersonaGeneration(input: {
   modelId: string;
@@ -106,14 +132,10 @@ export async function previewPersonaGeneration(input: {
   const commonBlocks = [
     { name: "system_baseline", content: "Generate a coherent forum persona profile." },
     {
-      name: "global_policy",
-      content: `${input.document.globalPolicyDraft.systemBaseline}\n${input.document.globalPolicyDraft.globalPolicy}`,
-    },
-    {
       name: "generator_instruction",
       content: [
         "Generate the canonical PersonaCoreV2 payload as one validated JSON object.",
-        "Write all persona-generation content in English, regardless of the language used in global policy text or admin extra prompt.",
+        "Write all persona-generation content in English.",
         "Use snake_case keys exactly as provided.",
         "Preserve named references when they clarify the persona.",
         "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
@@ -266,7 +288,7 @@ export async function previewPersonaGeneration(input: {
       modelInput: {
         prompt: auditPrompt,
         maxOutputTokens: Math.min(
-          PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS,
+          PERSONA_GENERATION_BUDGETS.qualityAuditOutputTokens,
           maxOutputTokens,
         ),
         temperature: 0,
@@ -336,13 +358,39 @@ export async function previewPersonaGeneration(input: {
   };
 
   const auditPersonaCoreV2StageQuality = async (
-    _stage: Record<string, unknown>,
+    stage: PersonaCoreV2,
   ): Promise<{
     issues: string[];
     repairGuidance: string[];
-    normalizedParsedOutput?: Record<string, unknown>;
+    normalizedParsedOutput?: PersonaCoreV2;
   }> => {
-    return { issues: [], repairGuidance: [] };
+    const auditResult = await runPersonaGenerationSemanticAudit({
+      stageName: "persona_core_v2",
+      auditLabel: "persona_core_quality_audit",
+      instructions: [
+        "Check only these two aspects: persona_core_quality and persona_fit.",
+        "Pass persona_core_quality only if identity, thinking procedure, forum behavior, narrative logic, and anti_generic constraints describe one coherent operating persona.",
+        "Fail persona_core_quality if the packet feels generic, contradictory, reference-cosplay, or too shallow to drive distinct post/comment/reply/story behavior.",
+        "Pass persona_fit only if the reference_names and abstract_traits support the same persona without literal imitation instructions.",
+        "If you fail, keep issues concrete and mention the top-level PersonaCoreV2 key that should change when possible.",
+      ],
+      parsedOutput: buildPersonaCoreV2AuditPacket(stage),
+      defaultIssue: "persona_core_v2 failed semantic quality audit.",
+      failClosedOnTransport: false,
+      fallbackRepairGuidance: [
+        "Tighten the persona around one coherent operating logic across identity, mind, forum, and narrative.",
+        "Keep reference influence abstract and non-imitative.",
+      ],
+    });
+
+    if (auditResult.passes) {
+      return { issues: [], repairGuidance: [] };
+    }
+
+    return {
+      issues: auditResult.issues,
+      repairGuidance: auditResult.repairGuidance,
+    };
   };
 
   const deriveRepairType = (val: unknown): string => deriveJsonLeafType(val);
@@ -492,7 +540,7 @@ export async function previewPersonaGeneration(input: {
           maxOutputTokens:
             attempt === 1
               ? Math.min(stageInput.outputMaxTokens, maxOutputTokens)
-              : Math.min(PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.repairRetryCap, maxOutputTokens),
+              : Math.min(PERSONA_GENERATION_BUDGETS.repairRetryOutputTokens, maxOutputTokens),
           temperature: attempt === 1 ? 0.4 : 0.2,
         },
         entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:attempt-${attempt}`,
@@ -519,7 +567,7 @@ export async function previewPersonaGeneration(input: {
         modelInput: {
           prompt,
           maxOutputTokens: Math.min(
-            PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.qualityRepairCap,
+            PERSONA_GENERATION_BUDGETS.qualityRepairOutputTokens,
             maxOutputTokens,
           ),
           temperature: attempt === 1 ? 0.2 : 0.1,
@@ -588,15 +636,16 @@ export async function previewPersonaGeneration(input: {
           ? Object.keys(output).filter((key) => {
               const lower = allText.toLowerCase();
               const keywordMap: Record<string, string> = {
-                voice_fingerprint: "voice tone flat personality",
-                identity_summary: "generic identity archetype",
-                values: "values principle judgment value_hierarchy",
-                interaction_defaults: "interaction stance discussion",
-                aesthetic_profile: "creative narrative humor",
-                lived_context: "lived context experience",
-                creator_affinity: "creator admired preference",
-                task_style_matrix: "task post comment write",
-                guardrails: "guardrail boundary hard_no",
+                identity:
+                  "identity archetype core_drive central_tension self_image generic persona fit",
+                mind: "mind thinking_procedure context_reading salience interpretation response omission",
+                taste: "taste values respects dismisses obsessions judgment",
+                voice: "voice register rhythm opening closing humor metaphor phrase tone",
+                forum: "forum participation post comment reply thread discussion behavior",
+                narrative: "narrative story conflict ending scene plot character story_engine",
+                reference_style:
+                  "reference reference_names abstract_traits imitation cosplay literal",
+                anti_generic: "anti_generic generic drift placeholder bland shallow failure_mode",
               };
               const keywords = keywordMap[key];
               if (!keywords) {
@@ -862,8 +911,9 @@ export async function previewPersonaGeneration(input: {
       parse: (rawText) => PersonaCoreV2Schema.parse(parsePersonaCoreStageOutput(rawText)),
       validateQuality: (stage) =>
         validatePersonaCoreV2Quality(stage as unknown as Record<string, unknown>),
+      validateQualityAsync: auditPersonaCoreV2StageQuality,
       allowedReferenceNames: [],
-      outputMaxTokens: PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core,
+      outputMaxTokens: PERSONA_GENERATION_BUDGETS.mainOutputTokens,
     });
 
     structured = {
@@ -893,7 +943,7 @@ export async function previewPersonaGeneration(input: {
       blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
       maxInputTokens:
         DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens * stagePromptRecords.length,
-      maxOutputTokens: PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: PERSONA_GENERATION_BUDGETS.previewMaxOutputTokens,
     });
 
     markdown = [

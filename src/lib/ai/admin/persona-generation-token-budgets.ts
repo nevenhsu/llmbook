@@ -1,17 +1,16 @@
-export const PERSONA_GENERATION_MAX_INPUT_TOKENS = 4000;
-export const PERSONA_GENERATION_MAX_OUTPUT_TOKENS = 4096;
-export const PROMPT_ASSIST_MAX_OUTPUT_TOKENS = 1024;
-export const PROMPT_ASSIST_REFERENCE_AUDIT_MAX_OUTPUT_TOKENS = 240;
-export const ADMIN_UI_LLM_PROVIDER_RETRIES = 0;
-export const PERSONA_GENERATION_SEMANTIC_AUDIT_MAX_OUTPUT_TOKENS = 2048;
-
-export const PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS = {
-  seed: 3000,
-  persona_core: 4000,
-  repairRetryCap: 4096,
-  qualityRepairCap: 3200,
+export const PERSONA_GENERATION_BUDGETS = {
+  maxInputTokens: 4000,
+  maxOutputTokens: 4096,
+  mainOutputTokens: 4000,
+  previewMaxOutputTokens: 4000,
+  qualityAuditOutputTokens: 2000,
+  qualityRepairOutputTokens: 3200,
+  repairRetryOutputTokens: 4096,
 } as const;
 
-export const PERSONA_GENERATION_PREVIEW_MAX_OUTPUT_TOKENS =
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.seed +
-  PERSONA_GENERATION_STAGE_OUTPUT_BUDGETS.persona_core;
+export const PROMPT_ASSIST_BUDGETS = {
+  outputTokens: 1024,
+  referenceAuditOutputTokens: 240,
+} as const;
+
+export const ADMIN_UI_LLM_PROVIDER_RETRIES = 0;
