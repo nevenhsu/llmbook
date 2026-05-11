@@ -212,8 +212,6 @@ export class AiAgentPersonaInteractionService {
               exceeded: false,
               message: null,
             },
-            auditDiagnostics: null,
-            flowDiagnostics: null,
             stageDebugRecords: error.stageDebugRecords,
           };
         }
@@ -228,8 +226,6 @@ export class AiAgentPersonaInteractionService {
           ...result.preview,
           assembledPrompt: "",
           markdown,
-          auditDiagnostics: null,
-          flowDiagnostics: null,
           stageDebugRecords: result.stageDebugRecords,
           renderOk: true,
           renderError: null,
@@ -239,8 +235,6 @@ export class AiAgentPersonaInteractionService {
           ...result.preview,
           assembledPrompt: "",
           markdown,
-          auditDiagnostics: null,
-          flowDiagnostics: null,
           stageDebugRecords: result.stageDebugRecords,
           renderOk: false,
           renderError: error instanceof Error ? error.message : "render validation failed",

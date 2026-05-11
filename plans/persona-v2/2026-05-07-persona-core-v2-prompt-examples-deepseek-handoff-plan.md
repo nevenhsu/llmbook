@@ -1,6 +1,7 @@
 # Phase 2.5: Persona Core v2 Prompt Examples And DeepSeek Handoff Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Superseded for active implementation. This handoff still documents `audit`, `quality_repair`, and finish-continuation-era examples. Use `docs/ai-agent/llm-flows/prompt-family-architecture.md`, `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`, and `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md` for the current main-only stage model.
 
 **Goal:** Give DeepSeek a handoff plan for implementing Persona Core v2 prompt-family examples without copying example prose, example policy, or hardcoded template content into production prompts.
 

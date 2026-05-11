@@ -22,11 +22,8 @@ import {
   POST_BODY_SCHEMA_META,
   COMMENT_SCHEMA_META,
   REPLY_SCHEMA_META,
-  getAuditSchema,
-  getAuditSchemaMeta,
   type SchemaMetadata,
 } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
-import type { z } from "zod";
 import {
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
@@ -49,7 +46,7 @@ import type {
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 
-export type PersonaInteractionStagePurpose = "main" | "schema_repair" | "audit" | "quality_repair";
+export type PersonaInteractionStagePurpose = "main";
 
 export type PersonaInteractionStageResult = {
   assembledPrompt: string;
@@ -258,9 +255,6 @@ export class AiAgentPersonaInteractionStageService {
 
     const personaPacketText = personaPacket?.renderedText ?? "";
 
-    const includeExpandedContext =
-      input.stagePurpose === "main" || input.stagePurpose === "schema_repair";
-
     const maxOutputTokens = getInteractionMaxOutputTokens({
       actionType: input.taskType,
       stagePurpose: input.stagePurpose,
@@ -276,34 +270,29 @@ export class AiAgentPersonaInteractionStageService {
           personaPacket,
           personaPacketText,
         })
-      : includeExpandedContext
-        ? buildPromptBlocks({
-            actionType: input.taskType,
-            globalDraft: input.document.globalPolicyDraft,
-            outputStyle: input.document.globalPolicyDraft.styleGuide,
-            agentProfile: formatAgentProfile({
-              displayName: profile.persona.display_name,
-              username: profile.persona.username,
-              bio: profile.persona.bio,
+      : buildPromptBlocks({
+          actionType: input.taskType,
+          globalDraft: input.document.globalPolicyDraft,
+          outputStyle: input.document.globalPolicyDraft.styleGuide,
+          agentProfile: formatAgentProfile({
+            displayName: profile.persona.display_name,
+            username: profile.persona.username,
+            bio: profile.persona.bio,
+          }),
+          plannerMode:
+            input.taskType === "post_plan"
+              ? "This stage is planning and scoring, not final writing."
+              : undefined,
+          agentCore: personaPacketText,
+          boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
+          targetContext:
+            input.targetContextText ??
+            formatTargetContext({
+              taskType: input.taskType,
+              targetContext: input.targetContext,
             }),
-            plannerMode:
-              input.taskType === "post_plan"
-                ? "This stage is planning and scoring, not final writing."
-                : undefined,
-            agentCore: personaPacketText,
-            boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
-            targetContext:
-              input.targetContextText ??
-              formatTargetContext({
-                taskType: input.taskType,
-                targetContext: input.targetContext,
-              }),
-            taskContext: input.taskContext,
-          })
-        : buildLeanStageBlocks({
-            document: input.document,
-            taskContext: input.taskContext,
-          });
+          taskContext: input.taskContext,
+        });
     const assembledPrompt = formatPrompt(blocks);
     const tokenBudget = buildTokenBudgetSignal({
       blocks,
@@ -311,46 +300,18 @@ export class AiAgentPersonaInteractionStageService {
       maxOutputTokens,
     });
 
-    // Determine if this stage should use structured invocation
-    const isAudit = input.stagePurpose === "audit";
-    const isJsonStage =
-      input.stagePurpose === "main" ||
-      input.stagePurpose === "quality_repair" ||
-      input.stagePurpose === "schema_repair" ||
-      isAudit;
-
-    if (isJsonStage) {
-      // Resolve the appropriate schema and metadata
-      let stageSchema: z.ZodTypeAny;
-      let schemaMeta: SchemaMetadata;
-
-      if (isAudit) {
-        stageSchema = getAuditSchema(input.taskType, contentMode);
-        schemaMeta = getAuditSchemaMeta(input.taskType, contentMode);
-      } else {
-        const resolved = resolveStageSchema(input.taskType);
-        if (!resolved) {
-          return this.invokeRawAndReturn(
-            assembledPrompt,
-            tokenBudget,
-            maxOutputTokens,
-            model,
-            provider,
-            invocationConfig,
-            registry,
-            input,
-          );
-        }
-        stageSchema = resolved;
-        schemaMeta =
-          resolveFlowSchemaMeta(input.taskType) ??
-          ({
-            schemaName: "Unknown",
-            validationRules: [],
-            allowedRepairPaths: [],
-            immutablePaths: [],
-          } satisfies SchemaMetadata);
-      }
+    // Main stage always uses structured invocation when a schema is resolvable
+    const resolved = resolveStageSchema(input.taskType);
+    if (resolved) {
+      const stageSchema = resolved;
+      const schemaMeta =
+        resolveFlowSchemaMeta(input.taskType) ??
+        ({
+          schemaName: "Unknown",
+          validationRules: [],
+          allowedRepairPaths: [],
+          immutablePaths: [],
+        } satisfies SchemaMetadata);
 
       const structuredResult = await invokeStructuredLLM({
         registry,
@@ -359,7 +320,7 @@ export class AiAgentPersonaInteractionStageService {
         modelInput: {
           prompt: assembledPrompt,
           maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
-          temperature: isAudit ? 0 : 0.3,
+          temperature: 0.3,
           metadata: {
             _m: {
               stagePurpose: input.stagePurpose,
@@ -464,7 +425,7 @@ export class AiAgentPersonaInteractionStageService {
       modelInput: {
         prompt: assembledPrompt,
         maxOutputTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
-        temperature: input.stagePurpose === "audit" ? 0 : 0.3,
+        temperature: 0.3,
       },
       entityId: `persona-interaction-stage:${input.stagePurpose}:${model.id}`,
       timeoutMs: invocationConfig.timeoutMs,
@@ -540,7 +501,6 @@ export async function runPersonaInteractionStage(
     renderOk: true,
     renderError: null,
     tokenBudget: stageResult.tokenBudget,
-    auditDiagnostics: null,
     stageDebugRecords: stageResult.debugRecord ? [stageResult.debugRecord] : undefined,
   };
 }

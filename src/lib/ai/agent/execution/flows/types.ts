@@ -4,7 +4,6 @@ import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overv
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
-import type { PostPlanAuditChecks } from "@/lib/ai/prompt-runtime/post-plan-audit";
 
 export type TextFlowKind = "post" | "comment" | "reply";
 
@@ -20,8 +19,6 @@ export type FlowDiagnostics = {
   attempts: Array<{
     stage: string;
     main: number;
-    schemaRepair: number;
-    repair: number;
     regenerate: number;
   }>;
   stageResults: Array<{
@@ -42,35 +39,6 @@ export type FlowDiagnostics = {
       novelty: number;
     };
   }>;
-  planningAudit?: {
-    contract: "post_plan_audit";
-    status: "passed" | "passed_after_repair" | "failed";
-    repairApplied: boolean;
-    issues: string[];
-    checks: PostPlanAuditChecks;
-  };
-  bodyAudit?: {
-    contract: "post_body_audit";
-    status: "passed" | "passed_after_repair";
-    repairApplied: boolean;
-    issues: string[];
-    contentChecks: {
-      angle_fidelity: "pass" | "fail";
-      body_usefulness: "pass" | "fail";
-      markdown_structure: "pass" | "fail";
-    };
-    personaChecks: {
-      body_persona_fit: "pass" | "fail";
-      anti_style_compliance: "pass" | "fail";
-    };
-  };
-  audit?: {
-    contract: "comment_audit" | "reply_audit";
-    status: "passed" | "passed_after_repair";
-    repairApplied: boolean;
-    issues: string[];
-    checks: Record<string, "pass" | "fail">;
-  };
 };
 
 export type TextFlowExecutionErrorCauseCategory =
@@ -78,8 +46,6 @@ export type TextFlowExecutionErrorCauseCategory =
   | "empty_output"
   | "schema_validation"
   | "deterministic_gate"
-  | "semantic_audit"
-  | "quality_repair"
   | "render_validation";
 
 export class TextFlowExecutionError extends Error {
@@ -156,8 +122,6 @@ export function parseTextFlowFailureSummary(
         "empty_output",
         "schema_validation",
         "deterministic_gate",
-        "semantic_audit",
-        "quality_repair",
         "render_validation",
       ].includes(String(parsed.causeCategory))
     ) {
@@ -245,7 +209,7 @@ export type TextFlowModuleRunInput = {
     personaId: string;
     modelId: string;
     taskType: PromptActionType;
-    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
+    stagePurpose: "main";
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;
@@ -313,8 +277,6 @@ export function buildPassedSingleStageDiagnostics(stage: string): FlowDiagnostic
       {
         stage,
         main: 1,
-        schemaRepair: 0,
-        repair: 0,
         regenerate: 0,
       },
     ],
@@ -333,8 +295,6 @@ export function buildModuleMetadata(input: {
     model_id: input.modelSelection.modelId,
     provider_key: input.modelSelection.providerKey,
     model_key: input.modelSelection.modelKey,
-    audit_status: input.preview.auditDiagnostics?.status ?? null,
-    repair_applied: input.preview.auditDiagnostics?.repairApplied ?? false,
     task_type: input.task.taskType,
     dispatch_kind: input.task.dispatchKind,
     flow_kind: input.flowKind,

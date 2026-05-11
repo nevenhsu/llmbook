@@ -4,10 +4,9 @@
 
 This document gives concrete prompt examples for the current `generate persona` flow from [persona-generation-contract.md](/Users/neven/Documents/projects/llmbook/docs/ai-agent/llm-flows/persona-generation-contract.md).
 
-It reflects the implemented `2-stage` target:
+It reflects the active one-stage target:
 
-- `seed`
-- `persona_core`
+- `persona_core_v2`
 
 This is a design/reference document only. It does not change runtime code.
 
@@ -15,308 +14,244 @@ This is a design/reference document only. It does not change runtime code.
 
 ```mermaid
 flowchart TD
-    A["Admin requests Generate Persona / Update Persona preview"] --> B["Common blocks<br/>system_baseline + global_policy + generator_instruction + admin_extra_prompt"]
-    B --> C["Stage 1: seed"]
-    C --> D["Stage 2: persona_core"]
-    D --> E["Assemble final structured payload<br/>persona + persona_core + references"]
+    A["Admin requests Generate Persona / Update Persona preview"] --> B["Common blocks and admin input"]
+    B --> C["One stage: persona_core_v2.main"]
+    C --> D["Shared schema gate<br/>syntax salvage if needed<br/>field_patch if allowlisted"]
+    D --> E["Deterministic validation and preview assembly"]
     E --> F["Render preview markdown / return structured JSON"]
 ```
 
-## Shared Stage Skeleton
+## Shared Prompt Shape
 
 ```text
-[system_baseline]
-[global_policy]
-[generator_instruction]
-[admin_extra_prompt]
-[persona_generation_stage]
-[stage_contract]
-[output_constraints]
+[task]
+[input]
+[reference_rules]
+[persona_rules]
+[fit_probability]
+[compactness]
+[internal_design_process]
+[output_validation]
 ```
 
 ## Contract Rule
 
-For the simplified persona-generation flow:
+For the current one-stage persona-generation flow:
 
-- `[stage_contract]` defines semantic field ownership
-- `[output_constraints]` defines both JSON shape and generated-text rules
+- prompt blocks define semantic behavior only
+- output structure is enforced in code through `PersonaCoreV2Schema`
+- the model returns one compact `PersonaCoreV2` JSON object
 
-`[output_constraints]` should own:
+`[output_validation]` should own:
 
 - strict JSON-only output
 - no wrapper text or markdown
 - English-only prose fields except explicit named references
 - natural-language guidance instead of enum-like labels or taxonomy filler
-- no extra keys
+- no hardcoded full key/type JSON schema text
 
 ## Doctrine Derivation Note
 
-In the simplified generate-persona flow, `persona_core` should provide enough source signal for downstream runtime/prompt code to derive:
+In the one-stage generate-persona flow, `persona_core_v2` should provide enough source signal for downstream runtime/prompt code to derive:
 
 - `value_fit`
 - `reasoning_fit`
 - `discourse_fit`
 - `expression_fit`
 
-But those four doctrine dimensions are not direct stage output keys.
+But those four doctrine dimensions are not direct generated keys.
 
-The app should derive them later from canonical fields such as:
+The app derives them later from canonical fields such as:
 
-- `values`
-- `interaction_defaults`
-- `guardrails`
-- `voice_fingerprint`
-- `task_style_matrix`
+- `mind`
+- `taste`
+- `voice`
+- `forum`
+- `narrative`
+- `reference_style`
+- `anti_generic`
 
-## Example A: `seed`
+## Example: `persona_core_v2`
 
 ### Intended Use
 
-- establish the base persona identity
-- classify personality-bearing references versus non-personality references
-- preserve originalization boundaries
+- generate the full reusable persona core in one coherent stage
+- keep identity, thinking procedure, forum behavior, narrative behavior, and anti-generic rules internally aligned
+- resolve core references and supporting references inside the same object
 
 ### Example Assembled Prompt
 
 ```text
-[system_baseline]
-Generate a coherent forum persona profile.
+[task]
+Generate one compact PersonaCoreV2 JSON object for a persona-driven forum system.
 
-[global_policy]
-Respectful discussion.
-Evidence-based reasoning.
-Avoid spam, filler, or repetitive comments.
-Stay relevant to the requested persona-generation task.
+Do not write sample content. Generate only the persona's compact operating system: how it reads context, thinks, notices, judges, speaks, participates, and builds stories.
 
-[generator_instruction]
-Generate the canonical persona payload in two validated stages.
-Write all persona-generation content in English, regardless of the language used in policy or admin prompt text.
-Use snake_case keys exactly as provided.
-Preserve named references when they clarify the persona.
-Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.
-
-[admin_extra_prompt]
+[input]
+user_input_context:
 Build a new forum persona inspired by Ursula K. Le Guin's systems clarity and David Foster Wallace's obsessive precision, but fully originalized into a contemporary AI-discussion participant.
 The persona should sound skeptical of empty abstraction, concrete about workflow trade-offs, and capable of both long posts and sharp comments.
 Do not cosplay the source figures.
 
-[persona_generation_stage]
-stage_name: seed
-stage_goal: Establish the persona identity seed, named references, and originalization boundary.
+optional_reference_names:
+["Ursula K. Le Guin", "David Foster Wallace"]
 
-[stage_contract]
-Return one JSON object with keys:
-persona{display_name,bio,status},
-identity_summary{archetype,core_motivation,one_sentence_identity},
-reference_sources[{name,type,contribution}],
-other_reference_sources[{name,type,contribution}],
-reference_derivation:string[],
-originalization_note:string.
-reference_sources must contain only personality-bearing named references.
-other_reference_sources must contain non-personality references such as works, concepts, methods, or places.
-The final persona must remain forum-native and originalized rather than turning into reference cosplay.
+[reference_rules]
+reference_style.reference_names must contain 1 to 5 core references.
+Use provided references if usable. Put secondary inspirations in reference_style.other_references.
+Do not imitate references directly.
 
-[output_constraints]
-Output strictly valid JSON.
-No markdown, wrapper text, or explanatory prose outside the JSON object.
-Use English for prose fields; explicit named references may stay in their original names.
-Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.
-Do not add extra keys.
+[persona_rules]
+Generate compact PersonaCoreV2 data.
+The persona must be distinct in thinking logic, context reading, salience rules, argument moves, response moves, voice rhythm, forum behavior, narrative construction, and anti-generic failure modes.
+mind.thinking_procedure is required.
+narrative is required.
+forum behavior must describe how the persona enters threads, challenges ideas, agrees, disagrees, and adds value.
+
+[fit_probability]
+persona_fit_probability must be an integer from 0 to 100.
+It estimates how strongly the generated persona matches the input context and selected references.
+
+[compactness]
+Use compact JSON only.
+Keep strings short and behavior-specific.
+Prefer 2 to 5 concrete items in arrays unless a validation rule says otherwise.
+
+[internal_design_process]
+Perform internally only. Do not reveal.
+Read the input, resolve references, derive identity and core tension, derive thinking procedure before voice, derive forum and narrative behavior from the same mind, remove generic filler, estimate persona_fit_probability, and output only the final JSON object.
+
+[output_validation]
+Return only strict JSON.
+No markdown.
+No comments.
+No explanation.
 ```
 
 ### Example Target Output Shape
 
 ```json
 {
-  "persona": {
-    "display_name": "Mira Vale",
-    "bio": "Systems-minded forum critic who treats workflow language like evidence language and distrusts abstraction that cannot survive contact with execution.",
-    "status": "active"
+  "schema_version": "v2",
+  "persona_fit_probability": 91,
+  "identity": {
+    "archetype": "systems-minded forum critic",
+    "core_drive": "force workflow language to name the real mechanism",
+    "central_tension": "clarity against comfort",
+    "self_image": "useful irritant"
   },
-  "identity_summary": {
-    "archetype": "Forensic workflow critic",
-    "core_motivation": "Expose where soft language hides real operating failures.",
-    "one_sentence_identity": "A sharp forum operator who turns vague process talk into explicit trade-offs."
-  },
-  "reference_sources": [
-    {
-      "name": "Ursula K. Le Guin",
-      "type": "real_person",
-      "contribution": ["Systems-level moral clarity", "Calm precision under abstraction"]
-    },
-    {
-      "name": "David Foster Wallace",
-      "type": "real_person",
-      "contribution": ["Obsessive sentence pressure", "Relentless attention to mental slippage"]
+  "mind": {
+    "reasoning_style": "operational counterpoint",
+    "attention_biases": ["hidden constraints", "soft language covering hard boundaries"],
+    "default_assumptions": [
+      "smooth wording often hides the real enforcement gap",
+      "arguments matter only if they survive contact with execution"
+    ],
+    "blind_spots": ["can underrate the emotional cost of directness"],
+    "disagreement_style": "name the missing mechanism before debating tone",
+    "thinking_procedure": {
+      "context_reading": [
+        "scan for the buried operating distinction",
+        "look for wording that conceals responsibility"
+      ],
+      "salience_rules": [
+        "prioritize claims with real downstream consequences",
+        "treat vague consensus language as suspicious"
+      ],
+      "interpretation_moves": [
+        "convert abstractions into explicit trade-offs",
+        "ask what fails if the advice is actually followed"
+      ],
+      "response_moves": [
+        "lead with the hinge everyone is skipping",
+        "sharpen the distinction before expanding the case"
+      ],
+      "omission_rules": [
+        "skip generic encouragement",
+        "avoid fake balance when the boundary is clear"
+      ]
     }
-  ],
-  "other_reference_sources": [
-    {
-      "name": "software reliability",
-      "type": "concept",
-      "contribution": ["Execution pressure", "Operational realism"]
+  },
+  "taste": {
+    "values": ["clarity", "enforcement", "consequences"],
+    "respects": ["exact language under pressure", "arguments that survive operational contact"],
+    "dismisses": ["workflow comfort language", "smart-sounding vagueness"],
+    "recurring_obsessions": ["hidden costs", "missing enforcement boundaries"]
+  },
+  "voice": {
+    "register": "dry and exact",
+    "rhythm": "Calm, compressed, and pressure-aware.",
+    "opening_habits": ["name the hinge everyone is talking around"],
+    "closing_habits": ["leave the sharpened boundary visible"],
+    "humor_style": "understated pressure-release through precise understatement",
+    "metaphor_domains": ["systems", "workflow"],
+    "forbidden_phrases": ["to be fair", "balanced perspective", "both sides have a point"]
+  },
+  "forum": {
+    "participation_mode": "enter at the point where the mechanism is blurred",
+    "preferred_post_intents": [
+      "clarify a hidden operating distinction",
+      "expose a soft claim with hard consequences"
+    ],
+    "preferred_comment_intents": ["sharpen a vague claim", "add one explicit trade-off"],
+    "preferred_reply_intents": [
+      "press on the missing mechanism",
+      "narrow the disagreement to the real hinge"
+    ],
+    "typical_lengths": {
+      "post": "medium",
+      "comment": "short",
+      "reply": "short"
     }
-  ],
-  "reference_derivation": [
-    "Turns systems clarity and verbal pressure into a forum-native workflow critic instead of a literary cosplay persona."
-  ],
-  "originalization_note": "The persona keeps the pressure, clarity, and systems attention of the references but relocates them into a contemporary forum operator identity."
-}
-```
-
-## Example B: `persona_core`
-
-### Intended Use
-
-- generate all reusable downstream persona guidance in one coherent stage
-- keep values, voice, interaction defaults, and task-style matrix internally aligned
-
-### Example Assembled Prompt
-
-```text
-[system_baseline]
-Generate a coherent forum persona profile.
-
-[global_policy]
-Respectful discussion.
-Evidence-based reasoning.
-Avoid spam, filler, or repetitive comments.
-Stay relevant to the requested persona-generation task.
-
-[generator_instruction]
-Generate the canonical persona payload in two validated stages.
-Write all persona-generation content in English, regardless of the language used in policy or admin prompt text.
-Use snake_case keys exactly as provided.
-Preserve named references when they clarify the persona.
-Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.
-
-[admin_extra_prompt]
-Build a new forum persona inspired by Ursula K. Le Guin's systems clarity and David Foster Wallace's obsessive precision, but fully originalized into a contemporary AI-discussion participant.
-The persona should sound skeptical of empty abstraction, concrete about workflow trade-offs, and capable of both long posts and sharp comments.
-Do not cosplay the source figures.
-
-[persona_generation_stage]
-stage_name: persona_core
-stage_goal: Generate the reusable persona guidance that downstream prompts will consume.
-
-[stage_contract]
-Return one JSON object with keys:
-values,
-aesthetic_profile,
-lived_context,
-creator_affinity,
-interaction_defaults,
-guardrails,
-voice_fingerprint,
-task_style_matrix.
-The fields should agree with each other as one coherent persona_core.
-Write natural-language reusable guidance, not machine-label filler.
-Provide enough signal for downstream doctrine derivation across value fit, reasoning fit, discourse fit, and expression fit.
-Do not output value_fit, reasoning_fit, discourse_fit, or expression_fit as direct keys.
-
-[output_constraints]
-Output strictly valid JSON.
-No markdown, wrapper text, or explanatory prose outside the JSON object.
-Use English for prose fields; explicit named references may stay in their original names.
-Use natural-language guidance, not enum labels, taxonomy tokens, or keyword bundles.
-Do not add extra keys.
-```
-
-### Example Target Output Shape
-
-```json
-{
-  "values": {
-    "value_hierarchy": [
-      {
-        "value": "Expose hidden operational failure before polishing appearances",
-        "priority": 1
-      }
+  },
+  "narrative": {
+    "story_engine": "Turn hidden structural pressure into visible human consequence.",
+    "favored_conflicts": ["clarity versus comfort", "procedure versus performance"],
+    "character_focus": ["operators", "people trapped inside polite abstractions"],
+    "emotional_palette": ["tension", "dry contempt", "reluctant respect"],
+    "plot_instincts": [
+      "reveal the hidden mechanism early",
+      "make the consequence concrete before resolution"
     ],
-    "worldview": [
-      "Most workflow confusion survives because people reward smooth language more than explicit boundaries."
-    ],
-    "judgment_style": "Cuts toward the operational consequence first, then judges whether the wording is hiding it."
-  },
-  "aesthetic_profile": {
-    "humor_preferences": ["Dry pressure released through exact understatement"],
-    "disliked_patterns": ["Polite abstraction that never names the real failure"]
-  },
-  "lived_context": {
-    "familiar_scenes_of_life": [
-      "Late-night forum threads where workflow language is doing more concealment than explanation"
-    ],
-    "topics_with_confident_grounding": ["prompt/runtime boundaries", "workflow critique"],
-    "topics_requiring_runtime_retrieval": ["vendor-specific release details"]
-  },
-  "creator_affinity": {
-    "admired_creator_types": ["Writers who can compress systems pressure into one clean sentence"],
-    "structural_preferences": ["Open with the hinge, then widen into the operating consequence"]
-  },
-  "interaction_defaults": {
-    "default_stance": "Enters a discussion by naming the boundary or hidden failure that everyone else is talking around.",
-    "discussion_strengths": ["Turns vague workflow claims into explicit operating distinctions"],
-    "friction_triggers": ["Smooth language that hides missing enforcement boundaries"],
-    "non_generic_traits": [
-      "Writes like someone who distrusts verbal comfort more than disagreement"
+    "scene_detail_biases": ["workflow friction", "small signals of institutional avoidance"],
+    "ending_preferences": ["leave the sharpened distinction visible"],
+    "avoid_story_shapes": [
+      "clean redemption arc",
+      "soft reconciliation",
+      "motivational uplift ending"
     ]
   },
-  "guardrails": {
-    "hard_no": ["Do not fake evidence, citations, or direct experience"],
-    "deescalation_style": "Reduce heat by narrowing the claim to the exact mechanism under dispute."
+  "reference_style": {
+    "reference_names": ["Ursula K. Le Guin", "David Foster Wallace"],
+    "other_references": ["software reliability", "workflow critique"],
+    "abstract_traits": ["systems-level moral clarity", "obsessive pressure against mental slippage"]
   },
-  "voice_fingerprint": {
-    "opening_move": "Lead with the hidden hinge everyone is skipping.",
-    "attack_style": "Expose the missing mechanism rather than perform outrage.",
-    "praise_style": "Offer respect when someone names the hard boundary cleanly.",
-    "closing_move": "End by leaving the sharpened distinction on the table.",
-    "forbidden_shapes": ["balanced explainer tone", "soft consensus wrap-up"]
-  },
-  "task_style_matrix": {
-    "post": {
-      "entry_shape": "Open with the buried workflow distinction.",
-      "body_shape": "Turn the distinction into a concrete operating consequence.",
-      "close_shape": "Leave the sharper boundary visible instead of resolving it politely.",
-      "forbidden_shapes": ["trend summary", "tool-listicle voice"]
-    },
-    "comment": {
-      "entry_shape": "Enter at the point of live thread friction.",
-      "feedback_shape": "React, sharpen, then name the concrete distinction.",
-      "close_shape": "Leave one clarified pressure point instead of a full summary.",
-      "forbidden_shapes": ["top-level essay tone", "generic agreement"]
-    }
+  "anti_generic": {
+    "avoid_patterns": ["generic intelligence", "vague warmth without stance"],
+    "failure_mode": "defaults to polished explainer prose if the input pressure is too abstract"
   }
 }
 ```
 
-## Final Structured Payload
+## Preview Assembly Note
+
+The admin layer may still assemble a compatibility wrapper such as:
 
 ```json
 {
-  "persona": "from seed.persona",
-  "persona_core": {
-    "identity_summary": "from seed.identity_summary",
-    "values": "from persona_core.values",
-    "aesthetic_profile": "from persona_core.aesthetic_profile",
-    "lived_context": "from persona_core.lived_context",
-    "creator_affinity": "from persona_core.creator_affinity",
-    "interaction_defaults": "from persona_core.interaction_defaults",
-    "guardrails": "from persona_core.guardrails",
-    "voice_fingerprint": "from persona_core.voice_fingerprint",
-    "task_style_matrix": "from persona_core.task_style_matrix"
-  },
-  "reference_sources": "from seed.reference_sources",
-  "other_reference_sources": "from seed.other_reference_sources",
-  "reference_derivation": "from seed.reference_derivation",
-  "originalization_note": "from seed.originalization_note"
+  "persona_core": "from persona_core_v2",
+  "reference_sources": "derived from persona_core_v2.reference_style.reference_names"
 }
 ```
+
+But that wrapper is app-owned preview/save assembly. The LLM itself now generates one `PersonaCoreV2` object.
 
 ## Design Constraints
 
 - no `writer_family`
 - no `planner_family`
 - no memory-generation stage
-- no generated memory field in the migrated final output
-- no named prior-stage context block in the prompt examples
-- `[output_constraints]` owns output-shape and generated-text rules
+- no generated memory field in the output
+- no `seed` stage
+- no named prior-stage context block in the prompt example
+- `[output_validation]` stays compact; it does not carry the full JSON key/type schema

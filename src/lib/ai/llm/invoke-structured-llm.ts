@@ -14,7 +14,6 @@ import { invokeLLMRaw } from "@/lib/ai/llm/invoke-llm";
 import { runSharedJsonSchemaGate } from "@/lib/ai/json-repair/schema-gate";
 import {
   createFieldPatchAdapter,
-  createFinishContinuationAdapter,
   type PatchLlmInvoker,
 } from "@/lib/ai/json-repair/schema-gate-adapters";
 
@@ -76,10 +75,6 @@ export async function invokeStructuredLLM<T>(
   };
 
   const fieldPatchAdapter = createFieldPatchAdapter(repairRawInvoker, input.entityId);
-  const finishContinuationAdapter = createFinishContinuationAdapter(
-    repairRawInvoker,
-    input.entityId,
-  );
 
   const rawObject = raw.object as Record<string, unknown> | undefined;
   const errorMessage = typeof raw.error === "string" ? raw.error : (raw.errorDetails?.body ?? null);
@@ -97,7 +92,6 @@ export async function invokeStructuredLLM<T>(
     allowedRepairPaths: input.schemaGate.allowedRepairPaths,
     immutablePaths: input.schemaGate.immutablePaths,
     invokeFieldPatch: fieldPatchAdapter,
-    invokeFinishContinuation: finishContinuationAdapter,
     rawObject,
   });
 

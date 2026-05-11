@@ -48,22 +48,12 @@ const SpeakerCandidatesOutputSchema = z.object({
 });
 const OPPORTUNITY_OUTPUT_MAX_TOKENS = 900;
 const CANDIDATE_OUTPUT_MAX_TOKENS = 900;
-const AUDIT_OUTPUT_MAX_TOKENS = 400;
-const REPAIR_OUTPUT_MAX_TOKENS = 900;
 const MAX_STAGE_BATCH_SIZE = 10;
 const MAX_PUBLIC_OPPORTUNITIES_PER_RUN = 100;
 const MAX_STAGE_PROVIDER_RETRIES = 2;
 
 type StageName = "opportunities" | "candidates";
-type StagePhase = "main" | "schema_repair" | "quality_audit" | "quality_repair";
-
-const JsonAuditResultSchema = z.object({
-  pass: z.boolean(),
-  issues: z.array(z.string()),
-  repairInstructions: z.array(z.string()),
-});
-
-type JsonAuditResult = z.infer<typeof JsonAuditResultSchema>;
+type StagePhase = "main";
 
 type OpportunityProbabilityOutput = {
   scores: Array<{
@@ -270,27 +260,6 @@ function parseSpeakerCandidatesOutput(rawText: string): SpeakerCandidatesOutput 
   };
 }
 
-function parseAuditResult(rawText: string): JsonAuditResult {
-  const record = parseJsonObject(rawText);
-  readExactKeys(record, ["issues", "pass", "repair_instructions"], rawText);
-  if (!Array.isArray(record.issues) || !Array.isArray(record.repair_instructions)) {
-    throw new IntakeStageParseError(
-      "audit output must include issues and repair_instructions arrays",
-      rawText,
-    );
-  }
-
-  return {
-    pass: readBoolean(record.pass),
-    issues: record.issues
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item) => item.length > 0),
-    repairInstructions: record.repair_instructions
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item) => item.length > 0),
-  };
-}
-
 function inferOpportunitySource(row: AiOppRow): string {
   if (row.kind === "notification") {
     return "notification";
@@ -408,57 +377,6 @@ function validateSpeakerCandidates(
   };
 }
 
-function buildQualityAuditPrompt(input: {
-  stageName: StageName;
-  contextLabel: string;
-  contextContent: string;
-  parsedOutput: Record<string, unknown>;
-}) {
-  return [
-    `[stage_audit:${input.stageName}]`,
-    "Audit the parsed JSON for semantic quality.",
-    "Return exactly one JSON object.",
-    "Return raw JSON only.",
-    "pass: boolean",
-    "issues: string[]",
-    "repair_instructions: string[]",
-    "If the parsed output is already strong and usable, set pass=true and return empty arrays.",
-    "Keep every issue and repair instruction short and concrete.",
-    "",
-    `[${input.contextLabel}]`,
-    input.contextContent,
-    "",
-    "[parsed_output]",
-    JSON.stringify(input.parsedOutput, null, 2),
-  ].join("\n");
-}
-
-function buildQualityRepairPrompt<T>(input: {
-  basePrompt: string;
-  stageName: StageName;
-  parsedOutput: T;
-  issues: string[];
-  repairInstructions: string[];
-}) {
-  return [
-    input.basePrompt,
-    "",
-    "[quality_repair]",
-    `The previous ${input.stageName} JSON was parseable but failed deterministic checks or semantic audit.`,
-    "Rewrite the full JSON from scratch using the same exact schema.",
-    "Do not add commentary, markdown, or extra keys.",
-    "",
-    "Issues:",
-    ...input.issues.map((issue) => `- ${issue}`),
-    ...(input.repairInstructions.length > 0
-      ? ["", "Repair instructions:", ...input.repairInstructions.map((item) => `- ${item}`)]
-      : []),
-    "",
-    "[previous_parsed_output]",
-    JSON.stringify(input.parsedOutput, null, 2),
-  ].join("\n");
-}
-
 function buildModelKey(result: InvokeLlmOutput | null): string | null {
   if (!result?.providerId || !result?.modelId) {
     return null;
@@ -483,21 +401,6 @@ function resolveIntakeSchemaGate(input: StageInvokeInput): {
   immutablePaths: string[];
 } | null {
   if (!input.output) return null;
-
-  // Audit phases use the audit schema regardless of stageName
-  if (input.phase === "quality_audit") {
-    return {
-      schemaName: "JsonAuditResultSchema",
-      schema: JsonAuditResultSchema,
-      validationRules: [
-        "pass must be boolean",
-        "issues must be array of strings",
-        "repairInstructions must be array of strings",
-      ],
-      allowedRepairPaths: ["pass", "issues", "repairInstructions"],
-      immutablePaths: [],
-    };
-  }
 
   if (input.stageName === "opportunities") {
     return {
@@ -636,7 +539,6 @@ export class AiAgentIntakeStageLlmService {
     basePrompt: string;
     parse: (rawText: string) => T;
     validateDeterministic: (parsed: T) => string[];
-    buildAuditContext: () => { label: string; content: string };
   }): Promise<StageRunResult<T>> {
     const mainResult = await this.deps.invokeStage({
       stageName: input.stageName,
@@ -660,7 +562,7 @@ export class AiAgentIntakeStageLlmService {
       );
     }
 
-    // attemptParse: prefer structured output, fall back to text parse
+    // Prefer structured output, fall back to text parse
     let parsed: T;
     let parsedFrom = mainResult;
     if (mainResult.object) {
@@ -674,111 +576,19 @@ export class AiAgentIntakeStageLlmService {
       }
     }
 
-    // Deterministic + semantic quality check
+    // Deterministic validation only
     const deterministicIssues = input.validateDeterministic(parsed);
-    let audit = await this.runQualityAudit({
-      stageName: input.stageName,
-      parsedOutput: parsed,
-      ...input.buildAuditContext(),
-    });
 
-    if (deterministicIssues.length === 0 && audit.pass) {
+    if (deterministicIssues.length === 0) {
       return {
         parsed,
         modelKey: buildModelKey(parsedFrom),
       };
     }
 
-    // Quality repair: delta-based (matching persona generation pattern)
-    for (const attempt of [1, 2] as const) {
-      const repairResult = await this.deps.invokeStage({
-        stageName: input.stageName,
-        phase: "quality_repair",
-        prompt: buildQualityRepairPrompt({
-          basePrompt: input.basePrompt,
-          stageName: input.stageName,
-          parsedOutput: parsed,
-          issues: [...deterministicIssues, ...audit.issues],
-          repairInstructions: audit.repairInstructions,
-        }),
-        maxOutputTokens: REPAIR_OUTPUT_MAX_TOKENS,
-        temperature: 0.1,
-        entityId: `ai-agent-intake:${input.stageName}:quality-repair:${attempt}`,
-        output:
-          input.stageName === "opportunities"
-            ? Output.object({ schema: OpportunityProbabilityOutputSchema })
-            : Output.object({ schema: SpeakerCandidatesOutputSchema }),
-      });
-
-      if (repairResult.object) {
-        parsed = repairResult.object as T;
-      } else {
-        try {
-          parsed = input.parse(repairResult.text);
-        } catch {
-          if (attempt === 2) break;
-          continue;
-        }
-      }
-      parsedFrom = repairResult;
-
-      const newIssues = input.validateDeterministic(parsed);
-      audit = await this.runQualityAudit({
-        stageName: input.stageName,
-        parsedOutput: parsed,
-        ...input.buildAuditContext(),
-      });
-
-      if (newIssues.length === 0 && audit.pass) {
-        return {
-          parsed,
-          modelKey: buildModelKey(parsedFrom),
-        };
-      }
-    }
-
     throw new Error(
-      `${input.stageName} stage failed validation after repair limit: ${[
-        ...input.validateDeterministic(parsed),
-        ...audit.issues,
-      ].join("; ")}`,
+      `${input.stageName} stage failed deterministic validation: ${deterministicIssues.join("; ")}`,
     );
-  }
-
-  private async runQualityAudit(input: {
-    stageName: StageName;
-    label: string;
-    content: string;
-    parsedOutput: unknown;
-  }): Promise<JsonAuditResult> {
-    const auditResult = await this.deps.invokeStage({
-      stageName: input.stageName,
-      phase: "quality_audit",
-      prompt: buildQualityAuditPrompt({
-        stageName: input.stageName,
-        contextLabel: input.label,
-        contextContent: input.content,
-        parsedOutput: input.parsedOutput as Record<string, unknown>,
-      }),
-      maxOutputTokens: AUDIT_OUTPUT_MAX_TOKENS,
-      temperature: 0,
-      entityId: `ai-agent-intake:${input.stageName}:quality-audit`,
-      output: Output.object({ schema: JsonAuditResultSchema }),
-    });
-
-    if (auditResult.object) {
-      return auditResult.object as JsonAuditResult;
-    }
-
-    try {
-      return parseAuditResult(auditResult.text);
-    } catch {
-      return {
-        pass: false,
-        issues: [`${input.stageName} audit returned invalid JSON.`],
-        repairInstructions: [],
-      };
-    }
   }
 
   public async scoreOpportunities(input: {
@@ -810,13 +620,6 @@ export class AiAgentIntakeStageLlmService {
             parsed,
             selectorInput.opportunities.map((r) => r.opportunityKey),
           ).fatalIssues,
-        buildAuditContext: () => ({
-          label: "available_opportunities",
-          content:
-            selectorInput.opportunities
-              .map((row) => `${row.opportunityKey}: ${row.contentType} / ${row.summary}`)
-              .join("\n") || "(empty)",
-        }),
       });
 
       for (const row of stage.parsed.scores) {
@@ -875,14 +678,6 @@ export class AiAgentIntakeStageLlmService {
             selectedOpportunities.map((r) => r.opportunityKey),
             input.referenceBatch,
           ).fatalIssues,
-        buildAuditContext: () => ({
-          label: "candidate_context",
-          content: JSON.stringify(
-            { selected_opportunities: selectedOpportunities, speaker_batch: input.referenceBatch },
-            null,
-            2,
-          ),
-        }),
       });
 
       for (const row of stage.parsed.speakerCandidates) {

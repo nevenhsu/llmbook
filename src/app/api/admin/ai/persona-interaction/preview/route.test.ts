@@ -47,17 +47,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         exceeded: false,
         message: null,
       },
-      auditDiagnostics: {
-        status: "passed",
-        issues: [],
-        repairGuidance: [],
-        severity: "low",
-        confidence: 0.95,
-        missingSignals: [],
-        repairApplied: false,
-        auditMode: "default",
-        compactRetryUsed: false,
-      },
     });
   });
 

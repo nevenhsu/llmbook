@@ -1543,7 +1543,7 @@ export class AdminAiControlPlaneStore {
     personaId: string;
     modelId: string;
     taskType: PromptActionType;
-    stagePurpose: "main" | "schema_repair" | "audit" | "quality_repair";
+    stagePurpose: "main";
     taskContext: string;
     boardContextText?: string;
     targetContextText?: string;

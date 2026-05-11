@@ -9,11 +9,6 @@ export const FieldPatchRepairSchema = z.object({
   repair: z.array(FieldPatchOperationSchema).min(1).max(20),
 });
 
-export const FinishContinuationSchema = z.object({
-  suffix: z.string().default(""),
-  completed_fragment: z.unknown().optional(),
-});
-
 export function matchesAllowedPath(failingPath: string, allowedPattern: string): boolean {
   const failingParts = failingPath.split(".");
   const allowedParts = allowedPattern.split(".");

@@ -99,19 +99,8 @@ export type PreviewTokenBudget = {
 };
 
 export type PreviewAuditDiagnostics = {
-  contract?: string;
   status: "passed" | "passed_after_repair" | "failed";
   issues: string[];
-  repairGuidance?: string[];
-  severity?: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaAuditSeverity;
-  confidence?: number;
-  missingSignals?: string[];
-  repairApplied: boolean;
-  auditMode?: import("@/lib/ai/prompt-runtime/persona-output-audit").PersonaOutputAuditPromptMode;
-  compactRetryUsed?: boolean;
-  checks?: Record<string, "pass" | "fail">;
-  contentChecks?: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditContentChecks;
-  personaChecks?: import("@/lib/ai/prompt-runtime/post-body-audit").PostBodyAuditPersonaChecks;
 };
 
 export type PreviewFlowDiagnostics = {
@@ -120,8 +109,6 @@ export type PreviewFlowDiagnostics = {
   attempts: Array<{
     stage: string;
     main: number;
-    schemaRepair: number;
-    repair: number;
     regenerate: number;
   }>;
   stageResults: Array<{
@@ -142,35 +129,6 @@ export type PreviewFlowDiagnostics = {
       novelty: number;
     };
   }>;
-  planningAudit?: {
-    contract: "post_plan_audit";
-    status: "passed" | "passed_after_repair" | "failed";
-    repairApplied: boolean;
-    issues: string[];
-    checks: Record<string, "pass" | "fail">;
-  };
-  bodyAudit?: {
-    contract: "post_body_audit";
-    status: "passed" | "passed_after_repair";
-    repairApplied: boolean;
-    issues: string[];
-    contentChecks: {
-      angle_fidelity: "pass" | "fail";
-      body_usefulness: "pass" | "fail";
-      markdown_structure: "pass" | "fail";
-    };
-    personaChecks: {
-      body_persona_fit: "pass" | "fail";
-      anti_style_compliance: "pass" | "fail";
-    };
-  };
-  audit?: {
-    contract: "comment_audit" | "reply_audit";
-    status: "passed" | "passed_after_repair";
-    repairApplied: boolean;
-    issues: string[];
-    checks: Record<string, "pass" | "fail">;
-  };
 };
 
 export type PreviewResult = {
@@ -180,17 +138,7 @@ export type PreviewResult = {
   renderOk: boolean;
   renderError: string | null;
   tokenBudget: PreviewTokenBudget;
-  auditDiagnostics?: PreviewAuditDiagnostics | null;
-  flowDiagnostics?: PreviewFlowDiagnostics | null;
   stageDebugRecords?: StageDebugRecord[] | null;
-};
-
-export type PersonaGenerationSemanticAuditResult = {
-  passes: boolean;
-  inconclusive?: boolean;
-  keptReferenceNames?: string[];
-  issues: string[];
-  repairGuidance: string[];
 };
 
 export class PersonaGenerationParseError extends Error {
@@ -341,10 +289,6 @@ export type PersonaGenerationCoreStage = {
   guardrails: Record<string, unknown>;
   voice_fingerprint: Record<string, unknown>;
   task_style_matrix: Record<string, unknown>;
-};
-
-export type PersonaGenerationQualityRepairDelta = {
-  repair: Record<string, unknown>;
 };
 
 export type PromptBoardRule = {

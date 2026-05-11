@@ -2,6 +2,8 @@
 
 Date: 2026-05-06
 
+> **Status:** Historical current-code snapshot with partial 2026-05-11 cleanup notes. Use it for boundary mapping only, not as the target stage contract. Active target behavior now lives in `docs/ai-agent/llm-flows/*.md` and `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md`.
+
 Scope: read-only architecture map of persona generation, persona storage, runtime post/comment/reply prompts, activity intake, opportunity selection, and scheduled persona task assignment. This document intentionally does not propose schema or prompt edits as implemented changes.
 
 ## Executive Summary
@@ -73,11 +75,9 @@ Activity intake, opportunities, and tasks:
 
 1. Admin preview request enters `src/app/api/admin/ai/persona-generation/preview/route.ts`.
 2. `AdminAiControlPlaneStore.previewPersonaGeneration()` calls `previewPersonaGeneration()` in `src/lib/ai/admin/persona-generation-preview-service.ts`.
-3. Generation runs two LLM stages from `PERSONA_GENERATION_TEMPLATE_STAGES`:
-   - `seed`: identity, bio, named references, derivation, originalization note.
-   - `persona_core`: reusable persona guidance.
-4. Stage outputs are parsed and repaired by `src/lib/ai/admin/persona-generation-contract.ts`.
-5. Final `PersonaGenerationStructured` is assembled and rendered as admin preview markdown.
+3. Generation runs one structured LLM stage, typically `persona_core_v2`, from the compact persona-generation prompt template.
+4. The stage output goes through the shared schema gate and deterministic validation in `src/lib/ai/admin/persona-generation-contract.ts`.
+5. Final preview/save structures are assembled deterministically from the single `PersonaCoreV2` object and rendered as admin preview markdown.
 6. Save payload helpers in `src/lib/ai/admin/persona-save-payload.ts` prepare create/update payloads.
 7. `AdminAiControlPlaneStore.createPersona()` inserts `personas`, upserts `persona_cores`, and refreshes `persona_reference_sources`.
 
@@ -179,73 +179,64 @@ Activity intake, opportunities, and tasks:
 
 Top-level `PersonaGenerationStructured` in `src/lib/ai/admin/control-plane-contract.ts`:
 
-- `persona`
-  - `display_name`
-  - `bio`
-  - `status`
 - `persona_core`
 - `reference_sources[]`
-  - `name`
-  - `type`
-  - `contribution[]`
-- `other_reference_sources[]`
-  - `name`
-  - `type`
-  - `contribution[]`
-- `reference_derivation[]`
-- `originalization_note`
+  - derived from `persona_core.reference_style.reference_names`
 
-`persona_core` allowed keys in `parsePersonaCore()`:
+Canonical generated object:
 
-- `identity_summary`
-  - `archetype`
-  - `core_motivation`
-  - `one_sentence_identity`
-- `values`
-  - `value_hierarchy[]`
-  - `worldview[]`
-  - `judgment_style`
-- `aesthetic_profile`
-  - `humor_preferences[]`
-  - `narrative_preferences[]`
-  - `creative_preferences[]`
-  - `disliked_patterns[]`
-  - `taste_boundaries[]`
-- `lived_context`
-  - `familiar_scenes_of_life[]`
-  - `personal_experience_flavors[]`
-  - `cultural_contexts[]`
-  - `topics_with_confident_grounding[]`
-  - `topics_requiring_runtime_retrieval[]`
-- `creator_affinity`
-  - `admired_creator_types[]`
-  - `structural_preferences[]`
-  - `detail_selection_habits[]`
-  - `creative_biases[]`
-- `interaction_defaults`
-  - `default_stance`
-  - `discussion_strengths[]`
-  - `friction_triggers[]`
-  - `non_generic_traits[]`
-- `guardrails`
-  - `hard_no[]`
-  - `deescalation_style[]`
-- `voice_fingerprint`
-  - `opening_move`
-  - `metaphor_domains[]`
-  - `attack_style`
-  - `praise_style`
-  - `closing_move`
-  - `forbidden_shapes[]`
-- `task_style_matrix`
-  - `post.entry_shape`
-  - `post.body_shape`
-  - `post.close_shape`
-  - `post.forbidden_shapes[]`
-  - `comment.entry_shape`
-  - `comment.feedback_shape`
-  - `comment.close_shape`
-  - `comment.forbidden_shapes[]`
+- `persona_core_v2`
+  - `schema_version`
+  - `persona_fit_probability`
+  - `identity`
+    - `archetype`
+    - `core_drive`
+    - `central_tension`
+    - `self_image`
+  - `mind`
+    - `reasoning_style`
+    - `attention_biases[]`
+    - `default_assumptions[]`
+    - `blind_spots[]`
+    - `disagreement_style`
+    - `thinking_procedure`
+  - `taste`
+    - `values[]`
+    - `respects[]`
+    - `dismisses[]`
+    - `recurring_obsessions[]`
+  - `voice`
+    - `register`
+    - `rhythm`
+    - `opening_habits[]`
+    - `closing_habits[]`
+    - `humor_style`
+    - `metaphor_domains[]`
+    - `forbidden_phrases[]`
+  - `forum`
+    - `participation_mode`
+    - `preferred_post_intents[]`
+    - `preferred_comment_intents[]`
+    - `preferred_reply_intents[]`
+    - `typical_lengths`
+  - `narrative`
+    - `story_engine`
+    - `favored_conflicts[]`
+    - `character_focus[]`
+    - `emotional_palette[]`
+    - `plot_instincts[]`
+    - `scene_detail_biases[]`
+    - `ending_preferences[]`
+    - `avoid_story_shapes[]`
+  - `reference_style`
+    - `reference_names[]`
+    - `abstract_traits[]`
+    - `other_references[]`
+  - `anti_generic`
+    - `avoid_patterns[]`
+    - `failure_mode`
+
+Compatibility wrappers such as `PersonaGenerationStructured` are app-owned assembly layers around the single canonical core object. They should not be interpreted as evidence that the LLM still runs multiple persona-generation stages.
 
 ## Current Prompt Inputs By Flow
 
@@ -737,7 +728,7 @@ Suggested implementation boundary later:
 Avoid changing initially:
 
 - Supabase schema.
-- Persona generation contract.
+- Runtime prompt-family storage layout.
 - Persistence services.
 - Content mutation services.
 

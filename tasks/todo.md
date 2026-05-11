@@ -2,18 +2,25 @@
 
 ## Active
 
-- [x] Inspect one-stage persona-generation budget call sites and isolate legacy multi-stage naming.
-- [x] Add focused coverage for one-stage budget semantics.
-- [x] Refactor persona-generation budgets to one-stage/purpose-based constants and update direct call sites.
-- [x] Run focused verification and record the remaining unrelated prompt-assist test drift.
+- [x] Inspect current llm-flow audit/repair surfaces and DeepSeek handoff dependencies.
+- [x] Draft the new audit/repair-removal handoff plan under `/plans/ai-agent`.
+- [x] Rewrite the active llm-flow reference docs to reflect syntax salvage plus `field_patch` only.
+- [x] Reconcile stale persona-generation docs to the active one-stage `persona_core_v2` contract.
+- [x] Mark stale non-archived Persona v2 implementation plans as superseded where they conflict with the active stage model.
+- [x] Verify tracker/reference consistency and record the planning review note.
 
 ## Current References
 
 - LLM JSON contract: `docs/dev-guidelines/08-llm-json-stage-contract.md`
 - AI-agent flows: `docs/ai-agent/llm-flows`
+- Active plan: `plans/ai-agent/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md`
 
 ## Review
 
+- **2026-05-11:** Marked stale non-archived Persona v2 implementation plans as superseded where they still present retired stage behavior as current guidance. Added explicit status notes to the older prompt-family, schema-gate, patchschema, and integrated DeepSeek plans, and updated the one-stage persona-generation source plan to remove finish-continuation from its top-level contract summary. Verification for this docs-only cleanup was limited to focused grep checks plus diff review.
+- **2026-05-11:** Reconciled current persona-generation docs to the active one-stage Persona v2 plans. Updated `docs/ai-agent/llm-flows/persona-generation-contract.md`, `docs/ai-agent/llm-flows/persona-generation-simplification-examples.md`, `docs/ai-agent/llm-flows/README.md`, and `plans/persona-v2/persona-prompt-architecture-current-map.md` so current references now describe one `persona_core_v2` generation stage rather than `seed -> persona_core`. Verification for this docs-only pass was limited to focused grep checks against active docs/plans plus diff review.
+- **2026-05-11:** Rewrote the active llm-flow reference docs to match the latest repair simplification literally. `docs/dev-guidelines/08-llm-json-stage-contract.md`, `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`, `docs/ai-agent/llm-flows/prompt-family-architecture.md`, and `docs/ai-agent/llm-flows/persona-generation-contract.md` now describe `main -> shared schema gate -> deterministic checks`, with deterministic syntax salvage before parse success and shared `field_patch` only after parseability. The active DeepSeek handoff plan was aligned so Task 5 keeps syntax salvage while still removing finish-continuation, `schema_repair`, `audit`, and `quality_repair`. Verification for this docs-first update was limited to focused grep checks on the touched references and tracker consistency review.
+- **2026-05-11:** Added `plans/ai-agent/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md` as the DeepSeek handoff for simplifying active llm flows. Follow-up review produced three corrections that are now reflected in the plan: intake had been under-scoped, shared structured/schema infrastructure must stay, and the final removal target is `schema_repair`, `audit`, and `quality_repair`, with shared `field_patch` as the only surviving repair mechanism. The plan now explicitly replaces repair-stage exposure with attempt/retry counting plus failure diagnostics. Verification for this planning-only task was limited to targeted code/doc inspection and tracker consistency checks.
 - **2026-05-08:** Simplified `persona-generation-token-budgets.ts` to match the one-stage Persona Core v2 flow. Replaced legacy multi-stage exports (`seed`, `persona_core`, stage-summed preview output, and standalone prompt-assist constants) with purpose-based grouped budgets: `PERSONA_GENERATION_BUDGETS` and `PROMPT_ASSIST_BUDGETS`. Updated the direct runtime/template/mock call sites so preview output now tracks one-stage main generation instead of `seed + persona_core`, and prompt-template input budget no longer multiplies by stage count. Added focused budget tests. Focused tests for token budgets, prompt template, preview service, and preview mock page passed; `git diff --check` passed; TypeScript grep for the touched persona budget files returned no matches. `src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts` still has unrelated pre-existing expectation drift because it asserts the old string return contract instead of the current `{ text, referenceNames }` shape.
 - **2026-05-08:** Fixed `persona-generation-preview-service.ts` audit-flow drift. `persona_core_v2` now actually runs the compact `persona_core_quality_audit` through `validateQualityAsync`, using a narrow audit packet with `identity_anchor` and `persona_core_focus` instead of leaving the semantic-audit helper dead. Also updated quality-repair key targeting from retired v1 keys to current Persona Core v2 keys (`identity`, `mind`, `taste`, `voice`, `forum`, `narrative`, `reference_style`, `anti_generic`). Added focused regression coverage for the audit invocation and prompt packet shape. Verified with focused Vitest runs and `git diff --check`.
 - **2026-05-08:** Fixed DeepSeek prompt-assist reference audit wiring. Service now correctly handles structured `object` results when text is empty. Updated provider to forward `providerOptions` (reasoning effort). Refined `PersonaPromptCard` UI and API to handle `referenceNames`.

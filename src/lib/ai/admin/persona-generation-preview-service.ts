@@ -3,8 +3,6 @@ import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import { Output } from "ai";
-import { z } from "zod";
 import { PersonaCoreV2Schema } from "@/lib/ai/core/persona-core-v2";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
@@ -29,60 +27,14 @@ import {
   formatPrompt,
 } from "@/lib/ai/admin/control-plane-shared";
 import {
-  deepMergeJson,
-  deriveJsonLeafType,
-  deriveJsonSchema,
-} from "@/lib/ai/admin/llm-flow-shared";
-import {
   collectEnglishOnlyIssues,
-  parsePersonaGenerationSemanticAuditResult,
   parsePersonaCoreStageOutput,
-  parseQualityRepairDelta,
   validatePersonaCoreV2Quality,
 } from "@/lib/ai/admin/persona-generation-contract";
 import {
   PERSONA_GENERATION_TEMPLATE_STAGES,
   renderPersonaGenerationStageContract,
 } from "@/lib/ai/admin/persona-generation-prompt-template";
-
-const PersonaGenerationSemanticAuditSchema = z.object({
-  passes: z.boolean(),
-  issues: z.array(z.string()).default([]),
-  repairGuidance: z.array(z.string()).default([]),
-  keptReferenceNames: z.array(z.string()).optional(),
-});
-
-const PersonaGenerationQualityRepairDeltaSchema = z.object({
-  repair: z.record(z.string(), z.unknown()),
-});
-
-function buildPersonaCoreV2AuditPacket(stage: PersonaCoreV2): Record<string, unknown> {
-  return {
-    identity_anchor: {
-      archetype: stage.identity.archetype,
-      core_drive: stage.identity.core_drive,
-      central_tension: stage.identity.central_tension,
-      self_image: stage.identity.self_image,
-      reference_names: stage.reference_style.reference_names,
-      abstract_traits: stage.reference_style.abstract_traits,
-    },
-    persona_core_focus: {
-      thinking_procedure: stage.mind.thinking_procedure,
-      forum: {
-        participation_mode: stage.forum.participation_mode,
-        preferred_post_intents: stage.forum.preferred_post_intents,
-        preferred_comment_intents: stage.forum.preferred_comment_intents,
-        preferred_reply_intents: stage.forum.preferred_reply_intents,
-      },
-      narrative: {
-        story_engine: stage.narrative.story_engine,
-        favored_conflicts: stage.narrative.favored_conflicts,
-        ending_preferences: stage.narrative.ending_preferences,
-      },
-      anti_generic: stage.anti_generic,
-    },
-  };
-}
 
 export async function previewPersonaGeneration(input: {
   modelId: string;
@@ -231,183 +183,12 @@ export async function previewPersonaGeneration(input: {
     return formatPrompt(blocks);
   };
 
-  const runPersonaGenerationSemanticAudit = async (auditInput: {
-    stageName: string;
-    auditLabel: string;
-    instructions: string[];
-    parsedOutput: Record<string, unknown>;
-    defaultIssue: string;
-    failClosedOnTransport?: boolean;
-    fallbackRepairGuidance?: string[];
-  }): Promise<{
-    passes: boolean;
-    keptReferenceNames?: string[];
-    issues: string[];
-    repairGuidance: string[];
-  }> => {
-    const auditPrompt = [
-      `[${auditInput.auditLabel}]`,
-      ...auditInput.instructions,
-      "Keep your response in English.",
-      "The parsed_stage packet is intentionally compact — do not fail because omitted background is missing.",
-      "",
-      "[output_constraints]",
-      "Return exactly one JSON object.",
-      "Return raw JSON only. Do not use markdown fences.",
-      "If the stage passes, return passes=true with empty issues and repairGuidance arrays.",
-      "If the stage fails, keep the whole JSON response under 120 words.",
-      "Do not include analysis, reasoning, or explanatory prose.",
-      "Keep every issue and repairGuidance item short and functional.",
-      "",
-      "[parsed_stage]",
-      (() => {
-        const compactValue = (val: unknown, depth: number): unknown => {
-          if (depth >= 2 && typeof val === "string") return val.slice(0, 50);
-          if (depth >= 4) return null;
-          if (Array.isArray(val)) {
-            const items = val.slice(0, depth >= 2 ? 1 : 2).map((v) => compactValue(v, depth + 1));
-            return items;
-          }
-          if (val && typeof val === "object") {
-            const sub: Record<string, unknown> = {};
-            for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-              sub[k] = compactValue(v, depth + 1);
-            }
-            return sub;
-          }
-          return val;
-        };
-        return JSON.stringify(compactValue(auditInput.parsedOutput, 0));
-      })(),
-    ].join("\n");
-
-    const auditResult = await invokeLLM({
-      registry,
-      taskType: "generic",
-      routeOverride: invocationConfig.route,
-      modelInput: {
-        prompt: auditPrompt,
-        maxOutputTokens: Math.min(
-          PERSONA_GENERATION_BUDGETS.qualityAuditOutputTokens,
-          maxOutputTokens,
-        ),
-        temperature: 0,
-        providerOptions: {
-          xai: {
-            reasoningEffort: "low",
-          },
-          deepseek: {
-            reasoningEffort: "low",
-          },
-        },
-        output: Output.object({ schema: PersonaGenerationSemanticAuditSchema }),
-      },
-      entityId: `persona-generation-preview:${model.id}:${auditInput.stageName}:${auditInput.auditLabel}:semantic-audit-1`,
-      timeoutMs: invocationConfig.timeoutMs,
-      retries: previewProviderRetries,
-      onProviderError: async (event) => {
-        await input.recordLlmInvocationError({
-          providerKey: event.providerId,
-          modelKey: event.modelId,
-          error: event.error,
-          errorDetails: event.errorDetails,
-        });
-      },
-    });
-
-    recordStageAttempt(auditInput.stageName, auditInput.auditLabel, auditResult);
-
-    if (!auditResult.text.trim() && !auditResult.object) {
-      if (!auditInput.failClosedOnTransport) {
-        return { passes: true, issues: [], repairGuidance: [] };
-      }
-      return {
-        passes: false,
-        issues: [auditInput.defaultIssue],
-        repairGuidance: auditInput.fallbackRepairGuidance ?? [],
-      };
-    }
-
-    try {
-      const auditText = auditResult.text.trim() || JSON.stringify(auditResult.object ?? {});
-      const parsed = parsePersonaGenerationSemanticAuditResult(auditText);
-      if (parsed.passes) {
-        return {
-          passes: true,
-          keptReferenceNames: parsed.keptReferenceNames,
-          issues: [],
-          repairGuidance: [],
-        };
-      }
-      return {
-        passes: false,
-        keptReferenceNames: parsed.keptReferenceNames,
-        issues: parsed.issues.length > 0 ? parsed.issues : [auditInput.defaultIssue],
-        repairGuidance: parsed.repairGuidance,
-      };
-    } catch {
-      if (!auditInput.failClosedOnTransport) {
-        return { passes: true, issues: [], repairGuidance: [] };
-      }
-      return {
-        passes: false,
-        issues: [auditInput.defaultIssue],
-        repairGuidance: auditInput.fallbackRepairGuidance ?? [],
-      };
-    }
-  };
-
-  const auditPersonaCoreV2StageQuality = async (
-    stage: PersonaCoreV2,
-  ): Promise<{
-    issues: string[];
-    repairGuidance: string[];
-    normalizedParsedOutput?: PersonaCoreV2;
-  }> => {
-    const auditResult = await runPersonaGenerationSemanticAudit({
-      stageName: "persona_core_v2",
-      auditLabel: "persona_core_quality_audit",
-      instructions: [
-        "Check only these two aspects: persona_core_quality and persona_fit.",
-        "Pass persona_core_quality only if identity, thinking procedure, forum behavior, narrative logic, and anti_generic constraints describe one coherent operating persona.",
-        "Fail persona_core_quality if the packet feels generic, contradictory, reference-cosplay, or too shallow to drive distinct post/comment/reply/story behavior.",
-        "Pass persona_fit only if the reference_names and abstract_traits support the same persona without literal imitation instructions.",
-        "If you fail, keep issues concrete and mention the top-level PersonaCoreV2 key that should change when possible.",
-      ],
-      parsedOutput: buildPersonaCoreV2AuditPacket(stage),
-      defaultIssue: "persona_core_v2 failed semantic quality audit.",
-      failClosedOnTransport: false,
-      fallbackRepairGuidance: [
-        "Tighten the persona around one coherent operating logic across identity, mind, forum, and narrative.",
-        "Keep reference influence abstract and non-imitative.",
-      ],
-    });
-
-    if (auditResult.passes) {
-      return { issues: [], repairGuidance: [] };
-    }
-
-    return {
-      issues: auditResult.issues,
-      repairGuidance: auditResult.repairGuidance,
-    };
-  };
-
-  const deriveRepairType = (val: unknown): string => deriveJsonLeafType(val);
-  const deriveRepairSchema = (value: unknown, prefix: string): string =>
-    deriveJsonSchema(value, prefix);
-
   const runPersonaGenerationStage = async <T>(stageInput: {
     stageName: string;
     stageGoal: string;
     stageContract: string;
     parse: (rawText: string) => T;
     validateQuality?: (parsed: T) => string[];
-    validateQualityAsync?: (parsed: T) => Promise<{
-      issues: string[];
-      repairGuidance?: string[];
-      normalizedParsedOutput?: T;
-    }>;
     carryForwardContext?: Record<string, unknown> | null;
     allowedReferenceNames?: string[];
     outputMaxTokens: number;
@@ -559,36 +340,6 @@ export async function previewPersonaGeneration(input: {
       return result;
     };
 
-    const invokeQualityRepairAttempt = async (prompt: string, attempt: 1 | 2) => {
-      const result = await invokeLLM({
-        registry,
-        taskType: "generic",
-        routeOverride: invocationConfig.route,
-        modelInput: {
-          prompt,
-          maxOutputTokens: Math.min(
-            PERSONA_GENERATION_BUDGETS.qualityRepairOutputTokens,
-            maxOutputTokens,
-          ),
-          temperature: attempt === 1 ? 0.2 : 0.1,
-          output: Output.object({ schema: PersonaGenerationQualityRepairDeltaSchema }),
-        },
-        entityId: `persona-generation-preview:${model.id}:${stageInput.stageName}:quality-repair-${attempt}`,
-        timeoutMs: invocationConfig.timeoutMs,
-        retries: previewProviderRetries,
-        onProviderError: async (event) => {
-          await input.recordLlmInvocationError({
-            providerKey: event.providerId,
-            modelKey: event.modelId,
-            error: event.error,
-            errorDetails: event.errorDetails,
-          });
-        },
-      });
-      recordStageAttempt(stageInput.stageName, `quality-repair-${attempt}`, result);
-      return result;
-    };
-
     const buildStageAttemptDetails = (input: {
       attemptStage: string;
       llmResult: {
@@ -614,105 +365,6 @@ export async function previewPersonaGeneration(input: {
         ...(input.llmResult.error ? { providerError: input.llmResult.error } : {}),
         ...(input.llmResult.errorDetails ? { errorDetails: input.llmResult.errorDetails } : {}),
       };
-    };
-
-    const buildQualityRepairPrompt = (repairInput: {
-      qualityIssues: string[];
-      previousParsedOutput: T;
-      repairGuidance?: string[];
-      isRetry: boolean;
-    }) => {
-      const validKeys = Object.keys(
-        repairInput.previousParsedOutput as Record<string, unknown>,
-      ).join(", ");
-
-      const allText = [...repairInput.qualityIssues, ...(repairInput.repairGuidance ?? [])].join(
-        " ",
-      );
-      const output = repairInput.previousParsedOutput as Record<string, unknown>;
-      const mentionedKeys = Object.keys(output).filter((key) => allText.includes(key));
-      const mappedKeys =
-        mentionedKeys.length === 0
-          ? Object.keys(output).filter((key) => {
-              const lower = allText.toLowerCase();
-              const keywordMap: Record<string, string> = {
-                identity:
-                  "identity archetype core_drive central_tension self_image generic persona fit",
-                mind: "mind thinking_procedure context_reading salience interpretation response omission",
-                taste: "taste values respects dismisses obsessions judgment",
-                voice: "voice register rhythm opening closing humor metaphor phrase tone",
-                forum: "forum participation post comment reply thread discussion behavior",
-                narrative: "narrative story conflict ending scene plot character story_engine",
-                reference_style:
-                  "reference reference_names abstract_traits imitation cosplay literal",
-                anti_generic: "anti_generic generic drift placeholder bland shallow failure_mode",
-              };
-              const keywords = keywordMap[key];
-              if (!keywords) {
-                return false;
-              }
-              return keywords.split(" ").some((word) => lower.includes(word));
-            })
-          : [];
-      const targetedKeys = mappedKeys.length > 0 ? mappedKeys : mentionedKeys;
-      const targetedSchema =
-        targetedKeys.length > 0 && targetedKeys.length < Object.keys(output).length
-          ? targetedKeys
-              .map((key) => {
-                const schema = deriveRepairSchema(output[key], key);
-                return schema
-                  ? `${key}: { ${schema} }`
-                  : `${key}: ${deriveRepairType(output[key])}`;
-              })
-              .join("\n")
-          : "";
-
-      const compactPrevious = JSON.stringify(repairInput.previousParsedOutput);
-      const previousSnippet =
-        compactPrevious.length <= 1200
-          ? compactPrevious
-          : `${compactPrevious.slice(0, 800)}...${compactPrevious.slice(-300)}`;
-
-      const header = repairInput.isRetry
-        ? "[retry] Parse failed on previous delta. Return a SMALL delta with only the fields mentioned in the issue below."
-        : `[repair] Fix the quality issue below. Return a delta with only the fields that need to change.`;
-
-      const lines = [
-        header,
-        "",
-        `Available keys: ${validKeys}`,
-        "",
-        "Issue to fix:",
-        ...repairInput.qualityIssues.map((issue) => `- ${issue}`),
-        ...(repairInput.repairGuidance?.length
-          ? ["", "Repair guidance:", ...repairInput.repairGuidance.map((item) => `- ${item}`)]
-          : []),
-      ];
-
-      if (targetedSchema) {
-        lines.push(
-          "",
-          "Sub-key structure for the field(s) to fix — use these exact sub-keys:",
-          targetedSchema,
-        );
-      }
-
-      lines.push(
-        "",
-        "What to return: a delta object containing ONLY the sub-fields that need changing.",
-        "Use the exact sub-key names from the structure above. Do NOT invent new sub-key names.",
-        "Leave all other fields and sub-fields unchanged — they are already correct.",
-        "",
-        '[output] {"repair": {"<key>": {"<sub_key>": "<new value>"}}}',
-        "Return raw JSON only. No markdown, no commentary.",
-        "",
-        "=== CONTEXT ONLY — DO NOT INCLUDE IN OUTPUT ===",
-        "Reference JSON showing current values:",
-        previousSnippet,
-        "=== END CONTEXT ===",
-      );
-
-      return lines.join("\n");
     };
 
     const attemptParse = (
@@ -780,115 +432,26 @@ export async function previewPersonaGeneration(input: {
       return attemptParse(first, "attempt-1");
     };
 
-    const collectStageQualityResult = async (candidateStage: T) => {
-      const baseDeterministicQualityIssues = [
+    const collectStageQualityResult = (candidateStage: T): string[] => {
+      return [
         ...collectEnglishOnlyIssues(candidateStage, {
           allowedReferenceNames: stageInput.allowedReferenceNames,
         }),
         ...(stageInput.validateQuality?.(candidateStage) ?? []),
       ];
-      const semanticQualityResult =
-        baseDeterministicQualityIssues.length === 0 && stageInput.validateQualityAsync
-          ? await stageInput.validateQualityAsync(candidateStage)
-          : null;
-      const normalizedParsedOutput =
-        semanticQualityResult?.normalizedParsedOutput ?? candidateStage;
-      const deterministicQualityIssues =
-        normalizedParsedOutput === candidateStage
-          ? baseDeterministicQualityIssues
-          : [
-              ...collectEnglishOnlyIssues(normalizedParsedOutput, {
-                allowedReferenceNames: stageInput.allowedReferenceNames,
-              }),
-              ...(stageInput.validateQuality?.(normalizedParsedOutput) ?? []),
-            ];
-      return {
-        normalizedParsedOutput,
-        issues: [...deterministicQualityIssues, ...(semanticQualityResult?.issues ?? [])],
-        repairGuidance: semanticQualityResult?.repairGuidance,
-      };
     };
 
     const parsedStage = (await resolveParsedStage()) as T;
-    const initialQualityResult = await collectStageQualityResult(parsedStage);
-    if (initialQualityResult.issues.length === 0) {
-      return initialQualityResult.normalizedParsedOutput;
-    }
-
-    let previousParsedOutput = initialQualityResult.normalizedParsedOutput;
-    let pendingQualityIssues = initialQualityResult.issues;
-    let pendingRepairGuidance = initialQualityResult.repairGuidance;
-    let isQualityRepairRetry = false;
-
-    for (const attempt of [1, 2] as const) {
-      const qualityRepairPrompt = buildQualityRepairPrompt({
-        qualityIssues: pendingQualityIssues,
-        previousParsedOutput: previousParsedOutput,
-        repairGuidance: pendingRepairGuidance,
-        isRetry: isQualityRepairRetry,
+    const qualityIssues = collectStageQualityResult(parsedStage);
+    if (qualityIssues.length > 0) {
+      throw new PersonaGenerationQualityError({
+        stageName: stageInput.stageName,
+        message: `persona generation stage ${stageInput.stageName} quality check failed`,
+        rawOutput: "",
+        issues: qualityIssues,
       });
-
-      const qualityRepaired = await invokeQualityRepairAttempt(qualityRepairPrompt, attempt);
-      const attemptStage = `quality-repair-${attempt}` as const;
-
-      try {
-        const qualityRepairText =
-          qualityRepaired.text.trim() || JSON.stringify(qualityRepaired.object ?? {});
-        const delta = parseQualityRepairDelta(qualityRepairText);
-        const rawMerged = deepMergeJson(
-          previousParsedOutput as Record<string, unknown>,
-          delta.repair,
-        );
-        const mergedStage = stageInput.parse(JSON.stringify(rawMerged)) as T;
-        const repairedQualityResult = await collectStageQualityResult(mergedStage);
-        if (repairedQualityResult.issues.length === 0) {
-          return repairedQualityResult.normalizedParsedOutput;
-        }
-        if (attempt === 2) {
-          throw new PersonaGenerationQualityError({
-            stageName: stageInput.stageName,
-            message: `persona generation stage ${stageInput.stageName} quality repair failed`,
-            rawOutput: qualityRepaired.text,
-            issues: repairedQualityResult.issues,
-            details: buildStageAttemptDetails({
-              attemptStage,
-              llmResult: qualityRepaired,
-            }),
-          });
-        }
-
-        previousParsedOutput = repairedQualityResult.normalizedParsedOutput;
-        pendingQualityIssues = repairedQualityResult.issues;
-        pendingRepairGuidance = repairedQualityResult.repairGuidance;
-        isQualityRepairRetry = false;
-      } catch (parseError) {
-        if (attempt === 2) {
-          if (parseError instanceof PersonaGenerationQualityError) {
-            throw parseError;
-          }
-          const parseMessage =
-            parseError instanceof Error ? parseError.message : "unknown parse error";
-          throw new PersonaGenerationQualityError({
-            stageName: stageInput.stageName,
-            message: `persona generation stage ${stageInput.stageName} quality repair delta parse or merge failed: ${parseMessage}`,
-            rawOutput: qualityRepaired.text,
-            issues: pendingQualityIssues,
-            details: buildStageAttemptDetails({
-              attemptStage,
-              llmResult: qualityRepaired,
-            }),
-          });
-        }
-        isQualityRepairRetry = true;
-      }
     }
-
-    throw new PersonaGenerationQualityError({
-      stageName: stageInput.stageName,
-      message: `persona generation stage ${stageInput.stageName} quality repair failed`,
-      rawOutput: "",
-      issues: pendingQualityIssues,
-    });
+    return parsedStage;
   };
 
   let personaCore!: PersonaCoreV2;
@@ -911,7 +474,6 @@ export async function previewPersonaGeneration(input: {
       parse: (rawText) => PersonaCoreV2Schema.parse(parsePersonaCoreStageOutput(rawText)),
       validateQuality: (stage) =>
         validatePersonaCoreV2Quality(stage as unknown as Record<string, unknown>),
-      validateQualityAsync: auditPersonaCoreV2StageQuality,
       allowedReferenceNames: [],
       outputMaxTokens: PERSONA_GENERATION_BUDGETS.mainOutputTokens,
     });

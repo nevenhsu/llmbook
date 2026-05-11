@@ -1,6 +1,7 @@
 # Persona Core v2 DeepSeek Integrated Implementation Plan
 
 > **For DeepSeek:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Superseded for active implementation. This integrated plan still assumes finish-continuation and prompt-level audit/quality-repair stages. Use `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md` together with the current llm-flow docs instead.
 
 **Goal:** Implement Persona Core v2 one-stage persona generation, Persona v2 prompt-family static constants, code-owned structured output schemas, and the shared JSON schema repair gate as one coherent runtime migration.
 

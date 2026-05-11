@@ -1,6 +1,7 @@
 # Phase 2: Persona Core v2 Prompt Family Integration Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Superseded for active implementation. This plan assumes prompt-level `schema_repair`, `audit`, and `quality_repair` stages that are retired by the current llm-flow contract. Use `docs/ai-agent/llm-flows/prompt-family-architecture.md`, `docs/dev-guidelines/08-llm-json-stage-contract.md`, and `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md` instead.
 
 **Goal:** Replace ad-hoc persona prompt blocks with compact `PersonaRuntimePacket.renderedText` while preserving staged post, comment, reply, audit, schema repair, and quality repair flows, ensuring each persona interprets context through persona-specific thinking procedures before final writing, and carrying the writer-output `metadata.probability` contract through v2 prompt output contracts.
 

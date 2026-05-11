@@ -1,6 +1,7 @@
 # PatchSchema FieldPatch DeepSeek Implementation Plan
 
 > **For DeepSeek:** implement this task-by-task. Keep the scope limited to schema-gate repair, PatchSchema handling, loose JSON normalization, and wiring existing JSON-producing Persona v2 flows through the shared gate. Do not redesign Persona content prompts beyond removing obsolete schema/key prompt text where the task explicitly says so.
+> **Status:** Superseded for active implementation. Historical notes about dynamic patching and loose normalization remain useful, but the finish-continuation state machine described here is no longer the active contract. Use `docs/dev-guidelines/08-llm-json-stage-contract.md` for the current repair boundary.
 
 **Goal:** Replace the current placeholder FieldPatch behavior with a reliable schema-bound repair framework that handles `finishReason=length`, AI SDK object-generation parse failures, dynamic missing-field patching, loose extra-key stripping, and overlong-array normalization before any audit or downstream runtime logic consumes LLM JSON.
 

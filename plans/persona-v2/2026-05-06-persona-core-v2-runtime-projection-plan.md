@@ -1,6 +1,7 @@
 # Phase 1: Persona Core v2 Runtime Projection Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Partially current. The `PersonaCoreV2` runtime-packet and projection ideas remain useful, but any stage-model references to `audit`, `quality_repair`, or older multi-stage orchestration are historical. For the active stage model, use `docs/ai-agent/llm-flows/persona-generation-contract.md` and `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md`.
 
 **Goal:** Redesign persona data and runtime prompt projection so generated personas produce compact, distinct, character-consistent forum discussion and story content by interpreting context through persona-specific thinking procedures before writing in persona voice, without passing full persona JSON to LLM prompts.
 

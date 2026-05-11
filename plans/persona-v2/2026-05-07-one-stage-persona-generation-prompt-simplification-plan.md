@@ -1,10 +1,11 @@
 # Phase 3: One-Stage Persona Core v2 Generation Prompt Simplification Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Still relevant for the one-stage `persona_core_v2` prompt shape and data contract. However, its older finish-continuation wording is superseded by the current shared repair contract in `docs/dev-guidelines/08-llm-json-stage-contract.md` and the llm-flow simplification handoff in `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md`.
 
 **Goal:** Replace the current multi-stage persona generation prompt with one compact prompt that returns exactly one complete `PersonaCoreV2` JSON object from `user_input_context` and optional user-provided reference names.
 
-**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by `invokeStructuredLLM` using AI SDK structured output `Output.object({ schema: PersonaCoreV2Schema })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair follows `docs/dev-guidelines/08-llm-json-stage-contract.md`: `invokeLLMRaw` may pass the provider output schema, while the structured wrapper owns schema-gate validation, `finishReason=length` continuation, length-equivalent object-generation failure routing, and FieldPatch.
+**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by `invokeStructuredLLM` using AI SDK structured output `Output.object({ schema: PersonaCoreV2Schema })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair follows `docs/dev-guidelines/08-llm-json-stage-contract.md`: `invokeLLMRaw` may pass the provider output schema, while the structured wrapper owns schema-gate validation, deterministic syntax salvage for structurally incomplete prefixes, and `field_patch` for parseable schema-invalid JSON.
 
 **Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` with `Output.object`, Zod, existing persona generation admin flow, `PersonaCoreV2`, staged LLM JSON parsing and repair, Vitest.
 
@@ -22,8 +23,8 @@
 - Use `PersonaCoreV2Schema` as the code-owned structured output contract.
 - Delete hardcoded key/type JSON schema text from the generation prompt.
 - Route persona generation through `invokeStructuredLLM`; raw provider invocation still passes `Output.object({ schema: PersonaCoreV2Schema })`, but schema validation and repair live in the shared schema gate.
-- Update invalid JSON and `finishReason=length` repair behavior so length truncation first tries deterministic syntactic closure or finish continuation, then falls back to FieldPatch instead of regenerating the full object.
-- Treat AI SDK structured-output errors that say the provider failed to generate a parsable object conforming to the schema as `finishReason=length`-equivalent for repair routing.
+- Update invalid JSON and `finishReason=length` repair behavior so length truncation first tries deterministic syntactic closure; if the payload remains unparseable, fail closed or retry the main stage at the flow boundary instead of using finish-continuation.
+- Treat AI SDK structured-output errors that say the provider failed to generate a parsable object conforming to the schema as `finishReason=length`-equivalent for deterministic syntax-salvage routing and failure diagnostics.
 
 ## Non-Goals
 

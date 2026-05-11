@@ -21,16 +21,12 @@ export type SharedJsonSchemaGateInput<T = unknown> = {
   allowedRepairPaths: string[];
   immutablePaths: string[];
   invokeFieldPatch?: (input: FieldPatchInvocationInput) => Promise<FieldPatchInvocationResult>;
-  invokeFinishContinuation?: (
-    input: FinishContinuationInvocationInput,
-  ) => Promise<FinishContinuationInvocationResult>;
 };
 
 export type SchemaGateAttemptStage =
   | "initial_parse"
   | "loose_normalize"
   | "deterministic_tail_closure"
-  | "finish_continuation"
   | "field_patch"
   | "final_validate";
 
@@ -92,21 +88,5 @@ export type FieldPatchOperation = {
 export interface FieldPatchInvocationResult {
   repair: FieldPatchOperation[];
   rawText?: string | null;
-  finishReason?: string | null;
-}
-
-export interface FinishContinuationInvocationInput {
-  schemaName: string;
-  flowId: string;
-  stageId: string;
-  partialJsonText: string;
-  likelyOpenPath: string | null;
-  requiredRemainingPaths: string[];
-  validationSummary: string;
-}
-
-export interface FinishContinuationInvocationResult {
-  suffix: string;
-  completed_fragment?: unknown;
   finishReason?: string | null;
 }

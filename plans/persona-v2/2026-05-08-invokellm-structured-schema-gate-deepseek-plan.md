@@ -1,6 +1,7 @@
 # InvokeLLM Structured Schema Gate DeepSeek Implementation Plan
 
 > **For DeepSeek:** implement this task-by-task. Keep the scope limited to LLM invocation layering, structured JSON schema-gate repair, and wiring existing Persona v2 JSON outputs through that gate. Do not redesign persona behavior prompts except where obsolete full-schema prompt text must be removed to avoid conflicting with code-owned schemas.
+> **Status:** Superseded for active implementation. This plan still encodes finish-continuation as an active repair path. Use `docs/dev-guidelines/08-llm-json-stage-contract.md` and `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md` for the current deterministic-syntax-salvage plus `field_patch` model.
 
 **Goal:** Make every opt-in structured JSON LLM output pass through one shared schema check and repair path, while pure string outputs continue to use raw text invocation.
 

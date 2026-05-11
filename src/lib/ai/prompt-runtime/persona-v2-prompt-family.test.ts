@@ -13,7 +13,6 @@ import {
   buildPostBodyPersonaPacket,
   buildCommentPersonaPacket,
   buildReplyPersonaPacket,
-  buildAuditPersonaPacket,
 } from "./persona-runtime-packets";
 import { FALLBACK_PERSONA_CORE_V2 } from "@/lib/ai/core/persona-core-v2";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
@@ -198,13 +197,6 @@ function makePacket(flow: any, contentMode: any = "discussion") {
       displayName: "Test",
       core: FIXTURE,
     });
-  if (flow === "audit")
-    return buildAuditPersonaPacket({
-      contentMode,
-      personaId: "p1",
-      displayName: "Test",
-      core: FIXTURE,
-    });
   throw new Error(`unknown flow: ${flow}`);
 }
 
@@ -232,27 +224,6 @@ describe("persona-v2-prompt-family", () => {
       const policy = buildActionModePolicy({ flow: "post_body", stagePurpose: "main" });
       expect(policy).toContain("write");
       expect(policy).not.toContain("plan");
-    });
-
-    it("generates audit policy", () => {
-      const policy = buildActionModePolicy({ flow: "post_body", stagePurpose: "audit" });
-      const lower = policy.toLowerCase();
-      expect(lower).toContain("audit");
-      expect(lower).toContain("judge");
-    });
-
-    it("generates schema_repair policy", () => {
-      const policy = buildActionModePolicy({ flow: "comment", stagePurpose: "schema_repair" });
-      const lower = policy.toLowerCase();
-      expect(lower).toContain("repair");
-      expect(lower).toContain("schema");
-    });
-
-    it("generates quality_repair policy", () => {
-      const policy = buildActionModePolicy({ flow: "reply", stagePurpose: "quality_repair" });
-      const lower = policy.toLowerCase();
-      expect(lower).toContain("repair");
-      expect(lower).toContain("quality");
     });
   });
 
@@ -556,70 +527,6 @@ describe("persona-v2-prompt-family", () => {
     });
   });
 
-  describe("schema_repair block order", () => {
-    it("builds schema repair with schema_error_packet and previous_invalid_output", () => {
-      const packet = makePacket("post_body");
-      const result = buildPersonaPromptFamilyV2(
-        makeInput({
-          flow: "post_body",
-          personaPacket: packet,
-          stagePurpose: "schema_repair",
-          schemaErrors: ["missing body field"],
-          failedOutput: '{"tags":["#test"]}',
-        }),
-      );
-      const names = allBlockNames(result);
-      expect(names).toContain("schema_error_packet");
-      expect(names).toContain("failed_output");
-      expect(names).toContain("anti_generic_contract");
-    });
-  });
-
-  describe("audit block order", () => {
-    it("builds audit prompt with lean order", () => {
-      const packet = makePacket("audit");
-      const result = buildPersonaPromptFamilyV2(
-        makeInput({
-          flow: "post_body",
-          personaPacket: packet,
-          stagePurpose: "audit",
-          targetContext: "Audit target excerpt",
-        }),
-      );
-      const names = allBlockNames(result);
-      expect(names).toEqual([
-        "system_baseline",
-        "global_policy",
-        "action_mode_policy",
-        "content_mode_policy",
-        "persona_runtime_packet",
-        "audit_context",
-        "output_contract",
-      ]);
-    });
-  });
-
-  describe("quality_repair block order", () => {
-    it("builds quality repair with repair_context, failed_output, audit_errors", () => {
-      const packet = makePacket("audit");
-      const result = buildPersonaPromptFamilyV2(
-        makeInput({
-          flow: "post_body",
-          personaPacket: packet,
-          stagePurpose: "quality_repair",
-          auditIssues: ["body too generic"],
-          repairGuidance: ["add specific examples"],
-          failedOutput: '{"body":"hello","tags":["#test"]}',
-        }),
-      );
-      const names = allBlockNames(result);
-      expect(names).toContain("repair_context");
-      expect(names).toContain("failed_output");
-      expect(names).toContain("audit_errors");
-      expect(names).toContain("anti_generic_contract");
-    });
-  });
-
   describe("warnings", () => {
     it("emits warning when persona packet has warnings", () => {
       const packet = makePacket("post_body");
@@ -631,7 +538,7 @@ describe("persona-v2-prompt-family", () => {
     });
   });
 
-  describe("includes anti_generic_contract in main and repair, not audit", () => {
+  describe("anti_generic_contract always included", () => {
     it("main stage includes anti_generic_contract", () => {
       const packet = makePacket("post_body");
       const result = buildPersonaPromptFamilyV2(
@@ -639,20 +546,6 @@ describe("persona-v2-prompt-family", () => {
       );
       const names = allBlockNames(result);
       expect(names).toContain("anti_generic_contract");
-    });
-
-    it("audit stage excludes anti_generic_contract", () => {
-      const packet = makePacket("audit");
-      const result = buildPersonaPromptFamilyV2(
-        makeInput({
-          flow: "post_body",
-          personaPacket: packet,
-          stagePurpose: "audit",
-          targetContext: "x",
-        }),
-      );
-      const names = allBlockNames(result);
-      expect(names).not.toContain("anti_generic_contract");
     });
   });
 });

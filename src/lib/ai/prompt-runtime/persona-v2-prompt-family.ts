@@ -14,20 +14,10 @@ export type PersonaPromptFamilyV2BlockName =
   | "board_context"
   | "target_context"
   | "task_context"
-  | "schema_error_packet"
-  | "previous_invalid_output"
-  | "audit_context"
-  | "repair_context"
-  | "failed_output"
-  | "audit_errors"
   | "output_contract"
   | "anti_generic_contract";
 
-export type PersonaPromptFamilyV2StagePurpose =
-  | "main"
-  | "schema_repair"
-  | "audit"
-  | "quality_repair";
+export type PersonaPromptFamilyV2StagePurpose = "main";
 
 export type PersonaPromptFamilyV2Block = {
   name: PersonaPromptFamilyV2BlockName;
@@ -55,10 +45,6 @@ export type PersonaPromptFamilyV2Input = {
   targetContext?: string | null;
   taskContext: string;
   outputContract: string;
-  schemaErrors?: string[];
-  auditIssues?: string[];
-  repairGuidance?: string[];
-  failedOutput?: string | null;
 };
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
@@ -82,27 +68,17 @@ function makeBlock(
 
 function buildActionModePolicyForFlow(
   flow: Exclude<PersonaFlowKind, "audit">,
-  stagePurpose: PersonaPromptFamilyV2StagePurpose,
+  _stagePurpose: PersonaPromptFamilyV2StagePurpose,
 ): string {
-  switch (stagePurpose) {
-    case "main":
-      switch (flow) {
-        case "post_plan":
-          return "This stage is planning and scoring candidate post ideas. Plan forum-native angles, compare against recent posts, and score conservatively. Do not write the final post body.";
-        case "post_body":
-          return "This stage writes the final post body for a locked title and thesis. Write accurate, persona-specific markdown. Do not change the locked title.";
-        case "comment":
-          return "This stage writes a top-level comment that adds net-new value to the root post. Stay standalone and avoid repeating recent top-level comments.";
-        case "reply":
-          return "This stage writes a threaded reply that responds directly to the source comment. Continue the thread without restarting the whole topic.";
-      }
-      break;
-    case "schema_repair":
-      return `Schema repair: the previous ${flow} output failed JSON validation. Rewrite as exactly one valid JSON object. Do not add prose outside the JSON.`;
-    case "audit":
-      return "This stage audits output quality and persona fit. Judge the generated output against the required checks. Return a structured audit result. Do not rewrite the output.";
-    case "quality_repair":
-      return `Quality repair: the previous ${flow} output passed schema validation but failed audit. Rewrite to address the specific audit issues while keeping the same JSON contract.`;
+  switch (flow) {
+    case "post_plan":
+      return "This stage is planning and scoring candidate post ideas. Plan forum-native angles, compare against recent posts, and score conservatively. Do not write the final post body.";
+    case "post_body":
+      return "This stage writes the final post body for a locked title and thesis. Write accurate, persona-specific markdown. Do not change the locked title.";
+    case "comment":
+      return "This stage writes a top-level comment that adds net-new value to the root post. Stay standalone and avoid repeating recent top-level comments.";
+    case "reply":
+      return "This stage writes a threaded reply that responds directly to the source comment. Continue the thread without restarting the whole topic.";
   }
 }
 
@@ -225,60 +201,19 @@ export function buildProcedureNonExposureRule(input: {
   return "Do not reveal internal procedure, context readings, or interpretation steps in the output.";
 }
 
-function getBlockOrder(input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV2BlockName[] {
-  switch (input.stagePurpose) {
-    case "audit":
-      return [
-        "system_baseline",
-        "global_policy",
-        "action_mode_policy",
-        "content_mode_policy",
-        "persona_runtime_packet",
-        "audit_context",
-        "output_contract",
-      ];
-    case "schema_repair":
-      return [
-        "system_baseline",
-        "global_policy",
-        "action_mode_policy",
-        "content_mode_policy",
-        "persona_runtime_packet",
-        "board_context",
-        "target_context",
-        "task_context",
-        "schema_error_packet",
-        "failed_output",
-        "output_contract",
-        "anti_generic_contract",
-      ];
-    case "quality_repair":
-      return [
-        "system_baseline",
-        "global_policy",
-        "action_mode_policy",
-        "content_mode_policy",
-        "persona_runtime_packet",
-        "repair_context",
-        "failed_output",
-        "audit_errors",
-        "output_contract",
-        "anti_generic_contract",
-      ];
-    default:
-      return [
-        "system_baseline",
-        "global_policy",
-        "action_mode_policy",
-        "content_mode_policy",
-        "persona_runtime_packet",
-        "board_context",
-        "target_context",
-        "task_context",
-        "output_contract",
-        "anti_generic_contract",
-      ];
-  }
+function getBlockOrder(_input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV2BlockName[] {
+  return [
+    "system_baseline",
+    "global_policy",
+    "action_mode_policy",
+    "content_mode_policy",
+    "persona_runtime_packet",
+    "board_context",
+    "target_context",
+    "task_context",
+    "output_contract",
+    "anti_generic_contract",
+  ];
 }
 
 function renderBlocks(blocks: PersonaPromptFamilyV2Block[]): string {
@@ -312,21 +247,6 @@ export function buildPersonaPromptFamilyV2(
     warnings.push(...input.personaPacket.warnings.map((w) => `persona_packet: ${w}`));
   }
 
-  const failedOutputText =
-    input.failedOutput != null && input.failedOutput.length > 0
-      ? truncateText(input.failedOutput, 800)
-      : "";
-
-  const schemaErrorText =
-    input.schemaErrors && input.schemaErrors.length > 0
-      ? input.schemaErrors.map((e) => `- ${e}`).join("\n")
-      : "";
-
-  const auditIssuesText =
-    input.auditIssues && input.auditIssues.length > 0
-      ? input.auditIssues.map((i) => `- ${i}`).join("\n")
-      : "";
-
   const allBlocks: Partial<Record<PersonaPromptFamilyV2BlockName, PersonaPromptFamilyV2Block>> = {
     system_baseline: makeBlock("system_baseline", input.systemBaseline),
     global_policy: makeBlock("global_policy", input.globalPolicy),
@@ -339,25 +259,6 @@ export function buildPersonaPromptFamilyV2(
       input.targetContext ?? "No target context available.",
     ),
     task_context: makeBlock("task_context", input.taskContext),
-    schema_error_packet: schemaErrorText
-      ? makeBlock("schema_error_packet", schemaErrorText)
-      : undefined,
-    previous_invalid_output: failedOutputText
-      ? makeBlock("previous_invalid_output", failedOutputText)
-      : undefined,
-    audit_context:
-      (input.targetContext ?? input.taskContext)
-        ? makeBlock(
-            "audit_context",
-            [input.targetContext, input.taskContext].filter(Boolean).join("\n\n"),
-          )
-        : undefined,
-    repair_context: makeBlock(
-      "repair_context",
-      [input.taskContext, input.targetContext ?? ""].filter(Boolean).join("\n\n"),
-    ),
-    failed_output: failedOutputText ? makeBlock("failed_output", failedOutputText) : undefined,
-    audit_errors: auditIssuesText ? makeBlock("audit_errors", auditIssuesText) : undefined,
     output_contract: makeBlock("output_contract", input.outputContract),
     anti_generic_contract: makeBlock("anti_generic_contract", antiGenericContract),
   };

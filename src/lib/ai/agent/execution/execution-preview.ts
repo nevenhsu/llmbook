@@ -1,8 +1,4 @@
-import type {
-  PreviewAuditDiagnostics,
-  PreviewResult,
-  PreviewTokenBudget,
-} from "@/lib/ai/admin/control-plane-contract";
+import type { PreviewResult, PreviewTokenBudget } from "@/lib/ai/admin/control-plane-contract";
 import {
   mockInteractionPreview,
   mockInteractionPreviewComment,
@@ -46,23 +42,6 @@ export type AiAgentExecutionParsedOutput =
       };
       error: string | null;
     };
-
-export type AiAgentExecutionAuditOutput = {
-  contract: NonNullable<PreviewAuditDiagnostics["contract"]>;
-  pass: boolean;
-  status: PreviewAuditDiagnostics["status"];
-  issues: string[];
-  repairInstructions: string[];
-  severity: string | null;
-  confidence: number | null;
-  missingSignals: string[];
-  repairApplied: boolean;
-  auditMode: string | null;
-  compactRetryUsed: boolean;
-  checks?: PreviewAuditDiagnostics["checks"];
-  contentChecks?: PreviewAuditDiagnostics["contentChecks"];
-  personaChecks?: PreviewAuditDiagnostics["personaChecks"];
-};
 
 export type AiAgentDeterministicCheckResult = {
   stage: "schema_validate" | "deterministic_checks";
@@ -113,7 +92,6 @@ export type AiAgentExecutionPreview = {
   rawOutput: string;
   parsedOutput: AiAgentExecutionParsedOutput;
   deterministicChecks: AiAgentDeterministicCheckResult[];
-  auditedOutput: AiAgentExecutionAuditOutput | null;
   writePlan: AiAgentExecutionWritePlan;
   previewSurface: PreviewResult;
 };
@@ -262,31 +240,6 @@ function buildDeterministicChecks(
   ];
 }
 
-function buildAuditedOutput(
-  auditDiagnostics: PreviewAuditDiagnostics | null | undefined,
-): AiAgentExecutionAuditOutput | null {
-  if (!auditDiagnostics) {
-    return null;
-  }
-
-  return {
-    contract: auditDiagnostics.contract ?? "persona_output_audit",
-    pass: auditDiagnostics.status === "passed" || auditDiagnostics.status === "passed_after_repair",
-    status: auditDiagnostics.status,
-    issues: auditDiagnostics.issues,
-    repairInstructions: auditDiagnostics.repairGuidance ?? [],
-    severity: auditDiagnostics.severity ?? null,
-    confidence: auditDiagnostics.confidence ?? null,
-    missingSignals: auditDiagnostics.missingSignals ?? [],
-    repairApplied: auditDiagnostics.repairApplied,
-    auditMode: auditDiagnostics.auditMode ?? null,
-    compactRetryUsed: auditDiagnostics.compactRetryUsed ?? false,
-    checks: auditDiagnostics.checks,
-    contentChecks: auditDiagnostics.contentChecks,
-    personaChecks: auditDiagnostics.personaChecks,
-  };
-}
-
 function buildWritePlan(input: {
   candidate: TaskCandidatePreview;
   writeExpectation: TaskWritePreview | null;
@@ -381,7 +334,6 @@ export function buildExecutionPreview(input: {
   const rawOutput = previewSurface.rawResponse ?? previewSurface.markdown;
   const parsedOutput = buildParsedOutput({ candidate, rawOutput });
   const deterministicChecks = buildDeterministicChecks(parsedOutput);
-  const auditedOutput = buildAuditedOutput(previewSurface.auditDiagnostics);
 
   return {
     taskCandidate: candidate,
@@ -406,7 +358,6 @@ export function buildExecutionPreview(input: {
     rawOutput,
     parsedOutput,
     deterministicChecks,
-    auditedOutput,
     writePlan: buildWritePlan({
       candidate,
       writeExpectation,

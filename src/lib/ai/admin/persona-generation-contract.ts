@@ -3,7 +3,6 @@ import {
   PromptAssistError,
   type PersonaGenerationCoreStage,
   type PersonaGenerationSeedStage,
-  type PersonaGenerationSemanticAuditResult,
   type PersonaGenerationStructured,
   type PromptAssistAttemptStage,
   type PromptAssistNamedReference,
@@ -1241,78 +1240,6 @@ function parsePersonaStageObject(rawText: string): Record<string, unknown> {
   return record;
 }
 
-export function parsePersonaGenerationSemanticAuditResult(
-  rawText: string,
-): PersonaGenerationSemanticAuditResult {
-  const trimmed = rawText.trim();
-  if (!trimmed) {
-    return {
-      passes: false,
-      inconclusive: true,
-      issues: ["Semantic audit returned empty output"],
-      repairGuidance: [],
-    };
-  }
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
-    return {
-      passes: false,
-      inconclusive: true,
-      issues: ["Semantic audit output was not a valid JSON object"],
-      repairGuidance: [],
-    };
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
-    return {
-      passes: false,
-      inconclusive: true,
-      issues: ["Semantic audit returned invalid JSON"],
-      repairGuidance: [],
-    };
-  }
-
-  const record = asRecord(parsed);
-  if (!record) {
-    return {
-      passes: false,
-      inconclusive: true,
-      issues: ["Semantic audit must return a JSON object"],
-      repairGuidance: [],
-    };
-  }
-  const issuesRaw = Array.isArray(record.issues) ? record.issues : null;
-  const repairGuidanceRaw = Array.isArray(record.repairGuidance) ? record.repairGuidance : null;
-  const keptReferenceNamesRaw = Array.isArray(record.keptReferenceNames)
-    ? record.keptReferenceNames
-    : null;
-  if (typeof record.passes !== "boolean" || issuesRaw === null || repairGuidanceRaw === null) {
-    throw new PersonaGenerationParseError(
-      "persona generation semantic audit must include boolean passes and string-array issues/repairGuidance",
-      rawText,
-    );
-  }
-
-  return {
-    passes: record.passes,
-    ...(keptReferenceNamesRaw
-      ? {
-          keptReferenceNames: keptReferenceNamesRaw
-            .map((item) => (typeof item === "string" ? item.trim() : ""))
-            .filter((item) => item.length > 0),
-        }
-      : {}),
-    issues: issuesRaw
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item) => item.length > 0),
-    repairGuidance: repairGuidanceRaw
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item) => item.length > 0),
-  };
-}
-
 export function parsePersonaSeedOutput(rawText: string): PersonaGenerationSeedStage {
   try {
     const record = parsePersonaStageObject(rawText);
@@ -1404,32 +1331,4 @@ export function parsePersonaGenerationOutput(rawText: string): {
       rawText,
     );
   }
-}
-
-export function parseQualityRepairDelta(rawText: string): {
-  repair: Record<string, unknown>;
-} {
-  const jsonText = extractJsonFromText(rawText);
-  if (!jsonText) {
-    throw new Error("quality repair delta output is empty");
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new Error("quality repair delta output must be valid JSON");
-  }
-
-  const record = asRecord(parsed);
-  if (!record) {
-    throw new Error("quality repair delta output must be a JSON object");
-  }
-
-  const repairRecord = asRecord(record.repair);
-  if (!repairRecord || Object.keys(repairRecord).length === 0) {
-    throw new Error("quality repair delta must contain a non-empty repair object");
-  }
-
-  return { repair: repairRecord };
 }

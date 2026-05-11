@@ -10,12 +10,7 @@ import {
   tryDeterministicTailClosure,
   deriveOpenPath,
 } from "./response-finisher";
-import {
-  buildFieldPatchSchema,
-  applyFieldPatch,
-  matchesAllowedPath,
-  FinishContinuationSchema,
-} from "./field-patch-schema";
+import { buildFieldPatchSchema, applyFieldPatch, matchesAllowedPath } from "./field-patch-schema";
 import type { z } from "zod";
 
 function zodInnerDef(schema: z.ZodTypeAny): Record<string, unknown> | null {
@@ -263,56 +258,6 @@ export async function runSharedJsonSchemaGate<T>(
           const patchResult = await tryFieldPatch(closed, input, debug, input.finishReason);
           if (patchResult) return patchResult;
         }
-      }
-
-      // Step 3: For continuation_needed, try finish continuation
-      if (classification === "continuation_needed" && input.invokeFinishContinuation) {
-        const contInput = {
-          schemaName: input.schemaName,
-          flowId: input.flowId,
-          stageId: input.stageId,
-          partialJsonText: extraction.json,
-          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json)),
-          requiredRemainingPaths: schemaRequiredPaths,
-          validationSummary: parseError ?? "schema validation failed",
-        };
-        const contResult = await input.invokeFinishContinuation(contInput);
-        debug.attempts.push({
-          attemptStage: "finish_continuation",
-          finishReason: input.finishReason,
-          likelyOpenPath: contInput.likelyOpenPath,
-          requiredRemainingPaths: schemaRequiredPaths,
-          errorSummary: contResult.suffix ? "continuation suffix received" : "continuation empty",
-          repairablePaths: undefined,
-        });
-
-        if (contResult.suffix) {
-          const completed = extraction.json + contResult.suffix;
-          const completedResult = parseAndValidate(completed, input.schema);
-          if (completedResult.success) {
-            debug.status = "repaired";
-            debug.attempts.push({
-              attemptStage: "final_validate",
-              finishReason: input.finishReason,
-              likelyOpenPath: null,
-              requiredRemainingPaths: [],
-              errorSummary: "finish continuation succeeded",
-            });
-            return { status: "valid", value: completedResult.data, debug };
-          }
-
-          // Continuation produced parseable but schema-invalid — route to FieldPatch
-          const patchResult = await tryFieldPatch(completed, input, debug, input.finishReason);
-          if (patchResult) return patchResult;
-        }
-      } else if (classification === "continuation_needed") {
-        debug.attempts.push({
-          attemptStage: "finish_continuation",
-          finishReason: input.finishReason,
-          likelyOpenPath: deriveOpenPath(scanJsonState(extraction.json)),
-          requiredRemainingPaths: schemaRequiredPaths,
-          errorSummary: "continuation callback not available",
-        });
       }
     }
 

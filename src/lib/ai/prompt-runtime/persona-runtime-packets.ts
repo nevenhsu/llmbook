@@ -17,12 +17,11 @@ type BudgetProfile = {
   hardMaxWords: number;
 };
 
-const BUDGETS: Record<PersonaFlowKind, BudgetProfile> = {
+const BUDGETS: Record<Exclude<PersonaFlowKind, "audit">, BudgetProfile> = {
   post_plan: { minWords: 80, maxWords: 160, hardMaxWords: 240 },
   post_body: { minWords: 70, maxWords: 140, hardMaxWords: 200 },
   comment: { minWords: 50, maxWords: 120, hardMaxWords: 180 },
   reply: { minWords: 50, maxWords: 120, hardMaxWords: 180 },
-  audit: { minWords: 50, maxWords: 140, hardMaxWords: 220 },
 };
 
 type SectionKey = keyof PersonaRuntimePacketSections;
@@ -79,13 +78,6 @@ function buildProcedureLine(
         ...tp.context_reading.slice(0, 1),
         ...tp.response_moves.slice(0, 1),
         ...tp.omission_rules.slice(0, 1),
-      ];
-      break;
-    case "audit":
-      parts = [
-        ...tp.context_reading.slice(0, 1),
-        ...tp.salience_rules.slice(0, 1),
-        "verify internal procedure matches output",
       ];
       break;
   }
@@ -253,30 +245,6 @@ function selectSections(
           ),
         ];
         break;
-
-      case "audit":
-        sections.identity = [
-          buildSectionText("identity", `${core.identity.archetype}; ${core.identity.core_drive}`),
-        ];
-        sections.mind = [
-          buildSectionText(
-            "mind",
-            `${core.mind.reasoning_style}; values: ${core.taste.values.join(", ")}`,
-          ),
-        ];
-        sections.antiGeneric = [
-          buildSectionText(
-            "antiGeneric",
-            `${core.anti_generic.avoid_patterns.join(", ")}; failure mode: ${core.anti_generic.failure_mode}`,
-          ),
-        ];
-        sections.referenceStyle = [
-          buildSectionText(
-            "referenceStyle",
-            `traits: ${core.reference_style.abstract_traits.join(", ")}; non-imitation enforced.`,
-          ),
-        ];
-        break;
     }
   } else {
     // story mode
@@ -368,25 +336,6 @@ function selectSections(
           buildSectionText(
             "forum",
             `Reply intent: ${core.forum.preferred_reply_intents.join(", ")}`,
-          ),
-        ];
-        break;
-
-      case "audit":
-        sections.identity = [buildSectionText("identity", core.identity.archetype)];
-        sections.narrative = [
-          buildSectionText(
-            "narrative",
-            `Engine: ${core.narrative.story_engine}; Conflicts: ${core.narrative.favored_conflicts.join(", ")}`,
-          ),
-        ];
-        sections.antiGeneric = [
-          buildSectionText("antiGeneric", core.anti_generic.avoid_patterns.join(", ")),
-        ];
-        sections.referenceStyle = [
-          buildSectionText(
-            "referenceStyle",
-            `traits: ${core.reference_style.abstract_traits.join(", ")}; non-imitation.`,
           ),
         ];
         break;
@@ -650,38 +599,7 @@ export function buildReplyPersonaPacket(input: {
   });
 }
 
-export function buildAuditPersonaPacket(input: {
-  contentMode: ContentMode;
-  personaId: string;
-  displayName?: string | null;
-  core: PersonaCoreV2;
-  auditTargets?: PersonaAuditTarget[];
-}): PersonaAuditEvidencePacket {
-  const packet = buildPersonaRuntimePacket({
-    flow: "audit",
-    contentMode: input.contentMode,
-    personaId: input.personaId,
-    displayName: input.displayName,
-    core: input.core,
-  });
-
-  return {
-    ...packet,
-    flow: "audit",
-    auditTargets: input.auditTargets ?? [
-      "value_fit",
-      "reasoning_fit",
-      "discourse_fit",
-      "expression_fit",
-      "procedure_fit",
-      "anti_generic",
-      "reference_non_imitation",
-      ...(input.contentMode === "story" ? (["narrative_fit"] as PersonaAuditTarget[]) : []),
-    ],
-  };
-}
-
-const FLOW_MAP: Record<string, PersonaFlowKind> = {
+const FLOW_MAP: Record<string, Exclude<PersonaFlowKind, "audit">> = {
   post: "post_body",
   post_plan: "post_plan",
   post_body: "post_body",
@@ -712,15 +630,6 @@ export function buildPersonaPacketForPrompt(input: {
   const flow = FLOW_MAP[input.taskType];
   if (!flow) {
     return null;
-  }
-
-  if (input.stagePurpose === "audit" || input.stagePurpose === "quality_repair") {
-    return buildAuditPersonaPacket({
-      contentMode: input.contentMode,
-      personaId: input.personaId,
-      displayName: input.displayName,
-      core: input.core,
-    });
   }
 
   return buildPersonaRuntimePacket({

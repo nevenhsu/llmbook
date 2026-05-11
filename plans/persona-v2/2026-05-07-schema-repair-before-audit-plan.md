@@ -1,6 +1,7 @@
 # Phase 2.7: Shared JSON Schema Gate Before Audit Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** Superseded for active implementation. This plan predates the removal of prompt-level audit/repair stages and still assumes finish-continuation. Use `docs/dev-guidelines/08-llm-json-stage-contract.md` plus `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md` instead.
 
 **Goal:** Make the shared schema gate mandatory for every app-owned structured JSON LLM output, with Persona Core v2 prompt-family flows as the first integration target, so audits only judge output quality after JSON parsing and schema validation already pass.
 

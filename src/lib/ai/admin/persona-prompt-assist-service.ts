@@ -9,13 +9,18 @@ import {
 } from "@/lib/ai/admin/persona-generation-token-budgets";
 import {
   PromptAssistError,
-  type PersonaGenerationSemanticAuditResult,
   type AiModelConfig,
   type AiProviderConfig,
   type PromptAssistAttemptStage,
   type PromptAssistNamedReference,
   type PromptAssistReferenceResolutionOutput,
 } from "@/lib/ai/admin/control-plane-contract";
+
+type PersonaGenerationSemanticAuditResult = {
+  passes: boolean;
+  issues: string[];
+  repairGuidance: string[];
+};
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
 
 const PromptAssistReferenceOutputSchema = z.object({
@@ -46,10 +51,20 @@ import {
   extractLikelyNamedReferences,
   isLikelyTruncatedPromptAssistText,
   isWeakPromptAssistRewrite,
-  parsePersonaGenerationSemanticAuditResult,
   parsePromptAssistReferenceResolutionOutput,
   validatePromptAssistResult,
 } from "@/lib/ai/admin/persona-generation-contract";
+
+function parsePersonaGenerationSemanticAuditResult(
+  rawText: string,
+): PersonaGenerationSemanticAuditResult {
+  const parsed = PromptAssistReferenceAuditSchema.parse(JSON.parse(rawText));
+  return {
+    passes: parsed.passes,
+    issues: parsed.issues,
+    repairGuidance: parsed.repairGuidance,
+  };
+}
 
 const PROMPT_ASSIST_REFERENCE_REPAIR_MAX_OUTPUT_TOKENS = 320;
 

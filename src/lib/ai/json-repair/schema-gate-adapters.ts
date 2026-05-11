@@ -4,10 +4,8 @@ import type { z } from "zod";
 import type {
   FieldPatchInvocationInput,
   FieldPatchInvocationResult,
-  FinishContinuationInvocationInput,
-  FinishContinuationInvocationResult,
 } from "./schema-gate-contracts";
-import { FieldPatchRepairSchema, FinishContinuationSchema } from "./field-patch-schema";
+import { FieldPatchRepairSchema } from "./field-patch-schema";
 
 export type PatchLlmInvoker = (input: {
   prompt: string;
@@ -70,57 +68,6 @@ export function createFieldPatchAdapter(
     return {
       repair: [],
       rawText: result.text,
-      finishReason: result.finishReason,
-    };
-  };
-}
-
-export function createFinishContinuationAdapter(
-  invokeLlm: PatchLlmInvoker,
-  entityPrefix: string,
-): (input: FinishContinuationInvocationInput) => Promise<FinishContinuationInvocationResult> {
-  return async (input) => {
-    const prompt = [
-      "[finish_continuation]",
-      "The previous JSON output was cut off before completion.",
-      `Schema: ${input.schemaName}`,
-      "",
-      `Required remaining: ${input.requiredRemainingPaths.join(", ") || "unknown"}`,
-      `Likely open at: ${input.likelyOpenPath ?? "unknown"}`,
-      "",
-      "Continue only the missing JSON suffix from where the previous output was cut off.",
-      "Return the suffix as the `suffix` field.",
-      "Do not rewrite the full JSON object.",
-      "Do not include the previous output prefix in your response.",
-      "Do not add commentary or markdown.",
-      "",
-      "Previous output:",
-      input.partialJsonText,
-    ].join("\n");
-
-    const result = await invokeLlm({
-      prompt,
-      maxOutputTokens: 800,
-      temperature: 0.1,
-      output: Output.object({
-        schema: FinishContinuationSchema,
-      }),
-      entityId: `${entityPrefix}:finish-continuation`,
-    });
-
-    if (result.object) {
-      const parsed = result.object as Record<string, unknown>;
-      const suffix = typeof parsed.suffix === "string" ? parsed.suffix : "";
-      return {
-        suffix,
-        completed_fragment: parsed.completed_fragment,
-        finishReason: result.finishReason,
-      };
-    }
-
-    // Fallback: use text as suffix
-    return {
-      suffix: result.text.trim(),
       finishReason: result.finishReason,
     };
   };

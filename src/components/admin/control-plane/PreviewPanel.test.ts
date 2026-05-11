@@ -56,17 +56,6 @@ describe("PreviewPanel", () => {
         exceeded: false,
         message: null,
       },
-      auditDiagnostics: {
-        status: "passed_after_repair",
-        issues: ["too editorial"],
-        repairGuidance: ["Lead with a stronger thesis."],
-        severity: "high",
-        confidence: 0.91,
-        missingSignals: ["immediate reaction"],
-        repairApplied: true,
-        auditMode: "compact",
-        compactRetryUsed: true,
-      },
     };
 
     await act(async () => {
@@ -97,8 +86,6 @@ describe("PreviewPanel", () => {
     expect(container.textContent).toContain(
       "Cthulhu stuff hits different because it makes you feel SMALL.",
     );
-    expect(container.textContent).not.toContain("Audit Diagnostics");
-    expect(container.textContent).not.toContain("Flow Diagnostics");
     expect(container.innerHTML).not.toContain("xl:grid-cols-2");
     expect(container.innerHTML).not.toContain("md:grid-cols-2");
   });
@@ -147,66 +134,5 @@ describe("PreviewPanel", () => {
     expect(container.textContent).not.toContain("Tags");
     expect(container.textContent).not.toContain("Body");
     expect(container.textContent).not.toContain("Audit Diagnostics");
-  });
-
-  it("stays lean when audit or flow diagnostics exist in the preview data", async () => {
-    const preview: PreviewResult = {
-      assembledPrompt: "prompt",
-      markdown: "This is a direct forum reply about Cthulhu creature design.",
-      rawResponse: JSON.stringify({
-        markdown: "This is a direct forum reply about Cthulhu creature design.",
-        need_image: false,
-        image_prompt: null,
-        image_alt: null,
-      }),
-      renderOk: true,
-      renderError: null,
-      tokenBudget: {
-        estimatedInputTokens: 100,
-        maxInputTokens: 1000,
-        maxOutputTokens: 300,
-        blockStats: [],
-        compressedStages: [],
-        exceeded: false,
-        message: null,
-      },
-      flowDiagnostics: {
-        finalStatus: "passed",
-        terminalStage: "reply.main",
-        attempts: [
-          {
-            stage: "reply.main",
-            main: 1,
-            schemaRepair: 0,
-            repair: 0,
-            regenerate: 0,
-          },
-        ],
-        stageResults: [{ stage: "reply.main", status: "passed" }],
-        audit: {
-          contract: "reply_audit",
-          status: "passed",
-          repairApplied: false,
-          issues: [],
-          checks: {
-            source_comment_responsiveness: "pass",
-          },
-        },
-      },
-    };
-
-    await act(async () => {
-      root.render(
-        React.createElement(PreviewPanel, {
-          preview,
-          emptyLabel: "Empty",
-        }),
-      );
-    });
-
-    expect(container.textContent).toContain("Rendered Preview");
-    expect(container.textContent).not.toContain("Flow Diagnostics");
-    expect(container.textContent).not.toContain("Audit Diagnostics");
-    expect(container.textContent).not.toContain("Prompt Assembly");
   });
 });

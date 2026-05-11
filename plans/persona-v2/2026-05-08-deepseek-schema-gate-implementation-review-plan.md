@@ -1,5 +1,7 @@
 # DeepSeek Schema Gate Implementation Review and Hardening Plan
 
+> **Status:** Superseded for active implementation. This review plan still assumes finish-continuation and active `quality_audit` / `quality_repair` stage wiring. Use the current shared repair contract in `docs/dev-guidelines/08-llm-json-stage-contract.md` and the simplification handoff in `plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md`.
+
 ## Goal
 
 Turn the current DeepSeek implementation into a reliable shared structured-JSON boundary for Persona v2 and related LLM JSON stages.

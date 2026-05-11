@@ -4,7 +4,6 @@ import {
   buildPostBodyPersonaPacket,
   buildCommentPersonaPacket,
   buildReplyPersonaPacket,
-  buildAuditPersonaPacket,
   buildPersonaPacketForPrompt,
   normalizePersonaCoreV2,
   buildPersonaRuntimePacket,
@@ -137,16 +136,6 @@ describe("packet budgets", () => {
     });
     expect(packet.wordCount).toBeGreaterThanOrEqual(50);
     expect(packet.wordCount).toBeLessThanOrEqual(180);
-  });
-
-  it("audit discussion stays within budget", () => {
-    const packet = buildAuditPersonaPacket({
-      contentMode: "discussion",
-      personaId: "p1",
-      core: FIXTURE,
-    });
-    expect(packet.wordCount).toBeGreaterThanOrEqual(50);
-    expect(packet.wordCount).toBeLessThanOrEqual(220);
   });
 
   it("post_plan story stays within budget", () => {
@@ -349,65 +338,6 @@ describe("buildPersonaPacketForPrompt", () => {
       core: FIXTURE,
     });
     expect(packet).toBeNull();
-  });
-
-  it("returns audit packet for audit stage", () => {
-    const packet = buildPersonaPacketForPrompt({
-      taskType: "comment",
-      stagePurpose: "audit",
-      contentMode: "discussion",
-      personaId: "p1",
-      core: FIXTURE,
-    });
-    expect(packet).not.toBeNull();
-    expect(packet!.flow).toBe("audit");
-  });
-
-  it("returns audit packet for quality_repair stage", () => {
-    const packet = buildPersonaPacketForPrompt({
-      taskType: "post_body",
-      stagePurpose: "quality_repair",
-      contentMode: "discussion",
-      personaId: "p1",
-      core: FIXTURE,
-    });
-    expect(packet).not.toBeNull();
-    expect(packet!.flow).toBe("audit");
-  });
-});
-
-describe("audit packet", () => {
-  it("includes default audit targets for discussion", () => {
-    const packet = buildAuditPersonaPacket({
-      contentMode: "discussion",
-      personaId: "p1",
-      core: FIXTURE,
-    });
-    expect(packet.auditTargets).toContain("value_fit");
-    expect(packet.auditTargets).toContain("reasoning_fit");
-    expect(packet.auditTargets).toContain("discourse_fit");
-    expect(packet.auditTargets).toContain("expression_fit");
-    expect(packet.auditTargets).toContain("procedure_fit");
-    expect(packet.auditTargets).toContain("anti_generic");
-    expect(packet.auditTargets).toContain("reference_non_imitation");
-  });
-
-  it("includes narrative_fit for story mode", () => {
-    const packet = buildAuditPersonaPacket({
-      contentMode: "story",
-      personaId: "p1",
-      core: FIXTURE,
-    });
-    expect(packet.auditTargets).toContain("narrative_fit");
-  });
-
-  it("does not include narrative_fit for discussion mode", () => {
-    const packet = buildAuditPersonaPacket({
-      contentMode: "discussion",
-      personaId: "p1",
-      core: FIXTURE,
-    });
-    expect(packet.auditTargets).not.toContain("narrative_fit");
   });
 });
 
