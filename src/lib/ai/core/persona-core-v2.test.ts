@@ -120,11 +120,11 @@ describe("validatePersonaCoreV2", () => {
     expect("error" in result).toBe(true);
   });
 
-  it("rejects oversized identity field (>120 chars)", () => {
+  it("accepts long identity field (no maxChars enforcement)", () => {
     const valid = makeValidV2();
-    valid.identity.archetype = "x".repeat(121);
+    valid.identity.archetype = "x".repeat(200);
     const result = validatePersonaCoreV2(valid);
-    expect("error" in result).toBe(true);
+    expect("error" in result).toBe(false);
   });
 
   it("rejects chain-of-thought language in thinking procedure", () => {

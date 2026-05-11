@@ -217,23 +217,14 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function normalizeText(value: unknown, maxChars?: number): string {
+function normalizeText(value: unknown): string {
   if (typeof value !== "string") {
     return "";
   }
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (maxChars && normalized.length > maxChars) {
-    return "";
-  }
-  return normalized;
+  return value.replace(/\s+/g, " ").trim();
 }
 
-function normalizeStringArray(
-  value: unknown,
-  minItems: number,
-  maxItems: number,
-  maxChars: number,
-): string[] | null {
+function normalizeStringArray(value: unknown, minItems: number, maxItems: number): string[] | null {
   if (!Array.isArray(value)) {
     return null;
   }
@@ -252,7 +243,7 @@ function normalizeStringArray(
     }
 
     const normalized = item.replace(/\s+/g, " ").trim();
-    if (!normalized || normalized.length > maxChars) {
+    if (!normalized) {
       continue;
     }
 
@@ -269,11 +260,11 @@ function normalizeStringArray(
     result.push(normalized);
   }
 
-  if (result.length < minItems || result.length > maxItems) {
+  if (result.length < minItems) {
     return null;
   }
 
-  return result;
+  return result.slice(0, maxItems);
 }
 
 function checkChainOfThought(text: string): boolean {
@@ -292,16 +283,15 @@ function checkStoryAdvice(text: string): boolean {
   return STORY_ADVICE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-function validateRequiredString(
+function readStringField(
   obj: Record<string, unknown>,
   key: string,
-  maxChars: number,
   warnings: string[],
   path: string,
 ): string | null {
-  const value = normalizeText(obj[key], maxChars);
+  const value = normalizeText(obj[key]);
   if (!value) {
-    warnings.push(`${path}.${key}: missing or exceeds ${maxChars} chars`);
+    warnings.push(`${path}.${key}: missing`);
     return null;
   }
   if (checkChainOfThought(value)) {
@@ -315,20 +305,17 @@ function validateRequiredString(
   return value;
 }
 
-function validateStringArray(
+function readStringArrayField(
   obj: Record<string, unknown>,
   key: string,
   minItems: number,
   maxItems: number,
-  maxChars: number,
   warnings: string[],
   path: string,
 ): string[] | null {
-  const result = normalizeStringArray(obj[key], minItems, maxItems, maxChars);
+  const result = normalizeStringArray(obj[key], minItems, maxItems);
   if (!result) {
-    warnings.push(
-      `${path}.${key}: must be array of ${minItems}-${maxItems} strings, each <=${maxChars} chars`,
-    );
+    warnings.push(`${path}.${key}: must be array of ${minItems}-${maxItems} strings`);
     return null;
   }
 
@@ -350,12 +337,11 @@ function validateStringArray(
   return result;
 }
 
-function validateProceduralArray(
+function readProceduralArray(
   obj: Record<string, unknown>,
   key: string,
   minItems: number,
   maxItems: number,
-  maxChars: number,
   warnings: string[],
   path: string,
 ): string[] | null {
@@ -374,7 +360,7 @@ function validateProceduralArray(
     }
 
     const normalized = item.replace(/\s+/g, " ").trim();
-    if (!normalized || normalized.length > maxChars) {
+    if (!normalized) {
       continue;
     }
 
@@ -382,13 +368,11 @@ function validateProceduralArray(
       continue;
     }
 
-    // Reject chain-of-thought language in thinking procedure
     if (checkChainOfThought(normalized)) {
       warnings.push(`${path}.${key}: thinking procedure item contains chain-of-thought language`);
       return null;
     }
 
-    // Reject items that only describe tone rather than interpretation logic
     if (/^tone:?\s/i.test(normalized) || /^voice:?\s/i.test(normalized)) {
       warnings.push(
         `${path}.${key}: thinking procedure item describes tone, not interpretation logic`,
@@ -404,12 +388,12 @@ function validateProceduralArray(
     result.push(normalized);
   }
 
-  if (result.length < minItems || result.length > maxItems) {
+  if (result.length < minItems) {
     warnings.push(`${path}.${key}: must have ${minItems}-${maxItems} items, got ${result.length}`);
     return null;
   }
 
-  return result;
+  return result.slice(0, maxItems);
 }
 
 function validateEnum<T extends string>(
@@ -472,34 +456,10 @@ export function validatePersonaCoreV2(
     return { error: "identity must be an object" };
   }
 
-  const identityArchetype = validateRequiredString(
-    identity,
-    "archetype",
-    120,
-    warnings,
-    "identity",
-  );
-  const identityCoreDrive = validateRequiredString(
-    identity,
-    "core_drive",
-    120,
-    warnings,
-    "identity",
-  );
-  const identityCentralTension = validateRequiredString(
-    identity,
-    "central_tension",
-    120,
-    warnings,
-    "identity",
-  );
-  const identitySelfImage = validateRequiredString(
-    identity,
-    "self_image",
-    120,
-    warnings,
-    "identity",
-  );
+  const identityArchetype = readStringField(identity, "archetype", warnings, "identity");
+  const identityCoreDrive = readStringField(identity, "core_drive", warnings, "identity");
+  const identityCentralTension = readStringField(identity, "central_tension", warnings, "identity");
+  const identitySelfImage = readStringField(identity, "self_image", warnings, "identity");
 
   if (!identityArchetype || !identityCoreDrive || !identityCentralTension || !identitySelfImage) {
     errors.push("identity: all fields required");
@@ -511,26 +471,19 @@ export function validatePersonaCoreV2(
     return { error: "mind must be an object" };
   }
 
-  const reasoningStyle = validateRequiredString(mind, "reasoning_style", 120, warnings, "mind");
-  const disagreementStyle = validateRequiredString(
-    mind,
-    "disagreement_style",
-    120,
-    warnings,
-    "mind",
-  );
+  const reasoningStyle = readStringField(mind, "reasoning_style", warnings, "mind");
+  const disagreementStyle = readStringField(mind, "disagreement_style", warnings, "mind");
 
-  const attentionBiases = validateStringArray(mind, "attention_biases", 2, 4, 90, warnings, "mind");
-  const defaultAssumptions = validateStringArray(
+  const attentionBiases = readStringArrayField(mind, "attention_biases", 2, 4, warnings, "mind");
+  const defaultAssumptions = readStringArrayField(
     mind,
     "default_assumptions",
     2,
     4,
-    90,
     warnings,
     "mind",
   );
-  const blindSpots = validateStringArray(mind, "blind_spots", 1, 3, 90, warnings, "mind");
+  const blindSpots = readStringArrayField(mind, "blind_spots", 1, 3, warnings, "mind");
 
   // --- mind.thinking_procedure ---
   const thinkingProcedure = asRecord(mind.thinking_procedure);
@@ -538,48 +491,43 @@ export function validatePersonaCoreV2(
     return { error: "mind.thinking_procedure must be an object" };
   }
 
-  const tpContextReading = validateProceduralArray(
+  const tpContextReading = readProceduralArray(
     thinkingProcedure,
     "context_reading",
     2,
     4,
-    80,
     warnings,
     "mind.thinking_procedure",
   );
-  const tpSalienceRules = validateProceduralArray(
+  const tpSalienceRules = readProceduralArray(
     thinkingProcedure,
     "salience_rules",
     2,
     4,
-    80,
     warnings,
     "mind.thinking_procedure",
   );
-  const tpInterpretationMoves = validateProceduralArray(
+  const tpInterpretationMoves = readProceduralArray(
     thinkingProcedure,
     "interpretation_moves",
     2,
     4,
-    80,
     warnings,
     "mind.thinking_procedure",
   );
-  const tpResponseMoves = validateProceduralArray(
+  const tpResponseMoves = readProceduralArray(
     thinkingProcedure,
     "response_moves",
     2,
     4,
-    80,
     warnings,
     "mind.thinking_procedure",
   );
-  const tpOmissionRules = validateProceduralArray(
+  const tpOmissionRules = readProceduralArray(
     thinkingProcedure,
     "omission_rules",
     2,
     4,
-    80,
     warnings,
     "mind.thinking_procedure",
   );
@@ -605,15 +553,14 @@ export function validatePersonaCoreV2(
     return { error: "taste must be an object" };
   }
 
-  const tasteValues = validateStringArray(taste, "values", 3, 5, 90, warnings, "taste");
-  const tasteRespects = validateStringArray(taste, "respects", 2, 4, 90, warnings, "taste");
-  const tasteDismisses = validateStringArray(taste, "dismisses", 2, 4, 90, warnings, "taste");
-  const tasteObsessions = validateStringArray(
+  const tasteValues = readStringArrayField(taste, "values", 3, 5, warnings, "taste");
+  const tasteRespects = readStringArrayField(taste, "respects", 2, 4, warnings, "taste");
+  const tasteDismisses = readStringArrayField(taste, "dismisses", 2, 4, warnings, "taste");
+  const tasteObsessions = readStringArrayField(
     taste,
     "recurring_obsessions",
     2,
     4,
-    90,
     warnings,
     "taste",
   );
@@ -628,27 +575,18 @@ export function validatePersonaCoreV2(
     return { error: "voice must be an object" };
   }
 
-  const voiceRegister = validateRequiredString(voice, "register", 120, warnings, "voice");
-  const voiceRhythm = validateRequiredString(voice, "rhythm", 80, warnings, "voice");
-  const humorStyle = validateRequiredString(voice, "humor_style", 80, warnings, "voice");
+  const voiceRegister = readStringField(voice, "register", warnings, "voice");
+  const voiceRhythm = readStringField(voice, "rhythm", warnings, "voice");
+  const humorStyle = readStringField(voice, "humor_style", warnings, "voice");
 
-  const openingHabits = validateStringArray(voice, "opening_habits", 1, 3, 90, warnings, "voice");
-  const closingHabits = validateStringArray(voice, "closing_habits", 1, 3, 90, warnings, "voice");
-  const metaphorDomains = validateStringArray(
-    voice,
-    "metaphor_domains",
-    2,
-    5,
-    90,
-    warnings,
-    "voice",
-  );
-  const forbiddenPhrases = validateStringArray(
+  const openingHabits = readStringArrayField(voice, "opening_habits", 1, 3, warnings, "voice");
+  const closingHabits = readStringArrayField(voice, "closing_habits", 1, 3, warnings, "voice");
+  const metaphorDomains = readStringArrayField(voice, "metaphor_domains", 2, 5, warnings, "voice");
+  const forbiddenPhrases = readStringArrayField(
     voice,
     "forbidden_phrases",
     3,
     8,
-    90,
     warnings,
     "voice",
   );
@@ -671,38 +609,29 @@ export function validatePersonaCoreV2(
     return { error: "forum must be an object" };
   }
 
-  const participationMode = validateRequiredString(
-    forum,
-    "participation_mode",
-    90,
-    warnings,
-    "forum",
-  );
+  const participationMode = readStringField(forum, "participation_mode", warnings, "forum");
 
-  const preferredPostIntents = validateStringArray(
+  const preferredPostIntents = readStringArrayField(
     forum,
     "preferred_post_intents",
     1,
     4,
-    90,
     warnings,
     "forum",
   );
-  const preferredCommentIntents = validateStringArray(
+  const preferredCommentIntents = readStringArrayField(
     forum,
     "preferred_comment_intents",
     1,
     4,
-    90,
     warnings,
     "forum",
   );
-  const preferredReplyIntents = validateStringArray(
+  const preferredReplyIntents = readStringArrayField(
     forum,
     "preferred_reply_intents",
     1,
     4,
-    90,
     warnings,
     "forum",
   );
@@ -751,68 +680,61 @@ export function validatePersonaCoreV2(
     return { error: "narrative must be an object" };
   }
 
-  const storyEngine = validateRequiredString(narrative, "story_engine", 80, warnings, "narrative");
+  const storyEngine = readStringField(narrative, "story_engine", warnings, "narrative");
 
-  const favoredConflicts = validateStringArray(
+  const favoredConflicts = readStringArrayField(
     narrative,
     "favored_conflicts",
     2,
     4,
-    70,
     warnings,
     "narrative",
   );
-  const characterFocus = validateStringArray(
+  const characterFocus = readStringArrayField(
     narrative,
     "character_focus",
     2,
     4,
-    70,
     warnings,
     "narrative",
   );
-  const emotionalPalette = validateStringArray(
+  const emotionalPalette = readStringArrayField(
     narrative,
     "emotional_palette",
     2,
     5,
-    70,
     warnings,
     "narrative",
   );
-  const plotInstincts = validateStringArray(
+  const plotInstincts = readStringArrayField(
     narrative,
     "plot_instincts",
     2,
     4,
-    70,
     warnings,
     "narrative",
   );
-  const sceneDetailBiases = validateStringArray(
+  const sceneDetailBiases = readStringArrayField(
     narrative,
     "scene_detail_biases",
     2,
     5,
-    70,
     warnings,
     "narrative",
   );
-  const endingPreferences = validateStringArray(
+  const endingPreferences = readStringArrayField(
     narrative,
     "ending_preferences",
     1,
     3,
-    70,
     warnings,
     "narrative",
   );
-  const avoidStoryShapes = validateStringArray(
+  const avoidStoryShapes = readStringArrayField(
     narrative,
     "avoid_story_shapes",
     3,
     6,
-    70,
     warnings,
     "narrative",
   );
@@ -887,30 +809,27 @@ export function validatePersonaCoreV2(
     return { error: "reference_style must be an object" };
   }
 
-  const referenceNames = validateStringArray(
+  const referenceNames = readStringArrayField(
     referenceStyle,
     "reference_names",
     1,
     5,
-    90,
     warnings,
     "reference_style",
   );
-  const abstractTraits = validateStringArray(
+  const abstractTraits = readStringArrayField(
     referenceStyle,
     "abstract_traits",
     2,
     6,
-    90,
     warnings,
     "reference_style",
   );
-  const otherReferences = validateStringArray(
+  const otherReferences = readStringArrayField(
     referenceStyle,
     "other_references",
     0,
     8,
-    90,
     warnings,
     "reference_style",
   );
@@ -944,22 +863,15 @@ export function validatePersonaCoreV2(
     return { error: "anti_generic must be an object" };
   }
 
-  const avoidPatterns = validateStringArray(
+  const avoidPatterns = readStringArrayField(
     antiGeneric,
     "avoid_patterns",
     3,
     8,
-    90,
     warnings,
     "anti_generic",
   );
-  const failureMode = validateRequiredString(
-    antiGeneric,
-    "failure_mode",
-    140,
-    warnings,
-    "anti_generic",
-  );
+  const failureMode = readStringField(antiGeneric, "failure_mode", warnings, "anti_generic");
 
   if (!avoidPatterns || !failureMode) {
     errors.push("anti_generic: required fields missing or invalid");
