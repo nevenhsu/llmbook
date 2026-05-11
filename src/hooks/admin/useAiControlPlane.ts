@@ -22,6 +22,7 @@ import {
 import {
   defaultInteractionTaskContext,
   buildPersonaUpdateExtraPrompt,
+  extractReferenceNamesFromProfile,
   derivePersonaUsername,
 } from "@/components/admin/control-plane/control-plane-utils";
 import {
@@ -149,6 +150,7 @@ export function useAiControlPlane({
     personaId: initialPersonas[0]?.id ?? "",
     modelId: initialPersonaGenerationModelId,
     extraPrompt: "",
+    referenceNames: "",
   });
   const [personaGenerationLoading, setPersonaGenerationLoading] = useState(false);
   const [personaUpdateLoading, setPersonaUpdateLoading] = useState(false);
@@ -279,6 +281,7 @@ export function useAiControlPlane({
       setPersonaUpdate((prev) => ({
         ...prev,
         extraPrompt: "",
+        referenceNames: "",
       }));
       return;
     }
@@ -290,6 +293,7 @@ export function useAiControlPlane({
         ? {
             ...prev,
             extraPrompt: "",
+            referenceNames: "",
           }
         : prev,
     );
@@ -307,6 +311,7 @@ export function useAiControlPlane({
               ? {
                   ...prev,
                   extraPrompt: buildPersonaUpdateExtraPrompt(profile),
+                  referenceNames: extractReferenceNamesFromProfile(profile),
                 }
               : prev,
           );
@@ -978,6 +983,7 @@ export function useAiControlPlane({
         {
           modelId: personaUpdate.modelId,
           extraPrompt: personaUpdate.extraPrompt,
+          referenceNames: personaUpdate.referenceNames,
           debug: true,
         },
         {
@@ -1052,6 +1058,7 @@ export function useAiControlPlane({
         setPersonaUpdate((prev) => ({
           ...prev,
           extraPrompt: buildPersonaUpdateExtraPrompt(refreshedProfile),
+          referenceNames: extractReferenceNamesFromProfile(refreshedProfile),
         }));
       } else {
         await apiPost(
@@ -1147,7 +1154,8 @@ export function useAiControlPlane({
       if (isUpdate) {
         setPersonaUpdate((prev) => ({
           ...prev,
-          extraPrompt: res.text,
+          extraPrompt: stripPromptAssistReferenceSuffix(res.text, res.referenceNames),
+          referenceNames: res.referenceNames.join(", "),
         }));
       } else {
         setPersonaGeneration((prev) => ({

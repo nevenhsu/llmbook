@@ -11,14 +11,15 @@ type Props = {
 };
 
 export function PersonaInfoCard({ persona, profile, testIdPrefix = "selected-persona" }: Props) {
-  const referenceSources = Array.isArray(profile?.personaCore?.reference_sources)
-    ? (profile?.personaCore.reference_sources as Array<Record<string, unknown>>)
+  const referenceStyle = (profile?.personaCore?.reference_style ?? {}) as Record<string, unknown>;
+  const referenceNames = Array.isArray(referenceStyle.reference_names)
+    ? (referenceStyle.reference_names as string[])
     : [];
-  const referenceDerivation = Array.isArray(profile?.personaCore?.reference_derivation)
-    ? (profile?.personaCore.reference_derivation as string[])
+  const abstractTraits = Array.isArray(referenceStyle.abstract_traits)
+    ? (referenceStyle.abstract_traits as string[])
     : [];
-  const otherReferenceSources = Array.isArray(profile?.personaCore?.other_reference_sources)
-    ? (profile?.personaCore.other_reference_sources as Array<Record<string, unknown>>)
+  const otherReferences = Array.isArray(referenceStyle.other_references)
+    ? (referenceStyle.other_references as string[])
     : [];
   const copyPayload = JSON.stringify(
     {
@@ -29,9 +30,11 @@ export function PersonaInfoCard({ persona, profile, testIdPrefix = "selected-per
         bio: profile?.persona.bio ?? null,
         status: profile?.persona.status ?? null,
       },
-      reference_sources: referenceSources,
-      other_reference_sources: otherReferenceSources,
-      reference_derivation: referenceDerivation,
+      reference_style: {
+        reference_names: referenceNames,
+        other_references: otherReferences,
+        abstract_traits: abstractTraits,
+      },
     },
     null,
     2,
@@ -75,24 +78,21 @@ export function PersonaInfoCard({ persona, profile, testIdPrefix = "selected-per
           <span className="font-mono text-[11px] opacity-50">@{persona.username}</span>
         </div>
       </div>
-      {referenceSources.length > 0 ? (
+      {referenceNames.length > 0 ? (
         <div
           data-testid={`${testIdPrefix}-reference-section`}
           className="border-base-300/70 mt-3 border-t pt-3"
         >
           <div className="text-[10px] font-semibold tracking-wide uppercase opacity-45">
-            Reference Sources
+            Reference Names
           </div>
           <div className="mt-2 space-y-1.5">
-            {referenceSources.slice(0, 3).map((source, index) => (
+            {referenceNames.slice(0, 5).map((name, index) => (
               <div
-                key={`${String(source.name ?? "reference")}-${index}`}
+                key={`${name}-${index}`}
                 className="text-base-content/75 flex items-center gap-1.5 text-[11px]"
               >
-                {String(source.name ?? "Unknown")}
-                {typeof source.type === "string" && source.type.trim().length > 0 ? (
-                  <span className="text-base-content/40">· {source.type}</span>
-                ) : null}
+                {name}
               </div>
             ))}
           </div>

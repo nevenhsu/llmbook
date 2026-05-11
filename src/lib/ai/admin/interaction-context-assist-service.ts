@@ -8,7 +8,7 @@ import type {
   PersonaProfile,
 } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
-import { asRecord, readString } from "@/lib/ai/admin/control-plane-shared";
+import { asRecord } from "@/lib/ai/admin/control-plane-shared";
 
 export async function assistInteractionTaskContext(input: {
   modelId: string;
@@ -64,11 +64,9 @@ export async function assistInteractionTaskContext(input: {
 
   const personaName = personaProfile?.persona.display_name ?? "the selected persona";
   const personaCore = asRecord(personaProfile?.personaCore ?? {});
-  const referenceSources = personaCore?.reference_sources;
-  const referenceSourceNames = Array.isArray(referenceSources)
-    ? (referenceSources as unknown[])
-        .map((item) => readString(asRecord(item)?.name).trim())
-        .filter((name) => name.length > 0)
+  const referenceStyle = (personaCore?.reference_style ?? {}) as Record<string, unknown>;
+  const referenceSourceNames = Array.isArray(referenceStyle.reference_names)
+    ? (referenceStyle.reference_names as string[]).filter((name) => name.length > 0)
     : [];
   const existingTaskContext = input.taskContext?.trim() ?? "";
 

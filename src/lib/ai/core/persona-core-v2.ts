@@ -25,8 +25,10 @@ const PersonaThinkingProcedureSchema = z.object({
 });
 
 const IdentitySchema = z.object({
+  display_name: z.string(),
   archetype: z.string(),
   core_drive: z.string(),
+  bio: z.string(),
   central_tension: z.string(),
   self_image: z.string(),
 });
@@ -99,6 +101,7 @@ export const PersonaCoreV2Schema = z.object({
   schema_version: z.literal("v2").default("v2"),
   persona_fit_probability: z.number().int().min(0).max(100),
   identity: IdentitySchema,
+  originalization_note: z.string(),
   mind: MindSchema,
   taste: TasteSchema,
   voice: VoiceSchema,
@@ -163,6 +166,7 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
   "schema_version",
   "persona_fit_probability",
   "identity",
+  "originalization_note",
   "mind",
   "taste",
   "voice",
@@ -456,10 +460,18 @@ export function validatePersonaCoreV2(
     return { error: "identity must be an object" };
   }
 
+  const identityDisplayName = readStringField(identity, "display_name", warnings, "identity");
+  const identityBio = readStringField(identity, "bio", warnings, "identity");
   const identityArchetype = readStringField(identity, "archetype", warnings, "identity");
   const identityCoreDrive = readStringField(identity, "core_drive", warnings, "identity");
   const identityCentralTension = readStringField(identity, "central_tension", warnings, "identity");
   const identitySelfImage = readStringField(identity, "self_image", warnings, "identity");
+  const originalizationNote = readStringField(
+    source,
+    "originalization_note",
+    warnings,
+    "originalization_note",
+  );
 
   if (!identityArchetype || !identityCoreDrive || !identityCentralTension || !identitySelfImage) {
     errors.push("identity: all fields required");
@@ -643,19 +655,19 @@ export function validatePersonaCoreV2(
   } else {
     const postLength = validateEnum(
       typicalLengths.post,
-      new Set<ContentLength>(["short", "medium", "long"]),
+      ALLOWED_CONTENT_LENGTHS,
       "forum.typical_lengths.post",
       warnings,
     );
     const commentLength = validateEnum(
       typicalLengths.comment,
-      new Set<ContentLength>(["one_liner", "short", "medium"]),
+      ALLOWED_CONTENT_LENGTHS,
       "forum.typical_lengths.comment",
       warnings,
     );
     const replyLength = validateEnum(
       typicalLengths.reply,
-      new Set<ContentLength>(["short", "medium"]),
+      ALLOWED_CONTENT_LENGTHS,
       "forum.typical_lengths.reply",
       warnings,
     );
@@ -894,9 +906,12 @@ export function validatePersonaCoreV2(
       source.persona_fit_probability <= 100
         ? source.persona_fit_probability
         : 50,
+    originalization_note: originalizationNote!,
     identity: {
+      display_name: identityDisplayName!,
       archetype: identityArchetype!,
       core_drive: identityCoreDrive!,
+      bio: identityBio!,
       central_tension: identityCentralTension!,
       self_image: identitySelfImage!,
     },
@@ -938,21 +953,21 @@ export function validatePersonaCoreV2(
         post:
           validateEnum(
             (typicalLengths as Record<string, unknown>)?.post,
-            new Set<ContentLength>(["short", "medium", "long"]),
+            ALLOWED_CONTENT_LENGTHS,
             "forum.typical_lengths.post",
             warnings,
           ) ?? "medium",
         comment:
           validateEnum(
             (typicalLengths as Record<string, unknown>)?.comment,
-            new Set<ContentLength>(["one_liner", "short", "medium"]),
+            ALLOWED_CONTENT_LENGTHS,
             "forum.typical_lengths.comment",
             warnings,
           ) ?? "short",
         reply:
           validateEnum(
             (typicalLengths as Record<string, unknown>)?.reply,
-            new Set<ContentLength>(["short", "medium"]),
+            ALLOWED_CONTENT_LENGTHS,
             "forum.typical_lengths.reply",
             warnings,
           ) ?? "short",
@@ -985,9 +1000,13 @@ export function validatePersonaCoreV2(
 export const FALLBACK_PERSONA_CORE_V2: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 80,
+  originalization_note:
+    "Clarity against comfort — a useful irritant who punctures vague consensus.",
   identity: {
+    display_name: "Mara Ellison",
     archetype: "restless pattern-spotter",
     core_drive: "puncture vague consensus",
+    bio: "A sharp-eyed forum contributor who cuts through noise with pointed questions.",
     central_tension: "clarity against comfort",
     self_image: "a useful irritant",
   },

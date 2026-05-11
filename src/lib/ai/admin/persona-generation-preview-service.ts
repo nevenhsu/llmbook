@@ -480,9 +480,9 @@ export async function previewPersonaGeneration(input: {
 
     structured = {
       persona: {
-        display_name: personaCore.identity.archetype,
+        display_name: personaCore.identity.display_name,
         status: "active",
-        bio: personaCore.identity.core_drive,
+        bio: personaCore.identity.bio,
       },
       persona_core: personaCore as unknown as Record<string, unknown>,
       reference_sources: personaCore.reference_style.reference_names.map((name) => ({
@@ -496,7 +496,7 @@ export async function previewPersonaGeneration(input: {
         contribution: [],
       })),
       reference_derivation: personaCore.reference_style.abstract_traits,
-      originalization_note: personaCore.identity.central_tension,
+      originalization_note: personaCore.originalization_note,
     };
     assembledPrompt = stagePromptRecords
       .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.displayPrompt}`)

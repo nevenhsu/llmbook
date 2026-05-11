@@ -86,9 +86,11 @@ function buildGeneratedPersonaCardData(
         status: structured.persona.status,
       },
       personaCore: {
-        reference_sources: structured.reference_sources,
-        other_reference_sources: structured.other_reference_sources,
-        reference_derivation: structured.reference_derivation,
+        reference_style: {
+          reference_names: structured.reference_sources.map((s) => s.name),
+          other_references: structured.other_reference_sources.map((s) => s.name),
+          abstract_traits: structured.reference_derivation,
+        },
       },
       personaMemories: [],
     },

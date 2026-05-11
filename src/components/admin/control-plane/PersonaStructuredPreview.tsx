@@ -229,6 +229,7 @@ function V2IdentitySection({ personaCore }: { personaCore: Record<string, unknow
         <div className="text-xs font-semibold tracking-wide uppercase opacity-55">Archetype</div>
         <div className="mt-2 text-sm font-medium">{asText(identity.archetype) ?? "—"}</div>
       </div>
+
       <div className="bg-base-100/70 rounded-xl p-4">
         <div className="text-xs font-semibold tracking-wide uppercase opacity-55">Core Drive</div>
         <div className="mt-2 text-sm">{asText(identity.core_drive) ?? "—"}</div>

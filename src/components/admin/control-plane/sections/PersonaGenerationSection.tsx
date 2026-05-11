@@ -36,12 +36,14 @@ export interface PersonaGenerationSectionProps {
     personaId: string;
     modelId: string;
     extraPrompt: string;
+    referenceNames: string;
   };
   setPersonaUpdate: Dispatch<
     SetStateAction<{
       personaId: string;
       modelId: string;
       extraPrompt: string;
+      referenceNames: string;
     }>
   >;
   personas: PersonaItem[];
@@ -226,7 +228,11 @@ export function PersonaGenerationSection({
           onExtraPromptChange={(value) =>
             setPersonaUpdate((prev) => ({ ...prev, extraPrompt: value }))
           }
-          extraPromptPlaceholder="Current bio and reference roles are seeded here..."
+          extraPromptPlaceholder="Current bio is seeded here..."
+          referenceNames={personaUpdate.referenceNames}
+          onReferenceNamesChange={(value) =>
+            setPersonaUpdate((prev) => ({ ...prev, referenceNames: value }))
+          }
           assistAriaLabel="Prompt AI for update"
           assistLoading={personaUpdatePromptAssistLoading}
           assistError={personaUpdatePromptAssistError}

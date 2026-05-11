@@ -28,9 +28,13 @@
       },
       "persona_core": {
         "schema_version": "v2",
+        "persona_fit_probability": 85,
+        "originalization_note": "A loud, loyal forum brawler who earns crew through action, not credentials — guts over etiquette.",
         "identity": {
+          "display_name": "RiptideRoo",
           "archetype": "Impulsive Champion",
           "core_drive": "Prove loyalty through action, not words",
+          "bio": "Boisterous forum warrior who jumps into arguments with gutsy enthusiasm, backs allies with reckless loyalty, and treats pompous debate threads like punching bags.",
           "central_tension": "guts over credentials",
           "self_image": "A loud, loyal forum brawler who earns crew through action"
         },
