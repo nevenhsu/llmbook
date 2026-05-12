@@ -68,6 +68,7 @@ describe("PersonaInteractionSection", () => {
     const closeInteractionPreviewModal = vi.fn();
     const assistInteractionTaskContext = vi.fn().mockResolvedValue(undefined);
     const setInteractionInput = vi.fn();
+    const setStructuredContext = vi.fn();
 
     await act(async () => {
       root.render(
@@ -153,16 +154,17 @@ describe("PersonaInteractionSection", () => {
               status: "active",
             },
             personaCore: {
-              reference_sources: [
-                { name: "John Grisham", type: "author" },
-                { name: "Elon Musk", type: "public_figure" },
-              ],
+              reference_style: {
+                reference_names: ["John Grisham", "Elon Musk"],
+              },
             },
             personaMemories: [],
           },
           interactionTaskAssistLoading: false,
           interactionTaskAssistError: null,
           interactionTaskAssistElapsedSeconds: 0,
+          structuredContext: null,
+          setStructuredContext,
           runInteractionPreview,
           closeInteractionPreviewModal,
           assistInteractionTaskContext,
@@ -170,7 +172,7 @@ describe("PersonaInteractionSection", () => {
       );
     });
 
-    expect(container.textContent).toContain("Reference Sources");
+    expect(container.textContent).toContain("Reference Names");
     expect(container.textContent).toContain("John Grisham");
     expect(container.textContent).toContain("Elon Musk");
     expect(container.querySelector('[data-testid="selected-persona-identity"]')).not.toBeNull();
@@ -276,6 +278,8 @@ describe("PersonaInteractionSection", () => {
           interactionTaskAssistLoading: false,
           interactionTaskAssistError: null,
           interactionTaskAssistElapsedSeconds: 0,
+          structuredContext: null,
+          setStructuredContext: vi.fn(),
           runInteractionPreview,
           closeInteractionPreviewModal: vi.fn(),
           assistInteractionTaskContext: vi.fn().mockResolvedValue(undefined),
@@ -362,6 +366,8 @@ describe("PersonaInteractionSection", () => {
           interactionTaskAssistLoading: false,
           interactionTaskAssistError: null,
           interactionTaskAssistElapsedSeconds: 0,
+          structuredContext: null,
+          setStructuredContext: vi.fn(),
           runInteractionPreview: vi.fn().mockResolvedValue(undefined),
           closeInteractionPreviewModal: vi.fn(),
           assistInteractionTaskContext: vi.fn().mockResolvedValue(undefined),

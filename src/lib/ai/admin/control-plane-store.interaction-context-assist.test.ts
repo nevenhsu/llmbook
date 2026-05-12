@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminAiControlPlaneStore, type AiModelConfig } from "@/lib/ai/admin/control-plane-store";
+import type { InteractionContextAssistOutput } from "@/lib/ai/admin/interaction-context-assist-schema";
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({}),
@@ -17,8 +18,8 @@ vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
   })),
 }));
 
-vi.mock("@/lib/ai/llm/invoke-llm", () => ({
-  invokeLLM: vi.fn(),
+vi.mock("@/lib/ai/llm/invoke-structured-llm", () => ({
+  invokeStructuredLLM: vi.fn(),
 }));
 
 function sampleModel(): AiModelConfig {
@@ -78,118 +79,145 @@ function mockActiveControlPlane(store: AdminAiControlPlaneStore) {
   });
 }
 
+function mockValidCommentOutput(): InteractionContextAssistOutput {
+  return {
+    taskType: "comment",
+    articleTitle: "The Art of Gesture Critique",
+    articleOutline: "Explore silhouette contrast techniques and draft evolution.",
+  };
+}
+
+function mockValidPostOutput(): InteractionContextAssistOutput {
+  return {
+    taskType: "post",
+    titleDirection: "A deep dive into silhouette contrast",
+    contentDirection: "Examine how gesture and silhouette shape visual storytelling.",
+  };
+}
+
 describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
-  it("uses existing task context in the first prompt and returns the first non-empty model output", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM).mockResolvedValue({
-      text: "Push the silhouette contrast further and explain what changed between the two drafts.",
-      error: null,
+  it("returns structured output for a comment with task context", async () => {
+    const { invokeStructuredLLM } = await import("@/lib/ai/llm/invoke-structured-llm");
+    vi.mocked(invokeStructuredLLM).mockResolvedValue({
+      status: "valid",
+      value: mockValidCommentOutput(),
+      raw: { text: "", finishReason: "stop", error: null },
     } as never);
 
     const store = new AdminAiControlPlaneStore();
     mockActiveControlPlane(store);
-    vi.spyOn(store, "getPersonaProfile").mockResolvedValue({
-      persona: {
-        id: "persona-1",
-        username: "ai_critic",
-        display_name: "AI Critic",
-        avatar_url: null,
-        bio: "bio",
-        status: "active",
-      },
-      personaCore: {
-        reference_sources: [{ name: "John Grisham", type: "author" }],
-        other_reference_sources: [],
-      },
-      personaMemories: [],
-    });
 
     const result = await store.assistInteractionTaskContext({
       modelId: "model-1",
       taskType: "comment",
-      personaId: "persona-1",
       taskContext: "Current draft asks for critique on gesture and silhouette.",
     });
 
-    expect(result).toContain("silhouette");
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
-    expect(invokeLLM).toHaveBeenCalledWith(
+    expect(result.taskType).toBe("comment");
+    expect(result.articleTitle).toBe("The Art of Gesture Critique");
+    expect(result.articleOutline).toContain("silhouette");
+    expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
+    expect(invokeStructuredLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         taskType: "generic",
         retries: 0,
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
-            "Existing task context:\nCurrent draft asks for critique on gesture and silhouette.",
+            "Task context: Current draft asks for critique on gesture and silhouette.",
           ),
-          maxOutputTokens: 900,
-          temperature: 0.4,
+          maxOutputTokens: 2000,
+          temperature: 0.7,
+        }),
+        schemaGate: expect.objectContaining({
+          schemaName: "InteractionContextAssist",
         }),
       }),
     );
   });
 
-  it("retries with a higher cap and then throws an explicit empty-output error when the model stays empty", async () => {
-    const { invokeLLM } = await import("@/lib/ai/llm/invoke-llm");
-    vi.mocked(invokeLLM)
-      .mockResolvedValueOnce({
-        text: "   ",
-        finishReason: "length",
-        error: null,
-        attempts: 1,
-      } as never)
-      .mockResolvedValueOnce({
-        text: "",
-        finishReason: "error",
-        error: "PROVIDER_ERROR_OUTPUT",
-        attempts: 2,
-      } as never);
+  it("returns structured output for a post without task context", async () => {
+    const { invokeStructuredLLM } = await import("@/lib/ai/llm/invoke-structured-llm");
+    vi.mocked(invokeStructuredLLM).mockResolvedValue({
+      status: "valid",
+      value: mockValidPostOutput(),
+      raw: { text: "", finishReason: "stop", error: null },
+    } as never);
 
     const store = new AdminAiControlPlaneStore();
     mockActiveControlPlane(store);
-    vi.spyOn(store, "getPersonaProfile").mockResolvedValue({
-      persona: {
-        id: "persona-1",
-        username: "ai_critic",
-        display_name: "AI Critic",
-        avatar_url: null,
-        bio: "bio",
-        status: "active",
-      },
-      personaCore: {
-        reference_sources: [{ name: "Nora Ephron", type: "writer" }],
-        other_reference_sources: [],
-      },
-      personaMemories: [],
+
+    const result = await store.assistInteractionTaskContext({
+      modelId: "model-1",
+      taskType: "post",
+      taskContext: "",
     });
+
+    expect(result.taskType).toBe("post");
+    expect(result.titleDirection).toContain("silhouette");
+    expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
+    expect(invokeStructuredLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelInput: expect.objectContaining({
+          prompt: expect.stringContaining("Generate a random content direction"),
+        }),
+      }),
+    );
+  });
+
+  it("throws with schema failure details when structured output fails", async () => {
+    const { invokeStructuredLLM } = await import("@/lib/ai/llm/invoke-structured-llm");
+    vi.mocked(invokeStructuredLLM).mockResolvedValue({
+      status: "schema_failure",
+      error: "Schema validation failed: missing required field",
+      raw: { text: "{}", finishReason: "stop", error: null },
+      schemaGateDebug: {},
+    } as never);
+
+    const store = new AdminAiControlPlaneStore();
+    mockActiveControlPlane(store);
 
     await expect(
       store.assistInteractionTaskContext({
         modelId: "model-1",
-        taskType: "post",
-        personaId: "persona-1",
+        taskType: "reply",
         taskContext: "",
       }),
     ).rejects.toThrow(
-      "interaction context assist returned empty output (finishReason=error; error=PROVIDER_ERROR_OUTPUT; attempts=2)",
+      "interaction context assist schema failure: Schema validation failed: missing required field",
     );
 
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(invokeLLM).mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        retries: 0,
-        modelInput: expect.objectContaining({ maxOutputTokens: 900, temperature: 0.4 }),
-      }),
-    );
-    expect(vi.mocked(invokeLLM).mock.calls[1]?.[0]).toEqual(
-      expect.objectContaining({
-        retries: 0,
-        modelInput: expect.objectContaining({ maxOutputTokens: 1400, temperature: 0.2 }),
-      }),
-    );
+    expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not include persona data in the prompt", async () => {
+    const { invokeStructuredLLM } = await import("@/lib/ai/llm/invoke-structured-llm");
+    vi.mocked(invokeStructuredLLM).mockResolvedValue({
+      status: "valid",
+      value: mockValidCommentOutput(),
+      raw: { text: "", finishReason: "stop", error: null },
+    } as never);
+
+    const store = new AdminAiControlPlaneStore();
+    mockActiveControlPlane(store);
+
+    await store.assistInteractionTaskContext({
+      modelId: "model-1",
+      taskType: "comment",
+      taskContext: "Some context",
+    });
+
+    const callArg = vi.mocked(invokeStructuredLLM).mock.calls[0]?.[0];
+    expect(callArg).toBeDefined();
+    const prompt = (callArg as { modelInput: { prompt: string } })?.modelInput?.prompt;
+    expect(prompt).not.toContain("Persona:");
+    expect(prompt).not.toContain("Reference anchors:");
+
+    // The function no longer takes personaId
+    expect(callArg).toBeDefined();
   });
 });

@@ -6,6 +6,7 @@ import type {
   PersonaProfile,
   PreviewResult,
 } from "@/lib/ai/admin/control-plane-store";
+import type { InteractionContextAssistOutput } from "@/lib/ai/admin/interaction-context-assist-schema";
 import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
 import PersonaSelector from "@/components/ui/PersonaSelector";
 import { SectionCard } from "../SectionCard";
@@ -47,9 +48,65 @@ export interface PersonaInteractionSectionProps {
   interactionTaskAssistLoading: boolean;
   interactionTaskAssistError: string | null;
   interactionTaskAssistElapsedSeconds: number;
+  structuredContext: InteractionContextAssistOutput | null;
+  setStructuredContext: Dispatch<SetStateAction<InteractionContextAssistOutput | null>>;
   runInteractionPreview: () => Promise<void>;
   closeInteractionPreviewModal: () => void;
   assistInteractionTaskContext: () => Promise<void>;
+}
+
+function FieldRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs font-semibold opacity-50">{label}</div>
+      <div className="mt-0.5 text-sm leading-relaxed opacity-80">{value}</div>
+    </div>
+  );
+}
+
+function StructuredContextRow({ output }: { output: InteractionContextAssistOutput }) {
+  switch (output.taskType) {
+    case "post":
+      return (
+        <div className="border-base-300 bg-base-200/60 mt-2 rounded-lg border px-3 py-2.5">
+          <FieldRow label="Title Direction" value={output.titleDirection} />
+          <div className="mt-2">
+            <FieldRow label="Content Direction" value={output.contentDirection} />
+          </div>
+        </div>
+      );
+
+    case "comment":
+      return (
+        <div className="border-base-300 bg-base-200/60 mt-2 rounded-lg border px-3 py-2.5">
+          <FieldRow label="Article" value={output.articleTitle} />
+          <div className="mt-2">
+            <FieldRow label="Outline" value={output.articleOutline} />
+          </div>
+        </div>
+      );
+
+    case "reply":
+      return (
+        <div className="border-base-300 bg-base-200/60 mt-2 rounded-lg border px-3 py-2.5">
+          <FieldRow label="Article Outline" value={output.articleOutline} />
+          <div className="mt-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs font-semibold opacity-50">Comment Thread</span>
+              <span className="text-[10px] opacity-35">{output.comments.length}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              {output.comments.map((c, i) => (
+                <div key={i} className="flex gap-1.5 text-xs">
+                  <span className="mt-0.5 font-medium opacity-25 select-none">{i + 1}.</span>
+                  <span className="opacity-75">{c.content}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+  }
 }
 
 export function PersonaInteractionSection({
@@ -68,6 +125,8 @@ export function PersonaInteractionSection({
   interactionTaskAssistLoading,
   interactionTaskAssistError,
   interactionTaskAssistElapsedSeconds,
+  structuredContext,
+  setStructuredContext,
   runInteractionPreview,
   closeInteractionPreviewModal,
   assistInteractionTaskContext,
@@ -81,7 +140,10 @@ export function PersonaInteractionSection({
   );
 
   const runPreviewDisabled =
-    interactionInput.taskContext.trim().length === 0 || interactionPreviewModalPhase === "loading";
+    (structuredContext === null && interactionInput.taskContext.trim().length === 0) ||
+    interactionPreviewModalPhase === "loading";
+
+  const assistDisabled = !interactionInput.modelId || structuredContext !== null;
 
   return (
     <div className="space-y-6">
@@ -119,6 +181,7 @@ export function PersonaInteractionSection({
                 value={interactionInput.taskType}
                 onChange={(e) => {
                   const taskType = e.target.value as "post" | "comment" | "reply";
+                  setStructuredContext(null);
                   setInteractionInput((prev) => ({
                     ...prev,
                     taskType,
@@ -146,7 +209,7 @@ export function PersonaInteractionSection({
                 <button
                   type="button"
                   className="btn btn-outline border-base-300 text-base-content hover:border-primary hover:text-primary btn-xs ml-auto gap-1 shadow-none"
-                  disabled={!interactionInput.modelId}
+                  disabled={assistDisabled}
                   onClick={() => void assistInteractionTaskContext()}
                 >
                   {taskAssistButtonMode === "cancel" ? (
@@ -160,16 +223,25 @@ export function PersonaInteractionSection({
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full font-mono text-sm leading-relaxed"
                 value={interactionInput.taskContext}
-                onChange={(e) =>
-                  setInteractionInput((prev) => ({ ...prev, taskContext: e.target.value }))
-                }
+                onChange={(e) => {
+                  setStructuredContext(null);
+                  setInteractionInput((prev) => ({
+                    ...prev,
+                    taskContext: e.target.value,
+                  }));
+                }}
                 placeholder="Paste post/comment content to test response assembly..."
               />
+
+              {structuredContext && <StructuredContextRow output={structuredContext} />}
+
               <div
                 className={`mt-2 text-xs ${interactionTaskAssistError ? "text-error" : "opacity-55"}`}
               >
-                {taskAssistStatus ??
-                  "Use AI to generate a random scenario for this interaction preview."}
+                {structuredContext
+                  ? "Structured context ready. Edit the text to discard and switch to manual mode."
+                  : (taskAssistStatus ??
+                    "Use AI to generate a random scenario for this interaction preview.")}
               </div>
               <div className="mt-4 flex justify-end">
                 <button

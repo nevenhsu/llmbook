@@ -7,9 +7,6 @@ import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-run
 import type { ContentMode, PersonaFlowKind, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
   buildPersonaPromptFamilyV2,
-  buildActionModePolicy,
-  buildContentModePolicy,
-  buildAntiGenericContract,
   type PersonaPromptFamilyV2StagePurpose,
 } from "@/lib/ai/prompt-runtime/persona-v2-prompt-family";
 import {
@@ -27,12 +24,9 @@ import {
 import {
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
-  formatAgentProfile,
-  formatBoardContext,
   formatPrompt,
-  formatTargetContext,
-  buildPromptBlocks,
 } from "@/lib/ai/admin/control-plane-shared";
+import { formatBoardContext, formatTargetContext } from "@/lib/ai/admin/control-plane-shared";
 import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import type {
   AiControlPlaneDocument,
@@ -60,8 +54,6 @@ export type PersonaInteractionStageResult = {
 };
 
 export type PersonaInteractionStageExecutionMode = "admin_preview" | "runtime";
-
-export type PersonaPromptFamilyMode = "legacy" | "persona_core_v2";
 
 export type PersonaInteractionStageInput = {
   personaId: string;
@@ -92,7 +84,6 @@ export type PersonaInteractionStageInput = {
   attemptLabel?: string;
   executionMode?: PersonaInteractionStageExecutionMode;
   contentMode?: ContentMode;
-  promptFamily?: PersonaPromptFamilyMode;
 };
 
 function buildLeanStageBlocks(input: {
@@ -122,6 +113,8 @@ function buildLeanStageBlocks(input: {
 
 type ActionTypeToFlowMap = Record<string, Exclude<PersonaFlowKind, "audit"> | null>;
 
+// vote / poll_post / poll_vote flow definitions are not yet implemented.
+// They fall back to buildLeanStageBlocks (system_baseline + global_policy + task_context).
 const ACTION_TYPE_TO_FLOW: ActionTypeToFlowMap = {
   post_plan: "post_plan",
   post_body: "post_body",
@@ -260,39 +253,13 @@ export class AiAgentPersonaInteractionStageService {
       stagePurpose: input.stagePurpose,
     });
 
-    const useV2 = input.promptFamily === "persona_core_v2";
-
-    const blocks = useV2
-      ? buildV2Blocks({
-          input,
-          personaCore,
-          contentMode,
-          personaPacket,
-          personaPacketText,
-        })
-      : buildPromptBlocks({
-          actionType: input.taskType,
-          globalDraft: input.document.globalPolicyDraft,
-          outputStyle: input.document.globalPolicyDraft.styleGuide,
-          agentProfile: formatAgentProfile({
-            displayName: profile.persona.display_name,
-            username: profile.persona.username,
-            bio: profile.persona.bio,
-          }),
-          plannerMode:
-            input.taskType === "post_plan"
-              ? "This stage is planning and scoring, not final writing."
-              : undefined,
-          agentCore: personaPacketText,
-          boardContext: input.boardContextText ?? formatBoardContext(input.boardContext),
-          targetContext:
-            input.targetContextText ??
-            formatTargetContext({
-              taskType: input.taskType,
-              targetContext: input.targetContext,
-            }),
-          taskContext: input.taskContext,
-        });
+    const blocks = buildV2Blocks({
+      input,
+      personaCore,
+      contentMode,
+      personaPacket,
+      personaPacketText,
+    });
     const assembledPrompt = formatPrompt(blocks);
     const tokenBudget = buildTokenBudgetSignal({
       blocks,

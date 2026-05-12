@@ -10,7 +10,6 @@ export const POST = withAuth(async (req, { user }) => {
   const body = (await req.json().catch(() => ({}))) as {
     modelId?: string;
     taskType?: "post" | "comment" | "reply";
-    personaId?: string;
     taskContext?: string;
   };
 
@@ -22,12 +21,11 @@ export const POST = withAuth(async (req, { user }) => {
     return http.badRequest("taskType must be post, comment, or reply");
   }
 
-  const text = await new AdminAiControlPlaneStore().assistInteractionTaskContext({
+  const output = await new AdminAiControlPlaneStore().assistInteractionTaskContext({
     modelId: body.modelId.trim(),
     taskType: body.taskType,
-    personaId: body.personaId?.trim() || undefined,
     taskContext: body.taskContext?.trim() || undefined,
   });
 
-  return http.ok({ text });
+  return http.ok(output);
 });

@@ -34,6 +34,10 @@ import {
   isPersonaGenerationAbortError,
   type PersonaGenerationModalPhase,
 } from "@/components/admin/control-plane/persona-generation-modal-utils";
+import {
+  type InteractionContextAssistOutput,
+  serializeAssistOutput,
+} from "@/lib/ai/admin/interaction-context-assist-schema";
 
 export function applyPolicyReleaseToDraft(
   draft: DraftState,
@@ -129,12 +133,6 @@ export function useAiControlPlane({
     note: initialSelectedRelease?.changeNote ?? "",
   });
 
-  const [policyPreviewInput, setPolicyPreviewInput] = useState({
-    version: latestRelease?.version ? String(latestRelease.version) : "",
-    taskContext: "Draft a forum comment preview.",
-  });
-  const [policyPreview, setPolicyPreview] = useState<PreviewResult | null>(null);
-
   const initialPersonaGenerationModelId =
     initialModels.find((model) => {
       const provider = initialProviders.find((item) => item.id === model.providerId);
@@ -218,6 +216,9 @@ export function useAiControlPlane({
   const [interactionTaskAssistLoading, setInteractionTaskAssistLoading] = useState(false);
   const [interactionTaskAssistError, setInteractionTaskAssistError] = useState<string | null>(null);
   const [interactionTaskAssistElapsedSeconds, setInteractionTaskAssistElapsedSeconds] = useState(0);
+  const [structuredContext, setStructuredContext] = useState<InteractionContextAssistOutput | null>(
+    null,
+  );
   const [modelTestImageLinks, setModelTestImageLinks] = useState<Record<string, string>>({});
 
   const textModels = useMemo(
@@ -631,7 +632,6 @@ export function useAiControlPlane({
         note: draft.note,
       });
       toast.success(`Policy updated (v${res.item.version})`);
-      setPolicyPreviewInput((prev) => ({ ...prev, version: String(res.item.version) }));
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save policy");
@@ -650,50 +650,9 @@ export function useAiControlPlane({
         note: draft.note,
       });
       toast.success(`Policy published (v${res.item.version})`);
-      setPolicyPreviewInput((prev) => ({ ...prev, version: String(res.item.version) }));
       await refreshAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to publish policy");
-    }
-  };
-
-  const runPolicyPreview = async () => {
-    if (!policyPreviewInput.version) {
-      toast.error("version is required");
-      return;
-    }
-    try {
-      const res = await apiPost<{ preview: PreviewResult }>(
-        `/api/admin/ai/policy-releases/${policyPreviewInput.version}/preview`,
-        {
-          taskContext: policyPreviewInput.taskContext,
-        },
-      );
-      setPolicyPreview(res.preview);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to run preview");
-    }
-  };
-
-  const previewSelectedPolicyDraft = async () => {
-    const version = String(draft.selectedVersion);
-    const taskContext =
-      policyPreviewInput.taskContext.trim() || "Preview prompt assembled from policy draft.";
-    setPolicyPreviewInput({
-      version,
-      taskContext,
-    });
-
-    try {
-      const res = await apiPost<{ preview: PreviewResult }>(
-        `/api/admin/ai/policy-releases/${version}/preview`,
-        {
-          taskContext,
-        },
-      );
-      setPolicyPreview(res.preview);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to run preview");
     }
   };
 
@@ -729,7 +688,6 @@ export function useAiControlPlane({
         return;
       }
       setDraft((prev) => applyPolicyReleaseToDraft(prev, selected));
-      setPolicyPreviewInput((prev) => ({ ...prev, version: String(selected.version) }));
     },
     [releases],
   );
@@ -1198,7 +1156,7 @@ export function useAiControlPlane({
       toast.error("persona/model are required");
       return;
     }
-    if (!hasNonEmptyText(interactionInput.taskContext)) {
+    if (structuredContext === null && !hasNonEmptyText(interactionInput.taskContext)) {
       toast.error("Task context is required");
       return;
     }
@@ -1210,14 +1168,19 @@ export function useAiControlPlane({
     setInteractionPreview(null);
     interactionPreviewStartedAtRef.current = Date.now();
     try {
+      const payload: Record<string, unknown> = {
+        personaId: interactionInput.personaId,
+        modelId: interactionInput.modelId,
+        taskType: interactionInput.taskType,
+      };
+      if (structuredContext) {
+        payload.structuredContext = structuredContext;
+      } else {
+        payload.taskContext = interactionInput.taskContext;
+      }
       const res = await apiPost<{ preview: PreviewResult }>(
         "/api/admin/ai/persona-interaction/preview",
-        {
-          personaId: interactionInput.personaId,
-          modelId: interactionInput.modelId,
-          taskType: interactionInput.taskType,
-          taskContext: interactionInput.taskContext,
-        },
+        payload,
       );
       setInteractionPreview(res.preview);
       setInteractionPreviewModalPhase("success");
@@ -1258,12 +1221,11 @@ export function useAiControlPlane({
     setInteractionTaskAssistLoading(true);
 
     try {
-      const res = await apiPost<{ text: string }>(
+      const res = await apiPost<InteractionContextAssistOutput>(
         "/api/admin/ai/persona-interaction/context-assist",
         {
           modelId: interactionInput.modelId,
           taskType: interactionInput.taskType,
-          personaId: interactionInput.personaId || undefined,
           taskContext: interactionInput.taskContext.trim() || undefined,
         },
         { signal: abortController.signal },
@@ -1271,9 +1233,10 @@ export function useAiControlPlane({
       if (interactionTaskAssistAbortRef.current !== abortController) {
         return;
       }
+      setStructuredContext(res);
       setInteractionInput((prev) => ({
         ...prev,
-        taskContext: res.text,
+        taskContext: serializeAssistOutput(res),
       }));
       toast.success("Task context generated");
     } catch (error) {
@@ -1306,9 +1269,6 @@ export function useAiControlPlane({
     personas,
     draft,
     setDraft,
-    policyPreviewInput,
-    setPolicyPreviewInput,
-    policyPreview,
     personaGeneration,
     setPersonaGeneration,
     personaUpdate,
@@ -1364,8 +1324,6 @@ export function useAiControlPlane({
     reorderModels,
     createDraft,
     publishNextVersion,
-    runPolicyPreview,
-    previewSelectedPolicyDraft,
     rollbackRelease,
     deletePolicyRelease,
     viewPolicyVersion,
@@ -1378,6 +1336,8 @@ export function useAiControlPlane({
     runInteractionPreview,
     closeInteractionPreviewModal,
     assistInteractionTaskContext,
+    structuredContext,
+    setStructuredContext,
     personaStepStatus,
   };
 }

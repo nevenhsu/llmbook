@@ -40,6 +40,7 @@ import {
   type ProviderRow,
 } from "@/lib/ai/admin/control-plane-contract";
 import { assistInteractionTaskContext } from "@/lib/ai/admin/interaction-context-assist-service";
+import { type InteractionContextAssistOutput } from "@/lib/ai/admin/interaction-context-assist-schema";
 import type { PersonaReferenceCheckResult } from "@/lib/ai/admin/persona-batch-contract";
 import { assistPersonaPrompt } from "@/lib/ai/admin/persona-prompt-assist-service";
 import { previewPersonaGeneration } from "@/lib/ai/admin/persona-generation-preview-service";
@@ -49,7 +50,6 @@ import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-int
 import {
   asRecord,
   buildLlmErrorDetailsSuffix,
-  buildPromptBlocks,
   buildTokenBudgetSignal,
   DEFAULT_TOKEN_LIMITS,
   formatPrompt,
@@ -1122,60 +1122,6 @@ export class AdminAiControlPlaneStore {
     };
   }
 
-  public async previewGlobalPolicyRelease(
-    version: number,
-    taskContext: string,
-  ): Promise<PreviewResult> {
-    const row = await this.fetchReleaseByVersion(version);
-    if (!row) {
-      throw new Error("policy release not found");
-    }
-
-    const document = readGlobalPolicyDocument(row.policy);
-    const blocks = buildPromptBlocks({
-      actionType: "comment",
-      globalDraft: document.globalPolicyDraft,
-      outputStyle: document.globalPolicyDraft.styleGuide,
-      agentCore: "(global preview mode)",
-      boardContext: "",
-      targetContext: "",
-      taskContext,
-    });
-
-    const tokenBudget = buildTokenBudgetSignal({
-      blocks,
-      maxInputTokens: DEFAULT_TOKEN_LIMITS.interactionMaxInputTokens,
-      maxOutputTokens: getInteractionRuntimeBudgets("comment").initial,
-    });
-
-    const markdown = [
-      "## Global Policy Preview",
-      "",
-      `Task Context: ${taskContext || "(empty)"}`,
-      "",
-      "This is a policy-only prompt assembly preview.",
-    ].join("\n");
-
-    try {
-      markdownToEditorHtml(markdown);
-      return {
-        assembledPrompt: formatPrompt(blocks),
-        markdown,
-        renderOk: true,
-        renderError: null,
-        tokenBudget,
-      };
-    } catch (error) {
-      return {
-        assembledPrompt: formatPrompt(blocks),
-        markdown,
-        renderOk: false,
-        renderError: error instanceof Error ? error.message : "render validation failed",
-        tokenBudget,
-      };
-    }
-  }
-
   public async listPersonas(limit = 50, query?: string): Promise<PersonaSummary[]> {
     let qb = this.supabase
       .from("personas")
@@ -1375,15 +1321,15 @@ export class AdminAiControlPlaneStore {
   public async assistInteractionTaskContext(input: {
     modelId: string;
     taskType: "post" | "comment" | "reply";
-    personaId?: string;
     taskContext?: string;
-  }): Promise<string> {
+  }): Promise<InteractionContextAssistOutput> {
     const { providers, models } = await this.getActiveControlPlane();
     return assistInteractionTaskContext({
-      ...input,
+      modelId: input.modelId,
+      taskType: input.taskType,
+      taskContext: input.taskContext,
       providers,
       models,
-      getPersonaProfile: (personaId) => this.getPersonaProfile(personaId),
       recordLlmInvocationError: (event) => this.recordLlmInvocationError(event),
     });
   }

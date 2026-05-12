@@ -1,23 +1,88 @@
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
-import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
+import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
-import { ADMIN_UI_LLM_PROVIDER_RETRIES } from "@/lib/ai/admin/persona-generation-token-budgets";
-import type {
-  AiModelConfig,
-  AiProviderConfig,
-  PersonaProfile,
-} from "@/lib/ai/admin/control-plane-contract";
+import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
-import { asRecord } from "@/lib/ai/admin/control-plane-shared";
+import {
+  InteractionContextAssistSchema,
+  type InteractionContextAssistOutput,
+} from "@/lib/ai/admin/interaction-context-assist-schema";
+
+function buildPrompt(input: {
+  taskType: "post" | "comment" | "reply";
+  taskContext: string;
+}): string {
+  const hasContext = input.taskContext.length > 0;
+  const thinkingStep1 = hasContext
+    ? "Consider the background data provided as reference direction."
+    : "Generate a random content direction related to a story forum.";
+
+  switch (input.taskType) {
+    case "post":
+      return [
+        "[task context]",
+        "Your task is to generate a detailed task context for a post interaction. Generate an article title direction and content direction.",
+        "",
+        "[background data]",
+        `Task context: ${hasContext ? input.taskContext : "none"}`,
+        "",
+        "[detailed tasks and rules]",
+        "Only generate article direction and content reference. Do not write the full article.",
+        "",
+        "[immediate task]",
+        "Generate a detailed task context for a post. Create a direction for an article title and its content.",
+        "",
+        "[thinking step by step]",
+        `1. ${thinkingStep1}`,
+        "2. Generate the task context as a handoff for the next stage.",
+      ].join("\n");
+
+    case "comment":
+      return [
+        "[task context]",
+        "Your task is to generate a detailed task context for a comment interaction. Generate a fictional article title and simple outline for the persona to comment on.",
+        "",
+        "[background data]",
+        `Task context: ${hasContext ? input.taskContext : "none"}`,
+        "",
+        "[detailed tasks and rules]",
+        "Only generate a fictional article outline. The persona will write a comment on it later.",
+        "",
+        "[immediate task]",
+        "Generate a detailed task context for a comment. Create a fictional article outline to comment on.",
+        "",
+        "[thinking step by step]",
+        `1. ${thinkingStep1}`,
+        "2. Generate the task context as a handoff for the next stage.",
+      ].join("\n");
+
+    case "reply":
+      return [
+        "[task context]",
+        "Your task is to generate a detailed task context for a reply interaction. Generate an article simple outline and a comment thread with 3 comments for the persona to reply to.",
+        "",
+        "[background data]",
+        `Task context: ${hasContext ? input.taskContext : "none"}`,
+        "",
+        "[detailed tasks and rules]",
+        "Only generate an article outline and a comment thread. Each comment should be up to 2 sentences. The comments should be related discussion around the article.",
+        "",
+        "[immediate task]",
+        "Generate a detailed task context for a reply. Create an article outline and 3 comments to reply to.",
+        "",
+        "[thinking step by step]",
+        `1. ${thinkingStep1}`,
+        "2. Generate the task context as a handoff for the next stage.",
+      ].join("\n");
+  }
+}
 
 export async function assistInteractionTaskContext(input: {
   modelId: string;
   taskType: "post" | "comment" | "reply";
-  personaId?: string;
   taskContext?: string;
   providers: AiProviderConfig[];
   models: AiModelConfig[];
-  getPersonaProfile: (personaId: string) => Promise<PersonaProfile>;
   recordLlmInvocationError: (input: {
     providerKey: string;
     modelKey: string;
@@ -29,7 +94,7 @@ export async function assistInteractionTaskContext(input: {
       body?: string;
     };
   }) => Promise<void>;
-}): Promise<string> {
+}): Promise<InteractionContextAssistOutput> {
   const { model, provider } = resolvePersonaTextModel({
     modelId: input.modelId,
     models: input.models,
@@ -53,107 +118,50 @@ export async function assistInteractionTaskContext(input: {
     includeDeepSeek: true,
   });
 
-  let personaProfile: PersonaProfile | null = null;
-  if (input.personaId) {
-    try {
-      personaProfile = await input.getPersonaProfile(input.personaId);
-    } catch {
-      personaProfile = null;
-    }
-  }
-
-  const personaName = personaProfile?.persona.display_name ?? "the selected persona";
-  const personaCore = asRecord(personaProfile?.personaCore ?? {});
-  const referenceStyle = (personaCore?.reference_style ?? {}) as Record<string, unknown>;
-  const referenceSourceNames = Array.isArray(referenceStyle.reference_names)
-    ? (referenceStyle.reference_names as string[]).filter((name) => name.length > 0)
-    : [];
   const existingTaskContext = input.taskContext?.trim() ?? "";
+  const prompt = buildPrompt({
+    taskType: input.taskType,
+    taskContext: existingTaskContext,
+  });
 
-  const prompt = [
-    existingTaskContext
-      ? "Write one short Interaction Preview scenario related to the current task context."
-      : "Write one short random Interaction Preview scenario.",
-    `Task type: ${input.taskType}.`,
-    `Persona: ${personaName}.`,
-    referenceSourceNames.length > 0
-      ? `Reference anchors: ${referenceSourceNames.join(", ")}.`
-      : null,
-    existingTaskContext ? `Existing task context:\n${existingTaskContext}` : null,
-    "Return plain text only.",
-    existingTaskContext
-      ? "Keep it clearly related, but do not copy or paraphrase the input."
-      : "Make it realistic and specific.",
-    input.taskType === "comment"
-      ? existingTaskContext
-        ? "Make it feel like a forum comment or critique that invites a reply."
-        : "Make it feel like a forum comment that invites a reply."
-      : existingTaskContext
-        ? "Make it feel like a related topic seed for the next post."
-        : "Make it feel like a topic seed for a new post.",
-  ]
-    .filter((line): line is string => Boolean(line))
-    .join("\n");
+  const entityId = `interaction-context-assist:${model.id}`;
 
-  const metadata = {
-    entityType: "admin_ai_control_plane" as const,
-    entityId: `interaction-context-assist:${model.id}`,
-  };
-  const runAssistPrompt = async (
-    candidatePrompt: string,
-    maxOutputTokens: number,
-    temperature: number,
-  ) => {
-    return invokeLLM({
-      registry,
-      taskType: "generic",
-      routeOverride: invocationConfig.route,
-      modelInput: {
-        prompt: candidatePrompt,
-        maxOutputTokens,
-        temperature,
-        metadata,
-      },
-      entityId: metadata.entityId,
-      timeoutMs: invocationConfig.timeoutMs,
-      retries: Math.min(invocationConfig.retries ?? 0, ADMIN_UI_LLM_PROVIDER_RETRIES),
-      onProviderError: async (event) => {
-        await input.recordLlmInvocationError({
-          providerKey: event.providerId,
-          modelKey: event.modelId,
-          error: event.error,
-          errorDetails: event.errorDetails,
-        });
-      },
-    });
-  };
+  const result = await invokeStructuredLLM({
+    registry,
+    taskType: "generic",
+    routeOverride: invocationConfig.route,
+    modelInput: {
+      prompt,
+      maxOutputTokens: 2000,
+      temperature: 0.7,
+    },
+    entityId,
+    timeoutMs: invocationConfig.timeoutMs,
+    retries: 0,
+    onProviderError: async (event) => {
+      await input.recordLlmInvocationError({
+        providerKey: event.providerId,
+        modelKey: event.modelId,
+        error: event.error,
+        errorDetails: event.errorDetails,
+      });
+    },
+    schemaGate: {
+      schemaName: "InteractionContextAssist",
+      schema: InteractionContextAssistSchema,
+      validationRules: [
+        "taskType must match the requested interaction type",
+        "Each comment content must be 1-2 sentences (reply only)",
+        "comments must contain exactly 3 items (reply only)",
+      ],
+      allowedRepairPaths: ["comments", "comments.*.content"],
+      immutablePaths: ["taskType"],
+    },
+  });
 
-  const firstAttempt = await runAssistPrompt(prompt, 900, 0.4);
-  if (firstAttempt.text.trim()) {
-    return firstAttempt.text.trim();
+  if (result.status === "schema_failure") {
+    throw new Error(`interaction context assist schema failure: ${result.error}`);
   }
 
-  const retryPrompt = [
-    existingTaskContext
-      ? "Rewrite the current task context into one short related Interaction Preview scenario."
-      : "Create one short Interaction Preview scenario.",
-    `Task type: ${input.taskType}.`,
-    `Persona: ${personaName}.`,
-    referenceSourceNames.length > 0
-      ? `Reference anchors: ${referenceSourceNames.join(", ")}.`
-      : null,
-    existingTaskContext ? `Existing task context:\n${existingTaskContext}` : null,
-    "Return plain text only.",
-    "One short paragraph. No markdown.",
-  ]
-    .filter((line): line is string => Boolean(line))
-    .join("\n");
-
-  const secondAttempt = await runAssistPrompt(retryPrompt, 1400, 0.2);
-  if (secondAttempt.text.trim()) {
-    return secondAttempt.text.trim();
-  }
-  throw new Error(
-    `interaction context assist returned empty output (finishReason=${String(secondAttempt.finishReason ?? "unknown")}; error=${String(secondAttempt.error ?? "none")}; attempts=${String(secondAttempt.attempts ?? 0)})`,
-  );
+  return result.value;
 }

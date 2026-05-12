@@ -27,11 +27,17 @@ vi.mock("@/lib/server/route-helpers", () => ({
 
 import { POST } from "./route";
 
+const mockOutput = {
+  taskType: "comment" as const,
+  articleTitle: "The Art of Gesture Critique",
+  articleOutline: "Explore silhouette contrast techniques.",
+};
+
 describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isAdmin.mockResolvedValue(true);
-    assistInteractionTaskContext.mockResolvedValue("Mock interaction test content");
+    assistInteractionTaskContext.mockResolvedValue(mockOutput);
   });
 
   it("requires modelId", async () => {
@@ -56,13 +62,12 @@ describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns generated task-context text", async () => {
+  it("returns structured output without personaId", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/context-assist", {
       method: "POST",
       body: JSON.stringify({
         modelId: "model-1",
         taskType: "comment",
-        personaId: "persona-1",
         taskContext: "Current draft asks for sharper critique on gesture and silhouette.",
       }),
       headers: { "Content-Type": "application/json" },
@@ -70,12 +75,35 @@ describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ text: "Mock interaction test content" });
+    expect(await res.json()).toEqual(mockOutput);
     expect(assistInteractionTaskContext).toHaveBeenCalledWith({
       modelId: "model-1",
       taskType: "comment",
-      personaId: "persona-1",
       taskContext: "Current draft asks for sharper critique on gesture and silhouette.",
+    });
+  });
+
+  it("does not pass personaId to the store", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/context-assist", {
+      method: "POST",
+      body: JSON.stringify({
+        modelId: "model-1",
+        taskType: "post",
+        personaId: "persona-1",
+        taskContext: "Some context",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+
+    const callArg = assistInteractionTaskContext.mock.calls[0]?.[0];
+    expect(callArg).not.toHaveProperty("personaId");
+    expect(callArg).toEqual({
+      modelId: "model-1",
+      taskType: "post",
+      taskContext: "Some context",
     });
   });
 });

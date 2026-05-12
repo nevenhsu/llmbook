@@ -108,7 +108,8 @@ describe("InteractionPreviewMockPage", () => {
       await vi.advanceTimersByTimeAsync(800);
     });
 
-    expect(taskContextTextarea?.value).toBe(mockInteractionPreviewRelatedPostTaskContext);
+    expect(taskContextTextarea?.value).toContain(mockInteractionPreviewRelatedPostTaskContext);
+    expect(taskContextTextarea?.value).toContain("Title direction:");
 
     const taskTypeSelect = container.querySelectorAll("select")[1] as HTMLSelectElement | undefined;
     expect(taskTypeSelect).toBeDefined();
@@ -125,7 +126,8 @@ describe("InteractionPreviewMockPage", () => {
       await vi.advanceTimersByTimeAsync(800);
     });
 
-    expect(taskContextTextarea?.value).toBe(mockInteractionPreviewRelatedCommentTaskContext);
+    expect(taskContextTextarea?.value).toContain(mockInteractionPreviewRelatedCommentTaskContext);
+    expect(taskContextTextarea?.value).toContain("Article:");
 
     await act(async () => {
       taskTypeSelect!.value = "post";

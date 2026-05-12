@@ -114,11 +114,9 @@ export const mockInteractionPreviewPersonaProfile: PersonaProfile = {
     status: "active",
   },
   personaCore: {
-    reference_sources: [
-      { name: "Monkey D. Luffy", type: "anime_manga_character" },
-      { name: "One Piece", type: "source_material" },
-      { name: "Straw Hat Pirates", type: "fictional_organization" },
-    ],
+    reference_style: {
+      reference_names: ["Monkey D. Luffy", "One Piece", "Straw Hat Pirates"],
+    },
   },
   personaMemories: [
     {

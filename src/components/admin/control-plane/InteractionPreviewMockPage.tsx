@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FlaskConical } from "lucide-react";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
+import type { InteractionContextAssistOutput } from "@/lib/ai/admin/interaction-context-assist-schema";
+import { serializeAssistOutput } from "@/lib/ai/admin/interaction-context-assist-schema";
 import type { PersonaGenerationModalPhase } from "./persona-generation-modal-utils";
 import { PersonaInteractionSection } from "./sections/PersonaInteractionSection";
 import {
@@ -39,6 +41,9 @@ export function InteractionPreviewMockPage() {
   const [interactionTaskAssistLoading, setInteractionTaskAssistLoading] = useState(false);
   const [interactionTaskAssistError] = useState<string | null>(null);
   const [interactionTaskAssistElapsedSeconds, setInteractionTaskAssistElapsedSeconds] = useState(0);
+  const [structuredContext, setStructuredContext] = useState<InteractionContextAssistOutput | null>(
+    null,
+  );
   const interactionPreviewStartedAtRef = useRef<number | null>(null);
   const interactionTaskAssistStartedAtRef = useRef<number | null>(null);
 
@@ -119,19 +124,39 @@ export function InteractionPreviewMockPage() {
 
     try {
       await new Promise((resolve) => window.setTimeout(resolve, TASK_CONTEXT_ASSIST_DELAY_MS));
+      const hasExistingContext = interactionInput.taskContext.trim().length > 0;
+      let mockOutput: InteractionContextAssistOutput;
+      if (interactionInput.taskType === "post") {
+        mockOutput = {
+          taskType: "post",
+          titleDirection: hasExistingContext
+            ? mockInteractionPreviewRelatedPostTaskContext
+            : mockInteractionPreviewRandomPostTaskContext,
+          contentDirection: "Explore themes and narrative structure for the post.",
+        };
+      } else if (interactionInput.taskType === "reply") {
+        mockOutput = {
+          taskType: "reply",
+          articleOutline: "A discussion about cosmic horror in modern fiction.",
+          comments: [
+            { content: "The use of cosmic horror has evolved significantly." },
+            { content: "Modern authors blend psychological and cosmic dread." },
+            { content: "I think the genre needs more non-Euclidean perspectives." },
+          ],
+        };
+      } else {
+        mockOutput = {
+          taskType: "comment",
+          articleTitle: hasExistingContext
+            ? mockInteractionPreviewRelatedCommentTaskContext
+            : mockInteractionPreviewRandomCommentTaskContext,
+          articleOutline: "Key points and structure for the comment response.",
+        };
+      }
+      setStructuredContext(mockOutput);
       setInteractionInput((prev) => ({
         ...prev,
-        taskContext: (() => {
-          const hasExistingContext = prev.taskContext.trim().length > 0;
-          if (prev.taskType === "post") {
-            return hasExistingContext
-              ? mockInteractionPreviewRelatedPostTaskContext
-              : mockInteractionPreviewRandomPostTaskContext;
-          }
-          return hasExistingContext
-            ? mockInteractionPreviewRelatedCommentTaskContext
-            : mockInteractionPreviewRandomCommentTaskContext;
-        })(),
+        taskContext: serializeAssistOutput(mockOutput),
       }));
       setInteractionTaskAssistElapsedSeconds(
         Math.max(0, Math.floor((Date.now() - interactionTaskAssistStartedAtRef.current!) / 1000)),
@@ -183,6 +208,8 @@ export function InteractionPreviewMockPage() {
         interactionTaskAssistLoading={interactionTaskAssistLoading}
         interactionTaskAssistError={interactionTaskAssistError}
         interactionTaskAssistElapsedSeconds={interactionTaskAssistElapsedSeconds}
+        structuredContext={structuredContext}
+        setStructuredContext={setStructuredContext}
         runInteractionPreview={runInteractionPreview}
         closeInteractionPreviewModal={closeInteractionPreviewModal}
         assistInteractionTaskContext={assistInteractionTaskContext}

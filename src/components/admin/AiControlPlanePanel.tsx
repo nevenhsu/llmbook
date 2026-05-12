@@ -31,7 +31,6 @@ export default function AiControlPlanePanel(props: Props) {
     personas,
     draft,
     setDraft,
-    policyPreview,
     personaGeneration,
     setPersonaGeneration,
     personaUpdate,
@@ -86,7 +85,6 @@ export default function AiControlPlanePanel(props: Props) {
     reorderModels,
     createDraft,
     publishNextVersion,
-    previewSelectedPolicyDraft,
     rollbackRelease,
     deletePolicyRelease,
     viewPolicyVersion,
@@ -99,6 +97,8 @@ export default function AiControlPlanePanel(props: Props) {
     runInteractionPreview,
     closeInteractionPreviewModal,
     assistInteractionTaskContext,
+    structuredContext,
+    setStructuredContext,
     personaStepStatus,
   } = useAiControlPlane(props);
 
@@ -212,8 +212,6 @@ export default function AiControlPlanePanel(props: Props) {
               viewPolicyVersion={viewPolicyVersion}
               updatePolicy={createDraft}
               publishPolicy={publishNextVersion}
-              policyPreview={policyPreview}
-              previewSelectedPolicyDraft={previewSelectedPolicyDraft}
               rollbackRelease={rollbackRelease}
               deletePolicyRelease={deletePolicyRelease}
             />
@@ -281,6 +279,8 @@ export default function AiControlPlanePanel(props: Props) {
               interactionTaskAssistLoading={interactionTaskAssistLoading}
               interactionTaskAssistError={interactionTaskAssistError}
               interactionTaskAssistElapsedSeconds={interactionTaskAssistElapsedSeconds}
+              structuredContext={structuredContext}
+              setStructuredContext={setStructuredContext}
               runInteractionPreview={runInteractionPreview}
               closeInteractionPreviewModal={closeInteractionPreviewModal}
               assistInteractionTaskContext={assistInteractionTaskContext}

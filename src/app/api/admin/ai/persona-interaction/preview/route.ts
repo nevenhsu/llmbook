@@ -4,6 +4,10 @@ import { isAdmin } from "@/lib/admin";
 import type { PromptBoardContext, PromptTargetContext } from "@/lib/ai/admin/control-plane-store";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
+import {
+  type InteractionContextAssistOutput,
+  serializeAssistOutput,
+} from "@/lib/ai/admin/interaction-context-assist-schema";
 import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 export const POST = withAuth(async (req, { user }) => {
@@ -90,6 +94,7 @@ export const POST = withAuth(async (req, { user }) => {
     modelId?: string;
     taskType?: PromptActionType;
     taskContext?: string;
+    structuredContext?: InteractionContextAssistOutput;
     boardContext?: {
       name?: string;
       description?: string;
@@ -115,13 +120,17 @@ export const POST = withAuth(async (req, { user }) => {
     return http.badRequest("taskType must be post, comment, reply, vote, poll_post, or poll_vote");
   }
 
+  const resolvedTaskContext = body.structuredContext
+    ? serializeAssistOutput(body.structuredContext)
+    : (body.taskContext ?? "");
+
   let preview;
   try {
     preview = await new AdminAiControlPlaneStore().previewPersonaInteraction({
       personaId: body.personaId.trim(),
       modelId: body.modelId.trim(),
       taskType: body.taskType,
-      taskContext: body.taskContext ?? "",
+      taskContext: resolvedTaskContext,
       boardContext: normalizeBoardContext(body.boardContext),
       targetContext: normalizeTargetContext(body.targetContext),
     });

@@ -1,9 +1,4 @@
-import {
-  PLANNER_FAMILY_PROMPT_BLOCK_ORDER,
-  WRITER_FAMILY_PROMPT_BLOCK_ORDER,
-  buildActionOutputConstraints,
-  type PromptActionType,
-} from "@/lib/ai/prompt-runtime/prompt-builder";
+import { type PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { PERSONA_GENERATION_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 import type {
   AiControlPlaneDocument,
@@ -210,120 +205,6 @@ export function writeGlobalPolicyDocument(
   };
 }
 
-function trimBoardContext(boardContext: string | undefined): string {
-  if (!boardContext) {
-    return "";
-  }
-  const trimmed = boardContext.trim();
-  if (!trimmed) {
-    return "";
-  }
-  const nameMatch = trimmed.match(/^Name:\s*(.+)$/m);
-  return nameMatch ? `Name: ${nameMatch[1].trim()}` : trimmed.split("\n").slice(0, 1).join("\n");
-}
-
-function trimTargetContext(targetContext: string | undefined): string {
-  if (!targetContext) {
-    return "";
-  }
-  const trimmed = targetContext.trim();
-  if (!trimmed || trimmed.length <= 200) {
-    return trimmed;
-  }
-  return `${trimmed.slice(0, 200)}`;
-}
-
-export function buildPromptBlocks(input: {
-  actionType: PromptActionType;
-  globalDraft: GlobalPolicyStudioDraft;
-  agentProfile?: string;
-  outputStyle?: string;
-  plannerMode?: string;
-  agentCore: string;
-  agentPostingLens?: string;
-  planningScoringContract?: string;
-  boardContext?: string;
-  targetContext?: string;
-  taskContext: string;
-}): Array<{ name: string; content: string }> {
-  const baseline = input.globalDraft.systemBaseline.trim();
-  const systemBaseline = baseline || "(not set)";
-  const allBlocks = {
-    system_baseline: { name: "system_baseline", content: systemBaseline },
-    global_policy: {
-      name: "global_policy",
-      content: (() => {
-        const policy = input.globalDraft.globalPolicy.replace(/^Policy:\s*/im, "").trim();
-        const forbidden = input.globalDraft.forbiddenRules.replace(/^Forbidden:\s*/im, "").trim();
-        return ["Policy:", policy || "(not set)", "Forbidden:", forbidden || "(not set)"].join(
-          "\n",
-        );
-      })(),
-    },
-    planner_mode: {
-      name: "planner_mode",
-      content:
-        input.plannerMode?.trim() ||
-        [
-          "This stage is planning and scoring, not final writing.",
-          "Generate candidate post ideas and score them conservatively.",
-        ].join("\n"),
-    },
-    output_style: {
-      name: "output_style",
-      content: input.outputStyle?.trim() || "No output style guidance available.",
-    },
-    agent_profile: {
-      name: "agent_profile",
-      content: input.agentProfile?.trim() || "No agent profile available.",
-    },
-    persona_packet: {
-      name: "persona_packet",
-      content:
-        input.agentCore ||
-        [
-          "Persona: thoughtful contributor.",
-          "Internally apply persona procedure, output only final content.",
-        ].join("\n"),
-    },
-    agent_posting_lens: {
-      name: "agent_posting_lens",
-      content:
-        input.agentPostingLens?.trim() ||
-        [
-          "This persona tends to post when a workflow distinction is being blurred.",
-          "Make the framing feel pointed, not neutral or theatrical.",
-        ].join("\n"),
-    },
-    board_context: {
-      name: "board_context",
-      content: trimBoardContext(input.boardContext),
-    },
-    target_context: {
-      name: "target_context",
-      content: trimTargetContext(input.targetContext),
-    },
-    planning_scoring_contract: {
-      name: "planning_scoring_contract",
-      content:
-        input.planningScoringContract?.trim() ||
-        ["Return exactly 3 candidates.", "Score conservatively."].join("\n"),
-    },
-    task_context: { name: "task_context", content: input.taskContext },
-    output_constraints: {
-      name: "output_constraints",
-      content: buildActionOutputConstraints(input.actionType),
-    },
-  } as const;
-
-  const order =
-    input.actionType === "post_plan"
-      ? PLANNER_FAMILY_PROMPT_BLOCK_ORDER
-      : WRITER_FAMILY_PROMPT_BLOCK_ORDER;
-
-  return order.map((name) => allBlocks[name]).filter((block) => block.content.trim().length > 0);
-}
-
 export function formatAgentMemory(input: { shortTerm: string; longTerm: string }): string {
   return [
     "Short-term:",
@@ -382,18 +263,6 @@ export function formatTargetContext(input: {
   ]
     .filter((part): part is string => Boolean(part))
     .join("\n");
-}
-
-export function formatAgentProfile(input: {
-  displayName: string;
-  username: string;
-  bio: string;
-}): string {
-  return [
-    `display_name: ${input.displayName}`,
-    `username: ${input.username}`,
-    `bio: ${input.bio}`,
-  ].join("\n");
 }
 
 export function formatPrompt(blocks: Array<{ name: string; content: string }>): string {

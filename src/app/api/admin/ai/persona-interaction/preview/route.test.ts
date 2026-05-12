@@ -69,6 +69,78 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     });
   });
 
+  it("serializes structuredContext to taskContext when provided", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "reply",
+        structuredContext: {
+          taskType: "reply",
+          articleOutline: "A discussion about cosmic horror.",
+          comments: [
+            { content: "First comment." },
+            { content: "Second comment." },
+            { content: "Third comment." },
+          ],
+        },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+    expect(previewPersonaInteraction).toHaveBeenCalledWith({
+      personaId: "p1",
+      modelId: "m1",
+      taskType: "reply",
+      taskContext: [
+        "Outline: A discussion about cosmic horror.",
+        "",
+        "Comments:",
+        "1. First comment.",
+        "2. Second comment.",
+        "3. Third comment.",
+      ].join("\n"),
+      boardContext: undefined,
+      targetContext: undefined,
+    });
+  });
+
+  it("prefers structuredContext over taskContext when both are provided", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "post",
+        taskContext: "manual text that should be ignored",
+        structuredContext: {
+          taskType: "post",
+          titleDirection: "A deep dive into cosmic horror.",
+          contentDirection: "Explore themes of insignificance.",
+        },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+    expect(previewPersonaInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskContext: expect.stringContaining("Title direction: A deep dive into cosmic horror."),
+      }),
+    );
+    expect(previewPersonaInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskContext: expect.stringContaining(
+          "Content direction: Explore themes of insignificance.",
+        ),
+      }),
+    );
+  });
+
   it("rejects internal post stage task types", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",

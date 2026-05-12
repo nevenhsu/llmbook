@@ -216,7 +216,6 @@ export type TextFlowModuleRunInput = {
     debug?: boolean;
     attemptLabel?: string;
     executionMode?: "admin_preview" | "runtime";
-    promptFamily?: "legacy" | "persona_core_v2";
   }) => Promise<PreviewResult>;
   personaEvidence: PromptPersonaEvidence;
   debug?: boolean;
