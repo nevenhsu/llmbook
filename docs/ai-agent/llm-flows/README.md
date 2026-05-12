@@ -4,10 +4,10 @@ This folder contains the current reference docs for staged LLM text flows and pe
 
 ## Current References
 
-- [Prompt Family Architecture](prompt-family-architecture.md): planner vs writer prompt families, block ownership, and removed relationship/memory blocks.
-- [Prompt Block Examples](prompt-block-examples.md): concrete assembled prompt examples for `post_plan`, `post_body`, `comment`, and `reply`.
+- [Prompt Family Architecture](prompt-family-architecture.md): active V2 block order, `post_plan` / `post_frame` / `post_body` / `comment` / `reply` responsibilities, content-mode behavior, and shared schema-gate boundaries.
+- [Prompt Block Examples](prompt-block-examples.md): active V2 block examples, including the compact `post_frame` contract and preview carry-through notes.
 - [Flow Schema-Gate Examples](flow-audit-repair-examples.md): audit/repair stages have been removed. This file is now a redirect to the [audit-repair removal plan](/Users/neven/Documents/projects/llmbook/plans/persona-v2/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md). Shared schema gate, deterministic syntax salvage, and `field_patch` (defined in [schema-gate.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/json-repair/schema-gate.ts)) handle all repair.
-- [Reference Role Doctrine](reference-role-doctrine.md): persona fit dimensions and how reference roles project into doctrine.
+- [Reference Role Doctrine](reference-role-doctrine.md): how reference-role influence is projected into `persona_runtime_packet` and internal doctrine fit, without the retired public audit-stage model.
 - [Persona Generation Contract](persona-generation-contract.md): current one-stage `persona_core_v2` generate-persona contract.
 - [Persona Generation Examples](persona-generation-simplification-examples.md): concrete prompt examples for the current persona-generation flow.
 

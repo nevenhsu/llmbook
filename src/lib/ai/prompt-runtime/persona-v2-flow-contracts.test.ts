@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   buildOutputContractV2,
-  buildAuditOutputContractV2,
   parseMetadataProbability,
   normalizeMetadataProbability,
   PostPlanOutputSchema,
@@ -9,14 +8,6 @@ import {
   PostBodyOutputSchema,
   CommentOutputSchema,
   ReplyOutputSchema,
-  PostPlanDiscussionAuditSchema,
-  PostPlanStoryAuditSchema,
-  PostBodyDiscussionAuditSchema,
-  PostBodyStoryAuditSchema,
-  CommentDiscussionAuditSchema,
-  CommentStoryAuditSchema,
-  ReplyDiscussionAuditSchema,
-  ReplyStoryAuditSchema,
   POST_PLAN_SCHEMA_META,
   POST_FRAME_SCHEMA_META,
   POST_BODY_SCHEMA_META,
@@ -56,14 +47,20 @@ describe("persona-v2-flow-contracts", () => {
     it("post_plan does NOT include metadata.probability", () => {
       const contract = buildOutputContractV2({ flow: "post_plan", contentMode: "discussion" });
       expect(contract).not.toContain("probability");
-      expect(contract).toContain("candidates"); // post_plan uses candidate schema
+      expect(contract).toContain("candidates");
     });
 
     it("post_plan story mode maps to story title and thesis", () => {
       const contract = buildOutputContractV2({ flow: "post_plan", contentMode: "story" });
       expect(contract).toContain("story");
       expect(contract).toContain("candidates");
-      // Uses same candidate schema, story semantics from content_mode_policy
+    });
+
+    it("post_frame contract uses required_details and excludes locked_title", () => {
+      const contract = buildOutputContractV2({ flow: "post_frame", contentMode: "discussion" });
+      expect(contract).toContain("required_details");
+      expect(contract).not.toContain("locked_title");
+      expect(contract).not.toContain("content_mode");
     });
 
     it("post_body story mode keeps same JSON keys", () => {
@@ -87,26 +84,11 @@ describe("persona-v2-flow-contracts", () => {
       expect(contract).toContain("metadata");
     });
 
-    it("all writer contracts include JSON-only instruction", () => {
+    it("all writer contracts forbid mentioning prompt instructions", () => {
       for (const flow of ["post_body", "post", "comment", "reply"] as const) {
         const contract = buildOutputContractV2({ flow, contentMode: "discussion" });
-        expect(contract).toContain("JSON");
+        expect(contract).toContain("Do not mention prompt instructions");
       }
-    });
-  });
-
-  describe("buildAuditOutputContractV2", () => {
-    it("does not score, validate, or explain probability", () => {
-      for (const flow of ["post_body", "comment", "reply"] as const) {
-        const contract = buildAuditOutputContractV2({ flow, contentMode: "discussion" });
-        expect(contract).not.toContain("probability");
-      }
-    });
-
-    it("includes audit-specific keys", () => {
-      const contract = buildAuditOutputContractV2({ flow: "post_body", contentMode: "discussion" });
-      expect(contract).toContain("passes");
-      expect(contract).toContain("issues");
     });
   });
 
@@ -344,8 +326,6 @@ describe("Zod output schemas", () => {
   describe("PostFrameSchema", () => {
     it("validates a valid compact post frame", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "The Missing Boundary",
         main_idea:
           "Teams over-edit prompts because they never separate generation, validation, and enforcement.",
         angle: "The workflow boundary is the real bottleneck, not the prompt wording.",
@@ -377,8 +357,6 @@ describe("Zod output schemas", () => {
 
     it("validates story mode post frame", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "story",
-        locked_title: "The Last Warm Pool",
         main_idea:
           "An old-blood Deep One must decide whether to share the last volcanic pool with surface-born hybrids as the ocean cools.",
         angle:
@@ -413,8 +391,6 @@ describe("Zod output schemas", () => {
 
     it("rejects old nested beat objects", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test idea",
         angle: "Test angle",
         beats: [
@@ -432,8 +408,6 @@ describe("Zod output schemas", () => {
 
     it("rejects old nested details object", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test idea",
         angle: "Test angle",
         beats: ["beat 1", "beat 2", "beat 3"],
@@ -452,8 +426,6 @@ describe("Zod output schemas", () => {
 
     it("rejects fewer than 3 beats", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test",
         angle: "Test",
         beats: ["beat 1", "beat 2"],
@@ -467,8 +439,6 @@ describe("Zod output schemas", () => {
 
     it("rejects more than 5 beats", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test",
         angle: "Test",
         beats: ["b1", "b2", "b3", "b4", "b5", "b6"],
@@ -482,8 +452,6 @@ describe("Zod output schemas", () => {
 
     it("rejects fewer than 3 required_details", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test",
         angle: "Test",
         beats: ["b1", "b2", "b3"],
@@ -497,8 +465,6 @@ describe("Zod output schemas", () => {
 
     it("rejects fewer than 2 tone items", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test",
         angle: "Test",
         beats: ["b1", "b2", "b3"],
@@ -512,8 +478,6 @@ describe("Zod output schemas", () => {
 
     it("rejects fewer than 3 avoid items", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "discussion",
-        locked_title: "Test",
         main_idea: "Test",
         angle: "Test",
         beats: ["b1", "b2", "b3"],
@@ -525,10 +489,10 @@ describe("Zod output schemas", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects invalid content_mode", () => {
+    it("strips unknown extra keys like content_mode from old callers", () => {
       const result = PostFrameSchema.safeParse({
-        content_mode: "essay",
-        locked_title: "Test",
+        content_mode: "discussion",
+        locked_title: "Old Title",
         main_idea: "Test",
         angle: "Test",
         beats: ["b1", "b2", "b3"],
@@ -537,112 +501,12 @@ describe("Zod output schemas", () => {
         tone: ["sharp", "practical"],
         avoid: ["a", "b", "c"],
       });
-      expect(result.success).toBe(false);
-    });
-  });
-
-  describe("audit schemas", () => {
-    it("PostPlanDiscussionAuditSchema has exactly two checks", () => {
-      const result = PostPlanDiscussionAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { candidate_quality: "pass", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("PostPlanStoryAuditSchema has exactly two checks", () => {
-      const result = PostPlanStoryAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { story_candidate_quality: "pass", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("PostBodyDiscussionAuditSchema validates", () => {
-      const result = PostBodyDiscussionAuditSchema.safeParse({
-        passes: false,
-        issues: ["issue"],
-        repairGuidance: ["guidance"],
-        checks: { content_quality: "fail", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("PostBodyStoryAuditSchema validates", () => {
-      const result = PostBodyStoryAuditSchema.safeParse({
-        passes: false,
-        issues: ["issue"],
-        repairGuidance: ["guidance"],
-        checks: { story_quality: "fail", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("CommentDiscussionAuditSchema validates", () => {
-      const result = CommentDiscussionAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { comment_quality: "pass", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("CommentStoryAuditSchema validates", () => {
-      const result = CommentStoryAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { story_comment_quality: "pass", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("ReplyDiscussionAuditSchema validates", () => {
-      const result = ReplyDiscussionAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { reply_quality: "pass", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("ReplyStoryAuditSchema validates", () => {
-      const result = ReplyStoryAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { story_reply_quality: "pass", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("audit schemas strip extra checks keys", () => {
-      const result = PostPlanDiscussionAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { candidate_quality: "pass", persona_fit: "pass", extra_check: "pass" },
-      });
+      // Zod .object() strips unknown keys by default, so this should succeed
       expect(result.success).toBe(true);
       if (result.success) {
-        expect((result.data.checks as Record<string, unknown>).extra_check).toBeUndefined();
+        expect((result.data as Record<string, unknown>).content_mode).toBeUndefined();
+        expect((result.data as Record<string, unknown>).locked_title).toBeUndefined();
       }
-    });
-
-    it("audit schemas reject unknown pass/fail values", () => {
-      const result = PostPlanDiscussionAuditSchema.safeParse({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-        checks: { candidate_quality: "unknown", persona_fit: "pass" },
-      });
-      expect(result.success).toBe(false);
     });
   });
 
@@ -659,11 +523,13 @@ describe("Zod output schemas", () => {
       expect(POST_BODY_SCHEMA_META.allowedRepairPaths).toContain("metadata.probability");
     });
 
-    it("POST_FRAME_SCHEMA_META has required fields", () => {
+    it("POST_FRAME_SCHEMA_META excludes code-owned fields", () => {
       expect(POST_FRAME_SCHEMA_META.schemaName).toBe("PostFrameSchema");
       expect(POST_FRAME_SCHEMA_META.validationRules.length).toBeGreaterThan(0);
       expect(POST_FRAME_SCHEMA_META.allowedRepairPaths.length).toBeGreaterThan(0);
-      expect(POST_FRAME_SCHEMA_META.immutablePaths).toContain("locked_title");
+      expect(POST_FRAME_SCHEMA_META.immutablePaths).toEqual([]);
+      expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("content_mode");
+      expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("locked_title");
       expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("beats.*.purpose");
       expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("details");
     });

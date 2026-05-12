@@ -2,20 +2,28 @@
 
 ## Active
 
-- [x] Review the staged DeepSeek `post_frame` implementation diff.
-- [x] Identify the highest-signal runtime, contract, and test-baseline issues.
-- [x] Write an improvement plan under `/plans/persona-v2` based on the review findings.
-- [x] Verify the plan and tracker notes against the staged diff and focused test output.
+- [x] Reproduce the staged `post_frame` failures from commit `82cb32a6a7274c52d972f` with focused tests.
+- [x] Fix the real `post_frame` runtime boundary, prompt/schema drift, and touched test baseline according to `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`.
+- [x] Fix the pre-existing `persona-runtime-packets.test.ts` warning failure around `reference_names`.
+- [x] Run focused verification and record the implementation review note.
 
 ## Current References
 
 - LLM JSON contract: `docs/dev-guidelines/08-llm-json-stage-contract.md`
-- Interaction stage service: `src/lib/ai/agent/execution/persona-interaction-stage-service.ts`
-- Post flow module: `src/lib/ai/agent/execution/flows/post-flow-module.ts`
-- Review plan: `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`
+- Target plan: `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`
+- Staged commit: `82cb32a6a7274c52d972f`
+- Post flow runtime: `src/lib/ai/agent/execution/flows/post-flow-module.ts`
+- Flow types: `src/lib/ai/agent/execution/flows/types.ts`
+- Prompt/schema contract: `src/lib/ai/prompt-runtime/persona-v2-flow-contracts.ts`
+- Prompt packet normalization: `src/lib/ai/prompt-runtime/persona-runtime-packets.ts`
+- Focused tests: `src/lib/ai/agent/execution/flows/post-flow-module.test.ts`
+- Focused tests: `src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts`
+- Focused tests: `src/lib/ai/prompt-runtime/persona-runtime-packets.test.ts`
 
 ## Review
 
+- **2026-05-12:** Inspected the staged DeepSeek `post_frame` work at `82cb32a6a7274c52d972f`, kept the already-landed frame/schema changes, and tightened the remaining failure boundary plus regression coverage. The main runtime fix was to classify schema-gate / schema-validation wording explicitly as `schema_validation` in `post-flow-module.ts`, which closes a hole where `post_frame` schema failures could be reported as `deterministic_gate` depending on the thrown message. I also added a focused regression in `post-flow-module.test.ts` for that case and a closest-seam `persona-interaction-stage-service.test.ts` regression proving `post_frame` story-mode prompts use the active V2 `PostFrameSchema` path. Separately, I fixed the pre-existing `persona-runtime-packets.test.ts` failure by making the test fixture a fully valid v2 object again (`identity.display_name`, `identity.bio`, `originalization_note`), so `normalizePersonaCoreV2()` no longer emits expected-missing-field warnings for the “valid v2” case. Verification: `npx vitest run src/lib/ai/agent/execution/flows/post-flow-module.test.ts src/lib/ai/agent/execution/persona-interaction-stage-service.test.ts src/lib/ai/prompt-runtime/persona-runtime-packets.test.ts src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts` passed with 99 tests; `npx vitest run src/lib/ai/prompt-runtime/persona-v2-prompt-family.test.ts` passed with 34 tests; `git diff --check` on the touched files passed.
+- **2026-05-12:** Reconciled the old `docs/ai-agent/llm-flows` references to the newer Persona v2 plan set. The active docs now describe the V2-only prompt builder/block order, the first-class `post_frame` stage with the compact shared field set, content-mode-aware preview/runtime threading, structured interaction-context assist handoff, and per-stage preview output expectations. I also removed stale current-reference language that still framed persona interaction around the legacy prompt shell or public audit-stage doctrine. Verification for this docs-only pass was limited to focused grep checks for stale terms plus diff review of the touched docs and tracker.
 - **2026-05-12:** Refined the `post_frame` review plan after follow-up design discussion. The improvement plan now treats requested `contentMode` and locked title as code-owned frame context rather than model-authored fields, so the fix path is to remove them from `PostFrameSchema`/prompt output and thread them through code instead of validating LLM echoes. The plan still keeps the other findings intact: story mode must reach the real stage boundary, singular `required_detail` must be corrected to `required_details`, and the touched focused suite still needs rebaselining. Verification for this doc-only correction was limited to plan diff review and consistency checks.
 - **2026-05-12:** Reviewed the staged DeepSeek `post_frame` implementation and wrote `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`. The review found three primary correctness gaps plus one rebaseline gap: story `contentMode` is never passed into the real stage service so story-mode `post_frame` prompt/packet branches are dead at runtime; `post_frame` accepts schema-valid frames without deterministically checking `content_mode` or `locked_title` against the request/selected plan; `buildPostFrameOutputContract()` drifts from the schema by omitting `content_mode` and using singular `required_detail`; and the touched focused suite remains red because legacy post-flow tests and flow-contract tests were not fully rebaselined. Focused `vitest` confirmed red touched suites, while `npx tsc --noEmit` is currently blocked by the repo-level `baseUrl` deprecation error in `tsconfig.json`.
 - **2026-05-12:** Corrected the `piped-zooming-crane` update approach after user feedback. The plan now explicitly preserves the earlier runtime-integration backbone and layers the new compact two-mode `post_frame` contract on top of it, instead of reading like a replacement handoff. Verification for this doc-only correction was limited to focused diff review and tracker consistency checks.

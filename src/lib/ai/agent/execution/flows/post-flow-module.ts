@@ -42,10 +42,10 @@ function buildSelectedPostPlanBlock(plan: SelectedPostPlan): string {
   ].join("\n");
 }
 
-function buildPostFrameBlock(frame: PostFrame): string {
+function buildPostFrameBlock(frame: PostFrame, contentMode: ContentMode): string {
   const lines = [
     "[post_frame]",
-    `Content mode: ${frame.content_mode}`,
+    `Content mode: ${contentMode}`,
     `Main idea: ${frame.main_idea}`,
     `Angle: ${frame.angle}`,
     "",
@@ -66,7 +66,6 @@ function buildPostFrameTaskContext(contentMode: ContentMode): string {
   return [
     "Generate a compact structural frame for the locked title and thesis below.",
     "Return a single PostFrame object — not the final post body.",
-    "Copy locked_title exactly from the selected plan.",
     contentMode === "story"
       ? "Write main_idea as the dramatic premise, angle as the narrative lens, beats as concrete story movements, required_details as scene-level details, and ending_direction as the intended emotional or imagistic landing."
       : "Write main_idea as the central claim, angle as the interpretive approach, beats as argument movements, required_details as concrete examples and observations, and ending_direction as the intended intellectual or rhetorical landing.",
@@ -122,7 +121,13 @@ function buildPostBodyTaskContext(): string {
 }
 
 function classifyPostFailure(error: Error): TextFlowExecutionErrorCauseCategory {
-  if (error.message.includes("invalid") || error.message.includes("expected")) {
+  if (
+    error.message.toLowerCase().includes("schema") ||
+    error.message.toLowerCase().includes("validation") ||
+    error.message.includes("invalid") ||
+    error.message.includes("expected") ||
+    error.message.includes("could not parse")
+  ) {
     return "schema_validation";
   }
   if (error.message.includes("empty") || error.message.includes("did not produce")) {
@@ -169,6 +174,11 @@ async function runPostFlow(
     }
   };
 
+  const contentMode: ContentMode =
+    typeof input.task.payload?.contentMode === "string"
+      ? (input.task.payload.contentMode as ContentMode)
+      : "discussion";
+
   const invokeStage = async (stageInput: {
     taskType: "post_plan" | "post_frame" | "post_body";
     taskContext: string;
@@ -186,6 +196,7 @@ async function runPostFlow(
       debug: input.debug,
       attemptLabel: stageInput.attemptLabel,
       executionMode: mode === "runtime" ? "runtime" : "admin_preview",
+      contentMode,
     });
 
   // ---- Planning stage ----
@@ -250,10 +261,6 @@ async function runPostFlow(
 
   // ---- Frame stage ----
   const selectedPostPlan = buildSelectedPostPlan(selectedCandidate);
-  const contentMode: ContentMode =
-    typeof input.task.payload?.contentMode === "string"
-      ? (input.task.payload.contentMode as ContentMode)
-      : "discussion";
   let postFrame: PostFrame | null = null;
 
   try {
@@ -299,7 +306,7 @@ async function runPostFlow(
   // ---- Body stage ----
   const combinedTargetContext = [
     buildSelectedPostPlanBlock(selectedPostPlan),
-    buildPostFrameBlock(postFrame),
+    buildPostFrameBlock(postFrame, contentMode),
   ].join("\n\n");
   let bodyPreview;
   let parsedBody;

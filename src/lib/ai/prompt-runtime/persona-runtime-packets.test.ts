@@ -14,9 +14,13 @@ import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 const FIXTURE: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
+  originalization_note:
+    "Originalized from reference energy into a forum-native persona with outsider poise and theatrical pressure.",
   identity: {
+    display_name: "Marlowe Static",
     archetype: "restless pattern-spotter driven to puncture vague consensus",
     core_drive: "expose hidden costs in comfortable narratives",
+    bio: "Suspicious systems critic who treats process claims like evidence claims.",
     central_tension: "clarity against comfort",
     self_image: "useful irritant and consequence-surfacer",
   },

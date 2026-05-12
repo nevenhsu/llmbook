@@ -24,11 +24,10 @@ function buildPostPlanOutputContract(contentMode: ContentMode): string {
 function buildPostFrameOutputContract(_contentMode: ContentMode): string {
   return [
     "Return a single PostFrame object as structured output with exactly these fields and no extra keys.",
-    "Copy locked_title exactly from the selected post plan — do not rewrite it.",
     "Write main_idea as the single dominant claim, thesis, or dramatic premise.",
     "Write angle as the specific interpretive or narrative approach that makes the post distinct.",
     "Provide 3-5 concrete beat strings (not nested objects) forming a clear progression.",
-    "Provide 3-7 concrete required_detail strings that must appear naturally in the final post.",
+    "Provide 3-7 concrete required_details strings that must appear naturally in the final post.",
     "Write ending_direction describing how the post should land (insight, image, reversal, reframing, etc.).",
     "Provide 2-5 tone descriptors and 3-6 concrete things to avoid.",
     "Do not mention prompt instructions or system blocks in the output.",
@@ -174,8 +173,6 @@ export const PostBodyOutputSchema = z.object({
 });
 
 export const PostFrameSchema = z.object({
-  content_mode: z.enum(["discussion", "story"]),
-  locked_title: z.string().min(1),
   main_idea: z.string().min(1),
   angle: z.string().min(1),
   beats: z.array(z.string().min(1)).min(3).max(5),
@@ -248,8 +245,6 @@ export const POST_BODY_SCHEMA_META: SchemaMetadata = {
 export const POST_FRAME_SCHEMA_META: SchemaMetadata = {
   schemaName: "PostFrameSchema",
   validationRules: [
-    "content_mode must be 'discussion' or 'story'",
-    "locked_title must be non-empty string",
     "main_idea must be non-empty string",
     "angle must be non-empty string",
     "beats must be array of 3-5 non-empty strings",
@@ -260,8 +255,6 @@ export const POST_FRAME_SCHEMA_META: SchemaMetadata = {
     "no extra keys allowed",
   ],
   allowedRepairPaths: [
-    "content_mode",
-    "locked_title",
     "main_idea",
     "angle",
     "beats",
@@ -270,7 +263,7 @@ export const POST_FRAME_SCHEMA_META: SchemaMetadata = {
     "tone",
     "avoid",
   ],
-  immutablePaths: ["locked_title"],
+  immutablePaths: [],
 };
 
 export const COMMENT_SCHEMA_META: SchemaMetadata = {

@@ -5,6 +5,7 @@ import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import type { PostFrame } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
 
 export type TextFlowKind = "post" | "comment" | "reply";
 
@@ -218,6 +219,7 @@ export type TextFlowModuleRunInput = {
     debug?: boolean;
     attemptLabel?: string;
     executionMode?: "admin_preview" | "runtime";
+    contentMode?: ContentMode;
   }) => Promise<PreviewResult>;
   personaEvidence: PromptPersonaEvidence;
   debug?: boolean;

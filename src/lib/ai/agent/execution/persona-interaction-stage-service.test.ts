@@ -206,7 +206,7 @@ describe("AiAgentPersonaInteractionStageService", () => {
     expect(result.assembledPrompt).toContain("[target_context]");
   });
 
-  it("maps reply stages with output constraints", async () => {
+  it("maps reply stages with V2 output contract blocks", async () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
@@ -214,12 +214,12 @@ describe("AiAgentPersonaInteractionStageService", () => {
       taskContext: "Generate a reply inside the active thread below.",
     });
 
-    expect(result.assembledPrompt).toContain("[output_constraints]");
+    expect(result.assembledPrompt).toContain("[output_contract]");
     expect(result.assembledPrompt).toContain("[target_context]");
     expect(result.assembledPrompt).not.toContain("standalone top-level contribution");
   });
 
-  it("uses lean prompt blocks for audit stage", async () => {
+  it("keeps V2 context blocks when a non-main stagePurpose is passed through", async () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
@@ -231,8 +231,9 @@ describe("AiAgentPersonaInteractionStageService", () => {
     });
 
     expect(result.assembledPrompt).toContain("[task_context]");
-    expect(result.assembledPrompt).not.toContain("[board_context]");
-    expect(result.assembledPrompt).not.toContain("[target_context]");
+    expect(result.assembledPrompt).toContain("[board_context]");
+    expect(result.assembledPrompt).toContain("[target_context]");
+    expect(result.assembledPrompt).toContain("[output_contract]");
   });
 
   it("passes schemaGate config to invokeStructuredLLM for JSON stages", async () => {
@@ -252,7 +253,31 @@ describe("AiAgentPersonaInteractionStageService", () => {
     );
   });
 
-  it("passes audit schema for audit stages", async () => {
+  it("uses PostFrameSchema and story-mode prompt policy for post_frame stages", async () => {
+    const service = new AiAgentPersonaInteractionStageService();
+    const result = await service.runStage({
+      ...baseInput(),
+      taskType: "post_frame",
+      contentMode: "story",
+      taskContext: "Generate a compact story frame for the locked title below.",
+      targetContextText:
+        "[selected_post_plan]\nLocked title: The Last Warm Pool\nThesis: The ritual exposes hierarchy through warmth.",
+    });
+
+    expect(result.assembledPrompt).toContain("[content_mode_policy]");
+    expect(result.assembledPrompt).toContain("Content mode: story.");
+    expect(result.assembledPrompt).toContain("main_idea");
+    expect(result.assembledPrompt).toContain("required_details");
+    expect(invokeStructuredLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaGate: expect.objectContaining({
+          schemaName: "PostFrameSchema",
+        }),
+      }),
+    );
+  });
+
+  it("non-main comment stage still resolves to the active comment output schema", async () => {
     const service = new AiAgentPersonaInteractionStageService();
     await service.runStage({
       ...baseInput(),
@@ -263,7 +288,7 @@ describe("AiAgentPersonaInteractionStageService", () => {
     expect(invokeStructuredLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         schemaGate: expect.objectContaining({
-          schemaName: "CommentDiscussionAuditSchema",
+          schemaName: "CommentOutputSchema",
         }),
       }),
     );
