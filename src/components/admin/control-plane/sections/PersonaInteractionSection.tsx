@@ -26,6 +26,7 @@ export interface PersonaInteractionSectionProps {
     modelId: string;
     taskType: "post" | "comment" | "reply";
     taskContext: string;
+    contentMode: "discussion" | "story";
   };
   setInteractionInput: Dispatch<
     SetStateAction<{
@@ -33,6 +34,7 @@ export interface PersonaInteractionSectionProps {
       modelId: string;
       taskType: "post" | "comment" | "reply";
       taskContext: string;
+      contentMode: "discussion" | "story";
     }>
   >;
   personas: PersonaItem[];
@@ -192,6 +194,23 @@ export function PersonaInteractionSection({
                 <option value="post">Post Generation</option>
                 <option value="comment">Comment Response</option>
                 <option value="reply">Thread Reply</option>
+              </select>
+            </div>
+            <div className="form-control w-full">
+              <label className="label py-1">
+                <span className="label-text text-xs font-semibold opacity-70">Content Mode</span>
+              </label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={interactionInput.contentMode}
+                onChange={(e) => {
+                  const contentMode = e.target.value as "discussion" | "story";
+                  setStructuredContext(null);
+                  setInteractionInput((prev) => ({ ...prev, contentMode }));
+                }}
+              >
+                <option value="discussion">Discussion</option>
+                <option value="story">Story</option>
               </select>
             </div>
           </div>

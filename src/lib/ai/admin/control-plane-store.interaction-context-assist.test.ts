@@ -163,7 +163,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     expect(invokeStructuredLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         modelInput: expect.objectContaining({
-          prompt: expect.stringContaining("Generate a random content direction"),
+          prompt: expect.stringContaining("Generate a random discussion topic"),
         }),
       }),
     );

@@ -186,6 +186,7 @@ export class AiAgentPersonaInteractionService {
           runPersonaInteractionStage: async (stageInput) =>
             runPersonaInteractionStage({
               ...stageInput,
+              contentMode: input.contentMode,
               document: input.document,
               providers: input.providers,
               models: input.models,

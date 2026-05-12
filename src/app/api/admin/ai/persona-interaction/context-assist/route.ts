@@ -11,6 +11,7 @@ export const POST = withAuth(async (req, { user }) => {
     modelId?: string;
     taskType?: "post" | "comment" | "reply";
     taskContext?: string;
+    contentMode?: "discussion" | "story";
   };
 
   if (!body.modelId?.trim()) {
@@ -25,6 +26,7 @@ export const POST = withAuth(async (req, { user }) => {
     modelId: body.modelId.trim(),
     taskType: body.taskType,
     taskContext: body.taskContext?.trim() || undefined,
+    contentMode: body.contentMode,
   });
 
   return http.ok(output);

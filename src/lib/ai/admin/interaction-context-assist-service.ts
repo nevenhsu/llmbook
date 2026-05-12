@@ -11,26 +11,36 @@ import {
 function buildPrompt(input: {
   taskType: "post" | "comment" | "reply";
   taskContext: string;
+  contentMode: "discussion" | "story";
 }): string {
   const hasContext = input.taskContext.length > 0;
+  const isDiscussion = input.contentMode === "discussion";
   const thinkingStep1 = hasContext
     ? "Consider the background data provided as reference direction."
-    : "Generate a random content direction related to a story forum.";
+    : isDiscussion
+      ? "Generate a random discussion topic related to a story forum."
+      : "Generate a random story premise related to a story forum.";
 
   switch (input.taskType) {
     case "post":
       return [
         "[task context]",
-        "Your task is to generate a detailed task context for a post interaction. Generate an article title direction and content direction.",
+        isDiscussion
+          ? "Your task is to generate a detailed task context for a discussion post. Generate an article title direction and content direction for a forum discussion."
+          : "Your task is to generate a detailed task context for a story post. Generate a story title direction and premise for a narrative post.",
         "",
         "[background data]",
         `Task context: ${hasContext ? input.taskContext : "none"}`,
         "",
         "[detailed tasks and rules]",
-        "Only generate article direction and content reference. Do not write the full article.",
+        isDiscussion
+          ? "Only generate article direction and content reference for a discussion. Do not write the full article."
+          : "Only generate story direction and premise. Do not write the full story.",
         "",
         "[immediate task]",
-        "Generate a detailed task context for a post. Create a direction for an article title and its content.",
+        isDiscussion
+          ? "Generate a detailed task context for a discussion post. Create a direction for an article title and its content."
+          : "Generate a detailed task context for a story post. Create a direction for a story title and its premise.",
         "",
         "[thinking step by step]",
         `1. ${thinkingStep1}`,
@@ -40,16 +50,22 @@ function buildPrompt(input: {
     case "comment":
       return [
         "[task context]",
-        "Your task is to generate a detailed task context for a comment interaction. Generate a fictional article title and simple outline for the persona to comment on.",
+        isDiscussion
+          ? "Your task is to generate a detailed task context for a comment interaction. Generate a fictional discussion article title and simple outline for the persona to comment on."
+          : "Your task is to generate a detailed task context for a comment interaction. Generate a fictional story article title and simple outline for the persona to comment on.",
         "",
         "[background data]",
         `Task context: ${hasContext ? input.taskContext : "none"}`,
         "",
         "[detailed tasks and rules]",
-        "Only generate a fictional article outline. The persona will write a comment on it later.",
+        isDiscussion
+          ? "Only generate a fictional discussion article outline. The persona will write a comment on it later."
+          : "Only generate a fictional story article outline. The persona will write a comment on it later.",
         "",
         "[immediate task]",
-        "Generate a detailed task context for a comment. Create a fictional article outline to comment on.",
+        isDiscussion
+          ? "Generate a detailed task context for a comment. Create a fictional discussion article outline to comment on."
+          : "Generate a detailed task context for a comment. Create a fictional story article outline to comment on.",
         "",
         "[thinking step by step]",
         `1. ${thinkingStep1}`,
@@ -59,16 +75,22 @@ function buildPrompt(input: {
     case "reply":
       return [
         "[task context]",
-        "Your task is to generate a detailed task context for a reply interaction. Generate an article simple outline and a comment thread with 3 comments for the persona to reply to.",
+        isDiscussion
+          ? "Your task is to generate a detailed task context for a reply interaction. Generate a discussion article simple outline and a comment thread with 3 comments for the persona to reply to."
+          : "Your task is to generate a detailed task context for a reply interaction. Generate a story article simple outline and a comment thread with 3 comments for the persona to reply to.",
         "",
         "[background data]",
         `Task context: ${hasContext ? input.taskContext : "none"}`,
         "",
         "[detailed tasks and rules]",
-        "Only generate an article outline and a comment thread. Each comment should be up to 2 sentences. The comments should be related discussion around the article.",
+        isDiscussion
+          ? "Only generate a discussion article outline and a comment thread. Each comment should be up to 2 sentences. The comments should be related discussion around the article."
+          : "Only generate a story article outline and a comment thread. Each comment should be up to 2 sentences. The comments should be related story discussion around the article.",
         "",
         "[immediate task]",
-        "Generate a detailed task context for a reply. Create an article outline and 3 comments to reply to.",
+        isDiscussion
+          ? "Generate a detailed task context for a reply. Create a discussion article outline and 3 comments to reply to."
+          : "Generate a detailed task context for a reply. Create a story article outline and 3 comments to reply to.",
         "",
         "[thinking step by step]",
         `1. ${thinkingStep1}`,
@@ -81,6 +103,7 @@ export async function assistInteractionTaskContext(input: {
   modelId: string;
   taskType: "post" | "comment" | "reply";
   taskContext?: string;
+  contentMode?: "discussion" | "story";
   providers: AiProviderConfig[];
   models: AiModelConfig[];
   recordLlmInvocationError: (input: {
@@ -122,6 +145,7 @@ export async function assistInteractionTaskContext(input: {
   const prompt = buildPrompt({
     taskType: input.taskType,
     taskContext: existingTaskContext,
+    contentMode: input.contentMode ?? "discussion",
   });
 
   const entityId = `interaction-context-assist:${model.id}`;

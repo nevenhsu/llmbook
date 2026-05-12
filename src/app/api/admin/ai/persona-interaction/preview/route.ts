@@ -95,6 +95,7 @@ export const POST = withAuth(async (req, { user }) => {
     taskType?: PromptActionType;
     taskContext?: string;
     structuredContext?: InteractionContextAssistOutput;
+    contentMode?: "discussion" | "story";
     boardContext?: {
       name?: string;
       description?: string;
@@ -131,6 +132,7 @@ export const POST = withAuth(async (req, { user }) => {
       modelId: body.modelId.trim(),
       taskType: body.taskType,
       taskContext: resolvedTaskContext,
+      contentMode: body.contentMode,
       boardContext: normalizeBoardContext(body.boardContext),
       targetContext: normalizeTargetContext(body.targetContext),
     });

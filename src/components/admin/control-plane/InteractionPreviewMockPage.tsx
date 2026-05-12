@@ -31,7 +31,8 @@ export function InteractionPreviewMockPage() {
     modelId: string;
     taskType: "post" | "comment" | "reply";
     taskContext: string;
-  }>(mockInteractionPreviewDefaultInput);
+    contentMode: "discussion" | "story";
+  }>({ ...mockInteractionPreviewDefaultInput, contentMode: "discussion" });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
   const [interactionPreviewModalOpen, setInteractionPreviewModalOpen] = useState(false);
   const [interactionPreviewModalPhase, setInteractionPreviewModalPhase] =

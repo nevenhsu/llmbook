@@ -199,6 +199,7 @@ export function useAiControlPlane({
     modelId: initialModels.find((item) => item.capability === "text_generation")?.id ?? "",
     taskType: "post" as "post" | "comment" | "reply",
     taskContext: defaultInteractionTaskContext("post"),
+    contentMode: "discussion" as "discussion" | "story",
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
   const [interactionPreviewModalOpen, setInteractionPreviewModalOpen] = useState(false);
@@ -1172,6 +1173,7 @@ export function useAiControlPlane({
         personaId: interactionInput.personaId,
         modelId: interactionInput.modelId,
         taskType: interactionInput.taskType,
+        contentMode: interactionInput.contentMode,
       };
       if (structuredContext) {
         payload.structuredContext = structuredContext;
@@ -1227,6 +1229,7 @@ export function useAiControlPlane({
           modelId: interactionInput.modelId,
           taskType: interactionInput.taskType,
           taskContext: interactionInput.taskContext.trim() || undefined,
+          contentMode: interactionInput.contentMode,
         },
         { signal: abortController.signal },
       );

@@ -1322,12 +1322,14 @@ export class AdminAiControlPlaneStore {
     modelId: string;
     taskType: "post" | "comment" | "reply";
     taskContext?: string;
+    contentMode?: "discussion" | "story";
   }): Promise<InteractionContextAssistOutput> {
     const { providers, models } = await this.getActiveControlPlane();
     return assistInteractionTaskContext({
       modelId: input.modelId,
       taskType: input.taskType,
       taskContext: input.taskContext,
+      contentMode: input.contentMode,
       providers,
       models,
       recordLlmInvocationError: (event) => this.recordLlmInvocationError(event),
@@ -1515,6 +1517,7 @@ export class AdminAiControlPlaneStore {
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
+    contentMode?: "discussion" | "story";
   }): Promise<PreviewResult> {
     return previewPersonaInteraction({
       ...input,
