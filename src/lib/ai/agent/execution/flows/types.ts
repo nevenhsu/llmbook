@@ -4,6 +4,7 @@ import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overv
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
+import type { PostFrame } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
 
 export type TextFlowKind = "post" | "comment" | "reply";
 
@@ -180,6 +181,7 @@ export type TextFlowRunResult =
       flowKind: "post";
       parsed: {
         selectedPostPlan: SelectedPostPlan;
+        postFrame?: PostFrame;
         postBody: PostBodyOutput;
         renderedPost: RenderedPost;
       };

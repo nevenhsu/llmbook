@@ -225,6 +225,15 @@ describe("persona-v2-prompt-family", () => {
       expect(policy).toContain("write");
       expect(policy).not.toContain("plan");
     });
+
+    it("post_frame policy mentions framing and forbids writing final body", () => {
+      const policy = buildActionModePolicy({ flow: "post_frame", stagePurpose: "main" });
+      expect(policy).toContain("frame");
+      expect(policy).toContain("locked");
+      expect(policy).toContain("flat object");
+      expect(policy).not.toContain("write final");
+      expect(policy).not.toContain("nested");
+    });
   });
 
   describe("buildContentModePolicy", () => {
@@ -254,6 +263,28 @@ describe("persona-v2-prompt-family", () => {
     it("story reply says continuation, forbids standalone", () => {
       const policy = buildContentModePolicy({ flow: "reply", contentMode: "story" });
       expect(policy).toContain("continuation");
+    });
+
+    it("discussion post_frame contains discussion field rules", () => {
+      const policy = buildContentModePolicy({ flow: "post_frame", contentMode: "discussion" });
+      expect(policy).toContain("discussion");
+      expect(policy).toContain("claim");
+      expect(policy).toContain("argument");
+      expect(policy).toContain("required_details");
+      expect(policy).not.toContain("dramatize");
+    });
+
+    it("story post_frame contains story field rules and no pass-through language", () => {
+      const policy = buildContentModePolicy({ flow: "post_frame", contentMode: "story" });
+      expect(policy).toContain("story");
+      expect(policy).toContain("dramatic premise");
+      expect(policy).toContain("narrative lens");
+      expect(policy).toContain("scene");
+      expect(policy).toContain("sensory");
+      expect(policy).toContain("dramatize");
+      expect(policy).not.toContain("not currently configured");
+      expect(policy).not.toContain("pass through");
+      expect(policy).not.toContain("minimal beats");
     });
   });
 

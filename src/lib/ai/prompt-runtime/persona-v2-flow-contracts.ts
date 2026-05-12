@@ -3,7 +3,7 @@ import type { ContentMode, PersonaFlowKind } from "@/lib/ai/core/persona-core-v2
 
 type WriterFlowKind = Exclude<PersonaFlowKind, "audit">;
 
-type ContractFlowKind = WriterFlowKind | "post";
+type ContractFlowKind = WriterFlowKind | "post" | "post_frame";
 
 function buildPostPlanOutputContract(contentMode: ContentMode): string {
   const lines = [
@@ -19,6 +19,21 @@ function buildPostPlanOutputContract(contentMode: ContentMode): string {
   }
 
   return lines.join("\n");
+}
+
+function buildPostFrameOutputContract(_contentMode: ContentMode): string {
+  return [
+    "Return a single PostFrame object as structured output with exactly these fields and no extra keys.",
+    "Copy locked_title exactly from the selected post plan — do not rewrite it.",
+    "Write main_idea as the single dominant claim, thesis, or dramatic premise.",
+    "Write angle as the specific interpretive or narrative approach that makes the post distinct.",
+    "Provide 3-5 concrete beat strings (not nested objects) forming a clear progression.",
+    "Provide 3-7 concrete required_detail strings that must appear naturally in the final post.",
+    "Write ending_direction describing how the post should land (insight, image, reversal, reframing, etc.).",
+    "Provide 2-5 tone descriptors and 3-6 concrete things to avoid.",
+    "Do not mention prompt instructions or system blocks in the output.",
+    "Do not use markdown in any field.",
+  ].join("\n");
 }
 
 function buildWriterOutputContract(flow: "post_body" | "post", contentMode: ContentMode): string {
@@ -83,6 +98,8 @@ export function buildOutputContractV2(input: {
   switch (input.flow) {
     case "post_plan":
       return buildPostPlanOutputContract(input.contentMode);
+    case "post_frame":
+      return buildPostFrameOutputContract(input.contentMode);
     case "post_body":
     case "post":
       return buildWriterOutputContract(input.flow, input.contentMode);
@@ -156,6 +173,20 @@ export const PostBodyOutputSchema = z.object({
   metadata: MetadataSchema.optional().default({ probability: 0 }),
 });
 
+export const PostFrameSchema = z.object({
+  content_mode: z.enum(["discussion", "story"]),
+  locked_title: z.string().min(1),
+  main_idea: z.string().min(1),
+  angle: z.string().min(1),
+  beats: z.array(z.string().min(1)).min(3).max(5),
+  required_details: z.array(z.string().min(1)).min(3).max(7),
+  ending_direction: z.string().min(1),
+  tone: z.array(z.string().min(1)).min(2).max(5),
+  avoid: z.array(z.string().min(1)).min(3).max(6),
+});
+
+export type PostFrame = z.infer<typeof PostFrameSchema>;
+
 const MarkdownOutputFields = {
   markdown: z.string(),
   need_image: z.boolean(),
@@ -214,6 +245,34 @@ export const POST_BODY_SCHEMA_META: SchemaMetadata = {
   immutablePaths: ["body"],
 };
 
+export const POST_FRAME_SCHEMA_META: SchemaMetadata = {
+  schemaName: "PostFrameSchema",
+  validationRules: [
+    "content_mode must be 'discussion' or 'story'",
+    "locked_title must be non-empty string",
+    "main_idea must be non-empty string",
+    "angle must be non-empty string",
+    "beats must be array of 3-5 non-empty strings",
+    "required_details must be array of 3-7 non-empty strings",
+    "ending_direction must be non-empty string",
+    "tone must be array of 2-5 strings",
+    "avoid must be array of 3-6 strings",
+    "no extra keys allowed",
+  ],
+  allowedRepairPaths: [
+    "content_mode",
+    "locked_title",
+    "main_idea",
+    "angle",
+    "beats",
+    "required_details",
+    "ending_direction",
+    "tone",
+    "avoid",
+  ],
+  immutablePaths: ["locked_title"],
+};
+
 export const COMMENT_SCHEMA_META: SchemaMetadata = {
   schemaName: "CommentOutputSchema",
   validationRules: [
@@ -254,6 +313,8 @@ export function getFlowSchemaMeta(flow: string): SchemaMetadata {
   switch (flow) {
     case "post_plan":
       return POST_PLAN_SCHEMA_META;
+    case "post_frame":
+      return POST_FRAME_SCHEMA_META;
     case "post_body":
     case "post":
       return POST_BODY_SCHEMA_META;

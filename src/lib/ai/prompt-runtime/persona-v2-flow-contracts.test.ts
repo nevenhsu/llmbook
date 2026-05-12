@@ -5,6 +5,7 @@ import {
   parseMetadataProbability,
   normalizeMetadataProbability,
   PostPlanOutputSchema,
+  PostFrameSchema,
   PostBodyOutputSchema,
   CommentOutputSchema,
   ReplyOutputSchema,
@@ -17,6 +18,7 @@ import {
   ReplyDiscussionAuditSchema,
   ReplyStoryAuditSchema,
   POST_PLAN_SCHEMA_META,
+  POST_FRAME_SCHEMA_META,
   POST_BODY_SCHEMA_META,
   COMMENT_SCHEMA_META,
   REPLY_SCHEMA_META,
@@ -339,6 +341,206 @@ describe("Zod output schemas", () => {
     });
   });
 
+  describe("PostFrameSchema", () => {
+    it("validates a valid compact post frame", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "The Missing Boundary",
+        main_idea:
+          "Teams over-edit prompts because they never separate generation, validation, and enforcement.",
+        angle: "The workflow boundary is the real bottleneck, not the prompt wording.",
+        beats: [
+          "Hook: show why prompt tuning gets blamed too early",
+          "Example: contrast malformed-output repair with policy enforcement",
+          "Interpretation: explain what the boundary shift reveals about tool design",
+          "Twist: the best prompt engineers stop tuning and start enforcing",
+          "Closing: reframe the operator's job as boundary maintenance",
+        ],
+        required_details: [
+          "A concrete example of a malformed JSON output that passed validation",
+          "The specific moment when enforcement, not repair, caught the issue",
+          "A social observation about why teams prefer prompt tuning to workflow changes",
+          "A comparison to a non-AI engineering discipline (e.g. compiler passes)",
+        ],
+        ending_direction:
+          "Land on the irony that the fix was never about better prompts — it was about harder gates.",
+        tone: ["sharp", "practical", "slightly contrarian"],
+        avoid: [
+          "vague commentary without example",
+          "generic summary without specific observation",
+          "tutorial tone",
+          "assistant-like explanation",
+        ],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("validates story mode post frame", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "story",
+        locked_title: "The Last Warm Pool",
+        main_idea:
+          "An old-blood Deep One must decide whether to share the last volcanic pool with surface-born hybrids as the ocean cools.",
+        angle:
+          "Told through the ritual of pool-allocation, where every gesture carries centuries of hierarchy.",
+        beats: [
+          "Setup: the cooling announcement and the old-blood's morning ritual",
+          "Encounter: a young hybrid petitions for access outside the cycle",
+          "Complication: the old-blood's own child supports the petition",
+          "Recognition: the hierarchy was never about warmth — it was about being seen as ancient",
+          "Ending: the old-blood opens the gate but cannot enter the pool",
+        ],
+        required_details: [
+          "The phosphorescent lichen that marks the pool's edge",
+          "The sound of gill-flutters in silence as the petition is read",
+          "A dialogue fragment: 'You were surface-born. You don't know what cold means.'",
+          "The social rule that elders enter first, regardless of need",
+          "The gesture of touching one's own gill-slits before speaking to an elder",
+        ],
+        ending_direction:
+          "Image: the old-blood watches from the cold trench as hybrids share the pool, feeling the warmth through the water but not entering.",
+        tone: ["eerie", "restrained", "melancholy", "ceremonial"],
+        avoid: [
+          "direct moralizing about equality",
+          "plot summary instead of scene",
+          "generic horror adjectives like 'eldritch' or 'unimaginable'",
+          "assistant-like commentary",
+          "abstract claims without sensory dramatization",
+        ],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects old nested beat objects", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test idea",
+        angle: "Test angle",
+        beats: [
+          { purpose: "Hook", must_include: ["detail 1", "detail 2"] },
+          { purpose: "Body", must_include: ["detail 3"] },
+          { purpose: "Closing", must_include: ["detail 4", "detail 5"] },
+        ],
+        required_details: ["detail a", "detail b", "detail c"],
+        ending_direction: "Test ending",
+        tone: ["sharp", "practical"],
+        avoid: ["vague", "generic", "tutorial"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects old nested details object", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test idea",
+        angle: "Test angle",
+        beats: ["beat 1", "beat 2", "beat 3"],
+        details: {
+          examples: ["ex1", "ex2"],
+          sensory_or_scene: ["s1"],
+          social_or_behavioral: ["sb1"],
+          contrast: "contrast text",
+        },
+        ending_direction: "Test ending",
+        tone: ["sharp", "practical"],
+        avoid: ["vague", "generic", "tutorial"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects fewer than 3 beats", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test",
+        angle: "Test",
+        beats: ["beat 1", "beat 2"],
+        required_details: ["d1", "d2", "d3"],
+        ending_direction: "Test",
+        tone: ["sharp", "practical"],
+        avoid: ["a", "b", "c"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects more than 5 beats", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test",
+        angle: "Test",
+        beats: ["b1", "b2", "b3", "b4", "b5", "b6"],
+        required_details: ["d1", "d2", "d3"],
+        ending_direction: "Test",
+        tone: ["sharp", "practical"],
+        avoid: ["a", "b", "c"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects fewer than 3 required_details", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test",
+        angle: "Test",
+        beats: ["b1", "b2", "b3"],
+        required_details: ["d1", "d2"],
+        ending_direction: "Test",
+        tone: ["sharp", "practical"],
+        avoid: ["a", "b", "c"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects fewer than 2 tone items", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test",
+        angle: "Test",
+        beats: ["b1", "b2", "b3"],
+        required_details: ["d1", "d2", "d3"],
+        ending_direction: "Test",
+        tone: ["only one"],
+        avoid: ["a", "b", "c"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects fewer than 3 avoid items", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "discussion",
+        locked_title: "Test",
+        main_idea: "Test",
+        angle: "Test",
+        beats: ["b1", "b2", "b3"],
+        required_details: ["d1", "d2", "d3"],
+        ending_direction: "Test",
+        tone: ["sharp", "practical"],
+        avoid: ["only", "two"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects invalid content_mode", () => {
+      const result = PostFrameSchema.safeParse({
+        content_mode: "essay",
+        locked_title: "Test",
+        main_idea: "Test",
+        angle: "Test",
+        beats: ["b1", "b2", "b3"],
+        required_details: ["d1", "d2", "d3"],
+        ending_direction: "Test",
+        tone: ["sharp", "practical"],
+        avoid: ["a", "b", "c"],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe("audit schemas", () => {
     it("PostPlanDiscussionAuditSchema has exactly two checks", () => {
       const result = PostPlanDiscussionAuditSchema.safeParse({
@@ -457,8 +659,18 @@ describe("Zod output schemas", () => {
       expect(POST_BODY_SCHEMA_META.allowedRepairPaths).toContain("metadata.probability");
     });
 
+    it("POST_FRAME_SCHEMA_META has required fields", () => {
+      expect(POST_FRAME_SCHEMA_META.schemaName).toBe("PostFrameSchema");
+      expect(POST_FRAME_SCHEMA_META.validationRules.length).toBeGreaterThan(0);
+      expect(POST_FRAME_SCHEMA_META.allowedRepairPaths.length).toBeGreaterThan(0);
+      expect(POST_FRAME_SCHEMA_META.immutablePaths).toContain("locked_title");
+      expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("beats.*.purpose");
+      expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("details");
+    });
+
     it("getFlowSchemaMeta returns correct metadata", () => {
       expect(getFlowSchemaMeta("post_plan").schemaName).toBe("PostPlanOutputSchema");
+      expect(getFlowSchemaMeta("post_frame").schemaName).toBe("PostFrameSchema");
       expect(getFlowSchemaMeta("post_body").schemaName).toBe("PostBodyOutputSchema");
       expect(getFlowSchemaMeta("comment").schemaName).toBe("CommentOutputSchema");
       expect(getFlowSchemaMeta("reply").schemaName).toBe("ReplyOutputSchema");

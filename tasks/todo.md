@@ -2,21 +2,24 @@
 
 ## Active
 
-- [x] Inspect current llm-flow audit/repair surfaces and DeepSeek handoff dependencies.
-- [x] Draft the new audit/repair-removal handoff plan under `/plans/ai-agent`.
-- [x] Rewrite the active llm-flow reference docs to reflect syntax salvage plus `field_patch` only.
-- [x] Reconcile stale persona-generation docs to the active one-stage `persona_core_v2` contract.
-- [x] Mark stale non-archived Persona v2 implementation plans as superseded where they conflict with the active stage model.
-- [x] Verify tracker/reference consistency and record the planning review note.
+- [x] Review the staged DeepSeek `post_frame` implementation diff.
+- [x] Identify the highest-signal runtime, contract, and test-baseline issues.
+- [x] Write an improvement plan under `/plans/persona-v2` based on the review findings.
+- [x] Verify the plan and tracker notes against the staged diff and focused test output.
 
 ## Current References
 
 - LLM JSON contract: `docs/dev-guidelines/08-llm-json-stage-contract.md`
-- AI-agent flows: `docs/ai-agent/llm-flows`
-- Active plan: `plans/ai-agent/2026-05-11-llm-flow-audit-repair-removal-deepseek-handoff-plan.md`
+- Interaction stage service: `src/lib/ai/agent/execution/persona-interaction-stage-service.ts`
+- Post flow module: `src/lib/ai/agent/execution/flows/post-flow-module.ts`
+- Review plan: `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`
 
 ## Review
 
+- **2026-05-12:** Refined the `post_frame` review plan after follow-up design discussion. The improvement plan now treats requested `contentMode` and locked title as code-owned frame context rather than model-authored fields, so the fix path is to remove them from `PostFrameSchema`/prompt output and thread them through code instead of validating LLM echoes. The plan still keeps the other findings intact: story mode must reach the real stage boundary, singular `required_detail` must be corrected to `required_details`, and the touched focused suite still needs rebaselining. Verification for this doc-only correction was limited to plan diff review and consistency checks.
+- **2026-05-12:** Reviewed the staged DeepSeek `post_frame` implementation and wrote `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`. The review found three primary correctness gaps plus one rebaseline gap: story `contentMode` is never passed into the real stage service so story-mode `post_frame` prompt/packet branches are dead at runtime; `post_frame` accepts schema-valid frames without deterministically checking `content_mode` or `locked_title` against the request/selected plan; `buildPostFrameOutputContract()` drifts from the schema by omitting `content_mode` and using singular `required_detail`; and the touched focused suite remains red because legacy post-flow tests and flow-contract tests were not fully rebaselined. Focused `vitest` confirmed red touched suites, while `npx tsc --noEmit` is currently blocked by the repo-level `baseUrl` deprecation error in `tsconfig.json`.
+- **2026-05-12:** Corrected the `piped-zooming-crane` update approach after user feedback. The plan now explicitly preserves the earlier runtime-integration backbone and layers the new compact two-mode `post_frame` contract on top of it, instead of reading like a replacement handoff. Verification for this doc-only correction was limited to focused diff review and tracker consistency checks.
+- **2026-05-12:** Updated `plans/persona-v2/piped-zooming-crane.md` again after the `post_frame` contract changed materially. The handoff now uses one compact shared field set for both `story` and `discussion` (`content_mode`, `locked_title`, `main_idea`, `angle`, `beats`, `required_details`, `ending_direction`, `tone`, `avoid`), removes the old nested beat/detail structure from the active plan, replaces the previous story-mode skip rule with a real story `post_frame` stage, and renames the framing artifact in the plan from stale `PostPlanV2Schema` / `PostPlanV2` wording to `PostFrameSchema` / `PostFrame`. The revised plan also makes the schema migration explicit in `persona-v2-flow-contracts.ts`, requires `post_frame` to keep using `invokeStructuredLLM` with `Output.object({ schema: PostFrameSchema })`, and updates the post-flow integration and tests accordingly. Verification for this planning-only update was limited to focused code inspection, grep checks, and tracker consistency review.
 - **2026-05-11:** Marked stale non-archived Persona v2 implementation plans as superseded where they still present retired stage behavior as current guidance. Added explicit status notes to the older prompt-family, schema-gate, patchschema, and integrated DeepSeek plans, and updated the one-stage persona-generation source plan to remove finish-continuation from its top-level contract summary. Verification for this docs-only cleanup was limited to focused grep checks plus diff review.
 - **2026-05-11:** Reconciled current persona-generation docs to the active one-stage Persona v2 plans. Updated `docs/ai-agent/llm-flows/persona-generation-contract.md`, `docs/ai-agent/llm-flows/persona-generation-simplification-examples.md`, `docs/ai-agent/llm-flows/README.md`, and `plans/persona-v2/persona-prompt-architecture-current-map.md` so current references now describe one `persona_core_v2` generation stage rather than `seed -> persona_core`. Verification for this docs-only pass was limited to focused grep checks against active docs/plans plus diff review.
 - **2026-05-11:** Rewrote the active llm-flow reference docs to match the latest repair simplification literally. `docs/dev-guidelines/08-llm-json-stage-contract.md`, `docs/ai-agent/llm-flows/flow-audit-repair-examples.md`, `docs/ai-agent/llm-flows/prompt-family-architecture.md`, and `docs/ai-agent/llm-flows/persona-generation-contract.md` now describe `main -> shared schema gate -> deterministic checks`, with deterministic syntax salvage before parse success and shared `field_patch` only after parseability. The active DeepSeek handoff plan was aligned so Task 5 keeps syntax salvage while still removing finish-continuation, `schema_repair`, `audit`, and `quality_repair`. Verification for this docs-first update was limited to focused grep checks on the touched references and tracker consistency review.

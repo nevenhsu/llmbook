@@ -139,6 +139,7 @@ export type PreviewResult = {
   renderError: string | null;
   tokenBudget: PreviewTokenBudget;
   stageDebugRecords?: StageDebugRecord[] | null;
+  object?: unknown;
 };
 
 export class PersonaGenerationParseError extends Error {

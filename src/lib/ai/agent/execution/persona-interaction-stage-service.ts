@@ -12,10 +12,12 @@ import {
 import {
   buildOutputContractV2,
   PostPlanOutputSchema,
+  PostFrameSchema,
   PostBodyOutputSchema,
   CommentOutputSchema,
   ReplyOutputSchema,
   POST_PLAN_SCHEMA_META,
+  POST_FRAME_SCHEMA_META,
   POST_BODY_SCHEMA_META,
   COMMENT_SCHEMA_META,
   REPLY_SCHEMA_META,
@@ -117,6 +119,7 @@ type ActionTypeToFlowMap = Record<string, Exclude<PersonaFlowKind, "audit"> | nu
 // They fall back to buildLeanStageBlocks (system_baseline + global_policy + task_context).
 const ACTION_TYPE_TO_FLOW: ActionTypeToFlowMap = {
   post_plan: "post_plan",
+  post_frame: "post_frame",
   post_body: "post_body",
   post: "post_body",
   comment: "comment",
@@ -130,6 +133,8 @@ function resolveFlowSchemaMeta(taskType: string): SchemaMetadata | undefined {
   switch (taskType) {
     case "post_plan":
       return POST_PLAN_SCHEMA_META;
+    case "post_frame":
+      return POST_FRAME_SCHEMA_META;
     case "post_body":
     case "post":
       return POST_BODY_SCHEMA_META;
@@ -146,6 +151,8 @@ function resolveStageSchema(taskType: string) {
   switch (taskType) {
     case "post_plan":
       return PostPlanOutputSchema;
+    case "post_frame":
+      return PostFrameSchema;
     case "post_body":
     case "post":
       return PostBodyOutputSchema;
@@ -469,5 +476,6 @@ export async function runPersonaInteractionStage(
     renderError: null,
     tokenBudget: stageResult.tokenBudget,
     stageDebugRecords: stageResult.debugRecord ? [stageResult.debugRecord] : undefined,
+    object: stageResult.object,
   };
 }

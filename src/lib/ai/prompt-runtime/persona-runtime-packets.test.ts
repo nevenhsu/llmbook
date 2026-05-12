@@ -157,6 +157,28 @@ describe("packet budgets", () => {
     expect(packet.wordCount).toBeGreaterThanOrEqual(70);
     expect(packet.wordCount).toBeLessThanOrEqual(200);
   });
+
+  it("post_frame discussion stays within budget", () => {
+    const packet = buildPersonaRuntimePacket({
+      flow: "post_frame",
+      contentMode: "discussion",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    expect(packet.wordCount).toBeGreaterThanOrEqual(70);
+    expect(packet.wordCount).toBeLessThanOrEqual(200);
+  });
+
+  it("post_frame story stays within budget", () => {
+    const packet = buildPersonaRuntimePacket({
+      flow: "post_frame",
+      contentMode: "story",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    expect(packet.wordCount).toBeGreaterThanOrEqual(70);
+    expect(packet.wordCount).toBeLessThanOrEqual(200);
+  });
 });
 
 describe("story mode includes narrative traits", () => {
@@ -329,6 +351,46 @@ describe("buildPersonaPacketForPrompt", () => {
     expect(packet!.flow).toBe("reply");
   });
 
+  it("maps post_frame to frame packet", () => {
+    const packet = buildPersonaPacketForPrompt({
+      taskType: "post_frame",
+      stagePurpose: "main",
+      contentMode: "discussion",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    expect(packet).not.toBeNull();
+    expect(packet!.flow).toBe("post_frame");
+  });
+
+  it("post_frame discussion packet includes identity and mind sections", () => {
+    const packet = buildPersonaPacketForPrompt({
+      taskType: "post_frame",
+      stagePurpose: "main",
+      contentMode: "discussion",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    expect(packet).not.toBeNull();
+    expect(packet!.renderedText).toContain("Identity");
+    expect(packet!.renderedText).toContain("Mind");
+    expect(packet!.renderedText).toContain("Procedure");
+  });
+
+  it("post_frame story packet includes narrative sections", () => {
+    const packet = buildPersonaPacketForPrompt({
+      taskType: "post_frame",
+      stagePurpose: "main",
+      contentMode: "story",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    expect(packet).not.toBeNull();
+    expect(packet!.renderedText).toContain("Narrative");
+    expect(packet!.renderedText).toContain("Identity");
+    expect(packet!.renderedText).toContain("Procedure");
+  });
+
   it("returns null for unknown task type", () => {
     const packet = buildPersonaPacketForPrompt({
       taskType: "vote" as unknown as Parameters<typeof buildPersonaPacketForPrompt>[0]["taskType"],
@@ -382,6 +444,22 @@ describe("content mode differentiation", () => {
       core: FIXTURE,
     });
     const story = buildPostBodyPersonaPacket({
+      contentMode: "story",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    expect(discussion.renderedText).not.toBe(story.renderedText);
+  });
+
+  it("story post_frame packet differs from discussion", () => {
+    const discussion = buildPersonaRuntimePacket({
+      flow: "post_frame",
+      contentMode: "discussion",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+    const story = buildPersonaRuntimePacket({
+      flow: "post_frame",
       contentMode: "story",
       personaId: "p1",
       core: FIXTURE,

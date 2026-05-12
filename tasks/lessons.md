@@ -17,6 +17,9 @@
 - **Audit Boundaries:** Audits are quality-only (e.g., `persona_fit`). Schema parsing/repair happens _before_ audit. Do not audit types, keys, or parseability.
 - **Shared Repair:** Use a shared framework for all LLM JSON. Keep repair bounded to deterministic syntax salvage before parse success, then `field_patch` for parseable schema-invalid data.
 - **User Corrections:** Apply the latest correction literally, even if it reverses an earlier correction in the same thread; when the user says they only want `field_patch`, retire `schema_repair` again and update the plan/docs to match.
+- **Plan Revisions:** When the user updates an existing plan, merge the new contract into the current handoff structure instead of replacing the earlier plan wholesale unless they explicitly ask for a rewrite.
+- **Stage Artifact Naming:** When a stage artifact stops being a richer version of a prior object and becomes its own stage product, rename it to match the stage boundary directly; for `post_frame`, prefer `PostFrameSchema` / `PostFrame` over stale `PostPlanV2` naming.
+- **Code-Owned Context:** Request-owned invariants like content mode and locked title should be passed by app code, not authored by the model and then revalidated from output.
 - **Persona Generation Drift:** When active Persona v2 plans say generate-persona is one-stage `persona_core_v2`, current docs must not describe `seed -> persona_core` as the live contract; keep two-stage references only in clearly archived historical docs.
 - **Superseded Plans:** When older non-archived implementation plans conflict with the active contract, add an explicit superseded/status banner instead of leaving them to read like current guidance.
 - **Repair Boundaries:** Keep deterministic syntax salvage separate from `field_patch`. Syntax salvage may only close incomplete JSON structure; `field_patch` starts only after parseability.

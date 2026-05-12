@@ -19,6 +19,7 @@ type BudgetProfile = {
 
 const BUDGETS: Record<Exclude<PersonaFlowKind, "audit">, BudgetProfile> = {
   post_plan: { minWords: 80, maxWords: 160, hardMaxWords: 240 },
+  post_frame: { minWords: 70, maxWords: 140, hardMaxWords: 200 },
   post_body: { minWords: 70, maxWords: 140, hardMaxWords: 200 },
   comment: { minWords: 50, maxWords: 120, hardMaxWords: 180 },
   reply: { minWords: 50, maxWords: 120, hardMaxWords: 180 },
@@ -57,6 +58,14 @@ function buildProcedureLine(
         ...tp.context_reading.slice(0, 1),
         ...tp.salience_rules.slice(0, 1),
         ...tp.response_moves.slice(0, 1),
+      ];
+      break;
+    case "post_frame":
+      parts = [
+        ...tp.salience_rules.slice(0, 1),
+        ...tp.interpretation_moves.slice(0, 1),
+        ...tp.response_moves.slice(0, 1),
+        ...tp.omission_rules.slice(0, 1),
       ];
       break;
     case "post_body":
@@ -158,6 +167,46 @@ function selectSections(
           buildSectionText(
             "voice",
             `${core.voice.register}, ${core.voice.rhythm}; opens: ${core.voice.opening_habits[0]}; closes: ${core.voice.closing_habits[0]}`,
+          ),
+        ];
+        break;
+
+      case "post_frame":
+        sections.identity = [
+          buildSectionText("identity", `${core.identity.archetype}; ${core.identity.core_drive}`),
+          `Tension: ${core.identity.central_tension}`,
+        ];
+        sections.mind = [
+          buildSectionText(
+            "mind",
+            `${core.mind.reasoning_style}; ${core.mind.attention_biases.join(", ")}`,
+          ),
+        ];
+        sections.taste = [
+          buildSectionText(
+            "taste",
+            `Values: ${core.taste.values.join(", ")}; Dismisses: ${core.taste.dismisses.join(", ")}`,
+          ),
+        ];
+        sections.voice = [
+          buildSectionText(
+            "voice",
+            `${core.voice.register}, ${core.voice.rhythm}; opens: ${core.voice.opening_habits[0]}; closes: ${core.voice.closing_habits[0]}`,
+          ),
+        ];
+        sections.forum = [
+          buildSectionText(
+            "forum",
+            `${core.forum.participation_mode}; Post intents: ${core.forum.preferred_post_intents.join(", ")}`,
+          ),
+        ];
+        sections.antiGeneric = [
+          buildSectionText("antiGeneric", core.anti_generic.avoid_patterns.join(", ")),
+        ];
+        sections.referenceStyle = [
+          buildSectionText(
+            "referenceStyle",
+            `${core.reference_style.abstract_traits.join(", ")}; do not imitate names or canon.`,
           ),
         ];
         break;
@@ -270,6 +319,38 @@ function selectSections(
         ];
         sections.voice = [
           buildSectionText("voice", `${core.voice.register}, ${core.voice.rhythm}`),
+        ];
+        break;
+
+      case "post_frame":
+        sections.identity = [
+          buildSectionText(
+            "identity",
+            `${core.identity.archetype}; tension: ${core.identity.central_tension}`,
+          ),
+        ];
+        sections.mind = [
+          buildSectionText(
+            "mind",
+            `${core.mind.reasoning_style}; ${core.mind.attention_biases.join(", ")}`,
+          ),
+        ];
+        sections.voice = [
+          buildSectionText("voice", `${core.voice.register}, ${core.voice.rhythm}`),
+          `Opens: ${core.voice.opening_habits[0]}`,
+        ];
+        sections.narrative = [
+          buildSectionText("narrative", `Engine: ${core.narrative.story_engine}`),
+          `Conflicts: ${core.narrative.favored_conflicts.join(", ")}`,
+          `Plot: ${core.narrative.plot_instincts.join(", ")}`,
+          `Endings: ${core.narrative.ending_preferences.join(", ")}`,
+          `Scene details: ${core.narrative.scene_detail_biases.join(", ")}`,
+        ];
+        sections.antiGeneric = [
+          buildSectionText(
+            "antiGeneric",
+            `Avoid story: ${core.narrative.avoid_story_shapes.join(", ")}`,
+          ),
         ];
         break;
 
@@ -602,6 +683,7 @@ export function buildReplyPersonaPacket(input: {
 const FLOW_MAP: Record<string, Exclude<PersonaFlowKind, "audit">> = {
   post: "post_body",
   post_plan: "post_plan",
+  post_frame: "post_frame",
   post_body: "post_body",
   comment: "comment",
   reply: "reply",

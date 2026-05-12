@@ -36,6 +36,7 @@ export type Phase1PromptBlockName = PlannerFamilyPromptBlockName | WriterFamilyP
 export type PromptActionType =
   | "post"
   | "post_plan"
+  | "post_frame"
   | "post_body"
   | "comment"
   | "reply"
