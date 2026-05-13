@@ -76,7 +76,63 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     });
   });
 
-  it("serializes structuredContext to taskContext when provided", async () => {
+  it("routes post structuredContext into targetContextText with empty taskContext", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "post",
+        structuredContext: {
+          taskType: "post",
+          titleDirection: "Tentacles and Madness: A Cthulhu Mythos Worldbuilding Guide",
+          contentDirection:
+            "Explore the key elements of Lovecraftian horror in worldbuilding, focusing on the design of creatures that evoke cosmic dread, the role of forbidden knowledge, and how to create environments that feel ancient and unknowable.",
+        },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+
+    const callArg = previewPersonaInteraction.mock.calls[0][0];
+    expect(callArg.targetContextText).toBe(
+      [
+        "Title direction: Tentacles and Madness: A Cthulhu Mythos Worldbuilding Guide",
+        "Content direction: Explore the key elements of Lovecraftian horror in worldbuilding, focusing on the design of creatures that evoke cosmic dread, the role of forbidden knowledge, and how to create environments that feel ancient and unknowable.",
+      ].join("\n"),
+    );
+    expect(callArg.taskContext).toBe("");
+  });
+
+  it("routes comment structuredContext into targetContextText with empty taskContext", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "comment",
+        structuredContext: {
+          taskType: "comment",
+          articleTitle: "On Cosmic Horror",
+          articleOutline: "A discussion about cosmic horror themes.",
+        },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+
+    const callArg = previewPersonaInteraction.mock.calls[0][0];
+    expect(callArg.targetContextText).toBe(
+      "Article: On Cosmic Horror\nOutline: A discussion about cosmic horror themes.",
+    );
+    expect(callArg.taskContext).toBe("");
+  });
+
+  it("routes reply structuredContext into targetContextText with empty taskContext", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
@@ -98,11 +154,10 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    expect(previewPersonaInteraction).toHaveBeenCalledWith({
-      personaId: "p1",
-      modelId: "m1",
-      taskType: "reply",
-      taskContext: [
+
+    const callArg = previewPersonaInteraction.mock.calls[0][0];
+    expect(callArg.targetContextText).toBe(
+      [
         "Outline: A discussion about cosmic horror.",
         "",
         "Comments:",
@@ -110,23 +165,44 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         "2. Second comment.",
         "3. Third comment.",
       ].join("\n"),
-      boardContext: undefined,
-      targetContext: undefined,
-    });
+    );
+    expect(callArg.taskContext).toBe("");
   });
 
-  it("prefers structuredContext over taskContext when both are provided", async () => {
+  it("routes manual taskContext as targetContextText for user-facing preview flows", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
         personaId: "p1",
         modelId: "m1",
-        taskType: "post",
-        taskContext: "manual text that should be ignored",
-        structuredContext: {
-          taskType: "post",
-          titleDirection: "A deep dive into cosmic horror.",
-          contentDirection: "Explore themes of insignificance.",
+        taskType: "comment",
+        taskContext: "Write about cosmic insignificance.",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
+    expect(res.status).toBe(200);
+
+    const callArg = previewPersonaInteraction.mock.calls[0][0];
+    expect(callArg.targetContextText).toBe("Write about cosmic insignificance.");
+    expect(callArg.taskContext).toBe("");
+  });
+
+  it("keeps vote taskContext on the legacy path", async () => {
+    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "vote",
+        taskContext: "Decide whether this target deserves an upvote.",
+        targetContext: {
+          targetType: "post",
+          targetId: "post-1",
+          targetAuthor: "artist_1",
+          targetContent: "I tried three compositions and the last one feels strongest.",
+          threadSummary: "Critique thread about composition choices.",
         },
       }),
       headers: { "Content-Type": "application/json" },
@@ -134,18 +210,20 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    expect(previewPersonaInteraction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskContext: expect.stringContaining("Title direction: A deep dive into cosmic horror."),
-      }),
-    );
-    expect(previewPersonaInteraction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskContext: expect.stringContaining(
-          "Content direction: Explore themes of insignificance.",
-        ),
-      }),
-    );
+    expect(previewPersonaInteraction).toHaveBeenCalledWith({
+      personaId: "p1",
+      modelId: "m1",
+      taskType: "vote",
+      taskContext: "Decide whether this target deserves an upvote.",
+      targetContext: {
+        targetType: "post",
+        targetId: "post-1",
+        targetAuthor: "artist_1",
+        targetContent: "I tried three compositions and the last one feels strongest.",
+        threadSummary: "Critique thread about composition choices.",
+      },
+      boardContext: undefined,
+    });
   });
 
   it("rejects internal post stage task types", async () => {
@@ -240,7 +318,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     });
   });
 
-  it("still accepts board context for markdown actions", async () => {
+  it("passes board context and targetContext alongside targetContextText for user-facing flows", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
@@ -265,23 +343,26 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    expect(previewPersonaInteraction).toHaveBeenCalledWith({
-      personaId: "p1",
-      modelId: "m1",
-      taskType: "comment",
-      taskContext: "hello",
-      boardContext: {
-        name: "Illustration",
-        description: "Feedback for visual drafts",
-        rules: [{ title: "Be specific", description: "Actionable critique only" }],
-      },
-      targetContext: {
-        targetType: "comment",
-        targetId: "comment-9",
-        targetAuthor: "critic_2",
-        targetContent: "Push the contrast further in the focal area.",
-      },
-    });
+    expect(previewPersonaInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personaId: "p1",
+        modelId: "m1",
+        taskType: "comment",
+        targetContextText: "hello",
+        boardContext: {
+          name: "Illustration",
+          description: "Feedback for visual drafts",
+          rules: [{ title: "Be specific", description: "Actionable critique only" }],
+        },
+        targetContext: {
+          targetType: "comment",
+          targetId: "comment-9",
+          targetAuthor: "critic_2",
+          targetContent: "Push the contrast further in the focal area.",
+        },
+      }),
+    );
+    expect(previewPersonaInteraction.mock.calls[0][0].taskContext).toBe("");
   });
 
   it("returns 422 with explicit persona audit failure details", async () => {

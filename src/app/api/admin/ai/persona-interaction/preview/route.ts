@@ -116,9 +116,18 @@ export const POST = withAdminAuth(async (req, { user }) => {
     return http.badRequest("taskType must be post, comment, reply, vote, poll_post, or poll_vote");
   }
 
-  const resolvedTaskContext = body.structuredContext
+  const isUserFacing =
+    body.taskType === "post" || body.taskType === "comment" || body.taskType === "reply";
+
+  const serializedStructured = body.structuredContext
     ? serializeAssistOutput(body.structuredContext)
-    : (body.taskContext ?? "");
+    : undefined;
+
+  const resolvedTargetContextText = isUserFacing
+    ? (serializedStructured ?? (body.taskContext?.trim() || undefined))
+    : undefined;
+
+  const resolvedTaskContext = isUserFacing ? "" : (serializedStructured ?? body.taskContext ?? "");
 
   let preview;
   try {
@@ -130,6 +139,7 @@ export const POST = withAdminAuth(async (req, { user }) => {
       contentMode: body.contentMode,
       boardContext: normalizeBoardContext(body.boardContext),
       targetContext: normalizeTargetContext(body.targetContext),
+      targetContextText: resolvedTargetContextText,
     });
   } catch (error) {
     if (error instanceof PersonaOutputValidationError) {

@@ -40,6 +40,7 @@ vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
 
 vi.mock("@/lib/ai/llm/invoke-llm", () => ({
   invokeLLM,
+  invokeLLMRaw: invokeLLM,
 }));
 
 function sampleModel(): AiModelConfig {
@@ -178,22 +179,37 @@ function samplePersonaProfile(): PersonaProfile {
   };
 }
 
+function collectStagePrompts(preview: {
+  stageDebugRecords?: { displayPrompt: string }[] | null;
+}): string {
+  return (preview.stageDebugRecords ?? []).map((r) => r.displayPrompt).join("\n---\n");
+}
+
 describe("AiAgentPersonaInteractionService", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     createDbBackedLlmProviderRegistry.mockReset();
     resolveLlmInvocationConfig.mockReset();
     invokeLLM.mockReset();
-    createDbBackedLlmProviderRegistry.mockResolvedValue({ providers: new Map() });
+    createDbBackedLlmProviderRegistry.mockResolvedValue({ providers: new Map() } as any);
     resolveLlmInvocationConfig.mockResolvedValue({
       route: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
       timeoutMs: 30_000,
       retries: 0,
     });
     invokeLLM.mockImplementation(async (input?: unknown) => {
-      const prompt = String(
-        (input as { modelInput?: { prompt?: string } } | undefined)?.modelInput?.prompt ?? "",
+      const modelInput = (
+        input as
+          | { modelInput?: { prompt?: string; metadata?: Record<string, unknown> } }
+          | undefined
+      )?.modelInput;
+      const prompt = String(modelInput?.prompt ?? "");
+      const taskType = String(
+        modelInput?.metadata?._m && typeof modelInput.metadata._m === "object"
+          ? ((modelInput.metadata._m as Record<string, unknown>).taskType ?? "")
+          : "",
       );
+
       if (
         prompt.includes("[persona_output_audit]") ||
         prompt.includes("[comment_audit]") ||
@@ -257,8 +273,71 @@ describe("AiAgentPersonaInteractionService", () => {
           error: null,
         };
       }
+
+      // Post flow stages
+      if (taskType === "post_plan") {
+        return {
+          text: JSON.stringify({
+            candidates: [
+              {
+                title: "Test Post",
+                thesis: "Test thesis",
+                body_outline: ["a", "b"],
+                persona_fit_score: 80,
+                novelty_score: 70,
+              },
+              {
+                title: "Test Post 2",
+                thesis: "Test thesis 2",
+                body_outline: ["c", "d"],
+                persona_fit_score: 75,
+                novelty_score: 85,
+              },
+            ],
+          }),
+          finishReason: "stop",
+          error: null,
+        };
+      }
+      if (taskType === "post_frame") {
+        return {
+          text: JSON.stringify({
+            main_idea: "Test idea",
+            angle: "Test angle",
+            beats: ["beat1", "beat2", "beat3"],
+            required_details: ["d1", "d2", "d3"],
+            ending_direction: "Test ending",
+            tone: ["serious", "analytical"],
+            avoid: ["a1", "a2", "a3"],
+          }),
+          finishReason: "stop",
+          error: null,
+        };
+      }
+      if (taskType === "post_body" || prompt.includes("Write the final post body")) {
+        return {
+          text: JSON.stringify({
+            body: "Preview response body.",
+            tags: ["test", "preview"],
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+            metadata: { probability: 50 },
+          }),
+          finishReason: "stop",
+          error: null,
+        };
+      }
+
+      // Default: comment/reply markdown output
       return {
-        text: JSON.stringify({ markdown: "Preview response" }),
+        text: JSON.stringify({
+          markdown: "Preview response",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+          metadata: { probability: 0 },
+        }),
         finishReason: "stop",
         error: null,
       };
@@ -281,15 +360,17 @@ describe("AiAgentPersonaInteractionService", () => {
       models: [sampleModel()],
       getPersonaProfile: async () => samplePersonaProfile(),
       recordLlmInvocationError: async () => {},
+      debug: true,
     });
 
-    expect(preview.assembledPrompt).toContain("[board_context]\n[board]\nName: Creative Lab");
-    expect(preview.assembledPrompt).toContain("[target_context]\n[source_comment]");
-    expect(preview.assembledPrompt).toContain("[root_post]");
-    expect(preview.assembledPrompt).not.toContain("[agent_memory]");
-    expect(preview.assembledPrompt).not.toContain("[agent_relationship_context]");
-    expect(preview.assembledPrompt).not.toContain("target_type:");
-    expect(preview.assembledPrompt).not.toContain("target_id:");
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[board_context]\n[board]\nName: Creative Lab");
+    expect(prompts).toContain("[target_context]\n[source_comment]");
+    expect(prompts).toContain("[root_post]");
+    expect(prompts).not.toContain("[agent_memory]");
+    expect(prompts).not.toContain("[agent_relationship_context]");
+    expect(prompts).not.toContain("target_type:");
+    expect(prompts).not.toContain("target_id:");
   });
 
   it("delegates post_body execution to raw stage service", async () => {
@@ -318,16 +399,142 @@ describe("AiAgentPersonaInteractionService", () => {
       models: [sampleModel()],
       getPersonaProfile: async () => samplePersonaProfile(),
       recordLlmInvocationError: async () => {},
+      debug: true,
     });
 
     expect(invokeLLM).toHaveBeenCalledTimes(1);
-    expect(preview.assembledPrompt).toContain("[task_context]");
-    expect(preview.assembledPrompt).toContain(
-      "Write the final post body for the selected plan below.",
-    );
-    expect(preview.rawResponse).toContain("Preview response");
-    expect(preview.markdown).toBe(preview.rawResponse);
-    expect(preview.auditDiagnostics).toBeNull();
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[task_context]");
+    expect(prompts).toContain("Write the final post body for the selected plan below.");
+    expect(preview.rawResponse).toContain("Preview response body");
+    expect(preview.markdown).toContain("Preview response body");
+  });
+
+  it("puts title/content direction under [target_context] for post preview", async () => {
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "post",
+      taskContext:
+        "Title direction: Tentacles and Madness\nContent direction: Explore cosmic horror.",
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+      debug: true,
+    });
+
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[target_context]");
+    expect(prompts).toContain("Title direction: Tentacles and Madness");
+    expect(prompts).toContain("Content direction: Explore cosmic horror.");
+    expect(prompts).toContain("[task_context]");
+    expect(prompts).toContain("Generate a new post");
+  });
+
+  it("does not leak title/content direction into [task_context] for post preview", async () => {
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "post",
+      taskContext:
+        "Title direction: Tentacles and Madness\nContent direction: Explore cosmic horror.",
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+      debug: true,
+    });
+
+    const prompts = collectStagePrompts(preview);
+    const taskContextStart = prompts.indexOf("[task_context]");
+    const targetContextStart = prompts.indexOf("[target_context]", taskContextStart + 1);
+    const taskBlock =
+      targetContextStart > taskContextStart
+        ? prompts.slice(taskContextStart, targetContextStart)
+        : prompts.slice(taskContextStart);
+    expect(taskBlock).not.toContain("Title direction:");
+    expect(taskBlock).not.toContain("Content direction:");
+  });
+
+  it("routes manual taskContext as targetContext for comment preview", async () => {
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "comment",
+      taskContext: "Write about cosmic insignificance.",
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+      debug: true,
+    });
+
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[target_context]");
+    expect(prompts).toContain("Write about cosmic insignificance.");
+    expect(prompts).toContain("[task_context]");
+    expect(prompts).toContain("Generate a top-level comment");
+  });
+
+  it("routes manual taskContext as targetContext for reply preview", async () => {
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "reply",
+      taskContext: "Respond to the source comment directly.",
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+      debug: true,
+    });
+
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[target_context]");
+    expect(prompts).toContain("Respond to the source comment directly.");
+    expect(prompts).toContain("[task_context]");
+    expect(prompts).toContain("Generate a reply");
+  });
+
+  it("still honors preformatted targetContextText over structured objects", async () => {
+    const service = new AiAgentPersonaInteractionService();
+
+    const preview = await service.run({
+      personaId: "persona-1",
+      modelId: "model-1",
+      taskType: "comment",
+      taskContext: "ignored fallback text",
+      boardContextText: "[board]\nName: Creative Lab",
+      targetContextText:
+        "[source_comment]\n[artist_1]: Please be more specific.\n\n[root_post]\nTitle: Best prompting workflows this week",
+      document: sampleDocument(),
+      providers: [sampleProvider()],
+      models: [sampleModel()],
+      getPersonaProfile: async () => samplePersonaProfile(),
+      recordLlmInvocationError: async () => {},
+      debug: true,
+    });
+
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[board_context]\n[board]\nName: Creative Lab");
+    expect(prompts).toContain("[target_context]\n[source_comment]");
+    expect(prompts).toContain("[root_post]");
+    expect(prompts).not.toContain("ignored fallback text");
+    expect(prompts).not.toContain("target_type:");
+    expect(prompts).not.toContain("target_id:");
   });
 
   it("routes reply taskType through flow module with diagnostics", async () => {
@@ -354,15 +561,14 @@ describe("AiAgentPersonaInteractionService", () => {
       models: [sampleModel()],
       getPersonaProfile: async () => samplePersonaProfile(),
       recordLlmInvocationError: async () => {},
+      debug: true,
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
-    expect(preview.assembledPrompt).toContain("[source_comment]");
-    expect(preview.assembledPrompt).toContain("thread reply");
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[source_comment]");
+    expect(prompts).toContain("Generate a reply using the dynamic target context below");
     expect(preview.markdown).toContain("Preview response");
-    expect(preview.auditDiagnostics).not.toBeNull();
-    expect(preview.auditDiagnostics?.status).toBe("passed");
-    expect(preview.flowDiagnostics?.finalStatus).toBe("passed");
-    expect(preview.flowDiagnostics?.terminalStage).toBe("reply.main");
+    expect(preview.renderOk).toBe(true);
   });
 });

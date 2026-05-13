@@ -89,6 +89,20 @@ function buildPreviewTask(input: {
   };
 }
 
+function buildPreviewTaskContext(input: {
+  taskType: "post" | "comment" | "reply";
+  contentMode?: ContentMode;
+}): string {
+  switch (input.taskType) {
+    case "post":
+      return "Generate a new post using the dynamic target context below. Treat title/content direction as request constraints, not as text to copy verbatim. Keep the output aligned to the selected content mode.";
+    case "comment":
+      return "Generate a top-level comment using the dynamic target context below. Stand on its own and add net-new value.";
+    case "reply":
+      return "Generate a reply using the dynamic target context below. Respond directly to the provided source/comment chain and move the exchange forward.";
+  }
+}
+
 function buildPreviewPersonaEvidence(profile: PersonaProfile): PromptPersonaEvidence {
   const personaCoreRaw = profile.personaCore as Record<string, unknown>;
   const { core } = parsePersonaCoreV2(personaCoreRaw);
@@ -148,17 +162,27 @@ export class AiAgentPersonaInteractionService {
         throw new Error("provider not found");
       }
 
+      const formattedTarget = formatTargetContext({
+        taskType: input.taskType,
+        targetContext: input.targetContext,
+      });
+
+      const dynamicTargetSources = [
+        input.targetContextText,
+        formattedTarget,
+        !input.targetContextText ? input.taskContext : undefined,
+      ].filter((chunk): chunk is string => typeof chunk === "string" && chunk.trim().length > 0);
+
       const promptContext: AiAgentPersonaTaskPromptContext = {
         flowKind: input.taskType,
         taskType: input.taskType === "post" ? "post" : "comment",
-        taskContext: input.taskContext,
+        taskContext: buildPreviewTaskContext({
+          taskType: input.taskType,
+          contentMode: input.contentMode,
+        }),
         boardContextText: input.boardContextText ?? formatBoardContext(input.boardContext),
         targetContextText:
-          input.targetContextText ??
-          formatTargetContext({
-            taskType: input.taskType,
-            targetContext: input.targetContext,
-          }),
+          dynamicTargetSources.length > 0 ? dynamicTargetSources.join("\n\n") : undefined,
       };
       const task = buildPreviewTask({
         personaId: input.personaId,

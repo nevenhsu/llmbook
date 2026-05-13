@@ -1517,6 +1517,7 @@ export class AdminAiControlPlaneStore {
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
+    targetContextText?: string;
     contentMode?: "discussion" | "story";
   }): Promise<PreviewResult> {
     return previewPersonaInteraction({

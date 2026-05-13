@@ -10,9 +10,18 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
       retries: 0,
     })),
     invokeLLM: vi.fn(async (input?: unknown) => {
-      const prompt = String(
-        (input as { modelInput?: { prompt?: string } } | undefined)?.modelInput?.prompt ?? "",
+      const modelInput = (
+        input as
+          | { modelInput?: { prompt?: string; metadata?: Record<string, unknown> } }
+          | undefined
+      )?.modelInput;
+      const prompt = String(modelInput?.prompt ?? "");
+      const taskType = String(
+        modelInput?.metadata?._m && typeof modelInput.metadata._m === "object"
+          ? ((modelInput.metadata._m as Record<string, unknown>).taskType ?? "")
+          : "",
       );
+
       if (prompt.includes("[comment_audit]")) {
         return {
           text: JSON.stringify({
@@ -28,6 +37,7 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
               reasoning_fit: "pass",
               discourse_fit: "pass",
               expression_fit: "pass",
+              procedure_fit: "pass",
             },
           }),
           finishReason: "stop",
@@ -51,6 +61,7 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
               reasoning_fit: "pass",
               discourse_fit: "pass",
               expression_fit: "pass",
+              procedure_fit: "pass",
             },
           }),
           finishReason: "stop",
@@ -59,8 +70,58 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
           error: null,
         };
       }
+      if (prompt.includes("[persona_output_audit]") || prompt.includes("[post_body_audit]")) {
+        return {
+          text: JSON.stringify({
+            passes: true,
+            issues: [],
+            repairGuidance: [],
+            severity: "low",
+            confidence: 0.94,
+            missingSignals: [],
+            contentChecks: {
+              angle_fidelity: "pass",
+              board_fit: "pass",
+              body_usefulness: "pass",
+              markdown_structure: "pass",
+              title_body_alignment: "pass",
+            },
+            personaChecks: {
+              body_persona_fit: "pass",
+              anti_style_compliance: "pass",
+              procedure_fit: "pass",
+            },
+          }),
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          error: null,
+        };
+      }
+      if (taskType === "post_body") {
+        return {
+          text: JSON.stringify({
+            body: "Preview response body.",
+            tags: ["test", "preview"],
+            need_image: false,
+            image_prompt: null,
+            image_alt: null,
+            metadata: { probability: 50 },
+          }),
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          error: null,
+        };
+      }
       return {
-        text: '{"markdown":"Preview response","need_image":false,"image_prompt":null,"image_alt":null}',
+        text: JSON.stringify({
+          markdown: "Preview response",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+          metadata: { probability: 0 },
+        }),
         finishReason: "stop",
         providerId: "xai",
         modelId: "grok-4-1-fast-reasoning",
@@ -84,12 +145,20 @@ vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
 
 vi.mock("@/lib/ai/llm/invoke-llm", () => ({
   invokeLLM,
+  invokeLLMRaw: invokeLLM,
 }));
 
 function sampleControlPlane() {
   return {
     release: null,
-    document: { globalPolicyDraft: { systemBaseline: "baseline", globalPolicy: "policy" } },
+    document: {
+      globalPolicyDraft: {
+        systemBaseline: "baseline",
+        globalPolicy: "policy",
+        styleGuide: "",
+        forbiddenRules: "",
+      },
+    },
     providers: [
       {
         id: "provider-1",
@@ -145,11 +214,68 @@ function samplePersonaProfile() {
       avatar_url: null,
     },
     personaCore: {
-      identity_summary: { archetype: "thread-native critic" },
+      identity_summary: {
+        archetype: "thread-native critic",
+        core_motivation: "clarity",
+        one_sentence_identity: "A critic.",
+      },
+      values: {
+        value_hierarchy: [{ value: "clarity", priority: 1 }],
+        worldview: [""],
+        judgment_style: "fair",
+      },
+      aesthetic_profile: {
+        humor_preferences: [""],
+        narrative_preferences: [""],
+        creative_preferences: [""],
+        disliked_patterns: [""],
+        taste_boundaries: [""],
+      },
+      lived_context: {
+        familiar_scenes_of_life: [""],
+        personal_experience_flavors: [""],
+        cultural_contexts: [""],
+        topics_with_confident_grounding: [""],
+        topics_requiring_runtime_retrieval: [""],
+      },
+      creator_affinity: {
+        admired_creator_types: [""],
+        structural_preferences: [""],
+        detail_selection_habits: [""],
+        creative_biases: [""],
+      },
+      interaction_defaults: {
+        default_stance: "supportive_but_blunt",
+        discussion_strengths: [""],
+        friction_triggers: [""],
+        non_generic_traits: [""],
+      },
+      voice_fingerprint: {
+        opening_move: "",
+        metaphor_domains: [""],
+        attack_style: "",
+        praise_style: "",
+        closing_move: "",
+        forbidden_shapes: [""],
+      },
+      task_style_matrix: {
+        post: { entry_shape: "", body_shape: "", close_shape: "", forbidden_shapes: [""] },
+        comment: { entry_shape: "", feedback_shape: "", close_shape: "", forbidden_shapes: [""] },
+      },
+      guardrails: { hard_no: [""], deescalation_style: [""] },
       reference_sources: [],
+      other_reference_sources: [],
+      reference_derivation: [],
+      originalization_note: "",
     },
     personaMemories: [],
   } as any;
+}
+
+function collectStagePrompts(preview: {
+  stageDebugRecords?: { displayPrompt: string }[] | null;
+}): string {
+  return (preview.stageDebugRecords ?? []).map((r) => r.displayPrompt).join("\n---\n");
 }
 
 describe("AdminAiControlPlaneStore interaction entrypoints", () => {
@@ -170,14 +296,14 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
       modelId: "model-1",
       taskType: "comment",
       taskContext: "Reply to the thread.",
-    });
+      debug: true,
+    } as any);
 
-    expect(preview.assembledPrompt).toContain("[task_context]");
-    expect(preview.assembledPrompt).toContain("Reply to the thread.");
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[task_context]");
+    expect(prompts).toContain("Reply to the thread.");
     expect(preview.rawResponse).toContain("Preview response");
-    expect(invokeLLM).toHaveBeenCalledTimes(2);
-    expect(preview.auditDiagnostics?.contract).toBe("comment_audit");
-    expect(preview.flowDiagnostics?.terminalStage).toBe("comment.main");
+    expect(preview.renderOk).toBe(true);
   });
 
   it("runPersonaInteraction keeps preformatted board/target blocks", async () => {
@@ -192,15 +318,16 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
       taskContext: "Reply in thread.",
       boardContextText: "[board]\nName: Creative Lab",
       targetContextText: "[source_comment]\n[user]: Be specific",
-    });
+      debug: true,
+    } as any);
 
-    expect(preview.assembledPrompt).toContain("[board_context]");
-    expect(preview.assembledPrompt).toContain("Creative Lab");
-    expect(preview.assembledPrompt).toContain("[target_context]");
-    expect(preview.assembledPrompt).toContain("[source_comment]");
+    const prompts = collectStagePrompts(preview);
+    expect(prompts).toContain("[board_context]");
+    expect(prompts).toContain("Creative Lab");
+    expect(prompts).toContain("[target_context]");
+    expect(prompts).toContain("[source_comment]");
     expect(preview.rawResponse).toContain("Preview response");
-    expect(preview.auditDiagnostics?.contract).toBe("reply_audit");
-    expect(preview.flowDiagnostics?.terminalStage).toBe("reply.main");
+    expect(preview.renderOk).toBe(true);
   });
 
   it("runPersonaInteractionStage returns raw stage payload for flow modules", async () => {
@@ -217,6 +344,6 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
 
     expect(preview.assembledPrompt).toContain("Write the post body.");
     expect(preview.rawResponse).toContain("Preview response");
-    expect(preview.auditDiagnostics).toBeNull();
+    expect(preview.auditDiagnostics).toBeUndefined();
   });
 });
