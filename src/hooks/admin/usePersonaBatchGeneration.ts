@@ -421,6 +421,7 @@ export function usePersonaBatchGeneration({
       referenceName,
       dbReferenceExists: false,
       contextPrompt: "",
+      contextPromptReferenceNames: [],
       displayName: "",
       username: "",
       personaData: null,
@@ -616,7 +617,7 @@ export function usePersonaBatchGeneration({
       };
       markRowTaskStarted(rowId, "prompt");
       try {
-        const response = await apiPost<{ text: string }>(
+        const response = await apiPost<{ text: string; referenceNames: string[] }>(
           "/api/admin/ai/persona-generation/prompt-assist",
           payload,
         );
@@ -626,6 +627,7 @@ export function usePersonaBatchGeneration({
               ? {
                   ...item,
                   contextPrompt: response.text,
+                  contextPromptReferenceNames: response.referenceNames,
                   latestError: item.latestError?.type === "prompt" ? null : item.latestError,
                 }
               : item,
@@ -659,6 +661,7 @@ export function usePersonaBatchGeneration({
       const payload = {
         modelId,
         extraPrompt: row!.contextPrompt,
+        referenceNames: row!.contextPromptReferenceNames.join(", "),
       };
       markRowTaskStarted(rowId, "generate");
       try {

@@ -40,6 +40,8 @@ export function ReferenceSourcesModal({
   onClose,
 }: Props) {
   const [showCompletedSummary, setShowCompletedSummary] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [promptExpanded, setPromptExpanded] = useState(false);
   const previousAddLoadingRef = useRef(addLoading);
   const previousCompletedSummaryKeyRef = useRef<string | null>(null);
   const previousIsOpenRef = useRef(isOpen);
@@ -99,6 +101,23 @@ export function ReferenceSourcesModal({
       setShowCompletedSummary(true);
     }
   }, [addLastCompletedAddedCount, addLastCompletedDuplicateCount, addLoading, isOpen]);
+
+  const promptText = `Generate a comma-separated list of 20 personifiable reference names.
+
+References may include, but are not limited to, writers, artists, philosophers, psychologists, scientists, economists, sociologists, politicians, creators, social-media personalities, fictional characters, mythic figures, archetypes, brands, animals, institutions, occupations, or social roles.
+
+Choose references that can strongly shape persona identity, thinking logic, voice, forum behavior, and narrative instincts.
+Return names only, separated by commas.`;
+
+  async function handleCopyPrompt() {
+    try {
+      await navigator.clipboard.writeText(promptText);
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 2000);
+    } catch {
+      setCopyState("failed");
+    }
+  }
 
   if (!isOpen) {
     return null;
@@ -166,6 +185,47 @@ export function ReferenceSourcesModal({
         }
       >
         <div className="space-y-3">
+          <div className="bg-base-200 border-base-300 rounded-xl border p-4">
+            <div
+              className="flex w-full cursor-pointer items-center justify-between gap-3 select-none"
+              onClick={() => setPromptExpanded(!promptExpanded)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setPromptExpanded(!promptExpanded);
+                }
+              }}
+            >
+              <span className="text-xs font-semibold tracking-wide uppercase opacity-50">
+                Prompt for AI
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleCopyPrompt();
+                  }}
+                >
+                  {copyState === "copied" ? "Copied" : copyState === "failed" ? "Failed" : "Copy"}
+                </button>
+                <span
+                  className="text-xs opacity-40 transition-transform duration-200"
+                  style={{ transform: promptExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                >
+                  ▼
+                </span>
+              </span>
+            </div>
+            {promptExpanded ? (
+              <pre className="mt-2 text-xs leading-relaxed whitespace-pre-wrap opacity-80">
+                {promptText}
+              </pre>
+            ) : null}
+          </div>
           <textarea
             className="textarea textarea-bordered min-h-[18rem] w-full"
             value={value}

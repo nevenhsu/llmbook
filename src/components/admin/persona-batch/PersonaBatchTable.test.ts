@@ -25,6 +25,7 @@ function buildRow(
     referenceName: overrides.referenceName,
     dbReferenceExists: overrides.dbReferenceExists ?? false,
     contextPrompt: overrides.contextPrompt ?? "",
+    contextPromptReferenceNames: overrides.contextPromptReferenceNames ?? [],
     displayName: overrides.displayName ?? "",
     username: overrides.username ?? "",
     personaData: overrides.personaData ?? null,

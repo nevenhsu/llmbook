@@ -19,7 +19,7 @@ export function PersonaBatchToolbar({
 }: Props) {
   return (
     <div className="bg-base-100 border-base-300 rounded-2xl border p-5 shadow-sm">
-      <div className="grid gap-4 xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start">
+      <div className="flex flex-col gap-6">
         <label className="form-control">
           <span className="label-text text-sm font-medium">Model Selection</span>
           <select
@@ -38,7 +38,7 @@ export function PersonaBatchToolbar({
 
         <div
           data-testid="reference-sources-header"
-          className="flex items-center justify-between gap-3 pt-1 xl:pt-7"
+          className="flex items-center justify-between gap-3"
         >
           <span className="text-sm font-medium">Reference Sources</span>
           <button
@@ -47,7 +47,7 @@ export function PersonaBatchToolbar({
             disabled={disableInputs}
             onClick={onOpenReferenceModal}
           >
-            Add
+            Add Names
           </button>
         </div>
       </div>

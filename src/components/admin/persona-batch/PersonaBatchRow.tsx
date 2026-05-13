@@ -163,6 +163,19 @@ export function PersonaBatchRow({
         <div className="truncate text-sm leading-6 opacity-80" title={row.contextPrompt}>
           {summarize(row.contextPrompt)}
         </div>
+        {row.contextPromptReferenceNames.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {row.contextPromptReferenceNames.map((name) => (
+              <span
+                key={name}
+                className="badge badge-outline badge-xs max-w-[120px] truncate"
+                title={name}
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {row.promptChangedSinceGenerate ? (
             <span className="badge badge-warning badge-outline text-xs">Prompt changed</span>

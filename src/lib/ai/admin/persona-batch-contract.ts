@@ -27,6 +27,7 @@ export type PersonaBatchRow = {
   referenceName: string;
   dbReferenceExists: boolean;
   contextPrompt: string;
+  contextPromptReferenceNames: string[];
   displayName: string;
   username: string;
   personaData: PersonaBatchPersonaData | null;

@@ -63,6 +63,7 @@ function buildInitialRows(): PersonaBatchGenerationController["rows"] {
       dbReferenceExists: false,
       contextPrompt:
         "A globe-trotting storyteller who opens with sensory snapshots and attacks shallow taste with lived authority.",
+      contextPromptReferenceNames: ["Anthony Bourdain"],
       displayName: generatedDisplayName,
       username: derivePersonaUsername(generatedDisplayName),
       personaData: cloneStructured(mockPersonaGenerationPreview.structured),
@@ -81,6 +82,7 @@ function buildInitialRows(): PersonaBatchGenerationController["rows"] {
       referenceName: "Hayao Miyazaki",
       dbReferenceExists: true,
       contextPrompt: "",
+      contextPromptReferenceNames: [],
       displayName: "",
       username: "",
       personaData: null,
@@ -116,6 +118,7 @@ function buildInitialRows(): PersonaBatchGenerationController["rows"] {
       dbReferenceExists: false,
       contextPrompt:
         "A speculative voice that treats social systems as worlds to be pressure-tested.",
+      contextPromptReferenceNames: ["Ursula K. Le Guin"],
       displayName: "",
       username: "",
       personaData: null,
@@ -379,6 +382,7 @@ export function PersonaBatchPreviewMockPage() {
               ? {
                   ...row,
                   contextPrompt: `Mock AI prompt for ${row.referenceName}`,
+                  contextPromptReferenceNames: [row.referenceName],
                   latestError: null,
                 }
               : row,
@@ -770,6 +774,7 @@ export function PersonaBatchPreviewMockPage() {
             referenceName,
             dbReferenceExists: false,
             contextPrompt: "",
+            contextPromptReferenceNames: [],
             displayName: "",
             username: "",
             personaData: null,
