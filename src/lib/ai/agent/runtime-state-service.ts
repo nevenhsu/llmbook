@@ -1,5 +1,6 @@
 import { loadAiAgentConfig } from "@/lib/ai/agent/config/agent-config";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { claimLease } from "@/lib/ai/agent/runtime-lease";
 
 export const ORCHESTRATOR_RUNTIME_SINGLETON_KEY = "global";
 export const ORCHESTRATOR_RUNTIME_APP_ONLINE_WINDOW_MS = 30_000;
@@ -191,35 +192,44 @@ function buildLeaseBlockedResult(input: {
     };
   }
 
-  const leaseUntil = normalizeIsoString(input.row.lease_until);
-  const cooldownUntil = normalizeIsoString(input.row.cooldown_until);
-  const nowMs = input.now.getTime();
-  const leaseActive = leaseUntil ? new Date(leaseUntil).getTime() > nowMs : false;
-  const cooldownActive = cooldownUntil ? new Date(cooldownUntil).getTime() > nowMs : false;
+  const leaseClaim = claimLease(
+    {
+      paused: input.row.paused,
+      leaseOwner: input.row.lease_owner,
+      leaseUntil: input.row.lease_until,
+      cooldownUntil: input.row.cooldown_until,
+    },
+    {
+      leaseOwner: input.requestedLeaseOwner,
+      leaseMs: 0, // not used for blocking check
+      now: input.now,
+      allowDuringCooldown: input.allowDuringCooldown,
+    },
+  );
 
-  if (leaseActive && input.row.lease_owner && input.row.lease_owner !== input.requestedLeaseOwner) {
+  if (leaseClaim.result === "claimed") {
+    if (input.missingLeaseOwnedByRequesterSummary) {
+      return {
+        mode: "blocked",
+        reasonCode: "lease_not_owned",
+        summary: input.missingLeaseOwnedByRequesterSummary,
+        runtimeState,
+      };
+    }
+
     return {
       mode: "blocked",
       reasonCode: "lease_held_by_other",
-      summary: `Runtime lease is currently held by ${input.row.lease_owner} until ${leaseUntil}.`,
+      summary: input.fallbackSummary,
       runtimeState,
     };
   }
 
-  if (!input.allowDuringCooldown && cooldownActive) {
+  if (leaseClaim.reason?.includes("Cooldown")) {
     return {
       mode: "blocked",
       reasonCode: "cooldown_active",
-      summary: `Runtime cooldown is active until ${cooldownUntil}.`,
-      runtimeState,
-    };
-  }
-
-  if (input.missingLeaseOwnedByRequesterSummary) {
-    return {
-      mode: "blocked",
-      reasonCode: "lease_not_owned",
-      summary: input.missingLeaseOwnedByRequesterSummary,
+      summary: `Runtime cooldown is active until ${input.row.cooldown_until}.`,
       runtimeState,
     };
   }
@@ -227,7 +237,7 @@ function buildLeaseBlockedResult(input: {
   return {
     mode: "blocked",
     reasonCode: "lease_held_by_other",
-    summary: input.fallbackSummary,
+    summary: `Runtime lease is currently held by ${input.row.lease_owner} until ${input.row.lease_until}.`,
     runtimeState,
   };
 }

@@ -1,6 +1,6 @@
 import { AdminAiControlPlaneStore, type PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import { getActiveOrderedModels } from "@/lib/ai/admin/active-model-order";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import {
   AiAgentPersonaTaskContextBuilder,
   type AiAgentPersonaTaskPromptContext,
@@ -17,9 +17,7 @@ import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 type PersonaTaskGeneratorDeps = {
-  buildPromptContext: (input: {
-    task: AiAgentRecentTaskSnapshot;
-  }) => Promise<AiAgentPersonaTaskPromptContext>;
+  buildPromptContext: (input: { task: TaskSnapshot }) => Promise<AiAgentPersonaTaskPromptContext>;
   loadPreferredTextModel: () => Promise<PreferredTextModel>;
   runPersonaInteractionStage: (input: {
     personaId: string;
@@ -60,7 +58,7 @@ export type AiAgentPersonaTaskGeneratedOutput =
     };
 
 export type AiAgentPersonaTaskGenerationResult = {
-  task: AiAgentRecentTaskSnapshot;
+  task: TaskSnapshot;
   mode: AiAgentPersonaTaskExecutionMode;
   promptContext: AiAgentPersonaTaskPromptContext;
   preview: PreviewResult;
@@ -145,7 +143,7 @@ export class AiAgentPersonaTaskGenerator {
   }
 
   public async generateFromTask(input: {
-    task: AiAgentRecentTaskSnapshot;
+    task: TaskSnapshot;
     mode?: AiAgentPersonaTaskExecutionMode;
     extraInstructions?: string | null;
   }): Promise<AiAgentPersonaTaskGenerationResult> {

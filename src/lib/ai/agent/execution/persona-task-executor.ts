@@ -8,12 +8,12 @@ import {
   AiAgentPersonaTaskGenerator,
   type AiAgentPersonaTaskGenerationResult,
 } from "@/lib/ai/agent/execution/persona-task-generator";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 type PersonaTaskExecutorDeps = {
-  loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
+  loadTaskById: (taskId: string) => Promise<TaskSnapshot | null>;
   generateTaskContent: (input: {
-    task: AiAgentRecentTaskSnapshot;
+    task: TaskSnapshot;
     mode: "runtime";
   }) => Promise<AiAgentPersonaTaskGenerationResult>;
   persistGeneratedTaskResult: (input: {
@@ -50,7 +50,7 @@ export class AiAgentPersonaTaskExecutor {
 
   public async executeTask(input: {
     taskId?: string;
-    task?: AiAgentRecentTaskSnapshot;
+    task?: TaskSnapshot;
     sourceRuntime: string;
     jobTaskId?: string | null;
     createdBy?: string | null;

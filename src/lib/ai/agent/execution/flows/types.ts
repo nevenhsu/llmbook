@@ -1,6 +1,6 @@
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
@@ -204,7 +204,7 @@ export type TextFlowRunResult =
     };
 
 export type TextFlowModuleRunInput = {
-  task: AiAgentRecentTaskSnapshot;
+  task: TaskSnapshot;
   promptContext: AiAgentPersonaTaskPromptContext;
   extraInstructions?: string | null;
   loadPreferredTextModel: () => Promise<PreferredTextModel>;
@@ -290,7 +290,7 @@ export function buildPassedSingleStageDiagnostics(stage: string): FlowDiagnostic
 export function buildModuleMetadata(input: {
   modelSelection: PreferredTextModel;
   preview: PreviewResult;
-  task: AiAgentRecentTaskSnapshot;
+  task: TaskSnapshot;
   flowKind: TextFlowKind;
 }): Record<string, unknown> {
   return {

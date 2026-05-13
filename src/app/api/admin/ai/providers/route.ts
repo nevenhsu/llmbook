@@ -1,5 +1,4 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import {
   AdminAiControlPlaneStore,
   type AiProviderConfig,
@@ -27,21 +26,13 @@ function sanitizeProvider(provider: AiProviderConfig) {
   };
 }
 
-export const GET = withAuth(async (_req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const GET = withAdminAuth(async (_req, { user }) => {
   const store = new AdminAiControlPlaneStore();
   const state = await store.getActiveControlPlane();
   return http.ok({ items: state.providers.map(sanitizeProvider), release: state.release });
 });
 
-export const POST = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth(async (req, { user }) => {
   const body = (await req.json()) as {
     providerKey?: string;
     displayName?: string;
@@ -69,11 +60,7 @@ export const POST = withAuth(async (req, { user }) => {
   return http.created({ item: sanitizeProvider(item) });
 });
 
-export const PATCH = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const PATCH = withAdminAuth(async (req, { user }) => {
   const body = (await req.json()) as {
     id?: string;
     providerKey?: string;

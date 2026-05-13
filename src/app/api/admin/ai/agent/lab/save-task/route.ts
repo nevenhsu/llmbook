@@ -1,8 +1,7 @@
-import { isAdmin } from "@/lib/admin";
 import { AiAgentTaskInjectionService } from "@/lib/ai/agent/intake/task-injection-service";
 import type { TaskCandidatePreview } from "@/lib/ai/agent/intake/intake-preview";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { withAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
+import { withAdminAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
 
 type SaveTaskBody = {
   candidates?: TaskCandidatePreview[];
@@ -74,11 +73,7 @@ async function incrementMatchedPersonaCounts(input: {
   }
 }
 
-export const POST = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth(async (req, { user }) => {
   const body = await parseJsonBody<SaveTaskBody>(req);
   if ("status" in body) {
     return body;

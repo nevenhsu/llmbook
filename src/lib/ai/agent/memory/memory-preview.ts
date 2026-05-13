@@ -1,4 +1,4 @@
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 export type AiAgentMemoryPersonaOption = {
   personaId: string;
@@ -87,13 +87,13 @@ function readString(record: Record<string, unknown>, key: string): string | null
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function renderTaskSummary(task: AiAgentRecentTaskSnapshot): string {
+function renderTaskSummary(task: TaskSnapshot): string {
   return `${task.taskType} result from ${task.sourceTable ?? "unknown"}:${task.sourceId ?? task.id}`;
 }
 
 export function buildLatestMemoryWritePreview(input: {
   persona: AiAgentMemoryPersonaOption;
-  recentTasks: AiAgentRecentTaskSnapshot[];
+  recentTasks: TaskSnapshot[];
   recentShortMemories: AiAgentMemoryEntryPreview[];
 }): AiAgentLatestMemoryWritePreview {
   const task =
@@ -220,7 +220,7 @@ export function buildCompressionPreview(input: {
 export function buildMemoryPersonaPreview(input: {
   persona: AiAgentMemoryPersonaOption;
   entries: AiAgentMemoryEntryPreview[];
-  recentTasks: AiAgentRecentTaskSnapshot[];
+  recentTasks: TaskSnapshot[];
 }): AiAgentMemoryPersonaPreview {
   const canonicalLongMemory =
     input.entries.find(

@@ -3,39 +3,17 @@ import {
   type TaskCandidatePreview,
   type TaskInjectionPreview,
 } from "@/lib/ai/agent/intake/intake-preview";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import {
+  mapTaskRow,
+  type TaskSnapshot,
+  type TaskSnapshotPersonaRow,
+  type TaskSnapshotRow,
+} from "@/lib/ai/agent/read-models/task-snapshot";
 import type { QueueTaskStatus } from "@/lib/ai/task-queue/task-queue";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type PersonaIdentityRow = {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-};
-
-type InsertedTaskRow = {
-  id: string;
-  persona_id: string;
-  task_type: string;
-  dispatch_kind: string;
-  source_table: string | null;
-  source_id: string | null;
-  dedupe_key: string | null;
-  cooldown_until: string | null;
-  payload: Record<string, unknown> | null;
-  status: QueueTaskStatus;
-  scheduled_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  retry_count: number;
-  max_retries: number;
-  lease_owner: string | null;
-  lease_until: string | null;
-  result_id: string | null;
-  result_type: string | null;
-  error_message: string | null;
-  created_at: string;
-};
+type PersonaIdentityRow = TaskSnapshotPersonaRow;
+type InsertedTaskRow = TaskSnapshotRow;
 
 type InjectPersonaTasksRpcCandidate = {
   candidate_index: number;
@@ -69,7 +47,7 @@ export type AiAgentTaskInjectionExecutedResponse = {
   kind: AiAgentRuntimeIntakeKind | "manual";
   message: string;
   injectionPreview: TaskInjectionPreview;
-  insertedTasks: AiAgentRecentTaskSnapshot[];
+  insertedTasks: TaskSnapshot[];
 };
 
 function toQueueTaskType(candidate: TaskCandidatePreview): "comment" | "post" | "reply" {
@@ -143,36 +121,7 @@ function buildActualInjectionPreview(input: {
   };
 }
 
-function toRecentTaskSnapshot(
-  row: InsertedTaskRow,
-  persona: PersonaIdentityRow | null,
-): AiAgentRecentTaskSnapshot {
-  return {
-    id: row.id,
-    personaId: row.persona_id,
-    personaUsername: persona?.username ?? null,
-    personaDisplayName: persona?.display_name ?? null,
-    taskType: row.task_type,
-    dispatchKind: row.dispatch_kind,
-    sourceTable: row.source_table,
-    sourceId: row.source_id,
-    dedupeKey: row.dedupe_key,
-    cooldownUntil: row.cooldown_until,
-    payload: row.payload ?? {},
-    status: row.status,
-    scheduledAt: row.scheduled_at,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    retryCount: row.retry_count,
-    maxRetries: row.max_retries,
-    leaseOwner: row.lease_owner,
-    leaseUntil: row.lease_until,
-    resultId: row.result_id,
-    resultType: row.result_type,
-    errorMessage: row.error_message,
-    createdAt: row.created_at,
-  };
-}
+const toRecentTaskSnapshot = mapTaskRow;
 
 export class AiAgentTaskInjectionService {
   private readonly deps: TaskInjectionServiceDeps;

@@ -2,22 +2,22 @@
 
 ## Active
 
-- [x] Inspect the existing `/admin/ai/control-plane` prompt-assist reference-name flow and the current `/admin/ai/persona-batch` contract/UI gaps.
-- [x] Write the new batch-reference-names implementation plan in `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md`.
+- [x] Read the existing `plans/architecture-deepening.md` note and verify each candidate against the live codebase.
+- [x] Rewrite `plans/architecture-deepening.md` as an execution-ready implementation plan with corrected scope, exact file inventories, and ordered verification.
 - [x] Record the doc-only review note and keep the tracker aligned with this planning task.
 
 ## Current References
 
-- LLM JSON contract: `docs/dev-guidelines/08-llm-json-stage-contract.md`
-- Target plan: `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md`
-- Control-plane reference path: `src/hooks/admin/useAiControlPlane.ts`
-- Batch hook: `src/hooks/admin/usePersonaBatchGeneration.ts`
-- Batch row contract: `src/lib/ai/admin/persona-batch-contract.ts`
-- Batch toolbar: `src/components/admin/persona-batch/PersonaBatchToolbar.tsx`
-- Batch table: `src/components/admin/persona-batch/PersonaBatchTable.tsx`
+- Target plan: `plans/architecture-deepening.md`
+- Route helpers: `src/lib/server/route-helpers.ts`
+- Intake god module: `src/lib/ai/agent/intake/opportunity-pipeline-service.ts`
+- Runtime services: `src/lib/ai/agent/runtime-state-service.ts`, `src/lib/ai/agent/jobs/job-runtime-state-service.ts`
+- Task snapshot producers: `src/lib/ai/agent/execution/persona-task-store.ts`, `src/lib/ai/agent/memory/memory-read-model.ts`, `src/lib/ai/agent/operator-console/task-table-read-model.ts`, `src/lib/ai/agent/intake/task-injection-service.ts`
+- Agent lab data/types: `src/components/admin/agent-lab/lab-data.ts`, `src/components/admin/agent-lab/types.ts`
 
 ## Review
 
+- **2026-05-13:** Rewrote `plans/architecture-deepening.md` into an execution-ready implementation plan after re-validating the live tree. The updated plan keeps the original six deepening themes but turns them into ordered implementation slices with exact files, test-first steps, and verification commands. It also corrects the least reliable part of the original note: the client-side "7 hooks / 27 components" idea is now an inventory-backed action-consolidation task based on current `fetch()` and helper-call sites, rather than a blind hook expansion. Additional live checks folded into the rewritten plan: `opportunity-pipeline-service.ts` is still 1732 lines, the two runtime-state services are still 769/349 lines, 36 admin AI routes still use `withAuth` plus inline admin checks, task-snapshot mapping is duplicated in four concrete producers, and moving `lab-data.ts` cleanly requires extracting pure agent-lab data types into `src/lib` instead of importing component-local types from a lib module. Verification for this docs-only planning task was limited to focused file inspection, `rg` inventories, and diff review of the rewritten plan plus tracker.
 - **2026-05-12:** Wrote `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md` for `/admin/ai/persona-batch` reference-name support. The plan keeps the existing batch architecture intact but brings prompt-assist behavior to parity with the control-plane `Generate Persona` card: batch rows gain a dedicated editable `referenceNames` field, prompt assist stores both cleaned prompt text and returned reference names, generate preview starts sending `referenceNames`, the table gains a visible reference-names surface, and the toolbar action is renamed from `Add` to `Add Reference`. Verification for this doc-only planning task was limited to focused code inspection of the control-plane prompt-assist path, the current batch hook/contract/components, related tests, and diff review of the new plan plus tracker.
 - **2026-05-12:** Inspected the staged DeepSeek `post_frame` work at `82cb32a6a7274c52d972f`, kept the already-landed frame/schema changes, and tightened the remaining failure boundary plus regression coverage. The main runtime fix was to classify schema-gate / schema-validation wording explicitly as `schema_validation` in `post-flow-module.ts`, which closes a hole where `post_frame` schema failures could be reported as `deterministic_gate` depending on the thrown message. I also added a focused regression in `post-flow-module.test.ts` for that case and a closest-seam `persona-interaction-stage-service.test.ts` regression proving `post_frame` story-mode prompts use the active V2 `PostFrameSchema` path. Separately, I fixed the pre-existing `persona-runtime-packets.test.ts` failure by making the test fixture a fully valid v2 object again (`identity.display_name`, `identity.bio`, `originalization_note`), so `normalizePersonaCoreV2()` no longer emits expected-missing-field warnings for the “valid v2” case. Verification: `npx vitest run src/lib/ai/agent/execution/flows/post-flow-module.test.ts src/lib/ai/agent/execution/persona-interaction-stage-service.test.ts src/lib/ai/prompt-runtime/persona-runtime-packets.test.ts src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts` passed with 99 tests; `npx vitest run src/lib/ai/prompt-runtime/persona-v2-prompt-family.test.ts` passed with 34 tests; `git diff --check` on the touched files passed.
 - **2026-05-12:** Reconciled the old `docs/ai-agent/llm-flows` references to the newer Persona v2 plan set. The active docs now describe the V2-only prompt builder/block order, the first-class `post_frame` stage with the compact shared field set, content-mode-aware preview/runtime threading, structured interaction-context assist handoff, and per-stage preview output expectations. I also removed stale current-reference language that still framed persona interaction around the legacy prompt shell or public audit-stage doctrine. Verification for this docs-only pass was limited to focused grep checks for stale terms plus diff review of the touched docs and tracker.

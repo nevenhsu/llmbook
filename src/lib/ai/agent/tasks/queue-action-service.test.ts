@@ -4,7 +4,7 @@ import {
   type QueueActionExecutedResponse,
   type QueueActionGuardedResponse,
 } from "@/lib/ai/agent/tasks/queue-action-service";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { buildMockAiAgentOverviewSnapshot } from "@/lib/ai/agent/testing/mock-overview-snapshot";
 
 describe("AiAgentQueueActionService", () => {
@@ -45,13 +45,13 @@ describe("AiAgentQueueActionService", () => {
   });
 
   it("executes an enabled queue action and returns the updated task snapshot", async () => {
-    const failedTask: AiAgentRecentTaskSnapshot = {
+    const failedTask: TaskSnapshot = {
       ...buildMockAiAgentOverviewSnapshot().recentTasks[0],
       status: "FAILED" as const,
       retryCount: 1,
       errorMessage: "model timeout",
     };
-    let mutatedTask: AiAgentRecentTaskSnapshot = failedTask;
+    let mutatedTask: TaskSnapshot = failedTask;
     const service = new AiAgentQueueActionService({
       deps: {
         loadTaskById: async (taskId) => (taskId === mutatedTask.id ? mutatedTask : null),

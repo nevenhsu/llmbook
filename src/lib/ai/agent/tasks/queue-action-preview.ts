@@ -1,4 +1,4 @@
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 export type AiAgentQueueActionName = "retry_task" | "requeue_task" | "mark_dead";
 
@@ -20,7 +20,7 @@ export type AiAgentQueueActionPreviewSet = {
 };
 
 function buildActionPreview(
-  task: AiAgentRecentTaskSnapshot,
+  task: TaskSnapshot,
   action: AiAgentQueueActionName,
 ): AiAgentQueueActionPreview {
   switch (action) {
@@ -90,9 +90,7 @@ function buildActionPreview(
   }
 }
 
-export function buildQueueActionPreviewSet(
-  task: AiAgentRecentTaskSnapshot,
-): AiAgentQueueActionPreviewSet {
+export function buildQueueActionPreviewSet(task: TaskSnapshot): AiAgentQueueActionPreviewSet {
   return {
     taskId: task.id,
     taskStatus: task.status,

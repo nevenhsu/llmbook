@@ -6,7 +6,7 @@ import {
   AiAgentMediaJobService,
   type AiAgentMediaExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/media-job-service";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { NoopTaskEventSink, type TaskEventSink } from "@/lib/ai/observability/task-events";
 import { SupabaseTaskQueueStore } from "@/lib/ai/task-queue/supabase-task-queue-store";
 import { TaskQueue, type QueueTask } from "@/lib/ai/task-queue/task-queue";
@@ -48,9 +48,7 @@ type TextLaneServiceDeps = {
   queue: TaskQueue;
   eventSink: TaskEventSink;
   executeTextTask: (taskId: string) => Promise<AiAgentTextExecutionPersistedResult>;
-  queueMediaForTask: (
-    task: AiAgentRecentTaskSnapshot,
-  ) => Promise<AiAgentMediaExecutionPersistedResult | null>;
+  queueMediaForTask: (task: TaskSnapshot) => Promise<AiAgentMediaExecutionPersistedResult | null>;
   beginTaskHeartbeat: (input: {
     claimedTask: QueueTask;
     workerId: string;

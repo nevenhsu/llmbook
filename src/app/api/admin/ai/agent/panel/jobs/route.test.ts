@@ -25,6 +25,13 @@ vi.mock("@/lib/server/route-helpers", () => {
     parseJsonBody: async (req: Request) => req.json(),
     withAuth: (handler: any) => (req: Request, ctx: any) =>
       handler(req, { user: { id: "admin-user" } }, ctx),
+    withAdminAuth: (handler: any) => async (req: Request, routeContext?: any) => {
+      const user = { id: "admin-user" };
+      if (!(await isAdmin(user.id))) {
+        return Response.json({ error: "Forbidden - Admin access required" }, { status: 403 });
+      }
+      return handler(req, { user, supabase: {} }, routeContext ?? { params: Promise.resolve({}) });
+    },
   };
 });
 

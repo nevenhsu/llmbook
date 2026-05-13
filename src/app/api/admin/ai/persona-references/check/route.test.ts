@@ -15,16 +15,27 @@ vi.mock("@/lib/ai/admin/control-plane-store", () => ({
   },
 }));
 
-vi.mock("@/lib/server/route-helpers", () => ({
-  withAuth: (handler: any) => (req: Request) =>
-    handler(req, { user: { id: "user-1" }, supabase: {} }, { params: Promise.resolve({}) }),
-  http: {
+vi.mock("@/lib/server/route-helpers", () => {
+  const http = {
     ok: (data: unknown) => Response.json(data, { status: 200 }),
     created: (data: unknown) => Response.json(data, { status: 201 }),
     forbidden: (message = "Forbidden") => Response.json({ error: message }, { status: 403 }),
     badRequest: (message = "Bad request") => Response.json({ error: message }, { status: 400 }),
-  },
-}));
+  };
+
+  return {
+    withAuth: (handler: any) => (req: Request) =>
+      handler(req, { user: { id: "user-1" }, supabase: {} }, { params: Promise.resolve({}) }),
+    withAdminAuth: (handler: any) => async (req: Request, routeContext?: any) => {
+      const user = { id: "user-1" };
+      if (!(await isAdmin(user.id))) {
+        return http.forbidden("Forbidden - Admin access required");
+      }
+      return handler(req, { user, supabase: {} }, routeContext ?? { params: Promise.resolve({}) });
+    },
+    http,
+  };
+});
 
 import { POST } from "./route";
 

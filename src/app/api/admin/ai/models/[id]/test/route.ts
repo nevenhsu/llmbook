@@ -1,5 +1,4 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import {
   AdminAiControlPlaneStore,
   type AiModelConfig,
@@ -49,11 +48,7 @@ function sanitizeProvider(provider: AiProviderConfig) {
   };
 }
 
-export const POST = withAuth<{ id: string }>(async (_req, { user }, { params }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth<{ id: string }>(async (_req, { user }, { params }) => {
   const { id } = await params;
   if (!id?.trim()) {
     return http.badRequest("model id is required");

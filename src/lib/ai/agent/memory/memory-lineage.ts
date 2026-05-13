@@ -1,4 +1,4 @@
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import type {
   AiAgentMemoryPersistedWriteResponse,
   AiAgentMemoryPersistedCompressResponse,
@@ -38,7 +38,7 @@ export type AiAgentMemoryOutcomeTrace = {
 };
 
 export function buildMemoryLineageSummary(input: {
-  selectedTask: AiAgentRecentTaskSnapshot | null;
+  selectedTask: TaskSnapshot | null;
   activeMemoryPreview: AiAgentMemoryPersonaPreview | null;
   latestWriteResult: AiAgentMemoryPersistedWriteResponse | null;
   compressionResult: AiAgentMemoryPersistedCompressResponse | null;
@@ -77,7 +77,7 @@ export function buildMemoryLineageSummary(input: {
 }
 
 export function buildMemoryOutcomeTrace(input: {
-  selectedTask: AiAgentRecentTaskSnapshot | null;
+  selectedTask: TaskSnapshot | null;
   activeMemoryPreview: AiAgentMemoryPersonaPreview | null;
   latestWriteResult: AiAgentMemoryPersistedWriteResponse | null;
   compressionResult: AiAgentMemoryPersistedCompressResponse | null;

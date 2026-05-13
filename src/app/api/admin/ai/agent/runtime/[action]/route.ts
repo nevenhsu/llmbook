@@ -1,5 +1,4 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import { NextResponse } from "next/server";
 import {
   AiAgentRuntimeControlService,
@@ -13,11 +12,7 @@ function parseAction(value: string): AiAgentRuntimeControlAction | null {
   return null;
 }
 
-export const POST = withAuth<{ action: string }>(async (_request, { user }, { params }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth<{ action: string }>(async (_request, { user }, { params }) => {
   const { action: rawAction } = await params;
   const action = parseAction(rawAction);
   if (!action) {

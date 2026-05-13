@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { SupabaseClient } from "@supabase/supabase-js";
+import { isAdmin } from "@/lib/admin";
 
 // Standard error response format
 export interface ApiErrorResponse {
@@ -163,6 +164,33 @@ export function withAuth<TParams = unknown>(
     }
 
     return handler(req, { user: { id: user.id }, supabase }, routeContext);
+  });
+}
+
+/**
+ * Wrapper for admin-authenticated route handlers
+ * Composes withAuth + isAdmin check
+ *
+ * Usage:
+ * ```ts
+ * export const POST = withAdminAuth(async (req, { user, supabase }) => {
+ *   // User is guaranteed to be authenticated AND admin here
+ *   return jsonOk(result);
+ * });
+ * ```
+ */
+export function withAdminAuth<TParams = unknown>(
+  handler: (
+    req: Request,
+    ctx: AuthContext,
+    routeContext: { params: Promise<TParams> },
+  ) => Promise<NextResponse>,
+): (req: Request, routeContext: { params: Promise<TParams> }) => Promise<NextResponse> {
+  return withAuth(async (req, ctx, routeContext) => {
+    if (!(await isAdmin(ctx.user.id))) {
+      return http.forbidden("Forbidden - Admin access required");
+    }
+    return handler(req, ctx, routeContext);
   });
 }
 

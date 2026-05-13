@@ -3,7 +3,7 @@ import { generateImage } from "ai";
 import { createXai } from "@ai-sdk/xai";
 import sharp from "sharp";
 import { buildExecutionPreviewFromTask } from "@/lib/ai/agent/execution/execution-preview";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { loadDecryptedProviderSecrets } from "@/lib/ai/llm/provider-secrets";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -62,7 +62,7 @@ type GeneratedImageArtifact = {
 };
 
 type TaskMediaContext = {
-  task: AiAgentRecentTaskSnapshot;
+  task: TaskSnapshot;
   ownerTable: MediaOwnerTable;
   ownerId: string;
   imagePrompt: string;
@@ -121,7 +121,7 @@ function readRetryBackoffMinutes(retryCount: number): number | null {
   return MEDIA_RETRY_BACKOFF_MINUTES[retryCount - 1] ?? null;
 }
 
-function readTaskMediaContext(task: AiAgentRecentTaskSnapshot): TaskMediaContext | null {
+function readTaskMediaContext(task: TaskSnapshot): TaskMediaContext | null {
   const executionPreview = buildExecutionPreviewFromTask(task);
   const mediaWritePayload = executionPreview.writePlan.mediaWrite?.payload as
     | {
@@ -148,7 +148,7 @@ function readTaskMediaContext(task: AiAgentRecentTaskSnapshot): TaskMediaContext
 }
 
 function mapRowToResult(input: {
-  task: AiAgentRecentTaskSnapshot;
+  task: TaskSnapshot;
   ownerTable: MediaOwnerTable;
   ownerId: string;
   imagePrompt: string;
@@ -197,7 +197,7 @@ export class AiAgentMediaJobService {
   }
 
   public async ensurePendingJobForTask(
-    task: AiAgentRecentTaskSnapshot,
+    task: TaskSnapshot,
   ): Promise<AiAgentMediaExecutionPersistedResult | null> {
     const context = readTaskMediaContext(task);
     if (!context) {
@@ -239,9 +239,7 @@ export class AiAgentMediaJobService {
     });
   }
 
-  public async executeForTask(
-    task: AiAgentRecentTaskSnapshot,
-  ): Promise<AiAgentMediaExecutionPersistedResult> {
+  public async executeForTask(task: TaskSnapshot): Promise<AiAgentMediaExecutionPersistedResult> {
     const context = readTaskMediaContext(task);
     if (!context) {
       throw new Error("media execution blocked by missing image prompt");

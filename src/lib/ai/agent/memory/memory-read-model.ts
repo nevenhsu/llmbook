@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import {
+  mapTaskRow,
+  type TaskSnapshot,
+  type TaskSnapshotPersonaRow,
+  type TaskSnapshotRow,
+} from "@/lib/ai/agent/read-models/task-snapshot";
 import type { QueueTaskStatus } from "@/lib/ai/task-queue/task-queue";
 import {
   buildMemoryEntryPreview,
@@ -9,11 +14,8 @@ import {
   type AiAgentMemoryPersonaPreview,
 } from "@/lib/ai/agent/memory/memory-preview";
 
-type PersonaRow = {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-};
+type PersonaRow = TaskSnapshotPersonaRow;
+type TaskRow = TaskSnapshotRow;
 
 type MemoryRow = {
   id: string;
@@ -30,57 +32,7 @@ type MemoryRow = {
   updated_at: string;
 };
 
-type TaskRow = {
-  id: string;
-  persona_id: string;
-  task_type: string;
-  dispatch_kind: string;
-  source_table: string | null;
-  source_id: string | null;
-  dedupe_key: string | null;
-  cooldown_until: string | null;
-  payload: Record<string, unknown> | null;
-  status: QueueTaskStatus;
-  scheduled_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  retry_count: number;
-  max_retries: number;
-  lease_owner: string | null;
-  lease_until: string | null;
-  result_id: string | null;
-  result_type: string | null;
-  error_message: string | null;
-  created_at: string;
-};
-
-function fromTaskRow(row: TaskRow, persona: PersonaRow | null): AiAgentRecentTaskSnapshot {
-  return {
-    id: row.id,
-    personaId: row.persona_id,
-    personaUsername: persona?.username ?? null,
-    personaDisplayName: persona?.display_name ?? null,
-    taskType: row.task_type,
-    dispatchKind: row.dispatch_kind,
-    sourceTable: row.source_table,
-    sourceId: row.source_id,
-    dedupeKey: row.dedupe_key,
-    cooldownUntil: row.cooldown_until,
-    payload: row.payload ?? {},
-    status: row.status,
-    scheduledAt: row.scheduled_at,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    retryCount: row.retry_count,
-    maxRetries: row.max_retries,
-    leaseOwner: row.lease_owner,
-    leaseUntil: row.lease_until,
-    resultId: row.result_id,
-    resultType: row.result_type,
-    errorMessage: row.error_message,
-    createdAt: row.created_at,
-  };
-}
+const fromTaskRow = mapTaskRow;
 
 export class AiAgentMemoryPreviewStore {
   public async getRuntimePreviewSet(): Promise<{
@@ -155,7 +107,7 @@ export class AiAgentMemoryPreviewStore {
       entryMap.set(row.persona_id, [...(entryMap.get(row.persona_id) ?? []), next]);
     }
 
-    const tasksByPersona = new Map<string, AiAgentRecentTaskSnapshot[]>();
+    const tasksByPersona = new Map<string, TaskSnapshot[]>();
     for (const row of (tasks ?? []) as TaskRow[]) {
       const persona = personaMap.get(row.persona_id) ?? null;
       const next = fromTaskRow(row, persona);

@@ -1,68 +1,18 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import {
+  mapTaskRow,
+  type TaskSnapshot,
+  type TaskSnapshotPersonaRow,
+  type TaskSnapshotRow,
+} from "@/lib/ai/agent/read-models/task-snapshot";
 import type {
   AiAgentOperatorTaskTableResponse,
   AiAgentOperatorTaskTarget,
 } from "@/lib/ai/agent/operator-console/types";
 import { parseTextFlowFailureSummary } from "@/lib/ai/agent/execution/flows/types";
 
-type PersonaRow = {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-};
-
-type TaskRow = {
-  id: string;
-  persona_id: string;
-  task_type: string;
-  dispatch_kind: string;
-  source_table: string | null;
-  source_id: string | null;
-  dedupe_key: string | null;
-  cooldown_until: string | null;
-  payload: Record<string, unknown> | null;
-  status: AiAgentRecentTaskSnapshot["status"];
-  scheduled_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  retry_count: number;
-  max_retries: number;
-  lease_owner: string | null;
-  lease_until: string | null;
-  result_id: string | null;
-  result_type: string | null;
-  error_message: string | null;
-  created_at: string;
-};
-
-function mapTaskRow(row: TaskRow, persona: PersonaRow | null): AiAgentRecentTaskSnapshot {
-  return {
-    id: row.id,
-    personaId: row.persona_id,
-    personaUsername: persona?.username ?? null,
-    personaDisplayName: persona?.display_name ?? null,
-    taskType: row.task_type,
-    dispatchKind: row.dispatch_kind,
-    sourceTable: row.source_table,
-    sourceId: row.source_id,
-    dedupeKey: row.dedupe_key,
-    cooldownUntil: row.cooldown_until,
-    payload: row.payload ?? {},
-    status: row.status,
-    scheduledAt: row.scheduled_at,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    retryCount: row.retry_count,
-    maxRetries: row.max_retries,
-    leaseOwner: row.lease_owner,
-    leaseUntil: row.lease_until,
-    resultId: row.result_id,
-    resultType: row.result_type,
-    errorMessage: row.error_message,
-    createdAt: row.created_at,
-  };
-}
+type PersonaRow = TaskSnapshotPersonaRow;
+type TaskRow = TaskSnapshotRow;
 
 type Deps = {
   countActiveRows: (kind: "public" | "notification") => Promise<number>;
@@ -71,15 +21,13 @@ type Deps = {
     kind: "public" | "notification";
     offset: number;
     limit: number;
-  }) => Promise<AiAgentRecentTaskSnapshot[]>;
+  }) => Promise<TaskSnapshot[]>;
   loadTerminalRows: (input: {
     kind: "public" | "notification";
     offset: number;
     limit: number;
-  }) => Promise<AiAgentRecentTaskSnapshot[]>;
-  loadTargetMap: (
-    tasks: AiAgentRecentTaskSnapshot[],
-  ) => Promise<Map<string, AiAgentOperatorTaskTarget>>;
+  }) => Promise<TaskSnapshot[]>;
+  loadTargetMap: (tasks: TaskSnapshot[]) => Promise<Map<string, AiAgentOperatorTaskTarget>>;
   now: () => Date;
 };
 
@@ -151,7 +99,7 @@ export class AiAgentTaskTableReadModel {
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const offset = (page - 1) * pageSize;
 
-    let rows: AiAgentRecentTaskSnapshot[] = [];
+    let rows: TaskSnapshot[] = [];
     if (offset < activeCount) {
       const activeRows = await this.deps.loadActiveRows({
         kind: input.kind,
@@ -217,7 +165,7 @@ export class AiAgentTaskTableReadModel {
     offset: number;
     limit: number;
     orderColumn: "scheduled_at" | "completed_at";
-  }): Promise<AiAgentRecentTaskSnapshot[]> {
+  }): Promise<TaskSnapshot[]> {
     if (input.limit <= 0) {
       return [];
     }
@@ -258,7 +206,7 @@ export class AiAgentTaskTableReadModel {
   }
 
   private async readTargetMap(
-    tasks: AiAgentRecentTaskSnapshot[],
+    tasks: TaskSnapshot[],
   ): Promise<Map<string, AiAgentOperatorTaskTarget>> {
     const supabase = createAdminClient();
     const resultPosts = tasks

@@ -1,6 +1,5 @@
-import { isAdmin } from "@/lib/admin";
 import { AiAgentOpportunityPipelineService } from "@/lib/ai/agent/intake/opportunity-pipeline-service";
-import { withAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
+import { withAdminAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
 
 type Body = {
   opportunityIds?: string[];
@@ -8,11 +7,7 @@ type Body = {
   batchSize?: number;
 };
 
-export const POST = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth(async (req, { user }) => {
   const bodyResult = await parseJsonBody<Body>(req);
   if (bodyResult instanceof Response) {
     return bodyResult;

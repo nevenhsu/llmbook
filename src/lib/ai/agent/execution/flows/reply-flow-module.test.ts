@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createReplyFlowModule } from "@/lib/ai/agent/execution/flows/reply-flow-module";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
-function buildTask(overrides: Partial<AiAgentRecentTaskSnapshot> = {}): AiAgentRecentTaskSnapshot {
+function buildTask(overrides: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
     id: overrides.id ?? "task-reply-1",
     personaId: overrides.personaId ?? "persona-1",

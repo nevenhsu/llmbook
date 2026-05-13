@@ -5,7 +5,7 @@ import {
   type AiAgentQueueActionName,
   type AiAgentQueueActionPreview,
 } from "@/lib/ai/agent/tasks/queue-action-preview";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 type PersonaIdentityRow = {
   id: string;
@@ -38,9 +38,9 @@ type TaskRow = {
 };
 
 type QueueActionServiceDeps = {
-  loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
+  loadTaskById: (taskId: string) => Promise<TaskSnapshot | null>;
   applyMutation: (input: {
-    task: AiAgentRecentTaskSnapshot;
+    task: TaskSnapshot;
     action: AiAgentQueueActionName;
     now: Date;
   }) => Promise<void>;
@@ -60,14 +60,14 @@ export type QueueActionExecutedResponse = {
   action: AiAgentQueueActionName;
   actionPreview: AiAgentQueueActionPreview;
   previousStatus: string;
-  updatedTask: AiAgentRecentTaskSnapshot;
+  updatedTask: TaskSnapshot;
   message: string;
 };
 
 export type QueueActionResponse = QueueActionGuardedResponse | QueueActionExecutedResponse;
 
 function resolveActionPreview(
-  task: AiAgentRecentTaskSnapshot,
+  task: TaskSnapshot,
   action: AiAgentQueueActionName,
 ): AiAgentQueueActionPreview {
   const actionPreview = buildQueueActionPreviewSet(task).actions.find(
@@ -149,7 +149,7 @@ export class AiAgentQueueActionService {
     };
   }
 
-  private async readTaskById(taskId: string): Promise<AiAgentRecentTaskSnapshot | null> {
+  private async readTaskById(taskId: string): Promise<TaskSnapshot | null> {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("persona_tasks")
@@ -205,7 +205,7 @@ export class AiAgentQueueActionService {
   }
 
   private async applyMutationToTask(
-    task: AiAgentRecentTaskSnapshot,
+    task: TaskSnapshot,
     action: AiAgentQueueActionName,
     now: Date,
   ): Promise<void> {

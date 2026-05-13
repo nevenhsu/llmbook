@@ -1,12 +1,7 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import { AiAgentMediaAdminService } from "@/lib/ai/agent/execution/media-admin-service";
 
-export const GET = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const GET = withAdminAuth(async (req, { user }) => {
   const url = new URL(req.url);
   const limitParam = url.searchParams.get("limit");
   const statusParam = url.searchParams.get("status");

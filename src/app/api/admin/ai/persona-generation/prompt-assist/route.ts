@@ -1,13 +1,8 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import { AdminAiControlPlaneStore, PromptAssistError } from "@/lib/ai/admin/control-plane-store";
 import { NextResponse } from "next/server";
 
-export const POST = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth(async (req, { user }) => {
   let body: unknown;
   try {
     body = await req.json();

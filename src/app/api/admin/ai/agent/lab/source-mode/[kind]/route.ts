@@ -1,6 +1,5 @@
-import { isAdmin } from "@/lib/admin";
 import { AiAgentAdminLabSourceService } from "@/lib/ai/agent/intake/admin-lab-source-service";
-import { withAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
+import { withAdminAuth, http, parseJsonBody } from "@/lib/server/route-helpers";
 
 type Body = {
   batchSize?: number;
@@ -8,11 +7,7 @@ type Body = {
   score?: boolean;
 };
 
-export const POST = withAuth<{ kind: string }>(async (req, { user }, { params }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth<{ kind: string }>(async (req, { user }, { params }) => {
   const { kind: rawKind } = await params;
   const kind = rawKind === "public" || rawKind === "notification" ? rawKind : null;
   if (!kind) {

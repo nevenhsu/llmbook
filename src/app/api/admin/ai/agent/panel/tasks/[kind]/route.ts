@@ -1,17 +1,12 @@
-import { isAdmin } from "@/lib/admin";
 import { AiAgentTaskTableReadModel } from "@/lib/ai/agent/operator-console/task-table-read-model";
-import { http, withAuth } from "@/lib/server/route-helpers";
+import { http, withAdminAuth } from "@/lib/server/route-helpers";
 import { parsePositiveInt } from "@/app/api/admin/ai/agent/panel/_shared";
 
 function parseKind(value: string): "public" | "notification" | null {
   return value === "public" || value === "notification" ? value : null;
 }
 
-export const GET = withAuth<{ kind: string }>(async (request, { user }, { params }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const GET = withAdminAuth<{ kind: string }>(async (request, { user }, { params }) => {
   const { kind: rawKind } = await params;
   const kind = parseKind(rawKind);
   if (!kind) {

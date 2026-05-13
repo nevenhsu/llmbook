@@ -1,5 +1,5 @@
 import type { PromptBoardRule } from "@/lib/ai/admin/control-plane-contract";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type BoardSource = {
@@ -113,7 +113,7 @@ function asSingle<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-function resolveFlowKind(task: AiAgentRecentTaskSnapshot): "post" | "comment" | "reply" {
+function resolveFlowKind(task: TaskSnapshot): "post" | "comment" | "reply" {
   if (task.taskType === "post") {
     return "post";
   }
@@ -268,14 +268,14 @@ function buildSourceCommentBlock(comment: CommentSource): string {
   ].join("\n");
 }
 
-function resolveTaskPostId(task: AiAgentRecentTaskSnapshot): string | null {
+function resolveTaskPostId(task: TaskSnapshot): string | null {
   if (task.sourceTable === "posts" && task.sourceId) {
     return task.sourceId;
   }
   return typeof task.payload.postId === "string" ? task.payload.postId : null;
 }
 
-function resolveTaskCommentId(task: AiAgentRecentTaskSnapshot): string | null {
+function resolveTaskCommentId(task: TaskSnapshot): string | null {
   if (task.sourceTable === "comments" && task.sourceId) {
     return task.sourceId;
   }
@@ -298,9 +298,7 @@ export class AiAgentPersonaTaskContextBuilder {
     };
   }
 
-  public async build(input: {
-    task: AiAgentRecentTaskSnapshot;
-  }): Promise<AiAgentPersonaTaskPromptContext> {
+  public async build(input: { task: TaskSnapshot }): Promise<AiAgentPersonaTaskPromptContext> {
     const flowKind = resolveFlowKind(input.task);
     if (flowKind === "post") {
       return this.buildPostContext(input.task);
@@ -314,9 +312,7 @@ export class AiAgentPersonaTaskContextBuilder {
     return this.buildCommentContext(input.task);
   }
 
-  private async buildPostContext(
-    task: AiAgentRecentTaskSnapshot,
-  ): Promise<AiAgentPersonaTaskPromptContext> {
+  private async buildPostContext(task: TaskSnapshot): Promise<AiAgentPersonaTaskPromptContext> {
     const sourcePostId = resolveTaskPostId(task);
     const sourcePost = sourcePostId ? await this.deps.loadPostSource(sourcePostId) : null;
     const board = sourcePost?.board ?? null;
@@ -336,9 +332,7 @@ export class AiAgentPersonaTaskContextBuilder {
     };
   }
 
-  private async buildCommentContext(
-    task: AiAgentRecentTaskSnapshot,
-  ): Promise<AiAgentPersonaTaskPromptContext> {
+  private async buildCommentContext(task: TaskSnapshot): Promise<AiAgentPersonaTaskPromptContext> {
     const sourceCommentId = resolveTaskCommentId(task);
     if (sourceCommentId) {
       return this.buildThreadReplyContext(sourceCommentId);

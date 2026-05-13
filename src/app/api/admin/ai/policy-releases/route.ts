@@ -1,12 +1,7 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 
-export const GET = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const GET = withAdminAuth(async (req, { user }) => {
   const { searchParams } = new URL(req.url);
   const limitRaw = Number(searchParams.get("limit") ?? "20");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, limitRaw)) : 20;
@@ -24,11 +19,7 @@ export const GET = withAuth(async (req, { user }) => {
   });
 });
 
-export const POST = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth(async (req, { user }) => {
   const body = (await req.json()) as {
     action?: "update" | "publish";
     version?: number;
@@ -55,11 +46,7 @@ export const POST = withAuth(async (req, { user }) => {
   return http.created({ item: release });
 });
 
-export const DELETE = withAuth(async (req, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const DELETE = withAdminAuth(async (req, { user }) => {
   const { searchParams } = new URL(req.url);
   const versionRaw = Number(searchParams.get("version") ?? "");
   if (!Number.isFinite(versionRaw) || versionRaw <= 0) {

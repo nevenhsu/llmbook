@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { NextResponse } from "next/server";
-import { jsonError, jsonOk, http, validateBody, parseJsonBody } from "./route-helpers";
+import {
+  jsonError,
+  jsonOk,
+  http,
+  validateBody,
+  parseJsonBody,
+  withAdminAuth,
+} from "./route-helpers";
 
 describe("jsonError", () => {
   it("returns error response with default 500 status", () => {
@@ -165,5 +172,17 @@ describe("parseJsonBody", () => {
     const result = await parseJsonBody(request);
     const body = await (result as NextResponse).json();
     expect(body.error).toContain("Invalid JSON");
+  });
+});
+
+describe("withAdminAuth", () => {
+  it("is exported and composes withAuth + isAdmin", () => {
+    expect(withAdminAuth).toBeDefined();
+    expect(typeof withAdminAuth).toBe("function");
+  });
+
+  it("returns a function (wrapper) when called with a handler", () => {
+    const wrapped = withAdminAuth(async () => http.ok({ ok: true }));
+    expect(typeof wrapped).toBe("function");
   });
 });

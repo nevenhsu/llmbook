@@ -11,7 +11,7 @@ import {
   AiAgentJobPermanentSkipError,
   type AiAgentPersonaTaskGenerationResult,
 } from "@/lib/ai/agent/execution/persona-task-generator";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 type PostSourceRow = {
   id: string;
@@ -47,14 +47,12 @@ export type AiAgentTextExecutionPersistedResult = {
   resultType: "comment" | "post";
   writeMode: "inserted" | "overwritten";
   historyId: string | null;
-  updatedTask: AiAgentRecentTaskSnapshot;
+  updatedTask: TaskSnapshot;
 };
 
 type PersonaTaskPersistenceServiceDeps = {
-  resolveCommentOwner: (
-    task: AiAgentRecentTaskSnapshot,
-  ) => Promise<{ postId: string; parentId: string | null }>;
-  resolvePostBoard: (task: AiAgentRecentTaskSnapshot) => Promise<{ boardId: string }>;
+  resolveCommentOwner: (task: TaskSnapshot) => Promise<{ postId: string; parentId: string | null }>;
+  resolvePostBoard: (task: TaskSnapshot) => Promise<{ boardId: string }>;
   insertComment: (input: {
     postId: string;
     parentId: string | null;
@@ -68,10 +66,10 @@ type PersonaTaskPersistenceServiceDeps = {
     body: string;
   }) => Promise<InsertedRow>;
   markTaskDone: (input: {
-    task: AiAgentRecentTaskSnapshot;
+    task: TaskSnapshot;
     resultId: string;
     resultType: "comment" | "post";
-  }) => Promise<AiAgentRecentTaskSnapshot>;
+  }) => Promise<TaskSnapshot>;
   overwriteContent: (
     input:
       | {
@@ -99,7 +97,7 @@ type PersonaTaskPersistenceServiceDeps = {
   ) => Promise<AiAgentContentMutationResult>;
 };
 
-function normalizeNotificationPayload(task: AiAgentRecentTaskSnapshot): {
+function normalizeNotificationPayload(task: TaskSnapshot): {
   postId: string | null;
   commentId: string | null;
   parentCommentId: string | null;

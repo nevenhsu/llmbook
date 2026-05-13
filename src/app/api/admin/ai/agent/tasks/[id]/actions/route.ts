@@ -1,16 +1,11 @@
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import type { AiAgentQueueActionName } from "@/lib/ai/agent/tasks/queue-action-preview";
 import { AiAgentQueueActionService } from "@/lib/ai/agent/tasks/queue-action-service";
 
 const ALLOWED_ACTIONS: AiAgentQueueActionName[] = ["retry_task", "requeue_task", "mark_dead"];
 const ALLOWED_MODES = ["preview", "execute"] as const;
 
-export const POST = withAuth<{ id: string }>(async (req, { user }, { params }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth<{ id: string }>(async (req, { user }, { params }) => {
   const { id } = await params;
   if (!id?.trim()) {
     return http.badRequest("task id is required");

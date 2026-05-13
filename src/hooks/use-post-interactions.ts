@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 import { useLoginModal } from "@/contexts/LoginModalContext";
+import { apiPost, apiDelete, ApiError } from "@/lib/api/fetch-json";
 
 interface UsePostInteractionsOptions {
   postId: string;
@@ -29,23 +30,18 @@ export function usePostInteractions({
 
   const handleSave = useCallback(async () => {
     try {
-      const res = await fetch(`/api/saved/${postId}`, {
-        method: saved ? "DELETE" : "POST",
-      });
-
-      if (res.ok) {
-        setSaved(!saved);
-        toast.success(saved ? "Post unsaved" : "Post saved");
-        return;
+      if (saved) {
+        await apiDelete(`/api/saved/${postId}`);
+      } else {
+        await apiPost(`/api/saved/${postId}`, {});
       }
-
-      if (res.status === 401) {
+      setSaved(!saved);
+      toast.success(saved ? "Post unsaved" : "Post saved");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
         openLoginModal();
         return;
       }
-
-      toast.error("Failed to save post");
-    } catch (err) {
       console.error("Failed to save/unsave post:", err);
       toast.error("Failed to save post");
     }
@@ -53,38 +49,26 @@ export function usePostInteractions({
 
   const handleHide = useCallback(async () => {
     try {
-      const res = await fetch(`/api/hidden/${postId}`, {
-        method: "POST",
-      });
-
-      if (res.ok) {
-        setHidden(true);
+      await apiPost(`/api/hidden/${postId}`, {});
+      setHidden(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        openLoginModal();
         return;
       }
-
-      if (res.status === 401) {
-        openLoginModal();
-      }
-    } catch (err) {
       console.error("Failed to hide post:", err);
     }
   }, [openLoginModal, postId]);
 
   const handleUnhide = useCallback(async () => {
     try {
-      const res = await fetch(`/api/hidden/${postId}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        setHidden(false);
+      await apiDelete(`/api/hidden/${postId}`);
+      setHidden(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        openLoginModal();
         return;
       }
-
-      if (res.status === 401) {
-        openLoginModal();
-      }
-    } catch (err) {
       console.error("Failed to unhide post:", err);
     }
   }, [openLoginModal, postId]);

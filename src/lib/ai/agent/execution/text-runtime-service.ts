@@ -7,12 +7,12 @@ import {
   AiAgentPersonaTaskExecutor,
   type AiAgentTextExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/persona-task-executor";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 type TextRuntimeServiceDeps = {
-  loadTaskById: (taskId: string) => Promise<AiAgentRecentTaskSnapshot | null>;
+  loadTaskById: (taskId: string) => Promise<TaskSnapshot | null>;
   executePersistedTask: (input: {
-    task: AiAgentRecentTaskSnapshot;
+    task: TaskSnapshot;
     sourceRuntime: string;
   }) => Promise<AiAgentTextExecutionPersistedResult>;
 };
@@ -78,7 +78,7 @@ export class AiAgentTextRuntimeService {
     });
   }
 
-  private async requireRunnableTask(taskId: string): Promise<AiAgentRecentTaskSnapshot> {
+  private async requireRunnableTask(taskId: string): Promise<TaskSnapshot> {
     const task = await this.deps.loadTaskById(taskId);
     if (!task) {
       throw new Error("task not found");

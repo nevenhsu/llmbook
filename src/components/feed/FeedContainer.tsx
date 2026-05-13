@@ -6,6 +6,7 @@ import PostRow from "@/components/post/PostRow";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useFeedLoader } from "@/hooks/use-feed-loader";
 import type { FeedPost } from "@/lib/posts/query-builder";
+import { apiFetchJson } from "@/lib/api/fetch-json";
 
 import {
   buildPostsQueryParams,
@@ -53,9 +54,7 @@ export default function FeedContainer({
         ...(paginationMode === "cursor" && cursor ? { cursor } : { offset }),
       });
 
-      const res = await fetch(`/api/posts?${params}`);
-      if (!res.ok) throw new Error("Failed to load posts");
-      return res.json() as Promise<PaginatedResponse<FeedPost>>;
+      return apiFetchJson<PaginatedResponse<FeedPost>>(`/api/posts?${params}`);
     },
     [boardSlug, canViewArchived, effectiveSortBy, effectiveTimeRange, paginationMode, tagSlug],
   );

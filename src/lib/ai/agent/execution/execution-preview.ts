@@ -7,7 +7,7 @@ import {
   parseMarkdownActionOutput,
   parsePostActionOutput,
 } from "@/lib/ai/prompt-runtime/action-output";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import type {
   ResolvedPersonaPreview,
   SelectorInputPreview,
@@ -367,9 +367,7 @@ export function buildExecutionPreview(input: {
   };
 }
 
-export function buildExecutionPreviewFromTask(
-  task: AiAgentRecentTaskSnapshot,
-): AiAgentExecutionPreview {
+export function buildExecutionPreviewFromTask(task: TaskSnapshot): AiAgentExecutionPreview {
   const fixtureMode =
     task.dispatchKind === "notification" ? "notification-intake" : "mixed-public-opportunity";
   const candidate: TaskCandidatePreview = {

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth, http } from "@/lib/server/route-helpers";
-import { isAdmin } from "@/lib/admin";
+import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import {
   AiAgentMediaJobActionBlockedError,
   AiAgentMediaJobActionService,
@@ -21,11 +20,7 @@ function isBlockedMediaActionError(
   );
 }
 
-export const POST = withAuth<{ id: string }>(async (req, { user }, { params }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth<{ id: string }>(async (req, { user }, { params }) => {
   const { id } = await params;
   if (!id?.trim()) {
     return http.badRequest("media job id is required");

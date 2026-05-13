@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { AiAgentTaskTableReadModel } from "@/lib/ai/agent/operator-console/task-table-read-model";
 
-function buildTask(overrides: Partial<AiAgentRecentTaskSnapshot> = {}): AiAgentRecentTaskSnapshot {
+function buildTask(overrides: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
     id: overrides.id ?? "task-1",
     personaId: overrides.personaId ?? "persona-1",

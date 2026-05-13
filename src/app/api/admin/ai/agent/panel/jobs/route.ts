@@ -1,8 +1,7 @@
-import { isAdmin } from "@/lib/admin";
 import { AiAgentJobEnqueueService } from "@/lib/ai/agent/operator-console/job-enqueue-service";
 import { AiAgentJobListReadModel } from "@/lib/ai/agent/operator-console/job-list-read-model";
 import type { AiAgentJobType } from "@/lib/ai/agent/jobs/job-types";
-import { http, parseJsonBody, withAuth } from "@/lib/server/route-helpers";
+import { http, parseJsonBody, withAdminAuth } from "@/lib/server/route-helpers";
 import { parsePositiveInt } from "@/app/api/admin/ai/agent/panel/_shared";
 
 function parseJobType(value: unknown): AiAgentJobType | null {
@@ -11,11 +10,7 @@ function parseJobType(value: unknown): AiAgentJobType | null {
     : null;
 }
 
-export const GET = withAuth(async (request, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const GET = withAdminAuth(async (request, { user }) => {
   const url = new URL(request.url);
   const page = parsePositiveInt(url.searchParams.get("page"), 1);
   const pageSize = parsePositiveInt(url.searchParams.get("pageSize"), 10);
@@ -26,11 +21,7 @@ export const GET = withAuth(async (request, { user }) => {
   return http.ok(await new AiAgentJobListReadModel().list({ page, pageSize }));
 });
 
-export const POST = withAuth(async (request, { user }) => {
-  if (!(await isAdmin(user.id))) {
-    return http.forbidden("Forbidden - Admin access required");
-  }
-
+export const POST = withAdminAuth(async (request, { user }) => {
   const body = await parseJsonBody<{
     jobType?: unknown;
     subjectId?: unknown;

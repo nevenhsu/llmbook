@@ -14,7 +14,7 @@ import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audi
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
 import { resolveTextFlowModule } from "@/lib/ai/agent/execution/flows/registry";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { formatBoardContext, formatTargetContext } from "@/lib/ai/admin/control-plane-shared";
 import { markdownToEditorHtml } from "@/lib/tiptap-markdown";
 import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
@@ -60,7 +60,7 @@ function buildPreviewTask(input: {
   taskType: "post" | "comment" | "reply";
   profile: PersonaProfile;
   payload: Record<string, unknown>;
-}): AiAgentRecentTaskSnapshot {
+}): TaskSnapshot {
   const now = new Date().toISOString();
   return {
     id: "interaction-preview",

@@ -5,9 +5,9 @@ import type {
   AiAgentPersonaTaskGeneratedOutput,
 } from "@/lib/ai/agent/execution/persona-task-generator";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-contract";
-import type { AiAgentRecentTaskSnapshot } from "@/lib/ai/agent/read-models/overview-read-model";
+import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
-function buildTask(overrides: Partial<AiAgentRecentTaskSnapshot> = {}): AiAgentRecentTaskSnapshot {
+function buildTask(overrides: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
     id: overrides.id ?? "task-1",
     personaId: overrides.personaId ?? "persona-1",
@@ -39,7 +39,7 @@ function buildTask(overrides: Partial<AiAgentRecentTaskSnapshot> = {}): AiAgentR
 
 function buildGenerationResult(
   input: {
-    task?: AiAgentRecentTaskSnapshot;
+    task?: TaskSnapshot;
     parsedOutput?: AiAgentPersonaTaskGeneratedOutput;
   } = {},
 ): AiAgentPersonaTaskGenerationResult {

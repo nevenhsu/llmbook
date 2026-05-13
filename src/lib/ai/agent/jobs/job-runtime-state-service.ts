@@ -1,6 +1,7 @@
 import { privateEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AiAgentJobRuntimeStateSnapshot } from "@/lib/ai/agent/jobs/job-types";
+import { buildLeaseSnapshot } from "@/lib/ai/agent/runtime-lease";
 
 type JobRuntimeStateRow = {
   runtime_key: string;
@@ -54,8 +55,12 @@ function buildSnapshot(
     };
   }
 
-  const leaseActive =
-    row.lease_until !== null && new Date(row.lease_until).getTime() > now.getTime();
+  const leaseCoreRow = {
+    paused: row.paused,
+    leaseOwner: row.lease_owner,
+    leaseUntil: row.lease_until,
+  };
+  const leaseSnapshot = buildLeaseSnapshot(leaseCoreRow, now);
 
   if (row.paused) {
     return {
@@ -72,7 +77,7 @@ function buildSnapshot(
     };
   }
 
-  if (leaseActive) {
+  if (!leaseSnapshot.available) {
     return {
       runtimeKey: row.runtime_key,
       paused: false,
