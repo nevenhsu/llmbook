@@ -1,0 +1,6 @@
+minimumReleaseAge: 1440 # 1 day
+
+allowBuilds:
+  "@parcel/watcher": true
+  sharp: true
+  unrs-resolver: true

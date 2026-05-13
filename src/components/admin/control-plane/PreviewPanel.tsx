@@ -14,6 +14,47 @@ export interface PreviewPanelProps {
   emptyLabel: string;
 }
 
+function formatStageName(name: string): string {
+  return name
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function PreBlock({ label, content }: { label?: string; content: string }) {
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Copied");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
+  return (
+    <div>
+      {label && (
+        <div className="mb-1 text-xs font-semibold tracking-[0.16em] uppercase opacity-50">
+          {label}
+        </div>
+      )}
+      <div className="relative">
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs btn-square absolute top-2 right-2 z-10"
+          aria-label="Copy"
+          onClick={() => void copyToClipboard()}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+        <pre className="bg-base-200 max-h-64 overflow-auto rounded p-3 pr-10 text-xs whitespace-pre-wrap">
+          {content}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 function buildRawResponseFromDebug(preview: PreviewResult): string {
   const records = preview.stageDebugRecords;
   if (!records || records.length === 0) {
@@ -215,9 +256,23 @@ export function PreviewPanel({ preview, emptyLabel }: PreviewPanelProps) {
         <details className="collapse-arrow border-base-300 collapse rounded-lg border">
           <summary className="collapse-title text-sm font-semibold">Raw Response</summary>
           <div className="collapse-content">
-            <pre className="bg-base-200 max-h-64 overflow-auto rounded p-3 text-xs whitespace-pre-wrap">
-              {rawResponse}
-            </pre>
+            {preview.stageDebugRecords && preview.stageDebugRecords.length > 1 ? (
+              <div className="space-y-4">
+                {preview.stageDebugRecords.map((record) => {
+                  const latestAttempt = record.attempts[record.attempts.length - 1];
+                  const text = latestAttempt?.text ?? "(no response)";
+                  return (
+                    <PreBlock
+                      key={record.name}
+                      label={formatStageName(record.name)}
+                      content={text}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <PreBlock content={rawResponse} />
+            )}
           </div>
         </details>
 

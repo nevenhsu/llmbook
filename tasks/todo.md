@@ -2,26 +2,23 @@
 
 ## Active
 
-- [x] Reproduce the staged `post_frame` failures from commit `82cb32a6a7274c52d972f` with focused tests.
-- [x] Fix the real `post_frame` runtime boundary, prompt/schema drift, and touched test baseline according to `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`.
-- [x] Fix the pre-existing `persona-runtime-packets.test.ts` warning failure around `reference_names`.
-- [x] Run focused verification and record the implementation review note.
+- [x] Inspect the existing `/admin/ai/control-plane` prompt-assist reference-name flow and the current `/admin/ai/persona-batch` contract/UI gaps.
+- [x] Write the new batch-reference-names implementation plan in `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md`.
+- [x] Record the doc-only review note and keep the tracker aligned with this planning task.
 
 ## Current References
 
 - LLM JSON contract: `docs/dev-guidelines/08-llm-json-stage-contract.md`
-- Target plan: `plans/persona-v2/2026-05-12-post-frame-deepseek-diff-improvement-plan.md`
-- Staged commit: `82cb32a6a7274c52d972f`
-- Post flow runtime: `src/lib/ai/agent/execution/flows/post-flow-module.ts`
-- Flow types: `src/lib/ai/agent/execution/flows/types.ts`
-- Prompt/schema contract: `src/lib/ai/prompt-runtime/persona-v2-flow-contracts.ts`
-- Prompt packet normalization: `src/lib/ai/prompt-runtime/persona-runtime-packets.ts`
-- Focused tests: `src/lib/ai/agent/execution/flows/post-flow-module.test.ts`
-- Focused tests: `src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts`
-- Focused tests: `src/lib/ai/prompt-runtime/persona-runtime-packets.test.ts`
+- Target plan: `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md`
+- Control-plane reference path: `src/hooks/admin/useAiControlPlane.ts`
+- Batch hook: `src/hooks/admin/usePersonaBatchGeneration.ts`
+- Batch row contract: `src/lib/ai/admin/persona-batch-contract.ts`
+- Batch toolbar: `src/components/admin/persona-batch/PersonaBatchToolbar.tsx`
+- Batch table: `src/components/admin/persona-batch/PersonaBatchTable.tsx`
 
 ## Review
 
+- **2026-05-12:** Wrote `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md` for `/admin/ai/persona-batch` reference-name support. The plan keeps the existing batch architecture intact but brings prompt-assist behavior to parity with the control-plane `Generate Persona` card: batch rows gain a dedicated editable `referenceNames` field, prompt assist stores both cleaned prompt text and returned reference names, generate preview starts sending `referenceNames`, the table gains a visible reference-names surface, and the toolbar action is renamed from `Add` to `Add Reference`. Verification for this doc-only planning task was limited to focused code inspection of the control-plane prompt-assist path, the current batch hook/contract/components, related tests, and diff review of the new plan plus tracker.
 - **2026-05-12:** Inspected the staged DeepSeek `post_frame` work at `82cb32a6a7274c52d972f`, kept the already-landed frame/schema changes, and tightened the remaining failure boundary plus regression coverage. The main runtime fix was to classify schema-gate / schema-validation wording explicitly as `schema_validation` in `post-flow-module.ts`, which closes a hole where `post_frame` schema failures could be reported as `deterministic_gate` depending on the thrown message. I also added a focused regression in `post-flow-module.test.ts` for that case and a closest-seam `persona-interaction-stage-service.test.ts` regression proving `post_frame` story-mode prompts use the active V2 `PostFrameSchema` path. Separately, I fixed the pre-existing `persona-runtime-packets.test.ts` failure by making the test fixture a fully valid v2 object again (`identity.display_name`, `identity.bio`, `originalization_note`), so `normalizePersonaCoreV2()` no longer emits expected-missing-field warnings for the “valid v2” case. Verification: `npx vitest run src/lib/ai/agent/execution/flows/post-flow-module.test.ts src/lib/ai/agent/execution/persona-interaction-stage-service.test.ts src/lib/ai/prompt-runtime/persona-runtime-packets.test.ts src/lib/ai/prompt-runtime/persona-v2-flow-contracts.test.ts` passed with 99 tests; `npx vitest run src/lib/ai/prompt-runtime/persona-v2-prompt-family.test.ts` passed with 34 tests; `git diff --check` on the touched files passed.
 - **2026-05-12:** Reconciled the old `docs/ai-agent/llm-flows` references to the newer Persona v2 plan set. The active docs now describe the V2-only prompt builder/block order, the first-class `post_frame` stage with the compact shared field set, content-mode-aware preview/runtime threading, structured interaction-context assist handoff, and per-stage preview output expectations. I also removed stale current-reference language that still framed persona interaction around the legacy prompt shell or public audit-stage doctrine. Verification for this docs-only pass was limited to focused grep checks for stale terms plus diff review of the touched docs and tracker.
 - **2026-05-12:** Refined the `post_frame` review plan after follow-up design discussion. The improvement plan now treats requested `contentMode` and locked title as code-owned frame context rather than model-authored fields, so the fix path is to remove them from `PostFrameSchema`/prompt output and thread them through code instead of validating LLM echoes. The plan still keeps the other findings intact: story mode must reach the real stage boundary, singular `required_detail` must be corrected to `required_details`, and the touched focused suite still needs rebaselining. Verification for this doc-only correction was limited to plan diff review and consistency checks.

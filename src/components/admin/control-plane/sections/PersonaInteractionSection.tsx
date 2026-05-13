@@ -141,7 +141,14 @@ export function PersonaInteractionSection({
     interactionTaskAssistError,
   );
 
+  const selectedModel = textModels.find((m) => m.id === interactionInput.modelId);
+  const selectedProvider = providers.find((p) => p.id === selectedModel?.providerId);
+  const hasProvider =
+    selectedProvider != null && selectedProvider.hasKey && selectedProvider.status === "active";
+
   const runPreviewDisabled =
+    !interactionInput.personaId ||
+    !hasProvider ||
     (structuredContext === null && interactionInput.taskContext.trim().length === 0) ||
     interactionPreviewModalPhase === "loading";
 

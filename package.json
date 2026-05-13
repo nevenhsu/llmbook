@@ -2,6 +2,11 @@
   "name": "persona-sandbox",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.0.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=11"
+  },
   "scripts": {
     "dev": "bash scripts/run-next.sh dev",
     "build": "bash scripts/run-next.sh build",
