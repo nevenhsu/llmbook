@@ -187,7 +187,7 @@ export function PersonaStructuredPreview({ structured }: Props) {
         )}
       </div>
 
-      <RefSourcesSection structured={structured} />
+      <ReferencesSection structured={structured} />
 
       <div className="collapse-arrow bg-base-100 border-base-300/70 collapse relative rounded-xl border">
         <input type="checkbox" />
@@ -282,7 +282,6 @@ function V2CoreSections({ personaCore }: { personaCore: Record<string, unknown> 
   const voice = asRecord(personaCore.voice);
   const forum = asRecord(personaCore.forum);
   const narrative = asRecord(personaCore.narrative);
-  const refStyle = asRecord(personaCore.reference_style);
   const antiGeneric = asRecord(personaCore.anti_generic);
   const forumLengths = asRecord(forum.typical_lengths);
 
@@ -370,14 +369,6 @@ function V2CoreSections({ personaCore }: { personaCore: Record<string, unknown> 
         {renderTagList("Scene Detail Biases", asStringArray(narrative.scene_detail_biases))}
         {renderTagList("Ending Preferences", asStringArray(narrative.ending_preferences))}
         {renderTagList("Avoid Story Shapes", asStringArray(narrative.avoid_story_shapes))}
-      </SectionCard>
-
-      <SectionCard
-        title="Reference Style"
-        description="Reference names and abstract traits (non-imitation)."
-      >
-        {renderTagList("Reference Names", asStringArray(refStyle.reference_names))}
-        {renderTagList("Abstract Traits", asStringArray(refStyle.abstract_traits))}
       </SectionCard>
 
       <SectionCard title="Anti-Generic" description="Patterns to avoid and failure mode.">
@@ -551,42 +542,45 @@ function V1CoreSections({ personaCore }: { personaCore: Record<string, unknown> 
   );
 }
 
-function RefSourcesSection({ structured }: { structured: PersonaGenerationStructured }) {
+function ReferencesSection({ structured }: { structured: PersonaGenerationStructured }) {
   return (
-    <>
-      <SectionCard
-        title={`Reference Sources (${structured.reference_sources.length})`}
-        description="Named influences with the specific contribution each one adds."
-      >
-        <div className="space-y-3">
-          {structured.reference_sources.map((source) => (
-            <div key={`${source.type}-${source.name}`} className="bg-base-200/50 rounded-xl p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="font-medium">{source.name}</div>
-                <span className="badge badge-outline border-base-300/70 text-[11px]">
-                  {source.type}
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <ul className="w-full space-y-2">
-                  {source.contribution.map((item) => (
-                    <li key={`${source.name}-${item}`} className="text-sm leading-6 opacity-85">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+    <SectionCard
+      title="References"
+      description="Named references, abstract traits, derivation, and how they shaped this persona."
+    >
+      <div className="space-y-5">
+        {structured.reference_sources.length > 0 ? (
+          <div className="space-y-3">
+            <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
+              Reference Sources ({structured.reference_sources.length})
             </div>
-          ))}
-        </div>
-      </SectionCard>
+            {structured.reference_sources.map((source) => (
+              <div key={`${source.type}-${source.name}`} className="bg-base-200/50 rounded-xl p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="font-medium">{source.name}</div>
+                  <span className="badge badge-outline border-base-300/70 text-[11px]">
+                    {source.type}
+                  </span>
+                </div>
+                {source.contribution.length > 0 ? (
+                  <ul className="mt-3 w-full space-y-2">
+                    {source.contribution.map((item) => (
+                      <li key={`${source.name}-${item}`} className="text-sm leading-6 opacity-85">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-      <SectionCard
-        title={`Other Reference Sources (${structured.other_reference_sources.length})`}
-        description="Non-personality references such as works, concepts, methods, or principles."
-      >
         {structured.other_reference_sources.length > 0 ? (
           <div className="space-y-3">
+            <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
+              Other Reference Sources ({structured.other_reference_sources.length})
+            </div>
             {structured.other_reference_sources.map((source) => (
               <div key={`${source.type}-${source.name}`} className="bg-base-200/50 rounded-xl p-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -595,41 +589,42 @@ function RefSourcesSection({ structured }: { structured: PersonaGenerationStruct
                     {source.type}
                   </span>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <ul className="w-full space-y-2">
+                {source.contribution.length > 0 ? (
+                  <ul className="mt-3 w-full space-y-2">
                     {source.contribution.map((item) => (
                       <li key={`${source.name}-${item}`} className="text-sm leading-6 opacity-85">
                         {item}
                       </li>
                     ))}
                   </ul>
-                </div>
+                ) : null}
               </div>
             ))}
           </div>
-        ) : (
-          <div className="text-sm opacity-60">No additional non-personality references.</div>
-        )}
-      </SectionCard>
+        ) : null}
 
-      <SectionCard
-        title="Reference Derivation"
-        description="How the named references were transformed into this persona."
-      >
-        <div className="space-y-2">
-          {structured.reference_derivation.map((item, index) => (
-            <div key={`${index}-${item}`} className="bg-base-200/50 rounded-lg px-3 py-2 text-sm">
-              {item}
+        {structured.reference_derivation.length > 0 ? (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
+              Reference Derivation
             </div>
-          ))}
-        </div>
-        <div className="space-y-2 pt-2">
-          <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
-            Originalization Note
+            {structured.reference_derivation.map((item, index) => (
+              <div key={`${index}-${item}`} className="bg-base-200/50 rounded-lg px-3 py-2 text-sm">
+                {item}
+              </div>
+            ))}
           </div>
-          <p className="text-sm leading-6">{structured.originalization_note}</p>
-        </div>
-      </SectionCard>
-    </>
+        ) : null}
+
+        {structured.originalization_note ? (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold tracking-wide uppercase opacity-55">
+              Originalization Note
+            </div>
+            <p className="text-sm leading-6">{structured.originalization_note}</p>
+          </div>
+        ) : null}
+      </div>
+    </SectionCard>
   );
 }

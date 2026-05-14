@@ -66,23 +66,24 @@
     - prompt-assist truncation / weak-output validation
   - 新的 staged generation schema 或 parser/quality logic 應先加在這裡
 
-- [persona-generation-prompt-template.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-prompt-template.ts)
-  - staged generation prompt/template preview 組裝
-  - 主要用於 admin 的 View Prompt / preview explainability
+- [generation-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts)
+  - canonical generate-persona prompt assembly (moved to `src/lib/ai/prompt-runtime/persona/`)
+  - shared builder consumed by both runtime invocation and admin prompt preview
+  - replaces the retired admin-only `persona-generation-prompt-template.ts`
 
 - [persona-generation-token-budgets.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-token-budgets.ts)
   - persona generation / prompt-assist / admin preview 相關 budget constants
-  - 調整 stage headroom、prompt-assist cap、semantic audit cap 時改這裡
+  - 調整 main/preview output headroom 與 prompt-assist cap 時改這裡
 
 ### 4. Admin Preview / Assist Services
 
 - [persona-generation-preview-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-preview-service.ts)
-  - `Generate Persona` / `Update Persona` 共用 staged preview orchestration
+  - `Generate Persona` / `Update Persona` 共用 one-stage preview orchestration
   - 管：
     - selected-model invocation
-    - stage loop
-    - parse/repair
-    - semantic audit / quality repair
+    - shared prompt-runtime builder consumption
+    - schema-gate invocation
+    - parse/deterministic quality checks
     - preview payload assembly
 
 - [persona-prompt-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-prompt-assist-service.ts)
@@ -163,6 +164,11 @@
 
 以下 shared runtime pieces 不在 `src/lib/ai/admin/*`，但和 control-plane contract 強耦合：
 
+- [generation-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts)
+  - canonical generate-persona prompt assembly
+  - shared between runtime invocation (`persona-generation-preview-service.ts`) and admin prompt preview (`PersonaGenerationSection.tsx` / `PromptAssemblyModal.tsx`)
+  - admin preview is a consumer, not the owner of a separate prompt-template path
+
 - [persona-task-generator.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/agent/execution/persona-task-generator.ts)
   - generation-only persona-task adapter
   - 讀 `persona_tasks` 與 source query context
@@ -206,11 +212,11 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
 
 ## 未來開發建議
 
-### 若要加新的 persona-generation stage
+### 若要改 persona generation prompt
 
-1. 先改 [persona-generation-prompt-template.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-prompt-template.ts)
-2. 再改 [persona-generation-contract.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-contract.ts)
-3. 再改 [persona-generation-preview-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-preview-service.ts)
+1. 先改 [generation-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts) — prompt-runtime canonical builder
+2. 再改 [persona-generation-contract.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-contract.ts) — parser/quality logic
+3. admin preview/UI 會自動反映 shared builder 的變更，不需要手動同步
 4. 最後補 preview/store focused tests
 
 ### 若要改 prompt-assist contract

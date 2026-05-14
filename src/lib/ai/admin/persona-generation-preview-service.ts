@@ -21,20 +21,16 @@ import {
 } from "@/lib/ai/admin/control-plane-contract";
 import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
-import {
-  buildTokenBudgetSignal,
-  DEFAULT_TOKEN_LIMITS,
-  formatPrompt,
-} from "@/lib/ai/admin/control-plane-shared";
+import { buildTokenBudgetSignal, DEFAULT_TOKEN_LIMITS } from "@/lib/ai/admin/control-plane-shared";
 import {
   collectEnglishOnlyIssues,
   parsePersonaCoreStageOutput,
   validatePersonaCoreV2Quality,
 } from "@/lib/ai/admin/persona-generation-contract";
 import {
-  PERSONA_GENERATION_TEMPLATE_STAGES,
-  renderPersonaGenerationStageContract,
-} from "@/lib/ai/admin/persona-generation-prompt-template";
+  buildPersonaGenerationPrompt,
+  renderPersonaGenerationPromptBlock,
+} from "@/lib/ai/prompt-runtime/persona/generation-prompt-builder";
 
 export async function previewPersonaGeneration(input: {
   modelId: string;
@@ -81,19 +77,6 @@ export async function previewPersonaGeneration(input: {
     includeXai: true,
     includeDeepSeek: true,
   });
-  const commonBlocks = [
-    { name: "system_baseline", content: "Generate a coherent forum persona profile." },
-    {
-      name: "generator_instruction",
-      content: [
-        "Generate the canonical PersonaCoreV2 payload as one validated JSON object.",
-        "Write all persona-generation content in English.",
-        "Use snake_case keys exactly as provided.",
-        "Preserve named references when they clarify the persona.",
-        "Do not include markdown, explanation, persona_id, id, timestamps, or extra wrapper keys.",
-      ].join("\n"),
-    },
-  ];
   const maxOutputTokens = Math.min(
     model.maxOutputTokens ?? DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
     DEFAULT_TOKEN_LIMITS.personaGenerationMaxOutputTokens,
@@ -102,13 +85,10 @@ export async function previewPersonaGeneration(input: {
     invocationConfig.retries ?? 0,
     ADMIN_UI_LLM_PROVIDER_RETRIES,
   );
-  const stagePromptRecords: Array<{
-    name: string;
-    prompt: string;
-    displayPrompt: string;
-    outputMaxTokens: number;
-  }> = [];
-
+  const promptBuildResult = buildPersonaGenerationPrompt({
+    extraPrompt: input.extraPrompt,
+    referenceNames: input.referenceNames ?? "",
+  });
   const stageDebugRecords: StageDebugRecord[] = [];
 
   const recordStageAttempt = (
@@ -144,69 +124,17 @@ export async function previewPersonaGeneration(input: {
     });
   };
 
-  const buildStagePrompt = (stageInput: {
-    stageName: string;
-    stageGoal: string;
-    stageContract: string;
-    carryForwardContext?: Record<string, unknown> | null;
-    contextFormatting?: "compact" | "pretty";
-  }) => {
-    const carryForwardContextContent = stageInput.carryForwardContext
-      ? JSON.stringify(
-          stageInput.carryForwardContext,
-          null,
-          stageInput.contextFormatting === "compact" ? 0 : 2,
-        )
-      : null;
-    const blocks = [
-      ...commonBlocks,
-      {
-        name: "persona_generation_stage",
-        content: [
-          `stage_name: ${stageInput.stageName}`,
-          `stage_goal: ${stageInput.stageGoal}`,
-          ...(carryForwardContextContent
-            ? ["prior_stage_source_of_truth:", carryForwardContextContent]
-            : []),
-        ].join("\n"),
-      },
-      { name: "stage_contract", content: stageInput.stageContract },
-      {
-        name: "output_constraints",
-        content: [
-          "Return only strict JSON.",
-          "No markdown, no comments, no explanation.",
-          "Do not output text outside the JSON object.",
-        ].join("\n"),
-      },
-    ];
-    return formatPrompt(blocks);
-  };
-
   const runPersonaGenerationStage = async <T>(stageInput: {
     stageName: string;
     stageGoal: string;
-    stageContract: string;
     parse: (rawText: string) => T;
     validateQuality?: (parsed: T) => string[];
     carryForwardContext?: Record<string, unknown> | null;
     allowedReferenceNames?: string[];
     outputMaxTokens: number;
   }): Promise<T> => {
-    const basePrompt = buildStagePrompt({
-      ...stageInput,
-      contextFormatting: "compact",
-    });
-    const displayPrompt = buildStagePrompt({
-      ...stageInput,
-      contextFormatting: "pretty",
-    });
-    stagePromptRecords.push({
-      name: stageInput.stageName,
-      prompt: basePrompt,
-      displayPrompt,
-      outputMaxTokens: stageInput.outputMaxTokens,
-    });
+    const basePrompt = promptBuildResult.assembledPrompt;
+    const displayPrompt = promptBuildResult.assembledPrompt;
 
     let stageDebug = stageDebugRecords.find((r) => r.name === stageInput.stageName);
     if (!stageDebug) {
@@ -461,16 +389,9 @@ export async function previewPersonaGeneration(input: {
   let markdown!: string;
 
   try {
-    const personaCoreStage = PERSONA_GENERATION_TEMPLATE_STAGES[0];
-    const contractText = renderPersonaGenerationStageContract(
-      personaCoreStage.contract.join("\n"),
-      input.extraPrompt,
-      input.referenceNames ?? "",
-    );
     personaCore = await runPersonaGenerationStage<PersonaCoreV2>({
-      stageName: personaCoreStage.name,
-      stageGoal: personaCoreStage.goal,
-      stageContract: contractText,
+      stageName: "persona_core_v2",
+      stageGoal: "Generate one compact PersonaCoreV2 JSON object.",
       parse: (rawText) => PersonaCoreV2Schema.parse(parsePersonaCoreStageOutput(rawText)),
       validateQuality: (stage) =>
         validatePersonaCoreV2Quality(stage as unknown as Record<string, unknown>),
@@ -498,13 +419,13 @@ export async function previewPersonaGeneration(input: {
       reference_derivation: personaCore.reference_style.abstract_traits,
       originalization_note: personaCore.originalization_note,
     };
-    assembledPrompt = stagePromptRecords
-      .map((stage, index) => `### Stage ${index + 1}: ${stage.name}\n${stage.displayPrompt}`)
-      .join("\n\n");
+    assembledPrompt = promptBuildResult.assembledPrompt;
     tokenBudget = buildTokenBudgetSignal({
-      blocks: stagePromptRecords.map((stage) => ({ name: stage.name, content: stage.prompt })),
-      maxInputTokens:
-        DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens * stagePromptRecords.length,
+      blocks: promptBuildResult.blocks.map((block) => ({
+        name: block.name,
+        content: renderPersonaGenerationPromptBlock(block),
+      })),
+      maxInputTokens: DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens,
       maxOutputTokens: PERSONA_GENERATION_BUDGETS.previewMaxOutputTokens,
     });
 

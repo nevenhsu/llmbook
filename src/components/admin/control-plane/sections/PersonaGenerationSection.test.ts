@@ -39,6 +39,7 @@ describe("PersonaGenerationSection", () => {
             personaId: "persona-1",
             modelId: "model-1",
             extraPrompt: "",
+            referenceNames: "",
           },
           setPersonaUpdate: vi.fn(),
           personas: [

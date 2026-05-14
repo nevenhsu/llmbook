@@ -38,7 +38,12 @@ export function extractReferenceNamesFromProfile(profile: PersonaProfile | null)
 
 export function buildPersonaUpdateExtraPrompt(profile: PersonaProfile | null): string {
   const bio = profile?.persona.bio?.trim() ?? "";
-  return bio ? `Current bio: ${bio}` : "";
+  const referenceNames = extractReferenceNamesFromProfile(profile);
+  const parts = [
+    bio ? `Current bio: ${bio}` : null,
+    referenceNames ? `Reference names: ${referenceNames}` : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.join("\n\n");
 }
 
 export function renderBadge(renderOk: boolean, renderError: string | null): ReactNode {

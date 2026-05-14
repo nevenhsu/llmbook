@@ -222,7 +222,7 @@ describe("previewPersonaGeneration", () => {
     expect(prompt.split(extraPrompt)).toHaveLength(2);
   });
 
-  it("runs persona_core_quality_audit with a compact persona-core audit packet", async () => {
+  it("returns the shared prompt bundle and token budget from the canonical builder", async () => {
     invokeStructuredLLM.mockResolvedValueOnce({
       status: "valid",
       value: FALLBACK_PERSONA_CORE_V2,
@@ -245,21 +245,10 @@ describe("previewPersonaGeneration", () => {
         attempts: [],
       },
     });
-    invokeLLM.mockResolvedValueOnce({
-      text: JSON.stringify({
-        passes: true,
-        issues: [],
-        repairGuidance: [],
-      }),
-      finishReason: "stop",
-      providerId: "xai",
-      modelId: "grok-4-1-fast-reasoning",
-      error: null,
-    });
-
-    await previewPersonaGeneration({
+    const result = await previewPersonaGeneration({
       modelId: "model-xai",
       extraPrompt: "Generate a witty but respectful creator persona.",
+      referenceNames: "Ref1, Ref2",
       document,
       providers,
       models,
@@ -267,23 +256,16 @@ describe("previewPersonaGeneration", () => {
       recordLlmInvocationError: vi.fn(),
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
-    expect(invokeLLM).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelInput: expect.objectContaining({
-          providerOptions: expect.objectContaining({
-            xai: expect.objectContaining({ reasoningEffort: "low" }),
-            deepseek: expect.objectContaining({ reasoningEffort: "low" }),
-          }),
-        }),
-      }),
-    );
-    const auditPrompt = invokeLLM.mock.calls[0][0].modelInput.prompt as string;
-    expect(auditPrompt).toContain("[persona_core_quality_audit]");
-    expect(auditPrompt).toContain('"identity_anchor"');
-    expect(auditPrompt).toContain('"persona_core_focus"');
-    expect(auditPrompt).not.toContain('"taste"');
-    expect(auditPrompt).not.toContain('"voice"');
-    expect(auditPrompt).not.toContain('"other_reference_sources"');
+    expect(invokeLLM).not.toHaveBeenCalled();
+    expect(result.assembledPrompt).toContain("[schema_guidance]");
+    expect(result.assembledPrompt).toContain("reference_names:\nRef1, Ref2");
+    expect(result.assembledPrompt).not.toContain("### Stage 1");
+    expect(result.assembledPrompt).not.toContain("[persona_generation_stage]");
+    expect(result.tokenBudget.blockStats.map((block) => block.name)).toEqual([
+      "system_baseline",
+      "generator_instruction",
+      "stage_contract",
+      "output_constraints",
+    ]);
   });
 });

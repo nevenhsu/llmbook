@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 const PRODUCTION_FILES = [
   "src/lib/ai/prompt-runtime/persona-v2-prompt-family.ts",
   "src/lib/ai/prompt-runtime/persona-v2-flow-contracts.ts",
-  "src/lib/ai/admin/persona-generation-prompt-template.ts",
+  "src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts",
 ] as const;
 
 const SENTINEL_PHRASES = [
@@ -25,10 +25,10 @@ describe("hardcoding guardrails", () => {
       }
     });
 
-    it("production prompt template does not contain sentinel strings", async () => {
+    it("production prompt builder does not contain sentinel strings", async () => {
       const { readFileSync } = await import("node:fs");
       const content = readFileSync(
-        "src/lib/ai/admin/persona-generation-prompt-template.ts",
+        "src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts",
         "utf8",
       );
       for (const sentinel of SENTINEL_PHRASES) {
@@ -38,10 +38,10 @@ describe("hardcoding guardrails", () => {
   });
 
   describe("no legacy schema text in prompts", () => {
-    it("persona generation template has no hardcoded key/type JSON schema blocks", async () => {
+    it("persona generation builder has no hardcoded key/type JSON schema blocks", async () => {
       const { readFileSync } = await import("node:fs");
       const content = readFileSync(
-        "src/lib/ai/admin/persona-generation-prompt-template.ts",
+        "src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts",
         "utf8",
       );
       // Should NOT contain full JSON schema descriptions

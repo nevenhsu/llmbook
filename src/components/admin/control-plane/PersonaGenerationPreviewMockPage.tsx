@@ -107,6 +107,7 @@ export function PersonaGenerationPreviewMockPage() {
     personaId: mockPersona.id,
     modelId: mockModel.id,
     extraPrompt: buildPersonaUpdateExtraPrompt(mockPersonaProfile),
+    referenceNames: "",
   });
   const [personaGenerationLoading, setPersonaGenerationLoading] = useState(false);
   const [personaUpdateLoading, setPersonaUpdateLoading] = useState(false);

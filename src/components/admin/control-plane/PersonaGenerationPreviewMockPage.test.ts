@@ -96,11 +96,11 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(extraPromptInput).not.toBeNull();
     expect(extraPromptInput?.value).toBe(mockPersonaGenerationSeedPrompt);
     const allPromptInputs = container.querySelectorAll(
-      'textarea[placeholder*="favorite celebrity"], textarea[placeholder*="Current bio and reference roles"]',
+      'textarea[placeholder*="favorite celebrity"], textarea[placeholder*="Current bio is seeded here"]',
     );
     const updateExtraPromptInput = allPromptInputs.item(1) as HTMLTextAreaElement | null;
     expect(updateExtraPromptInput?.value).toContain("Current bio:");
-    expect(updateExtraPromptInput?.value).toContain("Reference roles:");
+    expect(updateExtraPromptInput?.value).toContain("Reference names:");
     expect(container.textContent).toContain(
       "Starts from current bio and references, then refines with AI.",
     );
@@ -161,26 +161,22 @@ describe("PersonaGenerationPreviewMockPage", () => {
 
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Token Budget");
-    expect(container.textContent).toContain("Stage 1: persona_core_v2");
-    expect(container.textContent).toContain("Generate one compact PersonaCoreV2 JSON object.");
-    expect(container.textContent).toContain("[persona_core_v2]");
+    expect(container.textContent).toContain("stage_contract");
     expect(container.textContent).toContain("mind.thinking_procedure:");
-    expect(container.textContent).toContain(
-      "persona_fit_probability must be an integer from 0 to 100.",
-    );
+    expect(container.textContent).toContain("persona_fit_probability:");
     expect(container.textContent).toContain("Perform internally only. Do not reveal.");
     expect(container.textContent).not.toContain("[validated_context]");
     expect(container.textContent).not.toContain("[admin_extra_prompt]");
     expect(container.textContent).toContain("user_input_context:");
     expect(container.textContent).toContain(mockPersonaGenerationAdminExtraPrompt);
 
-    const personaCoreStageCollapse = Array.from(container.querySelectorAll(".collapse-title")).find(
-      (node) => node.textContent?.includes("Stage 1: persona_core_v2"),
+    const stageContractCollapse = Array.from(container.querySelectorAll(".collapse-title")).find(
+      (node) => node.textContent?.includes("stage_contract"),
     ) as HTMLElement | undefined;
-    expect(personaCoreStageCollapse).toBeDefined();
+    expect(stageContractCollapse).toBeDefined();
 
     await act(async () => {
-      personaCoreStageCollapse?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      stageContractCollapse?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(container.textContent).not.toContain("[validated_context]");
@@ -292,7 +288,7 @@ describe("PersonaGenerationPreviewMockPage", () => {
     expect(container.textContent).toContain("Prompt Assembly");
     expect(container.textContent).toContain("Token Budget");
     expect(container.textContent).not.toContain("Markdown Output");
-    expect(container.textContent).toContain("Stage 1: persona_core_v2");
+    expect(container.textContent).toContain("stage_contract");
     expect(
       Array.from(container.querySelectorAll("button")).some(
         (button) => button.textContent?.trim() === "Close",

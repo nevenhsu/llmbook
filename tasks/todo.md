@@ -2,22 +2,25 @@
 
 ## Active
 
-- [x] Trace the Interaction Preview `target_context` / `task_context` inversion across API, store, service, and prompt-family boundaries.
-- [x] Write the implementation handoff plan under `/plans` with exact files, test-first steps, and verification.
-- [x] Record the doc-only review note and keep the tracker aligned with this planning task.
+- [x] Trace the generate-persona prompt duplication across runtime preview, admin prompt preview, and current docs.
+- [x] Grill the target architecture until the canonical builder boundary, file placement, and plan scope are explicit.
+- [x] Write the implementation handoff plan under `/plans/persona-v2` and align the tracker plus lessons with the resolved decisions.
+- [x] Derive one reusable canonical-flow prompt-builder handoff prompt from the generate-persona plan so the structure can be reused for other flow prompt refactors.
 
 ## Current References
 
-- Target plan: `plans/persona-v2/2026-05-13-interaction-preview-context-block-fix-plan.md`
-- Preview API: `src/app/api/admin/ai/persona-interaction/preview/route.ts`
-- Preview store: `src/lib/ai/admin/control-plane-store.ts`
-- Interaction service: `src/lib/ai/agent/execution/persona-interaction-service.ts`
-- Stage service: `src/lib/ai/agent/execution/persona-interaction-stage-service.ts`
-- Prompt family: `src/lib/ai/prompt-runtime/persona-v2-prompt-family.ts`
-- Runtime context builder reference: `src/lib/ai/agent/execution/persona-task-context-builder.ts`
+- Target plan: `plans/persona-v2/2026-05-14-persona-generation-canonical-prompt-builder-plan.md`
+- Reusable handoff prompt: `plans/persona-v2/2026-05-14-canonical-flow-prompt-builder-handoff-prompt.md`
+- Runtime preview service: `src/lib/ai/admin/persona-generation-preview-service.ts`
+- Retired preview-template path: `src/lib/ai/admin/persona-generation-prompt-template.ts`
+- Current admin entrypoint: `src/components/admin/control-plane/sections/PersonaGenerationSection.tsx`
+- Shared prompt-runtime home: `src/lib/ai/prompt-runtime/`
+- Ownership doc: `docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md`
 
 ## Review
 
+- **2026-05-14:** Wrote `plans/persona-v2/2026-05-14-canonical-flow-prompt-builder-handoff-prompt.md` as a reusable handoff prompt derived from the generate-persona canonical builder plan. The new artifact keeps the structural pattern generic: shared prompt-runtime builder ownership, runtime-as-canonical source of truth, preview/admin derivation outside the builder, explicit deletion of retired template paths, and a reusable task/file/verification template that can be filled in for other flows. Verification for this docs-only task was limited to inspection of the source plan plus diff review of the new reusable prompt and tracker update.
+- **2026-05-14:** Wrote `plans/persona-v2/2026-05-14-persona-generation-canonical-prompt-builder-plan.md` after grilling the prompt-builder boundary with the user. The resolved target is: runtime assembly is canonical, generate-persona uses a single prompt-bundle builder instead of a staged preview shape, the shared builder moves under `src/lib/ai/prompt-runtime/persona/`, admin preview derives token-budget/presentation data outside the builder, and the refactor stays scoped to generate-persona while establishing the folder shape for future persona builders. Verification for this docs-only planning task was limited to focused code/doc inspection of the current duplicate paths, related tests/mocks, module ownership docs, and diff review of the new plan plus tracker/lessons updates.
 - **2026-05-13:** Wrote `plans/persona-v2/2026-05-13-interaction-preview-context-block-fix-plan.md` for the Interaction Preview context-block inversion. The plan identifies the likely root cause as the admin preview path serializing `structuredContext` into `taskContext`, then letting `AiAgentPersonaInteractionService` assign that dynamic payload to `promptContext.taskContext`. The proposed fix keeps the shared V2 prompt family intact, routes user-facing preview request text into `targetContextText`, supplies deterministic task guidance for post/comment/reply preview flows, and leaves vote/poll lean fallback behavior unchanged. Verification for this docs-only planning task was limited to focused source inspection, existing contract/doc checks, and diff review of the new plan plus tracker.
 - **2026-05-13:** Rewrote `plans/architecture-deepening.md` into an execution-ready implementation plan after re-validating the live tree. The updated plan keeps the original six deepening themes but turns them into ordered implementation slices with exact files, test-first steps, and verification commands. It also corrects the least reliable part of the original note: the client-side "7 hooks / 27 components" idea is now an inventory-backed action-consolidation task based on current `fetch()` and helper-call sites, rather than a blind hook expansion. Additional live checks folded into the rewritten plan: `opportunity-pipeline-service.ts` is still 1732 lines, the two runtime-state services are still 769/349 lines, 36 admin AI routes still use `withAuth` plus inline admin checks, task-snapshot mapping is duplicated in four concrete producers, and moving `lab-data.ts` cleanly requires extracting pure agent-lab data types into `src/lib` instead of importing component-local types from a lib module. Verification for this docs-only planning task was limited to focused file inspection, `rg` inventories, and diff review of the rewritten plan plus tracker.
 - **2026-05-12:** Wrote `plans/persona-v2/2026-05-12-persona-batch-reference-names-plan.md` for `/admin/ai/persona-batch` reference-name support. The plan keeps the existing batch architecture intact but brings prompt-assist behavior to parity with the control-plane `Generate Persona` card: batch rows gain a dedicated editable `referenceNames` field, prompt assist stores both cleaned prompt text and returned reference names, generate preview starts sending `referenceNames`, the table gains a visible reference-names surface, and the toolbar action is renamed from `Add` to `Add Reference`. Verification for this doc-only planning task was limited to focused code inspection of the control-plane prompt-assist path, the current batch hook/contract/components, related tests, and diff review of the new plan plus tracker.

@@ -1,26 +1,44 @@
 "use client";
 
+import { useMemo } from "react";
 import { ModalShell } from "@/components/ui/ModalShell";
-import type { PromptAssemblyPreview } from "@/lib/ai/admin/persona-generation-prompt-template";
+import type { PersonaGenerationPromptBuildResult } from "@/lib/ai/prompt-runtime/persona/generation-prompt-builder";
+import { renderPersonaGenerationPromptBlock } from "@/lib/ai/prompt-runtime/persona/generation-prompt-builder";
+import {
+  buildTokenBudgetSignal,
+  DEFAULT_TOKEN_LIMITS,
+  estimateTokens,
+} from "@/lib/ai/admin/control-plane-shared";
+import { PERSONA_GENERATION_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 
 type Props = {
   isOpen: boolean;
-  preview: PromptAssemblyPreview | null;
+  preview: PersonaGenerationPromptBuildResult | null;
   onClose: () => void;
 };
 
 export function PromptAssemblyModal({ isOpen, preview, onClose }: Props) {
-  if (!isOpen || !preview) {
+  const budget = useMemo(() => {
+    if (!preview) return null;
+    return buildTokenBudgetSignal({
+      blocks: preview.blocks.map((block) => ({
+        name: block.name,
+        content: renderPersonaGenerationPromptBlock(block),
+      })),
+      maxInputTokens: DEFAULT_TOKEN_LIMITS.personaGenerationMaxInputTokens,
+      maxOutputTokens: PERSONA_GENERATION_BUDGETS.previewMaxOutputTokens,
+    });
+  }, [preview]);
+
+  if (!isOpen || !preview || !budget) {
     return null;
   }
-
-  const budget = preview.tokenBudget;
 
   return (
     <dialog className="modal modal-open" open>
       <ModalShell
         title="Prompt Assembly"
-        description="Review the staged prompt bundle and token budget injected into the model before persona generation runs."
+        description="Review the prompt bundle and token budget injected into the model before persona generation runs."
         onClose={onClose}
         maxWidthClassName="max-w-5xl"
         minHeightClassName="min-h-[48vh]"
@@ -36,41 +54,42 @@ export function PromptAssemblyModal({ isOpen, preview, onClose }: Props) {
         <div className="space-y-5">
           <div className="space-y-3">
             <div className="px-1">
-              <h4 className="text-sm font-semibold">Prompt Assembly</h4>
+              <h4 className="text-sm font-semibold">Prompt Blocks</h4>
               <p className="mt-1 text-xs opacity-60">
-                Review each generation stage separately, then expand raw prompt text only when you
-                need the exact payload.
+                Review each prompt block, then expand raw prompt text when you need the exact
+                payload.
               </p>
             </div>
 
-            {preview.stages.map((stage) => (
-              <div
-                key={stage.name}
-                className="bg-base-100 border-base-300/60 overflow-hidden rounded-xl border"
-              >
-                <div className="collapse-arrow collapse">
-                  <input type="checkbox" />
-                  <div className="collapse-title bg-base-200/70 px-4 py-3">
-                    <div className="flex items-start justify-between gap-3 pr-6">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold">
-                          Stage {stage.index}: {stage.name}
+            {preview.blocks.map((block) => {
+              const renderedBlock = renderPersonaGenerationPromptBlock(block);
+              const blockTokens = estimateTokens(renderedBlock);
+              return (
+                <div
+                  key={block.name}
+                  className="bg-base-100 border-base-300/60 overflow-hidden rounded-xl border"
+                >
+                  <div className="collapse-arrow collapse">
+                    <input type="checkbox" />
+                    <div className="collapse-title bg-base-200/70 px-4 py-3">
+                      <div className="flex items-start justify-between gap-3 pr-6">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">{block.name}</div>
                         </div>
-                        <div className="mt-1 text-xs opacity-65">{stage.goal}</div>
-                      </div>
-                      <div className="bg-base-100 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap opacity-80">
-                        {stage.tokens.toLocaleString()} tokens
+                        <div className="bg-base-100 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap opacity-80">
+                          {blockTokens.toLocaleString()} tokens
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="collapse-content border-base-300/50 bg-base-200/30 border-t px-0 pb-0">
-                    <pre className="max-h-[34vh] overflow-auto p-4 text-xs whitespace-pre-wrap">
-                      {stage.rawPrompt}
-                    </pre>
+                    <div className="collapse-content border-base-300/50 bg-base-200/30 border-t px-0 pb-0">
+                      <pre className="max-h-[34vh] overflow-auto p-4 text-xs whitespace-pre-wrap">
+                        {renderedBlock}
+                      </pre>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="bg-base-100 border-base-300/60 overflow-hidden rounded-xl border">

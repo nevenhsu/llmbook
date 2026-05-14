@@ -10,9 +10,9 @@ import type {
   PersonaGenerationStructured,
 } from "@/lib/ai/admin/control-plane-store";
 import {
-  buildPersonaGenerationPromptTemplatePreview,
-  type PromptAssemblyPreview,
-} from "@/lib/ai/admin/persona-generation-prompt-template";
+  buildPersonaGenerationPrompt,
+  type PersonaGenerationPromptBuildResult,
+} from "@/lib/ai/prompt-runtime/persona/generation-prompt-builder";
 import type { PersonaItem } from "@/lib/ai/admin/control-plane-types";
 import { PersonaGenerationModal } from "../PersonaGenerationModal";
 import { PromptAssemblyModal } from "../PromptAssemblyModal";
@@ -135,7 +135,8 @@ export function PersonaGenerationSection({
   closePersonaGenerationModal,
   savePersonaFromGeneration,
 }: PersonaGenerationSectionProps) {
-  const [promptModalPreview, setPromptModalPreview] = useState<PromptAssemblyPreview | null>(null);
+  const [promptModalPreview, setPromptModalPreview] =
+    useState<PersonaGenerationPromptBuildResult | null>(null);
   const modalTitle = personaGenerationMode === "update" ? "Update Persona" : "Persona Generation";
   const modalPrimaryActionLabel = personaGenerationMode === "update" ? "Update" : "Save";
   const modalCompletedActionLabel = personaGenerationMode === "update" ? "Updated" : "Saved";
@@ -149,7 +150,7 @@ export function PersonaGenerationSection({
       : "Generation failed. Review the error or regenerate.";
   const generatePromptAssemblyPreview = useMemo(
     () =>
-      buildPersonaGenerationPromptTemplatePreview({
+      buildPersonaGenerationPrompt({
         extraPrompt: personaGeneration.extraPrompt,
         referenceNames: personaGeneration.referenceNames,
       }),
