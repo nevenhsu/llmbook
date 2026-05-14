@@ -5,6 +5,7 @@
 - **Design First:** For architecture or flow quality, stay in design mode. Present tradeoffs and ask one key question at a time before implementation.
 - **Plans & Docs:** Non-trivial work goes in `/plans`; durable reference in `/docs`.
 - **Git:** User handles git; don't mention stage/commit/push. Suggest the next step after work is done.
+- **Never Auto-Commit or Checkout:** Do not commit, merge, or switch branches without explicit user approval. Even when a skill (like finishing-a-development-branch) presents merge/PR options, wait for the user's explicit choice and confirmation before running `git commit`, `git merge`, `git checkout`, or `git stash`. The user owns the repo state.
 - **Maintenance:** Delete/migrate retired contracts fully. Treat user deletions as intentional.
 - **Syncing:** Keep `tasks/todo.md` compact: only active work, essential refs, and latest review note.
 

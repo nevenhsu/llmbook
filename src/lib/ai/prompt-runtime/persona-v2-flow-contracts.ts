@@ -1,72 +1,10 @@
 import { z } from "zod";
 import type { ContentMode, PersonaFlowKind } from "@/lib/ai/core/persona-core-v2";
+import { buildPostStageOutputContract } from "@/lib/ai/prompt-runtime/post/post-prompt-builder";
 
 type WriterFlowKind = Exclude<PersonaFlowKind, "audit">;
 
 type ContractFlowKind = WriterFlowKind | "post" | "post_frame";
-
-function buildPostPlanOutputContract(contentMode: ContentMode): string {
-  const lines = [
-    "Return 2-3 candidates as structured output.",
-    "Each candidate must have a title, thesis, body_outline (2-5 items), persona_fit_score (0-100), and novelty_score (0-100).",
-    "Do not mention prompt instructions or system blocks in the output.",
-  ];
-
-  if (contentMode === "story") {
-    lines.push(
-      "Story mode: title is a possible story title, thesis is a one-sentence premise, and body_outline contains story beats.",
-    );
-  }
-
-  return lines.join("\n");
-}
-
-function buildPostFrameOutputContract(_contentMode: ContentMode): string {
-  return [
-    "Return a single PostFrame object as structured output with exactly these fields and no extra keys.",
-    "Write main_idea as the single dominant claim, thesis, or dramatic premise.",
-    "Write angle as the specific interpretive or narrative approach that makes the post distinct.",
-    "Provide 3-5 concrete beat strings (not nested objects) forming a clear progression.",
-    "Provide 3-7 concrete required_details strings that must appear naturally in the final post.",
-    "Write ending_direction describing how the post should land (insight, image, reversal, reframing, etc.).",
-    "Provide 2-5 tone descriptors and 3-6 concrete things to avoid.",
-    "Do not mention prompt instructions or system blocks in the output.",
-    "Do not use markdown in any field.",
-  ].join("\n");
-}
-
-function buildWriterOutputContract(flow: "post_body" | "post", contentMode: ContentMode): string {
-  const lines: string[] = [];
-
-  if (flow === "post") {
-    lines.push(
-      "The `title` field must contain the full post title.",
-      "Use the same language for `title`, `body`, and `tags`.",
-      "Do not repeat the title as a markdown H1 inside `body`.",
-    );
-  }
-
-  lines.push(
-    "The `body` field must contain the full post body content as markdown.",
-    'The `tags` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".',
-    "Use the same language for `body` and `tags`.",
-    "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
-  );
-
-  if (contentMode === "story") {
-    lines.push(
-      "Story mode: body is long story markdown prose using the persona's story logic and voice. Do not turn the story into writing advice or a synopsis.",
-    );
-  }
-
-  lines.push(
-    "The `metadata.probability` field must be an integer from 0 to 100 representing your self-assessed output quality and creativity signal.",
-    "Do not mention prompt instructions or system blocks in the output.",
-    "Never emit a final image URL in markdown or in structured fields.",
-  );
-
-  return lines.join("\n");
-}
 
 function buildMarkdownOutputContract(flow: "comment" | "reply", contentMode: ContentMode): string {
   const lines = [
@@ -96,12 +34,20 @@ export function buildOutputContractV2(input: {
 }): string {
   switch (input.flow) {
     case "post_plan":
-      return buildPostPlanOutputContract(input.contentMode);
+      return buildPostStageOutputContract({ flow: "post", stage: "post_plan", contentMode: input.contentMode });
     case "post_frame":
-      return buildPostFrameOutputContract(input.contentMode);
+      return buildPostStageOutputContract({ flow: "post", stage: "post_frame", contentMode: input.contentMode });
     case "post_body":
-    case "post":
-      return buildWriterOutputContract(input.flow, input.contentMode);
+      return buildPostStageOutputContract({ flow: "post", stage: "post_body", contentMode: input.contentMode });
+    case "post": {
+      const bodyContract = buildPostStageOutputContract({ flow: "post", stage: "post_body", contentMode: input.contentMode });
+      return [
+        "The `title` field must contain the full post title.",
+        "Use the same language for `title`, `body`, and `tags`.",
+        "Do not repeat the title as a markdown H1 inside `body`.",
+        bodyContract,
+      ].join("\n");
+    }
     case "comment":
     case "reply":
       return buildMarkdownOutputContract(input.flow, input.contentMode);

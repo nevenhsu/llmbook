@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildPostStageActionModePolicy,
+  buildPostStageAntiGenericContract,
   buildPostStageContentModePolicy,
+  buildPostStageOutputContract,
   buildPostStageTaskContext,
   renderSelectedPostPlanTargetContext,
   renderPostFrameTargetContext,
@@ -343,5 +345,106 @@ describe("no retired labels leak into prompt text", () => {
     const result = renderPostFrameTargetContext({ frame, contentMode: "discussion" });
     expect(result).not.toContain("planner_mode");
     expect(result).not.toContain("writer");
+  });
+});
+
+describe("buildPostStageOutputContract", () => {
+  it("post_plan discussion requires candidates, scores, and forbids prompt mention", () => {
+    const contract = buildPostStageOutputContract({
+      flow: "post",
+      stage: "post_plan",
+      contentMode: "discussion",
+    });
+    expect(contract).toContain("2-3 candidates");
+    expect(contract).toContain("persona_fit_score");
+    expect(contract).toContain("novelty_score");
+    expect(contract).toContain("Do not mention prompt instructions");
+    expect(contract).not.toContain("probability");
+  });
+
+  it("post_plan story mode maps to story title and premise", () => {
+    const contract = buildPostStageOutputContract({
+      flow: "post",
+      stage: "post_plan",
+      contentMode: "story",
+    });
+    expect(contract).toContain("story");
+    expect(contract).toContain("story title");
+    expect(contract).toContain("premise");
+  });
+
+  it("post_frame uses required_details and forbids markdown", () => {
+    const contract = buildPostStageOutputContract({
+      flow: "post",
+      stage: "post_frame",
+      contentMode: "discussion",
+    });
+    expect(contract).toContain("required_details");
+    expect(contract).toContain("no extra keys");
+    expect(contract).toContain("Do not use markdown");
+    expect(contract).not.toContain("locked_title");
+  });
+
+  it("post_body discussion includes body, tags, and metadata.probability", () => {
+    const contract = buildPostStageOutputContract({
+      flow: "post",
+      stage: "post_body",
+      contentMode: "discussion",
+    });
+    expect(contract).toContain("body");
+    expect(contract).toContain("tags");
+    expect(contract).toContain("metadata");
+    expect(contract).toContain("probability");
+    expect(contract).toContain("0 to 100");
+    expect(contract).not.toContain("title");
+    expect(contract).toContain("final image URL");
+  });
+
+  it("post_body story mode adds story prose guidance", () => {
+    const contract = buildPostStageOutputContract({
+      flow: "post",
+      stage: "post_body",
+      contentMode: "story",
+    });
+    expect(contract).toContain("story markdown prose");
+    expect(contract).toContain("story logic");
+    expect(contract).toContain("Do not turn the story into");
+  });
+
+  it("all post stages forbid mentioning prompt instructions", () => {
+    for (const stage of ["post_plan", "post_frame", "post_body"] as CanonicalPostStage[]) {
+      const contract = buildPostStageOutputContract({
+        flow: "post",
+        stage,
+        contentMode: "discussion",
+      });
+      expect(contract).toContain("Do not mention prompt instructions");
+    }
+  });
+});
+
+describe("buildPostStageAntiGenericContract", () => {
+  it("forbids prompt block mention, assistant voice, and default examples", () => {
+    const contract = buildPostStageAntiGenericContract({ flow: "post", stage: "post_plan" });
+    expect(contract).toContain("prompt blocks");
+    expect(contract).toContain("generic assistant");
+    expect(contract).toContain("JSON schema");
+    expect(contract).toContain("default examples");
+  });
+
+  it("produces identical text for all three post stages", () => {
+    const plan = buildPostStageAntiGenericContract({ flow: "post", stage: "post_plan" });
+    const frame = buildPostStageAntiGenericContract({ flow: "post", stage: "post_frame" });
+    const body = buildPostStageAntiGenericContract({ flow: "post", stage: "post_body" });
+    expect(frame).toBe(plan);
+    expect(body).toBe(plan);
+  });
+
+  it("never mentions retired stage labels", () => {
+    for (const stage of ["post_plan", "post_frame", "post_body"] as CanonicalPostStage[]) {
+      const contract = buildPostStageAntiGenericContract({ flow: "post", stage });
+      expect(contract).not.toContain("planner_mode");
+      expect(contract).not.toContain("writer");
+    }
   });
 });

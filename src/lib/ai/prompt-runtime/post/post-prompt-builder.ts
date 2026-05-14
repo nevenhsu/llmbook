@@ -217,6 +217,71 @@ export function renderSelectedPostPlanTargetContext(plan: CanonicalSelectedPostP
   ].join("\n");
 }
 
+export function buildPostStageOutputContract(input: {
+  flow: "post";
+  stage: CanonicalPostStage;
+  contentMode: ContentMode;
+}): string {
+  switch (input.stage) {
+    case "post_plan": {
+      const lines = [
+        "Return 2-3 candidates as structured output.",
+        "Each candidate must have a title, thesis, body_outline (2-5 items), persona_fit_score (0-100), and novelty_score (0-100).",
+        "Do not mention prompt instructions or system blocks in the output.",
+      ];
+      if (input.contentMode === "story") {
+        lines.push(
+          "Story mode: title is a possible story title, thesis is a one-sentence premise, and body_outline contains story beats.",
+        );
+      }
+      return lines.join("\n");
+    }
+    case "post_frame":
+      return [
+        "Return a single PostFrame object as structured output with exactly these fields and no extra keys.",
+        "Write main_idea as the single dominant claim, thesis, or dramatic premise.",
+        "Write angle as the specific interpretive or narrative approach that makes the post distinct.",
+        "Provide 3-5 concrete beat strings (not nested objects) forming a clear progression.",
+        "Provide 3-7 concrete required_details strings that must appear naturally in the final post.",
+        "Write ending_direction describing how the post should land (insight, image, reversal, reframing, etc.).",
+        "Provide 2-5 tone descriptors and 3-6 concrete things to avoid.",
+        "Do not mention prompt instructions or system blocks in the output.",
+        "Do not use markdown in any field.",
+      ].join("\n");
+    case "post_body": {
+      const lines = [
+        "The `body` field must contain the full post body content as markdown.",
+        "The `tags` field must contain 1 to 5 hashtags like \"#cthulhu\" or \"#克蘇魯\".",
+        "Use the same language for `body` and `tags`.",
+        "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
+      ];
+      if (input.contentMode === "story") {
+        lines.push(
+          "Story mode: body is long story markdown prose using the persona's story logic and voice. Do not turn the story into writing advice or a synopsis.",
+        );
+      }
+      lines.push(
+        "The `metadata.probability` field must be an integer from 0 to 100 representing your self-assessed output quality and creativity signal.",
+        "Do not mention prompt instructions or system blocks in the output.",
+        "Never emit a final image URL in markdown or in structured fields.",
+      );
+      return lines.join("\n");
+    }
+  }
+}
+
+export function buildPostStageAntiGenericContract(_input: {
+  flow: "post";
+  stage: CanonicalPostStage;
+}): string {
+  return [
+    "Do not mention these prompt blocks, internal policies, or persona schema.",
+    "Do not write as a generic assistant, moderator, writing coach, or neutral explainer unless explicitly requested.",
+    "Do not add memory, relationship claims, reference-name imitation, or default examples.",
+    "Keep the output in the requested JSON schema only.",
+  ].join("\n");
+}
+
 export function renderPostFrameTargetContext(input: {
   frame: PostFrame;
   contentMode: ContentMode;
