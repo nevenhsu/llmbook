@@ -2,23 +2,24 @@
 
 ## Active
 
-- [x] Trace the generate-persona prompt duplication across runtime preview, admin prompt preview, and current docs.
-- [x] Grill the target architecture until the canonical builder boundary, file placement, and plan scope are explicit.
-- [x] Write the implementation handoff plan under `/plans/persona-v2` and align the tracker plus lessons with the resolved decisions.
-- [x] Derive one reusable canonical-flow prompt-builder handoff prompt from the generate-persona plan so the structure can be reused for other flow prompt refactors.
+- [x] Re-grill the PromptAssist plan against the live repo contracts and collapse the earlier multi-call builder idea into the new one-call structured PromptAssist target.
+- [x] Rewrite the PromptAssist plan around a single `invokeStructuredLLM` call, a narrow schema file, and one canonical `prompt-runtime` prompt file.
+- [x] Capture the new PromptAssist contract decisions in the active `/plans/persona-v2` artifact.
 
 ## Current References
 
-- Target plan: `plans/persona-v2/2026-05-14-persona-generation-canonical-prompt-builder-plan.md`
-- Reusable handoff prompt: `plans/persona-v2/2026-05-14-canonical-flow-prompt-builder-handoff-prompt.md`
-- Runtime preview service: `src/lib/ai/admin/persona-generation-preview-service.ts`
-- Retired preview-template path: `src/lib/ai/admin/persona-generation-prompt-template.ts`
-- Current admin entrypoint: `src/components/admin/control-plane/sections/PersonaGenerationSection.tsx`
-- Shared prompt-runtime home: `src/lib/ai/prompt-runtime/`
-- Ownership doc: `docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md`
+- Target plan: `plans/persona-v2/2026-05-14-persona-prompt-assist-canonical-prompt-builder-plan.md`
+- Prompt file target: `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`
+- Schema file target: `src/lib/ai/admin/prompt-assist-schema.ts`
+- API route: `src/app/api/admin/ai/persona-generation/prompt-assist/route.ts`
+- Admin service: `src/lib/ai/admin/persona-prompt-assist-service.ts`
+- Structured invocation helper: `src/lib/ai/llm/invoke-structured-llm.ts`
+- Ownership docs: `docs/ai-admin/CONTROL_PLANE_MODULE_MAP.md`, `docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md`
 
 ## Review
 
+- **2026-05-14:** Rewrote `plans/persona-v2/2026-05-14-persona-prompt-assist-canonical-prompt-builder-plan.md` after a grill session materially changed the target architecture. The active plan is no longer a multi-call canonical prompt-builder family for PromptAssist. It now targets one `invokeStructuredLLM` call with code-owned PromptAssist schema `{ text, referenceNames }`, app-owned `debugRecords` reuse via `StageDebugRecord[]`, failure-on-empty `referenceNames`, no suffix cleanup contract, one canonical prompt file at `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`, and a narrow schema file at `src/lib/ai/admin/prompt-assist-schema.ts`. Verification for this docs-only rewrite was limited to focused code inspection of the current PromptAssist service/hook/debug seams, plus diff review of the rewritten plan and tracker updates.
+- **2026-05-14:** Wrote `plans/persona-v2/2026-05-14-persona-prompt-assist-canonical-prompt-builder-plan.md` as a prompt-runtime extraction plan for `/api/admin/ai/persona-generation/prompt-assist`, using the reusable canonical-flow handoff prompt as the structural model. The resolved boundary keeps prompt-assist as a staged helper flow, not a fake one-stage bundle: static prompt text moves into a shared builder family under `src/lib/ai/prompt-runtime/persona/`, while `persona-prompt-assist-service.ts` remains responsible for stage sequencing, output-schema selection, retries/repairs, and typed error shaping. Verification for this docs-only planning task was limited to focused inspection of the prompt-assist route, store delegation, service internals, adjacent builder patterns, related tests, and ownership docs, plus diff review of the new plan and tracker update.
 - **2026-05-14:** Wrote `plans/persona-v2/2026-05-14-canonical-flow-prompt-builder-handoff-prompt.md` as a reusable handoff prompt derived from the generate-persona canonical builder plan. The new artifact keeps the structural pattern generic: shared prompt-runtime builder ownership, runtime-as-canonical source of truth, preview/admin derivation outside the builder, explicit deletion of retired template paths, and a reusable task/file/verification template that can be filled in for other flows. Verification for this docs-only task was limited to inspection of the source plan plus diff review of the new reusable prompt and tracker update.
 - **2026-05-14:** Wrote `plans/persona-v2/2026-05-14-persona-generation-canonical-prompt-builder-plan.md` after grilling the prompt-builder boundary with the user. The resolved target is: runtime assembly is canonical, generate-persona uses a single prompt-bundle builder instead of a staged preview shape, the shared builder moves under `src/lib/ai/prompt-runtime/persona/`, admin preview derives token-budget/presentation data outside the builder, and the refactor stays scoped to generate-persona while establishing the folder shape for future persona builders. Verification for this docs-only planning task was limited to focused code/doc inspection of the current duplicate paths, related tests/mocks, module ownership docs, and diff review of the new plan plus tracker/lessons updates.
 - **2026-05-13:** Wrote `plans/persona-v2/2026-05-13-interaction-preview-context-block-fix-plan.md` for the Interaction Preview context-block inversion. The plan identifies the likely root cause as the admin preview path serializing `structuredContext` into `taskContext`, then letting `AiAgentPersonaInteractionService` assign that dynamic payload to `promptContext.taskContext`. The proposed fix keeps the shared V2 prompt family intact, routes user-facing preview request text into `targetContextText`, supplies deterministic task guidance for post/comment/reply preview flows, and leaves vote/poll lean fallback behavior unchanged. Verification for this docs-only planning task was limited to focused source inspection, existing contract/doc checks, and diff review of the new plan plus tracker.
