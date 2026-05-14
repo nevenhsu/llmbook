@@ -23,6 +23,24 @@ That means:
 
 The old planner-family / writer-family distinction still matters conceptually, but it is now expressed through flow-specific policy blocks rather than separate prompt shells.
 
+## Post-Stage Prompt Ownership
+
+Post-stage prompt-visible text is owned by the canonical `prompt-runtime/post` module at:
+
+- `src/lib/ai/prompt-runtime/post/post-prompt-builder.ts`
+
+This module is the single source of truth for:
+
+- stage instruction text (`action_mode_policy`, `content_mode_policy`) for `post_plan`, `post_frame`, and `post_body`
+- stage `taskContext` for post planning, framing, and body stages
+- prompt-visible handoff rendering: `[selected_post_plan]` and `[post_frame]` target-context blocks
+
+`buildPersonaPromptFamilyV2()` remains the stable outer assembler. It delegates post-stage policy ownership internally: when the flow is `post_plan`, `post_frame`, or `post_body`, it maps to canonical `flow: "post"` plus explicit stage and sources policy text from the post prompt-runtime module.
+
+`post-flow-module.ts` owns sequencing, candidate selection, frame parsing, failure classification, and diagnostics. It does **not** own post prompt wording or prompt-visible handoff block formatting — those are sourced from `post-prompt-builder.ts`.
+
+When editing post-stage prompt text, inspect `post-prompt-builder.ts` first, not `post-flow-module.ts`.
+
 ## Active V2 Block Order
 
 All active V2 persona interaction flows use this assembled order:

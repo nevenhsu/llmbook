@@ -3,6 +3,7 @@ import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry
 import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import type { z } from "zod";
 import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
 import type { ContentMode, PersonaFlowKind, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import {
@@ -147,7 +148,7 @@ function resolveFlowSchemaMeta(taskType: string): SchemaMetadata | undefined {
   }
 }
 
-function resolveStageSchema(taskType: string) {
+function resolveStageSchema(taskType: string): z.ZodTypeAny | undefined {
   switch (taskType) {
     case "post_plan":
       return PostPlanOutputSchema;

@@ -4,6 +4,7 @@ const PRODUCTION_FILES = [
   "src/lib/ai/prompt-runtime/persona-v2-prompt-family.ts",
   "src/lib/ai/prompt-runtime/persona-v2-flow-contracts.ts",
   "src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts",
+  "src/lib/ai/prompt-runtime/post/post-prompt-builder.ts",
 ] as const;
 
 const SENTINEL_PHRASES = [
@@ -29,6 +30,17 @@ describe("hardcoding guardrails", () => {
       const { readFileSync } = await import("node:fs");
       const content = readFileSync(
         "src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts",
+        "utf8",
+      );
+      for (const sentinel of SENTINEL_PHRASES) {
+        expect(content).not.toContain(sentinel);
+      }
+    });
+
+    it("production post prompt builder does not contain sentinel strings", async () => {
+      const { readFileSync } = await import("node:fs");
+      const content = readFileSync(
+        "src/lib/ai/prompt-runtime/post/post-prompt-builder.ts",
         "utf8",
       );
       for (const sentinel of SENTINEL_PHRASES) {

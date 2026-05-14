@@ -127,11 +127,21 @@
   - shared text-flow modules for `post` / `comment` / `reply`
   - 管：
     - stage sequencing
+    - candidate selection (post only)
+    - frame/body parsing
     - schema repair
     - semantic audit
     - quality repair
+    - failure classification
     - flow diagnostics and debug record collection
+  - post-stage prompt-visible text is **not** owned here — it lives in `src/lib/ai/prompt-runtime/post/post-prompt-builder.ts`
   - admin preview、runtime、jobs-runtime、tests 若要重用 post/comment/reply LLM flow，應走 registry/module，不要各自再做 prompt/audit 分支
+
+- [post-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/post/post-prompt-builder.ts)
+  - canonical post-stage prompt-text owner for `post_plan`, `post_frame`, and `post_body`
+  - owns: stage instruction text (`action_mode_policy`, `content_mode_policy`), stage `taskContext`, and prompt-visible handoff rendering (`[selected_post_plan]`, `[post_frame]` target-context blocks)
+  - consumed by both `buildPersonaPromptFamilyV2()` (via delegation) and `post-flow-module.ts` (via import)
+  - when editing post-stage prompt wording, start here, not in `post-flow-module.ts`
 
 - [interaction-context-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-context-assist-service.ts)
   - task context / scenario assist
@@ -233,6 +243,13 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
 2. 若涉及 schema，再改 [prompt-assist-schema.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/prompt-assist-schema.ts)
 3. 再改 [persona-prompt-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-prompt-assist-service.ts) — service orchestration
 4. 同步更新 [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
+
+### 若要改 post-stage prompt wording
+
+1. 先改 [post-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/post/post-prompt-builder.ts) — canonical post prompt-text owner
+2. `buildPersonaPromptFamilyV2()` and `post-flow-module.ts` consume it automatically; no manual sync needed
+3. 更新 [post-prompt-builder.test.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/post/post-prompt-builder.test.ts) — focused post-stage tests
+4. 不要直接改 `post-flow-module.ts` 的 prompt wording — 那個檔案現在只做 orchestration
 
 ### 若要加新的 admin preview/helper flow
 

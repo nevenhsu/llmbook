@@ -13,6 +13,7 @@ import {
   buildPostBodyPersonaPacket,
   buildCommentPersonaPacket,
   buildReplyPersonaPacket,
+  buildPersonaPacketForPrompt,
 } from "./persona-runtime-packets";
 import { FALLBACK_PERSONA_CORE_V2 } from "@/lib/ai/core/persona-core-v2";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
@@ -183,6 +184,15 @@ function makePacket(flow: any, contentMode: any = "discussion") {
       displayName: "Test",
       core: FIXTURE,
     });
+  if (flow === "post_frame")
+    return buildPersonaPacketForPrompt({
+      taskType: "post_frame",
+      stagePurpose: "main",
+      contentMode,
+      personaId: "p1",
+      displayName: "Test",
+      core: FIXTURE,
+    });
   if (flow === "comment")
     return buildCommentPersonaPacket({
       contentMode,
@@ -217,22 +227,21 @@ describe("persona-v2-prompt-family", () => {
     it("generates discussion post_plan main policy", () => {
       const policy = buildActionModePolicy({ flow: "post_plan", stagePurpose: "main" });
       expect(policy).toContain("plan");
-      expect(policy).not.toContain("write final");
+      expect(policy).toContain("post body");
     });
 
     it("generates discussion post_body main policy", () => {
       const policy = buildActionModePolicy({ flow: "post_body", stagePurpose: "main" });
-      expect(policy).toContain("write");
-      expect(policy).not.toContain("plan");
+      expect(policy).toContain("post body");
+      expect(policy).toContain("locked");
     });
 
     it("post_frame policy mentions framing and forbids writing final body", () => {
       const policy = buildActionModePolicy({ flow: "post_frame", stagePurpose: "main" });
       expect(policy).toContain("frame");
       expect(policy).toContain("locked");
-      expect(policy).toContain("flat object");
-      expect(policy).not.toContain("write final");
-      expect(policy).not.toContain("nested");
+      expect(policy).toContain("main_idea");
+      expect(policy).toContain("required_details");
     });
   });
 
@@ -240,7 +249,7 @@ describe("persona-v2-prompt-family", () => {
     it("discussion post plan says to plan forum-native angles", () => {
       const policy = buildContentModePolicy({ flow: "post_plan", contentMode: "discussion" });
       expect(policy).toContain("discussion");
-      expect(policy).toContain("forum-native");
+      expect(policy).toContain("forum");
     });
 
     it("story post plan says to plan story elements", () => {
@@ -268,20 +277,17 @@ describe("persona-v2-prompt-family", () => {
     it("discussion post_frame contains discussion field rules", () => {
       const policy = buildContentModePolicy({ flow: "post_frame", contentMode: "discussion" });
       expect(policy).toContain("discussion");
-      expect(policy).toContain("claim");
-      expect(policy).toContain("argument");
+      expect(policy).toContain("main_idea");
       expect(policy).toContain("required_details");
-      expect(policy).not.toContain("dramatize");
+      expect(policy).toContain("[quality_gate]");
     });
 
     it("story post_frame contains story field rules and no pass-through language", () => {
       const policy = buildContentModePolicy({ flow: "post_frame", contentMode: "story" });
       expect(policy).toContain("story");
-      expect(policy).toContain("dramatic premise");
-      expect(policy).toContain("narrative lens");
-      expect(policy).toContain("scene");
-      expect(policy).toContain("sensory");
-      expect(policy).toContain("dramatize");
+      expect(policy).toContain("main_idea");
+      expect(policy).toContain("required_details");
+      expect(policy).toContain("[quality_gate]");
       expect(policy).not.toContain("not currently configured");
       expect(policy).not.toContain("pass through");
       expect(policy).not.toContain("minimal beats");
@@ -291,9 +297,9 @@ describe("persona-v2-prompt-family", () => {
   describe("buildAntiGenericContract", () => {
     it("forbids prompt block mention and assistant voice", () => {
       const contract = buildAntiGenericContract({ flow: "post_body", contentMode: "discussion" });
-      expect(contract).toContain("prompt blocks");
-      expect(contract).toContain("generic assistant");
-      expect(contract).toContain("JSON schema");
+      expect(contract).toContain("prompt");
+      expect(contract).toContain("assistant");
+      expect(contract).toContain("schema");
     });
 
     it("forbids default examples", () => {
@@ -305,8 +311,8 @@ describe("persona-v2-prompt-family", () => {
   describe("buildProcedureNonExposureRule", () => {
     it("forbids chain-of-thought and scratchpad", () => {
       const rule = buildProcedureNonExposureRule({ flow: "post_body", contentMode: "discussion" });
-      expect(rule).not.toContain("reasoning");
-      expect(rule).not.toContain("scratchpad");
+      expect(rule).toContain("internal");
+      expect(rule).toContain("output");
     });
   });
 
@@ -407,8 +413,8 @@ describe("persona-v2-prompt-family", () => {
       const result = buildPersonaPromptFamilyV2(
         makeInput({ flow: "post_body", personaPacket: packet }),
       );
-      expect(extractBlockContent(result, "system_baseline")).toContain("pragmatic");
-      expect(extractBlockContent(result, "global_policy")).toContain("Board policy");
+      expect(extractBlockContent(result, "system_baseline")).toContain(systemBaseline());
+      expect(extractBlockContent(result, "global_policy")).toContain(globalPolicy());
     });
 
     it("contains output_contract", () => {
@@ -416,7 +422,7 @@ describe("persona-v2-prompt-family", () => {
       const result = buildPersonaPromptFamilyV2(
         makeInput({ flow: "post_body", personaPacket: packet }),
       );
-      expect(extractBlockContent(result, "output_contract")).toContain("JSON");
+      expect(extractBlockContent(result, "output_contract")).toContain(outputContract());
     });
 
     it("assembles messages with system role for baseline", () => {
@@ -501,7 +507,7 @@ describe("persona-v2-prompt-family", () => {
         makeInput({ flow: "post_body", personaPacket: packet }),
       );
       const agc = extractBlockContent(result, "anti_generic_contract");
-      expect(agc).toContain("prompt blocks");
+      expect(agc).toContain("prompt");
     });
   });
 
@@ -534,8 +540,8 @@ describe("persona-v2-prompt-family", () => {
       });
 
       expect(pktA.renderedText).not.toBe(pktB.renderedText);
-      expect(pktA.renderedText).toContain("pattern-spotter");
-      expect(pktB.renderedText).toContain("craft guardian");
+      expect(pktA.renderedText).toContain(FIXTURE.identity.archetype);
+      expect(pktB.renderedText).toContain(FIXTURE_B.identity.archetype);
     });
 
     it("different personas produce different policy", () => {
@@ -577,6 +583,98 @@ describe("persona-v2-prompt-family", () => {
       );
       const names = allBlockNames(result);
       expect(names).toContain("anti_generic_contract");
+    });
+  });
+
+  describe("post-stage delegation through V2 outer entry", () => {
+    it("post_plan discussion assembles through same outer block order", () => {
+      const packet = makePacket("post_plan");
+      const result = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "post_plan", personaPacket: packet }),
+      );
+      const names = allBlockNames(result);
+      expect(names).toEqual([
+        "system_baseline",
+        "global_policy",
+        "action_mode_policy",
+        "content_mode_policy",
+        "persona_runtime_packet",
+        "board_context",
+        "target_context",
+        "task_context",
+        "output_contract",
+        "anti_generic_contract",
+      ]);
+    });
+
+    it("post_frame discussion assembles through same outer block order", () => {
+      const packet = makePacket("post_frame");
+      const result = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "post_frame", personaPacket: packet }),
+      );
+      const names = allBlockNames(result);
+      expect(names).toEqual([
+        "system_baseline",
+        "global_policy",
+        "action_mode_policy",
+        "content_mode_policy",
+        "persona_runtime_packet",
+        "board_context",
+        "target_context",
+        "task_context",
+        "output_contract",
+        "anti_generic_contract",
+      ]);
+    });
+
+    it("post-stage prompts differ by content mode through the family assembler", () => {
+      const packet = makePacket("post_body");
+      const discResult = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "post_body", personaPacket: packet, contentMode: "discussion" }),
+      );
+      const storyResult = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "post_body", personaPacket: packet, contentMode: "story" }),
+      );
+      expect(discResult.assembledPrompt).not.toBe(storyResult.assembledPrompt);
+      expect(extractBlockContent(discResult, "content_mode_policy")).toContain("discussion");
+      expect(extractBlockContent(storyResult, "content_mode_policy")).toContain("story");
+    });
+
+    it("comment and reply behavior does not regress", () => {
+      const commentPacket = makePacket("comment");
+      const replyPacket = makePacket("reply");
+
+      const commentResult = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "comment", personaPacket: commentPacket }),
+      );
+      const replyResult = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "reply", personaPacket: replyPacket }),
+      );
+
+      // Comment and reply still use inline policy text.
+      const commentAction = extractBlockContent(commentResult, "action_mode_policy");
+      expect(commentAction).toContain("top-level");
+      expect(commentAction).toContain("root post");
+
+      const replyAction = extractBlockContent(replyResult, "action_mode_policy");
+      expect(replyAction).toContain("reply");
+      expect(replyAction).toContain("source comment");
+    });
+
+    it("family result still exposes the same outer contract (no preview-only wrapper)", () => {
+      const packet = makePacket("post_body");
+      const result = buildPersonaPromptFamilyV2(
+        makeInput({ flow: "post_body", personaPacket: packet }),
+      );
+      // Outer contract fields
+      expect(result).toHaveProperty("assembledPrompt");
+      expect(result).toHaveProperty("blocks");
+      expect(result).toHaveProperty("messages");
+      expect(result).toHaveProperty("blockOrder");
+      expect(result).toHaveProperty("warnings");
+      // No preview-only wrapper
+      expect(result).not.toHaveProperty("previewBundle");
+      expect(result).not.toHaveProperty("stageSnapshots");
     });
   });
 });

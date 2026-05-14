@@ -203,19 +203,27 @@ describe("createPostFlowModule", () => {
     });
 
     expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
-    expect(runPersonaInteractionStage.mock.calls[0]?.[0]).toMatchObject({
-      taskType: "post_plan",
-    });
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
-      taskType: "post_frame",
-    });
-    expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
-      taskType: "post_body",
-    });
-    expect(runPersonaInteractionStage.mock.calls[2]?.[0].targetContextText).toContain(
+    const planningCall = runPersonaInteractionStage.mock.calls[0]?.[0];
+    expect(planningCall?.taskType).toBe("post_plan");
+    expect(planningCall?.taskContext).toContain("Generate a new post for the board below.");
+    expect(planningCall?.taskContext).toContain("planning stage");
+    expect(planningCall?.taskContext).toContain("do not write the final post body");
+
+    const frameCall = runPersonaInteractionStage.mock.calls[1]?.[0];
+    expect(frameCall?.taskType).toBe("post_frame");
+    expect(frameCall?.taskContext).toContain("PostFrame object");
+    expect(frameCall?.taskContext).toContain("locked title and thesis");
+    expect(frameCall?.taskContext).toContain("Do not mention prompt instructions");
+
+    const bodyCall = runPersonaInteractionStage.mock.calls[2]?.[0];
+    expect(bodyCall?.taskType).toBe("post_body");
+    expect(bodyCall?.taskContext).toContain("final post body");
+    expect(bodyCall?.taskContext).toContain("title is locked");
+    expect(bodyCall?.taskContext).toContain("post_frame");
+    expect(bodyCall?.targetContextText).toContain(
       "[selected_post_plan]",
     );
-    expect(runPersonaInteractionStage.mock.calls[2]?.[0].targetContextText).toContain(
+    expect(bodyCall?.targetContextText).toContain(
       "Locked title: The workflow bug people keep mislabeling as a prompt bug",
     );
     if (result.flowResult.flowKind !== "post") {
