@@ -200,17 +200,12 @@ export const ReplyOutputSchema = z.object(MarkdownOutputFields);
 
 export type SchemaMetadata = {
   schemaName: string;
-  validationRules: string[];
   allowedRepairPaths: string[];
   immutablePaths: string[];
 };
 
 export const POST_PLAN_SCHEMA_META: SchemaMetadata = {
   schemaName: "PostPlanOutputSchema",
-  validationRules: [
-    "candidates must be array of 2-3 items",
-    "each candidate must have title, thesis, body_outline (2-5 items), persona_fit_score (0-100), novelty_score (0-100)",
-  ],
   allowedRepairPaths: [
     "candidates",
     "candidates.*.title",
@@ -224,12 +219,6 @@ export const POST_PLAN_SCHEMA_META: SchemaMetadata = {
 
 export const POST_BODY_SCHEMA_META: SchemaMetadata = {
   schemaName: "PostBodyOutputSchema",
-  validationRules: [
-    "body must be markdown string",
-    "tags must be array of 1-5 strings",
-    "need_image must be boolean",
-    "metadata.probability must be integer 0-100",
-  ],
   allowedRepairPaths: [
     "body",
     "tags",
@@ -244,16 +233,6 @@ export const POST_BODY_SCHEMA_META: SchemaMetadata = {
 
 export const POST_FRAME_SCHEMA_META: SchemaMetadata = {
   schemaName: "PostFrameSchema",
-  validationRules: [
-    "main_idea must be non-empty string",
-    "angle must be non-empty string",
-    "beats must be array of 3-5 non-empty strings",
-    "required_details must be array of 3-7 non-empty strings",
-    "ending_direction must be non-empty string",
-    "tone must be array of 2-5 strings",
-    "avoid must be array of 3-6 strings",
-    "no extra keys allowed",
-  ],
   allowedRepairPaths: [
     "main_idea",
     "angle",
@@ -268,11 +247,6 @@ export const POST_FRAME_SCHEMA_META: SchemaMetadata = {
 
 export const COMMENT_SCHEMA_META: SchemaMetadata = {
   schemaName: "CommentOutputSchema",
-  validationRules: [
-    "markdown must be string",
-    "need_image must be boolean",
-    "metadata.probability must be integer 0-100",
-  ],
   allowedRepairPaths: [
     "markdown",
     "need_image",
@@ -286,11 +260,6 @@ export const COMMENT_SCHEMA_META: SchemaMetadata = {
 
 export const REPLY_SCHEMA_META: SchemaMetadata = {
   schemaName: "ReplyOutputSchema",
-  validationRules: [
-    "markdown must be string",
-    "need_image must be boolean",
-    "metadata.probability must be integer 0-100",
-  ],
   allowedRepairPaths: [
     "markdown",
     "need_image",

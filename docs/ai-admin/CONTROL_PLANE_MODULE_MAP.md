@@ -26,7 +26,7 @@
 
 - [control-plane-contract.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-contract.ts)
   - admin AI control-plane 的 canonical types / errors
-  - 例如 `PreviewResult`、`PersonaProfile`、`PromptAssistError`
+  - 例如 `PreviewResult`、`PersonaProfile`、`PersonaGenerationParseError`
   - 新功能若需要共用型別，優先加在這裡，不要再從 store re-export 當 source of truth
 
 - [stage-debug-records.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/stage-debug-records.ts)
@@ -57,13 +57,12 @@
 ### 3. Persona Generation Parsing / Validation
 
 - [persona-generation-contract.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-contract.ts)
-  - persona generation 專用 parser / validator / prompt-assist validation helper
+  - persona generation 專用 parser / validator
   - 例如：
     - stage output parsing
     - `reference_sources` / `other_reference_sources` canonical parsing
     - `persona_core` canonical parsing
     - English-only / mixed-script quality checks
-    - prompt-assist truncation / weak-output validation
   - 新的 staged generation schema 或 parser/quality logic 應先加在這裡
 
 - [generation-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts)
@@ -86,12 +85,21 @@
     - parse/deterministic quality checks
     - preview payload assembly
 
+- [prompt-assist-schema.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/prompt-assist-schema.ts)
+  - PromptAssist 的 narrow Zod schema
+  - LLM-owned output shape: `{ text, referenceNames }`
+  - schema ownership only; debugRecords 屬於 API/code envelope
+
+- [prompt-assist-prompt.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts)
+  - PromptAssist 的 canonical prompt text
+  - single render helper for the one structured call
+  - 不要將 prompt 放回 `src/lib/ai/admin/*`
+
 - [persona-prompt-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-prompt-assist-service.ts)
   - `/api/admin/ai/persona-generation/prompt-assist`
-  - 管：
-    - reference-first assist
-    - empty-output / truncation / missing-reference repair
-    - typed prompt-assist errors
+  - one `invokeStructuredLLM` call with the PromptAssist schema
+  - app-code normalization and deterministic checks (text not empty, referenceNames not empty)
+  - returns `{ text, referenceNames, debugRecords }` on success or `{ error, rawText, debugRecords }` on failure
 
 - [interaction-preview-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-preview-service.ts)
   - `Interaction Preview` 的 admin no-write wrapper
@@ -221,9 +229,10 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
 
 ### 若要改 prompt-assist contract
 
-1. 先改 [persona-prompt-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-prompt-assist-service.ts)
-2. 若涉及 validator，再改 [persona-generation-contract.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-contract.ts)
-3. 同步更新 [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
+1. 先改 [prompt-assist-prompt.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts) — canonical prompt text
+2. 若涉及 schema，再改 [prompt-assist-schema.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/prompt-assist-schema.ts)
+3. 再改 [persona-prompt-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-prompt-assist-service.ts) — service orchestration
+4. 同步更新 [ADMIN_CONTROL_PLANE_SPEC.md](/Users/neven/Documents/projects/llmbook/docs/ai-admin/ADMIN_CONTROL_PLANE_SPEC.md)
 
 ### 若要加新的 admin preview/helper flow
 

@@ -1,18 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isAdmin, assistPersonaPrompt, PromptAssistError } = vi.hoisted(() => ({
+const { isAdmin, assistPersonaPrompt } = vi.hoisted(() => ({
   isAdmin: vi.fn(),
   assistPersonaPrompt: vi.fn(),
-  PromptAssistError: class PromptAssistError extends Error {
-    code: string;
-    details?: Record<string, unknown> | null;
-    constructor(message: string, code: string, details?: Record<string, unknown> | null) {
-      super(message);
-      this.name = "PromptAssistError";
-      this.code = code;
-      this.details = details ?? null;
-    }
-  },
 }));
 
 vi.mock("@/lib/admin", () => ({
@@ -23,7 +13,6 @@ vi.mock("@/lib/ai/admin/control-plane-store", () => ({
   AdminAiControlPlaneStore: class {
     assistPersonaPrompt = assistPersonaPrompt;
   },
-  PromptAssistError,
 }));
 
 vi.mock("@/lib/server/route-helpers", () => ({
@@ -49,7 +38,11 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isAdmin.mockResolvedValue(true);
-    assistPersonaPrompt.mockResolvedValue({ text: "Prompt text", referenceNames: [] });
+    assistPersonaPrompt.mockResolvedValue({
+      text: "Prompt text",
+      referenceNames: ["Ada Lovelace"],
+      debugRecords: [],
+    });
   });
 
   it("requires modelId", async () => {
@@ -63,7 +56,7 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns assisted prompt text", async () => {
+  it("returns assisted prompt text with referenceNames and debugRecords", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-generation/prompt-assist", {
       method: "POST",
       body: JSON.stringify({ modelId: "model-1", inputPrompt: "hello" }),
@@ -72,28 +65,30 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ text: "Prompt text", referenceNames: [] });
+    expect(await res.json()).toEqual({
+      text: "Prompt text",
+      referenceNames: ["Ada Lovelace"],
+      debugRecords: [],
+    });
     expect(assistPersonaPrompt).toHaveBeenCalledWith({
       modelId: "model-1",
       inputPrompt: "hello",
     });
   });
 
-  it("surfaces prompt-assist errors instead of fabricating fallback text", async () => {
-    assistPersonaPrompt.mockRejectedValue(
-      new PromptAssistError(
-        "prompt assist repair returned empty output",
-        "prompt_assist_repair_output_empty",
+  it("surfaces prompt-assist failures with error, rawText, and debugRecords", async () => {
+    assistPersonaPrompt.mockResolvedValue({
+      error: "prompt assist output text is empty",
+      rawText: null,
+      debugRecords: [
         {
-          attemptStage: "empty_output_repair",
-          providerId: "xai",
-          modelId: "grok-4-1-fast-reasoning",
-          finishReason: "length",
-          hadText: false,
-          rawText: null,
+          name: "prompt_assist",
+          displayPrompt: "mock prompt",
+          outputMaxTokens: 1024,
+          attempts: [],
         },
-      ),
-    );
+      ],
+    });
 
     const req = new Request("http://localhost/api/admin/ai/persona-generation/prompt-assist", {
       method: "POST",
@@ -104,34 +99,41 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({
-      error: "prompt assist repair returned empty output",
-      code: "prompt_assist_repair_output_empty",
+      error: "prompt assist output text is empty",
       rawText: null,
-      details: {
-        attemptStage: "empty_output_repair",
-        providerId: "xai",
-        modelId: "grok-4-1-fast-reasoning",
-        finishReason: "length",
-        hadText: false,
-      },
+      debugRecords: [
+        {
+          name: "prompt_assist",
+          displayPrompt: "mock prompt",
+          outputMaxTokens: 1024,
+          attempts: [],
+        },
+      ],
     });
   });
 
-  it("includes the failing llm output when prompt-assist validation rejects a non-empty result", async () => {
-    assistPersonaPrompt.mockRejectedValue(
-      new PromptAssistError(
-        "prompt assist output must include at least 1 explicit personality-bearing named reference",
-        "prompt_assist_missing_reference",
+  it("returns failure when the llm output has no reference names", async () => {
+    assistPersonaPrompt.mockResolvedValue({
+      error: "prompt assist output must include at least one reference name",
+      rawText: "A globe-trotting storyteller who turns every meal into a social map.",
+      debugRecords: [
         {
-          attemptStage: "main_rewrite",
-          providerId: "minimax",
-          modelId: "MiniMax-M2.5",
-          finishReason: "stop",
-          hadText: true,
-          rawText: "A globe-trotting storyteller who turns every meal into a social map.",
+          name: "prompt_assist",
+          displayPrompt: "mock prompt",
+          outputMaxTokens: 1024,
+          attempts: [
+            {
+              attempt: "main",
+              text: "A globe-trotting storyteller who turns every meal into a social map.",
+              finishReason: "stop",
+              providerId: "minimax",
+              modelId: "MiniMax-M2.5",
+              hadError: false,
+            },
+          ],
         },
-      ),
-    );
+      ],
+    });
 
     const req = new Request("http://localhost/api/admin/ai/persona-generation/prompt-assist", {
       method: "POST",
@@ -142,17 +144,25 @@ describe("POST /api/admin/ai/persona-generation/prompt-assist", () => {
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({
-      error:
-        "prompt assist output must include at least 1 explicit personality-bearing named reference",
-      code: "prompt_assist_missing_reference",
+      error: "prompt assist output must include at least one reference name",
       rawText: "A globe-trotting storyteller who turns every meal into a social map.",
-      details: {
-        attemptStage: "main_rewrite",
-        providerId: "minimax",
-        modelId: "MiniMax-M2.5",
-        finishReason: "stop",
-        hadText: true,
-      },
+      debugRecords: [
+        {
+          name: "prompt_assist",
+          displayPrompt: "mock prompt",
+          outputMaxTokens: 1024,
+          attempts: [
+            {
+              attempt: "main",
+              text: "A globe-trotting storyteller who turns every meal into a social map.",
+              finishReason: "stop",
+              providerId: "minimax",
+              modelId: "MiniMax-M2.5",
+              hadError: false,
+            },
+          ],
+        },
+      ],
     });
   });
 });

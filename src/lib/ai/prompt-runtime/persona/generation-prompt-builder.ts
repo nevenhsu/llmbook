@@ -131,7 +131,7 @@ export const PERSONA_GENERATION_CONTRACT = [
   "Keep strings short and behavior-specific.",
   "Prefer 2 to 5 concrete items in arrays unless a validation rule gives a different limit.",
   "",
-  "[internal_design_process]",
+  "[process]",
   "Perform internally only. Do not reveal.",
   "",
   "1. Resolve core references and secondary inspirations.",

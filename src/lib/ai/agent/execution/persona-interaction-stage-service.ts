@@ -282,7 +282,6 @@ export class AiAgentPersonaInteractionStageService {
         resolveFlowSchemaMeta(input.taskType) ??
         ({
           schemaName: "Unknown",
-          validationRules: [],
           allowedRepairPaths: [],
           immutablePaths: [],
         } satisfies SchemaMetadata);
@@ -317,7 +316,6 @@ export class AiAgentPersonaInteractionStageService {
         schemaGate: {
           schemaName: schemaMeta.schemaName,
           schema: stageSchema,
-          validationRules: schemaMeta.validationRules,
           allowedRepairPaths: schemaMeta.allowedRepairPaths,
           immutablePaths: schemaMeta.immutablePaths,
         },

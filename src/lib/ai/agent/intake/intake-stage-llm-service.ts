@@ -396,7 +396,6 @@ function clampNonNegativeInt(value: number, max: number): number {
 function resolveIntakeSchemaGate(input: StageInvokeInput): {
   schemaName: string;
   schema: z.ZodTypeAny;
-  validationRules: string[];
   allowedRepairPaths: string[];
   immutablePaths: string[];
 } | null {
@@ -406,10 +405,6 @@ function resolveIntakeSchemaGate(input: StageInvokeInput): {
     return {
       schemaName: "OpportunityProbabilityOutputSchema",
       schema: OpportunityProbabilityOutputSchema,
-      validationRules: [
-        "scores must be array",
-        "each score must have opportunityKey (string), probability (0-100), contentMode (string)",
-      ],
       allowedRepairPaths: ["scores", "scores.*.probability", "scores.*.contentMode"],
       immutablePaths: ["scores.*.opportunityKey"],
     };
@@ -419,10 +414,6 @@ function resolveIntakeSchemaGate(input: StageInvokeInput): {
     return {
       schemaName: "SpeakerCandidatesOutputSchema",
       schema: SpeakerCandidatesOutputSchema,
-      validationRules: [
-        "speakerCandidates must be array",
-        "each entry must have opportunityKey (string), selectedSpeakers (array of {name, probability})",
-      ],
       allowedRepairPaths: [
         "speakerCandidates",
         "speakerCandidates.*.selectedSpeakers",
@@ -487,7 +478,6 @@ export class AiAgentIntakeStageLlmService {
               schemaGate: {
                 schemaName: structuredMeta.schemaName,
                 schema: structuredMeta.schema,
-                validationRules: structuredMeta.validationRules,
                 allowedRepairPaths: structuredMeta.allowedRepairPaths,
                 immutablePaths: structuredMeta.immutablePaths,
               },

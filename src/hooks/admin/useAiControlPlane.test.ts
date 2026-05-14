@@ -3,7 +3,6 @@ import type { PolicyReleaseListItem } from "@/lib/ai/admin/control-plane-store";
 import {
   applyPolicyReleaseToDraft,
   isEligiblePersonaGenerationModel,
-  stripPromptAssistReferenceSuffix,
 } from "@/hooks/admin/useAiControlPlane";
 import type { DraftState } from "@/lib/ai/admin/control-plane-types";
 import type { AiModelConfig, AiProviderConfig } from "@/lib/ai/admin/control-plane-store";
@@ -119,24 +118,5 @@ describe("isEligiblePersonaGenerationModel", () => {
     expect(
       isEligiblePersonaGenerationModel({ ...baseModel, lifecycleStatus: "retired" }, provider),
     ).toBe(false);
-  });
-});
-
-describe("stripPromptAssistReferenceSuffix", () => {
-  it("removes the fixed trailing reference suffix when exact reference names are provided separately", () => {
-    expect(
-      stripPromptAssistReferenceSuffix(
-        "A lucid world-builder who widens the imaginable. Reference sources: Ursula K. Le Guin, Octavia Butler.",
-        ["Ursula K. Le Guin", "Octavia Butler"],
-      ),
-    ).toBe("A lucid world-builder who widens the imaginable.");
-  });
-
-  it("leaves the text unchanged when the exact trailing reference suffix is not present", () => {
-    expect(
-      stripPromptAssistReferenceSuffix("A lucid world-builder who widens the imaginable.", [
-        "Ursula K. Le Guin",
-      ]),
-    ).toBe("A lucid world-builder who widens the imaginable.");
   });
 });

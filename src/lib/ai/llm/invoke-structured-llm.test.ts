@@ -25,7 +25,6 @@ const TestSchema = z.object({
 const schemaGateConfig = {
   schemaName: "TestSchema",
   schema: TestSchema,
-  validationRules: ["name must be string", "score must be int 0-100"],
   allowedRepairPaths: ["name", "score"],
   immutablePaths: [],
 };

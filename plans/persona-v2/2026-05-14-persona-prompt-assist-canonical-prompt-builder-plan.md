@@ -2,7 +2,7 @@
 
 **Goal:** Simplify `/api/admin/ai/persona-generation/prompt-assist` into one `invokeStructuredLLM` call that returns structured PromptAssist output, while moving PromptAssist's canonical prompt text into one `prompt-runtime` file.
 
-**Architecture:** `prompt-assist` is an admin helper pipeline, not a `Flow`. This change removes the current multi-call `reference_resolution -> audit -> rewrite -> repair` shape and replaces it with one code-owned PromptAssist schema plus one canonical prompt renderer. The model returns only the structured PromptAssist payload; app code adds debug artifacts, enforces minimal deterministic checks, and surfaces success/failure envelopes.
+**Architecture:** `prompt-assist` is an admin helper pipeline, not a `Flow`. The live implementation now uses one code-owned PromptAssist schema plus one canonical prompt renderer. This plan documents and hardens that one-call `invokeStructuredLLM` shape: the model returns only the structured PromptAssist payload, while app code adds debug artifacts, enforces minimal deterministic checks, and surfaces success/failure envelopes.
 
 **Resolved Decisions:**
 
@@ -14,7 +14,7 @@
 - `text` must not be empty after `trim()`.
 - `debugRecords` is not part of the LLM schema; app code attaches it to success and failure responses.
 - Canonical prompt text stays in `prompt-runtime`, not `admin/*`.
-- The canonical prompt file is `src/lib/ai/prompt-runtime/persona/prompt-assist.ts`.
+- The canonical prompt file is `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`.
 - The PromptAssist schema lives in a narrow dedicated file, not inside the service and not inside `persona-generation-contract.ts`.
 - Do not preserve the old trailing `Reference sources: ...` suffix contract.
 - Remove old PromptAssist-specific retry / repair / audit / resolution assumptions from the implementation.
@@ -31,16 +31,7 @@
 
 ## Current Problem
 
-The current PromptAssist implementation in `src/lib/ai/admin/persona-prompt-assist-service.ts` still assumes an older multi-call architecture:
-
-- reference-resolution JSON call
-- reference audit call
-- rewrite call
-- multiple retry / repair calls
-- suffix-based text contract (`Reference sources: ...`)
-- PromptAssist-specific error-code taxonomy tied to those retries
-
-That no longer matches the desired product shape. The new target is simpler:
+The live PromptAssist code has already moved to the simpler one-call model, but surrounding planning and tracker material can still drift back toward older assumptions. The active contract that must stay aligned is:
 
 - one structured LLM call
 - one schema-owned result object
@@ -52,7 +43,7 @@ That no longer matches the desired product shape. The new target is simpler:
 ### Prompt file
 
 ```text
-src/lib/ai/prompt-runtime/persona/prompt-assist.ts
+src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts
 ```
 
 This file owns PromptAssist's canonical static prompt content and renders the final prompt text for the single structured call.
@@ -99,7 +90,7 @@ Notes:
 
 **Files:**
 
-- Add: `src/lib/ai/prompt-runtime/persona/prompt-assist.ts`
+- Add: `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`
 
 **Steps:**
 
@@ -190,7 +181,7 @@ Notes:
 
 - Modify: `src/lib/ai/admin/persona-generation-contract.ts`
 - Modify: `src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts`
-- Modify: `src/hooks/admin/useAiControlPlane.test.ts`
+- Modify: `src/hooks/admin/useAiControlPlane.prompt-assist.test.ts`
 - Modify: `src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
 
 **Steps:**
@@ -213,7 +204,7 @@ Notes:
 **Steps:**
 
 - Update docs so PromptAssist prompt wording ownership starts in:
-  - `src/lib/ai/prompt-runtime/persona/prompt-assist.ts`
+  - `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`
 - Update docs so PromptAssist schema ownership starts in:
   - `src/lib/ai/admin/prompt-assist-schema.ts`
 - Remove stale descriptions of PromptAssist as a multi-call resolution / audit / rewrite helper.
@@ -227,7 +218,7 @@ Run focused verification for the new one-call PromptAssist contract:
 npx vitest run \
   src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts \
   src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts \
-  src/hooks/admin/useAiControlPlane.test.ts
+  src/hooks/admin/useAiControlPlane.prompt-assist.test.ts
 ```
 
 Add prompt/runtime contract coverage where touched:
@@ -250,7 +241,7 @@ If `tsc` is blocked by unrelated repo failures, report that separately from the 
 
 Primary implementation targets:
 
-- `src/lib/ai/prompt-runtime/persona/prompt-assist.ts`
+- `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`
 - `src/lib/ai/admin/prompt-assist-schema.ts`
 - `src/lib/ai/admin/persona-prompt-assist-service.ts`
 - `src/app/api/admin/ai/persona-generation/prompt-assist/route.ts`
@@ -264,7 +255,7 @@ Likely cleanup / verification touchpoints:
 - `src/lib/ai/admin/persona-generation-contract.ts`
 - `src/lib/ai/admin/control-plane-store.persona-prompt-assist.test.ts`
 - `src/app/api/admin/ai/persona-generation/prompt-assist/route.test.ts`
-- `src/hooks/admin/useAiControlPlane.test.ts`
+- `src/hooks/admin/useAiControlPlane.prompt-assist.test.ts`
 - `src/lib/ai/prompt-runtime/prompt-hardcode-guard.test.ts`
 
 ## Success Criteria

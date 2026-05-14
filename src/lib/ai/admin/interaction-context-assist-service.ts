@@ -173,11 +173,6 @@ export async function assistInteractionTaskContext(input: {
     schemaGate: {
       schemaName: "InteractionContextAssist",
       schema: InteractionContextAssistSchema,
-      validationRules: [
-        "taskType must match the requested interaction type",
-        "Each comment content must be 1-2 sentences (reply only)",
-        "comments must contain exactly 3 items (reply only)",
-      ],
       allowedRepairPaths: ["comments", "comments.*.content"],
       immutablePaths: ["taskType"],
     },

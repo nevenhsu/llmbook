@@ -513,7 +513,6 @@ describe("Zod output schemas", () => {
   describe("schema metadata", () => {
     it("POST_PLAN_SCHEMA_META has required fields", () => {
       expect(POST_PLAN_SCHEMA_META.schemaName).toBe("PostPlanOutputSchema");
-      expect(POST_PLAN_SCHEMA_META.validationRules.length).toBeGreaterThan(0);
       expect(POST_PLAN_SCHEMA_META.allowedRepairPaths.length).toBeGreaterThan(0);
       expect(POST_PLAN_SCHEMA_META.immutablePaths.length).toBeGreaterThan(0);
     });
@@ -525,7 +524,6 @@ describe("Zod output schemas", () => {
 
     it("POST_FRAME_SCHEMA_META excludes code-owned fields", () => {
       expect(POST_FRAME_SCHEMA_META.schemaName).toBe("PostFrameSchema");
-      expect(POST_FRAME_SCHEMA_META.validationRules.length).toBeGreaterThan(0);
       expect(POST_FRAME_SCHEMA_META.allowedRepairPaths.length).toBeGreaterThan(0);
       expect(POST_FRAME_SCHEMA_META.immutablePaths).toEqual([]);
       expect(POST_FRAME_SCHEMA_META.allowedRepairPaths).not.toContain("content_mode");

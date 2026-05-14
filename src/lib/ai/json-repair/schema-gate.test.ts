@@ -23,7 +23,6 @@ function makeGateInput<T>(
     rawText: "",
     finishReason: null,
     schemaName: "TestSchema",
-    validationRules: [],
     allowedRepairPaths: [],
     immutablePaths: [],
     ...overrides,

@@ -31,7 +31,6 @@ export type InvokeStructuredLlmInput<T = unknown> = {
   schemaGate: {
     schemaName: string;
     schema: z.ZodType<T>;
-    validationRules: string[];
     allowedRepairPaths: string[];
     immutablePaths: string[];
     compactRetryAllowed?: boolean;
@@ -88,7 +87,6 @@ export async function invokeStructuredLLM<T>(
     generationErrorMessage: errorMessage ?? undefined,
     schemaName: input.schemaGate.schemaName,
     schema: input.schemaGate.schema,
-    validationRules: input.schemaGate.validationRules,
     allowedRepairPaths: input.schemaGate.allowedRepairPaths,
     immutablePaths: input.schemaGate.immutablePaths,
     invokeFieldPatch: fieldPatchAdapter,

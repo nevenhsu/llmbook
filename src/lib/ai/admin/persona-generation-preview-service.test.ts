@@ -173,7 +173,6 @@ describe("previewPersonaGeneration", () => {
       expect.objectContaining({
         schemaGate: expect.objectContaining({
           schemaName: "PersonaCoreV2Schema",
-          validationRules: expect.not.arrayContaining([expect.stringContaining("schema_version")]),
         }),
       }),
     );

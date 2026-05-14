@@ -76,7 +76,6 @@ import {
 } from "@/lib/ai/admin/persona-reference-normalization";
 
 export {
-  PromptAssistError,
   PersonaGenerationParseError,
   PersonaGenerationQualityError,
 } from "@/lib/ai/admin/control-plane-contract";
@@ -1456,7 +1455,7 @@ export class AdminAiControlPlaneStore {
   public async assistPersonaPrompt(input: {
     modelId: string;
     inputPrompt: string;
-  }): Promise<{ text: string; referenceNames: string[] }> {
+  }): Promise<Awaited<ReturnType<typeof assistPersonaPrompt>>> {
     const { providers, models } = await this.getActiveControlPlane();
     return assistPersonaPrompt({
       ...input,

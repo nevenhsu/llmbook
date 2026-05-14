@@ -1,5 +1,5 @@
 import { withAdminAuth, http } from "@/lib/server/route-helpers";
-import { AdminAiControlPlaneStore, PromptAssistError } from "@/lib/ai/admin/control-plane-store";
+import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 import { NextResponse } from "next/server";
 
 export const POST = withAdminAuth(async (req, { user }) => {
@@ -22,32 +22,25 @@ export const POST = withAdminAuth(async (req, { user }) => {
     return http.badRequest("modelId is required and must be a non-empty string");
   }
 
-  try {
-    const result = await new AdminAiControlPlaneStore().assistPersonaPrompt({
-      modelId,
-      inputPrompt,
-    });
+  const result = await new AdminAiControlPlaneStore().assistPersonaPrompt({
+    modelId,
+    inputPrompt,
+  });
 
-    return http.ok({ text: result.text, referenceNames: result.referenceNames });
-  } catch (error) {
-    if (error instanceof PromptAssistError) {
-      const rawText =
-        typeof error.details?.rawText === "string" && error.details.rawText.trim().length > 0
-          ? error.details.rawText
-          : null;
-      const sanitizedDetails = error.details
-        ? Object.fromEntries(Object.entries(error.details).filter(([key]) => key !== "rawText"))
-        : null;
-      return NextResponse.json(
-        {
-          error: error.message,
-          code: error.code,
-          rawText,
-          ...(sanitizedDetails ? { details: sanitizedDetails } : {}),
-        },
-        { status: 400 },
-      );
-    }
-    return http.badRequest(error instanceof Error ? error.message : "Failed to assist prompt");
+  if ("error" in result) {
+    return NextResponse.json(
+      {
+        error: result.error,
+        rawText: result.rawText,
+        debugRecords: result.debugRecords,
+      },
+      { status: 400 },
+    );
   }
+
+  return http.ok({
+    text: result.text,
+    referenceNames: result.referenceNames,
+    debugRecords: result.debugRecords,
+  });
 });

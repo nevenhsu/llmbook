@@ -175,12 +175,6 @@ export async function previewPersonaGeneration(input: {
           schemaGate: {
             schemaName: "PersonaCoreV2Schema",
             schema: PersonaCoreV2Schema,
-            validationRules: [
-              "persona_fit_probability must be integer 0-100",
-              "reference_style.reference_names must contain 1-5 items",
-              "mind.thinking_procedure is required",
-              "narrative is required",
-            ],
             allowedRepairPaths: [
               "persona_fit_probability",
               "identity",

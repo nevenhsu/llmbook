@@ -2,7 +2,7 @@
 
 **Goal:** Bring `/admin/ai/persona-batch` to parity with `/admin/ai/control-plane` `Generate Persona` prompt-assist behavior so batch rows can capture `referenceNames` returned by `POST /api/admin/ai/persona-generation/prompt-assist`, expose them in the batch UI, and pass them into persona generation previews.
 
-**Architecture:** Keep batch row source identity split into two layers: immutable `referenceName` for duplicate checking / row identity, and editable row-level `referenceNames` for prompt-assist output and generation input. Reuse the existing control-plane prompt-assist response contract and prompt-text cleanup behavior instead of introducing a batch-only parsing path. Keep the page thin: row state remains in `usePersonaBatchGeneration`, shared row types live in `persona-batch-contract.ts`, and the table/modal components only render and edit that state.
+**Architecture:** Keep batch row source identity split into two layers: immutable `referenceName` for duplicate checking / row identity, and editable row-level `referenceNames` for prompt-assist output and generation input. Reuse the existing control-plane prompt-assist response contract instead of introducing a batch-only parsing path. Keep the page thin: row state remains in `usePersonaBatchGeneration`, shared row types live in `persona-batch-contract.ts`, and the table/modal components only render and edit that state.
 
 **Tech Stack:** TypeScript, React hooks, Next.js admin routes, existing persona generation prompt-assist / preview APIs, Vitest.
 
@@ -11,9 +11,9 @@
 ## Scope And Constraints
 
 - Scope is limited to `/admin/ai/persona-batch` and its preview sandbox.
-- Reuse the existing `POST /api/admin/ai/persona-generation/prompt-assist` response shape `{ text, referenceNames }`.
+- Reuse the existing `POST /api/admin/ai/persona-generation/prompt-assist` response shape `{ text, referenceNames, debugRecords }`.
 - Match the current control-plane `Generate Persona` behavior:
-  - assisted prompt text populates the prompt/context field after removing any trailing `Reference sources: ...` suffix
+  - assisted prompt text populates the prompt/context field directly from `res.text`
   - named references populate a dedicated `referenceNames` field
 - Keep `referenceName` as the immutable batch seed and duplicate-check key. Returned / edited `referenceNames` are generation inputs, not a replacement for row identity.
 - Keep reference names admin-side only. This plan does not change runtime persona packet rules or allow reference names to drift into normal runtime imitation instructions.
@@ -51,7 +51,7 @@ Behavioral rules:
 
 - On row creation from `Reference Sources`, seed `referenceNames` from the immutable `referenceName`.
 - On prompt-assist success, update both:
-  - `contextPrompt = stripPromptAssistReferenceSuffix(res.text, res.referenceNames)`
+  - `contextPrompt = res.text`
   - `referenceNames = res.referenceNames.join(", ")`
 - Manual row edits to `referenceNames` should mark the row as stale for regenerate in the same way prompt edits currently do.
 
@@ -68,7 +68,7 @@ Mirror the existing `/admin/ai/control-plane` `Generate Persona` path instead of
 
 Implementation note:
 
-- move `stripPromptAssistReferenceSuffix()` out of `useAiControlPlane.ts` into a shared admin helper, preferably [`src/lib/ai/admin/control-plane-shared.ts`](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-shared.ts), so both control-plane and batch use the exact same cleanup rule.
+- The live control-plane hook no longer strips a trailing `Reference sources: ...` suffix; batch should mirror that direct `res.text` assignment rather than reintroducing suffix cleanup.
 
 ## Implementation Tasks
 
@@ -78,16 +78,14 @@ Implementation note:
 
 - Modify: [`src/lib/ai/admin/persona-batch-contract.ts`](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-batch-contract.ts)
 - Modify: [`src/hooks/admin/usePersonaBatchGeneration.ts`](/Users/neven/Documents/projects/llmbook/src/hooks/admin/usePersonaBatchGeneration.ts)
-- Modify: [`src/lib/ai/admin/control-plane-shared.ts`](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/control-plane-shared.ts)
 - Modify: [`src/hooks/admin/useAiControlPlane.ts`](/Users/neven/Documents/projects/llmbook/src/hooks/admin/useAiControlPlane.ts)
 
 Changes:
 
 - Add `referenceNames` to `PersonaBatchRow`.
 - Seed `referenceNames` when new rows are created from the add-reference modal.
-- Extract and reuse `stripPromptAssistReferenceSuffix()` from shared admin code instead of keeping it hook-local.
-- Change batch prompt-assist typing from `{ text: string }` to `{ text: string; referenceNames: string[] }`.
-- On prompt success, persist both cleaned `contextPrompt` and row `referenceNames`.
+- Change batch prompt-assist typing from `{ text: string }` to `{ text: string; referenceNames: string[]; debugRecords: StageDebugRecord[] }`.
+- On prompt success, persist both `contextPrompt` and row `referenceNames`.
 - Update `executeRowGenerate()` to call `/api/admin/ai/persona-generation/preview` with:
 
 ```ts
@@ -156,7 +154,7 @@ Changes:
 Coverage targets:
 
 - new rows seed `referenceNames` from the added source reference
-- prompt assist stores both cleaned `contextPrompt` and returned `referenceNames`
+- prompt assist stores both `contextPrompt` and returned `referenceNames`
 - generate preview receives `referenceNames` in its payload
 - row editing updates `referenceNames` and triggers the same stale/regenerate reminder path as prompt edits
 - table renders the new `Reference Names` column

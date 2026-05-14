@@ -17,7 +17,6 @@ export type SharedJsonSchemaGateInput<T = unknown> = {
   generationErrorMessage?: string | null;
   schemaName: string;
   schema: z.ZodType<T>;
-  validationRules: string[];
   allowedRepairPaths: string[];
   immutablePaths: string[];
   invokeFieldPatch?: (input: FieldPatchInvocationInput) => Promise<FieldPatchInvocationResult>;

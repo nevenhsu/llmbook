@@ -109,26 +109,19 @@ admin UI 應同時支援：
 
 Persona prompt-assist 規則：
 
-- public API success payload 可維持 `{ text }`，但內部流程應拆成兩段：先做 `namedReferences` JSON resolution / audit / repair，再做 text-only rewrite，最後由 app code 追加固定的 trailing `Reference sources: ...` suffix
-- `namedReferences` 必須是 1-3 個有人格的對象參考，例如 real person、historical figure、fictional character、mythic figure、iconic persona；作品名、電影名、地區、風格、理念只能當 clue，不能直接作為最終 `namedReferences`
-- optimize mode 不應再用 regex 決定是否跳過 reference resolution；不論 input 是人名、角色名、作品名、還是風格描述，都應先讓 model 解析出 personality-bearing references，再交給 rewrite / audit / repair 使用
-- prompt-assist 可以做額外一輪 model-based repair，但不可在 app code 內本地合成 fallback prompt
-- reference resolution 若先回空字串、invalid JSON、或 audit 不通過，應先走一輪 model-based repair；repair 仍失敗才回 typed error
-- text rewrite 若先回空字串，可以先走一次 model-based empty-output repair；只有 repair 後仍為空才回錯
-- text rewrite 若非空但明顯截斷（例如 `finishReason=length` 或未完成句尾），也應先走一次 model-based truncation repair；repair 後仍截斷才回錯
-- 若 truncation repair 自己回空字串，應直接以 repair-stage empty-output error 回錯，並保留 `truncated_output_repair` 診斷欄位，不可沿用 stale 的 `main_rewrite` 截斷資訊
-- 若 user input 已經給了 explicit reference name，reference resolution 與 text rewrite prompts 都應直接帶入那些 source names；final appended suffix 會保留至少一個 resolved name，避免最後結果只剩匿名風格描述
-- final「是否有至少一個有效 personality-bearing named reference」屬於 semantic judgment，不應再由 regex 當最終 gate；prompt-assist 應先對 `namedReferences` JSON 做 compact LLM audit，不合格時再走 reference-resolution repair，repair 後再 audit 一次
-- 如果 `reference_resolution_repair` 回空字串且診斷顯示 `finishReason=length`，應再跑一次更短、更小輸出的 compact repair，而不是立刻表面化成 `prompt_assist_repair_output_empty`
-- 如果 reference audit 本身連續兩次回空或 invalid JSON，但 resolver stage 已產出可解析且 contract-valid 的 `namedReferences` JSON，應把 audit 視為 inconclusive；不要把 audit transport failure 誤報成 `prompt_assist_missing_reference`
-- bare derived adjectives 例如 `Joycean` / `Platonic` / `Kafkaesque` 不算有效 `namedReferences`；這類 wording 可以存在於 text，但真正的 reference 保留應靠 resolver/audit stage 與最後固定 suffix
-- prompt-assist 的 named-reference contract 不只適用於人名；如果 original input 是角色名、作品名、電影名、或其他 named reference，resolver audit / repair 也必須直接以 original input 作為 grounding，判斷最終 `namedReferences` 是否保留至少一個明確的人格型 reference
-- regex 在 prompt-assist 只適合保留做 lightweight hint extraction / source-name seeding，不應直接決定最終 pass/fail
-- 若模型輸出為空、缺少 explicit reference name、或最後結果仍過弱，API 應直接回錯誤給 admin，而不是 silently fabricate 一段 prompt
-- prompt-assist 錯誤回應應保留 typed `code`，至少區分 provider timeout / provider failure / empty repair output / missing reference / weak output
-- 對於 empty/provider 類 prompt-assist 錯誤，response `details` 應帶最後一次 LLM attempt 的診斷欄位，例如 `attemptStage`, `providerId`, `modelId`, `finishReason`, `hadText`
-- prompt-assist 錯誤回應應保留 top-level `rawText` 指向最後一次 LLM raw output，避免 debug UI 或外部 caller 只能從巢狀 details 猜測模型原文；不要再重複暴露同一份內容的第二個 alias 欄位
-- prompt-assist output cap 需保留比一般短句重寫更寬鬆的 headroom；若診斷出 `finishReason=length`，先檢查 cap 是否過低，特別是 MiniMax 路徑。目前 shared cap 應使用 `1024`
+- one `invokeStructuredLLM` call with the PromptAssist schema
+- LLM-owned output schema: `{ text, referenceNames }`
+- canonical prompt text lives in `src/lib/ai/prompt-runtime/persona/prompt-assist-prompt.ts`
+- PromptAssist schema lives in `src/lib/ai/admin/prompt-assist-schema.ts`
+- API success payload: `{ text, referenceNames, debugRecords }`
+- API failure payload: `{ error, rawText, debugRecords }` (no top-level `code`)
+- `debugRecords` reuses the shared `StageDebugRecord[]` shape; it is attached by app code, not part of the LLM schema
+- `referenceNames` must contain 1 to 3 personality-bearing names (real people, historical figures, fictional characters, mythic figures, or iconic personas)
+- works, titles, places, ideologies, and style labels are clues, not valid `referenceNames` by themselves
+- deterministic checks: `text` must not be empty after trim; `referenceNames` must not be empty after normalization
+- text no longer carries an appended reference suffix
+- old multi-call resolution / audit / rewrite / repair PromptAssist logic is removed
+- app code normalizes: trim text, trim/dedupe referenceNames, filter empty names, cap at 3
 
 輸出應對齊 canonical persisted shape：
 
