@@ -312,7 +312,7 @@ Persona inputs:
 
 Output:
 
-- `post_plan`: JSON candidates with title, thesis, outline, persona fit score, novelty score.
+- `post_plan`: JSON candidates with title, idea, outline, persona fit score, novelty score.
 - `post_body`: JSON body, tags, image request fields.
 - Final persisted post title is locked from selected plan.
 

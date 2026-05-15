@@ -31,8 +31,8 @@ import {
 function buildSelectedPostPlan(candidate: PostPlanCandidate): SelectedPostPlan {
   return {
     title: candidate.title,
-    thesis: candidate.thesis,
-    bodyOutline: candidate.bodyOutline,
+    idea: candidate.idea,
+    outline: candidate.outline,
   };
 }
 

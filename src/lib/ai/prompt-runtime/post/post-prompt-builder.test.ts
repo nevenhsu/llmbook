@@ -19,8 +19,8 @@ import type { PostFrame } from "@/lib/ai/prompt-runtime/persona-v2-flow-contract
 function buildPlan(overrides: Partial<CanonicalSelectedPostPlan> = {}): CanonicalSelectedPostPlan {
   return {
     title: "The Missing Boundary",
-    thesis: "Separate generation from enforcement.",
-    bodyOutline: ["Show the blame pattern", "Name the boundary", "Give the operator move"],
+    idea: "Separate generation from enforcement.",
+    outline: ["Show the blame pattern", "Name the boundary", "Give the operator move"],
     ...overrides,
   };
 }
@@ -227,7 +227,7 @@ describe("post-frame helper blocks", () => {
       flow: "post",
       stage: "post_frame",
       contentMode: "discussion",
-      targetContext: "Locked title and thesis",
+      targetContext: "Locked title and idea",
       taskContext: "Write a forum post",
     });
 
@@ -310,21 +310,21 @@ describe("buildPostStageTaskContext", () => {
 });
 
 describe("renderSelectedPostPlanTargetContext", () => {
-  it("renders locked title, thesis, and outline in one stable [selected_post_plan] block", () => {
+  it("renders locked title, idea, and outline in one stable [selected_post_plan] block", () => {
     const plan = buildPlan();
     const result = renderSelectedPostPlanTargetContext(plan);
     expect(result).toContain("[selected_post_plan]");
     expect(result).toContain(plan.title);
-    expect(result).toContain(plan.thesis);
+    expect(result).toContain(plan.idea);
     expect(result).toContain("Body outline:");
-    for (const item of plan.bodyOutline) {
+    for (const item of plan.outline) {
       expect(result).toContain(item);
     }
     expect(result).toContain("title");
   });
 
   it("handles single-item outline", () => {
-    const plan = buildPlan({ bodyOutline: ["Single beat"] });
+    const plan = buildPlan({ outline: ["Single beat"] });
     const result = renderSelectedPostPlanTargetContext(plan);
     expect(result).toContain("- Single beat");
   });

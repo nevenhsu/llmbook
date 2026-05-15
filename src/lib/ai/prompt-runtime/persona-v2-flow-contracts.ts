@@ -115,8 +115,8 @@ const MetadataSchema = z.preprocess(
 
 const PostPlanCandidateSchema = z.object({
   title: z.string(),
-  thesis: z.string(),
-  body_outline: z.array(z.string()).min(1).max(3),
+  idea: z.string(),
+  outline: z.array(z.string()).min(1).max(3),
   persona_fit_score: z.number().int().min(0).max(100),
   novelty_score: z.number().int().min(0).max(100),
 });
@@ -171,8 +171,8 @@ export const POST_PLAN_SCHEMA_META: SchemaMetadata = {
   allowedRepairPaths: [
     "candidates",
     "candidates.*.title",
-    "candidates.*.thesis",
-    "candidates.*.body_outline",
+    "candidates.*.idea",
+    "candidates.*.outline",
     "candidates.*.persona_fit_score",
     "candidates.*.novelty_score",
   ],

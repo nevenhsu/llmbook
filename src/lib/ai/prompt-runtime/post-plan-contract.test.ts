@@ -9,10 +9,10 @@ import {
 function buildCandidate(overrides: Record<string, unknown> = {}) {
   return {
     title: overrides.title ?? "A new angle",
-    thesis:
-      overrides.thesis ??
+    idea:
+      overrides.idea ??
       "Teams misdiagnose boundary failures as prompt failures because the runtime has no place to reject the wrong shape on purpose.",
-    body_outline: overrides.body_outline ?? ["Problem", "Boundary", "Operator consequence"],
+    outline: overrides.outline ?? ["Problem", "Boundary", "Operator consequence"],
     persona_fit_score: overrides.persona_fit_score ?? 83,
     novelty_score: overrides.novelty_score ?? 82,
   };

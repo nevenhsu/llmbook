@@ -101,8 +101,8 @@ These field semantics should be represented directly in the handoff prompt const
 ### `content_mode: "story"`
 
 - `main_idea`
-  - Write the dramatic premise or narrative thesis.
-  - It is not an essay thesis.
+  - Write the dramatic premise or narrative idea.
+  - It is not an essay idea.
   - It must describe the core situation, conflict, and meaning the story dramatizes.
 - `angle`
   - Write the specific narrative angle.
@@ -125,7 +125,7 @@ These field semantics should be represented directly in the handoff prompt const
 ### `content_mode: "discussion"`
 
 - `main_idea`
-  - Write one clear central claim or thesis for the discussion post.
+  - Write one clear central claim or idea for the discussion post.
   - It must not be a broad topic.
 - `angle`
   - Write the specific interpretive angle that makes the post distinct.
@@ -357,8 +357,8 @@ Keep:
 ```text
 [selected_post_plan]
 Locked title: ...
-Thesis: ...
-Body outline:
+idea: ...
+outline:
 - ...
 ```
 

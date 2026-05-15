@@ -103,8 +103,8 @@ function buildPassingPostPlanResponse(title = "Passing semantic plan") {
     candidates: [
       {
         title,
-        thesis: "Separate malformed-output repair from policy enforcement.",
-        body_outline: [
+        idea: "Separate malformed-output repair from policy enforcement.",
+        outline: [
           "Show the mistaken blame pattern.",
           "Name the boundary.",
           "Give the operator move.",
@@ -114,15 +114,15 @@ function buildPassingPostPlanResponse(title = "Passing semantic plan") {
       },
       {
         title: `${title} backup`,
-        thesis: "Treat validation and enforcement as different operating steps.",
-        body_outline: ["A", "B", "C"],
+        idea: "Treat validation and enforcement as different operating steps.",
+        outline: ["A", "B", "C"],
         persona_fit_score: 80,
         novelty_score: 81,
       },
       {
         title: `${title} third`,
-        thesis: "Post-processing boundaries matter more than prompt polish.",
-        body_outline: ["A", "B", "C"],
+        idea: "Post-processing boundaries matter more than prompt polish.",
+        outline: ["A", "B", "C"],
         persona_fit_score: 82,
         novelty_score: 83,
       },
@@ -142,16 +142,15 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "A weaker pass",
-                thesis: "A passable idea.",
-                body_outline: ["A", "B", "C"],
+                idea: "A passable idea.",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 75,
                 novelty_score: 76,
               },
               {
                 title: "The workflow bug people keep mislabeling as a prompt bug",
-                thesis:
-                  "Teams keep over-editing prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
-                body_outline: [
+                idea: "Teams keep over-editing prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
+                outline: [
                   "Show why prompt tuning gets blamed too early.",
                   "Contrast malformed-output repair with policy enforcement.",
                   "Give one operator-facing workflow example.",
@@ -161,8 +160,8 @@ describe("createPostFlowModule", () => {
               },
               {
                 title: "Another valid option",
-                thesis: "Yet another idea",
-                body_outline: ["#option1", "#option2", "#option3"],
+                idea: "Yet another idea",
+                outline: ["#option1", "#option2", "#option3"],
                 persona_fit_score: 70,
                 novelty_score: 76,
               },
@@ -212,7 +211,7 @@ describe("createPostFlowModule", () => {
     const frameCall = runPersonaInteractionStage.mock.calls[1]?.[0];
     expect(frameCall?.taskType).toBe("post_frame");
     expect(frameCall?.taskContext).toContain("PostFrame object");
-    expect(frameCall?.taskContext).toContain("locked title and thesis");
+    expect(frameCall?.taskContext).toContain("locked title and idea");
     expect(frameCall?.taskContext).toContain("Do not mention prompt instructions");
 
     const bodyCall = runPersonaInteractionStage.mock.calls[2]?.[0];
@@ -220,9 +219,7 @@ describe("createPostFlowModule", () => {
     expect(bodyCall?.taskContext).toContain("final post body");
     expect(bodyCall?.taskContext).toContain("title is locked");
     expect(bodyCall?.taskContext).toContain("post_frame");
-    expect(bodyCall?.targetContextText).toContain(
-      "[selected_post_plan]",
-    );
+    expect(bodyCall?.targetContextText).toContain("[selected_post_plan]");
     expect(bodyCall?.targetContextText).toContain(
       "Locked title: The workflow bug people keep mislabeling as a prompt bug",
     );
@@ -277,22 +274,22 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "Low score candidate",
-                thesis: "Still valid content.",
-                body_outline: ["A", "B", "C"],
+                idea: "Still valid content.",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 63,
                 novelty_score: 66,
               },
               {
                 title: "Better candidate",
-                thesis: "Stronger thesis.",
-                body_outline: ["A", "B", "C"],
+                idea: "Stronger idea.",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 80,
                 novelty_score: 82,
               },
               {
                 title: "Third candidate",
-                thesis: "Decent idea.",
-                body_outline: ["A", "B", "C"],
+                idea: "Decent idea.",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 70,
                 novelty_score: 72,
               },
@@ -361,22 +358,22 @@ describe("createPostFlowModule", () => {
             candidates: [
               {
                 title: "Passing plan A",
-                thesis: "Thesis A",
-                body_outline: ["A", "B", "C"],
+                idea: "idea A",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 80,
                 novelty_score: 81,
               },
               {
                 title: "Passing plan B",
-                thesis: "Thesis B",
-                body_outline: ["A", "B", "C"],
+                idea: "idea B",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 81,
                 novelty_score: 82,
               },
               {
                 title: "Passing plan C",
-                thesis: "Thesis C",
-                body_outline: ["A", "B", "C"],
+                idea: "idea C",
+                outline: ["A", "B", "C"],
                 persona_fit_score: 82,
                 novelty_score: 83,
               },
@@ -462,22 +459,22 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "Test Plan",
-                  thesis: "A test thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "A test idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 82,
                   novelty_score: 85,
                 },
                 {
                   title: "Backup Plan",
-                  thesis: "Backup thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Backup idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Third Plan",
-                  thesis: "Third thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Third idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 78,
                   novelty_score: 79,
                 },
@@ -571,22 +568,22 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "The Last Warm Pool",
-                  thesis: "A story of hierarchy and warmth.",
-                  body_outline: ["Introduce the old-blood", "The petition arrives", "Resolution"],
+                  idea: "A story of hierarchy and warmth.",
+                  outline: ["Introduce the old-blood", "The petition arrives", "Resolution"],
                   persona_fit_score: 85,
                   novelty_score: 88,
                 },
                 {
                   title: "Backup Story",
-                  thesis: "Another story idea.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Another story idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Third Story",
-                  thesis: "Third story idea.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Third story idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 78,
                   novelty_score: 79,
                 },
@@ -652,22 +649,22 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "Story Plan",
-                  thesis: "A story thesis.",
-                  body_outline: ["Intro", "Middle", "End"],
+                  idea: "A story idea.",
+                  outline: ["Intro", "Middle", "End"],
                   persona_fit_score: 85,
                   novelty_score: 88,
                 },
                 {
                   title: "Backup",
-                  thesis: "Backup thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Backup idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Third",
-                  thesis: "Third thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Third idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 78,
                   novelty_score: 79,
                 },
@@ -723,22 +720,22 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "Discussion Plan",
-                  thesis: "A discussion thesis.",
-                  body_outline: ["Point 1", "Point 2", "Point 3"],
+                  idea: "A discussion idea.",
+                  outline: ["Point 1", "Point 2", "Point 3"],
                   persona_fit_score: 85,
                   novelty_score: 88,
                 },
                 {
                   title: "Backup",
-                  thesis: "Backup thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Backup idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Third",
-                  thesis: "Third thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Third idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 78,
                   novelty_score: 79,
                 },
@@ -793,8 +790,8 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "The Missing Boundary",
-                  thesis: "Separate generation from enforcement.",
-                  body_outline: [
+                  idea: "Separate generation from enforcement.",
+                  outline: [
                     "Show the mistaken blame",
                     "Name the boundary",
                     "Give the operator move",
@@ -804,15 +801,15 @@ describe("createPostFlowModule", () => {
                 },
                 {
                   title: "Backup A",
-                  thesis: "Backup thesis.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Backup idea.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Backup B",
-                  thesis: "Another backup.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Another backup.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 79,
                   novelty_score: 78,
                 },
@@ -877,22 +874,22 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "Fallback Test",
-                  thesis: "Testing markdown fallback.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Testing markdown fallback.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 82,
                   novelty_score: 85,
                 },
                 {
                   title: "Backup",
-                  thesis: "Backup.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Backup.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Third",
-                  thesis: "Third.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "Third.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 78,
                   novelty_score: 79,
                 },
@@ -947,22 +944,22 @@ describe("createPostFlowModule", () => {
               candidates: [
                 {
                   title: "Plan A",
-                  thesis: "Thesis A.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "idea A.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 82,
                   novelty_score: 85,
                 },
                 {
                   title: "Plan B",
-                  thesis: "Thesis B.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "idea B.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 80,
                   novelty_score: 81,
                 },
                 {
                   title: "Plan C",
-                  thesis: "Thesis C.",
-                  body_outline: ["A", "B", "C"],
+                  idea: "idea C.",
+                  outline: ["A", "B", "C"],
                   persona_fit_score: 78,
                   novelty_score: 79,
                 },

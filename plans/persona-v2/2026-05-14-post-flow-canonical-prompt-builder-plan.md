@@ -157,7 +157,7 @@ The flow module should call prompt-runtime helpers for those values instead of b
   - `post_plan` discussion vs story policy wording
   - `post_frame` discussion vs story policy wording
   - `post_body` keeps the locked-title/no-rewrite rule
-  - selected-plan renderer includes locked title, thesis, and outline in one stable block
+  - selected-plan renderer includes locked title, idea, and outline in one stable block
   - post-frame renderer includes mode, beats, required details, ending direction, tone, and avoid list
   - no helper reintroduces retired stage labels or legacy planner/writer shell text
 
@@ -175,7 +175,7 @@ The flow module should call prompt-runtime helpers for those values instead of b
   - `post_plan`
   - `post_frame`
   - `post_body`
-  into canonical `flow: "post"` plus explicit stage.
+    into canonical `flow: "post"` plus explicit stage.
 - Replace inline post-stage `action_mode_policy` and `content_mode_policy` generation with calls into `post-prompt-builder.ts`.
 - Leave `comment` and `reply` inline for this pass.
 - Keep block order unchanged.

@@ -176,6 +176,8 @@ const PERSONA_C: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
   identity: {
+    display_name: "Persona C",
+    bio: "Persona C is a systems analyst who sees systems and second-order effects first.",
     archetype: "systems analyst",
     core_drive: "trace second-order effects before declaring victory",
     central_tension: "structure against anecdote",
@@ -224,6 +226,8 @@ const PERSONA_C: PersonaCoreV2 = {
   narrative: SHARED_NARRATIVE,
   reference_style: SHARED_REFERENCE,
   anti_generic: SHARED_ANTI_GENERIC,
+  originalization_note:
+    "Originalized from reference energy into a forum-native persona with outsider poise and theatrical pressure.",
 };
 
 describe("thinking procedure differentiation", () => {

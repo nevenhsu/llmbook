@@ -86,8 +86,8 @@ function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
       parsed: {
         selectedPostPlan: {
           title: "Plan title",
-          thesis: "Thesis",
-          bodyOutline: ["A", "B", "C"],
+          idea: "Thesis",
+          outline: ["A", "B", "C"],
         },
         postBody: {
           body: "Post body",

@@ -217,8 +217,8 @@ describe("schema gate with complex schemas", () => {
       .array(
         z.object({
           title: z.string(),
-          thesis: z.string(),
-          body_outline: z.array(z.string()).min(2).max(5),
+          idea: z.string(),
+          outline: z.array(z.string()).min(2).max(5),
           persona_fit_score: z.number().int().min(0).max(100),
           novelty_score: z.number().int().min(0).max(100),
         }),
@@ -234,15 +234,15 @@ describe("schema gate with complex schemas", () => {
           candidates: [
             {
               title: "A",
-              thesis: "B",
-              body_outline: ["1", "2"],
+              idea: "B",
+              outline: ["1", "2"],
               persona_fit_score: 80,
               novelty_score: 70,
             },
             {
               title: "C",
-              thesis: "D",
-              body_outline: ["3", "4"],
+              idea: "D",
+              outline: ["3", "4"],
               persona_fit_score: 75,
               novelty_score: 65,
             },
@@ -262,7 +262,7 @@ describe("schema gate with complex schemas", () => {
       makeGateInput({
         rawText: JSON.stringify({
           candidates: [
-            { title: "A", body_outline: ["1", "2"], persona_fit_score: 80, novelty_score: 70 },
+            { title: "A", outline: ["1", "2"], persona_fit_score: 80, novelty_score: 70 },
           ],
         }),
         schema: ComplexSchema,
@@ -399,7 +399,7 @@ describe("wildcard path matching", () => {
       .array(
         z.object({
           title: z.string(),
-          thesis: z.string(),
+          idea: z.string(),
         }),
       )
       .min(1)
@@ -413,7 +413,7 @@ describe("wildcard path matching", () => {
           candidates: [{ title: "A" }],
         }),
         schema: ArraySchema,
-        allowedRepairPaths: ["candidates.*.thesis"],
+        allowedRepairPaths: ["candidates.*.idea"],
         immutablePaths: [],
       }),
     );
@@ -427,17 +427,17 @@ describe("wildcard path matching", () => {
           candidates: [{ title: "A" }],
         }),
         schema: ArraySchema,
-        allowedRepairPaths: ["candidates.*.thesis"],
+        allowedRepairPaths: ["candidates.*.idea"],
         immutablePaths: [],
         invokeFieldPatch: async () => ({
-          repair: [{ path: "candidates.0.thesis", value: "A concrete thesis" }],
+          repair: [{ path: "candidates.0.idea", value: "A concrete idea" }],
         }),
       }),
     );
 
     expect(result.status).toBe("valid");
     if (result.status === "valid") {
-      expect(result.value.candidates[0].thesis).toBe("A concrete thesis");
+      expect(result.value.candidates[0].idea).toBe("A concrete idea");
     }
   });
 });

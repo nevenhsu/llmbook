@@ -149,7 +149,7 @@ export function buildPostBodyAuditPrompt(input: {
     "",
     "Rules:",
     "- The selected title is locked and cannot be changed at this stage.",
-    "- Fail angle_fidelity if the body drifts away from the selected thesis.",
+    "- Fail angle_fidelity if the body drifts away from the selected idea.",
     "- Fail body_usefulness if the body stays generic, empty, or structureless.",
     "- Fail body_persona_fit if the prose sounds generic instead of persona-specific.",
     "- Fail procedure_fit if the output matches the persona tone but ignores persona-specific context interpretation logic.",

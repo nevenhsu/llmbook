@@ -150,8 +150,8 @@ export type WriterMediaTail = {
 
 export type SelectedPostPlan = {
   title: string;
-  thesis: string;
-  bodyOutline: string[];
+  idea: string;
+  outline: string[];
 };
 
 export type PostBodyOutput = WriterMediaTail & {

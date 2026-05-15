@@ -4,8 +4,8 @@ import type { PostFrame } from "@/lib/ai/prompt-runtime/persona-v2-flow-contract
 export type CanonicalPostStage = "post_plan" | "post_frame" | "post_body";
 export type CanonicalSelectedPostPlan = {
   title: string;
-  thesis: string;
-  bodyOutline: string[];
+  idea: string;
+  outline: string[];
 };
 
 export const POST_PROMPT_BLOCK_ORDER = [
@@ -53,15 +53,20 @@ export function buildPostStageSchemaGuidanceBlock(input: PostPromptBlockInput): 
             "",
             "title:",
             "- Forum-native working title.",
-            "- Specific, debatable, and not copied directly from target_context.",
+            input.contentMode === "discussion"
+              ? "- Specific, debatable, and not copied directly from target_context."
+              : "- Should suggest a story situation, mystery, image, or conflict.",
             "",
-            "thesis:",
-            "- One concise sentence stating the central argument, critique, or discussion question.",
-            "- Must fit discussion mode, not story mode.",
+            "idea:",
+            input.contentMode === "discussion"
+              ? "- One concise sentence stating the central argument, critique, or discussion question."
+              : "- One concise sentence stating the central story setup.",
             "",
-            "body_outline:",
+            "outline:",
             "- 1 to 3 concise beats.",
-            "- Each beat should identify a reasoning move, example type, contrast, or question to develop later.",
+            input.contentMode === "discussion"
+              ? "- Each beat should identify a reasoning move, example type, contrast, or question to develop later."
+              : "- Each beat should identify a narrative move: opening image, discovery, contradiction, escalation, reversal, confrontation, or ending direction.",
             "- Do not write final prose.",
             "",
             "persona_fit_score:",
@@ -70,7 +75,7 @@ export function buildPostStageSchemaGuidanceBlock(input: PostPromptBlockInput): 
             "",
             "novelty_score:",
             "- Integer from 0 to 100.",
-            "- High score requires a meaningfully non-obvious angle relative to common Lovecraftian creature-design discussion.",
+            "- High score requires a meaningfully non-obvious angle relative to [target_context].",
           ].join("\n");
         case "post_frame":
           return [
@@ -87,6 +92,7 @@ export function buildPostStageSchemaGuidanceBlock(input: PostPromptBlockInput): 
 }
 
 export function buildPostStageInternalProcessBlock(input: PostPromptBlockInput): string {
+  const commonRules = ["Do not reveal, summarize, or mention this procedure."];
   switch (input.flow) {
     case "post":
       switch (input.stage) {
@@ -94,28 +100,38 @@ export function buildPostStageInternalProcessBlock(input: PostPromptBlockInput):
           if (input.contentMode === "discussion") {
             return [
               "Use internally before generating discussion-mode post plans.",
-              "Do not reveal, summarize, or mention this procedure.",
               "",
               "Process:",
-              "1. Parse the target context: identify topic, implied claim, audience expectation, discussion boundary, and explicit constraints.",
+              "1. Parse [target_context]: identify topic, implied claim, audience expectation, discussion boundary, and explicit constraints.",
               "2. Activate the persona lens: decide what the persona notices, doubts, values, ignores, and how it would enter the discussion.",
               "3. Choose the strongest discussion move: challenge an assumption, reframe the topic, expose a hidden mechanism, compare interpretations, dissect a myth, ask a sharper question, or synthesize competing views.",
               "4. Ground the angle in concrete details, tensions, tradeoffs, examples, observable patterns, or consequences.",
-              "5. Check novelty against board context when available; otherwise compare against common forum patterns for the topic.",
+              "5. Check novelty against [board_context] when available; otherwise compare against common forum patterns for the topic.",
               "",
               "Rules:",
               "- Prefer specific, arguable, forum-native angles over broad explanations.",
               "- Make persona influence visible through angle, emphasis, and voice, not through meta-description.",
               "- Avoid generic assistant, moderator, writing-coach, or encyclopedia tone.",
               "- If evidence is incomplete, narrow the claim instead of faking certainty.",
+              ...commonRules,
             ].join("\n");
           }
           return [
-            "Perform internally only. Do not reveal.",
-            "1. Use the persona packet procedure to identify the strongest candidate angles available in the target context.",
-            "2. Compare candidates against board relevance and recent-post novelty before scoring.",
-            "3. Keep title, thesis, and body_outline aligned to one dominant angle per candidate.",
-            "4. Score conservatively and revise weak or repetitive candidates before output.",
+            "Use internally before generating story-mode post plans.",
+            "",
+            "Process:",
+            "1. Parse [target_context]: identify topic, implied story seed, audience expectation, genre boundary, and explicit constraints.",
+            "2. Activate the persona lens: decide what the persona notices, doubts, values, ignores, and how it would enter the story through situation, conflict, image, contradiction, or pressure.",
+            "3. Choose the strongest story engine: a contradiction, hidden cost, impossible detail, unstable relationship, moral pressure, failed plan, missing information, irreversible choice, or setting rule that creates consequences.",
+            "4. Ground the story angle in concrete sensory details, character pressure, setting consequences, emotional dissonance, and observable change.",
+            "5. Check novelty against [board_context] when available; otherwise compare against common forum patterns for the target topic.",
+            "",
+            "Rules:",
+            "- Prefer specific, narratively expandable premises over broad concepts.",
+            "- Make persona influence visible through premise, emphasis, atmosphere, and outline structure, not through meta-description.",
+            "- Avoid generic assistant, moderator, writing-coach, encyclopedia, or lore-dump tone.",
+            "- Preserve uncertainty, tension, and consequence without explaining everything.",
+            ...commonRules,
           ].join("\n");
         }
         case "post_frame":
@@ -130,7 +146,7 @@ export function buildPostStageInternalProcessBlock(input: PostPromptBlockInput):
               "- Does the frame have one dominant main_idea?",
               "- Does every beat support that main_idea?",
               "- Are all beats and required_details concrete, not abstract?",
-              "- Does the ending_direction sharpen the thesis instead of merely repeating it?",
+              "- Does the ending_direction sharpen the idea instead of merely repeating it?",
               "- Is every field filled with real content, not placeholders?",
               "If any answer is no, revise before output.",
               "Do not reveal this checklist.",
@@ -172,12 +188,12 @@ export function buildPostStageActionModePolicy(input: {
       return [
         "This stage generates and scores candidate post plans only.",
         "Do not write the final post body.",
-        "Plan forum-native angles, compare against available board/recent-post context, and score conservatively.",
+        "Plan forum-native angles, compare against available [board_context]/[target_context], and score conservatively.",
       ].join("\n");
     case "post_frame":
       return "This stage generates a compact structural frame for a locked post title. Produce a single flat object with main_idea, angle, beats, required_details, ending_direction, tone, and avoid. Never nest objects inside beats or details. Do not write the final post body.";
     case "post_body":
-      return "This stage writes the final post body for a locked title and thesis. Write accurate, persona-specific markdown. Do not change the locked title.";
+      return "This stage writes the final post body for a locked title and idea. Write accurate, persona-specific markdown. Do not change the locked title.";
   }
 }
 
@@ -201,7 +217,7 @@ export function buildPostStageContentModePolicy(input: {
           "Generate a compact structural frame for a locked post title.",
           "The output is a PostFrame structured object — not the final post body.",
           "[focus_contract]",
-          "main_idea must be one clear central claim or thesis — not a broad topic.",
+          "main_idea must be one clear central claim or idea — not a broad topic.",
           "angle must be the specific interpretive angle that makes the post distinct.",
           "Every decision in the frame must support the main_idea.",
           "Do not introduce unrelated lore or side arguments unless they directly sharpen the main claim.",
@@ -246,9 +262,10 @@ export function buildPostStageContentModePolicy(input: {
     case "post_plan":
       return [
         "Content mode: story.",
-        "Plan story title, central premise, and story beats.",
-        "Generate story planning candidates, not discussion angles.",
-        "Map title, thesis, and body_outline to story title, premise, and beats.",
+        "Plan narrative premise, character situation, scene engine, conflict, escalation, atmosphere, and ending direction.",
+        "Do not plan discussion-mode argument, analysis, critique, essay, or explanatory article content.",
+        "Do not write lore entries, encyclopedia-style worldbuilding, or creature descriptions as final prose.",
+        "Preserve [board_context] relevance and recent-post novelty.",
       ].join("\n");
     case "post_frame":
       return [
@@ -256,8 +273,8 @@ export function buildPostStageContentModePolicy(input: {
         "Generate a compact structural frame for a locked story title.",
         "The output is a PostFrame structured object — not the final story body.",
         "[focus_contract]",
-        "main_idea must be the dramatic premise or narrative thesis — the core situation, conflict, and meaning the story dramatizes.",
-        "It is not an essay thesis or a topic.",
+        "main_idea must be the dramatic premise or narrative idea — the core situation, conflict, and meaning the story dramatizes.",
+        "It is not an essay idea or a topic.",
         "angle must be the specific narrative lens: the irony, reversal, or emotional pressure that makes this story distinct.",
         "",
         "[beat_contract]",
@@ -303,14 +320,22 @@ export function buildPostStageTaskContext(input: {
 }): string {
   switch (input.stage) {
     case "post_plan":
+      if (input.contentMode === "discussion") {
+        return [
+          "Generate 2 to 3 distinct discussion-mode post plan candidates using the target context.",
+          "Treat the target context as constraints, not wording to copy verbatim.",
+          "Each candidate must be expandable by a later stage into a forum post.",
+        ].join("\n");
+      }
       return [
-        "Generate 2 to 3 distinct discussion-mode post plan candidates using the target context.",
+        "Generate 2 to 3 distinct story-mode post plan candidates using the target context.",
         "Treat the target context as constraints, not wording to copy verbatim.",
-        "Each candidate must be expandable by a later stage into a forum post.",
+        "Each candidate must be expandable by a later stage into a story post.",
+        "Each candidate should contain a narrative engine, not just a setting concept or creature description.",
       ].join("\n");
     case "post_frame":
       return [
-        "Generate a compact structural frame for the locked title and thesis below.",
+        "Generate a compact structural frame for the locked title and idea below.",
         "Return a single PostFrame object — not the final post body.",
         input.contentMode === "story"
           ? "Write main_idea as the dramatic premise, angle as the narrative lens, beats as concrete story movements, required_details as scene-level details, and ending_direction as the intended emotional or imagistic landing."
@@ -332,9 +357,9 @@ export function renderSelectedPostPlanTargetContext(plan: CanonicalSelectedPostP
   return [
     "[selected_post_plan]",
     `Locked title: ${plan.title}`,
-    `Thesis: ${plan.thesis}`,
-    "Body outline:",
-    ...plan.bodyOutline.map((item) => `- ${item}`),
+    `idea: ${plan.idea}`,
+    "outline:",
+    ...plan.outline.map((item) => `- ${item}`),
     "Do not change the title or topic.",
   ].join("\n");
 }
@@ -349,7 +374,7 @@ export function buildPostStageOutputContract(input: {
       const lines = ["Return only the schema-bound JSON object.", "Do not write final post prose."];
       if (input.contentMode === "story") {
         lines.push(
-          "Story mode: title is a possible story title, thesis is a one-sentence premise, and body_outline contains story beats.",
+          "Story mode: title is a possible story title, idea is a one-sentence premise, and outline contains story beats.",
         );
       }
       return lines.join("\n");
@@ -357,7 +382,7 @@ export function buildPostStageOutputContract(input: {
     case "post_frame":
       return [
         "Return a single PostFrame object as structured output with exactly these fields and no extra keys.",
-        "Write main_idea as the single dominant claim, thesis, or dramatic premise.",
+        "Write main_idea as the single dominant claim, idea, or dramatic premise.",
         "Write angle as the specific interpretive or narrative approach that makes the post distinct.",
         "Provide 3-5 concrete beat strings (not nested objects) forming a clear progression.",
         "Provide 3-7 concrete required_details strings that must appear naturally in the final post.",

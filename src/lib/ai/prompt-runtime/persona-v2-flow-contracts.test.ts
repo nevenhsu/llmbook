@@ -50,7 +50,7 @@ describe("persona-v2-flow-contracts", () => {
       expect(contract).toContain("candidates");
     });
 
-    it("post_plan story mode maps to story title and thesis", () => {
+    it("post_plan story mode maps to story title and idea", () => {
       const contract = buildOutputContractV2({ flow: "post_plan", contentMode: "story" });
       expect(contract).toContain("story");
       expect(contract).toContain("candidates");
@@ -161,15 +161,15 @@ describe("Zod output schemas", () => {
         candidates: [
           {
             title: "A",
-            thesis: "B",
-            body_outline: ["1", "2"],
+            idea: "B",
+            outline: ["1", "2"],
             persona_fit_score: 80,
             novelty_score: 70,
           },
           {
             title: "C",
-            thesis: "D",
-            body_outline: ["3", "4"],
+            idea: "D",
+            outline: ["3", "4"],
             persona_fit_score: 75,
             novelty_score: 65,
           },
@@ -183,8 +183,8 @@ describe("Zod output schemas", () => {
         candidates: [
           {
             title: "A",
-            thesis: "B",
-            body_outline: ["1"],
+            idea: "B",
+            outline: ["1"],
             persona_fit_score: 80,
             novelty_score: 70,
           },
@@ -198,29 +198,29 @@ describe("Zod output schemas", () => {
         candidates: [
           {
             title: "1",
-            thesis: "2",
-            body_outline: ["3"],
+            idea: "2",
+            outline: ["3"],
             persona_fit_score: 80,
             novelty_score: 70,
           },
           {
             title: "4",
-            thesis: "5",
-            body_outline: ["6"],
+            idea: "5",
+            outline: ["6"],
             persona_fit_score: 80,
             novelty_score: 70,
           },
           {
             title: "7",
-            thesis: "8",
-            body_outline: ["9"],
+            idea: "8",
+            outline: ["9"],
             persona_fit_score: 80,
             novelty_score: 70,
           },
           {
             title: "10",
-            thesis: "11",
-            body_outline: ["12"],
+            idea: "11",
+            outline: ["12"],
             persona_fit_score: 80,
             novelty_score: 70,
           },
@@ -234,16 +234,16 @@ describe("Zod output schemas", () => {
         candidates: [
           {
             title: "A",
-            thesis: "B",
-            body_outline: ["1", "2"],
+            idea: "B",
+            outline: ["1", "2"],
             persona_fit_score: 80,
             novelty_score: 70,
             extra: "bad",
           },
           {
             title: "C",
-            thesis: "D",
-            body_outline: ["3", "4"],
+            idea: "D",
+            outline: ["3", "4"],
             persona_fit_score: 75,
             novelty_score: 65,
           },

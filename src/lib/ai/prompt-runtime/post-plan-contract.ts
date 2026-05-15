@@ -2,8 +2,8 @@ import { normalizeText, parseJsonObject, readStringArray } from "./json-parse-ut
 
 export type PostPlanCandidate = {
   title: string;
-  thesis: string;
-  bodyOutline: string[];
+  idea: string;
+  outline: string[];
   personaFitScore: number;
   noveltyScore: number;
 };
@@ -49,11 +49,11 @@ function candidateIssues(candidate: PostPlanCandidate, index: number): string[] 
   if (!candidate.title) {
     issues.push(`candidate ${index} title is required.`);
   }
-  if (!candidate.thesis) {
-    issues.push(`candidate ${index} thesis is required.`);
+  if (!candidate.idea) {
+    issues.push(`candidate ${index} idea is required.`);
   }
-  if (candidate.bodyOutline.length < 2 || candidate.bodyOutline.length > 5) {
-    issues.push(`candidate ${index} body_outline must contain 2 to 5 items.`);
+  if (candidate.outline.length < 1) {
+    issues.push(`candidate ${index} outline must contain 1 or more items.`);
   }
 
   const scoreFields = [
@@ -99,8 +99,8 @@ export function parsePostPlanActionOutput(rawText: string): ParsedPostPlanAction
               : {};
           return {
             title: readOptionalString(record.title),
-            thesis: readOptionalString(record.thesis),
-            bodyOutline: readStringArrayOrEmpty(record.body_outline),
+            idea: readOptionalString(record.idea),
+            outline: readStringArrayOrEmpty(record.outline),
             personaFitScore: readScore(record.persona_fit_score),
             noveltyScore: readScore(record.novelty_score),
           };

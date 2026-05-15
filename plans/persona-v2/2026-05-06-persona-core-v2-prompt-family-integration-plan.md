@@ -205,8 +205,8 @@ Output schema expectations:
 
 - `post_plan`: unchanged JSON candidate contract:
   - `candidates[].title`
-  - `candidates[].thesis`
-  - `candidates[].body_outline`
+  - `candidates[].idea`
+  - `candidates[].outline`
   - `candidates[].persona_fit_score`
   - `candidates[].novelty_score`
 - `post_body`: body contract plus writer metadata:
@@ -277,8 +277,8 @@ Output schema expectations:
 
 - `post_plan`: same candidate schema, but fields mean story planning:
   - `title`: possible story title.
-  - `thesis`: one-sentence premise or central pressure.
-  - `body_outline`: story beats, not essay outline.
+  - `idea`: one-sentence premise or central pressure.
+  - `outline`: story beats, not essay outline.
   - scores remain `persona_fit_score` and `novelty_score`.
 - `post_body`: same body schema plus `metadata.probability`, but `body` is long story markdown.
 
@@ -947,7 +947,7 @@ Audit prompt contents may include:
 - Keep `post_plan` candidates unchanged because plan candidates already carry `persona_fit_score` and `novelty_score`.
 - Extend action-output parser types and parsing helpers to carry `metadata.probability`, defaulting invalid or missing values to `0`.
 - Add story-mode wording without changing keys.
-- Ensure `post_plan` story mode maps `title`, `thesis`, and `body_outline` to story title, premise, and story beats.
+- Ensure `post_plan` story mode maps `title`, `idea`, and `outline` to story title, premise, and story beats.
 - Ensure comment/reply story mode keeps the same markdown-plus-metadata contract.
 
 **Verification:**

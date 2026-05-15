@@ -8,8 +8,8 @@ import type { PostPlanCandidate } from "@/lib/ai/prompt-runtime/post-plan-contra
 function validCandidate(): PostPlanCandidate {
   return {
     title: "The workflow bug people keep mislabeling",
-    thesis: "Most prompt issues are really workflow issues",
-    bodyOutline: ["#point1", "#point2", "#point3"],
+    idea: "Most prompt issues are really workflow issues",
+    outline: ["#point1", "#point2", "#point3"],
     personaFitScore: 85,
     noveltyScore: 90,
   };

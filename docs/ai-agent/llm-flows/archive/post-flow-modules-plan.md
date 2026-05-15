@@ -199,8 +199,8 @@ Required fields:
 
 - locked title
 - angle summary
-- thesis
-- body outline
+- idea
+- outline
 - difference from recent
 
 Excluded fields:
@@ -348,8 +348,8 @@ Expected: failures showing missing planning contract support and prompt constrai
   - `candidates[]`
   - `title`
   - `angle_summary`
-  - `thesis`
-  - `body_outline`
+  - `idea`
+  - `outline`
   - `difference_from_recent`
   - `board_fit_score`
   - `title_persona_fit_score`

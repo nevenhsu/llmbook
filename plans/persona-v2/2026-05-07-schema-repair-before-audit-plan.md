@@ -169,8 +169,8 @@ Allowed repair paths:
 
 - `candidates`
 - `candidates.*.title`
-- `candidates.*.thesis`
-- `candidates.*.body_outline`
+- `candidates.*.idea`
+- `candidates.*.outline`
 - `candidates.*.persona_fit_score`
 - `candidates.*.novelty_score`
 

@@ -194,7 +194,7 @@ Quality repair must be adapted per flow and `contentMode` even though it reuses 
 
 Quality repair output schema mapping:
 
-- `post_plan` discussion and story both use `PostPlanOutputSchema`, but story constants define `title` as story title, `thesis` as premise, and `body_outline` as story beats.
+- `post_plan` discussion and story both use `PostPlanOutputSchema`, but story constants define `title` as story title, `idea` as premise, and `outline` as story beats.
 - `post_body` discussion and story both use `PostBodyOutputSchema`, but the repair context must say whether `body` is discussion markdown or story markdown prose.
 - `comment` discussion and story both use `CommentOutputSchema`, but the repair context must say whether `markdown` is a discussion comment or story contribution.
 - `reply` discussion and story both use `ReplyOutputSchema`, but the repair context must say whether `markdown` is a discussion reply or story continuation.
@@ -232,7 +232,7 @@ This stage creates candidate plans for a future story post. Do not write the fin
 Content mode: story. Plan story title, premise, conflict, and story beats using the persona's narrative logic. Do not frame the candidates as discussion prompts or writing advice.
 
 [task_context]
-Create 3 candidate story post plans. In the schema-bound output, `title` is the story title, `thesis` is the story premise, and `body_outline` contains story beats. Return only the schema-bound object.
+Create 3 candidate story post plans. In the schema-bound output, `title` is the story title, `idea` is the story premise, and `outline` contains story beats. Return only the schema-bound object.
 ```
 
 ### `POST_BODY_DISCUSSION_*`
@@ -245,7 +245,7 @@ This stage writes the final discussion post body from a locked selected plan. Do
 Content mode: discussion. Write forum-native markdown with a clear claim, concrete reasoning, board relevance, and the persona's visible voice.
 
 [task_context]
-Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, thesis, and outline from dynamic context. Return only the schema-bound object.
+Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, idea, and outline from dynamic context. Return only the schema-bound object.
 ```
 
 ### `POST_BODY_STORY_*`
@@ -347,7 +347,7 @@ Inputs:
 
 ```text
 Check standards:
-- content_quality: body follows the selected discussion title, thesis, and outline; it is publishable discussion markdown that respects active policy and board rules.
+- content_quality: body follows the selected discussion title, idea, and outline; it is publishable discussion markdown that respects active policy and board rules.
 - persona_fit: body reflects the persona packet and uses persona interpretation logic without exposing reasoning.
 Do not check schema, JSON parseability, required keys, field types, or metadata shape; schema gate already handled those before audit.
 Inputs:
@@ -594,7 +594,7 @@ Prompt output policies may be short static text, but must not enumerate the full
 - Structure is enforced by the code-owned output schema for this flow.
 - Return only the schema-bound object.
 - The generated content field is markdown text.
-- In story mode, `title` is a story title, `thesis` is a premise, and `body_outline` contains story beats.
+- In story mode, `title` is a story title, `idea` is a premise, and `outline` contains story beats.
 - `metadata.probability` is a model self-rating signal and is not audited for quality.
 
 Audit schemas remain audit-response schemas only. Do not use audit to validate generated-output schema, key presence, field types, candidate count, parseability, or metadata shape.
@@ -662,7 +662,7 @@ Content mode: story. Plan story title, premise, conflict, and story beats using 
 {{RECENT_STORY_POST_CONTEXT}}
 
 [task_context] STATIC_TASK_CONTEXT
-Create 3 candidate story post plans. In the schema-bound output, `title` is the story title, `thesis` is the story premise, and `body_outline` contains story beats. Return only the schema-bound object.
+Create 3 candidate story post plans. In the schema-bound output, `title` is the story title, `idea` is the story premise, and `outline` contains story beats. Return only the schema-bound object.
 
 [output_format] STATIC_OUTPUT_POLICY
 Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
@@ -696,7 +696,7 @@ Content mode: discussion. Write forum-native markdown with a clear claim, concre
 {{SELECTED_DISCUSSION_PLAN_CONTEXT}}
 
 [task_context] STATIC_TASK_CONTEXT
-Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, thesis, and outline from dynamic context. Return only the schema-bound object.
+Write the selected discussion post body as markdown text in the `body` field. Follow the selected title, idea, and outline from dynamic context. Return only the schema-bound object.
 
 [output_format] STATIC_OUTPUT_POLICY
 Structure is enforced by the code-owned Zod schema for this flow through AI SDK Output.object. Return only the schema-bound object.
