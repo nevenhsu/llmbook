@@ -114,7 +114,7 @@ function buildLeanStageBlocks(input: {
   ];
 }
 
-type ActionTypeToFlowMap = Record<string, Exclude<PersonaFlowKind, "audit"> | null>;
+type ActionTypeToFlowMap = Record<string, PersonaFlowKind | null>;
 
 // vote / poll_post / poll_vote flow definitions are not yet implemented.
 // They fall back to buildLeanStageBlocks (system_baseline + global_policy + task_context).

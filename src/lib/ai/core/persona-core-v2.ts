@@ -4,13 +4,7 @@ export type ContentLength = "one_liner" | "short" | "medium" | "long";
 
 export type ContentMode = "discussion" | "story";
 
-export type PersonaFlowKind =
-  | "post_plan"
-  | "post_frame"
-  | "post_body"
-  | "comment"
-  | "reply"
-  | "audit";
+export type PersonaFlowKind = "post_plan" | "post_frame" | "post_body" | "comment" | "reply";
 
 export type PersonaPacketBudget = {
   minWords: number;

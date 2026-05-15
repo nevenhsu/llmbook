@@ -2,12 +2,14 @@ import type {
   ContentMode,
   PersonaFlowKind,
   PersonaRuntimePacket,
-  PersonaAuditEvidencePacket,
 } from "@/lib/ai/core/persona-core-v2";
 import {
   buildPostStageActionModePolicy,
   buildPostStageAntiGenericContract,
   buildPostStageContentModePolicy,
+  buildPostOwnedPromptBlockContent,
+  getPostPromptBlockOrder,
+  type PostPromptBlockName,
 } from "@/lib/ai/prompt-runtime/post/post-prompt-builder";
 
 export type PersonaPromptFamilyV2BlockName =
@@ -19,6 +21,8 @@ export type PersonaPromptFamilyV2BlockName =
   | "board_context"
   | "target_context"
   | "task_context"
+  | "schema_guidance"
+  | "internal_process"
   | "output_contract"
   | "anti_generic_contract";
 
@@ -40,7 +44,7 @@ export type PersonaPromptFamilyV2Result = {
 };
 
 export type PersonaPromptFamilyV2Input = {
-  flow: Exclude<PersonaFlowKind, "audit">;
+  flow: PersonaFlowKind;
   contentMode: ContentMode;
   stagePurpose: PersonaPromptFamilyV2StagePurpose;
   systemBaseline: string;
@@ -72,7 +76,7 @@ function makeBlock(
 }
 
 function buildActionModePolicyForFlow(
-  flow: Exclude<PersonaFlowKind, "audit">,
+  flow: PersonaFlowKind,
   _stagePurpose: PersonaPromptFamilyV2StagePurpose,
 ): string {
   switch (flow) {
@@ -89,10 +93,7 @@ function buildActionModePolicyForFlow(
   }
 }
 
-function buildContentModePolicyForFlow(
-  flow: Exclude<PersonaFlowKind, "audit">,
-  contentMode: ContentMode,
-): string {
+function buildContentModePolicyForFlow(flow: PersonaFlowKind, contentMode: ContentMode): string {
   // Delegate post stages to the canonical post prompt-runtime owner.
   if (flow === "post_plan" || flow === "post_frame" || flow === "post_body") {
     return buildPostStageContentModePolicy({ flow: "post", stage: flow, contentMode });
@@ -146,21 +147,21 @@ function buildContentModePolicyForFlow(
 }
 
 export function buildActionModePolicy(input: {
-  flow: Exclude<PersonaFlowKind, "audit">;
+  flow: PersonaFlowKind;
   stagePurpose: PersonaPromptFamilyV2StagePurpose;
 }): string {
   return buildActionModePolicyForFlow(input.flow, input.stagePurpose);
 }
 
 export function buildContentModePolicy(input: {
-  flow: Exclude<PersonaFlowKind, "audit">;
+  flow: PersonaFlowKind;
   contentMode: ContentMode;
 }): string {
   return buildContentModePolicyForFlow(input.flow, input.contentMode);
 }
 
 export function buildAntiGenericContract(input: {
-  flow: Exclude<PersonaFlowKind, "audit">;
+  flow: PersonaFlowKind;
   contentMode: ContentMode;
 }): string {
   if (input.flow === "post_plan" || input.flow === "post_frame" || input.flow === "post_body") {
@@ -175,13 +176,48 @@ export function buildAntiGenericContract(input: {
 }
 
 export function buildProcedureNonExposureRule(input: {
-  flow: Exclude<PersonaFlowKind, "audit">;
+  flow: PersonaFlowKind;
   contentMode: ContentMode;
 }): string {
   return "Do not reveal internal procedure, context readings, or interpretation steps in the output.";
 }
 
+function buildSchemaGuidancePlaceholder(input: { flow: PersonaFlowKind }): string {
+  switch (input.flow) {
+    case "comment":
+      return "Placeholder: comment schema_guidance pending canonical extraction.";
+    case "reply":
+      return "Placeholder: reply schema_guidance pending canonical extraction.";
+    default:
+      return "";
+  }
+}
+
+function buildInternalProcessPlaceholder(input: { flow: PersonaFlowKind }): string {
+  switch (input.flow) {
+    case "comment":
+      return [
+        "Placeholder: comment internal_process pending canonical extraction.",
+        "Perform internally only. Do not reveal.",
+      ].join("\n");
+    case "reply":
+      return [
+        "Placeholder: reply internal_process pending canonical extraction.",
+        "Perform internally only. Do not reveal.",
+      ].join("\n");
+    default:
+      return "";
+  }
+}
+
 function getBlockOrder(_input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV2BlockName[] {
+  if (_input.flow === "post_plan" || _input.flow === "post_frame" || _input.flow === "post_body") {
+    return [
+      "system_baseline",
+      "global_policy",
+      ...getPostPromptBlockOrder({ flow: "post", stage: _input.flow }),
+    ];
+  }
   return [
     "system_baseline",
     "global_policy",
@@ -191,6 +227,8 @@ function getBlockOrder(_input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV
     "board_context",
     "target_context",
     "task_context",
+    "schema_guidance",
+    "internal_process",
     "output_contract",
     "anti_generic_contract",
   ];
@@ -222,6 +260,8 @@ export function buildPersonaPromptFamilyV2(
   const contentModePolicy = buildContentModePolicyForFlow(input.flow, input.contentMode);
   const antiGenericContract = buildAntiGenericContract(input);
   const personaPacketText = input.personaPacket.renderedText;
+  const isPostFlow =
+    input.flow === "post_plan" || input.flow === "post_frame" || input.flow === "post_body";
 
   if (input.personaPacket.warnings && input.personaPacket.warnings.length > 0) {
     warnings.push(...input.personaPacket.warnings.map((w) => `persona_packet: ${w}`));
@@ -230,18 +270,46 @@ export function buildPersonaPromptFamilyV2(
   const allBlocks: Partial<Record<PersonaPromptFamilyV2BlockName, PersonaPromptFamilyV2Block>> = {
     system_baseline: makeBlock("system_baseline", input.systemBaseline),
     global_policy: makeBlock("global_policy", input.globalPolicy),
-    action_mode_policy: makeBlock("action_mode_policy", actionModePolicy),
-    content_mode_policy: makeBlock("content_mode_policy", contentModePolicy),
     persona_runtime_packet: makeBlock("persona_runtime_packet", personaPacketText),
     board_context: makeBlock("board_context", input.boardContext ?? "No board context available."),
-    target_context: makeBlock(
+  };
+
+  if (isPostFlow) {
+    const postBlocks = buildPostOwnedPromptBlockContent({
+      flow: "post",
+      stage: input.flow,
+      contentMode: input.contentMode,
+      targetContext: input.targetContext ?? null,
+      taskContext: input.taskContext,
+    });
+
+    (Object.entries(postBlocks) as Array<[PostPromptBlockName, string]>).forEach(
+      ([name, content]) => {
+        if (name === "persona_runtime_packet" || name === "board_context") {
+          return;
+        }
+        allBlocks[name] = makeBlock(name, content);
+      },
+    );
+  } else {
+    allBlocks.action_mode_policy = makeBlock("action_mode_policy", actionModePolicy);
+    allBlocks.content_mode_policy = makeBlock("content_mode_policy", contentModePolicy);
+    allBlocks.target_context = makeBlock(
       "target_context",
       input.targetContext ?? "No target context available.",
-    ),
-    task_context: makeBlock("task_context", input.taskContext),
-    output_contract: makeBlock("output_contract", input.outputContract),
-    anti_generic_contract: makeBlock("anti_generic_contract", antiGenericContract),
-  };
+    );
+    allBlocks.task_context = makeBlock("task_context", input.taskContext);
+    allBlocks.schema_guidance = makeBlock(
+      "schema_guidance",
+      buildSchemaGuidancePlaceholder({ flow: input.flow }),
+    );
+    allBlocks.internal_process = makeBlock(
+      "internal_process",
+      buildInternalProcessPlaceholder({ flow: input.flow }),
+    );
+    allBlocks.output_contract = makeBlock("output_contract", input.outputContract);
+    allBlocks.anti_generic_contract = makeBlock("anti_generic_contract", antiGenericContract);
+  }
 
   const blocks: PersonaPromptFamilyV2Block[] = [];
   for (const name of blockOrder) {

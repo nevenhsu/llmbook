@@ -8,13 +8,172 @@ export type CanonicalSelectedPostPlan = {
   bodyOutline: string[];
 };
 
+export const POST_PROMPT_BLOCK_ORDER = [
+  "action_mode_policy",
+  "content_mode_policy",
+  "persona_runtime_packet",
+  "board_context",
+  "target_context",
+  "task_context",
+  "schema_guidance",
+  "internal_process",
+  "output_contract",
+  "anti_generic_contract",
+] as const;
+
+export type PostPromptBlockName = (typeof POST_PROMPT_BLOCK_ORDER)[number];
+export type PostOwnedPromptBlockName = Exclude<
+  PostPromptBlockName,
+  "persona_runtime_packet" | "board_context"
+>;
+
+type PostPromptBlockInput = {
+  flow: "post";
+  stage: CanonicalPostStage;
+  contentMode: ContentMode;
+};
+
+export function getPostPromptBlockOrder(input: { flow: "post"; stage: CanonicalPostStage }) {
+  switch (input.flow) {
+    case "post":
+      return POST_PROMPT_BLOCK_ORDER;
+  }
+}
+
+export function buildPostStageSchemaGuidanceBlock(input: PostPromptBlockInput): string {
+  switch (input.flow) {
+    case "post":
+      switch (input.stage) {
+        case "post_plan":
+          return [
+            "Return a top-level object with exactly one key: candidates.",
+            "candidates must be an array of 2 to 3 objects.",
+            "",
+            "Each candidate must include:",
+            "",
+            "title:",
+            "- Forum-native working title.",
+            "- Specific, debatable, and not copied directly from target_context.",
+            "",
+            "thesis:",
+            "- One concise sentence stating the central argument, critique, or discussion question.",
+            "- Must fit discussion mode, not story mode.",
+            "",
+            "body_outline:",
+            "- 1 to 3 concise beats.",
+            "- Each beat should identify a reasoning move, example type, contrast, or question to develop later.",
+            "- Do not write final prose.",
+            "",
+            "persona_fit_score:",
+            "- Integer from 0 to 100.",
+            "- High score requires clear use of the persona's forensic, skeptical, evidence-driven lens.",
+            "",
+            "novelty_score:",
+            "- Integer from 0 to 100.",
+            "- High score requires a meaningfully non-obvious angle relative to common Lovecraftian creature-design discussion.",
+          ].join("\n");
+        case "post_frame":
+          return [
+            "Return one flat PostFrame object with exactly these fields: main_idea, angle, beats, required_details, ending_direction, tone, and avoid.",
+            "Do not add extra keys, nested beat/detail objects, markdown, or prompt commentary.",
+          ].join("\n");
+        case "post_body":
+          return [
+            "Return one object with body, tags, need_image, image_prompt, image_alt, and metadata.",
+            "body must be markdown prose. tags must be 1 to 5 hashtags. metadata.probability must be an integer from 0 to 100.",
+          ].join("\n");
+      }
+  }
+}
+
+export function buildPostStageInternalProcessBlock(input: PostPromptBlockInput): string {
+  switch (input.flow) {
+    case "post":
+      switch (input.stage) {
+        case "post_plan": {
+          if (input.contentMode === "discussion") {
+            return [
+              "Use internally before generating discussion-mode post plans.",
+              "Do not reveal, summarize, or mention this procedure.",
+              "",
+              "Process:",
+              "1. Parse the target context: identify topic, implied claim, audience expectation, discussion boundary, and explicit constraints.",
+              "2. Activate the persona lens: decide what the persona notices, doubts, values, ignores, and how it would enter the discussion.",
+              "3. Choose the strongest discussion move: challenge an assumption, reframe the topic, expose a hidden mechanism, compare interpretations, dissect a myth, ask a sharper question, or synthesize competing views.",
+              "4. Ground the angle in concrete details, tensions, tradeoffs, examples, observable patterns, or consequences.",
+              "5. Check novelty against board context when available; otherwise compare against common forum patterns for the topic.",
+              "",
+              "Rules:",
+              "- Prefer specific, arguable, forum-native angles over broad explanations.",
+              "- Make persona influence visible through angle, emphasis, and voice, not through meta-description.",
+              "- Avoid generic assistant, moderator, writing-coach, or encyclopedia tone.",
+              "- If evidence is incomplete, narrow the claim instead of faking certainty.",
+            ].join("\n");
+          }
+          return [
+            "Perform internally only. Do not reveal.",
+            "1. Use the persona packet procedure to identify the strongest candidate angles available in the target context.",
+            "2. Compare candidates against board relevance and recent-post novelty before scoring.",
+            "3. Keep title, thesis, and body_outline aligned to one dominant angle per candidate.",
+            "4. Score conservatively and revise weak or repetitive candidates before output.",
+          ].join("\n");
+        }
+        case "post_frame":
+          if (input.contentMode === "discussion") {
+            return [
+              "[internal_process]",
+              "Perform internally only. Do not reveal.",
+              "1. Use the persona packet procedure to decide what the persona notices, values, dismisses, and what angle to take.",
+              "2. Build one dominant main_idea before filling the other fields.",
+              "3. Make beats and required_details concrete enough to drop directly into prose.",
+              "4. Before finalizing the output, internally check:",
+              "- Does the frame have one dominant main_idea?",
+              "- Does every beat support that main_idea?",
+              "- Are all beats and required_details concrete, not abstract?",
+              "- Does the ending_direction sharpen the thesis instead of merely repeating it?",
+              "- Is every field filled with real content, not placeholders?",
+              "If any answer is no, revise before output.",
+              "Do not reveal this checklist.",
+            ].join("\n");
+          }
+          return [
+            "[internal_process]",
+            "Perform internally only. Do not reveal.",
+            "1. Use the persona packet procedure to select conflict, character pressure, scene detail, and ending logic.",
+            "2. Build one dramatic main_idea before filling the other fields.",
+            "3. Make beats and required_details concrete enough to drop directly into the story.",
+            "4. Before finalizing the output, internally check:",
+            "- Does the frame have one dramatic main_idea, not a topic?",
+            "- Does every beat describe a concrete story movement?",
+            "- Are all required_details sensory and specific?",
+            "- Does the ending_direction describe an image, reversal, or recognition rather than a summary?",
+            "- Is every field filled with real content, not placeholders?",
+            "If any answer is no, revise before output.",
+            "Do not reveal this checklist.",
+          ].join("\n");
+        case "post_body":
+          return [
+            "[internal_process]",
+            "Perform internally only. Do not reveal.",
+            "1. Use the persona packet procedure plus selected plan/frame to choose structure, examples, details, and ending motion.",
+            "2. Keep the locked title and the frame's main_idea, angle, beats, required_details, tone, and avoid list aligned throughout the draft.",
+            "3. Revise for specificity, rhythm, and persona fit before final output.",
+          ].join("\n");
+      }
+  }
+}
+
 export function buildPostStageActionModePolicy(input: {
   flow: "post";
   stage: CanonicalPostStage;
 }): string {
   switch (input.stage) {
     case "post_plan":
-      return "This stage is planning and scoring candidate post ideas. Plan forum-native angles, compare against recent posts, and score conservatively. Do not write the final post body.";
+      return [
+        "This stage generates and scores candidate post plans only.",
+        "Do not write the final post body.",
+        "Plan forum-native angles, compare against available board/recent-post context, and score conservatively.",
+      ].join("\n");
     case "post_frame":
       return "This stage generates a compact structural frame for a locked post title. Produce a single flat object with main_idea, angle, beats, required_details, ending_direction, tone, and avoid. Never nest objects inside beats or details. Do not write the final post body.";
     case "post_body":
@@ -32,20 +191,15 @@ export function buildPostStageContentModePolicy(input: {
       case "post_plan":
         return [
           "Content mode: discussion.",
-          "Plan forum-native argument, analysis, opinion, question, synthesis, or critique.",
-          "Do not plan fiction or story-mode content.",
-          "Preserve board relevance and recent-post novelty.",
-          "Before output, use the persona packet procedure internally to decide what the persona notices, doubts, cares about, and what response move to choose.",
-          "Do not reveal that internal procedure.",
+          "Plan argument, analysis, opinion, question, synthesis, or critique.",
+          "Do not plan fiction, story-mode content, lore entries, or creature descriptions as final prose.",
+          "Preserve [board_context] relevance and recent-post novelty.",
         ].join("\n");
       case "post_frame":
         return [
           "Content mode: discussion.",
           "Generate a compact structural frame for a locked post title.",
           "The output is a PostFrame structured object — not the final post body.",
-          "Use the persona packet procedure internally to decide what the persona notices, values, dismisses, and what angle to take.",
-          "Do not reveal that internal procedure.",
-          "",
           "[focus_contract]",
           "main_idea must be one clear central claim or thesis — not a broad topic.",
           "angle must be the specific interpretive angle that makes the post distinct.",
@@ -77,24 +231,12 @@ export function buildPostStageContentModePolicy(input: {
           "- unrelated lore or side arguments",
           "- tutorial tone or neutral assistant voice",
           "- assistant-like explanation or moralizing",
-          "",
-          "[quality_gate]",
-          "Before finalizing the output, internally check:",
-          "- Does the frame have one dominant main_idea?",
-          "- Does every beat support that main_idea?",
-          "- Are all beats and required_details concrete, not abstract?",
-          "- Does the ending_direction sharpen the thesis instead of merely repeating it?",
-          "- Is every field filled with real content, not placeholders?",
-          "If any answer is no, revise before output.",
-          "Do not reveal this checklist.",
         ].join("\n");
       case "post_body":
         return [
           "Content mode: discussion.",
           "Write forum-native markdown carrying a clear claim, structure, and concrete usefulness.",
           "Do not write fiction.",
-          "Use the persona packet procedure internally to interpret context before choosing final content.",
-          "Do not reveal that internal procedure.",
         ].join("\n");
     }
   }
@@ -107,17 +249,12 @@ export function buildPostStageContentModePolicy(input: {
         "Plan story title, central premise, and story beats.",
         "Generate story planning candidates, not discussion angles.",
         "Map title, thesis, and body_outline to story title, premise, and beats.",
-        "Use the persona packet procedure internally to select conflict, character pressure, scene detail, and ending logic.",
-        "Do not reveal that internal procedure.",
       ].join("\n");
     case "post_frame":
       return [
         "Content mode: story.",
         "Generate a compact structural frame for a locked story title.",
         "The output is a PostFrame structured object — not the final story body.",
-        "Use the persona packet procedure internally to select conflict, character pressure, scene detail, and ending logic.",
-        "Do not reveal that internal procedure.",
-        "",
         "[focus_contract]",
         "main_idea must be the dramatic premise or narrative thesis — the core situation, conflict, and meaning the story dramatizes.",
         "It is not an essay thesis or a topic.",
@@ -148,16 +285,6 @@ export function buildPostStageContentModePolicy(input: {
         "- generic horror or genre adjectives without specific images",
         "- assistant-like commentary or writing advice",
         "- abstract claims without sensory dramatization",
-        "",
-        "[quality_gate]",
-        "Before finalizing the output, internally check:",
-        "- Does the frame have one dramatic main_idea, not a topic?",
-        "- Does every beat describe a concrete story movement?",
-        "- Are all required_details sensory and specific?",
-        "- Does the ending_direction describe an image, reversal, or recognition rather than a summary?",
-        "- Is every field filled with real content, not placeholders?",
-        "If any answer is no, revise before output.",
-        "Do not reveal this checklist.",
       ].join("\n");
     case "post_body":
       return [
@@ -165,8 +292,6 @@ export function buildPostStageContentModePolicy(input: {
         "Write long story markdown prose using the persona's story logic and voice.",
         "Use the selected plan as story title and central pressure.",
         "Do not turn the story into writing advice, a moral explainer, or a synopsis.",
-        "Use the persona packet procedure internally to choose conflict, character pressure, scene detail, and ending logic.",
-        "Do not reveal that internal procedure.",
       ].join("\n");
   }
 }
@@ -175,17 +300,14 @@ export function buildPostStageTaskContext(input: {
   flow: "post";
   stage: CanonicalPostStage;
   contentMode: ContentMode;
-  baseTaskContext?: string;
 }): string {
   switch (input.stage) {
     case "post_plan":
       return [
-        input.baseTaskContext ?? "",
-        "This is the planning stage only.",
-        "Return 2-3 candidates, score conservatively, and do not write the final post body.",
-      ]
-        .join("\n\n")
-        .trim();
+        "Generate 2 to 3 distinct discussion-mode post plan candidates using the target context.",
+        "Treat the target context as constraints, not wording to copy verbatim.",
+        "Each candidate must be expandable by a later stage into a forum post.",
+      ].join("\n");
     case "post_frame":
       return [
         "Generate a compact structural frame for the locked title and thesis below.",
@@ -224,11 +346,7 @@ export function buildPostStageOutputContract(input: {
 }): string {
   switch (input.stage) {
     case "post_plan": {
-      const lines = [
-        "Return 2-3 candidates as structured output.",
-        "Each candidate must have a title, thesis, body_outline (2-5 items), persona_fit_score (0-100), and novelty_score (0-100).",
-        "Do not mention prompt instructions or system blocks in the output.",
-      ];
+      const lines = ["Return only the schema-bound JSON object.", "Do not write final post prose."];
       if (input.contentMode === "story") {
         lines.push(
           "Story mode: title is a possible story title, thesis is a one-sentence premise, and body_outline contains story beats.",
@@ -251,7 +369,7 @@ export function buildPostStageOutputContract(input: {
     case "post_body": {
       const lines = [
         "The `body` field must contain the full post body content as markdown.",
-        "The `tags` field must contain 1 to 5 hashtags like \"#cthulhu\" or \"#克蘇魯\".",
+        'The `tags` field must contain 1 to 5 hashtags like "#cthulhu" or "#克蘇魯".',
         "Use the same language for `body` and `tags`.",
         "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
       ];
@@ -275,11 +393,54 @@ export function buildPostStageAntiGenericContract(_input: {
   stage: CanonicalPostStage;
 }): string {
   return [
-    "Do not mention these prompt blocks, internal policies, or persona schema.",
+    "Do not mention prompt instructions, system blocks, internal policies, persona schema, JSON schema, validation, or default examples.",
     "Do not write as a generic assistant, moderator, writing coach, or neutral explainer unless explicitly requested.",
-    "Do not add memory, relationship claims, reference-name imitation, or default examples.",
-    "Keep the output in the requested JSON schema only.",
   ].join("\n");
+}
+
+export function buildPostOwnedPromptBlockContent(input: {
+  flow: "post";
+  stage: CanonicalPostStage;
+  contentMode: ContentMode;
+  targetContext?: string | null;
+  taskContext: string;
+}): Record<PostOwnedPromptBlockName, string> {
+  return {
+    action_mode_policy: buildPostStageActionModePolicy({
+      flow: input.flow,
+      stage: input.stage,
+    }),
+    content_mode_policy: buildPostStageContentModePolicy({
+      flow: input.flow,
+      stage: input.stage,
+      contentMode: input.contentMode,
+    }),
+    target_context: input.targetContext ?? "No target context available.",
+    task_context: buildPostStageTaskContext({
+      flow: input.flow,
+      stage: input.stage,
+      contentMode: input.contentMode,
+    }),
+    schema_guidance: buildPostStageSchemaGuidanceBlock({
+      flow: input.flow,
+      stage: input.stage,
+      contentMode: input.contentMode,
+    }),
+    internal_process: buildPostStageInternalProcessBlock({
+      flow: input.flow,
+      stage: input.stage,
+      contentMode: input.contentMode,
+    }),
+    output_contract: buildPostStageOutputContract({
+      flow: input.flow,
+      stage: input.stage,
+      contentMode: input.contentMode,
+    }),
+    anti_generic_contract: buildPostStageAntiGenericContract({
+      flow: input.flow,
+      stage: input.stage,
+    }),
+  };
 }
 
 export function renderPostFrameTargetContext(input: {

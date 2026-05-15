@@ -17,15 +17,17 @@ type BudgetProfile = {
   hardMaxWords: number;
 };
 
-const BUDGETS: Record<Exclude<PersonaFlowKind, "audit">, BudgetProfile> = {
-  post_plan: { minWords: 80, maxWords: 160, hardMaxWords: 240 },
-  post_frame: { minWords: 70, maxWords: 140, hardMaxWords: 200 },
-  post_body: { minWords: 70, maxWords: 140, hardMaxWords: 200 },
-  comment: { minWords: 50, maxWords: 120, hardMaxWords: 180 },
-  reply: { minWords: 50, maxWords: 120, hardMaxWords: 180 },
+const BUDGETS: Record<PersonaFlowKind, BudgetProfile> = {
+  post_plan: { minWords: 80, maxWords: 400, hardMaxWords: 500 },
+  post_frame: { minWords: 70, maxWords: 400, hardMaxWords: 500 },
+  post_body: { minWords: 70, maxWords: 400, hardMaxWords: 500 },
+  comment: { minWords: 50, maxWords: 400, hardMaxWords: 500 },
+  reply: { minWords: 50, maxWords: 400, hardMaxWords: 500 },
 };
 
 type SectionKey = keyof PersonaRuntimePacketSections;
+type RenderableSectionKey = Exclude<SectionKey, "thinkingProcedure">;
+type RenderablePacketSections = Omit<PersonaRuntimePacketSections, "thinkingProcedure">;
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -39,77 +41,30 @@ function truncateWords(text: string, maxWords: number): string {
   return `${words.slice(0, maxWords).join(" ")} [truncated]`;
 }
 
-function joinLines(lines: string[]): string {
-  return lines.filter((l) => l.length > 0).join("\n");
-}
-
-function buildProcedureLine(
-  core: PersonaCoreV2,
-  flow: PersonaFlowKind,
-  contentMode: ContentMode,
-): string {
+function buildProcedureLine(core: PersonaCoreV2, contentMode: ContentMode): string {
   const tp = core.mind.thinking_procedure;
 
-  let parts: string[] = [];
-
-  switch (flow) {
-    case "post_plan":
-      parts = [
-        ...tp.context_reading.slice(0, 1),
-        ...tp.salience_rules.slice(0, 1),
-        ...tp.response_moves.slice(0, 1),
-      ];
-      break;
-    case "post_frame":
-      parts = [
-        ...tp.salience_rules.slice(0, 1),
-        ...tp.interpretation_moves.slice(0, 1),
-        ...tp.response_moves.slice(0, 1),
-        ...tp.omission_rules.slice(0, 1),
-      ];
-      break;
-    case "post_body":
-      parts = [
-        ...tp.interpretation_moves.slice(0, 1),
-        ...tp.response_moves.slice(0, 1),
-        ...tp.omission_rules.slice(0, 1),
-      ];
-      break;
-    case "comment":
-      parts = [
-        ...tp.context_reading.slice(0, 1),
-        ...tp.salience_rules.slice(0, 1),
-        ...tp.response_moves.slice(0, 1),
-      ];
-      break;
-    case "reply":
-      parts = [
-        ...tp.context_reading.slice(0, 1),
-        ...tp.response_moves.slice(0, 1),
-        ...tp.omission_rules.slice(0, 1),
-      ];
-      break;
-  }
+  const parts: string[] = [
+    ["context_reading:", tp.context_reading.join(", ")].join(" "),
+    ["salience_rules:", tp.salience_rules.join(", ")].join(" "),
+    ["response_moves:", tp.response_moves.join(", ")].join(" "),
+    ["interpretation_moves:", tp.interpretation_moves.join(", ")].join(" "),
+    ["omission_rules:", tp.omission_rules.join(", ")].join(" "),
+  ];
 
   if (contentMode === "story") {
-    parts = [...parts, `story mode: use ${core.narrative.story_engine.slice(0, 40)}`];
+    parts.push(`story_mode: use ${core.narrative.story_engine};`);
   }
 
-  const joined = parts.join("; ");
+  const joined = parts.join(";\n");
 
-  if (countWords(joined) > 55) {
-    const truncated = truncateWords(joined, 55);
-    return `Procedure: internally ${truncated}`;
-  }
-
-  return `Procedure: internally ${joined}`;
+  return `Internal procedure:\n${joined}`;
 }
 
-function buildSectionText(key: SectionKey, text: string): string {
-  const labels: Record<SectionKey, string> = {
+function buildSectionText(key: RenderableSectionKey, text: string): string {
+  const labels: Record<RenderableSectionKey, string> = {
     identity: "Identity",
     mind: "Mind",
-    thinkingProcedure: "Procedure",
     taste: "Taste",
     voice: "Voice",
     forum: "Forum",
@@ -118,15 +73,33 @@ function buildSectionText(key: SectionKey, text: string): string {
     antiGeneric: "Avoid",
   };
 
-  return `${labels[key]}: ${text}`;
+  return `${labels[key]}:\n${text}`;
+}
+
+function buildReferenceStyleText(core: PersonaCoreV2): string {
+  const parts: string[] = [];
+
+  if (core.reference_style.reference_names.length > 0) {
+    parts.push(`Reference names: ${core.reference_style.reference_names.join(", ")}`);
+    parts.push(`- For persona-construction reference material, not roleplay targets.`);
+  }
+
+  if (core.reference_style.abstract_traits.length > 0) {
+    parts.push(`Abstract traits: ${core.reference_style.abstract_traits.join(", ")}`);
+    parts.push(
+      `- For reasoning habits, taste, atmosphere, metaphor domains, and interaction patterns.`,
+    );
+  }
+
+  return parts.join(";\n");
 }
 
 function selectSections(
   flow: PersonaFlowKind,
   contentMode: ContentMode,
   core: PersonaCoreV2,
-): PersonaRuntimePacketSections {
-  const sections: PersonaRuntimePacketSections = {};
+): RenderablePacketSections {
+  const sections: RenderablePacketSections = {};
 
   if (contentMode === "discussion") {
     switch (flow) {
@@ -157,17 +130,14 @@ function selectSections(
         sections.antiGeneric = [
           buildSectionText("antiGeneric", core.anti_generic.avoid_patterns.join(", ")),
         ];
-        sections.referenceStyle = [
-          buildSectionText(
-            "referenceStyle",
-            `${core.reference_style.abstract_traits.join(", ")}; do not imitate names or canon.`,
-          ),
-        ];
         sections.voice = [
           buildSectionText(
             "voice",
             `${core.voice.register}, ${core.voice.rhythm}; opens: ${core.voice.opening_habits[0]}; closes: ${core.voice.closing_habits[0]}`,
           ),
+        ];
+        sections.referenceStyle = [
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
         ];
         break;
 
@@ -204,10 +174,7 @@ function selectSections(
           buildSectionText("antiGeneric", core.anti_generic.avoid_patterns.join(", ")),
         ];
         sections.referenceStyle = [
-          buildSectionText(
-            "referenceStyle",
-            `${core.reference_style.abstract_traits.join(", ")}; do not imitate names or canon.`,
-          ),
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
         ];
         break;
 
@@ -229,10 +196,7 @@ function selectSections(
           buildSectionText("antiGeneric", core.anti_generic.avoid_patterns.join(", ")),
         ];
         sections.referenceStyle = [
-          buildSectionText(
-            "referenceStyle",
-            `${core.reference_style.abstract_traits.join(", ")}; do not imitate.`,
-          ),
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
         ];
         break;
 
@@ -288,10 +252,7 @@ function selectSections(
           buildSectionText("antiGeneric", core.anti_generic.avoid_patterns.join(", ")),
         ];
         sections.referenceStyle = [
-          buildSectionText(
-            "referenceStyle",
-            `${core.reference_style.abstract_traits.join(", ")}; do not imitate.`,
-          ),
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
         ];
         break;
     }
@@ -319,6 +280,9 @@ function selectSections(
         ];
         sections.voice = [
           buildSectionText("voice", `${core.voice.register}, ${core.voice.rhythm}`),
+        ];
+        sections.referenceStyle = [
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
         ];
         break;
 
@@ -352,6 +316,9 @@ function selectSections(
             `Avoid story: ${core.narrative.avoid_story_shapes.join(", ")}`,
           ),
         ];
+        sections.referenceStyle = [
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
+        ];
         break;
 
       case "post_body":
@@ -377,6 +344,9 @@ function selectSections(
         sections.forum = [
           buildSectionText("forum", `Post length: ${core.forum.typical_lengths.post}`),
         ];
+        sections.referenceStyle = [
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
+        ];
         break;
 
       case "comment":
@@ -394,6 +364,9 @@ function selectSections(
             "antiGeneric",
             `Avoid story: ${core.narrative.avoid_story_shapes.join(", ")}`,
           ),
+        ];
+        sections.referenceStyle = [
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
         ];
         break;
 
@@ -419,6 +392,9 @@ function selectSections(
             `Reply intent: ${core.forum.preferred_reply_intents.join(", ")}`,
           ),
         ];
+        sections.referenceStyle = [
+          buildSectionText("referenceStyle", buildReferenceStyleText(core)),
+        ];
         break;
     }
   }
@@ -426,10 +402,10 @@ function selectSections(
   return sections;
 }
 
-function renderPacketSections(sections: PersonaRuntimePacketSections): string {
+function renderPacketSections(sections: RenderablePacketSections): string {
   const lines: string[] = [];
 
-  for (const key of Object.keys(sections) as SectionKey[]) {
+  for (const key of Object.keys(sections) as RenderableSectionKey[]) {
     const sectionLines = sections[key];
     if (sectionLines && sectionLines.length > 0) {
       lines.push(...sectionLines);
@@ -462,20 +438,25 @@ export function normalizePersonaCoreV2(input: unknown): {
 }
 
 function enforceBudget(
-  sections: PersonaRuntimePacketSections,
+  sections: RenderablePacketSections,
   procedureLine: string,
   budget: BudgetProfile,
-): { sections: PersonaRuntimePacketSections; omittedSections: string[]; warnings: string[] } {
+): {
+  sections: RenderablePacketSections;
+  procedureLine: string;
+  omittedSections: string[];
+  warnings: string[];
+} {
   const omittedSections: string[] = [];
   const warnings: string[] = [];
+  let finalProcedureLine = procedureLine;
 
   let rendered = renderPacketSections(sections);
   let fullText = [rendered, procedureLine].filter(Boolean).join("\n\n");
   let wordCount = countWords(fullText);
 
   if (wordCount <= budget.maxWords) {
-    sections.thinkingProcedure = [procedureLine];
-    return { sections, omittedSections, warnings };
+    return { sections, procedureLine: finalProcedureLine, omittedSections, warnings };
   }
 
   // Budget still below hard max? Add procedure line inline at the end
@@ -523,8 +504,8 @@ function enforceBudget(
   if (wordCount > budget.hardMaxWords) {
     const nonProcWords = countWords(rendered);
     const procBudget = Math.max(10, budget.hardMaxWords - nonProcWords);
-    const truncatedProc = truncateWords(procedureLine, procBudget);
-    fullText = [rendered, truncatedProc].join("\n\n");
+    finalProcedureLine = truncateWords(procedureLine, procBudget);
+    fullText = [rendered, finalProcedureLine].join("\n\n");
     wordCount = countWords(fullText);
 
     if (wordCount > budget.hardMaxWords) {
@@ -533,39 +514,7 @@ function enforceBudget(
     }
   }
 
-  sections.thinkingProcedure = [procedureLine];
-
-  return { sections, omittedSections, warnings };
-}
-
-export function renderPersonaRuntimePacket(input: {
-  packet: Omit<PersonaRuntimePacket, "renderedText" | "wordCount">;
-  strictBudget?: boolean;
-}): PersonaRuntimePacket {
-  const { sections, omittedSections, warnings } = enforceBudget(
-    input.packet.sections,
-    "", // procedure line already in sections from the builder
-    input.packet.budget,
-  );
-
-  const procedureLines = sections.thinkingProcedure ?? [];
-  delete sections.thinkingProcedure;
-
-  const sectionText = renderPacketSections(sections);
-  const procedureText = procedureLines.join("\n");
-  const renderedText = [sectionText, procedureText].filter(Boolean).join("\n\n");
-
-  return {
-    ...input.packet,
-    sections: {
-      ...sections,
-      thinkingProcedure: procedureLines.length > 0 ? procedureLines : undefined,
-    },
-    renderedText,
-    wordCount: countWords(renderedText),
-    omittedSections,
-    warnings: [...input.packet.warnings, ...warnings],
-  };
+  return { sections, procedureLine: finalProcedureLine, omittedSections, warnings };
 }
 
 export function buildPersonaRuntimePacket(input: {
@@ -587,23 +536,17 @@ export function buildPersonaRuntimePacket(input: {
   }
 
   const sections = selectSections(input.flow, input.contentMode, input.core);
-  const procedureLine = buildProcedureLine(input.core, input.flow, input.contentMode);
-
-  sections.thinkingProcedure = [procedureLine];
+  const procedureLine = buildProcedureLine(input.core, input.contentMode);
 
   const {
     sections: finalSections,
+    procedureLine: finalProcedureLine,
     omittedSections,
     warnings: budgetWarnings,
   } = enforceBudget(sections, procedureLine, budget);
 
   const sectionText = renderPacketSections(finalSections);
-
-  // Extract procedure lines from sections to ensure they appear last
-  const procLines = finalSections.thinkingProcedure ?? [];
-  delete finalSections.thinkingProcedure;
-
-  const renderedText = [sectionText, procLines.join("\n")].filter(Boolean).join("\n\n");
+  const renderedText = [sectionText, finalProcedureLine].filter(Boolean).join("\n\n");
 
   return {
     flow: input.flow,
@@ -612,7 +555,10 @@ export function buildPersonaRuntimePacket(input: {
     displayName: input.displayName ?? null,
     schemaVersion: "v2",
     budget: { ...budget },
-    sections: { ...finalSections, thinkingProcedure: procLines.length > 0 ? procLines : undefined },
+    sections: {
+      ...finalSections,
+      thinkingProcedure: finalProcedureLine.length > 0 ? [finalProcedureLine] : undefined,
+    },
     renderedText,
     wordCount: countWords(renderedText),
     omittedSections,
@@ -680,7 +626,7 @@ export function buildReplyPersonaPacket(input: {
   });
 }
 
-const FLOW_MAP: Record<string, Exclude<PersonaFlowKind, "audit">> = {
+const FLOW_MAP: Record<string, PersonaFlowKind> = {
   post: "post_body",
   post_plan: "post_plan",
   post_frame: "post_frame",

@@ -16,7 +16,7 @@ describe("PERSONA_GENERATION_CONTRACT", () => {
     expect(contractText).toContain("[reference_rules]");
     expect(contractText).toContain("[schema_guidance]");
     expect(contractText).toContain("[compactness]");
-    expect(contractText).toContain("[internal_design_process]");
+    expect(contractText).toContain("[internal_process]");
   });
 
   it("contract contains no legacy seed stage", () => {

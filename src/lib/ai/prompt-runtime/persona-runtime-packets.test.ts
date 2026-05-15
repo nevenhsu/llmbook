@@ -219,22 +219,22 @@ describe("story mode includes narrative traits", () => {
 });
 
 describe("thinking procedure", () => {
-  it("includes Procedure: line in renderedText", () => {
+  it("includes Internal procedure: line in renderedText", () => {
     const packet = buildCommentPersonaPacket({
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
-    expect(packet.renderedText).toMatch(/Procedure:/);
+    expect(packet.renderedText).toMatch(/Internal procedure:/);
   });
 
-  it("procedure line includes 'internally'", () => {
+  it("procedure line includes procedure content", () => {
     const packet = buildCommentPersonaPacket({
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
-    expect(packet.renderedText).toMatch(/internally/i);
+    expect(packet.renderedText).toMatch(/context_reading:/i);
   });
 
   it("procedure line is under 55 words", () => {
@@ -244,12 +244,23 @@ describe("thinking procedure", () => {
       core: FIXTURE,
     });
 
-    const procMatch = packet.renderedText.match(/Procedure:.+/);
+    const procMatch = packet.renderedText.match(/Internal procedure:.+/);
 
     if (procMatch) {
       const words = wordCount(procMatch[0]);
       expect(words).toBeLessThanOrEqual(60); // Allow some slack for the "Procedure:" prefix
     }
+  });
+
+  it("post_plan renders Internal procedure only once", () => {
+    const packet = buildPostPlanPersonaPacket({
+      contentMode: "discussion",
+      personaId: "p1",
+      core: FIXTURE,
+    });
+
+    const matches = packet.renderedText.match(/Internal procedure:/g) ?? [];
+    expect(matches).toHaveLength(1);
   });
 });
 
@@ -274,23 +285,24 @@ describe("no full JSON in renderedText", () => {
   });
 });
 
-describe("reference names excluded", () => {
-  it("does not render reference_names in renderedText", () => {
+describe("reference names included", () => {
+  it("renders reference_names in renderedText", () => {
     const packet = buildPostPlanPersonaPacket({
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
-    expect(packet.renderedText).not.toContain("David Bowie");
-    expect(packet.renderedText).not.toContain("Laurie Anderson");
+    expect(packet.renderedText).toContain("David Bowie");
+    expect(packet.renderedText).toContain("Laurie Anderson");
   });
 
-  it("renders abstract_traits instead", () => {
+  it("renders reference_names together with abstract_traits", () => {
     const packet = buildPostPlanPersonaPacket({
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
+    expect(packet.renderedText).toContain("Reference names:");
     expect(packet.renderedText).toContain("theatrical pressure");
   });
 });
@@ -378,7 +390,7 @@ describe("buildPersonaPacketForPrompt", () => {
     expect(packet).not.toBeNull();
     expect(packet!.renderedText).toContain("Identity");
     expect(packet!.renderedText).toContain("Mind");
-    expect(packet!.renderedText).toContain("Procedure");
+    expect(packet!.renderedText).toContain("Internal procedure");
   });
 
   it("post_frame story packet includes narrative sections", () => {
@@ -392,7 +404,7 @@ describe("buildPersonaPacketForPrompt", () => {
     expect(packet).not.toBeNull();
     expect(packet!.renderedText).toContain("Narrative");
     expect(packet!.renderedText).toContain("Identity");
-    expect(packet!.renderedText).toContain("Procedure");
+    expect(packet!.renderedText).toContain("Internal procedure");
   });
 
   it("returns null for unknown task type", () => {

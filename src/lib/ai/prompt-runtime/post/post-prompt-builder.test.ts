@@ -3,8 +3,12 @@ import {
   buildPostStageActionModePolicy,
   buildPostStageAntiGenericContract,
   buildPostStageContentModePolicy,
+  buildPostStageInternalProcessBlock,
+  buildPostOwnedPromptBlockContent,
   buildPostStageOutputContract,
+  buildPostStageSchemaGuidanceBlock,
   buildPostStageTaskContext,
+  getPostPromptBlockOrder,
   renderSelectedPostPlanTargetContext,
   renderPostFrameTargetContext,
   type CanonicalSelectedPostPlan,
@@ -12,9 +16,7 @@ import {
 } from "./post-prompt-builder";
 import type { PostFrame } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
 
-function buildPlan(
-  overrides: Partial<CanonicalSelectedPostPlan> = {},
-): CanonicalSelectedPostPlan {
+function buildPlan(overrides: Partial<CanonicalSelectedPostPlan> = {}): CanonicalSelectedPostPlan {
   return {
     title: "The Missing Boundary",
     thesis: "Separate generation from enforcement.",
@@ -25,7 +27,8 @@ function buildPlan(
 
 function buildFrame(overrides: Partial<PostFrame> = {}): PostFrame {
   return {
-    main_idea: "Teams over-edit prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
+    main_idea:
+      "Teams over-edit prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
     angle: "The workflow boundary is the real bottleneck, not the prompt wording.",
     beats: [
       "Hook: show why prompt tuning gets blamed too early",
@@ -39,9 +42,15 @@ function buildFrame(overrides: Partial<PostFrame> = {}): PostFrame {
       "The specific moment when enforcement, not repair, caught the issue",
       "A social observation about why teams prefer prompt tuning to workflow changes",
     ],
-    ending_direction: "Land on the irony that the fix was never about better prompts — it was about harder gates.",
+    ending_direction:
+      "Land on the irony that the fix was never about better prompts — it was about harder gates.",
     tone: ["sharp", "practical", "slightly contrarian"],
-    avoid: ["vague commentary without example", "generic summary without specific observation", "tutorial tone", "assistant-like explanation"],
+    avoid: [
+      "vague commentary without example",
+      "generic summary without specific observation",
+      "tutorial tone",
+      "assistant-like explanation",
+    ],
     ...overrides,
   };
 }
@@ -49,7 +58,7 @@ function buildFrame(overrides: Partial<PostFrame> = {}): PostFrame {
 describe("buildPostStageActionModePolicy", () => {
   it("post_plan mentions planning and forbids writing final body", () => {
     const policy = buildPostStageActionModePolicy({ flow: "post", stage: "post_plan" });
-    expect(policy).toContain("planning");
+    expect(policy).toContain("candidate post plans");
     expect(policy).toContain("candidate");
     expect(policy).toContain("final post body");
   });
@@ -79,7 +88,7 @@ describe("buildPostStageContentModePolicy", () => {
         contentMode: "discussion",
       });
       expect(policy).toContain("discussion");
-      expect(policy).toContain("forum");
+      expect(policy).toContain("board relevance");
       expect(policy).toContain("novelty");
     });
 
@@ -98,7 +107,8 @@ describe("buildPostStageContentModePolicy", () => {
       expect(policy).toContain("[ending_contract]");
       expect(policy).toContain("[tone_contract]");
       expect(policy).toContain("[avoid_contract]");
-      expect(policy).toContain("[quality_gate]");
+      expect(policy).not.toContain("[schema_guidance]");
+      expect(policy).not.toContain("[internal_process]");
     });
 
     it("post_body says write forum-native markdown, not fiction", () => {
@@ -134,7 +144,8 @@ describe("buildPostStageContentModePolicy", () => {
       expect(policy).toContain("story");
       expect(policy).toContain("main_idea");
       expect(policy).toContain("required_details");
-      expect(policy).toContain("[quality_gate]");
+      expect(policy).not.toContain("[schema_guidance]");
+      expect(policy).not.toContain("[internal_process]");
       expect(policy).not.toContain("not currently configured");
       expect(policy).not.toContain("pass through");
     });
@@ -152,18 +163,103 @@ describe("buildPostStageContentModePolicy", () => {
   });
 });
 
+describe("post-frame helper blocks", () => {
+  it("renders stage-specific schema_guidance across post stages", () => {
+    const planBlock = buildPostStageSchemaGuidanceBlock({
+      flow: "post",
+      stage: "post_plan",
+      contentMode: "discussion",
+    });
+    const frameBlock = buildPostStageSchemaGuidanceBlock({
+      flow: "post",
+      stage: "post_frame",
+      contentMode: "discussion",
+    });
+    const bodyBlock = buildPostStageSchemaGuidanceBlock({
+      flow: "post",
+      stage: "post_body",
+      contentMode: "discussion",
+    });
+
+    expect(planBlock).toContain("[schema_guidance]");
+    expect(planBlock).toContain("candidates array");
+    expect(frameBlock).toContain("[schema_guidance]");
+    expect(frameBlock).toContain("PostFrame");
+    expect(bodyBlock).toContain("[schema_guidance]");
+    expect(bodyBlock).toContain("metadata.probability");
+  });
+
+  it("renders stage-specific internal_process and switches by content mode", () => {
+    const planBlock = buildPostStageInternalProcessBlock({
+      flow: "post",
+      stage: "post_plan",
+      contentMode: "discussion",
+    });
+    const discussionBlock = buildPostStageInternalProcessBlock({
+      flow: "post",
+      stage: "post_frame",
+      contentMode: "discussion",
+    });
+    const storyBlock = buildPostStageInternalProcessBlock({
+      flow: "post",
+      stage: "post_frame",
+      contentMode: "story",
+    });
+    const bodyBlock = buildPostStageInternalProcessBlock({
+      flow: "post",
+      stage: "post_body",
+      contentMode: "discussion",
+    });
+
+    expect(planBlock).toContain("[internal_process]");
+    expect(planBlock).toContain("candidate angles");
+    expect(discussionBlock).toContain("[internal_process]");
+    expect(discussionBlock).toContain("dominant main_idea");
+    expect(storyBlock).toContain("[internal_process]");
+    expect(storyBlock).toContain("dramatic main_idea");
+    expect(bodyBlock).toContain("[internal_process]");
+    expect(bodyBlock).toContain("selected plan/frame");
+  });
+
+  it("exposes canonical post block order and post-owned block assembly", () => {
+    const order = getPostPromptBlockOrder({ flow: "post", stage: "post_frame" });
+    const blocks = buildPostOwnedPromptBlockContent({
+      flow: "post",
+      stage: "post_frame",
+      contentMode: "discussion",
+      targetContext: "Locked title and thesis",
+      taskContext: "Write a forum post",
+    });
+
+    expect(order).toEqual([
+      "action_mode_policy",
+      "content_mode_policy",
+      "persona_runtime_packet",
+      "board_context",
+      "target_context",
+      "task_context",
+      "schema_guidance",
+      "internal_process",
+      "output_contract",
+      "anti_generic_contract",
+    ]);
+    expect(blocks.target_context).toContain("Locked title");
+    expect(blocks.schema_guidance).toContain("[schema_guidance]");
+    expect(blocks.internal_process).toContain("[internal_process]");
+  });
+});
+
 describe("buildPostStageTaskContext", () => {
   it("post_plan wraps baseTaskContext with planning-only instructions", () => {
     const ctx = buildPostStageTaskContext({
       flow: "post",
       stage: "post_plan",
       contentMode: "discussion",
-      baseTaskContext: "Write a post about AI.",
     });
     expect(ctx).toContain("Write a post about AI.");
-    expect(ctx).toContain("planning");
-    expect(ctx).toContain("candidate");
-    expect(ctx).toContain("final post body");
+    expect(ctx).toContain("candidate post plans");
+    expect(ctx).toContain("later stage");
+    expect(ctx).not.toContain("final post body");
   });
 
   it("post_plan handles empty baseTaskContext gracefully", () => {
@@ -172,7 +268,7 @@ describe("buildPostStageTaskContext", () => {
       stage: "post_plan",
       contentMode: "discussion",
     });
-    expect(ctx).toContain("planning");
+    expect(ctx).toContain("candidate post plans");
     expect(ctx).not.toContain("undefined");
   });
 
@@ -325,7 +421,6 @@ describe("no retired labels leak into prompt text", () => {
         flow: "post",
         stage,
         contentMode: "discussion",
-        baseTaskContext: "Base.",
       });
       expect(ctx).not.toContain("planner_mode");
       expect(ctx).not.toContain("writer");
@@ -355,7 +450,7 @@ describe("buildPostStageOutputContract", () => {
       stage: "post_plan",
       contentMode: "discussion",
     });
-    expect(contract).toContain("2-3 candidates");
+    expect(contract).toContain("2 to 3 candidates");
     expect(contract).toContain("persona_fit_score");
     expect(contract).toContain("novelty_score");
     expect(contract).toContain("Do not mention prompt instructions");

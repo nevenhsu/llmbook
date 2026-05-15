@@ -249,7 +249,7 @@ describe("persona-v2-prompt-family", () => {
     it("discussion post plan says to plan forum-native angles", () => {
       const policy = buildContentModePolicy({ flow: "post_plan", contentMode: "discussion" });
       expect(policy).toContain("discussion");
-      expect(policy).toContain("forum");
+      expect(policy).toContain("board relevance");
     });
 
     it("story post plan says to plan story elements", () => {
@@ -279,7 +279,8 @@ describe("persona-v2-prompt-family", () => {
       expect(policy).toContain("discussion");
       expect(policy).toContain("main_idea");
       expect(policy).toContain("required_details");
-      expect(policy).toContain("[quality_gate]");
+      expect(policy).not.toContain("[schema_guidance]");
+      expect(policy).not.toContain("[internal_process]");
     });
 
     it("story post_frame contains story field rules and no pass-through language", () => {
@@ -287,7 +288,8 @@ describe("persona-v2-prompt-family", () => {
       expect(policy).toContain("story");
       expect(policy).toContain("main_idea");
       expect(policy).toContain("required_details");
-      expect(policy).toContain("[quality_gate]");
+      expect(policy).not.toContain("[schema_guidance]");
+      expect(policy).not.toContain("[internal_process]");
       expect(policy).not.toContain("not currently configured");
       expect(policy).not.toContain("pass through");
       expect(policy).not.toContain("minimal beats");
@@ -332,6 +334,8 @@ describe("persona-v2-prompt-family", () => {
         "board_context",
         "target_context",
         "task_context",
+        "schema_guidance",
+        "internal_process",
         "output_contract",
         "anti_generic_contract",
       ]);
@@ -352,6 +356,8 @@ describe("persona-v2-prompt-family", () => {
         "board_context",
         "target_context",
         "task_context",
+        "schema_guidance",
+        "internal_process",
         "output_contract",
         "anti_generic_contract",
       ]);
@@ -372,6 +378,8 @@ describe("persona-v2-prompt-family", () => {
         "board_context",
         "target_context",
         "task_context",
+        "schema_guidance",
+        "internal_process",
         "output_contract",
         "anti_generic_contract",
       ]);
@@ -392,6 +400,8 @@ describe("persona-v2-prompt-family", () => {
         "board_context",
         "target_context",
         "task_context",
+        "schema_guidance",
+        "internal_process",
         "output_contract",
         "anti_generic_contract",
       ]);
@@ -405,7 +415,7 @@ describe("persona-v2-prompt-family", () => {
         makeInput({ flow: "post_body", personaPacket: packet }),
       );
       const packetContent = extractBlockContent(result, "persona_runtime_packet");
-      expect(packetContent).toContain("Procedure");
+      expect(packetContent).toContain("Internal procedure");
     });
 
     it("contains system_baseline and global_policy", () => {
@@ -422,7 +432,8 @@ describe("persona-v2-prompt-family", () => {
       const result = buildPersonaPromptFamilyV2(
         makeInput({ flow: "post_body", personaPacket: packet }),
       );
-      expect(extractBlockContent(result, "output_contract")).toContain(outputContract());
+      expect(extractBlockContent(result, "output_contract")).toContain("metadata.probability");
+      expect(extractBlockContent(result, "output_contract")).toContain("hashtags");
     });
 
     it("assembles messages with system role for baseline", () => {
@@ -602,6 +613,8 @@ describe("persona-v2-prompt-family", () => {
         "board_context",
         "target_context",
         "task_context",
+        "schema_guidance",
+        "internal_process",
         "output_contract",
         "anti_generic_contract",
       ]);
@@ -622,6 +635,8 @@ describe("persona-v2-prompt-family", () => {
         "board_context",
         "target_context",
         "task_context",
+        "schema_guidance",
+        "internal_process",
         "output_contract",
         "anti_generic_contract",
       ]);
@@ -659,6 +674,15 @@ describe("persona-v2-prompt-family", () => {
       const replyAction = extractBlockContent(replyResult, "action_mode_policy");
       expect(replyAction).toContain("reply");
       expect(replyAction).toContain("source comment");
+
+      expect(extractBlockContent(commentResult, "schema_guidance")).toContain("Placeholder");
+      expect(extractBlockContent(commentResult, "internal_process")).toContain(
+        "Perform internally only",
+      );
+      expect(extractBlockContent(replyResult, "schema_guidance")).toContain("Placeholder");
+      expect(extractBlockContent(replyResult, "internal_process")).toContain(
+        "Perform internally only",
+      );
     });
 
     it("family result still exposes the same outer contract (no preview-only wrapper)", () => {

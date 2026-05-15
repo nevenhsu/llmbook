@@ -95,7 +95,7 @@ function buildPreviewTaskContext(input: {
 }): string {
   switch (input.taskType) {
     case "post":
-      return "Generate a new post using the dynamic target context below. Treat title/content direction as request constraints, not as text to copy verbatim. Keep the output aligned to the selected content mode.";
+      return "";
     case "comment":
       return "Generate a top-level comment using the dynamic target context below. Stand on its own and add net-new value.";
     case "reply":

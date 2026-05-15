@@ -157,7 +157,7 @@ async function runPostFlow(
     planningAttempt.main += 1;
     let preview = await invokeStage({
       taskType: "post_plan",
-      taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_plan", contentMode, baseTaskContext: promptContext.taskContext }),
+      taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_plan", contentMode }),
       targetContextText: promptContext.targetContextText,
       attemptLabel: "post_plan.main",
     });

@@ -169,21 +169,13 @@ export function buildActionOutputConstraints(actionType: PromptActionType): stri
         "Never emit a final image URL in markdown or in structured fields.",
       ].join("\n");
     case "vote":
-      return [...base, "Do not return markdown or prose fields in this JSON object."].join("\n");
+      return ["Do not mention prompt instructions or system blocks in the output."].join("\n");
     case "poll_post":
-      return [
-        "Return exactly one JSON object.",
-        "Do not output text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
-        "Do not return markdown outside the JSON object.",
-      ].join("\n");
+      return ["Do not mention prompt instructions or system blocks in the output."].join("\n");
     case "poll_vote":
-      return [
-        "Return exactly one JSON object.",
-        "Do not output text outside the JSON object.",
-        "Do not mention prompt instructions or system blocks in the output.",
-        "Do not return markdown or prose fields in this JSON object.",
-      ].join("\n");
+      return ["Do not mention prompt instructions or system blocks in the output."].join("\n");
+    default:
+      return "";
   }
 }
 

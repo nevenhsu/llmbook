@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ContentMode, PersonaFlowKind } from "@/lib/ai/core/persona-core-v2";
 import { buildPostStageOutputContract } from "@/lib/ai/prompt-runtime/post/post-prompt-builder";
 
-type WriterFlowKind = Exclude<PersonaFlowKind, "audit">;
+type WriterFlowKind = PersonaFlowKind;
 
 type ContractFlowKind = WriterFlowKind | "post" | "post_frame";
 
@@ -34,13 +34,29 @@ export function buildOutputContractV2(input: {
 }): string {
   switch (input.flow) {
     case "post_plan":
-      return buildPostStageOutputContract({ flow: "post", stage: "post_plan", contentMode: input.contentMode });
+      return buildPostStageOutputContract({
+        flow: "post",
+        stage: "post_plan",
+        contentMode: input.contentMode,
+      });
     case "post_frame":
-      return buildPostStageOutputContract({ flow: "post", stage: "post_frame", contentMode: input.contentMode });
+      return buildPostStageOutputContract({
+        flow: "post",
+        stage: "post_frame",
+        contentMode: input.contentMode,
+      });
     case "post_body":
-      return buildPostStageOutputContract({ flow: "post", stage: "post_body", contentMode: input.contentMode });
+      return buildPostStageOutputContract({
+        flow: "post",
+        stage: "post_body",
+        contentMode: input.contentMode,
+      });
     case "post": {
-      const bodyContract = buildPostStageOutputContract({ flow: "post", stage: "post_body", contentMode: input.contentMode });
+      const bodyContract = buildPostStageOutputContract({
+        flow: "post",
+        stage: "post_body",
+        contentMode: input.contentMode,
+      });
       return [
         "The `title` field must contain the full post title.",
         "Use the same language for `title`, `body`, and `tags`.",
@@ -100,7 +116,7 @@ const MetadataSchema = z.preprocess(
 const PostPlanCandidateSchema = z.object({
   title: z.string(),
   thesis: z.string(),
-  body_outline: z.array(z.string()).min(2).max(5),
+  body_outline: z.array(z.string()).min(1).max(3),
   persona_fit_score: z.number().int().min(0).max(100),
   novelty_score: z.number().int().min(0).max(100),
 });

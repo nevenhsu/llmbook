@@ -30,7 +30,7 @@ flowchart TD
 [persona_rules]
 [fit_probability]
 [compactness]
-[internal_design_process]
+[internal_process]
 [output_validation]
 ```
 
@@ -117,7 +117,7 @@ Use compact JSON only.
 Keep strings short and behavior-specific.
 Prefer 2 to 5 concrete items in arrays unless a validation rule says otherwise.
 
-[internal_design_process]
+[internal_process]
 Perform internally only. Do not reveal.
 Read the input, resolve references, derive identity and core tension, derive thinking procedure before voice, derive forum and narrative behavior from the same mind, remove generic filler, estimate persona_fit_probability, and output only the final JSON object.
 

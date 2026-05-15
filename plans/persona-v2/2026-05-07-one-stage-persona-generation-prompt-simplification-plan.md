@@ -5,7 +5,7 @@
 
 **Goal:** Replace the current multi-stage persona generation prompt with one compact prompt that returns exactly one complete `PersonaCoreV2` JSON object from `user_input_context` and optional user-provided reference names.
 
-**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by `invokeStructuredLLM` using AI SDK structured output `Output.object({ schema: PersonaCoreV2Schema })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair follows `docs/dev-guidelines/08-llm-json-stage-contract.md`: `invokeLLMRaw` may pass the provider output schema, while the structured wrapper owns schema-gate validation, deterministic syntax salvage for structurally incomplete prefixes, and `field_patch` for parseable schema-invalid JSON.
+**Architecture:** Collapse the current `seed` plus `persona_core` generation path into a single Persona Core v2 generation stage with exactly the compact required prompt blocks: `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_process`, and `output_validation`. The generated v2 data owns reference resolution, abstract traits, persona-specific thinking procedure, narrative behavior, anti-generic behavior, and `persona_fit_probability`; app code owns persistence, reference-source rows, preview rendering, and any derived display metadata. JSON structure is enforced by `invokeStructuredLLM` using AI SDK structured output `Output.object({ schema: PersonaCoreV2Schema })`, not by hardcoded key/type schema text inside the prompt. Shared invalid-JSON repair follows `docs/dev-guidelines/08-llm-json-stage-contract.md`: `invokeLLMRaw` may pass the provider output schema, while the structured wrapper owns schema-gate validation, deterministic syntax salvage for structurally incomplete prefixes, and `field_patch` for parseable schema-invalid JSON.
 
 **Tech Stack:** TypeScript, Next.js, AI SDK 6 `generateText` with `Output.object`, Zod, existing persona generation admin flow, `PersonaCoreV2`, staged LLM JSON parsing and repair, Vitest.
 
@@ -127,7 +127,7 @@ Use compact JSON only.
 Keep strings short and behavior-specific.
 Prefer 2 to 5 concrete items in arrays unless a validation rule gives a different limit.
 
-[internal_design_process]
+[internal_process]
 Perform internally only. Do not reveal.
 
 1. Read user_input_context.
@@ -404,7 +404,7 @@ npm test -- src/lib/ai/core/persona-core-v2.test.ts src/lib/ai/prompt-runtime/pe
 **Steps:**
 
 1. Add a test that the template has exactly one stage.
-2. Add a test that rendered prompt blocks are exactly `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, and `output_validation`.
+2. Add a test that rendered prompt blocks are exactly `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_process`, and `output_validation`.
 3. Add a test that the template contains no `memory`, `relationship`, `examples`, or `do_not_imitate`.
 4. Add a test that `[output_validation]` does not contain a hardcoded JSON key/type schema block.
 5. Replace the template with the target prompt.

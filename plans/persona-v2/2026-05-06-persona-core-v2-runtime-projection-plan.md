@@ -439,11 +439,6 @@ export function buildAuditPersonaPacket(input: {
   core: PersonaCoreV2;
   auditTargets?: PersonaAuditEvidencePacket["auditTargets"];
 }): PersonaAuditEvidencePacket;
-
-export function renderPersonaRuntimePacket(input: {
-  packet: Omit<PersonaRuntimePacket, "renderedText" | "wordCount">;
-  strictBudget?: boolean;
-}): PersonaRuntimePacket;
 ```
 
 Integration signatures:

@@ -32,7 +32,7 @@ It should not reuse `planner_family` or `writer_family`.
 
 For `persona_core_v2`:
 
-- `[task]`, `[input]`, `[reference_rules]`, `[persona_rules]`, `[fit_probability]`, `[compactness]`, `[internal_design_process]`, and `[output_validation]` define the compact prompt shape
+- `[task]`, `[input]`, `[reference_rules]`, `[persona_rules]`, `[fit_probability]`, `[compactness]`, `[internal_process]`, and `[output_validation]` define the compact prompt shape
 - the exact JSON key/type contract remains code-owned by `PersonaCoreV2Schema`
 
 That means prompt constraints should own:

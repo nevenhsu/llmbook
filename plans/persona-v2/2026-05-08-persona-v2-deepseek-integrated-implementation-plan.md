@@ -130,7 +130,7 @@ npx vitest run src/lib/ai/core/persona-core-v2.test.ts src/lib/ai/prompt-runtime
 [persona_rules]
 [fit_probability]
 [compactness]
-[internal_design_process]
+[internal_process]
 [output_validation]
 ```
 
@@ -492,7 +492,7 @@ Expected:
 
 - [ ] `PersonaCoreV2Schema` is the canonical Persona Core v2 schema.
 - [ ] Persona generation is one stage and returns one compact `PersonaCoreV2`.
-- [ ] Persona generation prompt has exactly `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_design_process`, `output_validation`.
+- [ ] Persona generation prompt has exactly `task`, `input`, `reference_rules`, `persona_rules`, `fit_probability`, `compactness`, `internal_process`, `output_validation`.
 - [ ] `reference_style.do_not_imitate` is deleted from v2 data.
 - [ ] Non-imitation remains enforced by prompt/validation.
 - [ ] `persona_fit_probability` is an integer from 0 to 100.
