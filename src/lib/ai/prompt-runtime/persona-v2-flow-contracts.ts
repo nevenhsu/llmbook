@@ -35,25 +35,21 @@ export function buildOutputContractV2(input: {
   switch (input.flow) {
     case "post_plan":
       return buildPostStageOutputContract({
-        flow: "post",
         stage: "post_plan",
         contentMode: input.contentMode,
       });
     case "post_frame":
       return buildPostStageOutputContract({
-        flow: "post",
         stage: "post_frame",
         contentMode: input.contentMode,
       });
     case "post_body":
       return buildPostStageOutputContract({
-        flow: "post",
         stage: "post_body",
         contentMode: input.contentMode,
       });
     case "post": {
       const bodyContract = buildPostStageOutputContract({
-        flow: "post",
         stage: "post_body",
         contentMode: input.contentMode,
       });
