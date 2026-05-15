@@ -277,7 +277,7 @@ export function buildPersonaPromptFamilyV2(
   if (isPostFlow) {
     const postBlocks = buildPostOwnedPromptBlockContent({
       flow: "post",
-      stage: input.flow,
+      stage: input.flow as "post_plan" | "post_frame" | "post_body",
       contentMode: input.contentMode,
       targetContext: input.targetContext ?? null,
       taskContext: input.taskContext,

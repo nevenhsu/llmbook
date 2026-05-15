@@ -465,7 +465,7 @@ function enforceBudget(
 
   if (wordCount > budget.hardMaxWords) {
     // Need to truncate: remove optional sections by priority
-    const removalOrder: SectionKey[] = [
+    const removalOrder: RenderableSectionKey[] = [
       "referenceStyle",
       "taste",
       "forum",

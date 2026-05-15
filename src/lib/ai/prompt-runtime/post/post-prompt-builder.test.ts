@@ -330,7 +330,7 @@ describe("renderSelectedPostPlanTargetContext", () => {
   });
 
   it("handles longer outline", () => {
-    const plan = buildPlan({ bodyOutline: ["A", "B", "C", "D", "E"] });
+    const plan = buildPlan({ outline: ["A", "B", "C", "D", "E"] });
     const result = renderSelectedPostPlanTargetContext(plan);
     const lines = result.split("\n");
     const outlineLines = lines.filter((l) => l.startsWith("- "));

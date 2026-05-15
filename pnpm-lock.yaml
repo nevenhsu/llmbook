@@ -11,6 +11,9 @@ importers:
       '@ai-sdk/deepseek':
         specifier: ^2.0.32
         version: 2.0.34(zod@4.4.3)
+      '@ai-sdk/provider':
+        specifier: ^3.0.10
+        version: 3.0.10
       '@ai-sdk/xai':
         specifier: ^3.0.88
         version: 3.0.89(zod@4.4.3)
