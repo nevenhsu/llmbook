@@ -180,6 +180,15 @@ The newer Persona v2 plans also update the admin preview contract around these s
 
 These are admin/preview consequences of the same V2 flow contract, not a separate prompt architecture.
 
+## Task Type Boundary
+
+Persona interaction internals use explicit `flow` and `stage` only. `taskType` is a public or cross-feature label resolved once at the interaction-service boundary and never reinterpreted deeper in the prompt/runtime stack:
+
+- `PersonaInteractionTaskType` (`"post" | "comment" | "reply"`) — used by admin interaction routes and context-assist
+- `RuntimeTaskType` (broader union including `"vote"`, `"poll_post"`, `"poll_vote"`, `"generic"`) — used by cross-feature orchestration (control plane, queues, model adapters)
+
+The mapping `taskType → { flow, stage }` lives only in `resolveFlowStage()` at the interaction-service boundary. No internal helper re-derives stage from taskType.
+
 ## Lean Fallback Path
 
 `vote`, `poll_post`, and `poll_vote` do not yet have full V2 flow definitions.

@@ -11,7 +11,6 @@ import type {
   PersonaAuditEvidencePacket,
   PersonaAuditTarget,
 } from "@/lib/ai/core/persona-core-v2";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 
 type BudgetProfile = {
   minWords: number;
@@ -675,40 +674,4 @@ export function buildPersonaPacketForPrompt(input: {
   }
 
   return null;
-}
-
-const TASK_TYPE_TO_PERSONA_FLOW_STAGE: Partial<Record<PromptActionType, PersonaFlowStage>> = {
-  post: { flow: "post", stage: "post_body" },
-  post_plan: { flow: "post", stage: "post_plan" },
-  post_frame: { flow: "post", stage: "post_frame" },
-  post_body: { flow: "post", stage: "post_body" },
-  comment: { flow: "comment", stage: "comment_body" },
-  reply: { flow: "reply", stage: "reply_body" },
-};
-
-export function resolvePersonaPacketFlowStage(taskType: PromptActionType): PersonaFlowStage | null {
-  return TASK_TYPE_TO_PERSONA_FLOW_STAGE[taskType] ?? null;
-}
-
-export function buildPersonaPacketForTaskType(input: {
-  taskType: PromptActionType;
-  stagePurpose: string;
-  contentMode: ContentMode;
-  personaId: string;
-  displayName?: string | null;
-  core: PersonaCoreV2;
-}): PersonaRuntimePacket | null {
-  const flowStage = resolvePersonaPacketFlowStage(input.taskType);
-  if (!flowStage) {
-    return null;
-  }
-
-  return buildPersonaRuntimePacket({
-    flow: flowStage.flow,
-    stage: flowStage.stage,
-    contentMode: input.contentMode,
-    personaId: input.personaId,
-    displayName: input.displayName,
-    core: input.core,
-  });
 }

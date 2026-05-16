@@ -7,8 +7,8 @@ import type {
   PromptBoardContext,
   PromptTargetContext,
 } from "@/lib/ai/admin/control-plane-contract";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
+import type { RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { ContentMode, PersonaInteractionFlow, PersonaInteractionStage, PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
@@ -22,7 +22,7 @@ import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
 export type AiAgentPersonaInteractionInput = {
   personaId: string;
   modelId: string;
-  taskType: PromptActionType;
+  taskType: RuntimeTaskType;
   taskContext: string;
   boardContext?: PromptBoardContext;
   targetContext?: PromptTargetContext;
@@ -47,17 +47,37 @@ export type AiAgentPersonaInteractionInput = {
   contentMode?: ContentMode;
 };
 
-type UserFacingInteractionTaskType = "post" | "comment" | "reply";
+function resolveFlowStage(taskType: RuntimeTaskType): {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+} {
+  switch (taskType) {
+    case "post":
+      return { flow: "post", stage: "post_body" };
+    case "post_plan":
+      return { flow: "post", stage: "post_plan" };
+    case "post_frame":
+      return { flow: "post", stage: "post_frame" };
+    case "post_body":
+      return { flow: "post", stage: "post_body" };
+    case "comment":
+      return { flow: "comment", stage: "comment_body" };
+    case "reply":
+      return { flow: "reply", stage: "reply_body" };
+    default:
+      return { flow: "comment", stage: "comment_body" };
+  }
+}
 
 function isUserFacingInteractionTaskType(
-  taskType: PromptActionType,
-): taskType is UserFacingInteractionTaskType {
+  taskType: RuntimeTaskType,
+): taskType is PersonaInteractionTaskType {
   return taskType === "post" || taskType === "comment" || taskType === "reply";
 }
 
 function buildPreviewTask(input: {
   personaId: string;
-  taskType: "post" | "comment" | "reply";
+  taskType: PersonaInteractionTaskType;
   profile: PersonaProfile;
   payload: Record<string, unknown>;
 }): TaskSnapshot {
@@ -90,7 +110,7 @@ function buildPreviewTask(input: {
 }
 
 function buildPreviewTaskContext(input: {
-  taskType: "post" | "comment" | "reply";
+  taskType: PersonaInteractionTaskType;
   contentMode?: ContentMode;
 }): string {
   switch (input.taskType) {
@@ -267,10 +287,13 @@ export class AiAgentPersonaInteractionService {
       }
     }
 
+    const { flow, stage } = resolveFlowStage(input.taskType);
+
     const preview = await runPersonaInteractionStage({
       personaId: input.personaId,
       modelId: input.modelId,
-      taskType: input.taskType,
+      flow,
+      stage,
       stagePurpose: "main",
       taskContext: input.taskContext,
       boardContext: input.boardContext,
@@ -283,7 +306,7 @@ export class AiAgentPersonaInteractionService {
       getPersonaProfile: input.getPersonaProfile,
       recordLlmInvocationError: input.recordLlmInvocationError,
       debug: input.debug,
-      attemptLabel: `${input.taskType}.main`,
+      attemptLabel: `${flow}:${stage}.main`,
       contentMode: input.contentMode,
     });
     const markdown = renderRawStagePreviewMarkdown(preview.rawResponse ?? preview.markdown);

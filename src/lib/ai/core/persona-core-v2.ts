@@ -4,6 +4,8 @@ export type ContentLength = "one_liner" | "short" | "medium" | "long";
 
 export type ContentMode = "discussion" | "story";
 
+export type PersonaInteractionTaskType = "post" | "comment" | "reply";
+
 export type PersonaInteractionFlow = "post" | "comment" | "reply";
 
 export type PersonaInteractionStage =

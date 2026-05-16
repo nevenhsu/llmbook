@@ -74,7 +74,7 @@ function mapParsedOutput(
 
 export async function runSingleStageWriterFlow(input: {
   flowKind: SingleStageWriterFlowKind;
-  taskType: "comment" | "reply";
+  flow: "comment" | "reply";
   stage: string;
   mode: "preview" | "runtime";
   moduleInput: TextFlowModuleRunInput;
@@ -113,7 +113,8 @@ export async function runSingleStageWriterFlow(input: {
       const preview = await input.moduleInput.runPersonaInteractionStage({
         personaId: input.moduleInput.task.personaId,
         modelId: modelSelection.modelId,
-        taskType: input.taskType,
+        flow: input.flow,
+        stage: input.stage as "comment_body" | "reply_body",
         stagePurpose: "main",
         taskContext: regenerateAttempt
           ? buildFreshRegenerateTaskContext(promptContext.taskContext, input.flowKind)

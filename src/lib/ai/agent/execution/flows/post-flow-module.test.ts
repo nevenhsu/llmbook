@@ -203,19 +203,22 @@ describe("createPostFlowModule", () => {
 
     expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
     const planningCall = runPersonaInteractionStage.mock.calls[0]?.[0];
-    expect(planningCall?.taskType).toBe("post_plan");
+    expect(planningCall?.flow).toBe("post");
+    expect(planningCall?.stage).toBe("post_plan");
     expect(planningCall?.taskContext).toContain("Generate a new post for the board below.");
     expect(planningCall?.taskContext).toContain("planning stage");
     expect(planningCall?.taskContext).toContain("do not write the final post body");
 
     const frameCall = runPersonaInteractionStage.mock.calls[1]?.[0];
-    expect(frameCall?.taskType).toBe("post_frame");
+    expect(frameCall?.flow).toBe("post");
+    expect(frameCall?.stage).toBe("post_frame");
     expect(frameCall?.taskContext).toContain("PostFrame object");
     expect(frameCall?.taskContext).toContain("locked title and idea");
     expect(frameCall?.taskContext).toContain("Do not mention prompt instructions");
 
     const bodyCall = runPersonaInteractionStage.mock.calls[2]?.[0];
-    expect(bodyCall?.taskType).toBe("post_body");
+    expect(bodyCall?.flow).toBe("post");
+    expect(bodyCall?.stage).toBe("post_body");
     expect(bodyCall?.taskContext).toContain("final post body");
     expect(bodyCall?.taskContext).toContain("title is locked");
     expect(bodyCall?.taskContext).toContain("post_frame");
@@ -330,15 +333,18 @@ describe("createPostFlowModule", () => {
 
     expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
     expect(runPersonaInteractionStage.mock.calls[0]?.[0]).toMatchObject({
-      taskType: "post_plan",
+      flow: "post",
+      stage: "post_plan",
       stagePurpose: "main",
     });
     expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       stagePurpose: "main",
     });
     expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
-      taskType: "post_body",
+      flow: "post",
+      stage: "post_body",
       stagePurpose: "main",
     });
     expect(result.flowResult.diagnostics.gate).toEqual({
@@ -514,13 +520,16 @@ describe("createPostFlowModule", () => {
 
       expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
       expect(runPersonaInteractionStage.mock.calls[0]?.[0]).toMatchObject({
-        taskType: "post_plan",
+        flow: "post",
+        stage: "post_plan",
       });
       expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
-        taskType: "post_frame",
+        flow: "post",
+        stage: "post_frame",
       });
       expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
-        taskType: "post_body",
+        flow: "post",
+        stage: "post_body",
       });
       if (result.flowResult.flowKind !== "post") {
         throw new Error("expected post flow result");
@@ -623,13 +632,16 @@ describe("createPostFlowModule", () => {
 
       expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
       expect(runPersonaInteractionStage.mock.calls[0]?.[0]).toMatchObject({
-        taskType: "post_plan",
+        flow: "post",
+        stage: "post_plan",
       });
       expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
-        taskType: "post_frame",
+        flow: "post",
+        stage: "post_frame",
       });
       expect(runPersonaInteractionStage.mock.calls[2]?.[0]).toMatchObject({
-        taskType: "post_body",
+        flow: "post",
+        stage: "post_body",
       });
       if (result.flowResult.flowKind !== "post") {
         throw new Error("expected post flow result");
@@ -705,7 +717,8 @@ describe("createPostFlowModule", () => {
       // The critical assertion: post_frame call receives contentMode: "story"
       expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
       const frameCall = runPersonaInteractionStage.mock.calls[1]?.[0];
-      expect(frameCall.taskType).toBe("post_frame");
+      expect(frameCall.flow).toBe("post");
+      expect(frameCall.stage).toBe("post_frame");
       expect(frameCall.contentMode).toBe("story");
     });
 
@@ -775,7 +788,8 @@ describe("createPostFlowModule", () => {
       });
 
       const frameCall = runPersonaInteractionStage.mock.calls[1]?.[0];
-      expect(frameCall.taskType).toBe("post_frame");
+      expect(frameCall.flow).toBe("post");
+      expect(frameCall.stage).toBe("post_frame");
       expect(frameCall.contentMode).toBe("discussion");
     });
 

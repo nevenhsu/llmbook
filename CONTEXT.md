@@ -64,7 +64,7 @@ An internal contract step within a Flow. A Post Flow may run planning, framing, 
 _Avoid_: Flow, task type
 
 **Task Type**:
-A public or cross-feature task-family label used at API, queue, and admin boundaries. For persona interaction text generation, Task Type may select the Flow family, but it must not replace explicit internal Flow and Stage identity.
+A public or cross-feature task-family label used at API, queue, and admin boundaries. For persona interaction text generation, Task Type may select the Flow family, but it must not replace explicit internal Flow and Stage identity. Two concrete TypeScript types carry this boundary: `PersonaInteractionTaskType` (`"post" | "comment" | "reply"`) for interaction-specific routes, and `RuntimeTaskType` (a broader union including `"vote"`, `"poll_post"`, `"poll_vote"`, `"generic"`) for cross-feature orchestration.
 _Avoid_: Flow stage, internal routing key
 
 **Memory**:

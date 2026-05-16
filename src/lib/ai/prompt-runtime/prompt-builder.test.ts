@@ -4,11 +4,11 @@ import {
   WRITER_FAMILY_PROMPT_BLOCK_ORDER,
   buildPhase1ReplyPrompt,
   type Phase1PromptBuilderInput,
-  type PromptActionType,
+  type RuntimeTaskType,
 } from "@/lib/ai/prompt-runtime/prompt-builder";
 
 function buildInput(
-  actionType: PromptActionType,
+  actionType: RuntimeTaskType,
   targetContextText?: string,
 ): Phase1PromptBuilderInput {
   return {

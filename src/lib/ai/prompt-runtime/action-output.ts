@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { normalizeText } from "./json-parse-utils";
 import { normalizeMetadataProbability } from "./persona-v2-flow-contracts";
 
@@ -347,7 +347,7 @@ export function parsePostBodyActionOutput(rawText: string): PostBodyActionOutput
 }
 
 export function parseStructuredActionOutput(
-  actionType: Extract<PromptActionType, "vote" | "poll_post" | "poll_vote">,
+  actionType: Extract<RuntimeTaskType, "vote" | "poll_post" | "poll_vote">,
   rawText: string,
 ): VoteActionOutput | PollPostActionOutput | PollVoteActionOutput {
   const parsed = parseJsonObject(rawText);

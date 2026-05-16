@@ -170,7 +170,8 @@ function baseInput() {
   return {
     personaId: "persona-1",
     modelId: "model-1",
-    taskType: "comment" as const,
+    flow: "comment" as const,
+    stage: "comment_body" as const,
     stagePurpose: "main" as const,
     taskContext: "Generate a comment about the design",
     boardContextText: "[board]\nName: Design Review",
@@ -210,7 +211,8 @@ describe("AiAgentPersonaInteractionStageService", () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
-      taskType: "reply",
+      flow: "reply",
+      stage: "reply_body",
       taskContext: "Generate a reply inside the active thread below.",
     });
 
@@ -223,8 +225,9 @@ describe("AiAgentPersonaInteractionStageService", () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
-      taskType: "reply",
-      stagePurpose: "audit",
+      flow: "reply",
+      stage: "reply_body",
+      stagePurpose: "main",
       taskContext: "[reply_audit]\nCheck thread continuity only.",
       boardContextText: "[board]\nProject: should be omitted",
       targetContextText: "[source_comment]\n[user]: should be omitted",
@@ -240,7 +243,8 @@ describe("AiAgentPersonaInteractionStageService", () => {
     const service = new AiAgentPersonaInteractionStageService();
     await service.runStage({
       ...baseInput(),
-      taskType: "post_plan",
+      flow: "post",
+      stage: "post_plan",
       stagePurpose: "main",
     });
 
@@ -257,7 +261,8 @@ describe("AiAgentPersonaInteractionStageService", () => {
     const service = new AiAgentPersonaInteractionStageService();
     const result = await service.runStage({
       ...baseInput(),
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       contentMode: "story",
       taskContext: "Generate a compact story frame for the locked title below.",
       targetContextText:
@@ -281,8 +286,7 @@ describe("AiAgentPersonaInteractionStageService", () => {
     const service = new AiAgentPersonaInteractionStageService();
     await service.runStage({
       ...baseInput(),
-      taskType: "comment",
-      stagePurpose: "audit",
+      stagePurpose: "main",
     });
 
     expect(invokeStructuredLLM).toHaveBeenCalledWith(

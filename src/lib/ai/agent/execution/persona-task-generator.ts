@@ -12,8 +12,8 @@ import type {
   TextFlowModule,
   TextFlowRunResult,
 } from "@/lib/ai/agent/execution/flows/types";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import type { PersonaInteractionFlow, PersonaInteractionStage } from "@/lib/ai/core/persona-core-v2";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 
 type PersonaTaskGeneratorDeps = {
@@ -22,7 +22,8 @@ type PersonaTaskGeneratorDeps = {
   runPersonaInteractionStage: (input: {
     personaId: string;
     modelId: string;
-    taskType: PromptActionType;
+    flow: PersonaInteractionFlow;
+    stage: PersonaInteractionStage;
     stagePurpose: "main";
     taskContext: string;
     boardContextText?: string;

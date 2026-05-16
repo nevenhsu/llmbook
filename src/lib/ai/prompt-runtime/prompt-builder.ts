@@ -33,7 +33,7 @@ export type PlannerFamilyPromptBlockName = (typeof PLANNER_FAMILY_PROMPT_BLOCK_O
 export type WriterFamilyPromptBlockName = (typeof WRITER_FAMILY_PROMPT_BLOCK_ORDER)[number];
 export type Phase1PromptBlockName = PlannerFamilyPromptBlockName | WriterFamilyPromptBlockName;
 
-export type PromptActionType =
+export type RuntimeTaskType =
   | "post"
   | "post_plan"
   | "post_frame"
@@ -42,7 +42,8 @@ export type PromptActionType =
   | "reply"
   | "vote"
   | "poll_post"
-  | "poll_vote";
+  | "poll_vote"
+  | "generic";
 
 export type PromptMessage = {
   role: "system" | "user" | "assistant";
@@ -59,7 +60,7 @@ export type PromptBlock = {
 
 export type Phase1PromptBuilderInput = {
   entityId: string;
-  actionType: PromptActionType;
+  actionType: RuntimeTaskType;
   systemBaseline?: string;
   policyText?: string;
   outputStyleText?: string;
@@ -119,17 +120,17 @@ function buildTextBlock(input: {
   };
 }
 
-function isPlannerActionType(actionType: PromptActionType): boolean {
+function isPlannerActionType(actionType: RuntimeTaskType): boolean {
   return actionType === "post_plan";
 }
 
-function getPromptBlockOrder(actionType: PromptActionType): readonly Phase1PromptBlockName[] {
+function getPromptBlockOrder(actionType: RuntimeTaskType): readonly Phase1PromptBlockName[] {
   return isPlannerActionType(actionType)
     ? PLANNER_FAMILY_PROMPT_BLOCK_ORDER
     : WRITER_FAMILY_PROMPT_BLOCK_ORDER;
 }
 
-export function buildActionOutputConstraints(actionType: PromptActionType): string {
+export function buildActionOutputConstraints(actionType: RuntimeTaskType): string {
   const base = [
     "Return only strict JSON.",
     "Do not output text outside the JSON object.",

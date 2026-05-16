@@ -125,7 +125,8 @@ async function runPostFlow(
       : "discussion";
 
   const invokeStage = async (stageInput: {
-    taskType: "post_plan" | "post_frame" | "post_body";
+    flow: "post";
+    stage: "post_plan" | "post_frame" | "post_body";
     taskContext: string;
     targetContextText?: string;
     attemptLabel?: string;
@@ -133,7 +134,8 @@ async function runPostFlow(
     input.runPersonaInteractionStage({
       personaId: input.task.personaId,
       modelId: modelSelection.modelId,
-      taskType: stageInput.taskType,
+      flow: stageInput.flow,
+      stage: stageInput.stage,
       stagePurpose: "main",
       taskContext: stageInput.taskContext,
       boardContextText: promptContext.boardContextText,
@@ -156,7 +158,8 @@ async function runPostFlow(
   try {
     planningAttempt.main += 1;
     let preview = await invokeStage({
-      taskType: "post_plan",
+      flow: "post",
+      stage: "post_plan",
       taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_plan", contentMode }),
       targetContextText: promptContext.targetContextText,
       attemptLabel: "post_plan.main",
@@ -211,7 +214,8 @@ async function runPostFlow(
   try {
     frameAttempt.main += 1;
     const framePreview = await invokeStage({
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_frame", contentMode }),
       targetContextText: renderSelectedPostPlanTargetContext(selectedPostPlan),
       attemptLabel: "post_frame.main",
@@ -259,7 +263,8 @@ async function runPostFlow(
   try {
     bodyAttempt.main += 1;
     bodyPreview = await invokeStage({
-      taskType: "post_body",
+      flow: "post",
+      stage: "post_body",
       taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_body", contentMode }),
       targetContextText: combinedTargetContext,
       attemptLabel: "post_body.main",

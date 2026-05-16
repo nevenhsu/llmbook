@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import type { PromptBoardContext, PromptTargetContext } from "@/lib/ai/admin/control-plane-store";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 import {
   type InteractionContextAssistOutput,
@@ -75,7 +75,7 @@ export const POST = withAdminAuth(async (req, { user }) => {
     };
   };
 
-  const allowedTaskTypes: PromptActionType[] = [
+  const allowedTaskTypes: RuntimeTaskType[] = [
     "post",
     "comment",
     "reply",
@@ -87,7 +87,7 @@ export const POST = withAdminAuth(async (req, { user }) => {
   const body = (await req.json()) as {
     personaId?: string;
     modelId?: string;
-    taskType?: PromptActionType;
+    taskType?: RuntimeTaskType;
     taskContext?: string;
     structuredContext?: InteractionContextAssistOutput;
     contentMode?: "discussion" | "story";

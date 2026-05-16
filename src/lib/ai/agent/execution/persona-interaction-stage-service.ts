@@ -6,12 +6,13 @@ import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { z } from "zod";
 import {
   buildPersonaPacketForPrompt,
-  resolvePersonaPacketFlowStage,
 } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
 import type {
   ContentMode,
   PersonaCoreV2,
   PersonaFlowStage,
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
 } from "@/lib/ai/core/persona-core-v2";
 import {
   buildPersonaPromptFamilyV2,
@@ -44,7 +45,6 @@ import type {
   PromptTargetContext,
 } from "@/lib/ai/admin/control-plane-contract";
 import { resolvePersonaTextModel } from "@/lib/ai/admin/control-plane-model-resolution";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 
 export type PersonaInteractionStagePurpose = "main";
 
@@ -64,7 +64,8 @@ export type PersonaInteractionStageExecutionMode = "admin_preview" | "runtime";
 export type PersonaInteractionStageInput = {
   personaId: string;
   modelId: string;
-  taskType: PromptActionType;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   stagePurpose: PersonaInteractionStagePurpose;
   taskContext: string;
   boardContext?: PromptBoardContext;
@@ -136,13 +137,12 @@ function resolveStageSchema(flowStage: PersonaFlowStage): z.ZodTypeAny | undefin
 
 function buildV2Blocks(input: {
   input: PersonaInteractionStageInput;
-  flowStage: PersonaFlowStage | null;
   personaCore: PersonaCoreV2;
   contentMode: ContentMode;
   personaPacket: ReturnType<typeof buildPersonaPacketForPrompt>;
   personaPacketText: string;
 }): Array<{ name: string; content: string }> {
-  if (!input.flowStage || !input.personaPacket) {
+  if (!input.personaPacket) {
     return buildLeanStageBlocks({
       document: input.input.document,
       taskContext: input.input.taskContext,
@@ -154,13 +154,13 @@ function buildV2Blocks(input: {
   const targetContextText =
     input.input.targetContextText ??
     formatTargetContext({
-      taskType: input.input.taskType,
+      taskType: input.input.stage,
       targetContext: input.input.targetContext,
     });
 
   const result = buildPersonaPromptFamilyV2({
-    flow: input.flowStage.flow,
-    stage: input.flowStage.stage,
+    flow: input.input.flow,
+    stage: input.input.stage,
     contentMode: input.contentMode,
     stagePurpose: input.input.stagePurpose as PersonaPromptFamilyV2StagePurpose,
     systemBaseline: input.input.document.globalPolicyDraft.systemBaseline,
@@ -175,8 +175,8 @@ function buildV2Blocks(input: {
     targetContext: targetContextText || null,
     taskContext: input.input.taskContext,
     outputContract: buildOutputContractV2({
-      flow: input.flowStage.flow,
-      stage: input.flowStage.stage,
+      flow: input.input.flow,
+      stage: input.input.stage,
       contentMode: input.contentMode,
     }),
   });
@@ -215,13 +215,13 @@ export class AiAgentPersonaInteractionStageService {
     const profile = await input.getPersonaProfile(input.personaId);
     const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
     const contentMode = input.contentMode ?? "discussion";
-    const flowStage = resolvePersonaPacketFlowStage(input.taskType);
+    const flowStage: PersonaFlowStage = { flow: input.flow, stage: input.stage };
 
     const { core: personaCore } = parsePersonaCoreV2(effectivePersonaCore);
 
     const personaPacket = buildPersonaPacketForPrompt({
-      flow: flowStage?.flow ?? "comment",
-      stage: flowStage?.stage ?? "comment_body",
+      flow: input.flow,
+      stage: input.stage,
       stagePurpose: input.stagePurpose,
       contentMode,
       personaId: input.personaId,
@@ -231,17 +231,14 @@ export class AiAgentPersonaInteractionStageService {
 
     const personaPacketText = personaPacket?.renderedText ?? "";
 
-    const maxOutputTokens = flowStage
-      ? getInteractionMaxOutputTokens({
-          flow: flowStage.flow,
-          stage: flowStage.stage,
-          stagePurpose: input.stagePurpose,
-        })
-      : 1000;
+    const maxOutputTokens = getInteractionMaxOutputTokens({
+      flow: input.flow,
+      stage: input.stage,
+      stagePurpose: input.stagePurpose,
+    });
 
     const blocks = buildV2Blocks({
       input,
-      flowStage,
       personaCore,
       contentMode,
       personaPacket,
@@ -255,8 +252,8 @@ export class AiAgentPersonaInteractionStageService {
     });
 
     // Main stage always uses structured invocation when a schema is resolvable
-    const stageSchema = flowStage ? resolveStageSchema(flowStage) : undefined;
-    if (stageSchema && flowStage) {
+    const stageSchema = resolveStageSchema(flowStage);
+    if (stageSchema) {
       const schemaMeta =
         getFlowSchemaMeta(flowStage) ??
         ({
@@ -276,9 +273,8 @@ export class AiAgentPersonaInteractionStageService {
           metadata: {
             _m: {
               stagePurpose: input.stagePurpose,
-              taskType: input.taskType,
-              flow: flowStage.flow,
-              stage: flowStage.stage,
+              flow: input.flow,
+              stage: input.stage,
               schemaName: schemaMeta.schemaName,
             },
           },
@@ -325,7 +321,7 @@ export class AiAgentPersonaInteractionStageService {
         ...(input.debug
           ? {
               debugRecord: {
-                name: input.attemptLabel ?? `${input.taskType}:${input.stagePurpose}`,
+                name: input.attemptLabel ?? `${input.flow}:${input.stage}:${input.stagePurpose}`,
                 displayPrompt: assembledPrompt,
                 outputMaxTokens: Math.min(
                   model.maxOutputTokens ?? maxOutputTokens,
@@ -412,7 +408,7 @@ export class AiAgentPersonaInteractionStageService {
       ...(input.debug
         ? {
             debugRecord: {
-              name: input.attemptLabel ?? `${input.taskType}:${input.stagePurpose}`,
+              name: input.attemptLabel ?? `${input.flow}:${input.stage}:${input.stagePurpose}`,
               displayPrompt: assembledPrompt,
               outputMaxTokens: Math.min(model.maxOutputTokens ?? maxOutputTokens, maxOutputTokens),
               attempts: [

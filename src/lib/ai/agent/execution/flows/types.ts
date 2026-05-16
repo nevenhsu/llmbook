@@ -1,11 +1,10 @@
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { StageDebugRecord } from "@/lib/ai/stage-debug-records";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import type { PostFrame } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
-import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
+import type { ContentMode, PersonaInteractionFlow, PersonaInteractionStage } from "@/lib/ai/core/persona-core-v2";
 
 export type TextFlowKind = "post" | "comment" | "reply";
 
@@ -211,7 +210,8 @@ export type TextFlowModuleRunInput = {
   runPersonaInteractionStage: (input: {
     personaId: string;
     modelId: string;
-    taskType: PromptActionType;
+    flow: PersonaInteractionFlow;
+    stage: PersonaInteractionStage;
     stagePurpose: "main";
     taskContext: string;
     boardContextText?: string;

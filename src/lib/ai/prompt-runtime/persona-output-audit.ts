@@ -1,4 +1,4 @@
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type { PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
 import type {
   PromptPersonaDirectives,
   PersonaAuditSeverity,
@@ -86,7 +86,7 @@ function readConfidence(value: unknown): number | null {
 }
 
 export function buildPersonaOutputAuditPrompt(input: {
-  actionType: Extract<PromptActionType, "post" | "comment">;
+  actionType: Exclude<PersonaInteractionTaskType, "reply">;
   taskContext: string;
   renderedOutput: string;
   directives: PromptPersonaDirectives;

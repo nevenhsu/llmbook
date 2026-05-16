@@ -7,7 +7,7 @@ export function createReplyFlowModule(): TextFlowModule {
     runPreview: (input) =>
       runSingleStageWriterFlow({
         flowKind: "reply",
-        taskType: "reply",
+        flow: "reply",
         stage: "reply_body.main",
         mode: "preview",
         moduleInput: input,
@@ -15,7 +15,7 @@ export function createReplyFlowModule(): TextFlowModule {
     runRuntime: (input) =>
       runSingleStageWriterFlow({
         flowKind: "reply",
-        taskType: "reply",
+        flow: "reply",
         stage: "reply_body.main",
         mode: "runtime",
         moduleInput: input,
