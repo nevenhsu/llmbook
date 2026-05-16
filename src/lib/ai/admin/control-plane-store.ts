@@ -8,8 +8,11 @@ import {
   normalizeUsernameInput,
   validateUsernameFormat,
 } from "@/lib/username-validation";
-import type { PersonaInteractionFlow, PersonaInteractionStage } from "@/lib/ai/core/persona-core-v2";
-import { type RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type {
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
+  PersonaInteractionTaskType,
+} from "@/lib/ai/core/persona-core-v2";
 import { getInteractionRuntimeBudgets } from "@/lib/ai/prompt-runtime/runtime-budgets";
 import { invokeLLM } from "@/lib/ai/llm/invoke-llm";
 import { createDbBackedLlmProviderRegistry } from "@/lib/ai/llm/default-registry";
@@ -1469,7 +1472,7 @@ export class AdminAiControlPlaneStore {
   public async runPersonaInteraction(input: {
     personaId: string;
     modelId: string;
-    taskType: RuntimeTaskType;
+    taskType: PersonaInteractionTaskType;
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
@@ -1514,7 +1517,7 @@ export class AdminAiControlPlaneStore {
   public async previewPersonaInteraction(input: {
     personaId: string;
     modelId: string;
-    taskType: RuntimeTaskType;
+    taskType: PersonaInteractionTaskType;
     taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;

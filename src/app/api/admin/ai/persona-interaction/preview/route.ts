@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { withAdminAuth, http } from "@/lib/server/route-helpers";
 import type { PromptBoardContext, PromptTargetContext } from "@/lib/ai/admin/control-plane-store";
-import type { RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 import {
   type InteractionContextAssistOutput,
   serializeAssistOutput,
 } from "@/lib/ai/admin/interaction-context-assist-schema";
 import { PersonaOutputValidationError } from "@/lib/ai/prompt-runtime/persona-audit-shared";
+import type { PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
 
 export const POST = withAdminAuth(async (req, { user }) => {
   type PreviewBoardRule = {
@@ -75,19 +75,10 @@ export const POST = withAdminAuth(async (req, { user }) => {
     };
   };
 
-  const allowedTaskTypes: RuntimeTaskType[] = [
-    "post",
-    "comment",
-    "reply",
-    "vote",
-    "poll_post",
-    "poll_vote",
-  ];
-
   const body = (await req.json()) as {
     personaId?: string;
     modelId?: string;
-    taskType?: RuntimeTaskType;
+    taskType?: PersonaInteractionTaskType;
     taskContext?: string;
     structuredContext?: InteractionContextAssistOutput;
     contentMode?: "discussion" | "story";
@@ -112,22 +103,16 @@ export const POST = withAdminAuth(async (req, { user }) => {
     return http.badRequest("personaId and modelId are required");
   }
 
-  if (!body.taskType || !allowedTaskTypes.includes(body.taskType)) {
-    return http.badRequest("taskType must be post, comment, reply, vote, poll_post, or poll_vote");
+  if (body.taskType !== "post" && body.taskType !== "comment" && body.taskType !== "reply") {
+    return http.badRequest("taskType must be post, comment, or reply");
   }
-
-  const isUserFacing =
-    body.taskType === "post" || body.taskType === "comment" || body.taskType === "reply";
 
   const serializedStructured = body.structuredContext
     ? serializeAssistOutput(body.structuredContext)
     : undefined;
 
-  const resolvedTargetContextText = isUserFacing
-    ? (serializedStructured ?? (body.taskContext?.trim() || undefined))
-    : undefined;
-
-  const resolvedTaskContext = isUserFacing ? "" : (serializedStructured ?? body.taskContext ?? "");
+  const resolvedTargetContextText = serializedStructured ?? (body.taskContext?.trim() || undefined);
+  const resolvedTaskContext = "";
 
   let preview;
   try {

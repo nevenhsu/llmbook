@@ -7,8 +7,8 @@ import type {
   PersonaProfile,
 } from "@/lib/ai/admin/control-plane-contract";
 
-const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM } = vi.hoisted(
-  () => ({
+const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM, invokeStructuredLLM } =
+  vi.hoisted(() => ({
     createDbBackedLlmProviderRegistry: vi.fn(async () => ({ providers: new Map() })),
     resolveLlmInvocationConfig: vi.fn(async () => ({
       route: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
@@ -23,8 +23,140 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
         error: null,
       };
     }),
-  }),
-);
+    invokeStructuredLLM: vi.fn(async (input?: unknown) => {
+      const schemaName = String(
+        (
+          input as
+            | { schemaGate?: { schemaName?: string }; modelInput?: { prompt?: string } }
+            | undefined
+        )?.schemaGate?.schemaName ?? "",
+      );
+
+      if (schemaName === "PostPlanOutputSchema") {
+        const value = {
+          candidates: [
+            {
+              title: "Test Post",
+              idea: "Test thesis",
+              outline: ["a", "b"],
+              persona_fit_score: 80,
+              novelty_score: 70,
+            },
+            {
+              title: "Test Post 2",
+              idea: "Test thesis 2",
+              outline: ["c", "d"],
+              persona_fit_score: 75,
+              novelty_score: 85,
+            },
+          ],
+        };
+        return {
+          status: "valid" as const,
+          value,
+          raw: {
+            text: JSON.stringify(value),
+            finishReason: "stop",
+            providerId: "xai",
+            modelId: "grok-4-1-fast-reasoning",
+            error: null,
+          },
+          schemaGateDebug: {
+            flowId: "test",
+            stageId: "post_plan",
+            schemaName,
+            status: "passed" as const,
+            attempts: [],
+          },
+        };
+      }
+
+      if (schemaName === "PostFrameSchema") {
+        const value = {
+          main_idea: "Test idea",
+          angle: "Test angle",
+          beats: ["beat1", "beat2", "beat3"],
+          required_details: ["d1", "d2", "d3"],
+          ending_direction: "Test ending",
+          tone: ["serious", "analytical"],
+          avoid: ["a1", "a2", "a3"],
+        };
+        return {
+          status: "valid" as const,
+          value,
+          raw: {
+            text: JSON.stringify(value),
+            finishReason: "stop",
+            providerId: "xai",
+            modelId: "grok-4-1-fast-reasoning",
+            error: null,
+          },
+          schemaGateDebug: {
+            flowId: "test",
+            stageId: "post_frame",
+            schemaName,
+            status: "passed" as const,
+            attempts: [],
+          },
+        };
+      }
+
+      if (schemaName === "PostBodyOutputSchema") {
+        const value = {
+          body: "Preview response body.",
+          tags: ["test", "preview"],
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+          metadata: { probability: 50 },
+        };
+        return {
+          status: "valid" as const,
+          value,
+          raw: {
+            text: JSON.stringify(value),
+            finishReason: "stop",
+            providerId: "xai",
+            modelId: "grok-4-1-fast-reasoning",
+            error: null,
+          },
+          schemaGateDebug: {
+            flowId: "test",
+            stageId: "post_body",
+            schemaName,
+            status: "passed" as const,
+            attempts: [],
+          },
+        };
+      }
+
+      const value = {
+        markdown: "Preview response",
+        need_image: false,
+        image_prompt: null,
+        image_alt: null,
+        metadata: { probability: 0 },
+      };
+      return {
+        status: "valid" as const,
+        value,
+        raw: {
+          text: JSON.stringify(value),
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          error: null,
+        },
+        schemaGateDebug: {
+          flowId: "test",
+          stageId: schemaName === "ReplyOutputSchema" ? "reply_body" : "comment_body",
+          schemaName,
+          status: "passed" as const,
+          attempts: [],
+        },
+      };
+    }),
+  }));
 
 vi.mock("@/lib/tiptap-markdown", () => ({
   markdownToEditorHtml: vi.fn(() => "<p>ok</p>"),
@@ -41,6 +173,10 @@ vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
 vi.mock("@/lib/ai/llm/invoke-llm", () => ({
   invokeLLM,
   invokeLLMRaw: invokeLLM,
+}));
+
+vi.mock("@/lib/ai/llm/invoke-structured-llm", () => ({
+  invokeStructuredLLM,
 }));
 
 function sampleModel(): AiModelConfig {
@@ -191,6 +327,7 @@ describe("AiAgentPersonaInteractionService", () => {
     createDbBackedLlmProviderRegistry.mockReset();
     resolveLlmInvocationConfig.mockReset();
     invokeLLM.mockReset();
+    invokeStructuredLLM.mockClear();
     createDbBackedLlmProviderRegistry.mockResolvedValue({ providers: new Map() } as any);
     resolveLlmInvocationConfig.mockResolvedValue({
       route: { providerId: "xai", modelId: "grok-4-1-fast-reasoning" },
@@ -204,12 +341,6 @@ describe("AiAgentPersonaInteractionService", () => {
           | undefined
       )?.modelInput;
       const prompt = String(modelInput?.prompt ?? "");
-      const taskType = String(
-        modelInput?.metadata?._m && typeof modelInput.metadata._m === "object"
-          ? ((modelInput.metadata._m as Record<string, unknown>).taskType ?? "")
-          : "",
-      );
-
       if (
         prompt.includes("[persona_output_audit]") ||
         prompt.includes("[comment_audit]") ||
@@ -274,61 +405,6 @@ describe("AiAgentPersonaInteractionService", () => {
         };
       }
 
-      // Post flow stages
-      if (taskType === "post_plan") {
-        return {
-          text: JSON.stringify({
-            candidates: [
-              {
-                title: "Test Post",
-                idea: "Test thesis",
-                outline: ["a", "b"],
-                persona_fit_score: 80,
-                novelty_score: 70,
-              },
-              {
-                title: "Test Post 2",
-                idea: "Test thesis 2",
-                outline: ["c", "d"],
-                persona_fit_score: 75,
-                novelty_score: 85,
-              },
-            ],
-          }),
-          finishReason: "stop",
-          error: null,
-        };
-      }
-      if (taskType === "post_frame") {
-        return {
-          text: JSON.stringify({
-            main_idea: "Test idea",
-            angle: "Test angle",
-            beats: ["beat1", "beat2", "beat3"],
-            required_details: ["d1", "d2", "d3"],
-            ending_direction: "Test ending",
-            tone: ["serious", "analytical"],
-            avoid: ["a1", "a2", "a3"],
-          }),
-          finishReason: "stop",
-          error: null,
-        };
-      }
-      if (taskType === "post_body" || prompt.includes("Write the final post body")) {
-        return {
-          text: JSON.stringify({
-            body: "Preview response body.",
-            tags: ["test", "preview"],
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-            metadata: { probability: 50 },
-          }),
-          finishReason: "stop",
-          error: null,
-        };
-      }
-
       // Default: comment/reply markdown output
       return {
         text: JSON.stringify({
@@ -373,43 +449,6 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(prompts).not.toContain("target_id:");
   });
 
-  it("delegates post_body execution to raw stage service", async () => {
-    const service = new AiAgentPersonaInteractionService();
-
-    const preview = await service.run({
-      personaId: "persona-1",
-      modelId: "model-1",
-      taskType: "post_body",
-      taskContext: "Write the final post body for the selected plan below.",
-      boardContextText: "[board]\nName: Creative Lab",
-      targetContextText: [
-        "[selected_post_plan]",
-        "Locked title: The workflow bug people keep mislabeling as a prompt bug",
-        "Angle summary: Show that many prompt bugs are execution-boundary bugs.",
-        "idea: Teams keep over-editing prompts because they never separated generation, validation, and enforcement into distinct operating steps.",
-        "outline:",
-        "- Show why prompt tuning gets blamed too early.",
-        "- Contrast malformed-output repair with policy enforcement.",
-        "Difference from recent:",
-        "- Focuses on execution contract boundaries rather than prompt wording craft.",
-        "Do not change the title or topic.",
-      ].join("\n"),
-      document: sampleDocument(),
-      providers: [sampleProvider()],
-      models: [sampleModel()],
-      getPersonaProfile: async () => samplePersonaProfile(),
-      recordLlmInvocationError: async () => {},
-      debug: true,
-    });
-
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
-    const prompts = collectStagePrompts(preview);
-    expect(prompts).toContain("[task_context]");
-    expect(prompts).toContain("Write the final post body for the selected plan below.");
-    expect(preview.rawResponse).toContain("Preview response body");
-    expect(preview.markdown).toContain("Preview response body");
-  });
-
   it("puts title/content direction under [target_context] for post preview", async () => {
     const service = new AiAgentPersonaInteractionService();
 
@@ -432,7 +471,7 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(prompts).toContain("Title direction: Tentacles and Madness");
     expect(prompts).toContain("Content direction: Explore cosmic horror.");
     expect(prompts).toContain("[task_context]");
-    expect(prompts).toContain("Generate a new post");
+    expect(prompts).toContain("Generate 2 to 3 distinct discussion-mode post plan candidates");
   });
 
   it("does not leak title/content direction into [task_context] for post preview", async () => {
@@ -564,7 +603,7 @@ describe("AiAgentPersonaInteractionService", () => {
       debug: true,
     });
 
-    expect(invokeLLM).toHaveBeenCalledTimes(1);
+    expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
     const prompts = collectStagePrompts(preview);
     expect(prompts).toContain("[source_comment]");
     expect(prompts).toContain("Generate a reply using the dynamic target context below");

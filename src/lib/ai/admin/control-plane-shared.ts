@@ -1,4 +1,3 @@
-import { type RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
 import { PERSONA_GENERATION_BUDGETS } from "@/lib/ai/admin/persona-generation-token-budgets";
 import type {
   AiControlPlaneDocument,
@@ -237,7 +236,6 @@ export function formatBoardContext(input?: PromptBoardContext | null): string {
 }
 
 export function formatTargetContext(input: {
-  taskType: RuntimeTaskType;
   targetContext?: PromptTargetContext | null;
 }): string {
   const targetContext = input.targetContext;

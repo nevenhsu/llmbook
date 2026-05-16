@@ -75,7 +75,7 @@ function mapParsedOutput(
 export async function runSingleStageWriterFlow(input: {
   flowKind: SingleStageWriterFlowKind;
   flow: "comment" | "reply";
-  stage: string;
+  stage: "comment_body" | "reply_body";
   mode: "preview" | "runtime";
   moduleInput: TextFlowModuleRunInput;
 }): Promise<TextFlowModuleRunResult> {
@@ -122,7 +122,7 @@ export async function runSingleStageWriterFlow(input: {
         boardContextText: promptContext.boardContextText,
         targetContextText: promptContext.targetContextText,
         debug: input.moduleInput.debug,
-        attemptLabel: input.stage,
+        attemptLabel: `${input.stage}.main`,
         executionMode: input.mode === "runtime" ? "runtime" : "admin_preview",
       });
       collectDebugRecords(preview);

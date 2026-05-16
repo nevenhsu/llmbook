@@ -7,8 +7,7 @@ import type {
   PromptBoardContext,
   PromptTargetContext,
 } from "@/lib/ai/admin/control-plane-contract";
-import type { RuntimeTaskType } from "@/lib/ai/prompt-runtime/prompt-builder";
-import type { ContentMode, PersonaInteractionFlow, PersonaInteractionStage, PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
+import type { ContentMode, PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
@@ -22,7 +21,7 @@ import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
 export type AiAgentPersonaInteractionInput = {
   personaId: string;
   modelId: string;
-  taskType: RuntimeTaskType;
+  taskType: PersonaInteractionTaskType;
   taskContext: string;
   boardContext?: PromptBoardContext;
   targetContext?: PromptTargetContext;
@@ -46,34 +45,6 @@ export type AiAgentPersonaInteractionInput = {
   debug?: boolean;
   contentMode?: ContentMode;
 };
-
-function resolveFlowStage(taskType: RuntimeTaskType): {
-  flow: PersonaInteractionFlow;
-  stage: PersonaInteractionStage;
-} {
-  switch (taskType) {
-    case "post":
-      return { flow: "post", stage: "post_body" };
-    case "post_plan":
-      return { flow: "post", stage: "post_plan" };
-    case "post_frame":
-      return { flow: "post", stage: "post_frame" };
-    case "post_body":
-      return { flow: "post", stage: "post_body" };
-    case "comment":
-      return { flow: "comment", stage: "comment_body" };
-    case "reply":
-      return { flow: "reply", stage: "reply_body" };
-    default:
-      return { flow: "comment", stage: "comment_body" };
-  }
-}
-
-function isUserFacingInteractionTaskType(
-  taskType: RuntimeTaskType,
-): taskType is PersonaInteractionTaskType {
-  return taskType === "post" || taskType === "comment" || taskType === "reply";
-}
 
 function buildPreviewTask(input: {
   personaId: string;
@@ -171,167 +142,119 @@ function renderFlowMarkdown(
 
 export class AiAgentPersonaInteractionService {
   public async run(input: AiAgentPersonaInteractionInput): Promise<PreviewResult> {
-    if (isUserFacingInteractionTaskType(input.taskType)) {
-      const profile = await input.getPersonaProfile(input.personaId);
-      const model = input.models.find((item) => item.id === input.modelId);
-      if (!model) {
-        throw new Error("model not found");
-      }
-      const provider = input.providers.find((item) => item.id === model.providerId);
-      if (!provider) {
-        throw new Error("provider not found");
-      }
-
-      const formattedTarget = formatTargetContext({
-        taskType: input.taskType,
-        targetContext: input.targetContext,
-      });
-
-      const dynamicTargetSources = [
-        input.targetContextText,
-        formattedTarget,
-        !input.targetContextText ? input.taskContext : undefined,
-      ].filter((chunk): chunk is string => typeof chunk === "string" && chunk.trim().length > 0);
-
-      const promptContext: AiAgentPersonaTaskPromptContext = {
-        flowKind: input.taskType,
-        taskType: input.taskType === "post" ? "post" : "comment",
-        taskContext: buildPreviewTaskContext({
-          taskType: input.taskType,
-          contentMode: input.contentMode,
-        }),
-        boardContextText: input.boardContextText ?? formatBoardContext(input.boardContext),
-        targetContextText:
-          dynamicTargetSources.length > 0 ? dynamicTargetSources.join("\n\n") : undefined,
-      };
-      const task = buildPreviewTask({
-        personaId: input.personaId,
-        taskType: input.taskType,
-        profile,
-        payload: {
-          taskContext: input.taskContext,
-          boardContext: input.boardContext,
-          targetContext: input.targetContext,
-          boardContextText: input.boardContextText,
-          targetContextText: input.targetContextText,
-        },
-      });
-      const flowModule = resolveTextFlowModule(input.taskType);
-      let result;
-      try {
-        result = await flowModule.runPreview({
-          task,
-          promptContext,
-          loadPreferredTextModel: async () => ({
-            modelId: model.id,
-            providerKey: provider.providerKey,
-            modelKey: model.modelKey,
-          }),
-          runPersonaInteractionStage: async (stageInput) =>
-            runPersonaInteractionStage({
-              ...stageInput,
-              contentMode: input.contentMode,
-              document: input.document,
-              providers: input.providers,
-              models: input.models,
-              getPersonaProfile: input.getPersonaProfile,
-              recordLlmInvocationError: input.recordLlmInvocationError,
-            }),
-          personaEvidence: buildPreviewPersonaEvidence(profile),
-          debug: input.debug,
-        });
-      } catch (error) {
-        if (error instanceof TextFlowExecutionError) {
-          return {
-            assembledPrompt: "",
-            markdown: "",
-            rawResponse: null,
-            renderOk: false,
-            renderError: error.message,
-            tokenBudget: {
-              estimatedInputTokens: 0,
-              maxInputTokens: 0,
-              maxOutputTokens: 0,
-              blockStats: [],
-              compressedStages: [],
-              exceeded: false,
-              message: null,
-            },
-            stageDebugRecords: error.stageDebugRecords,
-          };
-        }
-        throw error;
-      }
-
-      const markdown = renderFlowMarkdown(result.flowResult);
-
-      try {
-        markdownToEditorHtml(markdown);
-        return {
-          ...result.preview,
-          assembledPrompt: "",
-          markdown,
-          stageDebugRecords: result.stageDebugRecords,
-          renderOk: true,
-          renderError: null,
-        };
-      } catch (error) {
-        return {
-          ...result.preview,
-          assembledPrompt: "",
-          markdown,
-          stageDebugRecords: result.stageDebugRecords,
-          renderOk: false,
-          renderError: error instanceof Error ? error.message : "render validation failed",
-        };
-      }
+    const profile = await input.getPersonaProfile(input.personaId);
+    const model = input.models.find((item) => item.id === input.modelId);
+    if (!model) {
+      throw new Error("model not found");
+    }
+    const provider = input.providers.find((item) => item.id === model.providerId);
+    if (!provider) {
+      throw new Error("provider not found");
     }
 
-    const { flow, stage } = resolveFlowStage(input.taskType);
-
-    const preview = await runPersonaInteractionStage({
-      personaId: input.personaId,
-      modelId: input.modelId,
-      flow,
-      stage,
-      stagePurpose: "main",
-      taskContext: input.taskContext,
-      boardContext: input.boardContext,
+    const formattedTarget = formatTargetContext({
       targetContext: input.targetContext,
-      boardContextText: input.boardContextText,
-      targetContextText: input.targetContextText,
-      document: input.document,
-      providers: input.providers,
-      models: input.models,
-      getPersonaProfile: input.getPersonaProfile,
-      recordLlmInvocationError: input.recordLlmInvocationError,
-      debug: input.debug,
-      attemptLabel: `${flow}:${stage}.main`,
-      contentMode: input.contentMode,
     });
-    const markdown = renderRawStagePreviewMarkdown(preview.rawResponse ?? preview.markdown);
+
+    const dynamicTargetSources = [
+      input.targetContextText,
+      formattedTarget,
+      !input.targetContextText ? input.taskContext : undefined,
+    ].filter((chunk): chunk is string => typeof chunk === "string" && chunk.trim().length > 0);
+
+    const promptContext: AiAgentPersonaTaskPromptContext = {
+      flowKind: input.taskType,
+      taskType: input.taskType === "post" ? "post" : "comment",
+      taskContext: buildPreviewTaskContext({
+        taskType: input.taskType,
+        contentMode: input.contentMode,
+      }),
+      boardContextText: input.boardContextText ?? formatBoardContext(input.boardContext),
+      targetContextText:
+        dynamicTargetSources.length > 0 ? dynamicTargetSources.join("\n\n") : undefined,
+    };
+    const task = buildPreviewTask({
+      personaId: input.personaId,
+      taskType: input.taskType,
+      profile,
+      payload: {
+        taskContext: input.taskContext,
+        boardContext: input.boardContext,
+        targetContext: input.targetContext,
+        boardContextText: input.boardContextText,
+        targetContextText: input.targetContextText,
+      },
+    });
+    const flowModule = resolveTextFlowModule(input.taskType);
+    let result;
+    try {
+      result = await flowModule.runPreview({
+        task,
+        promptContext,
+        loadPreferredTextModel: async () => ({
+          modelId: model.id,
+          providerKey: provider.providerKey,
+          modelKey: model.modelKey,
+        }),
+        runPersonaInteractionStage: async (stageInput) =>
+          runPersonaInteractionStage({
+            ...stageInput,
+            contentMode: input.contentMode,
+            document: input.document,
+            providers: input.providers,
+            models: input.models,
+            getPersonaProfile: input.getPersonaProfile,
+            recordLlmInvocationError: input.recordLlmInvocationError,
+          }),
+        personaEvidence: buildPreviewPersonaEvidence(profile),
+        debug: input.debug,
+      });
+    } catch (error) {
+      if (error instanceof TextFlowExecutionError) {
+        return {
+          assembledPrompt: "",
+          markdown: "",
+          rawResponse: null,
+          renderOk: false,
+          renderError: error.message,
+          tokenBudget: {
+            estimatedInputTokens: 0,
+            maxInputTokens: 0,
+            maxOutputTokens: 0,
+            blockStats: [],
+            compressedStages: [],
+            exceeded: false,
+            message: null,
+          },
+          stageDebugRecords: error.stageDebugRecords,
+        };
+      }
+      throw error;
+    }
+
+    const markdown = renderFlowMarkdown(result.flowResult);
 
     try {
       markdownToEditorHtml(markdown);
       return {
-        ...preview,
+        ...result.preview,
+        assembledPrompt: "",
         markdown,
+        stageDebugRecords: result.stageDebugRecords,
         renderOk: true,
         renderError: null,
       };
     } catch (error) {
       return {
-        ...preview,
+        ...result.preview,
+        assembledPrompt: "",
         markdown,
+        stageDebugRecords: result.stageDebugRecords,
         renderOk: false,
         renderError: error instanceof Error ? error.message : "render validation failed",
       };
     }
   }
-}
-
-function renderRawStagePreviewMarkdown(rawText: string): string {
-  return rawText.trim();
 }
 
 export async function runPersonaInteraction(

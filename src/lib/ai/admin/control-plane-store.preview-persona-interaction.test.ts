@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminAiControlPlaneStore } from "@/lib/ai/admin/control-plane-store";
 
-const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM } = vi.hoisted(
-  () => ({
+const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM, invokeStructuredLLM } =
+  vi.hoisted(() => ({
     createDbBackedLlmProviderRegistry: vi.fn(async () => ({ providers: new Map() })),
     resolveLlmInvocationConfig: vi.fn(async () => ({
       route: { targets: [{ providerId: "xai", modelId: "grok-4-1-fast-reasoning" }] },
@@ -16,12 +16,6 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
           | undefined
       )?.modelInput;
       const prompt = String(modelInput?.prompt ?? "");
-      const taskType = String(
-        modelInput?.metadata?._m && typeof modelInput.metadata._m === "object"
-          ? ((modelInput.metadata._m as Record<string, unknown>).taskType ?? "")
-          : "",
-      );
-
       if (prompt.includes("[comment_audit]")) {
         return {
           text: JSON.stringify({
@@ -128,8 +122,71 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
         error: null,
       };
     }),
-  }),
-);
+    invokeStructuredLLM: vi.fn(async (input?: unknown) => {
+      const schemaName = String(
+        (
+          input as
+            | { schemaGate?: { schemaName?: string } }
+            | undefined
+        )?.schemaGate?.schemaName ?? "",
+      );
+
+      if (schemaName === "PostBodyOutputSchema") {
+        const value = {
+          body: "Preview response",
+          tags: ["preview"],
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+          metadata: { probability: 0 },
+        };
+        return {
+          status: "valid" as const,
+          value,
+          raw: {
+            text: JSON.stringify(value),
+            finishReason: "stop",
+            providerId: "xai",
+            modelId: "grok-4-1-fast-reasoning",
+            error: null,
+          },
+          schemaGateDebug: {
+            flowId: "test",
+            stageId: "post_body",
+            schemaName,
+            status: "passed" as const,
+            attempts: [],
+          },
+        };
+      }
+
+      const value = {
+        markdown: "Preview response",
+        need_image: false,
+        image_prompt: null,
+        image_alt: null,
+        metadata: { probability: 0 },
+      };
+      return {
+        status: "valid" as const,
+        value,
+        raw: {
+          text: JSON.stringify(value),
+          finishReason: "stop",
+          providerId: "xai",
+          modelId: "grok-4-1-fast-reasoning",
+          error: null,
+        },
+        schemaGateDebug: {
+          flowId: "test",
+          stageId: schemaName === "ReplyOutputSchema" ? "reply_body" : "comment_body",
+          schemaName,
+          status: "passed" as const,
+          attempts: [],
+        },
+      };
+    }),
+  }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({}),
@@ -146,6 +203,10 @@ vi.mock("@/lib/ai/llm/runtime-config-provider", () => ({
 vi.mock("@/lib/ai/llm/invoke-llm", () => ({
   invokeLLM,
   invokeLLMRaw: invokeLLM,
+}));
+
+vi.mock("@/lib/ai/llm/invoke-structured-llm", () => ({
+  invokeStructuredLLM,
 }));
 
 function sampleControlPlane() {
@@ -284,6 +345,7 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
     createDbBackedLlmProviderRegistry.mockClear();
     resolveLlmInvocationConfig.mockClear();
     invokeLLM.mockClear();
+    invokeStructuredLLM.mockClear();
   });
 
   it("previewPersonaInteraction routes through shared interaction service", async () => {
@@ -337,12 +399,13 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
     const preview = await store.runPersonaInteractionStage({
       personaId: "persona-1",
       modelId: "model-1",
-      taskType: "post_body",
+      flow: "post",
+      stage: "post_body",
       stagePurpose: "main",
       taskContext: "Write the post body.",
     });
 
-    expect(preview.assembledPrompt).toContain("Write the post body.");
+    expect(preview.assembledPrompt).toContain("Write the final post body for the selected plan and frame.");
     expect(preview.rawResponse).toContain("Preview response");
     expect(preview.auditDiagnostics).toBeUndefined();
   });

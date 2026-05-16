@@ -189,41 +189,22 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     expect(callArg.taskContext).toBe("");
   });
 
-  it("keeps vote taskContext on the legacy path", async () => {
+  it("rejects non-interaction task types", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
         personaId: "p1",
         modelId: "m1",
         taskType: "vote",
-        taskContext: "Decide whether this target deserves an upvote.",
-        targetContext: {
-          targetType: "post",
-          targetId: "post-1",
-          targetAuthor: "artist_1",
-          targetContent: "I tried three compositions and the last one feels strongest.",
-          threadSummary: "Critique thread about composition choices.",
-        },
       }),
       headers: { "Content-Type": "application/json" },
     });
 
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
-    expect(res.status).toBe(200);
-    expect(previewPersonaInteraction).toHaveBeenCalledWith({
-      personaId: "p1",
-      modelId: "m1",
-      taskType: "vote",
-      taskContext: "Decide whether this target deserves an upvote.",
-      targetContext: {
-        targetType: "post",
-        targetId: "post-1",
-        targetAuthor: "artist_1",
-        targetContent: "I tried three compositions and the last one feels strongest.",
-        threadSummary: "Critique thread about composition choices.",
-      },
-      boardContext: undefined,
-    });
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toContain("post, comment, or reply");
+    expect(previewPersonaInteraction).not.toHaveBeenCalled();
   });
 
   it("rejects internal post stage task types", async () => {
@@ -236,86 +217,8 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     const res = await POST(req as any, { params: Promise.resolve({}) } as any);
     const body = await res.json();
     expect(res.status).toBe(400);
-    expect(body.error).toContain("post, comment, reply, vote, poll_post, or poll_vote");
+    expect(body.error).toContain("post, comment, or reply");
     expect(previewPersonaInteraction).not.toHaveBeenCalled();
-  });
-
-  it("passes structured vote target context through to the store", async () => {
-    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
-      method: "POST",
-      body: JSON.stringify({
-        personaId: "p1",
-        modelId: "m1",
-        taskType: "vote",
-        taskContext: "Decide whether this target deserves an upvote.",
-        targetContext: {
-          targetType: "post",
-          targetId: "post-1",
-          targetAuthor: "artist_1",
-          targetContent: "I tried three compositions and the last one feels strongest.",
-          threadSummary: "Critique thread about composition choices.",
-        },
-      }),
-      headers: { "Content-Type": "application/json" },
-    });
-
-    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
-    expect(res.status).toBe(200);
-    expect(previewPersonaInteraction).toHaveBeenCalledWith({
-      personaId: "p1",
-      modelId: "m1",
-      taskType: "vote",
-      taskContext: "Decide whether this target deserves an upvote.",
-      targetContext: {
-        targetType: "post",
-        targetId: "post-1",
-        targetAuthor: "artist_1",
-        targetContent: "I tried three compositions and the last one feels strongest.",
-        threadSummary: "Critique thread about composition choices.",
-      },
-      boardContext: undefined,
-    });
-  });
-
-  it("passes structured poll target context through to the store", async () => {
-    const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
-      method: "POST",
-      body: JSON.stringify({
-        personaId: "p1",
-        modelId: "m1",
-        taskType: "poll_vote",
-        taskContext: "Choose one option.",
-        targetContext: {
-          pollPostId: "poll-1",
-          pollQuestion: "Which palette works best?",
-          pollOptions: [
-            { id: "opt-1", label: "Warm" },
-            { id: "opt-2", label: "Cool" },
-          ],
-          threadSummary: "Users are split between warm and cool palettes.",
-        },
-      }),
-      headers: { "Content-Type": "application/json" },
-    });
-
-    const res = await POST(req as any, { params: Promise.resolve({}) } as any);
-    expect(res.status).toBe(200);
-    expect(previewPersonaInteraction).toHaveBeenCalledWith({
-      personaId: "p1",
-      modelId: "m1",
-      taskType: "poll_vote",
-      taskContext: "Choose one option.",
-      targetContext: {
-        pollPostId: "poll-1",
-        pollQuestion: "Which palette works best?",
-        pollOptions: [
-          { id: "opt-1", label: "Warm" },
-          { id: "opt-2", label: "Cool" },
-        ],
-        threadSummary: "Users are split between warm and cool palettes.",
-      },
-      boardContext: undefined,
-    });
   });
 
   it("passes board context and targetContext alongside targetContextText for user-facing flows", async () => {

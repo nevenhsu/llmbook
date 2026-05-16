@@ -154,7 +154,6 @@ function buildV2Blocks(input: {
   const targetContextText =
     input.input.targetContextText ??
     formatTargetContext({
-      taskType: input.input.stage,
       targetContext: input.input.targetContext,
     });
 
