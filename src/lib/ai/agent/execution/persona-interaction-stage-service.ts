@@ -4,8 +4,15 @@ import { invokeStructuredLLM } from "@/lib/ai/llm/invoke-structured-llm";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { z } from "zod";
-import { buildPersonaPacketForPrompt } from "@/lib/ai/prompt-runtime/persona-runtime-packets";
-import type { ContentMode, PersonaFlowKind, PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import {
+  buildPersonaPacketForPrompt,
+  resolvePersonaPacketFlowStage,
+} from "@/lib/ai/prompt-runtime/persona-runtime-packets";
+import type {
+  ContentMode,
+  PersonaCoreV2,
+  PersonaFlowStage,
+} from "@/lib/ai/core/persona-core-v2";
 import {
   buildPersonaPromptFamilyV2,
   type PersonaPromptFamilyV2StagePurpose,
@@ -17,11 +24,7 @@ import {
   PostBodyOutputSchema,
   CommentOutputSchema,
   ReplyOutputSchema,
-  POST_PLAN_SCHEMA_META,
-  POST_FRAME_SCHEMA_META,
-  POST_BODY_SCHEMA_META,
-  COMMENT_SCHEMA_META,
-  REPLY_SCHEMA_META,
+  getFlowSchemaMeta,
   type SchemaMetadata,
 } from "@/lib/ai/prompt-runtime/persona-v2-flow-contracts";
 import {
@@ -114,52 +117,17 @@ function buildLeanStageBlocks(input: {
   ];
 }
 
-type ActionTypeToFlowMap = Record<string, PersonaFlowKind | null>;
-
-// vote / poll_post / poll_vote flow definitions are not yet implemented.
-// They fall back to buildLeanStageBlocks (system_baseline + global_policy + task_context).
-const ACTION_TYPE_TO_FLOW: ActionTypeToFlowMap = {
-  post_plan: "post_plan",
-  post_frame: "post_frame",
-  post_body: "post_body",
-  post: "post_body",
-  comment: "comment",
-  reply: "reply",
-  vote: null,
-  poll_post: null,
-  poll_vote: null,
-};
-
-function resolveFlowSchemaMeta(taskType: string): SchemaMetadata | undefined {
-  switch (taskType) {
-    case "post_plan":
-      return POST_PLAN_SCHEMA_META;
-    case "post_frame":
-      return POST_FRAME_SCHEMA_META;
-    case "post_body":
-    case "post":
-      return POST_BODY_SCHEMA_META;
-    case "comment":
-      return COMMENT_SCHEMA_META;
-    case "reply":
-      return REPLY_SCHEMA_META;
-    default:
-      return undefined;
-  }
-}
-
-function resolveStageSchema(taskType: string): z.ZodTypeAny | undefined {
-  switch (taskType) {
+function resolveStageSchema(flowStage: PersonaFlowStage): z.ZodTypeAny | undefined {
+  switch (flowStage.stage) {
     case "post_plan":
       return PostPlanOutputSchema;
     case "post_frame":
       return PostFrameSchema;
     case "post_body":
-    case "post":
       return PostBodyOutputSchema;
-    case "comment":
+    case "comment_body":
       return CommentOutputSchema;
-    case "reply":
+    case "reply_body":
       return ReplyOutputSchema;
     default:
       return undefined;
@@ -168,13 +136,13 @@ function resolveStageSchema(taskType: string): z.ZodTypeAny | undefined {
 
 function buildV2Blocks(input: {
   input: PersonaInteractionStageInput;
+  flowStage: PersonaFlowStage | null;
   personaCore: PersonaCoreV2;
   contentMode: ContentMode;
   personaPacket: ReturnType<typeof buildPersonaPacketForPrompt>;
   personaPacketText: string;
 }): Array<{ name: string; content: string }> {
-  const flow = ACTION_TYPE_TO_FLOW[input.input.taskType];
-  if (!flow || !input.personaPacket) {
+  if (!input.flowStage || !input.personaPacket) {
     return buildLeanStageBlocks({
       document: input.input.document,
       taskContext: input.input.taskContext,
@@ -191,7 +159,8 @@ function buildV2Blocks(input: {
     });
 
   const result = buildPersonaPromptFamilyV2({
-    flow,
+    flow: input.flowStage.flow,
+    stage: input.flowStage.stage,
     contentMode: input.contentMode,
     stagePurpose: input.input.stagePurpose as PersonaPromptFamilyV2StagePurpose,
     systemBaseline: input.input.document.globalPolicyDraft.systemBaseline,
@@ -205,7 +174,11 @@ function buildV2Blocks(input: {
     boardContext: boardContextText || null,
     targetContext: targetContextText || null,
     taskContext: input.input.taskContext,
-    outputContract: buildOutputContractV2({ flow, contentMode: input.contentMode }),
+    outputContract: buildOutputContractV2({
+      flow: input.flowStage.flow,
+      stage: input.flowStage.stage,
+      contentMode: input.contentMode,
+    }),
   });
 
   return result.blocks.map((block) => ({
@@ -242,11 +215,13 @@ export class AiAgentPersonaInteractionStageService {
     const profile = await input.getPersonaProfile(input.personaId);
     const effectivePersonaCore = profile.personaCore as Record<string, unknown>;
     const contentMode = input.contentMode ?? "discussion";
+    const flowStage = resolvePersonaPacketFlowStage(input.taskType);
 
     const { core: personaCore } = parsePersonaCoreV2(effectivePersonaCore);
 
     const personaPacket = buildPersonaPacketForPrompt({
-      taskType: input.taskType,
+      flow: flowStage?.flow ?? "comment",
+      stage: flowStage?.stage ?? "comment_body",
       stagePurpose: input.stagePurpose,
       contentMode,
       personaId: input.personaId,
@@ -256,13 +231,17 @@ export class AiAgentPersonaInteractionStageService {
 
     const personaPacketText = personaPacket?.renderedText ?? "";
 
-    const maxOutputTokens = getInteractionMaxOutputTokens({
-      actionType: input.taskType,
-      stagePurpose: input.stagePurpose,
-    });
+    const maxOutputTokens = flowStage
+      ? getInteractionMaxOutputTokens({
+          flow: flowStage.flow,
+          stage: flowStage.stage,
+          stagePurpose: input.stagePurpose,
+        })
+      : 1000;
 
     const blocks = buildV2Blocks({
       input,
+      flowStage,
       personaCore,
       contentMode,
       personaPacket,
@@ -276,11 +255,10 @@ export class AiAgentPersonaInteractionStageService {
     });
 
     // Main stage always uses structured invocation when a schema is resolvable
-    const resolved = resolveStageSchema(input.taskType);
-    if (resolved) {
-      const stageSchema = resolved;
+    const stageSchema = flowStage ? resolveStageSchema(flowStage) : undefined;
+    if (stageSchema && flowStage) {
       const schemaMeta =
-        resolveFlowSchemaMeta(input.taskType) ??
+        getFlowSchemaMeta(flowStage) ??
         ({
           schemaName: "Unknown",
           allowedRepairPaths: [],
@@ -299,6 +277,8 @@ export class AiAgentPersonaInteractionStageService {
             _m: {
               stagePurpose: input.stagePurpose,
               taskType: input.taskType,
+              flow: flowStage.flow,
+              stage: flowStage.stage,
               schemaName: schemaMeta.schemaName,
             },
           },

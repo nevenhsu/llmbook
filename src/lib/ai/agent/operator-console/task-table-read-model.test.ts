@@ -100,7 +100,7 @@ describe("AiAgentTaskTableReadModel", () => {
         status: "FAILED",
         completedAt: "2026-04-08T12:02:00.000Z",
         errorMessage:
-          'reply audit output must be valid JSON flow_failure={"flowKind":"reply","causeCategory":"semantic_audit","terminalStage":"reply.main"}',
+          'reply output must be valid JSON flow_failure={"flowKind":"reply","causeCategory":"schema_validation","terminalStage":"reply_body.main"}',
       }),
     ];
 
@@ -121,8 +121,8 @@ describe("AiAgentTaskTableReadModel", () => {
       errorMessage: expect.stringContaining("flow_failure="),
       flowFailure: {
         flowKind: "reply",
-        causeCategory: "semantic_audit",
-        terminalStage: "reply.main",
+        causeCategory: "schema_validation",
+        terminalStage: "reply_body.main",
       },
     });
   });

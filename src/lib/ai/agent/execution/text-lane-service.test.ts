@@ -197,7 +197,7 @@ describe("AiAgentTextLaneService", () => {
             causeCategory: "semantic_audit",
             diagnostics: {
               finalStatus: "failed",
-              terminalStage: "reply.main",
+              terminalStage: "reply_body.main",
               attempts: [],
               stageResults: [],
             },

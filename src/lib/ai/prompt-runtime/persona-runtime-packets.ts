@@ -2,7 +2,9 @@ import { parsePersonaCoreV2, FALLBACK_PERSONA_CORE_V2 } from "@/lib/ai/core/pers
 import type {
   PersonaCoreV2,
   ContentMode,
-  PersonaFlowKind,
+  PersonaFlowStage,
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
   PersonaPacketBudget,
   PersonaRuntimePacket,
   PersonaRuntimePacketSections,
@@ -17,12 +19,12 @@ type BudgetProfile = {
   hardMaxWords: number;
 };
 
-const BUDGETS: Record<PersonaFlowKind, BudgetProfile> = {
+const STAGE_BUDGETS: Record<PersonaInteractionStage, BudgetProfile> = {
   post_plan: { minWords: 80, maxWords: 400, hardMaxWords: 500 },
   post_frame: { minWords: 70, maxWords: 400, hardMaxWords: 500 },
   post_body: { minWords: 70, maxWords: 400, hardMaxWords: 500 },
-  comment: { minWords: 50, maxWords: 400, hardMaxWords: 500 },
-  reply: { minWords: 50, maxWords: 400, hardMaxWords: 500 },
+  comment_body: { minWords: 50, maxWords: 400, hardMaxWords: 500 },
+  reply_body: { minWords: 50, maxWords: 400, hardMaxWords: 500 },
 };
 
 type SectionKey = keyof PersonaRuntimePacketSections;
@@ -95,14 +97,15 @@ function buildReferenceStyleText(core: PersonaCoreV2): string {
 }
 
 function selectSections(
-  flow: PersonaFlowKind,
+  _flow: PersonaInteractionFlow,
+  stage: PersonaInteractionStage,
   contentMode: ContentMode,
   core: PersonaCoreV2,
 ): RenderablePacketSections {
   const sections: RenderablePacketSections = {};
 
   if (contentMode === "discussion") {
-    switch (flow) {
+    switch (stage) {
       case "post_plan":
         sections.identity = [
           buildSectionText("identity", core.identity.archetype),
@@ -200,7 +203,7 @@ function selectSections(
         ];
         break;
 
-      case "comment":
+      case "comment_body":
         sections.identity = [
           buildSectionText("identity", `${core.identity.archetype}; ${core.identity.core_drive}`),
         ];
@@ -233,7 +236,7 @@ function selectSections(
         ];
         break;
 
-      case "reply":
+      case "reply_body":
         sections.identity = [buildSectionText("identity", core.identity.archetype)];
         sections.mind = [buildSectionText("mind", `Disagreement: ${core.mind.disagreement_style}`)];
         sections.forum = [
@@ -258,7 +261,7 @@ function selectSections(
     }
   } else {
     // story mode
-    switch (flow) {
+    switch (stage) {
       case "post_plan":
         sections.identity = [
           buildSectionText(
@@ -349,7 +352,7 @@ function selectSections(
         ];
         break;
 
-      case "comment":
+      case "comment_body":
         sections.voice = [
           buildSectionText("voice", `${core.voice.register}, ${core.voice.rhythm}`),
         ];
@@ -370,7 +373,7 @@ function selectSections(
         ];
         break;
 
-      case "reply":
+      case "reply_body":
         sections.voice = [
           buildSectionText("voice", `${core.voice.register}, ${core.voice.rhythm}`),
         ];
@@ -518,7 +521,8 @@ function enforceBudget(
 }
 
 export function buildPersonaRuntimePacket(input: {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
   personaId: string;
   displayName?: string | null;
@@ -528,14 +532,14 @@ export function buildPersonaRuntimePacket(input: {
     strictBudget?: boolean;
   };
 }): PersonaRuntimePacket {
-  const budget = BUDGETS[input.flow];
+  const budget = STAGE_BUDGETS[input.stage];
   const warnings: string[] = [];
 
   if (input.options?.includeExamples) {
     warnings.push("examples disabled by default");
   }
 
-  const sections = selectSections(input.flow, input.contentMode, input.core);
+  const sections = selectSections(input.flow, input.stage, input.contentMode, input.core);
   const procedureLine = buildProcedureLine(input.core, input.contentMode);
 
   const {
@@ -550,6 +554,7 @@ export function buildPersonaRuntimePacket(input: {
 
   return {
     flow: input.flow,
+    stage: input.stage,
     contentMode: input.contentMode,
     personaId: input.personaId,
     displayName: input.displayName ?? null,
@@ -573,7 +578,8 @@ export function buildPostPlanPersonaPacket(input: {
   core: PersonaCoreV2;
 }): PersonaRuntimePacket {
   return buildPersonaRuntimePacket({
-    flow: "post_plan",
+    flow: "post",
+    stage: "post_plan",
     contentMode: input.contentMode,
     personaId: input.personaId,
     displayName: input.displayName,
@@ -588,7 +594,8 @@ export function buildPostBodyPersonaPacket(input: {
   core: PersonaCoreV2;
 }): PersonaRuntimePacket {
   return buildPersonaRuntimePacket({
-    flow: "post_body",
+    flow: "post",
+    stage: "post_body",
     contentMode: input.contentMode,
     personaId: input.personaId,
     displayName: input.displayName,
@@ -604,6 +611,7 @@ export function buildCommentPersonaPacket(input: {
 }): PersonaRuntimePacket {
   return buildPersonaRuntimePacket({
     flow: "comment",
+    stage: "comment_body",
     contentMode: input.contentMode,
     personaId: input.personaId,
     displayName: input.displayName,
@@ -619,21 +627,13 @@ export function buildReplyPersonaPacket(input: {
 }): PersonaRuntimePacket {
   return buildPersonaRuntimePacket({
     flow: "reply",
+    stage: "reply_body",
     contentMode: input.contentMode,
     personaId: input.personaId,
     displayName: input.displayName,
     core: input.core,
   });
 }
-
-const FLOW_MAP: Record<string, PersonaFlowKind> = {
-  post: "post_body",
-  post_plan: "post_plan",
-  post_frame: "post_frame",
-  post_body: "post_body",
-  comment: "comment",
-  reply: "reply",
-};
 
 const DUMMY_SECTIONS: PersonaRuntimePacketSections = {
   identity: [],
@@ -648,6 +648,49 @@ const DUMMY_SECTIONS: PersonaRuntimePacketSections = {
 };
 
 export function buildPersonaPacketForPrompt(input: {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+  stagePurpose: string;
+  contentMode: ContentMode;
+  personaId: string;
+  displayName?: string | null;
+  core: PersonaCoreV2;
+}): PersonaRuntimePacket | null {
+  if (
+    (input.flow === "post" &&
+      (input.stage === "post_plan" ||
+        input.stage === "post_frame" ||
+        input.stage === "post_body")) ||
+    (input.flow === "comment" && input.stage === "comment_body") ||
+    (input.flow === "reply" && input.stage === "reply_body")
+  ) {
+    return buildPersonaRuntimePacket({
+      flow: input.flow,
+      stage: input.stage,
+      contentMode: input.contentMode,
+      personaId: input.personaId,
+      displayName: input.displayName,
+      core: input.core,
+    });
+  }
+
+  return null;
+}
+
+const TASK_TYPE_TO_PERSONA_FLOW_STAGE: Partial<Record<PromptActionType, PersonaFlowStage>> = {
+  post: { flow: "post", stage: "post_body" },
+  post_plan: { flow: "post", stage: "post_plan" },
+  post_frame: { flow: "post", stage: "post_frame" },
+  post_body: { flow: "post", stage: "post_body" },
+  comment: { flow: "comment", stage: "comment_body" },
+  reply: { flow: "reply", stage: "reply_body" },
+};
+
+export function resolvePersonaPacketFlowStage(taskType: PromptActionType): PersonaFlowStage | null {
+  return TASK_TYPE_TO_PERSONA_FLOW_STAGE[taskType] ?? null;
+}
+
+export function buildPersonaPacketForTaskType(input: {
   taskType: PromptActionType;
   stagePurpose: string;
   contentMode: ContentMode;
@@ -655,13 +698,14 @@ export function buildPersonaPacketForPrompt(input: {
   displayName?: string | null;
   core: PersonaCoreV2;
 }): PersonaRuntimePacket | null {
-  const flow = FLOW_MAP[input.taskType];
-  if (!flow) {
+  const flowStage = resolvePersonaPacketFlowStage(input.taskType);
+  if (!flowStage) {
     return null;
   }
 
   return buildPersonaRuntimePacket({
-    flow,
+    flow: flowStage.flow,
+    stage: flowStage.stage,
     contentMode: input.contentMode,
     personaId: input.personaId,
     displayName: input.displayName,

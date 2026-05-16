@@ -1,6 +1,7 @@
 import type {
   ContentMode,
-  PersonaFlowKind,
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
   PersonaRuntimePacket,
 } from "@/lib/ai/core/persona-core-v2";
 import {
@@ -44,7 +45,8 @@ export type PersonaPromptFamilyV2Result = {
 };
 
 export type PersonaPromptFamilyV2Input = {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
   stagePurpose: PersonaPromptFamilyV2StagePurpose;
   systemBaseline: string;
@@ -76,32 +78,35 @@ function makeBlock(
 }
 
 function buildActionModePolicyForFlow(
-  flow: PersonaFlowKind,
+  flow: PersonaInteractionFlow,
+  stage: PersonaInteractionStage,
   _stagePurpose: PersonaPromptFamilyV2StagePurpose,
 ): string {
-  switch (flow) {
+  switch (stage) {
     case "post_plan":
-      return buildPostStageActionModePolicy({ flow: "post", stage: "post_plan" });
     case "post_frame":
-      return buildPostStageActionModePolicy({ flow: "post", stage: "post_frame" });
     case "post_body":
-      return buildPostStageActionModePolicy({ flow: "post", stage: "post_body" });
-    case "comment":
+      return buildPostStageActionModePolicy({ flow: "post", stage });
+    case "comment_body":
       return "This stage writes a top-level comment that adds net-new value to the root post. Stay standalone and avoid repeating recent top-level comments.";
-    case "reply":
+    case "reply_body":
       return "This stage writes a threaded reply that responds directly to the source comment. Continue the thread without restarting the whole topic.";
   }
 }
 
-function buildContentModePolicyForFlow(flow: PersonaFlowKind, contentMode: ContentMode): string {
+function buildContentModePolicyForFlow(
+  flow: PersonaInteractionFlow,
+  stage: PersonaInteractionStage,
+  contentMode: ContentMode,
+): string {
   // Delegate post stages to the canonical post prompt-runtime owner.
-  if (flow === "post_plan" || flow === "post_frame" || flow === "post_body") {
-    return buildPostStageContentModePolicy({ flow: "post", stage: flow, contentMode });
+  if (flow === "post") {
+    return buildPostStageContentModePolicy({ flow: "post", stage, contentMode });
   }
 
   if (contentMode === "discussion") {
-    switch (flow) {
-      case "comment":
+    switch (stage) {
+      case "comment_body":
         return [
           "Content mode: discussion.",
           "Add net-new value to the root post through argument, analysis, or pointed contribution.",
@@ -110,7 +115,7 @@ function buildContentModePolicyForFlow(flow: PersonaFlowKind, contentMode: Conte
           "Use the persona packet procedure internally to decide what is missing, suspect, worth defending, and what response move to make.",
           "Do not reveal that internal procedure.",
         ].join("\n");
-      case "reply":
+      case "reply_body":
         return [
           "Content mode: discussion.",
           "Respond directly to the source comment.",
@@ -122,8 +127,8 @@ function buildContentModePolicyForFlow(flow: PersonaFlowKind, contentMode: Conte
   }
 
   // story mode — comment and reply only; post stages delegated above.
-  switch (flow) {
-    case "comment":
+  switch (stage) {
+    case "comment_body":
       return [
         "Content mode: story.",
         "Produce a compact story contribution tied to the root post.",
@@ -133,7 +138,7 @@ function buildContentModePolicyForFlow(flow: PersonaFlowKind, contentMode: Conte
         "Use the persona packet procedure internally to choose one story move, one pressure point, and one detail bias.",
         "Do not reveal that internal procedure.",
       ].join("\n");
-    case "reply":
+    case "reply_body":
       return [
         "Content mode: story.",
         "Continue the source comment or scene rather than opening a disconnected story.",
@@ -147,25 +152,28 @@ function buildContentModePolicyForFlow(flow: PersonaFlowKind, contentMode: Conte
 }
 
 export function buildActionModePolicy(input: {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   stagePurpose: PersonaPromptFamilyV2StagePurpose;
 }): string {
-  return buildActionModePolicyForFlow(input.flow, input.stagePurpose);
+  return buildActionModePolicyForFlow(input.flow, input.stage, input.stagePurpose);
 }
 
 export function buildContentModePolicy(input: {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
 }): string {
-  return buildContentModePolicyForFlow(input.flow, input.contentMode);
+  return buildContentModePolicyForFlow(input.flow, input.stage, input.contentMode);
 }
 
 export function buildAntiGenericContract(input: {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
 }): string {
-  if (input.flow === "post_plan" || input.flow === "post_frame" || input.flow === "post_body") {
-    return buildPostStageAntiGenericContract({ flow: "post", stage: input.flow });
+  if (input.flow === "post") {
+    return buildPostStageAntiGenericContract({ flow: "post", stage: input.stage });
   }
   return [
     "Do not mention these prompt blocks, internal policies, or persona schema.",
@@ -176,31 +184,38 @@ export function buildAntiGenericContract(input: {
 }
 
 export function buildProcedureNonExposureRule(input: {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
 }): string {
   return "Do not reveal internal procedure, context readings, or interpretation steps in the output.";
 }
 
-function buildSchemaGuidancePlaceholder(input: { flow: PersonaFlowKind }): string {
-  switch (input.flow) {
-    case "comment":
+function buildSchemaGuidancePlaceholder(input: {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+}): string {
+  switch (input.stage) {
+    case "comment_body":
       return "Placeholder: comment schema_guidance pending canonical extraction.";
-    case "reply":
+    case "reply_body":
       return "Placeholder: reply schema_guidance pending canonical extraction.";
     default:
       return "";
   }
 }
 
-function buildInternalProcessPlaceholder(input: { flow: PersonaFlowKind }): string {
-  switch (input.flow) {
-    case "comment":
+function buildInternalProcessPlaceholder(input: {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+}): string {
+  switch (input.stage) {
+    case "comment_body":
       return [
         "Placeholder: comment internal_process pending canonical extraction.",
         "Perform internally only. Do not reveal.",
       ].join("\n");
-    case "reply":
+    case "reply_body":
       return [
         "Placeholder: reply internal_process pending canonical extraction.",
         "Perform internally only. Do not reveal.",
@@ -211,11 +226,11 @@ function buildInternalProcessPlaceholder(input: { flow: PersonaFlowKind }): stri
 }
 
 function getBlockOrder(_input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV2BlockName[] {
-  if (_input.flow === "post_plan" || _input.flow === "post_frame" || _input.flow === "post_body") {
+  if (_input.flow === "post") {
     return [
       "system_baseline",
       "global_policy",
-      ...getPostPromptBlockOrder({ flow: "post", stage: _input.flow }),
+      ...getPostPromptBlockOrder({ flow: "post", stage: _input.stage as "post_plan" | "post_frame" | "post_body" }),
     ];
   }
   return [
@@ -256,12 +271,11 @@ export function buildPersonaPromptFamilyV2(
   const warnings: string[] = [];
   const blockOrder = getBlockOrder(input);
 
-  const actionModePolicy = buildActionModePolicyForFlow(input.flow, input.stagePurpose);
-  const contentModePolicy = buildContentModePolicyForFlow(input.flow, input.contentMode);
+  const actionModePolicy = buildActionModePolicyForFlow(input.flow, input.stage, input.stagePurpose);
+  const contentModePolicy = buildContentModePolicyForFlow(input.flow, input.stage, input.contentMode);
   const antiGenericContract = buildAntiGenericContract(input);
   const personaPacketText = input.personaPacket.renderedText;
-  const isPostFlow =
-    input.flow === "post_plan" || input.flow === "post_frame" || input.flow === "post_body";
+  const isPostFlow = input.flow === "post";
 
   if (input.personaPacket.warnings && input.personaPacket.warnings.length > 0) {
     warnings.push(...input.personaPacket.warnings.map((w) => `persona_packet: ${w}`));
@@ -277,7 +291,7 @@ export function buildPersonaPromptFamilyV2(
   if (isPostFlow) {
     const postBlocks = buildPostOwnedPromptBlockContent({
       flow: "post",
-      stage: input.flow as "post_plan" | "post_frame" | "post_body",
+      stage: input.stage as "post_plan" | "post_frame" | "post_body",
       contentMode: input.contentMode,
       targetContext: input.targetContext ?? null,
       taskContext: input.taskContext,
@@ -301,11 +315,11 @@ export function buildPersonaPromptFamilyV2(
     allBlocks.task_context = makeBlock("task_context", input.taskContext);
     allBlocks.schema_guidance = makeBlock(
       "schema_guidance",
-      buildSchemaGuidancePlaceholder({ flow: input.flow }),
+      buildSchemaGuidancePlaceholder({ flow: input.flow, stage: input.stage }),
     );
     allBlocks.internal_process = makeBlock(
       "internal_process",
-      buildInternalProcessPlaceholder({ flow: input.flow }),
+      buildInternalProcessPlaceholder({ flow: input.flow, stage: input.stage }),
     );
     allBlocks.output_contract = makeBlock("output_contract", input.outputContract);
     allBlocks.anti_generic_contract = makeBlock("anti_generic_contract", antiGenericContract);

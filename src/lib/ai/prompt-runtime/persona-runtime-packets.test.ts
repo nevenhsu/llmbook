@@ -164,7 +164,8 @@ describe("packet budgets", () => {
 
   it("post_frame discussion stays within budget", () => {
     const packet = buildPersonaRuntimePacket({
-      flow: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
@@ -175,7 +176,8 @@ describe("packet budgets", () => {
 
   it("post_frame story stays within budget", () => {
     const packet = buildPersonaRuntimePacket({
-      flow: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       contentMode: "story",
       personaId: "p1",
       core: FIXTURE,
@@ -321,31 +323,36 @@ describe("examples disabled", () => {
 describe("buildPersonaPacketForPrompt", () => {
   it("maps post_plan to plan packet", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "post_plan",
+      flow: "post",
+      stage: "post_plan",
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
     expect(packet).not.toBeNull();
-    expect(packet!.flow).toBe("post_plan");
+    expect(packet!.flow).toBe("post");
+    expect(packet!.stage).toBe("post_plan");
   });
 
   it("maps post_body to body packet", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "post_body",
+      flow: "post",
+      stage: "post_body",
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
     expect(packet).not.toBeNull();
-    expect(packet!.flow).toBe("post_body");
+    expect(packet!.flow).toBe("post");
+    expect(packet!.stage).toBe("post_body");
   });
 
   it("maps comment to comment packet", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "comment",
+      flow: "comment",
+      stage: "comment_body",
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
@@ -353,11 +360,13 @@ describe("buildPersonaPacketForPrompt", () => {
     });
     expect(packet).not.toBeNull();
     expect(packet!.flow).toBe("comment");
+    expect(packet!.stage).toBe("comment_body");
   });
 
   it("maps reply to reply packet", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "reply",
+      flow: "reply",
+      stage: "reply_body",
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
@@ -365,23 +374,27 @@ describe("buildPersonaPacketForPrompt", () => {
     });
     expect(packet).not.toBeNull();
     expect(packet!.flow).toBe("reply");
+    expect(packet!.stage).toBe("reply_body");
   });
 
   it("maps post_frame to frame packet", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
     expect(packet).not.toBeNull();
-    expect(packet!.flow).toBe("post_frame");
+    expect(packet!.flow).toBe("post");
+    expect(packet!.stage).toBe("post_frame");
   });
 
   it("post_frame discussion packet includes identity and mind sections", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
@@ -395,7 +408,8 @@ describe("buildPersonaPacketForPrompt", () => {
 
   it("post_frame story packet includes narrative sections", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       stagePurpose: "main",
       contentMode: "story",
       personaId: "p1",
@@ -407,9 +421,10 @@ describe("buildPersonaPacketForPrompt", () => {
     expect(packet!.renderedText).toContain("Internal procedure");
   });
 
-  it("returns null for unknown task type", () => {
+  it("returns null for unsupported flow/stage pairs", () => {
     const packet = buildPersonaPacketForPrompt({
-      taskType: "vote" as unknown as Parameters<typeof buildPersonaPacketForPrompt>[0]["taskType"],
+      flow: "comment" as unknown as Parameters<typeof buildPersonaPacketForPrompt>[0]["flow"],
+      stage: "post_plan" as unknown as Parameters<typeof buildPersonaPacketForPrompt>[0]["stage"],
       stagePurpose: "main",
       contentMode: "discussion",
       personaId: "p1",
@@ -469,13 +484,15 @@ describe("content mode differentiation", () => {
 
   it("story post_frame packet differs from discussion", () => {
     const discussion = buildPersonaRuntimePacket({
-      flow: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       contentMode: "discussion",
       personaId: "p1",
       core: FIXTURE,
     });
     const story = buildPersonaRuntimePacket({
-      flow: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       contentMode: "story",
       personaId: "p1",
       core: FIXTURE,

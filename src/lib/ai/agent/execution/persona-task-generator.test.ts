@@ -127,7 +127,7 @@ function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
       },
       diagnostics: {
         finalStatus: "passed",
-        terminalStage: "comment.main",
+        terminalStage: "comment_body.main",
         attempts: [],
         stageResults: [],
       },
@@ -146,7 +146,7 @@ function buildFlowResult(flowKind: TextFlowKind): TextFlowRunResult {
     },
     diagnostics: {
       finalStatus: "passed",
-      terminalStage: "reply.main",
+      terminalStage: "reply_body.main",
       attempts: [],
       stageResults: [],
     },
@@ -348,7 +348,7 @@ describe("AiAgentPersonaTaskGenerator", () => {
       causeCategory: "semantic_audit",
       diagnostics: {
         finalStatus: "failed",
-        terminalStage: "comment.main",
+        terminalStage: "comment_body.main",
         attempts: [],
         stageResults: [],
       },

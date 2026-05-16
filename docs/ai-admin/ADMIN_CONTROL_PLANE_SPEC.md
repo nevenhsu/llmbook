@@ -92,7 +92,7 @@ admin UI 應同時支援：
 
 - 需要 `Target Persona`
 - `Context / Extra Prompt` 預設帶入既有 `bio` + `reference roles`
-- 從 `Context / Extra Prompt` 之後，`View Prompt`、preview modal、以及 staged generation contract 都與 `Generate Persona` 共用同一條 pipeline；update 不應再有獨立 prompt template path
+- 從 `Context / Extra Prompt` 之後，`View Prompt`、preview modal、以及 one-stage generate-persona contract 都與 `Generate Persona` 共用同一條 pipeline；update 不應再有獨立 prompt template path
 - review modal 可重用 `Generate Persona` 的 preview surface
 - persona info card 應重用 shared reference-aware UI，顯示 identity 與 reference roles，不應只有 generation flow 有獨立樣式
 - `display_name` / `username` 可由 admin 編輯，但不可由程式自動互相覆蓋
@@ -101,9 +101,8 @@ admin UI 應同時支援：
 - admin persona create / update API write path 也必須重複套用 shared username normalizer，不能假設前端送進來的值已經合法
 - `Context / Extra Prompt` 應使用 multiline textarea，而不是單行 input
 - update write path 覆蓋 canonical persona fields，而不是只 patch 局部舊欄位
-- quality rules 走與 `Generate Persona` 相同的 staged generation pipeline；update 只是在進 pipeline 前先 seed `Context / Extra Prompt`
-- admin persona-generation preview 屬於 review flow，應保留 stage-local parse/quality repair，但不可再額外繼承高 provider retry 數；preview 應固定使用 selected model，並以 low-latency provider retries `0` 執行
-- admin persona-generation preview 若需要把前面 stage 的 canonical JSON 餵給後面 stage，模型實際吃到的 prior-stage carry-forward payload 應使用 compact JSON 以降低延遲；review UI 顯示的 assembled prompt 不需要把它表現成獨立命名 block
+- quality rules 走與 `Generate Persona` 相同的 one-stage pipeline；update 只是在進 pipeline 前先 seed `Context / Extra Prompt`
+- admin persona-generation preview 屬於 review flow，但不可再額外繼承高 provider retry 數；preview 應固定使用 selected model，並以 low-latency provider retries `0` 執行
 - 其他 admin review/helper flows 也應遵守同一條 low-latency 規則：`Interaction Preview`、persona `prompt-assist`、以及 `interaction context assist` 應固定使用 selected model / route，但 provider retries 應維持 `0`
 - 上述 low-retry 規則只適用於 admin preview / assist；production runtime 與 agent execution 不應跟著一起降 retry
 
@@ -141,27 +140,13 @@ preview review 至少應提供：
 - `originalization_note`
 - `voice_fingerprint`
 - `task_style_matrix`
-- `Generate Persona -> View Prompt` 必須與現行 staged generation contract 同步，不能落後 runtime schema
+- `Generate Persona -> View Prompt` 必須與現行 one-stage `persona_core_v2` contract 同步，不能落後 runtime schema
+- generate-persona prompt assembly 以 `src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts` 為 canonical source of truth；admin preview 只是 consumer
+- generate-persona 走 dedicated prompt path，不重用 interaction `planner_family` / `writer_family`
+- active generate-persona contract 是 one structured `persona_core_v2` main call plus shared schema gate and deterministic quality checks；不再維持 seed/core、audit/rewrite、或 preview-only template path
+- parser/normalizer 應容忍 harmless alias drift，例如模型回 `creator_admiration` 時要正規化進 canonical `creator_affinity`，或 `task_style_matrix.comment.body_shape` 時要正規化進 canonical `feedback_shape`
 
-Generate Persona 現行採用 staged generation contract，且每個 stage 都有兩層保護：
-
-1. schema / JSON repair
-2. quality validation / quality repair（目前用在 anti-cosplay 與 behavior-heavy stages）
-
-若某個 stage 因 `finishReason=length` 被截斷：
-
-- repair prompt 應帶入最新一次的 partial truncated output 作為 repair context
-- 但仍必須要求模型從頭重寫完整 JSON object，而不是嘗試 token-by-token continuation
-- 若第二次也被截斷，第三次 compact retry 應沿用最新 partial output，不能退回 blind rewrite
-- 若第三次 compact retry 仍以 `finishReason=length` 結束，應再跑一次 final truncation rescue，而不是直接把錯誤表面化成 generic invalid JSON / missing-field parse error
-- repairRetry / compactRetry / qualityRepair 的 shared caps 不能再被 base stage budget 重新壓低；否則 repair flow 只會名義上存在，實際上拿不到額外 headroom
-- stage-level quality repair 若第一次回空字串或 provider error，也應至少再重試一次；不要把 provider/empty failure 直接誤報成 invalid JSON
-- stage-level quality repair 若第一次回非空但 malformed JSON，也應至少再重試一次更嚴格的 JSON-only repair；不要因為第一個 repair response 壞掉就立刻表面化成 terminal invalid JSON
-- 若第二次 quality repair 仍以 `finishReason=length` 截斷，應再跑一次 `quality-repair-3` final rescue，再決定是否表面化錯誤
-- stage-level quality repair 不只要 retry parse failure；如果 quality-repair 已經回了可 parse JSON，但仍殘留 English-only / mixed-script / other deterministic quality issues，也應再跑下一輪 quality repair，而不是立刻表面化成 `quality repair failed`
-- stage parser 應容忍 harmless alias drift，例如模型回 `creator_admiration` 時要正規化進 canonical `creator_affinity`，或 `task_style_matrix.comment.body_shape` 時要正規化進 canonical `feedback_shape`
-
-persona-generation stage output 另外還有一條 shared language rule：
+generate-persona output 另外還有一條 shared language rule：
 
 - generated prose fields must stay English-only
 - non-English named references may still appear when they are explicit reference names
@@ -175,14 +160,13 @@ persona-generation stage output 另外還有一條 shared language rule：
 
 是自然語言、可重用的 persona guidance，而不是 `impulsive_challenge` 這類 machine-label tokens。
 
-`seed` stage 也必須保證：
+generate-persona output 也必須保證：
 
 - final bio / identity summary 是 reference-inspired，而不是 reference cosplay
 - `reference_sources` 只保留 personality-bearing named references；作品、概念、方法論、設計原則等非人格 references 應放到 `other_reference_sources`
-- seed semantic audit 應由 LLM 判斷哪些 `reference_sources` 仍屬於 personality-bearing references；不合格項目直接從該欄位移除，若過濾後為空則進 repair
 - 命名 reference 留在 `reference_sources` / `reference_derivation`
 - 不把 in-universe goals、titles、adversaries 直接抄進 final persona identity
-- `originalization_note` 不再用 keyword regex 當最終 semantic pass/fail；deterministic validation 只負責 concrete issues，adaptation/originalization meaning 交由一個 English-only compact LLM audit 判斷
+- `originalization_note` 的 deterministic validation 只負責 concrete issues；不要把舊 keyword-regex audit 寫回 active contract
 
 Generate Persona 不再產生 memory rows。未來若 dedicated memory module 重新啟用，必須以獨立 memory flow 設計，不可塞回 generate-persona output contract。
 
@@ -263,12 +247,9 @@ shared UI 規則：
 - admin preview、runtime、jobs-runtime、tests 共用 flow-module stage sequencing and validation gates
 - interaction generation 送給模型的是 compact task-aware persona summary，不是完整 `persona_core` JSON blob
 - 現階段 active prompt families 不直接發出 memory block；memory 需要等 dedicated module 後再接回
-- `comment` / `reply` / `post_body` 皆採用 compact audit packet + repair packet 的雙階段契約
-- `comment_audit` / `reply_audit` 的 persona 判斷改為四維 doctrine checks：
-  - `value_fit`
-  - `reasoning_fit`
-  - `discourse_fit`
-  - `expression_fit`
+- preview/runtime 共用 canonical prompt-runtime contract：user-facing flow families 是 `post` / `comment` / `reply`，internal stage identity 是 `post_plan` / `post_frame` / `post_body` / `comment_body` / `reply_body`
+- active interaction prompt boundary 只暴露 `main` generation；shared schema gate、deterministic syntax salvage、and allowlisted `field_patch` handle structured-output recovery below the prompt layer
+- doctrine fit remains a runtime quality expectation for planning/framing/writing, but it is no longer modeled as public audit-stage contracts in the admin docs
 
 支援 task types：
 

@@ -56,6 +56,17 @@ _Avoid_: Generation, content creation
 The type of text being generated — post, comment, or reply. Each Flow has a distinct module behind the shared TextFlowModule interface.
 _Avoid_: Content type, generation mode
 
+Rule:
+- `post` is a Flow family only. It must not be used as shorthand for the internal `post_body` Stage.
+
+**Stage**:
+An internal contract step within a Flow. A Post Flow may run planning, framing, and body-writing Stages; Comment and Reply Flows may run a single body-writing Stage.
+_Avoid_: Flow, task type
+
+**Task Type**:
+A public or cross-feature task-family label used at API, queue, and admin boundaries. For persona interaction text generation, Task Type may select the Flow family, but it must not replace explicit internal Flow and Stage identity.
+_Avoid_: Flow stage, internal routing key
+
 **Memory**:
 A Persona's accumulated context — short-term entries that are periodically compressed into long-term summaries.
 _Avoid_: Context, history
@@ -84,6 +95,7 @@ _Avoid_: Admin dashboard
 - An **Opportunity** is scored and may produce one or more **Tasks**
 - A **Task** is dispatched as a **Job** by the Jobs Runtime
 - A **Task** is executed by a **Flow** (post, comment, or reply)
+- A **Flow** may run one or more **Stages** before producing final text
 - A **Flow** reads a **Persona**'s **Memory** to generate contextually consistent content
 - Each **Runtime** acquires a **Lease** before running its loop
 - The **Control Plane** configures models, providers, and Personas; the **Operator Console** observes runtime execution

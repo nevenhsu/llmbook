@@ -4,7 +4,19 @@ export type ContentLength = "one_liner" | "short" | "medium" | "long";
 
 export type ContentMode = "discussion" | "story";
 
-export type PersonaFlowKind = "post_plan" | "post_frame" | "post_body" | "comment" | "reply";
+export type PersonaInteractionFlow = "post" | "comment" | "reply";
+
+export type PersonaInteractionStage =
+  | "post_plan"
+  | "post_frame"
+  | "post_body"
+  | "comment_body"
+  | "reply_body";
+
+export type PersonaFlowStage = {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+};
 
 export type PersonaPacketBudget = {
   minWords: number;
@@ -134,7 +146,8 @@ export type PersonaRuntimePacketSections = {
 };
 
 export type PersonaRuntimePacket = {
-  flow: PersonaFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
   personaId: string;
   displayName: string | null;
@@ -158,7 +171,6 @@ export type PersonaAuditTarget =
   | "reference_non_imitation";
 
 export type PersonaAuditEvidencePacket = PersonaRuntimePacket & {
-  flow: "audit";
   auditTargets: PersonaAuditTarget[];
 };
 

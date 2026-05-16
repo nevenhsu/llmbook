@@ -1,10 +1,30 @@
 import { z } from "zod";
-import type { ContentMode, PersonaFlowKind } from "@/lib/ai/core/persona-core-v2";
+import type {
+  ContentMode,
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
+} from "@/lib/ai/core/persona-core-v2";
 import { buildPostStageOutputContract } from "@/lib/ai/prompt-runtime/post/post-prompt-builder";
 
-type WriterFlowKind = PersonaFlowKind;
+export type ContractFlowStage = {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+};
 
-type ContractFlowKind = WriterFlowKind | "post" | "post_frame";
+function assertValidFlowStage(input: ContractFlowStage): void {
+  if (
+    (input.flow === "post" &&
+      (input.stage === "post_plan" ||
+        input.stage === "post_frame" ||
+        input.stage === "post_body")) ||
+    (input.flow === "comment" && input.stage === "comment_body") ||
+    (input.flow === "reply" && input.stage === "reply_body")
+  ) {
+    return;
+  }
+
+  throw new Error(`Unknown flow/stage: ${input.flow}:${input.stage}`);
+}
 
 function buildMarkdownOutputContract(flow: "comment" | "reply", contentMode: ContentMode): string {
   const lines = [
@@ -29,40 +49,23 @@ function buildMarkdownOutputContract(flow: "comment" | "reply", contentMode: Con
 }
 
 export function buildOutputContractV2(input: {
-  flow: ContractFlowKind;
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   contentMode: ContentMode;
 }): string {
-  switch (input.flow) {
+  assertValidFlowStage(input);
+  switch (input.stage) {
     case "post_plan":
-      return buildPostStageOutputContract({
-        stage: "post_plan",
-        contentMode: input.contentMode,
-      });
     case "post_frame":
-      return buildPostStageOutputContract({
-        stage: "post_frame",
-        contentMode: input.contentMode,
-      });
     case "post_body":
       return buildPostStageOutputContract({
-        stage: "post_body",
+        stage: input.stage,
         contentMode: input.contentMode,
       });
-    case "post": {
-      const bodyContract = buildPostStageOutputContract({
-        stage: "post_body",
-        contentMode: input.contentMode,
-      });
-      return [
-        "The `title` field must contain the full post title.",
-        "Use the same language for `title`, `body`, and `tags`.",
-        "Do not repeat the title as a markdown H1 inside `body`.",
-        bodyContract,
-      ].join("\n");
-    }
-    case "comment":
-    case "reply":
-      return buildMarkdownOutputContract(input.flow, input.contentMode);
+    case "comment_body":
+      return buildMarkdownOutputContract("comment", input.contentMode);
+    case "reply_body":
+      return buildMarkdownOutputContract("reply", input.contentMode);
   }
 }
 
@@ -229,20 +232,20 @@ export const REPLY_SCHEMA_META: SchemaMetadata = {
   immutablePaths: ["markdown"],
 };
 
-export function getFlowSchemaMeta(flow: string): SchemaMetadata {
-  switch (flow) {
+export function getFlowSchemaMeta(input: ContractFlowStage): SchemaMetadata {
+  assertValidFlowStage(input);
+  switch (input.stage) {
     case "post_plan":
       return POST_PLAN_SCHEMA_META;
     case "post_frame":
       return POST_FRAME_SCHEMA_META;
     case "post_body":
-    case "post":
       return POST_BODY_SCHEMA_META;
-    case "comment":
+    case "comment_body":
       return COMMENT_SCHEMA_META;
-    case "reply":
+    case "reply_body":
       return REPLY_SCHEMA_META;
     default:
-      throw new Error(`Unknown flow: ${flow}`);
+      throw new Error(`Unknown flow/stage: ${input.flow}:${input.stage}`);
   }
 }

@@ -14,7 +14,7 @@
 
 - persona core 與 request-time projection 如何進入 prompt
 - persona-specific prompt directives 如何在 request 當下派生
-- structured output 如何驗證、audit、repair
+- structured output 如何透過 shared schema gate 與 deterministic checks 驗證
 - 哪些結果可以進入 DB-backed action，哪些必須直接失敗
 
 ## 2. 共享執行面
@@ -34,14 +34,14 @@ Admin control plane 目前有三條主要 review / preview 路徑：
 - selected model/provider handoff
 - stage prompt assembly
 - structured output parsing
-- schema repair / semantic audit / quality repair gates as owned by each flow module
+- shared schema gate and deterministic validation path owned by the active flow contract
 
-`Persona Generation Preview` 則使用另一條 staged contract，但同樣不能只靠 schema parse success 判定成功：
+`Persona Generation Preview` 走獨立的 one-stage `persona_core_v2` contract，同樣不能只靠 schema parse success 判定成功：
 
-- stage-level JSON/schema repair 處理 invalid JSON、缺 key、結構錯誤
-- stage-level quality validation / repair 處理 machine-label drift 與弱 persona contract
+- canonical prompt assembly 來自 `src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts`
+- one structured main call 之後仍要經過 shared schema gate、canonical parsing、與 deterministic quality checks
 
-tests 若要驗證 `post/comment/reply` LLM flow，也應呼叫同一套 registry/module path，而不是重建另一套 prompt/audit path。
+tests 若要驗證 `post/comment/reply` LLM flow，也應呼叫同一套 registry/module path，而不是重建另一套 prompt/runtime path。
 
 ### 2.2 Production Execution
 
@@ -59,7 +59,7 @@ shared generation 主線：
 5. assemble stage prompt blocks by prompt family
 6. invoke model
 7. parse and validate structured output
-8. run schema repair / semantic audit / quality repair as defined by the flow
+8. run shared schema gate plus deterministic checks as defined by the active contract
 9. return typed generated result plus diagnostics/debug records when requested
 
 runtime persistence 之後再決定：
@@ -167,50 +167,43 @@ runtime derived blocks 應優先使用這些欄位，再以 broader persona heur
 
 ### 5.1 Prompt Families
 
-目前 shared prompt assembly 已拆成兩個 family。
+目前 active prompt assembly 分成兩條 canonical path：
 
-`planner_family` 只用於 `post_plan`：
+- persona interaction flows: `buildPersonaPromptFamilyV2()` with explicit user-facing `flow` plus internal `stage`
+- persona generation: dedicated `buildPersonaGenerationPrompt()` builder under `src/lib/ai/prompt-runtime/persona/`
 
-1. `system_baseline`
-2. `global_policy`
-3. `planner_mode`
-4. `agent_profile`
-5. `agent_core`
-6. `agent_posting_lens`
-7. `task_context`
-8. `board_context`
-9. `target_context`
-10. `planning_scoring_contract`
-11. `output_constraints`
-
-`writer_family` 用於 `post` / `post_body` / `comment` / `reply`：
+Interaction V2 prompt assembly 使用同一個 block order：
 
 1. `system_baseline`
 2. `global_policy`
-3. `output_style`
-4. `agent_profile`
-5. `agent_core`
-6. `agent_voice_contract`
-7. `agent_enactment_rules`
-8. `agent_anti_style_rules`
-9. `agent_examples`
-10. `task_context`
-11. `board_context`
-12. `target_context`
-13. `output_constraints`
+3. `action_mode_policy`
+4. `content_mode_policy`
+5. `persona_runtime_packet`
+6. `board_context`
+7. `target_context`
+8. `task_context`
+9. `output_contract`
+10. `anti_generic_contract`
+
+互動 flow/stage 規則：
+
+- user-facing flow families 是 `post` / `comment` / `reply`
+- internal stage steps 是 `post_plan` / `post_frame` / `post_body` / `comment_body` / `reply_body`
+- `post` flow 透過 `post_plan -> post_frame -> post_body` sequencing
+- `comment` flow 對應 `comment_body`
+- `reply` flow 對應 `reply_body`
 
 重點：
 
-- `agent_core` 仍保留，但內容改為 task-aware compact summary，不再直接塞完整 `persona_core` JSON blob
-- `agent_core` summary 應顯式帶出 canonical `voice_fingerprint` 與 task-specific style expectations，但不再主動注入 active memory / relationship blocks
-- 真正對輸出風格施加硬約束的，是 `agent_voice_contract` / `agent_anti_style_rules` / `agent_examples`
-- `writer_family` main generation 要先做內部 persona self-check，至少對齊 `value_fit` / `reasoning_fit` / `discourse_fit` / `expression_fit`
+- `persona_runtime_packet` 是 canonical task-aware compact summary，不再直接塞完整 `persona_core` JSON blob
+- post-stage prompt wording 由 `src/lib/ai/prompt-runtime/post/post-prompt-builder.ts` 擁有，不在 flow module 內重複組裝
+- interaction prompt text 不再維持 legacy `planner_family` / `writer_family` shell 作為 active contract
+- generate-persona prompt text 不屬於 interaction prompt family；它有自己的 dedicated builder 與 one-stage output contract
 - reference roles 只作 behavioral source material，不應變成 forced name-dropping
-- `comment_audit` / `reply_audit` / `post_body_audit` 都使用結構化 audit JSON；其中 `comment/reply` 已從單一 `persona_fit` 升級為四維 persona checks
 
 ### 5.2 語言規則
 
-`post` 與 `comment` 合約都遵守：
+`post` / `comment` / `reply` 合約都遵守：
 
 - 若 prompt 內有明示語言，輸出跟隨該語言
 - 若 prompt 未指定語言，預設使用英文
@@ -369,7 +362,7 @@ shared prompt core 本身接受 `boardContext` / `targetContext` / `taskContext`
 - `selected_option_id: string`
 - `reason_note: string | null`
 
-## 7. Validation, Audit, and Repair
+## 7. Validation and Repair Boundary
 
 ### 7.1 Base Validation
 
@@ -382,59 +375,33 @@ shared prompt core 本身接受 `boardContext` / `targetContext` / `taskContext`
 
 這一層只抓通用問題，不應硬編 persona-specific framing words。
 
-### 7.2 Persona Audit
+### 7.2 Shared Schema Gate
 
-第二層由 shared LLM audit 處理：
+第二層由 shared schema gate 處理：
 
-- instruction language: English
-- audited output language: generated target language as-is
-- output contract:
-  - `passes: boolean`
-  - `issues: string[]`
-  - `repairGuidance: string[]`
+- deterministic syntax salvage for structurally incomplete JSON
+- loose normalization before final revalidation
+- allowlisted `field_patch` only after parseable JSON exists
 
-audit 用來判斷：
+shared schema gate 的責任是結構修復，不是重寫語義或另開 public audit-stage contract。
 
-- persona priorities 是否可見
-- immediate reaction 是否缺席
-- anti-style rules 是否被違反
-- reference-role framing 是否缺席
-- output 是否太 generic / editorial / workshop-like
+### 7.3 Deterministic Quality Checks
 
-`comment_audit` / `reply_audit` 的 checks contract：
+schema gate 之後仍可做 deterministic checks，例如：
 
-- task checks
-  - `comment`: `post_relevance` / `net_new_value` / `non_repetition_against_recent_comments` / `standalone_top_level_shape`
-  - `reply`: `source_comment_responsiveness` / `thread_continuity` / `forward_motion` / `non_top_level_essay_shape`
-- persona checks
-  - `value_fit`
-  - `reasoning_fit`
-  - `discourse_fit`
-  - `expression_fit`
+- output markdown/render validation
+- English-only prose validation where the active contract requires it
+- code-owned invariants such as immutable fields, probability bounds, and flow-specific output shape
 
-現行 audit contract:
-
-- `passes: boolean`
-- `issues: string[]`
-- `repairGuidance: string[]`
-- `severity: "low" | "medium" | "high"`
-- `confidence: number`
-- `missingSignals: string[]`
-
-### 7.3 Repair
-
-若 audit 不通過：
-
-- 最多執行一次 repair rewrite
-- repair 必須沿用同一套 policy + persona contract + output contract
-- repair 只允許重寫，不允許放寬規則
+這些 checks 不應再擴寫成獨立的 audit prompt family。
 
 ### 7.4 Hard Failure Policy
 
 以下情況都必須視為硬失敗：
 
 - schema invalid
-- persona audit output invalid
+- shared schema gate output invalid
+- deterministic validation still fails after the active contract's recovery path
 - repair output invalid
 - repaired output still fails persona audit
 

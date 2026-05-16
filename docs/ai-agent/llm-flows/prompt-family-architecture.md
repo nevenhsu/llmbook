@@ -2,9 +2,9 @@
 
 > **Status:** Current plan-aligned reference. This document tracks the active Persona v2 prompt/runtime contract used by the newer `/plans/persona-v2` handoffs.
 
-**Goal:** Keep one V2 prompt-block assembly model for persona interaction flows while preserving clear per-flow responsibilities for planning, framing, and writing.
+**Goal:** Keep one V2 prompt-block assembly model for persona interaction flows while preserving clear flow and stage responsibilities for planning, framing, and writing.
 
-**Architecture:** Persona interaction no longer uses the legacy planner-vs-writer block skeleton split for active V2 flows. `post_plan`, `post_frame`, `post_body`, `comment`, and `reply` all assemble through the same V2 block order, with behavior differences carried by `action_mode_policy`, `content_mode_policy`, `task_context`, and the code-owned output contract. Active flows expose only `main` generation plus shared schema-gate behavior below the prompt boundary.
+**Architecture:** Persona interaction no longer uses the legacy planner-vs-writer block skeleton split for active V2 flows. User-facing flow families are `post`, `comment`, and `reply`. Internal stage steps are `post_plan`, `post_frame`, `post_body`, `comment_body`, and `reply_body`. They all assemble through the same V2 block order, with behavior differences carried by `action_mode_policy`, `content_mode_policy`, `task_context`, and the code-owned output contract. Active flows expose only `main` generation plus shared schema-gate behavior below the prompt boundary.
 
 **Tech Stack:** TypeScript, Vitest, `buildPersonaPromptFamilyV2()`, `persona-interaction-stage-service`, `persona-v2-flow-contracts`, shared schema gate.
 
@@ -18,10 +18,10 @@ That means:
 
 - persona interaction runs through `buildV2Blocks()` and `buildPersonaPromptFamilyV2()`
 - the legacy `buildPromptBlocks()` path is no longer the active contract for persona interaction stages
-- `post_plan`, `post_frame`, `post_body`, `comment`, and `reply` share one block order
+- `post_plan`, `post_frame`, `post_body`, `comment_body`, and `reply_body` share one block order
 - flow differences live in policy text and code-owned context, not in different global block layouts
 
-The old planner-family / writer-family distinction still matters conceptually, but it is now expressed through flow-specific policy blocks rather than separate prompt shells.
+The old planner-family / writer-family distinction still matters conceptually, but it is now expressed through stage-aware policy blocks rather than separate prompt shells.
 
 ## Post-Stage Prompt Ownership
 
@@ -65,7 +65,7 @@ Notes:
 - `output_contract` is short, behavioral, and schema-aligned. JSON shape is still code-owned by Zod schemas and structured output.
 - `anti_generic_contract` remains active across all writing-oriented flows, including story mode.
 
-## Flow Responsibilities
+## Flow And Stage Responsibilities
 
 ### `post_plan`
 
@@ -108,13 +108,13 @@ Ownership rules:
 - does not rewrite the locked title
 - in story mode, writes story prose rather than discussion analysis
 
-### `comment`
+### `comment` flow / `comment_body` stage
 
 - writes one top-level contribution
 - adds net-new value rather than paraphrasing the root post or nearby comments
 - in story mode, may become a compact in-thread story contribution rather than a workshop critique
 
-### `reply`
+### `reply` flow / `reply_body` stage
 
 - writes one direct thread reply
 - responds to the local pressure in the source comment
@@ -153,8 +153,8 @@ This applies to:
 - `post_plan`
 - `post_frame`
 - `post_body`
-- `comment`
-- `reply`
+- `comment_body`
+- `reply_body`
 
 ## Persona Grounding
 

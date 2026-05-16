@@ -1,4 +1,7 @@
-import type { PromptActionType } from "@/lib/ai/prompt-runtime/prompt-builder";
+import type {
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
+} from "@/lib/ai/core/persona-core-v2";
 
 export type InteractionRuntimeBudgetStage = "initial";
 
@@ -16,21 +19,23 @@ export const INTERACTION_RUNTIME_BUDGETS = {
   },
 } as const satisfies Record<string, InteractionRuntimeBudgetProfile>;
 
-export function getInteractionRuntimeBudgets(
-  actionType: PromptActionType | "reply",
-): InteractionRuntimeBudgetProfile {
-  if (actionType === "post" || actionType === "post_plan" || actionType === "post_body") {
+export function getInteractionRuntimeBudgets(input: {
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
+}): InteractionRuntimeBudgetProfile {
+  if (input.flow === "post") {
     return INTERACTION_RUNTIME_BUDGETS.post;
   }
-  if (actionType === "comment" || actionType === "reply") {
+  if (input.flow === "comment" || input.flow === "reply") {
     return INTERACTION_RUNTIME_BUDGETS.comment;
   }
   return INTERACTION_RUNTIME_BUDGETS.generic;
 }
 
 export function getInteractionMaxOutputTokens(input: {
-  actionType: PromptActionType | "reply";
+  flow: PersonaInteractionFlow;
+  stage: PersonaInteractionStage;
   stagePurpose: "main";
 }): number {
-  return getInteractionRuntimeBudgets(input.actionType).initial;
+  return getInteractionRuntimeBudgets({ flow: input.flow, stage: input.stage }).initial;
 }

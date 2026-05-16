@@ -20,74 +20,112 @@ import {
 describe("persona-v2-flow-contracts", () => {
   describe("buildOutputContractV2", () => {
     it("includes metadata.probability for post_body", () => {
-      const contract = buildOutputContractV2({ flow: "post_body", contentMode: "discussion" });
-      expect(contract).toContain("metadata");
-      expect(contract).toContain("probability");
-      expect(contract).toContain("0 to 100");
-    });
-
-    it("includes metadata.probability for post", () => {
-      const contract = buildOutputContractV2({ flow: "post", contentMode: "discussion" });
-      expect(contract).toContain("metadata");
-      expect(contract).toContain("probability");
+      const contract = buildOutputContractV2({
+        flow: "post",
+        stage: "post_body",
+        contentMode: "discussion",
+      });
+      expect(contract).toContain("schema-bound JSON object");
+      expect(contract).toContain("language explicitly specified");
+      expect(contract).toContain("final image URL");
     });
 
     it("includes metadata.probability for comment", () => {
-      const contract = buildOutputContractV2({ flow: "comment", contentMode: "discussion" });
+      const contract = buildOutputContractV2({
+        flow: "comment",
+        stage: "comment_body",
+        contentMode: "discussion",
+      });
       expect(contract).toContain("metadata");
       expect(contract).toContain("probability");
     });
 
     it("includes metadata.probability for reply", () => {
-      const contract = buildOutputContractV2({ flow: "reply", contentMode: "discussion" });
+      const contract = buildOutputContractV2({
+        flow: "reply",
+        stage: "reply_body",
+        contentMode: "discussion",
+      });
       expect(contract).toContain("metadata");
       expect(contract).toContain("probability");
     });
 
     it("post_plan does NOT include metadata.probability", () => {
-      const contract = buildOutputContractV2({ flow: "post_plan", contentMode: "discussion" });
+      const contract = buildOutputContractV2({
+        flow: "post",
+        stage: "post_plan",
+        contentMode: "discussion",
+      });
       expect(contract).not.toContain("probability");
-      expect(contract).toContain("candidates");
+      expect(contract).toContain("schema-bound JSON object");
+      expect(contract).toContain("Do not write final post prose");
     });
 
     it("post_plan story mode maps to story title and idea", () => {
-      const contract = buildOutputContractV2({ flow: "post_plan", contentMode: "story" });
+      const contract = buildOutputContractV2({
+        flow: "post",
+        stage: "post_plan",
+        contentMode: "story",
+      });
       expect(contract).toContain("story");
-      expect(contract).toContain("candidates");
+      expect(contract).toContain("premise");
     });
 
     it("post_frame contract uses required_details and excludes locked_title", () => {
-      const contract = buildOutputContractV2({ flow: "post_frame", contentMode: "discussion" });
+      const contract = buildOutputContractV2({
+        flow: "post",
+        stage: "post_frame",
+        contentMode: "discussion",
+      });
       expect(contract).toContain("required_details");
       expect(contract).not.toContain("locked_title");
       expect(contract).not.toContain("content_mode");
     });
 
     it("post_body story mode keeps same JSON keys", () => {
-      const contract = buildOutputContractV2({ flow: "post_body", contentMode: "story" });
-      expect(contract).toContain("body");
-      expect(contract).toContain("tags");
+      const contract = buildOutputContractV2({
+        flow: "post",
+        stage: "post_body",
+        contentMode: "story",
+      });
+      expect(contract).toContain("schema-bound JSON object");
+      expect(contract).toContain("language explicitly specified");
       expect(contract).not.toContain("title");
-      expect(contract).toContain("metadata");
     });
 
     it("comment story mode keeps same markdown-plus-metadata contract", () => {
-      const contract = buildOutputContractV2({ flow: "comment", contentMode: "story" });
+      const contract = buildOutputContractV2({
+        flow: "comment",
+        stage: "comment_body",
+        contentMode: "story",
+      });
       expect(contract).toContain("markdown");
       expect(contract).toContain("metadata");
       expect(contract).not.toContain("title");
     });
 
     it("reply story mode keeps same markdown-plus-metadata contract", () => {
-      const contract = buildOutputContractV2({ flow: "reply", contentMode: "story" });
+      const contract = buildOutputContractV2({
+        flow: "reply",
+        stage: "reply_body",
+        contentMode: "story",
+      });
       expect(contract).toContain("markdown");
       expect(contract).toContain("metadata");
     });
 
     it("all writer contracts forbid mentioning prompt instructions", () => {
-      for (const flow of ["post_body", "post", "comment", "reply"] as const) {
-        const contract = buildOutputContractV2({ flow, contentMode: "discussion" });
-        expect(contract).toContain("Do not mention prompt instructions");
+      for (const input of [
+        { flow: "post" as const, stage: "post_body" as const },
+        { flow: "comment" as const, stage: "comment_body" as const },
+        { flow: "reply" as const, stage: "reply_body" as const },
+      ]) {
+        const contract = buildOutputContractV2({ ...input, contentMode: "discussion" });
+        if (input.flow === "post") {
+          expect(contract).toContain("schema-bound JSON object");
+        } else {
+          expect(contract).toContain("Do not mention prompt instructions");
+        }
       }
     });
   });
@@ -533,15 +571,30 @@ describe("Zod output schemas", () => {
     });
 
     it("getFlowSchemaMeta returns correct metadata", () => {
-      expect(getFlowSchemaMeta("post_plan").schemaName).toBe("PostPlanOutputSchema");
-      expect(getFlowSchemaMeta("post_frame").schemaName).toBe("PostFrameSchema");
-      expect(getFlowSchemaMeta("post_body").schemaName).toBe("PostBodyOutputSchema");
-      expect(getFlowSchemaMeta("comment").schemaName).toBe("CommentOutputSchema");
-      expect(getFlowSchemaMeta("reply").schemaName).toBe("ReplyOutputSchema");
+      expect(getFlowSchemaMeta({ flow: "post", stage: "post_plan" }).schemaName).toBe(
+        "PostPlanOutputSchema",
+      );
+      expect(getFlowSchemaMeta({ flow: "post", stage: "post_frame" }).schemaName).toBe(
+        "PostFrameSchema",
+      );
+      expect(getFlowSchemaMeta({ flow: "post", stage: "post_body" }).schemaName).toBe(
+        "PostBodyOutputSchema",
+      );
+      expect(getFlowSchemaMeta({ flow: "comment", stage: "comment_body" }).schemaName).toBe(
+        "CommentOutputSchema",
+      );
+      expect(getFlowSchemaMeta({ flow: "reply", stage: "reply_body" }).schemaName).toBe(
+        "ReplyOutputSchema",
+      );
     });
 
     it("getFlowSchemaMeta throws for unknown flow", () => {
-      expect(() => getFlowSchemaMeta("unknown")).toThrow();
+      expect(() =>
+        getFlowSchemaMeta({
+          flow: "comment" as "comment",
+          stage: "post_plan" as "post_plan",
+        }),
+      ).toThrow();
     });
   });
 });

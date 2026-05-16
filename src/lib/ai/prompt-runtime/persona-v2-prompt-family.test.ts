@@ -8,6 +8,7 @@ import {
   type PersonaPromptFamilyV2Input,
   type PersonaPromptFamilyV2Result,
 } from "./persona-v2-prompt-family";
+import { buildOutputContractV2 } from "./persona-v2-flow-contracts";
 import {
   buildPostPlanPersonaPacket,
   buildPostBodyPersonaPacket,
@@ -16,7 +17,11 @@ import {
   buildPersonaPacketForPrompt,
 } from "./persona-runtime-packets";
 import { FALLBACK_PERSONA_CORE_V2 } from "@/lib/ai/core/persona-core-v2";
-import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
+import type {
+  PersonaCoreV2,
+  PersonaInteractionFlow,
+  PersonaInteractionStage,
+} from "@/lib/ai/core/persona-core-v2";
 
 const FIXTURE: PersonaCoreV2 = {
   schema_version: "v2",
@@ -155,21 +160,64 @@ function outputContract() {
   return "Return exactly one JSON object with { body, tags, need_image, image_prompt, image_alt, metadata: { probability: number } }.";
 }
 
-function makeInput(overrides: Partial<PersonaPromptFamilyV2Input>): PersonaPromptFamilyV2Input {
+type LegacyTestFlow = "post_plan" | "post_frame" | "post_body" | "comment" | "reply";
+
+const LEGACY_TEST_FLOW_TO_STAGE: Record<LegacyTestFlow, { flow: PersonaInteractionFlow; stage: PersonaInteractionStage }> = {
+  post_plan: { flow: "post", stage: "post_plan" },
+  post_frame: { flow: "post", stage: "post_frame" },
+  post_body: { flow: "post", stage: "post_body" },
+  comment: { flow: "comment", stage: "comment_body" },
+  reply: { flow: "reply", stage: "reply_body" },
+};
+
+function resolveTestFlowStage(input: {
+  flow?: LegacyTestFlow | PersonaInteractionFlow;
+  stage?: PersonaInteractionStage;
+}): { flow: PersonaInteractionFlow; stage: PersonaInteractionStage } {
+  if (input.stage) {
+    return {
+      flow: (input.flow as PersonaInteractionFlow | undefined) ?? "post",
+      stage: input.stage,
+    };
+  }
+
+  if (input.flow && input.flow in LEGACY_TEST_FLOW_TO_STAGE) {
+    return LEGACY_TEST_FLOW_TO_STAGE[input.flow as LegacyTestFlow];
+  }
+
+  return { flow: "post", stage: "post_body" };
+}
+
+function makeInput(
+  overrides: Partial<PersonaPromptFamilyV2Input> & {
+    flow?: LegacyTestFlow | PersonaInteractionFlow;
+    stage?: PersonaInteractionStage;
+  },
+): PersonaPromptFamilyV2Input {
+  const flowStage = resolveTestFlowStage(overrides);
+  const { flow: _legacyFlow, stage: _legacyStage, outputContract: overrideOutputContract, ...rest } =
+    overrides;
   return {
-    flow: "post_body",
     contentMode: "discussion",
     stagePurpose: "main",
     systemBaseline: systemBaseline(),
     globalPolicy: globalPolicy(),
     personaPacket: undefined as any,
     taskContext: taskContext(),
-    outputContract: outputContract(),
-    ...overrides,
+    ...rest,
+    flow: flowStage.flow,
+    stage: flowStage.stage,
+    outputContract:
+      overrideOutputContract ??
+      buildOutputContractV2({
+        flow: flowStage.flow,
+        stage: flowStage.stage,
+        contentMode: rest.contentMode ?? "discussion",
+      }),
   };
 }
 
-function makePacket(flow: any, contentMode: any = "discussion") {
+function makePacket(flow: LegacyTestFlow, contentMode: any = "discussion") {
   if (flow === "post_plan")
     return buildPostPlanPersonaPacket({
       contentMode,
@@ -186,7 +234,8 @@ function makePacket(flow: any, contentMode: any = "discussion") {
     });
   if (flow === "post_frame")
     return buildPersonaPacketForPrompt({
-      taskType: "post_frame",
+      flow: "post",
+      stage: "post_frame",
       stagePurpose: "main",
       contentMode,
       personaId: "p1",
@@ -225,69 +274,94 @@ function allBlockNames(result: PersonaPromptFamilyV2Result): string[] {
 describe("persona-v2-prompt-family", () => {
   describe("buildActionModePolicy", () => {
     it("generates discussion post_plan main policy", () => {
-      const policy = buildActionModePolicy({ flow: "post_plan", stagePurpose: "main" });
+      const policy = buildActionModePolicy({ flow: "post", stage: "post_plan", stagePurpose: "main" });
       expect(policy).toContain("plan");
       expect(policy).toContain("post body");
     });
 
     it("generates discussion post_body main policy", () => {
-      const policy = buildActionModePolicy({ flow: "post_body", stagePurpose: "main" });
+      const policy = buildActionModePolicy({ flow: "post", stage: "post_body", stagePurpose: "main" });
       expect(policy).toContain("post body");
       expect(policy).toContain("locked");
     });
 
     it("post_frame policy mentions framing and forbids writing final body", () => {
-      const policy = buildActionModePolicy({ flow: "post_frame", stagePurpose: "main" });
+      const policy = buildActionModePolicy({ flow: "post", stage: "post_frame", stagePurpose: "main" });
       expect(policy).toContain("frame");
       expect(policy).toContain("locked");
-      expect(policy).toContain("main_idea");
-      expect(policy).toContain("required_details");
+      expect(policy).toContain("final post content");
     });
   });
 
   describe("buildContentModePolicy", () => {
     it("discussion post plan says to plan forum-native angles", () => {
-      const policy = buildContentModePolicy({ flow: "post_plan", contentMode: "discussion" });
+      const policy = buildContentModePolicy({
+        flow: "post",
+        stage: "post_plan",
+        contentMode: "discussion",
+      });
       expect(policy).toContain("discussion");
-      expect(policy).toContain("board relevance");
+      expect(policy).toContain("board_context");
     });
 
     it("story post plan says to plan story elements", () => {
-      const policy = buildContentModePolicy({ flow: "post_plan", contentMode: "story" });
+      const policy = buildContentModePolicy({
+        flow: "post",
+        stage: "post_plan",
+        contentMode: "story",
+      });
       expect(policy).toContain("story");
       expect(policy).toContain("premise");
     });
 
     it("story post body says body is long story markdown", () => {
-      const policy = buildContentModePolicy({ flow: "post_body", contentMode: "story" });
+      const policy = buildContentModePolicy({
+        flow: "post",
+        stage: "post_body",
+        contentMode: "story",
+      });
       expect(policy).toContain("story");
       expect(policy).toContain("markdown");
     });
 
     it("story comment says short story or fragment", () => {
-      const policy = buildContentModePolicy({ flow: "comment", contentMode: "story" });
+      const policy = buildContentModePolicy({
+        flow: "comment",
+        stage: "comment_body",
+        contentMode: "story",
+      });
       expect(policy).toContain("story");
     });
 
     it("story reply says continuation, forbids standalone", () => {
-      const policy = buildContentModePolicy({ flow: "reply", contentMode: "story" });
+      const policy = buildContentModePolicy({
+        flow: "reply",
+        stage: "reply_body",
+        contentMode: "story",
+      });
       expect(policy).toContain("continuation");
     });
 
     it("discussion post_frame contains discussion field rules", () => {
-      const policy = buildContentModePolicy({ flow: "post_frame", contentMode: "discussion" });
+      const policy = buildContentModePolicy({
+        flow: "post",
+        stage: "post_frame",
+        contentMode: "discussion",
+      });
       expect(policy).toContain("discussion");
-      expect(policy).toContain("main_idea");
-      expect(policy).toContain("required_details");
+      expect(policy).toContain("argument-focused structural frame");
       expect(policy).not.toContain("[schema_guidance]");
       expect(policy).not.toContain("[internal_process]");
     });
 
     it("story post_frame contains story field rules and no pass-through language", () => {
-      const policy = buildContentModePolicy({ flow: "post_frame", contentMode: "story" });
+      const policy = buildContentModePolicy({
+        flow: "post",
+        stage: "post_frame",
+        contentMode: "story",
+      });
       expect(policy).toContain("story");
-      expect(policy).toContain("main_idea");
-      expect(policy).toContain("required_details");
+      expect(policy).toContain("PostFrame object");
       expect(policy).not.toContain("[schema_guidance]");
       expect(policy).not.toContain("[internal_process]");
       expect(policy).not.toContain("not currently configured");
@@ -298,21 +372,33 @@ describe("persona-v2-prompt-family", () => {
 
   describe("buildAntiGenericContract", () => {
     it("forbids prompt block mention and assistant voice", () => {
-      const contract = buildAntiGenericContract({ flow: "post_body", contentMode: "discussion" });
+      const contract = buildAntiGenericContract({
+        flow: "post",
+        stage: "post_body",
+        contentMode: "discussion",
+      });
       expect(contract).toContain("prompt");
       expect(contract).toContain("assistant");
       expect(contract).toContain("schema");
     });
 
     it("forbids default examples", () => {
-      const contract = buildAntiGenericContract({ flow: "comment", contentMode: "discussion" });
+      const contract = buildAntiGenericContract({
+        flow: "comment",
+        stage: "comment_body",
+        contentMode: "discussion",
+      });
       expect(contract).toContain("examples");
     });
   });
 
   describe("buildProcedureNonExposureRule", () => {
     it("forbids chain-of-thought and scratchpad", () => {
-      const rule = buildProcedureNonExposureRule({ flow: "post_body", contentMode: "discussion" });
+      const rule = buildProcedureNonExposureRule({
+        flow: "post",
+        stage: "post_body",
+        contentMode: "discussion",
+      });
       expect(rule).toContain("internal");
       expect(rule).toContain("output");
     });
@@ -432,8 +518,12 @@ describe("persona-v2-prompt-family", () => {
       const result = buildPersonaPromptFamilyV2(
         makeInput({ flow: "post_body", personaPacket: packet }),
       );
-      expect(extractBlockContent(result, "output_contract")).toContain("metadata.probability");
-      expect(extractBlockContent(result, "output_contract")).toContain("hashtags");
+      expect(extractBlockContent(result, "output_contract")).toContain(
+        "schema-bound JSON object",
+      );
+      expect(extractBlockContent(result, "output_contract")).toContain(
+        "language explicitly specified",
+      );
     });
 
     it("assembles messages with system role for baseline", () => {

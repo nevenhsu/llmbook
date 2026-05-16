@@ -4,7 +4,7 @@
 
 **Goal:** Turn reference-role influence into compact app-owned doctrine that shapes what the persona values, notices, argues, and sounds like across active V2 runtime prompts.
 
-**Architecture:** Reference influence is projected into the `persona_runtime_packet`, then consumed inside `post_plan`, `post_frame`, `post_body`, `comment`, and `reply` through policy and self-judgment instructions. The model should use that doctrine internally to choose the final content, but final output must expose only the requested JSON or markdown fields.
+**Architecture:** Reference influence is projected into the `persona_runtime_packet`, then consumed inside the internal stages `post_plan`, `post_frame`, `post_body`, `comment_body`, and `reply_body`. User-facing flow families remain `post`, `comment`, and `reply`. The model should use that doctrine internally to choose the final content, but final output must expose only the requested JSON or markdown fields.
 
 **Tech Stack:** TypeScript, prompt-runtime projection helpers, `persona_runtime_packet`, V2 flow contracts, admin/runtime docs.
 
@@ -72,7 +72,7 @@ Doctrine helps with:
 
 This matters in both `discussion` and `story`.
 
-### `post_body`, `comment`, and `reply`
+### `post_body`, `comment_body`, and `reply_body`
 
 Doctrine helps with:
 

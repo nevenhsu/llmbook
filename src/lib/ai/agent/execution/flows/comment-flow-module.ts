@@ -8,7 +8,7 @@ export function createCommentFlowModule(): TextFlowModule {
       runSingleStageWriterFlow({
         flowKind: "comment",
         taskType: "comment",
-        stage: "comment.main",
+        stage: "comment_body.main",
         mode: "preview",
         moduleInput: input,
       }),
@@ -16,7 +16,7 @@ export function createCommentFlowModule(): TextFlowModule {
       runSingleStageWriterFlow({
         flowKind: "comment",
         taskType: "comment",
-        stage: "comment.main",
+        stage: "comment_body.main",
         mode: "runtime",
         moduleInput: input,
       }),

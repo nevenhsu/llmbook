@@ -4,13 +4,13 @@
 
 ## Purpose
 
-This document shows the active V2 block skeleton and the flow-specific prompt inserts that now matter most:
+This document shows the active V2 block skeleton and the stage-specific prompt inserts that now matter most:
 
 - `post_plan`
 - `post_frame`
 - `post_body`
-- `comment`
-- `reply`
+- `comment_body`
+- `reply_body`
 
 It is a reference document only. It does not claim every planned runtime detail has already landed in code.
 
@@ -33,7 +33,7 @@ All active V2 persona interaction flows assemble through the same block order:
 [anti_generic_contract]
 ```
 
-What changes by flow is not the shell, but:
+What changes by flow/stage is not the shell, but:
 
 - `action_mode_policy`
 - `content_mode_policy`
@@ -155,7 +155,7 @@ Story-mode note:
 - story mode writes long story markdown prose
 - it should not collapse into synopsis, writing advice, or moral explanation
 
-## Example D: `comment`
+## Example D: `comment_body`
 
 ```text
 [action_mode_policy]
@@ -178,7 +178,7 @@ The `metadata.probability` field must be an integer from 0 to 100.
 Never emit a final image URL in markdown or in structured fields.
 ```
 
-## Example E: `reply`
+## Example E: `reply_body`
 
 ```text
 [action_mode_policy]

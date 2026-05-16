@@ -121,7 +121,7 @@ export async function runSingleStageWriterFlow(input: {
         boardContextText: promptContext.boardContextText,
         targetContextText: promptContext.targetContextText,
         debug: input.moduleInput.debug,
-        attemptLabel: `${input.flowKind}.main`,
+        attemptLabel: input.stage,
         executionMode: input.mode === "runtime" ? "runtime" : "admin_preview",
       });
       collectDebugRecords(preview);

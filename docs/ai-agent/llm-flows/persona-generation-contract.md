@@ -30,6 +30,8 @@ Persona generation stays on its own dedicated prompt path.
 
 It should not reuse `planner_family` or `writer_family`.
 
+Canonical prompt assembly lives in [generation-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/persona/generation-prompt-builder.ts). Admin `View Prompt` and runtime invocation should both consume that builder rather than maintaining a preview-only template path.
+
 For `persona_core_v2`:
 
 - `[task]`, `[input]`, `[reference_rules]`, `[persona_rules]`, `[fit_probability]`, `[compactness]`, `[internal_process]`, and `[output_validation]` define the compact prompt shape
