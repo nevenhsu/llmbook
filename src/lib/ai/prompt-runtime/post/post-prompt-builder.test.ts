@@ -57,14 +57,14 @@ function buildFrame(overrides: Partial<PostFrame> = {}): PostFrame {
 
 describe("buildPostStageActionModePolicy", () => {
   it("post_plan mentions planning and forbids writing final body", () => {
-    const policy = buildPostStageActionModePolicy({ flow: "post", stage: "post_plan" });
+    const policy = buildPostStageActionModePolicy({ stage: "post_plan", contentMode: "discussion" });
     expect(policy).toContain("candidate post plans");
     expect(policy).toContain("candidate");
     expect(policy).toContain("final post body");
   });
 
   it("post_frame mentions frame, locked title, flat object, and forbids writing final body", () => {
-    const policy = buildPostStageActionModePolicy({ flow: "post", stage: "post_frame" });
+    const policy = buildPostStageActionModePolicy({ stage: "post_frame", contentMode: "discussion" });
     expect(policy).toContain("frame");
     expect(policy).toContain("locked");
     expect(policy).toContain("flat object");
@@ -73,7 +73,7 @@ describe("buildPostStageActionModePolicy", () => {
   });
 
   it("post_body mentions writing final body and locked title", () => {
-    const policy = buildPostStageActionModePolicy({ flow: "post", stage: "post_body" });
+    const policy = buildPostStageActionModePolicy({ stage: "post_body", contentMode: "discussion" });
     expect(policy).toContain("final post body");
     expect(policy).toContain("locked title");
   });
@@ -83,7 +83,6 @@ describe("buildPostStageContentModePolicy", () => {
   describe("discussion mode", () => {
     it("post_plan says to plan forum-native angles", () => {
       const policy = buildPostStageContentModePolicy({
-        flow: "post",
         stage: "post_plan",
         contentMode: "discussion",
       });
@@ -94,7 +93,6 @@ describe("buildPostStageContentModePolicy", () => {
 
     it("post_frame contains discussion field contracts", () => {
       const policy = buildPostStageContentModePolicy({
-        flow: "post",
         stage: "post_frame",
         contentMode: "discussion",
       });
@@ -113,7 +111,6 @@ describe("buildPostStageContentModePolicy", () => {
 
     it("post_body says write forum-native markdown, not fiction", () => {
       const policy = buildPostStageContentModePolicy({
-        flow: "post",
         stage: "post_body",
         contentMode: "discussion",
       });
@@ -126,7 +123,6 @@ describe("buildPostStageContentModePolicy", () => {
   describe("story mode", () => {
     it("post_plan says to plan story elements", () => {
       const policy = buildPostStageContentModePolicy({
-        flow: "post",
         stage: "post_plan",
         contentMode: "story",
       });
@@ -137,7 +133,6 @@ describe("buildPostStageContentModePolicy", () => {
 
     it("post_frame contains story field contracts", () => {
       const policy = buildPostStageContentModePolicy({
-        flow: "post",
         stage: "post_frame",
         contentMode: "story",
       });
@@ -152,7 +147,6 @@ describe("buildPostStageContentModePolicy", () => {
 
     it("post_body says write long story markdown prose", () => {
       const policy = buildPostStageContentModePolicy({
-        flow: "post",
         stage: "post_body",
         contentMode: "story",
       });
@@ -166,17 +160,14 @@ describe("buildPostStageContentModePolicy", () => {
 describe("post-frame helper blocks", () => {
   it("renders stage-specific schema_guidance across post stages", () => {
     const planBlock = buildPostStageSchemaGuidanceBlock({
-      flow: "post",
       stage: "post_plan",
       contentMode: "discussion",
     });
     const frameBlock = buildPostStageSchemaGuidanceBlock({
-      flow: "post",
       stage: "post_frame",
       contentMode: "discussion",
     });
     const bodyBlock = buildPostStageSchemaGuidanceBlock({
-      flow: "post",
       stage: "post_body",
       contentMode: "discussion",
     });
@@ -191,22 +182,18 @@ describe("post-frame helper blocks", () => {
 
   it("renders stage-specific internal_process and switches by content mode", () => {
     const planBlock = buildPostStageInternalProcessBlock({
-      flow: "post",
       stage: "post_plan",
       contentMode: "discussion",
     });
     const discussionBlock = buildPostStageInternalProcessBlock({
-      flow: "post",
       stage: "post_frame",
       contentMode: "discussion",
     });
     const storyBlock = buildPostStageInternalProcessBlock({
-      flow: "post",
       stage: "post_frame",
       contentMode: "story",
     });
     const bodyBlock = buildPostStageInternalProcessBlock({
-      flow: "post",
       stage: "post_body",
       contentMode: "discussion",
     });
@@ -222,7 +209,7 @@ describe("post-frame helper blocks", () => {
   });
 
   it("exposes canonical post block order and post-owned block assembly", () => {
-    const order = getPostPromptBlockOrder({ flow: "post", stage: "post_frame" });
+    const order = getPostPromptBlockOrder();
     const blocks = buildPostOwnedPromptBlockContent({
       flow: "post",
       stage: "post_frame",
@@ -252,7 +239,6 @@ describe("post-frame helper blocks", () => {
 describe("buildPostStageTaskContext", () => {
   it("post_plan wraps baseTaskContext with planning-only instructions", () => {
     const ctx = buildPostStageTaskContext({
-      flow: "post",
       stage: "post_plan",
       contentMode: "discussion",
     });
@@ -264,7 +250,6 @@ describe("buildPostStageTaskContext", () => {
 
   it("post_plan handles empty baseTaskContext gracefully", () => {
     const ctx = buildPostStageTaskContext({
-      flow: "post",
       stage: "post_plan",
       contentMode: "discussion",
     });
@@ -274,7 +259,6 @@ describe("buildPostStageTaskContext", () => {
 
   it("post_frame for discussion uses claim/argument field guidance", () => {
     const ctx = buildPostStageTaskContext({
-      flow: "post",
       stage: "post_frame",
       contentMode: "discussion",
     });
@@ -286,7 +270,6 @@ describe("buildPostStageTaskContext", () => {
 
   it("post_frame for story uses premise/narrative field guidance", () => {
     const ctx = buildPostStageTaskContext({
-      flow: "post",
       stage: "post_frame",
       contentMode: "story",
     });
@@ -298,7 +281,6 @@ describe("buildPostStageTaskContext", () => {
 
   it("post_body enforces locked title and frame-guidance binding", () => {
     const ctx = buildPostStageTaskContext({
-      flow: "post",
       stage: "post_body",
       contentMode: "discussion",
     });
@@ -391,7 +373,7 @@ describe("no retired labels leak into prompt text", () => {
 
   it("action mode policy never mentions retired stage labels", () => {
     for (const stage of allStages) {
-      const policy = buildPostStageActionModePolicy({ flow: "post", stage });
+      const policy = buildPostStageActionModePolicy({ stage, contentMode: "discussion" });
       expect(policy).not.toContain("planner_mode");
       expect(policy).not.toContain("writer");
       expect(policy).not.toContain("agent_profile");
@@ -403,7 +385,6 @@ describe("no retired labels leak into prompt text", () => {
     for (const stage of allStages) {
       for (const mode of ["discussion", "story"] as const) {
         const policy = buildPostStageContentModePolicy({
-          flow: "post",
           stage,
           contentMode: mode,
         });
@@ -418,7 +399,6 @@ describe("no retired labels leak into prompt text", () => {
   it("task context never mentions retired stage labels", () => {
     for (const stage of allStages) {
       const ctx = buildPostStageTaskContext({
-        flow: "post",
         stage,
         contentMode: "discussion",
       });
@@ -446,7 +426,6 @@ describe("no retired labels leak into prompt text", () => {
 describe("buildPostStageOutputContract", () => {
   it("post_plan discussion requires candidates, scores, and forbids prompt mention", () => {
     const contract = buildPostStageOutputContract({
-      flow: "post",
       stage: "post_plan",
       contentMode: "discussion",
     });
@@ -459,7 +438,6 @@ describe("buildPostStageOutputContract", () => {
 
   it("post_plan story mode maps to story title and premise", () => {
     const contract = buildPostStageOutputContract({
-      flow: "post",
       stage: "post_plan",
       contentMode: "story",
     });
@@ -470,7 +448,6 @@ describe("buildPostStageOutputContract", () => {
 
   it("post_frame uses required_details and forbids markdown", () => {
     const contract = buildPostStageOutputContract({
-      flow: "post",
       stage: "post_frame",
       contentMode: "discussion",
     });
@@ -482,7 +459,6 @@ describe("buildPostStageOutputContract", () => {
 
   it("post_body discussion includes body, tags, and metadata.probability", () => {
     const contract = buildPostStageOutputContract({
-      flow: "post",
       stage: "post_body",
       contentMode: "discussion",
     });
@@ -497,7 +473,6 @@ describe("buildPostStageOutputContract", () => {
 
   it("post_body story mode adds story prose guidance", () => {
     const contract = buildPostStageOutputContract({
-      flow: "post",
       stage: "post_body",
       contentMode: "story",
     });
@@ -509,7 +484,6 @@ describe("buildPostStageOutputContract", () => {
   it("all post stages forbid mentioning prompt instructions", () => {
     for (const stage of ["post_plan", "post_frame", "post_body"] as CanonicalPostStage[]) {
       const contract = buildPostStageOutputContract({
-        flow: "post",
         stage,
         contentMode: "discussion",
       });
@@ -520,7 +494,7 @@ describe("buildPostStageOutputContract", () => {
 
 describe("buildPostStageAntiGenericContract", () => {
   it("forbids prompt block mention, assistant voice, and default examples", () => {
-    const contract = buildPostStageAntiGenericContract({ flow: "post", stage: "post_plan" });
+    const contract = buildPostStageAntiGenericContract({ stage: "post_plan", contentMode: "discussion" });
     expect(contract).toContain("prompt blocks");
     expect(contract).toContain("generic assistant");
     expect(contract).toContain("JSON schema");
@@ -528,16 +502,16 @@ describe("buildPostStageAntiGenericContract", () => {
   });
 
   it("produces identical text for all three post stages", () => {
-    const plan = buildPostStageAntiGenericContract({ flow: "post", stage: "post_plan" });
-    const frame = buildPostStageAntiGenericContract({ flow: "post", stage: "post_frame" });
-    const body = buildPostStageAntiGenericContract({ flow: "post", stage: "post_body" });
+    const plan = buildPostStageAntiGenericContract({ stage: "post_plan", contentMode: "discussion" });
+    const frame = buildPostStageAntiGenericContract({ stage: "post_frame", contentMode: "discussion" });
+    const body = buildPostStageAntiGenericContract({ stage: "post_body", contentMode: "discussion" });
     expect(frame).toBe(plan);
     expect(body).toBe(plan);
   });
 
   it("never mentions retired stage labels", () => {
     for (const stage of ["post_plan", "post_frame", "post_body"] as CanonicalPostStage[]) {
-      const contract = buildPostStageAntiGenericContract({ flow: "post", stage });
+      const contract = buildPostStageAntiGenericContract({ stage, contentMode: "discussion" });
       expect(contract).not.toContain("planner_mode");
       expect(contract).not.toContain("writer");
     }

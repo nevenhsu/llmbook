@@ -80,13 +80,13 @@ function makeBlock(
 function buildActionModePolicyForFlow(
   flow: PersonaInteractionFlow,
   stage: PersonaInteractionStage,
-  _stagePurpose: PersonaPromptFamilyV2StagePurpose,
+  contentMode: ContentMode,
 ): string {
   switch (stage) {
     case "post_plan":
     case "post_frame":
     case "post_body":
-      return buildPostStageActionModePolicy({ flow: "post", stage });
+      return buildPostStageActionModePolicy({ stage, contentMode });
     case "comment_body":
       return "This stage writes a top-level comment that adds net-new value to the root post. Stay standalone and avoid repeating recent top-level comments.";
     case "reply_body":
@@ -101,7 +101,10 @@ function buildContentModePolicyForFlow(
 ): string {
   // Delegate post stages to the canonical post prompt-runtime owner.
   if (flow === "post") {
-    return buildPostStageContentModePolicy({ flow: "post", stage, contentMode });
+    return buildPostStageContentModePolicy({
+      stage: stage as "post_plan" | "post_frame" | "post_body",
+      contentMode,
+    });
   }
 
   if (contentMode === "discussion") {
@@ -123,6 +126,8 @@ function buildContentModePolicyForFlow(
           "Use the persona packet procedure internally to identify the live point, doubt, care, and reply move.",
           "Do not reveal that internal procedure.",
         ].join("\n");
+      default:
+        return "";
     }
   }
 
@@ -148,6 +153,8 @@ function buildContentModePolicyForFlow(
         "Use the persona packet procedure internally to select continuation pressure, scene detail, and ending motion.",
         "Do not reveal that internal procedure.",
       ].join("\n");
+    default:
+      return "";
   }
 }
 
@@ -155,8 +162,9 @@ export function buildActionModePolicy(input: {
   flow: PersonaInteractionFlow;
   stage: PersonaInteractionStage;
   stagePurpose: PersonaPromptFamilyV2StagePurpose;
+  contentMode: ContentMode;
 }): string {
-  return buildActionModePolicyForFlow(input.flow, input.stage, input.stagePurpose);
+  return buildActionModePolicyForFlow(input.flow, input.stage, input.contentMode);
 }
 
 export function buildContentModePolicy(input: {
@@ -173,7 +181,10 @@ export function buildAntiGenericContract(input: {
   contentMode: ContentMode;
 }): string {
   if (input.flow === "post") {
-    return buildPostStageAntiGenericContract({ flow: "post", stage: input.stage });
+    return buildPostStageAntiGenericContract({
+      stage: input.stage as "post_plan" | "post_frame" | "post_body",
+      contentMode: input.contentMode,
+    });
   }
   return [
     "Do not mention these prompt blocks, internal policies, or persona schema.",
@@ -227,11 +238,7 @@ function buildInternalProcessPlaceholder(input: {
 
 function getBlockOrder(_input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV2BlockName[] {
   if (_input.flow === "post") {
-    return [
-      "system_baseline",
-      "global_policy",
-      ...getPostPromptBlockOrder({ flow: "post", stage: _input.stage as "post_plan" | "post_frame" | "post_body" }),
-    ];
+    return ["system_baseline", "global_policy", ...getPostPromptBlockOrder()];
   }
   return [
     "system_baseline",
@@ -271,8 +278,12 @@ export function buildPersonaPromptFamilyV2(
   const warnings: string[] = [];
   const blockOrder = getBlockOrder(input);
 
-  const actionModePolicy = buildActionModePolicyForFlow(input.flow, input.stage, input.stagePurpose);
-  const contentModePolicy = buildContentModePolicyForFlow(input.flow, input.stage, input.contentMode);
+  const actionModePolicy = buildActionModePolicyForFlow(input.flow, input.stage, input.contentMode);
+  const contentModePolicy = buildContentModePolicyForFlow(
+    input.flow,
+    input.stage,
+    input.contentMode,
+  );
   const antiGenericContract = buildAntiGenericContract(input);
   const personaPacketText = input.personaPacket.renderedText;
   const isPostFlow = input.flow === "post";

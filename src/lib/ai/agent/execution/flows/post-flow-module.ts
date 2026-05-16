@@ -160,7 +160,7 @@ async function runPostFlow(
     let preview = await invokeStage({
       flow: "post",
       stage: "post_plan",
-      taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_plan", contentMode }),
+      taskContext: buildPostStageTaskContext({ stage: "post_plan", contentMode }),
       targetContextText: promptContext.targetContextText,
       attemptLabel: "post_plan.main",
     });
@@ -216,7 +216,7 @@ async function runPostFlow(
     const framePreview = await invokeStage({
       flow: "post",
       stage: "post_frame",
-      taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_frame", contentMode }),
+      taskContext: buildPostStageTaskContext({ stage: "post_frame", contentMode }),
       targetContextText: renderSelectedPostPlanTargetContext(selectedPostPlan),
       attemptLabel: "post_frame.main",
     });
@@ -265,7 +265,7 @@ async function runPostFlow(
     bodyPreview = await invokeStage({
       flow: "post",
       stage: "post_body",
-      taskContext: buildPostStageTaskContext({ flow: "post", stage: "post_body", contentMode }),
+      taskContext: buildPostStageTaskContext({ stage: "post_body", contentMode }),
       targetContextText: combinedTargetContext,
       attemptLabel: "post_body.main",
     });
