@@ -16,7 +16,7 @@ export function derivePersonaUsername(displayName: string): string {
   return deriveSharedPersonaUsername(displayName);
 }
 
-export function defaultInteractionTaskContext(taskType: "post" | "comment" | "reply"): string {
+export function defaultInteractionTargetContext(taskType: "post" | "comment" | "reply"): string {
   if (taskType === "post") {
     return "Write a post about Cthulhu-themed worldbuilding and creature design for the forum.";
   }

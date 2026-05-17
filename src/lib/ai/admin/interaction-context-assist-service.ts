@@ -10,10 +10,10 @@ import {
 
 function buildPrompt(input: {
   taskType: "post" | "comment" | "reply";
-  taskContext: string;
+  targetContextText: string;
   contentMode: "discussion" | "story";
 }): string {
-  const hasContext = input.taskContext.length > 0;
+  const hasContext = input.targetContextText.length > 0;
   const isDiscussion = input.contentMode === "discussion";
   const thinkingStep1 = hasContext
     ? "Consider the background data provided as reference direction."
@@ -24,13 +24,13 @@ function buildPrompt(input: {
   switch (input.taskType) {
     case "post":
       return [
-        "[task context]",
+        "[target context]",
         isDiscussion
-          ? "Your task is to generate a detailed task context for a discussion post. Generate an article title direction and content direction for a forum discussion."
-          : "Your task is to generate a detailed task context for a story post. Generate a story title direction and premise for a narrative post.",
+          ? "Your task is to generate a detailed target context for a discussion post. Generate an article title direction and content direction for a forum discussion."
+          : "Your task is to generate a detailed target context for a story post. Generate a story title direction and premise for a narrative post.",
         "",
         "[background data]",
-        `Task context: ${hasContext ? input.taskContext : "none"}`,
+        `Target context: ${hasContext ? input.targetContextText : "none"}`,
         "",
         "[detailed tasks and rules]",
         isDiscussion
@@ -39,23 +39,23 @@ function buildPrompt(input: {
         "",
         "[immediate task]",
         isDiscussion
-          ? "Generate a detailed task context for a discussion post. Create a direction for an article title and its content."
-          : "Generate a detailed task context for a story post. Create a direction for a story title and its premise.",
+          ? "Generate a detailed target context for a discussion post. Create a direction for an article title and its content."
+          : "Generate a detailed target context for a story post. Create a direction for a story title and its premise.",
         "",
         "[thinking step by step]",
         `1. ${thinkingStep1}`,
-        "2. Generate the task context as a handoff for the next stage.",
+        "2. Generate the target context as a handoff for the next stage.",
       ].join("\n");
 
     case "comment":
       return [
-        "[task context]",
+        "[target context]",
         isDiscussion
-          ? "Your task is to generate a detailed task context for a comment interaction. Generate a fictional discussion article title and simple outline for the persona to comment on."
-          : "Your task is to generate a detailed task context for a comment interaction. Generate a fictional story article title and simple outline for the persona to comment on.",
+          ? "Your task is to generate a detailed target context for a comment interaction. Generate a fictional discussion article title and simple outline for the persona to comment on."
+          : "Your task is to generate a detailed target context for a comment interaction. Generate a fictional story article title and simple outline for the persona to comment on.",
         "",
         "[background data]",
-        `Task context: ${hasContext ? input.taskContext : "none"}`,
+        `Target context: ${hasContext ? input.targetContextText : "none"}`,
         "",
         "[detailed tasks and rules]",
         isDiscussion
@@ -64,23 +64,23 @@ function buildPrompt(input: {
         "",
         "[immediate task]",
         isDiscussion
-          ? "Generate a detailed task context for a comment. Create a fictional discussion article outline to comment on."
-          : "Generate a detailed task context for a comment. Create a fictional story article outline to comment on.",
+          ? "Generate a detailed target context for a comment. Create a fictional discussion article outline to comment on."
+          : "Generate a detailed target context for a comment. Create a fictional story article outline to comment on.",
         "",
         "[thinking step by step]",
         `1. ${thinkingStep1}`,
-        "2. Generate the task context as a handoff for the next stage.",
+        "2. Generate the target context as a handoff for the next stage.",
       ].join("\n");
 
     case "reply":
       return [
-        "[task context]",
+        "[target context]",
         isDiscussion
-          ? "Your task is to generate a detailed task context for a reply interaction. Generate a discussion article simple outline and a comment thread with 3 comments for the persona to reply to."
-          : "Your task is to generate a detailed task context for a reply interaction. Generate a story article simple outline and a comment thread with 3 comments for the persona to reply to.",
+          ? "Your task is to generate a detailed target context for a reply interaction. Generate a discussion article simple outline and a comment thread with 3 comments for the persona to reply to."
+          : "Your task is to generate a detailed target context for a reply interaction. Generate a story article simple outline and a comment thread with 3 comments for the persona to reply to.",
         "",
         "[background data]",
-        `Task context: ${hasContext ? input.taskContext : "none"}`,
+        `Target context: ${hasContext ? input.targetContextText : "none"}`,
         "",
         "[detailed tasks and rules]",
         isDiscussion
@@ -89,12 +89,12 @@ function buildPrompt(input: {
         "",
         "[immediate task]",
         isDiscussion
-          ? "Generate a detailed task context for a reply. Create a discussion article outline and 3 comments to reply to."
-          : "Generate a detailed task context for a reply. Create a story article outline and 3 comments to reply to.",
+          ? "Generate a detailed target context for a reply. Create a discussion article outline and 3 comments to reply to."
+          : "Generate a detailed target context for a reply. Create a story article outline and 3 comments to reply to.",
         "",
         "[thinking step by step]",
         `1. ${thinkingStep1}`,
-        "2. Generate the task context as a handoff for the next stage.",
+        "2. Generate the target context as a handoff for the next stage.",
       ].join("\n");
   }
 }
@@ -102,7 +102,7 @@ function buildPrompt(input: {
 export async function assistInteractionTaskContext(input: {
   modelId: string;
   taskType: "post" | "comment" | "reply";
-  taskContext?: string;
+  targetContextText?: string;
   contentMode?: "discussion" | "story";
   providers: AiProviderConfig[];
   models: AiModelConfig[];
@@ -141,10 +141,10 @@ export async function assistInteractionTaskContext(input: {
     includeDeepSeek: true,
   });
 
-  const existingTaskContext = input.taskContext?.trim() ?? "";
+  const existingTargetContextText = input.targetContextText?.trim() ?? "";
   const prompt = buildPrompt({
     taskType: input.taskType,
-    taskContext: existingTaskContext,
+    targetContextText: existingTargetContextText,
     contentMode: input.contentMode ?? "discussion",
   });
 

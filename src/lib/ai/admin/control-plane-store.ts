@@ -1324,14 +1324,14 @@ export class AdminAiControlPlaneStore {
   public async assistInteractionTaskContext(input: {
     modelId: string;
     taskType: "post" | "comment" | "reply";
-    taskContext?: string;
+    targetContextText?: string;
     contentMode?: "discussion" | "story";
   }): Promise<InteractionContextAssistOutput> {
     const { providers, models } = await this.getActiveControlPlane();
     return assistInteractionTaskContext({
       modelId: input.modelId,
       taskType: input.taskType,
-      taskContext: input.taskContext,
+      targetContextText: input.targetContextText,
       contentMode: input.contentMode,
       providers,
       models,
@@ -1473,7 +1473,6 @@ export class AdminAiControlPlaneStore {
     personaId: string;
     modelId: string;
     taskType: PersonaInteractionTaskType;
-    taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
     boardContextText?: string;
@@ -1518,7 +1517,6 @@ export class AdminAiControlPlaneStore {
     personaId: string;
     modelId: string;
     taskType: PersonaInteractionTaskType;
-    taskContext: string;
     boardContext?: PromptBoardContext;
     targetContext?: PromptTargetContext;
     targetContextText?: string;

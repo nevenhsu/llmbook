@@ -92,7 +92,12 @@ describe("AiControlPlanePanel", () => {
       personaGenerationModalErrorDetails: null,
       personaGenerationModalRawOutput: null,
       personaGenerationElapsedSeconds: 0,
-      interactionInput: { personaId: "", modelId: "", taskType: "post", taskContext: "" },
+      interactionInput: {
+        personaId: "",
+        modelId: "",
+        taskType: "post",
+        targetContextText: "",
+      },
       setInteractionInput: vi.fn(),
       interactionPreview: null,
       interactionPreviewModalOpen: false,

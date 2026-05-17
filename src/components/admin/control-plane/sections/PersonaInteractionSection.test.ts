@@ -4,7 +4,7 @@ import { act } from "react";
 import React from "react";
 import ReactDOMClient from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultInteractionTaskContext } from "../control-plane-utils";
+import { defaultInteractionTargetContext } from "../control-plane-utils";
 import { PersonaInteractionSection } from "./PersonaInteractionSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -63,7 +63,7 @@ describe("PersonaInteractionSection", () => {
     container.remove();
   });
 
-  it("shows selected persona references and task-context AI affordance", async () => {
+  it("shows selected persona references and target-context AI affordance", async () => {
     const runInteractionPreview = vi.fn().mockResolvedValue(undefined);
     const closeInteractionPreviewModal = vi.fn();
     const assistInteractionTaskContext = vi.fn().mockResolvedValue(undefined);
@@ -77,7 +77,7 @@ describe("PersonaInteractionSection", () => {
             personaId: "persona-1",
             modelId: "model-1",
             taskType: "comment",
-            taskContext: "",
+            targetContextText: "",
             contentMode: "discussion",
           },
           setInteractionInput,
@@ -187,16 +187,16 @@ describe("PersonaInteractionSection", () => {
       button.textContent?.includes("AI"),
     );
     expect(aiButton).toBeDefined();
-    const taskContextLabel = Array.from(container.querySelectorAll("span")).find((node) =>
-      node.textContent?.includes("Task Context / Content"),
+    const targetContextLabel = Array.from(container.querySelectorAll("span")).find((node) =>
+      node.textContent?.includes("Target Context / Content"),
     ) as HTMLSpanElement | undefined;
-    expect(taskContextLabel).toBeDefined();
+    expect(targetContextLabel).toBeDefined();
     expect(container.textContent).toContain(
-      "Use AI to generate a random scenario for this interaction preview.",
+      "Use AI to generate a random target context for this interaction preview.",
     );
 
     await act(async () => {
-      taskContextLabel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      targetContextLabel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(assistInteractionTaskContext).toHaveBeenCalledTimes(0);
@@ -214,7 +214,7 @@ describe("PersonaInteractionSection", () => {
     expect((runPreviewButton as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("enables Run Preview when task context is present", async () => {
+  it("enables Run Preview when target context is present", async () => {
     const runInteractionPreview = vi.fn().mockResolvedValue(undefined);
 
     await act(async () => {
@@ -224,7 +224,7 @@ describe("PersonaInteractionSection", () => {
             personaId: "persona-1",
             modelId: "model-1",
             taskType: "comment",
-            taskContext: "Reply to this draft critique.",
+            targetContextText: "Reply to this draft critique.",
             contentMode: "discussion",
           },
           setInteractionInput: vi.fn(),
@@ -303,7 +303,7 @@ describe("PersonaInteractionSection", () => {
     expect(runInteractionPreview).toHaveBeenCalledTimes(1);
   });
 
-  it("switches task category and replaces task context with the matching default seed", async () => {
+  it("switches task category and replaces target context with the matching default seed", async () => {
     const setInteractionInput = vi.fn();
 
     await act(async () => {
@@ -313,7 +313,7 @@ describe("PersonaInteractionSection", () => {
             personaId: "persona-1",
             modelId: "model-1",
             taskType: "post",
-            taskContext: defaultInteractionTaskContext("post"),
+            targetContextText: defaultInteractionTargetContext("post"),
             contentMode: "discussion",
           },
           setInteractionInput,
@@ -391,13 +391,13 @@ describe("PersonaInteractionSection", () => {
       personaId: string;
       modelId: string;
       taskType: "post" | "comment" | "reply";
-      taskContext: string;
+      targetContextText: string;
       contentMode: "discussion" | "story";
     }) => {
       personaId: string;
       modelId: string;
       taskType: "post" | "comment" | "reply";
-      taskContext: string;
+      targetContextText: string;
       contentMode: "discussion" | "story";
     };
 
@@ -406,14 +406,14 @@ describe("PersonaInteractionSection", () => {
         personaId: "persona-1",
         modelId: "model-1",
         taskType: "post",
-        taskContext: defaultInteractionTaskContext("post"),
+        targetContextText: defaultInteractionTargetContext("post"),
         contentMode: "discussion",
       }),
     ).toEqual({
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "comment",
-      taskContext: defaultInteractionTaskContext("comment"),
+      targetContextText: defaultInteractionTargetContext("comment"),
       contentMode: "discussion",
     });
   });

@@ -10,8 +10,6 @@ import type {
 import type { ContentMode, PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
-import { buildCommentStageTaskContext } from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
-import { buildReplyStageTaskContext } from "@/lib/ai/prompt-runtime/reply/reply-prompt-builder";
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
 import { resolveTextFlowModule } from "@/lib/ai/agent/execution/flows/registry";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
@@ -24,7 +22,6 @@ export type AiAgentPersonaInteractionInput = {
   personaId: string;
   modelId: string;
   taskType: PersonaInteractionTaskType;
-  taskContext: string;
   boardContext?: PromptBoardContext;
   targetContext?: PromptTargetContext;
   boardContextText?: string;
@@ -80,27 +77,6 @@ function buildPreviewTask(input: {
     errorMessage: null,
     createdAt: now,
   };
-}
-
-function buildPreviewTaskContext(input: {
-  taskType: PersonaInteractionTaskType;
-  contentMode?: ContentMode;
-}): string {
-  const contentMode = input.contentMode ?? "discussion";
-  switch (input.taskType) {
-    case "post":
-      return "";
-    case "comment":
-      return buildCommentStageTaskContext({
-        stage: "comment_body",
-        contentMode,
-      });
-    case "reply":
-      return buildReplyStageTaskContext({
-        stage: "reply_body",
-        contentMode,
-      });
-  }
 }
 
 function buildPreviewPersonaEvidence(profile: PersonaProfile): PromptPersonaEvidence {
@@ -168,16 +144,11 @@ export class AiAgentPersonaInteractionService {
     const dynamicTargetSources = [
       input.targetContextText,
       formattedTarget,
-      !input.targetContextText ? input.taskContext : undefined,
     ].filter((chunk): chunk is string => typeof chunk === "string" && chunk.trim().length > 0);
 
     const promptContext: AiAgentPersonaTaskPromptContext = {
       flowKind: input.taskType,
       taskType: input.taskType === "post" ? "post" : "comment",
-      taskContext: buildPreviewTaskContext({
-        taskType: input.taskType,
-        contentMode: input.contentMode,
-      }),
       boardContextText: input.boardContextText ?? formatBoardContext(input.boardContext),
       targetContextText:
         dynamicTargetSources.length > 0 ? dynamicTargetSources.join("\n\n") : undefined,
@@ -187,7 +158,6 @@ export class AiAgentPersonaInteractionService {
       taskType: input.taskType,
       profile,
       payload: {
-        taskContext: input.taskContext,
         boardContext: input.boardContext,
         targetContext: input.targetContext,
         boardContextText: input.boardContextText,

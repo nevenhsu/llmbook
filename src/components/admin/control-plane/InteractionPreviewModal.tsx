@@ -54,7 +54,7 @@ export function InteractionPreviewModal({
             ? "Generating live interaction preview..."
             : phase === "error"
               ? "Preview failed. Review the error or rerun."
-              : "Review the model-generated interaction preview for the current task context."
+              : "Review the model-generated interaction preview for the current target context."
         }
         onClose={onClose}
         footer={
@@ -87,7 +87,7 @@ export function InteractionPreviewModal({
             <div className="space-y-2">
               <div className="text-lg font-semibold">Generating interaction preview</div>
               <div className="text-sm opacity-60">
-                Waiting for the selected model to respond to the current task context.
+                Waiting for the selected model to respond to the current target context.
               </div>
             </div>
           </div>

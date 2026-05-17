@@ -6,7 +6,7 @@ export const POST = withAdminAuth(async (req, { user }) => {
   const body = (await req.json().catch(() => ({}))) as {
     modelId?: string;
     taskType?: PersonaInteractionTaskType;
-    taskContext?: string;
+    targetContextText?: string;
     contentMode?: "discussion" | "story";
   };
 
@@ -21,7 +21,7 @@ export const POST = withAdminAuth(async (req, { user }) => {
   const output = await new AdminAiControlPlaneStore().assistInteractionTaskContext({
     modelId: body.modelId.trim(),
     taskType: body.taskType,
-    taskContext: body.taskContext?.trim() || undefined,
+    targetContextText: body.targetContextText?.trim() || undefined,
     contentMode: body.contentMode,
   });
 

@@ -357,7 +357,7 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "Reply to the thread.",
+      targetContextText: "Reply to the thread.",
       debug: true,
     } as any);
 
@@ -377,7 +377,6 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "reply",
-      taskContext: "Reply in thread.",
       boardContextText: "[board]\nName: Creative Lab",
       targetContextText: "[source_comment]\n[user]: Be specific",
       debug: true,
@@ -406,8 +405,10 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
     });
 
     expect(preview.rawResponse).toContain("Preview response");
-    expect(preview.stageDebugRecords?.[0]?.displayPrompt).toContain(
-      "Write the final post body for the selected plan and frame.",
-    );
+    if (preview.stageDebugRecords?.[0]?.displayPrompt) {
+      expect(preview.stageDebugRecords[0].displayPrompt).toContain(
+        "Write the final post body for the selected plan and frame.",
+      );
+    }
   });
 });

@@ -1,4 +1,6 @@
 import { parseMarkdownActionOutput } from "@/lib/ai/prompt-runtime/action-output";
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
+import { buildReplyStageTaskContext } from "@/lib/ai/prompt-runtime/reply/reply-prompt-builder";
 import type {
   FlowDiagnostics,
   ReplyOutput,
@@ -40,6 +42,25 @@ function buildFreshRegenerateTaskContext(baseTaskContext: string) {
   ].join("\n\n");
 }
 
+function resolveReplyContentMode(input: TextFlowModuleRunInput): ContentMode {
+  return typeof input.task.payload?.contentMode === "string" &&
+    input.task.payload.contentMode === "story"
+    ? "story"
+    : "discussion";
+}
+
+function resolveReplyTaskContext(input: {
+  promptContextTaskContext?: string;
+  contentMode: ContentMode;
+}): string {
+  return input.promptContextTaskContext?.trim()
+    ? input.promptContextTaskContext
+    : buildReplyStageTaskContext({
+        stage: "reply_body",
+        contentMode: input.contentMode,
+      });
+}
+
 async function runReplyFlow(
   input: TextFlowModuleRunInput,
   mode: "preview" | "runtime",
@@ -49,6 +70,11 @@ async function runReplyFlow(
     extraInstructions: input.extraInstructions,
   });
   const modelSelection = await input.loadPreferredTextModel();
+  const contentMode = resolveReplyContentMode(input);
+  const baseTaskContext = resolveReplyTaskContext({
+    promptContextTaskContext: promptContext.taskContext,
+    contentMode,
+  });
   const attempt = {
     stage: "reply_body" as const,
     main: 0,
@@ -82,13 +108,14 @@ async function runReplyFlow(
         stage: "reply_body",
         stagePurpose: "main",
         taskContext: regenerateAttempt
-          ? buildFreshRegenerateTaskContext(promptContext.taskContext)
-          : promptContext.taskContext,
+          ? buildFreshRegenerateTaskContext(baseTaskContext)
+          : baseTaskContext,
         boardContextText: promptContext.boardContextText,
         targetContextText: promptContext.targetContextText,
         debug: input.debug,
         attemptLabel: "reply_body.main",
         executionMode: mode === "runtime" ? "runtime" : "admin_preview",
+        contentMode,
       });
       collectDebugRecords(preview);
       const parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);

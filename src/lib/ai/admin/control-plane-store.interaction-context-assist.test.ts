@@ -101,7 +101,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns structured output for a comment with task context", async () => {
+  it("returns structured output for a comment with target context", async () => {
     const { invokeStructuredLLM } = await import("@/lib/ai/llm/invoke-structured-llm");
     vi.mocked(invokeStructuredLLM).mockResolvedValue({
       status: "valid",
@@ -115,7 +115,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     const result = await store.assistInteractionTaskContext({
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "Current draft asks for critique on gesture and silhouette.",
+      targetContextText: "Current draft asks for critique on gesture and silhouette.",
     });
 
     expect(result.taskType).toBe("comment");
@@ -131,7 +131,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
         retries: 0,
         modelInput: expect.objectContaining({
           prompt: expect.stringContaining(
-            "Task context: Current draft asks for critique on gesture and silhouette.",
+            "Target context: Current draft asks for critique on gesture and silhouette.",
           ),
           maxOutputTokens: 2000,
           temperature: 0.7,
@@ -143,7 +143,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     );
   });
 
-  it("returns structured output for a post without task context", async () => {
+  it("returns structured output for a post without target context", async () => {
     const { invokeStructuredLLM } = await import("@/lib/ai/llm/invoke-structured-llm");
     vi.mocked(invokeStructuredLLM).mockResolvedValue({
       status: "valid",
@@ -157,7 +157,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     const result = await store.assistInteractionTaskContext({
       modelId: "model-1",
       taskType: "post",
-      taskContext: "",
+      targetContextText: "",
     });
 
     expect(result.taskType).toBe("post");
@@ -191,7 +191,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
       store.assistInteractionTaskContext({
         modelId: "model-1",
         taskType: "reply",
-        taskContext: "",
+        targetContextText: "",
       }),
     ).rejects.toThrow(
       "interaction context assist schema failure: Schema validation failed: missing required field",
@@ -214,7 +214,7 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     await store.assistInteractionTaskContext({
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "Some context",
+      targetContextText: "Some context",
     });
 
     const callArg = vi.mocked(invokeStructuredLLM).mock.calls[0]?.[0];

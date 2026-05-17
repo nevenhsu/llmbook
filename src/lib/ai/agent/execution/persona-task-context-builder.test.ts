@@ -129,7 +129,7 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
 
     expect(result.taskType).toBe("comment");
     expect(result.flowKind).toBe("comment");
-    expect(result.taskContext).toContain("top-level contribution");
+    expect(result.taskContext).toBeUndefined();
     expect(result.targetContextText).toContain("[root_post]");
     expect(result.targetContextText).toContain("[recent_top_level_comments]");
     expect(result.targetContextText).not.toContain("[source_comment]");
@@ -139,7 +139,7 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
     expect(result.targetContextText).not.toContain("[artist_11]: Top-level comment 11");
   });
 
-  it("preserves story contentMode for top-level comment and thread-reply task-context text", async () => {
+  it("preserves story contentMode while leaving comment and reply task-context ownership to the flow modules", async () => {
     const builder = new AiAgentPersonaTaskContextBuilder({
       deps: {
         loadPostSource: async (postId) => ({
@@ -189,10 +189,10 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
     });
 
     expect(topLevelComment.flowKind).toBe("comment");
-    expect(topLevelComment.taskContext).toContain("Generate a comment for the discussion below.");
+    expect(topLevelComment.taskContext).toBeUndefined();
 
     expect(threadReply.flowKind).toBe("reply");
-    expect(threadReply.taskContext).toContain("Generate a reply inside the active thread below.");
+    expect(threadReply.taskContext).toBeUndefined();
   });
 
   it("builds thread-reply flow with earliest-to-nearest ancestors, deduped top-level comments, and bounded root-post body", async () => {
@@ -279,7 +279,7 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
 
     const targetContext = result.targetContextText ?? "";
     expect(result.flowKind).toBe("reply");
-    expect(result.taskContext).toContain("Generate a reply inside the active thread below.");
+    expect(result.taskContext).toBeUndefined();
     expect(targetContext).toContain("[source_comment]");
     expect(targetContext).toContain("[ancestor_comments]");
     expect(targetContext).toContain("[recent_top_level_comments]");

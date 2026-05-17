@@ -20,7 +20,7 @@ import {
   SUPPORTED_PROVIDERS,
 } from "@/lib/ai/admin/control-plane-types";
 import {
-  defaultInteractionTaskContext,
+  defaultInteractionTargetContext,
   buildPersonaUpdateExtraPrompt,
   extractReferenceNamesFromProfile,
   derivePersonaUsername,
@@ -186,7 +186,7 @@ export function useAiControlPlane({
     personaId: initialPersonas[0]?.id ?? "",
     modelId: initialModels.find((item) => item.capability === "text_generation")?.id ?? "",
     taskType: "post" as "post" | "comment" | "reply",
-    taskContext: defaultInteractionTaskContext("post"),
+    targetContextText: defaultInteractionTargetContext("post"),
     contentMode: "discussion" as "discussion" | "story",
   });
   const [interactionPreview, setInteractionPreview] = useState<PreviewResult | null>(null);
@@ -1145,8 +1145,8 @@ export function useAiControlPlane({
       toast.error("persona/model are required");
       return;
     }
-    if (structuredContext === null && !hasNonEmptyText(interactionInput.taskContext)) {
-      toast.error("Task context is required");
+    if (structuredContext === null && !hasNonEmptyText(interactionInput.targetContextText)) {
+      toast.error("Target context is required");
       return;
     }
 
@@ -1166,7 +1166,7 @@ export function useAiControlPlane({
       if (structuredContext) {
         payload.structuredContext = structuredContext;
       } else {
-        payload.taskContext = interactionInput.taskContext;
+        payload.targetContextText = interactionInput.targetContextText;
       }
       const res = await apiPost<{ preview: PreviewResult }>(
         "/api/admin/ai/persona-interaction/preview",
@@ -1216,7 +1216,7 @@ export function useAiControlPlane({
         {
           modelId: interactionInput.modelId,
           taskType: interactionInput.taskType,
-          taskContext: interactionInput.taskContext.trim() || undefined,
+          targetContextText: interactionInput.targetContextText.trim() || undefined,
           contentMode: interactionInput.contentMode,
         },
         { signal: abortController.signal },
@@ -1227,14 +1227,15 @@ export function useAiControlPlane({
       setStructuredContext(res);
       setInteractionInput((prev) => ({
         ...prev,
-        taskContext: serializeAssistOutput(res),
+        targetContextText: serializeAssistOutput(res),
       }));
-      toast.success("Task context generated");
+      toast.success("Target context generated");
     } catch (error) {
       if (isPersonaGenerationAbortError(error)) {
         return;
       }
-      const message = error instanceof Error ? error.message : "Failed to generate task context";
+      const message =
+        error instanceof Error ? error.message : "Failed to generate target context";
       setInteractionTaskAssistError(message);
       toast.error(message);
     } finally {

@@ -75,7 +75,7 @@ describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
       body: JSON.stringify({
         modelId: "model-1",
         taskType: "comment",
-        taskContext: "Current draft asks for sharper critique on gesture and silhouette.",
+        targetContextText: "Current draft asks for sharper critique on gesture and silhouette.",
       }),
       headers: { "Content-Type": "application/json" },
     });
@@ -86,7 +86,7 @@ describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
     expect(assistInteractionTaskContext).toHaveBeenCalledWith({
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "Current draft asks for sharper critique on gesture and silhouette.",
+      targetContextText: "Current draft asks for sharper critique on gesture and silhouette.",
     });
   });
 
@@ -97,7 +97,7 @@ describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
         modelId: "model-1",
         taskType: "post",
         personaId: "persona-1",
-        taskContext: "Some context",
+        targetContextText: "Some context",
       }),
       headers: { "Content-Type": "application/json" },
     });
@@ -110,7 +110,7 @@ describe("POST /api/admin/ai/persona-interaction/context-assist", () => {
     expect(callArg).toEqual({
       modelId: "model-1",
       taskType: "post",
-      taskContext: "Some context",
+      targetContextText: "Some context",
     });
   });
 });

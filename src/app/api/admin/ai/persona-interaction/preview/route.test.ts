@@ -69,13 +69,12 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
       personaId: "p1",
       modelId: "m1",
       taskType: "reply",
-      taskContext: "",
       boardContext: undefined,
       targetContext: undefined,
     });
   });
 
-  it("routes post structuredContext into targetContextText with empty taskContext", async () => {
+  it("routes post structuredContext into targetContextText", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
@@ -102,10 +101,9 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         "Content direction: Explore the key elements of Lovecraftian horror in worldbuilding, focusing on the design of creatures that evoke cosmic dread, the role of forbidden knowledge, and how to create environments that feel ancient and unknowable.",
       ].join("\n"),
     );
-    expect(callArg.taskContext).toBe("");
   });
 
-  it("routes comment structuredContext into targetContextText with empty taskContext", async () => {
+  it("routes comment structuredContext into targetContextText", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
@@ -128,10 +126,9 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     expect(callArg.targetContextText).toBe(
       "Article: On Cosmic Horror\nOutline: A discussion about cosmic horror themes.",
     );
-    expect(callArg.taskContext).toBe("");
   });
 
-  it("routes reply structuredContext into targetContextText with empty taskContext", async () => {
+  it("routes reply structuredContext into targetContextText", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
@@ -165,17 +162,16 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         "3. Third comment.",
       ].join("\n"),
     );
-    expect(callArg.taskContext).toBe("");
   });
 
-  it("routes manual taskContext as targetContextText for user-facing preview flows", async () => {
+  it("routes manual targetContextText for user-facing preview flows", async () => {
     const req = new Request("http://localhost/api/admin/ai/persona-interaction/preview", {
       method: "POST",
       body: JSON.stringify({
         personaId: "p1",
         modelId: "m1",
         taskType: "comment",
-        taskContext: "Write about cosmic insignificance.",
+        targetContextText: "Write about cosmic insignificance.",
       }),
       headers: { "Content-Type": "application/json" },
     });
@@ -185,7 +181,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
 
     const callArg = previewPersonaInteraction.mock.calls[0][0];
     expect(callArg.targetContextText).toBe("Write about cosmic insignificance.");
-    expect(callArg.taskContext).toBe("");
   });
 
   it("rejects non-interaction task types", async () => {
@@ -227,7 +222,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         personaId: "p1",
         modelId: "m1",
         taskType: "comment",
-        taskContext: "hello",
+        targetContextText: "hello",
         boardContext: {
           name: "Illustration",
           description: "Feedback for visual drafts",
@@ -264,7 +259,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         },
       }),
     );
-    expect(previewPersonaInteraction.mock.calls[0][0].taskContext).toBe("");
   });
 
   it("returns 422 with explicit persona audit failure details", async () => {
@@ -286,7 +280,7 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
         personaId: "p1",
         modelId: "m1",
         taskType: "comment",
-        taskContext: "hello",
+        targetContextText: "hello",
       }),
       headers: { "Content-Type": "application/json" },
     });

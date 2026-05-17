@@ -427,7 +427,6 @@ describe("AiAgentPersonaInteractionService", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "Generate a reply inside the active thread below.",
       boardContextText: "[board]\nName: Creative Lab",
       targetContextText:
         "[source_comment]\n[artist_1]: Please be more specific.\n\n[root_post]\nTitle: Best prompting workflows this week",
@@ -456,7 +455,7 @@ describe("AiAgentPersonaInteractionService", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "post",
-      taskContext:
+      targetContextText:
         "Title direction: Tentacles and Madness\nContent direction: Explore cosmic horror.",
       document: sampleDocument(),
       providers: [sampleProvider()],
@@ -481,7 +480,7 @@ describe("AiAgentPersonaInteractionService", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "post",
-      taskContext:
+      targetContextText:
         "Title direction: Tentacles and Madness\nContent direction: Explore cosmic horror.",
       document: sampleDocument(),
       providers: [sampleProvider()],
@@ -502,14 +501,14 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(taskBlock).not.toContain("Content direction:");
   });
 
-  it("routes manual taskContext as targetContext for comment preview", async () => {
+  it("routes manual targetContextText into target_context for comment preview", async () => {
     const service = new AiAgentPersonaInteractionService();
 
     const preview = await service.run({
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "Write about cosmic insignificance.",
+      targetContextText: "Write about cosmic insignificance.",
       document: sampleDocument(),
       providers: [sampleProvider()],
       models: [sampleModel()],
@@ -525,14 +524,14 @@ describe("AiAgentPersonaInteractionService", () => {
     expect(prompts).toContain("Generate a top-level comment");
   });
 
-  it("routes manual taskContext as targetContext for reply preview", async () => {
+  it("routes manual targetContextText into target_context for reply preview", async () => {
     const service = new AiAgentPersonaInteractionService();
 
     const preview = await service.run({
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "reply",
-      taskContext: "Respond to the source comment directly.",
+      targetContextText: "Respond to the source comment directly.",
       document: sampleDocument(),
       providers: [sampleProvider()],
       models: [sampleModel()],
@@ -555,7 +554,6 @@ describe("AiAgentPersonaInteractionService", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "comment",
-      taskContext: "ignored fallback text",
       boardContextText: "[board]\nName: Creative Lab",
       targetContextText:
         "[source_comment]\n[artist_1]: Please be more specific.\n\n[root_post]\nTitle: Best prompting workflows this week",
@@ -583,7 +581,6 @@ describe("AiAgentPersonaInteractionService", () => {
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "reply",
-      taskContext: "Generate a reply inside the active thread below.",
       boardContextText: "[board]\nName: Creative Lab",
       targetContextText: [
         "[root_post]",

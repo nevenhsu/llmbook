@@ -1,4 +1,6 @@
 import { parseMarkdownActionOutput } from "@/lib/ai/prompt-runtime/action-output";
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
+import { buildCommentStageTaskContext } from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
 import type {
   CommentOutput,
   FlowDiagnostics,
@@ -40,6 +42,25 @@ function buildFreshRegenerateTaskContext(baseTaskContext: string) {
   ].join("\n\n");
 }
 
+function resolveCommentContentMode(input: TextFlowModuleRunInput): ContentMode {
+  return typeof input.task.payload?.contentMode === "string" &&
+    input.task.payload.contentMode === "story"
+    ? "story"
+    : "discussion";
+}
+
+function resolveCommentTaskContext(input: {
+  promptContextTaskContext?: string;
+  contentMode: ContentMode;
+}): string {
+  return input.promptContextTaskContext?.trim()
+    ? input.promptContextTaskContext
+    : buildCommentStageTaskContext({
+        stage: "comment_body",
+        contentMode: input.contentMode,
+      });
+}
+
 async function runCommentFlow(
   input: TextFlowModuleRunInput,
   mode: "preview" | "runtime",
@@ -49,6 +70,11 @@ async function runCommentFlow(
     extraInstructions: input.extraInstructions,
   });
   const modelSelection = await input.loadPreferredTextModel();
+  const contentMode = resolveCommentContentMode(input);
+  const baseTaskContext = resolveCommentTaskContext({
+    promptContextTaskContext: promptContext.taskContext,
+    contentMode,
+  });
   const attempt = {
     stage: "comment_body" as const,
     main: 0,
@@ -82,13 +108,14 @@ async function runCommentFlow(
         stage: "comment_body",
         stagePurpose: "main",
         taskContext: regenerateAttempt
-          ? buildFreshRegenerateTaskContext(promptContext.taskContext)
-          : promptContext.taskContext,
+          ? buildFreshRegenerateTaskContext(baseTaskContext)
+          : baseTaskContext,
         boardContextText: promptContext.boardContextText,
         targetContextText: promptContext.targetContextText,
         debug: input.debug,
         attemptLabel: "comment_body.main",
         executionMode: mode === "runtime" ? "runtime" : "admin_preview",
+        contentMode,
       });
       collectDebugRecords(preview);
       const parsed = parseMarkdownActionOutput(preview.rawResponse ?? preview.markdown);

@@ -244,10 +244,15 @@ export function mergeFlowTaskContext(input: {
   promptContext: AiAgentPersonaTaskPromptContext;
   extraInstructions?: string | null;
 }): AiAgentPersonaTaskPromptContext {
+  const baseTaskContext = input.promptContext.taskContext?.trim();
+  const extraInstructions = input.extraInstructions?.trim();
+
   const taskContext =
-    input.extraInstructions && input.extraInstructions.trim().length > 0
-      ? [input.promptContext.taskContext, input.extraInstructions.trim()].join("\n\n")
-      : input.promptContext.taskContext;
+    extraInstructions && extraInstructions.length > 0
+      ? [baseTaskContext, extraInstructions]
+          .filter((chunk): chunk is string => typeof chunk === "string" && chunk.length > 0)
+          .join("\n\n")
+      : baseTaskContext;
 
   return {
     ...input.promptContext,

@@ -79,7 +79,7 @@ export const POST = withAdminAuth(async (req, { user }) => {
     personaId?: string;
     modelId?: string;
     taskType?: PersonaInteractionTaskType;
-    taskContext?: string;
+    targetContextText?: string;
     structuredContext?: InteractionContextAssistOutput;
     contentMode?: "discussion" | "story";
     boardContext?: {
@@ -111,8 +111,8 @@ export const POST = withAdminAuth(async (req, { user }) => {
     ? serializeAssistOutput(body.structuredContext)
     : undefined;
 
-  const resolvedTargetContextText = serializedStructured ?? (body.taskContext?.trim() || undefined);
-  const resolvedTaskContext = "";
+  const resolvedTargetContextText =
+    serializedStructured ?? (body.targetContextText?.trim() || undefined);
 
   let preview;
   try {
@@ -120,7 +120,6 @@ export const POST = withAdminAuth(async (req, { user }) => {
       personaId: body.personaId.trim(),
       modelId: body.modelId.trim(),
       taskType: body.taskType,
-      taskContext: resolvedTaskContext,
       contentMode: body.contentMode,
       boardContext: normalizeBoardContext(body.boardContext),
       targetContext: normalizeTargetContext(body.targetContext),

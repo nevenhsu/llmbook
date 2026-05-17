@@ -13,7 +13,7 @@ import { SectionCard } from "../SectionCard";
 import { ModelSelectionField } from "../ModelSelectionField";
 import { InteractionPreviewModal } from "../InteractionPreviewModal";
 import { PersonaInfoCard } from "../PersonaInfoCard";
-import { defaultInteractionTaskContext } from "../control-plane-utils";
+import { defaultInteractionTargetContext } from "../control-plane-utils";
 import {
   formatPromptAssistStatus,
   readPromptAssistButtonMode,
@@ -25,7 +25,7 @@ export interface PersonaInteractionSectionProps {
     personaId: string;
     modelId: string;
     taskType: "post" | "comment" | "reply";
-    taskContext: string;
+    targetContextText: string;
     contentMode: "discussion" | "story";
   };
   setInteractionInput: Dispatch<
@@ -33,7 +33,7 @@ export interface PersonaInteractionSectionProps {
       personaId: string;
       modelId: string;
       taskType: "post" | "comment" | "reply";
-      taskContext: string;
+      targetContextText: string;
       contentMode: "discussion" | "story";
     }>
   >;
@@ -149,7 +149,7 @@ export function PersonaInteractionSection({
   const runPreviewDisabled =
     !interactionInput.personaId ||
     !hasProvider ||
-    (structuredContext === null && interactionInput.taskContext.trim().length === 0) ||
+    (structuredContext === null && interactionInput.targetContextText.trim().length === 0) ||
     interactionPreviewModalPhase === "loading";
 
   const assistDisabled = !interactionInput.modelId || structuredContext !== null;
@@ -194,7 +194,7 @@ export function PersonaInteractionSection({
                   setInteractionInput((prev) => ({
                     ...prev,
                     taskType,
-                    taskContext: defaultInteractionTaskContext(taskType),
+                    targetContextText: defaultInteractionTargetContext(taskType),
                   }));
                 }}
               >
@@ -230,7 +230,7 @@ export function PersonaInteractionSection({
             <div className="form-control w-full">
               <div className="label flex items-center justify-between gap-3 py-1">
                 <span className="label-text text-xs font-semibold opacity-70">
-                  Task Context / Content
+                  Target Context / Content
                 </span>
                 <button
                   type="button"
@@ -248,12 +248,12 @@ export function PersonaInteractionSection({
               </div>
               <textarea
                 className="textarea textarea-bordered focus:textarea-primary h-28 w-full font-mono text-sm leading-relaxed"
-                value={interactionInput.taskContext}
+                value={interactionInput.targetContextText}
                 onChange={(e) => {
                   setStructuredContext(null);
                   setInteractionInput((prev) => ({
                     ...prev,
-                    taskContext: e.target.value,
+                    targetContextText: e.target.value,
                   }));
                 }}
                 placeholder="Paste post/comment content to test response assembly..."
@@ -267,7 +267,7 @@ export function PersonaInteractionSection({
                 {structuredContext
                   ? "Structured context ready. Edit the text to discard and switch to manual mode."
                   : (taskAssistStatus ??
-                    "Use AI to generate a random scenario for this interaction preview.")}
+                    "Use AI to generate a random target context for this interaction preview.")}
               </div>
               <div className="mt-4 flex justify-end">
                 <button

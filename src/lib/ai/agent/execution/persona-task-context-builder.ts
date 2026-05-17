@@ -2,13 +2,11 @@ import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
 import type { PromptBoardRule } from "@/lib/ai/admin/control-plane-contract";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import {
-  buildCommentStageTaskContext,
   renderCommentTargetContext,
   type CanonicalCommentRootPost,
   type CanonicalRecentTopLevelComment,
 } from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
 import {
-  buildReplyStageTaskContext,
   renderReplyTargetContext,
   type CanonicalReplyAncestorComment,
   type CanonicalReplyRecentTopLevelComment,
@@ -106,7 +104,7 @@ type AiAgentPersonaTaskContextBuilderDeps = {
 export type AiAgentPersonaTaskPromptContext = {
   flowKind: "post" | "comment" | "reply";
   taskType: "post" | "comment";
-  taskContext: string;
+  taskContext?: string;
   boardContextText?: string;
   targetContextText?: string;
 };
@@ -379,16 +377,12 @@ export class AiAgentPersonaTaskContextBuilder {
     return {
       flowKind: "comment",
       taskType: "comment",
-      taskContext: buildCommentStageTaskContext({
-        stage: "comment_body",
-        contentMode,
-      }),
     };
   }
 
   private async buildTopLevelCommentContext(
     postId: string,
-    contentMode: ContentMode,
+    _contentMode: ContentMode,
   ): Promise<AiAgentPersonaTaskPromptContext> {
     const post = await this.deps.loadPostSource(postId);
     const recentTopLevelComments = await this.deps.listRecentTopLevelComments(postId);
@@ -396,10 +390,6 @@ export class AiAgentPersonaTaskContextBuilder {
     return {
       flowKind: "comment",
       taskType: "comment",
-      taskContext: buildCommentStageTaskContext({
-        stage: "comment_body",
-        contentMode,
-      }),
       boardContextText: buildBoardContextText(post?.board ?? null),
       targetContextText: renderCommentTargetContext({
         rootPost: mapCommentRootPost(post),
@@ -412,17 +402,13 @@ export class AiAgentPersonaTaskContextBuilder {
 
   private async buildThreadReplyContext(
     commentId: string,
-    contentMode: ContentMode,
+    _contentMode: ContentMode,
   ): Promise<AiAgentPersonaTaskPromptContext> {
     const sourceComment = await this.deps.loadCommentSource(commentId);
     if (!sourceComment) {
       return {
         flowKind: "reply",
         taskType: "comment",
-        taskContext: buildReplyStageTaskContext({
-          stage: "reply_body",
-          contentMode,
-        }),
       };
     }
 
@@ -436,10 +422,6 @@ export class AiAgentPersonaTaskContextBuilder {
     return {
       flowKind: "reply",
       taskType: "comment",
-      taskContext: buildReplyStageTaskContext({
-        stage: "reply_body",
-        contentMode,
-      }),
       boardContextText: buildBoardContextText(rootPost?.board ?? null),
       targetContextText: renderReplyTargetContext({
         rootPost: mapReplyRootPost(rootPost),
