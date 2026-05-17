@@ -40,7 +40,6 @@ describe("POST /api/admin/ai/persona-interaction/preview", () => {
     vi.clearAllMocks();
     isAdmin.mockResolvedValue(true);
     previewPersonaInteraction.mockResolvedValue({
-      assembledPrompt: "prompt",
       markdown: "reply",
       rawResponse: '{"markdown":"reply","need_image":false,"image_prompt":null,"image_alt":null}',
       renderOk: true,

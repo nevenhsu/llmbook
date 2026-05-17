@@ -11,6 +11,7 @@ import {
   AiAgentJobPermanentSkipError,
   type AiAgentPersonaTaskGenerationResult,
 } from "@/lib/ai/agent/execution/persona-task-generator";
+import type { TextFlowRunResult } from "@/lib/ai/agent/execution/flows/types";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 
 type PostSourceRow = {
@@ -69,6 +70,7 @@ type PersonaTaskPersistenceServiceDeps = {
     task: TaskSnapshot;
     resultId: string;
     resultType: "comment" | "post";
+    flowResult: TextFlowRunResult;
   }) => Promise<TaskSnapshot>;
   overwriteContent: (
     input:
@@ -108,6 +110,33 @@ function normalizeNotificationPayload(task: TaskSnapshot): {
     parentCommentId:
       typeof task.payload.parentCommentId === "string" ? task.payload.parentCommentId : null,
   };
+}
+
+function buildGeneratedMediaPayload(flowResult: TextFlowRunResult): {
+  needImage: boolean;
+  imagePrompt: string | null;
+  imageAlt: string | null;
+} {
+  switch (flowResult.flowKind) {
+    case "post":
+      return {
+        needImage: flowResult.parsed.renderedPost.needImage,
+        imagePrompt: flowResult.parsed.renderedPost.imagePrompt,
+        imageAlt: flowResult.parsed.renderedPost.imageAlt,
+      };
+    case "comment":
+      return {
+        needImage: flowResult.parsed.comment.needImage,
+        imagePrompt: flowResult.parsed.comment.imagePrompt,
+        imageAlt: flowResult.parsed.comment.imageAlt,
+      };
+    case "reply":
+      return {
+        needImage: flowResult.parsed.reply.needImage,
+        imagePrompt: flowResult.parsed.reply.imagePrompt,
+        imageAlt: flowResult.parsed.reply.imageAlt,
+      };
+  }
 }
 
 export class AiAgentPersonaTaskPersistenceService {
@@ -241,9 +270,14 @@ export class AiAgentPersonaTaskPersistenceService {
         (async (input) => {
           const supabase = createAdminClient();
           const completedAt = new Date().toISOString();
+          const payload = {
+            ...input.task.payload,
+            generatedMedia: buildGeneratedMediaPayload(input.flowResult),
+          };
           const { data, error } = await supabase
             .from("persona_tasks")
             .update({
+              payload,
               status: "DONE",
               started_at: input.task.startedAt ?? completedAt,
               completed_at: completedAt,
@@ -308,6 +342,7 @@ export class AiAgentPersonaTaskPersistenceService {
           task: generated.task,
           resultId: writePlan.targetId,
           resultType: "post",
+          flowResult: generated.flowResult,
         });
 
         return {
@@ -342,6 +377,7 @@ export class AiAgentPersonaTaskPersistenceService {
         task: generated.task,
         resultId: writePlan.targetId,
         resultType: "comment",
+        flowResult: generated.flowResult,
       });
 
       return {
@@ -367,6 +403,7 @@ export class AiAgentPersonaTaskPersistenceService {
         task: generated.task,
         resultId: insertedComment.id,
         resultType: "comment",
+        flowResult: generated.flowResult,
       });
 
       return {
@@ -391,6 +428,7 @@ export class AiAgentPersonaTaskPersistenceService {
       task: generated.task,
       resultId: insertedPost.id,
       resultType: "post",
+      flowResult: generated.flowResult,
     });
 
     return {

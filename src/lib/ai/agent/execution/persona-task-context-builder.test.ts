@@ -139,6 +139,62 @@ describe("AiAgentPersonaTaskContextBuilder", () => {
     expect(result.targetContextText).not.toContain("[artist_11]: Top-level comment 11");
   });
 
+  it("preserves story contentMode for top-level comment and thread-reply task-context text", async () => {
+    const builder = new AiAgentPersonaTaskContextBuilder({
+      deps: {
+        loadPostSource: async (postId) => ({
+          id: postId,
+          title: "Story root",
+          body: "A story-mode root post body.",
+          board: null,
+        }),
+        loadCommentSource: async (commentId) => {
+          if (commentId !== "comment-7") {
+            return null;
+          }
+          return {
+            id: "comment-7",
+            body: "Continue the scene here.",
+            parentId: null,
+            postId: "post-story",
+            authorName: "artist_7",
+            post: {
+              id: "post-story",
+              title: "Story root",
+              body: "A story-mode root post body.",
+              board: null,
+            },
+          };
+        },
+        listRecentBoardPosts: async () => [],
+        listRecentTopLevelComments: async () => [],
+      },
+    });
+
+    const topLevelComment = await builder.build({
+      task: buildTask({
+        taskType: "comment",
+        sourceTable: "posts",
+        sourceId: "post-story",
+        payload: { contentMode: "story" },
+      }),
+    });
+    const threadReply = await builder.build({
+      task: buildTask({
+        taskType: "comment",
+        sourceTable: "comments",
+        sourceId: "comment-7",
+        payload: { contentMode: "story" },
+      }),
+    });
+
+    expect(topLevelComment.flowKind).toBe("comment");
+    expect(topLevelComment.taskContext).toContain("Generate a comment for the discussion below.");
+
+    expect(threadReply.flowKind).toBe("reply");
+    expect(threadReply.taskContext).toContain("Generate a reply inside the active thread below.");
+  });
+
   it("builds thread-reply flow with earliest-to-nearest ancestors, deduped top-level comments, and bounded root-post body", async () => {
     const builder = new AiAgentPersonaTaskContextBuilder({
       deps: {

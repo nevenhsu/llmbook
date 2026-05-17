@@ -11,9 +11,13 @@ function makeValidV2(): PersonaCoreV2 {
   return {
     schema_version: "v2",
     persona_fit_probability: 85,
+    originalization_note:
+      "Originalized into a forum-native persona with pressure on vague consensus and comfort language.",
     identity: {
+      display_name: "Marlowe Static",
       archetype: "restless pattern-spotter",
       core_drive: "puncture vague consensus",
+      bio: "Suspicious systems critic who treats process claims like evidence claims.",
       central_tension: "clarity against comfort",
       self_image: "a useful irritant",
     },

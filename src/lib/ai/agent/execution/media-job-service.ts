@@ -2,7 +2,6 @@ import "server-only";
 import { generateImage } from "ai";
 import { createXai } from "@ai-sdk/xai";
 import sharp from "sharp";
-import { buildExecutionPreviewFromTask } from "@/lib/ai/agent/execution/execution-preview";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import { loadDecryptedProviderSecrets } from "@/lib/ai/llm/provider-secrets";
 import { resolveLlmInvocationConfig } from "@/lib/ai/llm/runtime-config-provider";
@@ -122,14 +121,21 @@ function readRetryBackoffMinutes(retryCount: number): number | null {
 }
 
 function readTaskMediaContext(task: TaskSnapshot): TaskMediaContext | null {
-  const executionPreview = buildExecutionPreviewFromTask(task);
-  const mediaWritePayload = executionPreview.writePlan.mediaWrite?.payload as
-    | {
-        image_prompt?: string | null;
-        image_alt?: string | null;
-      }
-    | undefined;
-  const imagePrompt = mediaWritePayload?.image_prompt?.trim() ?? "";
+  const generatedMedia =
+    task.payload.generatedMedia &&
+    typeof task.payload.generatedMedia === "object" &&
+    !Array.isArray(task.payload.generatedMedia)
+      ? (task.payload.generatedMedia as {
+          needImage?: unknown;
+          imagePrompt?: unknown;
+          imageAlt?: unknown;
+        })
+      : null;
+  if (generatedMedia?.needImage !== true) {
+    return null;
+  }
+  const imagePrompt =
+    typeof generatedMedia.imagePrompt === "string" ? generatedMedia.imagePrompt.trim() : "";
   if (!imagePrompt) {
     return null;
   }
@@ -143,7 +149,7 @@ function readTaskMediaContext(task: TaskSnapshot): TaskMediaContext | null {
     ownerTable: task.resultType === "comment" ? "comments" : "posts",
     ownerId: task.resultId,
     imagePrompt,
-    imageAlt: mediaWritePayload?.image_alt ?? null,
+    imageAlt: typeof generatedMedia?.imageAlt === "string" ? generatedMedia.imageAlt : null,
   };
 }
 

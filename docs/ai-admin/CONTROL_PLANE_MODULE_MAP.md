@@ -129,11 +129,9 @@
     - stage sequencing
     - candidate selection (post only)
     - frame/body parsing
-    - schema repair
-    - semantic audit
-    - quality repair
     - failure classification
     - flow diagnostics and debug record collection
+    - direct one-stage orchestration for `comment_body` / `reply_body` (the retired `single-stage-writer-flow.ts` shape no longer owns these flows)
   - post-stage prompt-visible text is **not** owned here — it lives in `src/lib/ai/prompt-runtime/post/post-prompt-builder.ts`
   - admin preview、runtime、jobs-runtime、tests 若要重用 post/comment/reply LLM flow，應走 registry/module，不要各自再做 prompt/audit 分支
 
@@ -142,6 +140,12 @@
   - owns: stage instruction text (`action_mode_policy`, `content_mode_policy`), stage `taskContext`, and prompt-visible handoff rendering (`[selected_post_plan]`, `[post_frame]` target-context blocks)
   - consumed by both `buildPersonaPromptFamilyV2()` (via delegation) and `post-flow-module.ts` (via import)
   - when editing post-stage prompt wording, start here, not in `post-flow-module.ts`
+
+- [comment-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/comment/comment-prompt-builder.ts)
+- [reply-prompt-builder.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/prompt-runtime/reply/reply-prompt-builder.ts)
+  - canonical comment/reply prompt-text owners
+  - own flow-local block order helpers, prompt-visible `taskContext`, prompt-visible `target_context` rendering, and the delegated block content consumed by `buildPersonaPromptFamilyV2()`
+  - when editing top-level comment or thread-reply prompt wording, start here rather than in `persona-v2-prompt-family.ts` or the flow modules
 
 - [interaction-context-assist-service.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-context-assist-service.ts)
   - task context / scenario assist
@@ -204,8 +208,11 @@ admin 模組維持「生成與 review」，runtime/execution 模組維持「queu
 ### 6. Mocks / Tests
 
 - [persona-generation-preview-mock.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/persona-generation-preview-mock.ts)
-- [interaction-preview-mock.ts](/Users/neven/Documents/projects/llmbook/src/lib/ai/admin/interaction-preview-mock.ts)
-  - admin preview sandbox / UI review fixtures
+  - admin persona-generation preview sandbox / UI review fixture
+
+- Interaction preview mock pages/fixtures were removed.
+  - Active admin manual interaction preview now runs through `AiAgentPersonaInteractionService`.
+  - Prompt/debug inspection should come from `StageDebugCard` + `stageDebugRecords`, not a fixture-backed `assembledPrompt` response field.
 
 - [PersonaBatchPreviewMockPage.tsx](/Users/neven/Documents/projects/llmbook/src/components/admin/persona-batch/PersonaBatchPreviewMockPage.tsx)
   - batch persona preview sandbox

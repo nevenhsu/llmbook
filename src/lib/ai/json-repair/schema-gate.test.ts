@@ -281,8 +281,10 @@ describe("normalized failure reason", () => {
         schema: SimpleSchema,
       }),
     );
-    // Should attempt finish continuation (colon-ending is continuation_needed)
-    expect(result.debug.attempts.some((a) => a.attemptStage === "finish_continuation")).toBe(true);
+    // Trailing colon still needs continuation, so no deterministic tail closure should run.
+    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
+      false,
+    );
   });
 
   it("normalizes object generation error", async () => {
@@ -295,8 +297,10 @@ describe("normalized failure reason", () => {
         schema: SimpleSchema,
       }),
     );
-    // Should attempt finish continuation (colon-ending is continuation_needed)
-    expect(result.debug.attempts.some((a) => a.attemptStage === "finish_continuation")).toBe(true);
+    // Trailing colon still needs continuation, so no deterministic tail closure should run.
+    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
+      false,
+    );
   });
 });
 
@@ -562,7 +566,9 @@ describe("object_generation_unparseable routing", () => {
         schema: SimpleSchema,
       }),
     );
-    expect(result.debug.attempts.some((a) => a.attemptStage === "finish_continuation")).toBe(true);
+    expect(result.debug.attempts.some((a) => a.attemptStage === "deterministic_tail_closure")).toBe(
+      false,
+    );
   });
 
   it("returns typed diagnostic for empty text with object generation error", async () => {

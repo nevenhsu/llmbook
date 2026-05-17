@@ -26,9 +26,13 @@ import type {
 const FIXTURE: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 82,
+  originalization_note:
+    "Originalized into a skeptical forum-native persona that pressure-tests comfortable narratives.",
   identity: {
+    display_name: "Marlowe Static",
     archetype: "restless pattern-spotter driven to puncture vague consensus",
     core_drive: "expose hidden costs in comfortable narratives",
+    bio: "Suspicious systems critic who treats process claims like evidence claims.",
     central_tension: "clarity against comfort",
     self_image: "useful irritant and consequence-surfacer",
   },
@@ -92,8 +96,10 @@ const FIXTURE: PersonaCoreV2 = {
 const FIXTURE_B: PersonaCoreV2 = {
   ...FIXTURE,
   identity: {
+    display_name: "Juniper Vale",
     archetype: "craft guardian who protects fragile creative work",
     core_drive: "defend craft quality and human nuance",
+    bio: "Care-first craft defender who distrusts speed as a substitute for judgment.",
     central_tension: "automation against human judgment",
     self_image: "last careful reader",
   },
@@ -189,9 +195,14 @@ function resolveTestFlowStage(input: {
 }
 
 function makeInput(
-  overrides: Partial<PersonaPromptFamilyV2Input> & {
+  overrides: Omit<
+    Partial<PersonaPromptFamilyV2Input>,
+    "flow" | "stage" | "personaPacket" | "outputContract"
+  > & {
     flow?: LegacyTestFlow | PersonaInteractionFlow;
     stage?: PersonaInteractionStage;
+    personaPacket: PersonaPromptFamilyV2Input["personaPacket"];
+    outputContract?: string;
   },
 ): PersonaPromptFamilyV2Input {
   const flowStage = resolveTestFlowStage(overrides);
@@ -202,9 +213,9 @@ function makeInput(
     stagePurpose: "main",
     systemBaseline: systemBaseline(),
     globalPolicy: globalPolicy(),
-    personaPacket: undefined as any,
     taskContext: taskContext(),
     ...rest,
+    personaPacket: overrides.personaPacket,
     flow: flowStage.flow,
     stage: flowStage.stage,
     outputContract:
@@ -217,7 +228,10 @@ function makeInput(
   };
 }
 
-function makePacket(flow: LegacyTestFlow, contentMode: any = "discussion") {
+function makePacket(
+  flow: LegacyTestFlow,
+  contentMode: "discussion" | "story" = "discussion",
+): PersonaPromptFamilyV2Input["personaPacket"] {
   if (flow === "post_plan")
     return buildPostPlanPersonaPacket({
       contentMode,
@@ -233,15 +247,21 @@ function makePacket(flow: LegacyTestFlow, contentMode: any = "discussion") {
       core: FIXTURE,
     });
   if (flow === "post_frame")
-    return buildPersonaPacketForPrompt({
-      flow: "post",
-      stage: "post_frame",
-      stagePurpose: "main",
-      contentMode,
-      personaId: "p1",
-      displayName: "Test",
-      core: FIXTURE,
-    });
+    {
+      const packet = buildPersonaPacketForPrompt({
+        flow: "post",
+        stage: "post_frame",
+        stagePurpose: "main",
+        contentMode,
+        personaId: "p1",
+        displayName: "Test",
+        core: FIXTURE,
+      });
+      if (!packet) {
+        throw new Error("expected valid post_frame packet");
+      }
+      return packet;
+    }
   if (flow === "comment")
     return buildCommentPersonaPacket({
       contentMode,
@@ -274,19 +294,34 @@ function allBlockNames(result: PersonaPromptFamilyV2Result): string[] {
 describe("persona-v2-prompt-family", () => {
   describe("buildActionModePolicy", () => {
     it("generates discussion post_plan main policy", () => {
-      const policy = buildActionModePolicy({ flow: "post", stage: "post_plan", stagePurpose: "main" });
+      const policy = buildActionModePolicy({
+        flow: "post",
+        stage: "post_plan",
+        stagePurpose: "main",
+        contentMode: "discussion",
+      });
       expect(policy).toContain("plan");
       expect(policy).toContain("post body");
     });
 
     it("generates discussion post_body main policy", () => {
-      const policy = buildActionModePolicy({ flow: "post", stage: "post_body", stagePurpose: "main" });
+      const policy = buildActionModePolicy({
+        flow: "post",
+        stage: "post_body",
+        stagePurpose: "main",
+        contentMode: "discussion",
+      });
       expect(policy).toContain("post body");
       expect(policy).toContain("locked");
     });
 
     it("post_frame policy mentions framing and forbids writing final body", () => {
-      const policy = buildActionModePolicy({ flow: "post", stage: "post_frame", stagePurpose: "main" });
+      const policy = buildActionModePolicy({
+        flow: "post",
+        stage: "post_frame",
+        stagePurpose: "main",
+        contentMode: "discussion",
+      });
       expect(policy).toContain("frame");
       expect(policy).toContain("locked");
       expect(policy).toContain("final post content");
@@ -324,22 +359,22 @@ describe("persona-v2-prompt-family", () => {
       expect(policy).toContain("markdown");
     });
 
-    it("story comment says short story or fragment", () => {
+    it("comment helper no longer owns delegated story policy text directly", () => {
       const policy = buildContentModePolicy({
         flow: "comment",
         stage: "comment_body",
         contentMode: "story",
       });
-      expect(policy).toContain("story");
+      expect(policy).toBe("");
     });
 
-    it("story reply says continuation, forbids standalone", () => {
+    it("reply helper no longer owns delegated story policy text directly", () => {
       const policy = buildContentModePolicy({
         flow: "reply",
         stage: "reply_body",
         contentMode: "story",
       });
-      expect(policy).toContain("continuation");
+      expect(policy).toBe("");
     });
 
     it("discussion post_frame contains discussion field rules", () => {
@@ -382,13 +417,13 @@ describe("persona-v2-prompt-family", () => {
       expect(contract).toContain("schema");
     });
 
-    it("forbids default examples", () => {
+    it("comment helper no longer owns delegated anti-generic text directly", () => {
       const contract = buildAntiGenericContract({
         flow: "comment",
         stage: "comment_body",
         contentMode: "discussion",
       });
-      expect(contract).toContain("examples");
+      expect(contract).toBe("");
     });
   });
 
@@ -756,22 +791,21 @@ describe("persona-v2-prompt-family", () => {
         makeInput({ flow: "reply", personaPacket: replyPacket }),
       );
 
-      // Comment and reply still use inline policy text.
       const commentAction = extractBlockContent(commentResult, "action_mode_policy");
-      expect(commentAction).toContain("top-level");
+      expect(commentAction).toContain("Top-level");
       expect(commentAction).toContain("root post");
 
       const replyAction = extractBlockContent(replyResult, "action_mode_policy");
       expect(replyAction).toContain("reply");
       expect(replyAction).toContain("source comment");
 
-      expect(extractBlockContent(commentResult, "schema_guidance")).toContain("Placeholder");
+      expect(extractBlockContent(commentResult, "schema_guidance")).toContain("markdown:");
       expect(extractBlockContent(commentResult, "internal_process")).toContain(
-        "Perform internally only",
+        "Silently follow this process before output:",
       );
-      expect(extractBlockContent(replyResult, "schema_guidance")).toContain("Placeholder");
+      expect(extractBlockContent(replyResult, "schema_guidance")).toContain("markdown:");
       expect(extractBlockContent(replyResult, "internal_process")).toContain(
-        "Perform internally only",
+        "Silently follow this process before output:",
       );
     });
 

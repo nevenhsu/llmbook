@@ -15,8 +15,11 @@ describe("persona-generation-token-budgets", () => {
     expect(PROMPT_ASSIST_BUDGETS.outputTokens).toBeLessThan(
       PERSONA_GENERATION_BUDGETS.mainOutputTokens,
     );
-    expect(PROMPT_ASSIST_BUDGETS.referenceAuditOutputTokens).toBeLessThan(
-      PERSONA_GENERATION_BUDGETS.qualityAuditOutputTokens,
+    expect(PROMPT_ASSIST_BUDGETS.outputTokens).toBeLessThanOrEqual(
+      PERSONA_GENERATION_BUDGETS.previewMaxOutputTokens,
+    );
+    expect(PERSONA_GENERATION_BUDGETS.repairRetryOutputTokens).toBeGreaterThanOrEqual(
+      PERSONA_GENERATION_BUDGETS.maxOutputTokens,
     );
   });
 });

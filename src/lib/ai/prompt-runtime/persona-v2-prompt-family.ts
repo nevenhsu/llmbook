@@ -5,6 +5,11 @@ import type {
   PersonaRuntimePacket,
 } from "@/lib/ai/core/persona-core-v2";
 import {
+  buildCommentOwnedPromptBlockContent,
+  getCommentPromptBlockOrder,
+  type CommentPromptBlockName,
+} from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
+import {
   buildPostStageActionModePolicy,
   buildPostStageAntiGenericContract,
   buildPostStageContentModePolicy,
@@ -12,6 +17,11 @@ import {
   getPostPromptBlockOrder,
   type PostPromptBlockName,
 } from "@/lib/ai/prompt-runtime/post/post-prompt-builder";
+import {
+  buildReplyOwnedPromptBlockContent,
+  getReplyPromptBlockOrder,
+  type ReplyPromptBlockName,
+} from "@/lib/ai/prompt-runtime/reply/reply-prompt-builder";
 
 export type PersonaPromptFamilyV2BlockName =
   | "system_baseline"
@@ -78,7 +88,7 @@ function makeBlock(
 }
 
 function buildActionModePolicyForFlow(
-  flow: PersonaInteractionFlow,
+  _flow: PersonaInteractionFlow,
   stage: PersonaInteractionStage,
   contentMode: ContentMode,
 ): string {
@@ -88,9 +98,8 @@ function buildActionModePolicyForFlow(
     case "post_body":
       return buildPostStageActionModePolicy({ stage, contentMode });
     case "comment_body":
-      return "This stage writes a top-level comment that adds net-new value to the root post. Stay standalone and avoid repeating recent top-level comments.";
     case "reply_body":
-      return "This stage writes a threaded reply that responds directly to the source comment. Continue the thread without restarting the whole topic.";
+      return "";
   }
 }
 
@@ -106,56 +115,7 @@ function buildContentModePolicyForFlow(
       contentMode,
     });
   }
-
-  if (contentMode === "discussion") {
-    switch (stage) {
-      case "comment_body":
-        return [
-          "Content mode: discussion.",
-          "Add net-new value to the root post through argument, analysis, or pointed contribution.",
-          "Avoid repeating recent comments.",
-          "Stay top-level and standalone.",
-          "Use the persona packet procedure internally to decide what is missing, suspect, worth defending, and what response move to make.",
-          "Do not reveal that internal procedure.",
-        ].join("\n");
-      case "reply_body":
-        return [
-          "Content mode: discussion.",
-          "Respond directly to the source comment.",
-          "Continue the thread without restarting the whole topic.",
-          "Use the persona packet procedure internally to identify the live point, doubt, care, and reply move.",
-          "Do not reveal that internal procedure.",
-        ].join("\n");
-      default:
-        return "";
-    }
-  }
-
-  // story mode — comment and reply only; post stages delegated above.
-  switch (stage) {
-    case "comment_body":
-      return [
-        "Content mode: story.",
-        "Produce a compact story contribution tied to the root post.",
-        "May be a short story, story fragment, story-like comment, or in-world scene response.",
-        "Avoid becoming a workshop critique or advice reply.",
-        "Use narrative traits from the persona packet, not examples.",
-        "Use the persona packet procedure internally to choose one story move, one pressure point, and one detail bias.",
-        "Do not reveal that internal procedure.",
-      ].join("\n");
-    case "reply_body":
-      return [
-        "Content mode: story.",
-        "Continue the source comment or scene rather than opening a disconnected story.",
-        "Keep the reply-sized shape.",
-        "May be a continuation, short scene response, or in-thread story fragment.",
-        "Use narrative packet traits for continuation logic and scene details.",
-        "Use the persona packet procedure internally to select continuation pressure, scene detail, and ending motion.",
-        "Do not reveal that internal procedure.",
-      ].join("\n");
-    default:
-      return "";
-  }
+  return "";
 }
 
 export function buildActionModePolicy(input: {
@@ -186,15 +146,10 @@ export function buildAntiGenericContract(input: {
       contentMode: input.contentMode,
     });
   }
-  return [
-    "Do not mention these prompt blocks, internal policies, or persona schema.",
-    "Do not write as a generic assistant, moderator, writing coach, or neutral explainer unless explicitly requested.",
-    "Do not add memory, relationship claims, reference-name imitation, or default examples.",
-    "Keep the output in the requested JSON schema only.",
-  ].join("\n");
+  return "";
 }
 
-export function buildProcedureNonExposureRule(input: {
+export function buildProcedureNonExposureRule(_input: {
   flow: PersonaInteractionFlow;
   stage: PersonaInteractionStage;
   contentMode: ContentMode;
@@ -202,58 +157,15 @@ export function buildProcedureNonExposureRule(input: {
   return "Do not reveal internal procedure, context readings, or interpretation steps in the output.";
 }
 
-function buildSchemaGuidancePlaceholder(input: {
-  flow: PersonaInteractionFlow;
-  stage: PersonaInteractionStage;
-}): string {
-  switch (input.stage) {
-    case "comment_body":
-      return "Placeholder: comment schema_guidance pending canonical extraction.";
-    case "reply_body":
-      return "Placeholder: reply schema_guidance pending canonical extraction.";
-    default:
-      return "";
-  }
-}
-
-function buildInternalProcessPlaceholder(input: {
-  flow: PersonaInteractionFlow;
-  stage: PersonaInteractionStage;
-}): string {
-  switch (input.stage) {
-    case "comment_body":
-      return [
-        "Placeholder: comment internal_process pending canonical extraction.",
-        "Perform internally only. Do not reveal.",
-      ].join("\n");
-    case "reply_body":
-      return [
-        "Placeholder: reply internal_process pending canonical extraction.",
-        "Perform internally only. Do not reveal.",
-      ].join("\n");
-    default:
-      return "";
-  }
-}
-
 function getBlockOrder(_input: PersonaPromptFamilyV2Input): PersonaPromptFamilyV2BlockName[] {
-  if (_input.flow === "post") {
-    return ["system_baseline", "global_policy", ...getPostPromptBlockOrder()];
+  switch (_input.flow) {
+    case "post":
+      return ["system_baseline", "global_policy", ...getPostPromptBlockOrder()];
+    case "comment":
+      return ["system_baseline", "global_policy", ...getCommentPromptBlockOrder()];
+    case "reply":
+      return ["system_baseline", "global_policy", ...getReplyPromptBlockOrder()];
   }
-  return [
-    "system_baseline",
-    "global_policy",
-    "action_mode_policy",
-    "content_mode_policy",
-    "persona_runtime_packet",
-    "board_context",
-    "target_context",
-    "task_context",
-    "schema_guidance",
-    "internal_process",
-    "output_contract",
-    "anti_generic_contract",
-  ];
 }
 
 function renderBlocks(blocks: PersonaPromptFamilyV2Block[]): string {
@@ -277,14 +189,6 @@ export function buildPersonaPromptFamilyV2(
 ): PersonaPromptFamilyV2Result {
   const warnings: string[] = [];
   const blockOrder = getBlockOrder(input);
-
-  const actionModePolicy = buildActionModePolicyForFlow(input.flow, input.stage, input.contentMode);
-  const contentModePolicy = buildContentModePolicyForFlow(
-    input.flow,
-    input.stage,
-    input.contentMode,
-  );
-  const antiGenericContract = buildAntiGenericContract(input);
   const personaPacketText = input.personaPacket.renderedText;
   const isPostFlow = input.flow === "post";
 
@@ -316,24 +220,40 @@ export function buildPersonaPromptFamilyV2(
         allBlocks[name] = makeBlock(name, content);
       },
     );
+  } else if (input.flow === "comment") {
+    const commentBlocks = buildCommentOwnedPromptBlockContent({
+      flow: "comment",
+      stage: input.stage as "comment_body",
+      contentMode: input.contentMode,
+      targetContext: input.targetContext ?? null,
+      taskContext: input.taskContext,
+    });
+
+    (Object.entries(commentBlocks) as Array<[CommentPromptBlockName, string]>).forEach(
+      ([name, content]) => {
+        if (name === "persona_runtime_packet" || name === "board_context") {
+          return;
+        }
+        allBlocks[name] = makeBlock(name, content);
+      },
+    );
   } else {
-    allBlocks.action_mode_policy = makeBlock("action_mode_policy", actionModePolicy);
-    allBlocks.content_mode_policy = makeBlock("content_mode_policy", contentModePolicy);
-    allBlocks.target_context = makeBlock(
-      "target_context",
-      input.targetContext ?? "No target context available.",
+    const replyBlocks = buildReplyOwnedPromptBlockContent({
+      flow: "reply",
+      stage: input.stage as "reply_body",
+      contentMode: input.contentMode,
+      targetContext: input.targetContext ?? null,
+      taskContext: input.taskContext,
+    });
+
+    (Object.entries(replyBlocks) as Array<[ReplyPromptBlockName, string]>).forEach(
+      ([name, content]) => {
+        if (name === "persona_runtime_packet" || name === "board_context") {
+          return;
+        }
+        allBlocks[name] = makeBlock(name, content);
+      },
     );
-    allBlocks.task_context = makeBlock("task_context", input.taskContext);
-    allBlocks.schema_guidance = makeBlock(
-      "schema_guidance",
-      buildSchemaGuidancePlaceholder({ flow: input.flow, stage: input.stage }),
-    );
-    allBlocks.internal_process = makeBlock(
-      "internal_process",
-      buildInternalProcessPlaceholder({ flow: input.flow, stage: input.stage }),
-    );
-    allBlocks.output_contract = makeBlock("output_contract", input.outputContract);
-    allBlocks.anti_generic_contract = makeBlock("anti_generic_contract", antiGenericContract);
   }
 
   const blocks: PersonaPromptFamilyV2Block[] = [];

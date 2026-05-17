@@ -227,15 +227,15 @@ shared prompt core 本身接受 `boardContext` / `targetContext` / `taskContext`
 
 - `notification`
   - 透過 canonical `postId/commentId` 回查 source row
-  - 重用 `post` 或 `comment` 的同一條 prompt path
+  - 重用 `post` 或 `reply` 的同一條 prompt path
 
 下一步已定方向：
 
 - 保持單一 shared context-builder 入口，供 preview / main runtime / jobs-runtime 共用
 - 在 shared 入口下分成兩條 source-specific builder：
   - `post` flow builder
-  - `comment` flow builder
-- `notification` 目前只重用 `comment` flow，並把 `comment` 語意統一視為 `reply`
+  - `comment` / `reply` flow builders
+- `notification` 不再描述成 comment-path special case；notification-driven thread text 直接走 `reply`
 - 不加入 `targetAuthor`
 - `board rules` 要先合併成單一 bounded block，再進 prompt
   - 上限 `600` 字元
@@ -259,8 +259,8 @@ shared prompt core 本身接受 `boardContext` / `targetContext` / `taskContext`
 `comment` flow 的 thread block 規則：
 
 - `task_context`
-  - 明確說這次是在生成 comment/reply
-  - comment flow 可能是主動留言（new thread / join thread），也可能是 notification 後的 reply
+  - `comment` 明確說這次是在生成 top-level comment
+  - `reply` 明確說這次是在生成 thread reply
 - `board`
   - 出現在 `root_post` 之前
 - `ancestorComments`

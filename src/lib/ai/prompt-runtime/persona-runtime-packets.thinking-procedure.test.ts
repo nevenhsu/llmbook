@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildCommentPersonaPacket,
   buildReplyPersonaPacket,
-  buildAuditPersonaPacket,
 } from "./persona-runtime-packets";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 
@@ -63,7 +62,11 @@ const SHARED_NARRATIVE: PersonaCoreV2["narrative"] = {
 const PERSONA_A: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
+  originalization_note:
+    "Originalized into an incentive-first forum persona that surfaces hidden costs and status pressure.",
   identity: {
+    display_name: "Persona A",
+    bio: "Persona A is a skeptical critic who notices incentives and hidden costs first.",
     archetype: "restless pattern-spotter",
     core_drive: "puncture vague consensus",
     central_tension: "clarity against comfort",
@@ -117,7 +120,11 @@ const PERSONA_A: PersonaCoreV2 = {
 const PERSONA_B: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
+  originalization_note:
+    "Originalized into a craft-first forum persona that protects fragile intent from speed.",
   identity: {
+    display_name: "Persona B",
+    bio: "Persona B is a craft guardian who notices care, texture, and erosion first.",
     archetype: "craft guardian",
     core_drive: "protect fragile intent from speed-driven erosion",
     central_tension: "care against efficiency",
@@ -280,9 +287,9 @@ describe("thinking procedure differentiation", () => {
       expect(commentB.renderedText.toLowerCase()).not.toContain("feedback loop");
     });
 
-    it("all procedure lines contain 'internally'", () => {
+    it("all discussion packets contain the Internal procedure section", () => {
       for (const p of [commentA, commentB, commentC]) {
-        expect(p.renderedText).toMatch(/internally/i);
+        expect(p.renderedText).toMatch(/Internal procedure:/);
       }
     });
 
@@ -325,31 +332,10 @@ describe("thinking procedure differentiation", () => {
       expect(replyC.renderedText.toLowerCase()).toContain("structured synthesis");
     });
 
-    it("each reply packet includes Procedure: line", () => {
+    it("each reply packet includes Internal procedure section", () => {
       for (const p of [replyA, replyB, replyC]) {
-        expect(p.renderedText).toMatch(/Procedure:/);
+        expect(p.renderedText).toMatch(/Internal procedure:/);
       }
-    });
-  });
-
-  describe("audit packets include procedure-fit target", () => {
-    const auditA = buildAuditPersonaPacket({
-      contentMode: "discussion",
-      personaId: "a",
-      core: PERSONA_A,
-    });
-    const auditC = buildAuditPersonaPacket({
-      contentMode: "discussion",
-      personaId: "c",
-      core: PERSONA_C,
-    });
-
-    it("discussion audit includes procedure_fit target", () => {
-      expect(auditA.auditTargets).toContain("procedure_fit");
-    });
-
-    it("audit packets differ when core differs", () => {
-      expect(auditA.renderedText).not.toBe(auditC.renderedText);
     });
   });
 
@@ -379,8 +365,8 @@ describe("thinking procedure differentiation", () => {
       expect(storyA.renderedText).not.toBe(discA.renderedText);
     });
 
-    it("story procedure line mentions story mode", () => {
-      expect(storyA.renderedText.toLowerCase()).toContain("story mode");
+    it("story procedure line includes story_mode guidance", () => {
+      expect(storyA.renderedText.toLowerCase()).toContain("story_mode:");
     });
   });
 
@@ -388,7 +374,6 @@ describe("thinking procedure differentiation", () => {
     const allPackets = [
       buildCommentPersonaPacket({ contentMode: "discussion", personaId: "a", core: PERSONA_A }),
       buildReplyPersonaPacket({ contentMode: "discussion", personaId: "a", core: PERSONA_A }),
-      buildAuditPersonaPacket({ contentMode: "discussion", personaId: "a", core: PERSONA_A }),
       buildCommentPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
       buildReplyPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
     ];
@@ -409,15 +394,16 @@ describe("thinking procedure differentiation", () => {
       }
     });
 
-    it("every packet says to use procedure internally", () => {
+    it("every packet includes the Internal procedure section", () => {
       for (const p of allPackets) {
-        expect(p.renderedText).toMatch(/internally|internal/i);
+        expect(p.renderedText).toMatch(/Internal procedure:/i);
       }
     });
 
-    it("renderedText contains no reference names", () => {
-      for (const p of allPackets) {
-        expect(p.renderedText).not.toContain("Jane Jacobs");
+    it("reference-style guidance appears only on packet variants that render that section", () => {
+      expect(allPackets.some((p) => p.renderedText.includes("Jane Jacobs"))).toBe(true);
+      for (const p of allPackets.filter((packet) => packet.renderedText.includes("Jane Jacobs"))) {
+        expect(p.renderedText).toContain("not roleplay targets");
       }
     });
 

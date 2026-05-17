@@ -378,7 +378,6 @@ export async function previewPersonaGeneration(input: {
 
   let personaCore!: PersonaCoreV2;
   let structured!: PersonaGenerationStructured;
-  let assembledPrompt!: string;
   let tokenBudget!: PreviewTokenBudget;
   let markdown!: string;
 
@@ -413,7 +412,6 @@ export async function previewPersonaGeneration(input: {
       reference_derivation: personaCore.reference_style.abstract_traits,
       originalization_note: personaCore.originalization_note,
     };
-    assembledPrompt = promptBuildResult.assembledPrompt;
     tokenBudget = buildTokenBudgetSignal({
       blocks: promptBuildResult.blocks.map((block) => ({
         name: block.name,
@@ -467,7 +465,6 @@ export async function previewPersonaGeneration(input: {
   try {
     markdownToEditorHtml(markdown);
     return {
-      assembledPrompt,
       markdown,
       renderOk: true,
       renderError: null,
@@ -477,7 +474,6 @@ export async function previewPersonaGeneration(input: {
     };
   } catch (error) {
     return {
-      assembledPrompt,
       markdown,
       renderOk: false,
       renderError: error instanceof Error ? error.message : "render validation failed",

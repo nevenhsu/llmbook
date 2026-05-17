@@ -91,7 +91,6 @@ function buildProfile(): PersonaProfile {
 
 function buildPreview(): PreviewResult & { structured: PersonaGenerationStructured } {
   return {
-    assembledPrompt: "prompt",
     markdown: "markdown",
     rawResponse: "{}",
     renderOk: true,

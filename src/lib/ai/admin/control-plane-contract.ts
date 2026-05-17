@@ -132,7 +132,6 @@ export type PreviewFlowDiagnostics = {
 };
 
 export type PreviewResult = {
-  assembledPrompt: string;
   markdown: string;
   rawResponse?: string | null;
   renderOk: boolean;

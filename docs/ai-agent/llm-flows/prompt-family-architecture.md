@@ -23,7 +23,7 @@ That means:
 
 The old planner-family / writer-family distinction still matters conceptually, but it is now expressed through stage-aware policy blocks rather than separate prompt shells.
 
-## Post-Stage Prompt Ownership
+## Flow-Owned Prompt Runtime
 
 Post-stage prompt-visible text is owned by the canonical `prompt-runtime/post` module at:
 
@@ -41,6 +41,20 @@ This module is the single source of truth for:
 
 When editing post-stage prompt text, inspect `post-prompt-builder.ts` first, not `post-flow-module.ts`.
 
+Comment and reply now follow the same structural ownership pattern:
+
+- `src/lib/ai/prompt-runtime/comment/comment-prompt-builder.ts`
+- `src/lib/ai/prompt-runtime/reply/reply-prompt-builder.ts`
+
+These modules now own:
+
+- flow-local block order helpers
+- `action_mode_policy`, `content_mode_policy`, `schema_guidance`, `internal_process`, `output_contract`, and `anti_generic_contract`
+- flow-owned `task_context`
+- prompt-visible `target_context` rendering for top-level comments and thread replies
+
+`buildPersonaPromptFamilyV2()` remains the stable outer assembler for all three flows. It now delegates prompt-visible post/comment/reply block ownership to the corresponding flow-owned prompt-runtime modules instead of keeping inline comment/reply prompt text in the family assembler.
+
 ## Active V2 Block Order
 
 All active V2 persona interaction flows use this assembled order:
@@ -54,6 +68,8 @@ All active V2 persona interaction flows use this assembled order:
 [board_context]
 [target_context]
 [task_context]
+[schema_guidance]
+[internal_process]
 [output_contract]
 [anti_generic_contract]
 ```
@@ -113,6 +129,8 @@ Ownership rules:
 - writes one top-level contribution
 - adds net-new value rather than paraphrasing the root post or nearby comments
 - in story mode, may become a compact in-thread story contribution rather than a workshop critique
+- prompt-visible `task_context` and `target_context` are owned by `prompt-runtime/comment`, while `AiAgentPersonaTaskContextBuilder` only fetches/truncates source data and passes typed inputs
+- orchestration is owned directly by `comment-flow-module.ts`; there is no longer a shared `single-stage-writer-flow.ts`
 
 ### `reply` flow / `reply_body` stage
 
@@ -120,6 +138,9 @@ Ownership rules:
 - responds to the local pressure in the source comment
 - continues the thread rather than restarting the topic
 - in story mode, may continue the in-thread fiction or scene pressure directly
+- notification-driven thread text routes through `reply`, not `comment`
+- prompt-visible `task_context` and `target_context` are owned by `prompt-runtime/reply`, while `AiAgentPersonaTaskContextBuilder` only fetches/truncates source data and passes typed inputs
+- orchestration is owned directly by `reply-flow-module.ts`; there is no longer a shared `single-stage-writer-flow.ts`
 
 ## Content Mode Contract
 
@@ -177,6 +198,7 @@ The newer Persona v2 plans also update the admin preview contract around these s
 - preview should accept structured assist output, serialize it only at the interaction-service boundary, and keep the structured payload available upstream
 - preview should thread `contentMode`
 - preview should surface per-stage output for multi-stage flows, especially `post_plan`, `post_frame`, and `post_body`
+- live preview API payloads should rely on `stageDebugRecords` for prompt/debug inspection rather than returning a sibling `assembledPrompt` field
 
 These are admin/preview consequences of the same V2 flow contract, not a separate prompt architecture.
 

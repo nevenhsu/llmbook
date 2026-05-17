@@ -1,13 +1,25 @@
-import {
-  buildExecutionPreviewFromTask,
-  type AiAgentExecutionPreview,
-} from "@/lib/ai/agent/execution/execution-preview";
 import { AiAgentPersonaTaskStore } from "@/lib/ai/agent/execution/persona-task-store";
 import {
   AiAgentPersonaTaskExecutor,
   type AiAgentTextExecutionPersistedResult,
 } from "@/lib/ai/agent/execution/persona-task-executor";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
+
+export type AiAgentTextRuntimeTaskPreview = {
+  taskId: string;
+  taskType: TaskSnapshot["taskType"];
+  sourceTable: TaskSnapshot["sourceTable"];
+  sourceId: TaskSnapshot["sourceId"];
+  dispatchKind: TaskSnapshot["dispatchKind"];
+  status: TaskSnapshot["status"];
+  resultId: TaskSnapshot["resultId"];
+  resultType: TaskSnapshot["resultType"];
+  generatedMedia: {
+    needImage: boolean;
+    imagePrompt: string | null;
+    imageAlt: string | null;
+  } | null;
+};
 
 type TextRuntimeServiceDeps = {
   loadTaskById: (taskId: string) => Promise<TaskSnapshot | null>;
@@ -24,8 +36,45 @@ export type AiAgentTextRuntimePreviewResult = {
   blocker: string | null;
   selectedTaskId: string | null;
   summary: string;
-  executionPreview: AiAgentExecutionPreview | null;
+  executionPreview: AiAgentTextRuntimeTaskPreview | null;
 };
+
+function readGeneratedMedia(task: TaskSnapshot): AiAgentTextRuntimeTaskPreview["generatedMedia"] {
+  const generatedMedia =
+    task.payload.generatedMedia &&
+    typeof task.payload.generatedMedia === "object" &&
+    !Array.isArray(task.payload.generatedMedia)
+      ? (task.payload.generatedMedia as {
+          needImage?: unknown;
+          imagePrompt?: unknown;
+          imageAlt?: unknown;
+        })
+      : null;
+
+  if (!generatedMedia) {
+    return null;
+  }
+
+  return {
+    needImage: generatedMedia.needImage === true,
+    imagePrompt: typeof generatedMedia.imagePrompt === "string" ? generatedMedia.imagePrompt : null,
+    imageAlt: typeof generatedMedia.imageAlt === "string" ? generatedMedia.imageAlt : null,
+  };
+}
+
+function buildRuntimeTaskPreview(task: TaskSnapshot): AiAgentTextRuntimeTaskPreview {
+  return {
+    taskId: task.id,
+    taskType: task.taskType,
+    sourceTable: task.sourceTable,
+    sourceId: task.sourceId,
+    dispatchKind: task.dispatchKind,
+    status: task.status,
+    resultId: task.resultId,
+    resultType: task.resultType,
+    generatedMedia: readGeneratedMedia(task),
+  };
+}
 
 export class AiAgentTextRuntimeGuardError extends Error {
   public readonly reasonCode: string;
@@ -65,8 +114,8 @@ export class AiAgentTextRuntimeService {
       available: true,
       blocker: null,
       selectedTaskId: task.id,
-      summary: "Shared execution preview is available for the selected text task.",
-      executionPreview: buildExecutionPreviewFromTask(task),
+      summary: "Runtime task preview is available for the selected text task.",
+      executionPreview: buildRuntimeTaskPreview(task),
     };
   }
 

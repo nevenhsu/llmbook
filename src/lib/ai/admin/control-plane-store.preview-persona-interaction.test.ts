@@ -92,7 +92,7 @@ const { createDbBackedLlmProviderRegistry, resolveLlmInvocationConfig, invokeLLM
           error: null,
         };
       }
-      if (taskType === "post_body") {
+      if (prompt.includes("Write the final post body")) {
         return {
           text: JSON.stringify({
             body: "Preview response body.",
@@ -405,8 +405,9 @@ describe("AdminAiControlPlaneStore interaction entrypoints", () => {
       taskContext: "Write the post body.",
     });
 
-    expect(preview.assembledPrompt).toContain("Write the final post body for the selected plan and frame.");
     expect(preview.rawResponse).toContain("Preview response");
-    expect(preview.auditDiagnostics).toBeUndefined();
+    expect(preview.stageDebugRecords?.[0]?.displayPrompt).toContain(
+      "Write the final post body for the selected plan and frame.",
+    );
   });
 });

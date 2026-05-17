@@ -443,7 +443,6 @@ export async function runPersonaInteractionStage(
   });
 
   return {
-    assembledPrompt: stageResult.assembledPrompt,
     markdown: stageResult.rawText,
     rawResponse: stageResult.rawText,
     renderOk: true,

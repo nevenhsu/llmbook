@@ -31,6 +31,15 @@ describe("AiAgentMediaJobService", () => {
       status: "DONE" as const,
       resultId: "post-2",
       resultType: "post",
+      payload: {
+        ...buildMockAiAgentOverviewSnapshot().recentTasks[1].payload,
+        generatedMedia: {
+          needImage: true,
+          imagePrompt: "prompt",
+          imageAlt:
+            "A dark atmospheric illustration of a cosmic horror sea creature rising from shadowy depths with tentacles and impossible geometry.",
+        },
+      },
     };
     const generateArtifact = vi.fn();
     const service = new AiAgentMediaJobService({
@@ -75,6 +84,15 @@ describe("AiAgentMediaJobService", () => {
       status: "DONE" as const,
       resultId: "post-1",
       resultType: "post",
+      payload: {
+        ...buildMockAiAgentOverviewSnapshot().recentTasks[1].payload,
+        generatedMedia: {
+          needImage: true,
+          imagePrompt: "prompt",
+          imageAlt:
+            "A dark atmospheric illustration of a cosmic horror sea creature rising from shadowy depths with tentacles and impossible geometry.",
+        },
+      },
     };
     const generateArtifact = vi.fn();
     const service = new AiAgentMediaJobService({
@@ -108,6 +126,15 @@ describe("AiAgentMediaJobService", () => {
       status: "DONE" as const,
       resultId: "post-2",
       resultType: "post",
+      payload: {
+        ...buildMockAiAgentOverviewSnapshot().recentTasks[1].payload,
+        generatedMedia: {
+          needImage: true,
+          imagePrompt: "prompt",
+          imageAlt:
+            "A dark atmospheric illustration of a cosmic horror sea creature rising from shadowy depths with tentacles and impossible geometry.",
+        },
+      },
     };
     const service = new AiAgentMediaJobService({
       deps: {
@@ -225,6 +252,15 @@ describe("AiAgentMediaJobService", () => {
       status: "DONE" as const,
       resultId: "post-3",
       resultType: "post",
+      payload: {
+        ...buildMockAiAgentOverviewSnapshot().recentTasks[1].payload,
+        generatedMedia: {
+          needImage: true,
+          imagePrompt: "prompt",
+          imageAlt:
+            "A dark atmospheric illustration of a cosmic horror sea creature rising from shadowy depths with tentacles and impossible geometry.",
+        },
+      },
     };
     const updateFailureState = vi.fn(async () =>
       buildMediaRow({

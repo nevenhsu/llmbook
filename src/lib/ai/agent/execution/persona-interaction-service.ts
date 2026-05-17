@@ -10,6 +10,8 @@ import type {
 import type { ContentMode, PersonaInteractionTaskType } from "@/lib/ai/core/persona-core-v2";
 import { parsePersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
+import { buildCommentStageTaskContext } from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
+import { buildReplyStageTaskContext } from "@/lib/ai/prompt-runtime/reply/reply-prompt-builder";
 import { runPersonaInteractionStage } from "@/lib/ai/agent/execution/persona-interaction-stage-service";
 import { resolveTextFlowModule } from "@/lib/ai/agent/execution/flows/registry";
 import type { AiAgentPersonaTaskPromptContext } from "@/lib/ai/agent/execution/persona-task-context-builder";
@@ -84,13 +86,20 @@ function buildPreviewTaskContext(input: {
   taskType: PersonaInteractionTaskType;
   contentMode?: ContentMode;
 }): string {
+  const contentMode = input.contentMode ?? "discussion";
   switch (input.taskType) {
     case "post":
       return "";
     case "comment":
-      return "Generate a top-level comment using the dynamic target context below. Stand on its own and add net-new value.";
+      return buildCommentStageTaskContext({
+        stage: "comment_body",
+        contentMode,
+      });
     case "reply":
-      return "Generate a reply using the dynamic target context below. Respond directly to the provided source/comment chain and move the exchange forward.";
+      return buildReplyStageTaskContext({
+        stage: "reply_body",
+        contentMode,
+      });
   }
 }
 
@@ -212,7 +221,6 @@ export class AiAgentPersonaInteractionService {
     } catch (error) {
       if (error instanceof TextFlowExecutionError) {
         return {
-          assembledPrompt: "",
           markdown: "",
           rawResponse: null,
           renderOk: false,
@@ -238,7 +246,6 @@ export class AiAgentPersonaInteractionService {
       markdownToEditorHtml(markdown);
       return {
         ...result.preview,
-        assembledPrompt: "",
         markdown,
         stageDebugRecords: result.stageDebugRecords,
         renderOk: true,
@@ -247,7 +254,6 @@ export class AiAgentPersonaInteractionService {
     } catch (error) {
       return {
         ...result.preview,
-        assembledPrompt: "",
         markdown,
         stageDebugRecords: result.stageDebugRecords,
         renderOk: false,

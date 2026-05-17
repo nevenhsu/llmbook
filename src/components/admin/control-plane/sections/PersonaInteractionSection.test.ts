@@ -78,6 +78,7 @@ describe("PersonaInteractionSection", () => {
             modelId: "model-1",
             taskType: "comment",
             taskContext: "",
+            contentMode: "discussion",
           },
           setInteractionInput,
           personas: [
@@ -224,6 +225,7 @@ describe("PersonaInteractionSection", () => {
             modelId: "model-1",
             taskType: "comment",
             taskContext: "Reply to this draft critique.",
+            contentMode: "discussion",
           },
           setInteractionInput: vi.fn(),
           personas: [],
@@ -312,6 +314,7 @@ describe("PersonaInteractionSection", () => {
             modelId: "model-1",
             taskType: "post",
             taskContext: defaultInteractionTaskContext("post"),
+            contentMode: "discussion",
           },
           setInteractionInput,
           personas: [],
@@ -387,13 +390,15 @@ describe("PersonaInteractionSection", () => {
     const updater = setInteractionInput.mock.calls[0][0] as (prev: {
       personaId: string;
       modelId: string;
-      taskType: "post" | "comment";
+      taskType: "post" | "comment" | "reply";
       taskContext: string;
+      contentMode: "discussion" | "story";
     }) => {
       personaId: string;
       modelId: string;
-      taskType: "post" | "comment";
+      taskType: "post" | "comment" | "reply";
       taskContext: string;
+      contentMode: "discussion" | "story";
     };
 
     expect(
@@ -402,12 +407,14 @@ describe("PersonaInteractionSection", () => {
         modelId: "model-1",
         taskType: "post",
         taskContext: defaultInteractionTaskContext("post"),
+        contentMode: "discussion",
       }),
     ).toEqual({
       personaId: "persona-1",
       modelId: "model-1",
       taskType: "comment",
       taskContext: defaultInteractionTaskContext("comment"),
+      contentMode: "discussion",
     });
   });
 });

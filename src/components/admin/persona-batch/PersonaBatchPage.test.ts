@@ -73,6 +73,7 @@ function buildController(overrides: Partial<PersonaBatchGenerationController> = 
       referenceName: "Anthony Bourdain",
       dbReferenceExists: false,
       contextPrompt: "A globe-trotting storyteller with knife-edge taste.",
+      contextPromptReferenceNames: ["Anthony Bourdain"],
       displayName: mockPersonaGenerationPreview.structured.persona.display_name,
       username: "ai_riptideroo",
       personaData: mockPersonaGenerationPreview.structured,
@@ -195,7 +196,7 @@ describe("PersonaBatchPage", () => {
     expect(container.querySelector("textarea")).toBeNull();
 
     const openReferenceModalButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Add",
+      (button) => button.textContent?.trim() === "Add Names",
     );
     expect(openReferenceModalButton).toBeDefined();
 
@@ -301,7 +302,7 @@ describe("PersonaBatchPage", () => {
     expect(container.textContent).toContain("Anthony Bourdain Persona");
     expect(container.textContent).toContain("ai_riptideroo");
     expect(container.textContent).toContain("Anthony Bourdain");
-    expect(container.textContent).toContain("Voice Fingerprint");
+    expect(container.textContent).toContain("Thinking Procedure");
 
     const personaRegenerateButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Regenerate"),

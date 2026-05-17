@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createCommentFlowModule } from "@/lib/ai/agent/execution/flows/comment-flow-module";
+import { TextFlowExecutionError } from "@/lib/ai/agent/execution/flows/types";
 import type { PreviewResult } from "@/lib/ai/admin/control-plane-store";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
 import type { PromptPersonaEvidence } from "@/lib/ai/prompt-runtime/persona-audit-shared";
@@ -32,9 +33,8 @@ function buildTask(overrides: Partial<TaskSnapshot> = {}): TaskSnapshot {
   };
 }
 
-function buildPreviewResult(rawResponse: string): PreviewResult {
+function buildPreviewResult(rawResponse: string, debugPrompt?: string): PreviewResult {
   return {
-    assembledPrompt: "prompt",
     markdown: rawResponse,
     rawResponse,
     renderOk: true,
@@ -48,7 +48,16 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
       exceeded: false,
       message: "ok",
     },
-    auditDiagnostics: null,
+    stageDebugRecords: debugPrompt
+      ? [
+          {
+            name: "comment_body",
+            displayPrompt: debugPrompt,
+            outputMaxTokens: 600,
+            attempts: [],
+          },
+        ]
+      : null,
   };
 }
 
@@ -67,41 +76,21 @@ function buildPersonaEvidence(): PromptPersonaEvidence {
 }
 
 describe("createCommentFlowModule", () => {
-  it("returns first-class comment audit diagnostics in the shared flow envelope", async () => {
+  it("parses a successful comment generation into the comment flow envelope", async () => {
     const flowModule = createCommentFlowModule();
-    const runPersonaInteractionStage = vi
-      .fn()
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown:
-              "I would push this one step further: the board needs a novelty rubric, not just title filtering.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            checks: {
-              post_relevance: "pass",
-              net_new_value: "pass",
-              non_repetition_against_recent_comments: "pass",
-              standalone_top_level_shape: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-              procedure_fit: "pass",
-            },
-          }),
-        ),
-      );
+    const runPersonaInteractionStage = vi.fn().mockResolvedValue(
+      buildPreviewResult(
+        JSON.stringify({
+          markdown:
+            "I would push this one step further: the board needs a novelty rubric, not just title filtering.",
+          need_image: false,
+          image_prompt: null,
+          image_alt: null,
+          metadata: { probability: 42 },
+        }),
+        "[task_context]\nGenerate a top-level comment on the post below.",
+      ),
+    );
 
     const result = await flowModule.runRuntime({
       task: buildTask(),
@@ -109,9 +98,6 @@ describe("createCommentFlowModule", () => {
         flowKind: "comment",
         taskType: "comment",
         taskContext: "Generate a top-level comment on the post below.",
-        boardContextText: "[board]\nName: Creative Lab",
-        targetContextText:
-          "[root_post]\nTitle: Novelty first\n\n[recent_top_level_comments]\n- [alice]: We need fresher prompts.",
       },
       loadPreferredTextModel: async () => ({
         modelId: "model-1",
@@ -122,6 +108,7 @@ describe("createCommentFlowModule", () => {
       personaEvidence: buildPersonaEvidence(),
     });
 
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(1);
     expect(result.flowResult.flowKind).toBe("comment");
     if (result.flowResult.flowKind !== "comment") {
       throw new Error("expected comment flow result");
@@ -132,69 +119,29 @@ describe("createCommentFlowModule", () => {
       needImage: false,
       imagePrompt: null,
       imageAlt: null,
-      metadata: { probability: 0 },
+      metadata: { probability: 42 },
     });
-    expect(result.flowResult.diagnostics.audit).toEqual({
-      contract: "comment_audit",
-      status: "passed",
-      repairApplied: false,
-      issues: [],
-      checks: {
-        post_relevance: "pass",
-        net_new_value: "pass",
-        non_repetition_against_recent_comments: "pass",
-        standalone_top_level_shape: "pass",
-        value_fit: "pass",
-        reasoning_fit: "pass",
-        discourse_fit: "pass",
-        expression_fit: "pass",
-        procedure_fit: "pass",
-      },
+    expect(result.flowResult.diagnostics).toEqual({
+      finalStatus: "passed",
+      terminalStage: "comment_body",
+      attempts: [{ stage: "comment_body", main: 1, regenerate: 0 }],
+      stageResults: [{ stage: "comment_body", status: "passed" }],
     });
-    expect(result.flowResult.diagnostics.attempts).toEqual([
-      {
-        stage: "comment.main",
-        main: 1,
-        schemaRepair: 0,
-        repair: 0,
-        regenerate: 0,
-      },
-    ]);
+    expect(result.stageDebugRecords?.[0]?.displayPrompt).toContain("[task_context]");
   });
 
-  it("regenerates the comment once when the first generation attempt fails terminally", async () => {
+  it("regenerates once with a fresh task-context suffix after a first failure", async () => {
     const flowModule = createCommentFlowModule();
     const runPersonaInteractionStage = vi
       .fn()
-      .mockRejectedValueOnce(new Error("comment audit failed after repair"))
+      .mockRejectedValueOnce(new Error("transient failure"))
       .mockResolvedValueOnce(
         buildPreviewResult(
           JSON.stringify({
-            markdown:
-              "The missing piece is board-level novelty memory, not more prompt adjectives.",
+            markdown: "The missing piece is board-level novelty memory, not more prompt adjectives.",
             need_image: false,
             image_prompt: null,
             image_alt: null,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            checks: {
-              post_relevance: "pass",
-              net_new_value: "pass",
-              non_repetition_against_recent_comments: "pass",
-              standalone_top_level_shape: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-              procedure_fit: "pass",
-            },
           }),
         ),
       );
@@ -215,241 +162,20 @@ describe("createCommentFlowModule", () => {
       personaEvidence: buildPersonaEvidence(),
     });
 
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
+    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(2);
     expect(runPersonaInteractionStage.mock.calls[1]?.[0].taskContext).toContain(
       "[fresh_regenerate]",
     );
     expect(result.flowResult.diagnostics.attempts).toEqual([
-      {
-        stage: "comment.main",
-        main: 2,
-        schemaRepair: 0,
-        repair: 0,
-        regenerate: 1,
-      },
+      { stage: "comment_body", main: 2, regenerate: 1 },
     ]);
-    if (result.flowResult.flowKind !== "comment") {
-      throw new Error("expected comment flow result");
-    }
-    expect(result.flowResult.parsed.comment.markdown).toContain("board-level novelty memory");
   });
 
-  it("runs one schema repair before audit when main output is invalid JSON", async () => {
+  it("throws a typed flow error after both attempts fail", async () => {
     const flowModule = createCommentFlowModule();
     const runPersonaInteractionStage = vi
       .fn()
-      .mockResolvedValueOnce(buildPreviewResult("Plain prose is not a valid comment JSON object."))
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown: "Schema repair produces the required structured comment.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            checks: {
-              post_relevance: "pass",
-              net_new_value: "pass",
-              non_repetition_against_recent_comments: "pass",
-              standalone_top_level_shape: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-              procedure_fit: "pass",
-            },
-          }),
-        ),
-      );
-
-    const result = await flowModule.runPreview({
-      task: buildTask(),
-      promptContext: {
-        flowKind: "comment",
-        taskType: "comment",
-        taskContext: "Generate a top-level comment on the post below.",
-      },
-      loadPreferredTextModel: async () => ({
-        modelId: "model-1",
-        providerKey: "xai",
-        modelKey: "grok-4-1-fast-reasoning",
-      }),
-      runPersonaInteractionStage: runPersonaInteractionStage as any,
-      personaEvidence: buildPersonaEvidence(),
-    });
-
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(3);
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0]).toMatchObject({
-      stagePurpose: "schema_repair",
-      taskType: "comment",
-    });
-    expect(runPersonaInteractionStage.mock.calls[1]?.[0].taskContext).toContain("[retry_repair]");
-    expect(result.flowResult.diagnostics.attempts).toEqual([
-      {
-        stage: "comment.main",
-        main: 1,
-        schemaRepair: 1,
-        repair: 0,
-        regenerate: 0,
-      },
-    ]);
-    if (result.flowResult.flowKind !== "comment") {
-      throw new Error("expected comment flow result");
-    }
-    expect(result.flowResult.parsed.comment.markdown).toContain("Schema repair produces");
-  });
-
-  it("regenerates when audit still fails after one repair attempt", async () => {
-    const flowModule = createCommentFlowModule();
-    const runPersonaInteractionStage = vi
-      .fn()
-      // first main generation
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown: "This is still broad and generic.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      // first audit -> fail
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: false,
-            issues: ["Too generic and repeats recent thread framing."],
-            repairGuidance: ["Add one concrete boundary-level distinction."],
-            checks: {
-              post_relevance: "pass",
-              net_new_value: "fail",
-              non_repetition_against_recent_comments: "fail",
-              standalone_top_level_shape: "fail",
-              value_fit: "fail",
-              reasoning_fit: "fail",
-              discourse_fit: "fail",
-              expression_fit: "fail",
-              procedure_fit: "pass",
-            },
-          }),
-        ),
-      )
-      // repair output
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown: "Attempted repair but still not thread-native enough.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      // re-audit -> still fail (forces regenerate)
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: false,
-            issues: ["Still repeats nearby top-level wording."],
-            repairGuidance: ["Force a fresh framing."],
-            checks: {
-              post_relevance: "pass",
-              net_new_value: "fail",
-              non_repetition_against_recent_comments: "fail",
-              standalone_top_level_shape: "fail",
-              value_fit: "fail",
-              reasoning_fit: "fail",
-              discourse_fit: "fail",
-              expression_fit: "fail",
-              procedure_fit: "pass",
-            },
-          }),
-        ),
-      )
-      // fresh regenerate generation
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown:
-              "The core fix is to separate schema-repair from policy-gate failures in operator logs.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      // regenerated audit -> pass
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            passes: true,
-            issues: [],
-            repairGuidance: [],
-            checks: {
-              post_relevance: "pass",
-              net_new_value: "pass",
-              non_repetition_against_recent_comments: "pass",
-              standalone_top_level_shape: "pass",
-              value_fit: "pass",
-              reasoning_fit: "pass",
-              discourse_fit: "pass",
-              expression_fit: "pass",
-              procedure_fit: "pass",
-            },
-          }),
-        ),
-      );
-
-    const result = await flowModule.runPreview({
-      task: buildTask(),
-      promptContext: {
-        flowKind: "comment",
-        taskType: "comment",
-        taskContext: "Generate a top-level comment on the post below.",
-      },
-      loadPreferredTextModel: async () => ({
-        modelId: "model-1",
-        providerKey: "xai",
-        modelKey: "grok-4-1-fast-reasoning",
-      }),
-      runPersonaInteractionStage: runPersonaInteractionStage as any,
-      personaEvidence: buildPersonaEvidence(),
-    });
-
-    expect(runPersonaInteractionStage).toHaveBeenCalledTimes(6);
-    const hasFreshRegenerate = runPersonaInteractionStage.mock.calls.some((call) =>
-      call?.[0]?.taskContext?.includes("[fresh_regenerate]"),
-    );
-    expect(hasFreshRegenerate).toBe(true);
-    expect(result.flowResult.diagnostics.attempts).toEqual([
-      {
-        stage: "comment.main",
-        main: 2,
-        schemaRepair: 0,
-        repair: 1,
-        regenerate: 1,
-      },
-    ]);
-    if (result.flowResult.flowKind !== "comment") {
-      throw new Error("expected comment flow result");
-    }
-    expect(result.flowResult.parsed.comment.markdown).toContain("schema-repair");
-  });
-
-  it("throws typed flow error with failed diagnostics on terminal failure", async () => {
-    const flowModule = createCommentFlowModule();
-    const runPersonaInteractionStage = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("transport down"))
+      .mockRejectedValueOnce(new Error("transport still down"))
       .mockRejectedValueOnce(new Error("transport still down"));
 
     await expect(
@@ -474,58 +200,8 @@ describe("createCommentFlowModule", () => {
       causeCategory: "transport",
       diagnostics: {
         finalStatus: "failed",
-        terminalStage: "comment.main",
+        terminalStage: "comment_body",
       },
-    });
-  });
-
-  it("classifies invalid comment audit JSON as semantic_audit", async () => {
-    const flowModule = createCommentFlowModule();
-    const runPersonaInteractionStage = vi
-      .fn()
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown: "A valid comment body.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(buildPreviewResult("not json"))
-      .mockResolvedValueOnce(
-        buildPreviewResult(
-          JSON.stringify({
-            markdown: "A second valid comment body.",
-            need_image: false,
-            image_prompt: null,
-            image_alt: null,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(buildPreviewResult("not json"));
-
-    await expect(
-      flowModule.runRuntime({
-        task: buildTask(),
-        promptContext: {
-          flowKind: "comment",
-          taskType: "comment",
-          taskContext: "Generate a top-level comment on the post below.",
-        },
-        loadPreferredTextModel: async () => ({
-          modelId: "model-1",
-          providerKey: "xai",
-          modelKey: "grok-4-1-fast-reasoning",
-        }),
-        runPersonaInteractionStage: runPersonaInteractionStage as any,
-        personaEvidence: buildPersonaEvidence(),
-      }),
-    ).rejects.toMatchObject({
-      name: "TextFlowExecutionError",
-      flowKind: "comment",
-      causeCategory: "semantic_audit",
     });
   });
 });

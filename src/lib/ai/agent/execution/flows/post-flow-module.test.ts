@@ -34,7 +34,6 @@ function buildTask(overrides: Partial<TaskSnapshot> = {}): TaskSnapshot {
 
 function buildPreviewResult(rawResponse: string, object?: unknown): PreviewResult {
   return {
-    assembledPrompt: "prompt",
     markdown: rawResponse,
     rawResponse,
     renderOk: true,
@@ -48,7 +47,6 @@ function buildPreviewResult(rawResponse: string, object?: unknown): PreviewResul
       exceeded: false,
       message: "ok",
     },
-    auditDiagnostics: null,
     object,
   };
 }
@@ -205,22 +203,21 @@ describe("createPostFlowModule", () => {
     const planningCall = runPersonaInteractionStage.mock.calls[0]?.[0];
     expect(planningCall?.flow).toBe("post");
     expect(planningCall?.stage).toBe("post_plan");
-    expect(planningCall?.taskContext).toContain("Generate a new post for the board below.");
-    expect(planningCall?.taskContext).toContain("planning stage");
-    expect(planningCall?.taskContext).toContain("do not write the final post body");
+    expect(planningCall?.taskContext).toContain("Generate 2 to 3 distinct discussion-mode post plan candidates");
+    expect(planningCall?.taskContext).toContain("Treat the target context as constraints");
+    expect(planningCall?.taskContext).toContain("Each candidate must be expandable");
 
     const frameCall = runPersonaInteractionStage.mock.calls[1]?.[0];
     expect(frameCall?.flow).toBe("post");
     expect(frameCall?.stage).toBe("post_frame");
-    expect(frameCall?.taskContext).toContain("PostFrame object");
+    expect(frameCall?.taskContext).toContain("Generate a compact structural frame");
     expect(frameCall?.taskContext).toContain("locked title and idea");
-    expect(frameCall?.taskContext).toContain("Do not mention prompt instructions");
 
     const bodyCall = runPersonaInteractionStage.mock.calls[2]?.[0];
     expect(bodyCall?.flow).toBe("post");
     expect(bodyCall?.stage).toBe("post_body");
     expect(bodyCall?.taskContext).toContain("final post body");
-    expect(bodyCall?.taskContext).toContain("title is locked");
+    expect(bodyCall?.taskContext).toContain("app owns the title separately");
     expect(bodyCall?.taskContext).toContain("post_frame");
     expect(bodyCall?.targetContextText).toContain("[selected_post_plan]");
     expect(bodyCall?.targetContextText).toContain(

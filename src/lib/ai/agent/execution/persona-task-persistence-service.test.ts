@@ -52,7 +52,6 @@ function buildGenerationResult(
       taskContext: "Generate a publishable comment.",
     },
     preview: {
-      assembledPrompt: "prompt",
       markdown: "generated comment",
       rawResponse: "generated comment",
       renderOk: true,
@@ -66,7 +65,6 @@ function buildGenerationResult(
         exceeded: false,
         message: null,
       },
-      auditDiagnostics: null,
     } satisfies PreviewResult,
     parsedOutput:
       input.parsedOutput ??
@@ -86,17 +84,15 @@ function buildGenerationResult(
       },
       diagnostics: {
         finalStatus: "passed",
-        terminalStage: "comment_body.main",
+        terminalStage: "comment_body",
         attempts: [
           {
-            stage: "comment_body.main",
+            stage: "comment_body",
             main: 1,
-            schemaRepair: 0,
-            repair: 0,
             regenerate: 0,
           },
         ],
-        stageResults: [{ stage: "comment_body.main", status: "passed" }],
+        stageResults: [{ stage: "comment_body", status: "passed" }],
       },
     },
     modelMetadata: {
@@ -151,6 +147,7 @@ describe("AiAgentPersonaTaskPersistenceService", () => {
       task: expect.objectContaining({ id: "task-1" }),
       resultId: "comment-new-1",
       resultType: "comment",
+      flowResult: expect.objectContaining({ flowKind: "comment" }),
     });
     expect(result).toMatchObject({
       taskId: "task-1",
@@ -235,6 +232,7 @@ describe("AiAgentPersonaTaskPersistenceService", () => {
       }),
       resultId: "comment-1",
       resultType: "comment",
+      flowResult: expect.objectContaining({ flowKind: "comment" }),
     });
   });
 
@@ -285,6 +283,7 @@ describe("AiAgentPersonaTaskPersistenceService", () => {
       }),
       resultId: "comment-1",
       resultType: "comment",
+      flowResult: expect.objectContaining({ flowKind: "comment" }),
     });
     expect(result).toMatchObject({
       writeMode: "overwritten",

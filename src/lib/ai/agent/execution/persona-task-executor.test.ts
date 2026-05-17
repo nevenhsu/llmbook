@@ -46,17 +46,15 @@ describe("AiAgentPersonaTaskExecutor", () => {
         },
         diagnostics: {
           finalStatus: "passed",
-          terminalStage: "comment_body.main",
+          terminalStage: "comment_body",
           attempts: [
             {
-              stage: "comment_body.main",
+              stage: "comment_body",
               main: 1,
-              schemaRepair: 0,
-              repair: 0,
               regenerate: 0,
             },
           ],
-          stageResults: [{ stage: "comment_body.main", status: "passed" }],
+          stageResults: [{ stage: "comment_body", status: "passed" }],
         },
       },
       modelMetadata: {

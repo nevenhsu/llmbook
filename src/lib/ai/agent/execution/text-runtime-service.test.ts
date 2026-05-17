@@ -21,9 +21,9 @@ describe("AiAgentTextRuntimeService", () => {
       available: true,
       blocker: null,
       selectedTaskId: task.id,
-      summary: "Shared execution preview is available for the selected text task.",
+      summary: "Runtime task preview is available for the selected text task.",
     });
-    expect(result.executionPreview?.taskCandidate.sourceId).toBe(task.sourceId);
+    expect(result.executionPreview?.sourceId).toBe(task.sourceId);
   });
 
   it("executes a runnable task through shared generation and persistence", async () => {

@@ -4,7 +4,6 @@ import {
   buildPostBodyPersonaPacket,
   buildCommentPersonaPacket,
   buildReplyPersonaPacket,
-  buildAuditPersonaPacket,
 } from "./persona-runtime-packets";
 import type { PersonaCoreV2 } from "@/lib/ai/core/persona-core-v2";
 
@@ -24,6 +23,8 @@ const SHARED_FORUM: PersonaCoreV2["forum"] = {
 };
 
 const SHARED_IDENTITY: PersonaCoreV2["identity"] = {
+  display_name: "Shared Persona",
+  bio: "Shared fixture persona used to isolate runtime-packet differences.",
   archetype: "restless observer",
   core_drive: "find the hidden tension",
   central_tension: "seeing against belonging",
@@ -84,6 +85,8 @@ const SHARED_ANTI_GENERIC: PersonaCoreV2["anti_generic"] = {
 const PERSONA_A: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
+  originalization_note:
+    "Originalized into a pressure-first story persona that exposes hidden status games.",
   identity: SHARED_IDENTITY,
   mind: SHARED_MIND,
   taste: SHARED_TASTE,
@@ -109,6 +112,8 @@ const PERSONA_A: PersonaCoreV2 = {
 const PERSONA_B: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
+  originalization_note:
+    "Originalized into an object-centered story persona that reveals old damage through detail.",
   identity: SHARED_IDENTITY,
   mind: SHARED_MIND,
   taste: SHARED_TASTE,
@@ -134,6 +139,8 @@ const PERSONA_B: PersonaCoreV2 = {
 const PERSONA_C: PersonaCoreV2 = {
   schema_version: "v2",
   persona_fit_probability: 85,
+  originalization_note:
+    "Originalized into a systems-failure story persona that exposes brittle order in public.",
   identity: SHARED_IDENTITY,
   mind: SHARED_MIND,
   taste: SHARED_TASTE,
@@ -377,48 +384,19 @@ describe("story mode differentiation", () => {
     });
   });
 
-  describe("audit packets include narrative_fit for story mode", () => {
-    it("story audit includes narrative_fit target", () => {
-      const audit = buildAuditPersonaPacket({
-        contentMode: "story",
-        personaId: "a",
-        core: PERSONA_A,
-      });
-      expect(audit.auditTargets).toContain("narrative_fit");
-    });
-
-    it("discussion audit does NOT include narrative_fit target", () => {
-      const audit = buildAuditPersonaPacket({
-        contentMode: "discussion",
-        personaId: "a",
-        core: PERSONA_A,
-      });
-      expect(audit.auditTargets).not.toContain("narrative_fit");
-    });
-
-    it("story audit packet contains story engine for context", () => {
-      const audit = buildAuditPersonaPacket({
-        contentMode: "story",
-        personaId: "a",
-        core: PERSONA_A,
-      });
-      expect(audit.renderedText.toLowerCase()).toContain("mask slips");
-    });
-  });
-
   describe("sanitization invariants hold for story packets", () => {
     const allPackets = [
       buildPostPlanPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
       buildPostBodyPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
       buildCommentPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
       buildReplyPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
-      buildAuditPersonaPacket({ contentMode: "story", personaId: "a", core: PERSONA_A }),
     ];
 
-    it("renderedText contains no reference names", () => {
+    it("renderedText includes reference names and abstract traits as non-imitation guidance", () => {
       for (const p of allPackets) {
-        expect(p.renderedText).not.toContain("Jane Jacobs");
-        expect(p.renderedText).not.toContain("James Baldwin");
+        expect(p.renderedText).toContain("Jane Jacobs");
+        expect(p.renderedText).toContain("James Baldwin");
+        expect(p.renderedText).toContain("not roleplay targets");
       }
     });
 
@@ -443,10 +421,10 @@ describe("story mode differentiation", () => {
       }
     });
 
-    it("renderedText contains Procedure: line with internally", () => {
+    it("renderedText contains Internal procedure with story_mode guidance", () => {
       for (const p of allPackets) {
-        expect(p.renderedText).toMatch(/Procedure:/);
-        expect(p.renderedText).toMatch(/internally/i);
+        expect(p.renderedText).toMatch(/Internal procedure:/);
+        expect(p.renderedText).toMatch(/story_mode:/i);
       }
     });
   });

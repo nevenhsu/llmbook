@@ -1,5 +1,20 @@
+import type { ContentMode } from "@/lib/ai/core/persona-core-v2";
 import type { PromptBoardRule } from "@/lib/ai/admin/control-plane-contract";
 import type { TaskSnapshot } from "@/lib/ai/agent/read-models/task-snapshot";
+import {
+  buildCommentStageTaskContext,
+  renderCommentTargetContext,
+  type CanonicalCommentRootPost,
+  type CanonicalRecentTopLevelComment,
+} from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
+import {
+  buildReplyStageTaskContext,
+  renderReplyTargetContext,
+  type CanonicalReplyAncestorComment,
+  type CanonicalReplyRecentTopLevelComment,
+  type CanonicalReplyRootPost,
+  type CanonicalReplySourceComment,
+} from "@/lib/ai/prompt-runtime/reply/reply-prompt-builder";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type BoardSource = {
@@ -224,48 +239,59 @@ function buildRecentBoardPostsBlock(posts: RecentBoardPost[]): string {
   ].join("\n");
 }
 
-function buildCommentLine(authorName: string, body: string, maxChars: number): string {
-  const safeName = normalizeWhitespace(authorName) || "unknown";
-  return `[${safeName}]: ${truncateInlineText(body, maxChars)}`;
+function mapCommentRootPost(post: PostSource | null): CanonicalCommentRootPost | null {
+  if (!post) {
+    return null;
+  }
+  return {
+    title: normalizeWhitespace(post.title),
+    bodyExcerpt: truncateText(post.body, ROOT_POST_BODY_MAX_CHARS),
+  };
 }
 
-function buildRootPostBlock(post: PostSource): string {
-  return [
-    "[root_post]",
-    `Title: ${normalizeWhitespace(post.title)}`,
-    "Body excerpt:",
-    truncateText(post.body, ROOT_POST_BODY_MAX_CHARS),
-  ].join("\n");
+function mapRecentTopLevelComment(
+  comment: RecentTopLevelComment,
+): CanonicalRecentTopLevelComment {
+  return {
+    authorName: normalizeWhitespace(comment.authorName) || "unknown",
+    bodyExcerpt: truncateInlineText(comment.body, COMMENT_EXCERPT_MAX_CHARS),
+  };
 }
 
-function buildRecentTopLevelCommentsBlock(comments: RecentTopLevelComment[]): string {
-  const lines = comments
-    .slice(0, RECENT_TOP_LEVEL_COMMENT_LIMIT)
-    .map((comment) =>
-      buildCommentLine(comment.authorName, comment.body, COMMENT_EXCERPT_MAX_CHARS),
-    );
-
-  return [
-    "[recent_top_level_comments]",
-    lines.length > 0 ? lines.join("\n") : "No recent top-level comments are available.",
-  ].join("\n");
+function mapReplyRootPost(post: PostSource | null): CanonicalReplyRootPost | null {
+  if (!post) {
+    return null;
+  }
+  return {
+    title: normalizeWhitespace(post.title),
+    bodyExcerpt: truncateText(post.body, ROOT_POST_BODY_MAX_CHARS),
+  };
 }
 
-function buildAncestorCommentsBlock(comments: CommentSource[]): string {
-  const lines = comments.map((comment) =>
-    buildCommentLine(comment.authorName, comment.body, COMMENT_EXCERPT_MAX_CHARS),
-  );
-  return [
-    "[ancestor_comments]",
-    lines.length > 0 ? lines.join("\n") : "No ancestor comments are available.",
-  ].join("\n");
+function mapReplySourceComment(comment: CommentSource | null): CanonicalReplySourceComment | null {
+  if (!comment) {
+    return null;
+  }
+  return {
+    authorName: normalizeWhitespace(comment.authorName) || "unknown",
+    bodyExcerpt: truncateInlineText(comment.body, SOURCE_COMMENT_EXCERPT_MAX_CHARS),
+  };
 }
 
-function buildSourceCommentBlock(comment: CommentSource): string {
-  return [
-    "[source_comment]",
-    buildCommentLine(comment.authorName, comment.body, SOURCE_COMMENT_EXCERPT_MAX_CHARS),
-  ].join("\n");
+function mapReplyAncestorComment(comment: CommentSource): CanonicalReplyAncestorComment {
+  return {
+    authorName: normalizeWhitespace(comment.authorName) || "unknown",
+    bodyExcerpt: truncateInlineText(comment.body, COMMENT_EXCERPT_MAX_CHARS),
+  };
+}
+
+function mapReplyRecentTopLevelComment(
+  comment: RecentTopLevelComment,
+): CanonicalReplyRecentTopLevelComment {
+  return {
+    authorName: normalizeWhitespace(comment.authorName) || "unknown",
+    bodyExcerpt: truncateInlineText(comment.body, COMMENT_EXCERPT_MAX_CHARS),
+  };
 }
 
 function resolveTaskPostId(task: TaskSnapshot): string | null {
@@ -280,6 +306,12 @@ function resolveTaskCommentId(task: TaskSnapshot): string | null {
     return task.sourceId;
   }
   return typeof task.payload.commentId === "string" ? task.payload.commentId : null;
+}
+
+function resolveTaskContentMode(task: TaskSnapshot): ContentMode {
+  return typeof task.payload.contentMode === "string" && task.payload.contentMode === "story"
+    ? "story"
+    : "discussion";
 }
 
 export class AiAgentPersonaTaskContextBuilder {
@@ -306,7 +338,7 @@ export class AiAgentPersonaTaskContextBuilder {
     if (flowKind === "reply") {
       const sourceCommentId = resolveTaskCommentId(input.task);
       if (sourceCommentId) {
-        return this.buildThreadReplyContext(sourceCommentId);
+        return this.buildThreadReplyContext(sourceCommentId, resolveTaskContentMode(input.task));
       }
     }
     return this.buildCommentContext(input.task);
@@ -333,29 +365,30 @@ export class AiAgentPersonaTaskContextBuilder {
   }
 
   private async buildCommentContext(task: TaskSnapshot): Promise<AiAgentPersonaTaskPromptContext> {
+    const contentMode = resolveTaskContentMode(task);
     const sourceCommentId = resolveTaskCommentId(task);
     if (sourceCommentId) {
-      return this.buildThreadReplyContext(sourceCommentId);
+      return this.buildThreadReplyContext(sourceCommentId, contentMode);
     }
 
     const sourcePostId = resolveTaskPostId(task);
     if (sourcePostId) {
-      return this.buildTopLevelCommentContext(sourcePostId);
+      return this.buildTopLevelCommentContext(sourcePostId, contentMode);
     }
 
     return {
       flowKind: "comment",
       taskType: "comment",
-      taskContext: [
-        "Generate a comment for the discussion below.",
-        "This comment should stand on its own as a top-level contribution to the post.",
-        "Add net-new value instead of paraphrasing the post or echoing recent comments.",
-      ].join("\n"),
+      taskContext: buildCommentStageTaskContext({
+        stage: "comment_body",
+        contentMode,
+      }),
     };
   }
 
   private async buildTopLevelCommentContext(
     postId: string,
+    contentMode: ContentMode,
   ): Promise<AiAgentPersonaTaskPromptContext> {
     const post = await this.deps.loadPostSource(postId);
     const recentTopLevelComments = await this.deps.listRecentTopLevelComments(postId);
@@ -363,34 +396,33 @@ export class AiAgentPersonaTaskContextBuilder {
     return {
       flowKind: "comment",
       taskType: "comment",
-      taskContext: [
-        "Generate a comment for the discussion below.",
-        "This comment should stand on its own as a top-level contribution to the post.",
-        "Add net-new value instead of paraphrasing the post or echoing recent comments.",
-      ].join("\n"),
+      taskContext: buildCommentStageTaskContext({
+        stage: "comment_body",
+        contentMode,
+      }),
       boardContextText: buildBoardContextText(post?.board ?? null),
-      targetContextText: [
-        post ? buildRootPostBlock(post) : null,
-        buildRecentTopLevelCommentsBlock(recentTopLevelComments),
-      ]
-        .filter((part): part is string => Boolean(part))
-        .join("\n\n"),
+      targetContextText: renderCommentTargetContext({
+        rootPost: mapCommentRootPost(post),
+        recentTopLevelComments: recentTopLevelComments
+          .slice(0, RECENT_TOP_LEVEL_COMMENT_LIMIT)
+          .map(mapRecentTopLevelComment),
+      }),
     };
   }
 
   private async buildThreadReplyContext(
     commentId: string,
+    contentMode: ContentMode,
   ): Promise<AiAgentPersonaTaskPromptContext> {
     const sourceComment = await this.deps.loadCommentSource(commentId);
     if (!sourceComment) {
       return {
         flowKind: "reply",
         taskType: "comment",
-        taskContext: [
-          "Generate a reply inside the active thread below.",
-          "Respond to the thread directly instead of restarting the conversation from scratch.",
-          "Move the exchange forward with a concrete, in-character reply.",
-        ].join("\n"),
+        taskContext: buildReplyStageTaskContext({
+          stage: "reply_body",
+          contentMode,
+        }),
       };
     }
 
@@ -404,20 +436,19 @@ export class AiAgentPersonaTaskContextBuilder {
     return {
       flowKind: "reply",
       taskType: "comment",
-      taskContext: [
-        "Generate a reply inside the active thread below.",
-        "Respond to the thread directly instead of restarting the conversation from scratch.",
-        "Move the exchange forward with a concrete, in-character reply.",
-      ].join("\n"),
+      taskContext: buildReplyStageTaskContext({
+        stage: "reply_body",
+        contentMode,
+      }),
       boardContextText: buildBoardContextText(rootPost?.board ?? null),
-      targetContextText: [
-        rootPost ? buildRootPostBlock(rootPost) : null,
-        buildSourceCommentBlock(sourceComment),
-        buildAncestorCommentsBlock(ancestorComments),
-        buildRecentTopLevelCommentsBlock(recentTopLevelComments),
-      ]
-        .filter((part): part is string => Boolean(part))
-        .join("\n\n"),
+      targetContextText: renderReplyTargetContext({
+        rootPost: mapReplyRootPost(rootPost),
+        sourceComment: mapReplySourceComment(sourceComment),
+        ancestorComments: ancestorComments.map(mapReplyAncestorComment),
+        recentTopLevelComments: recentTopLevelComments
+          .slice(0, RECENT_TOP_LEVEL_COMMENT_LIMIT)
+          .map(mapReplyRecentTopLevelComment),
+      }),
     };
   }
 

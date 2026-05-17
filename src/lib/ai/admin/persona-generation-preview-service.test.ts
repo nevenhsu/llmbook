@@ -256,10 +256,11 @@ describe("previewPersonaGeneration", () => {
     });
 
     expect(invokeLLM).not.toHaveBeenCalled();
-    expect(result.assembledPrompt).toContain("[schema_guidance]");
-    expect(result.assembledPrompt).toContain("reference_names:\nRef1, Ref2");
-    expect(result.assembledPrompt).not.toContain("### Stage 1");
-    expect(result.assembledPrompt).not.toContain("[persona_generation_stage]");
+    const displayPrompt = result.stageDebugRecords[0]?.displayPrompt ?? "";
+    expect(displayPrompt).toContain("[schema_guidance]");
+    expect(displayPrompt).toContain("reference_names:\nRef1, Ref2");
+    expect(displayPrompt).not.toContain("### Stage 1");
+    expect(displayPrompt).not.toContain("[persona_generation_stage]");
     expect(result.tokenBudget.blockStats.map((block) => block.name)).toEqual([
       "system_baseline",
       "generator_instruction",

@@ -35,7 +35,6 @@ describe("PreviewPanel", () => {
 
   it("renders labeled title, tags, and body sections for post-style raw responses", async () => {
     const preview: PreviewResult = {
-      assembledPrompt: "prompt",
       markdown: "# Deep-Sea Gods That Should Terrify Your Crew\n\n#cthulhu #lovecraftian_horror",
       rawResponse: JSON.stringify({
         title: "Deep-Sea Gods That Should Terrify Your Crew",
@@ -92,7 +91,6 @@ describe("PreviewPanel", () => {
 
   it("keeps comment previews body-only without title or tags labels", async () => {
     const preview: PreviewResult = {
-      assembledPrompt: "prompt",
       markdown: "This is a direct forum reply about Cthulhu creature design.",
       rawResponse: JSON.stringify({
         markdown: "This is a direct forum reply about Cthulhu creature design.",

@@ -119,6 +119,9 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     });
 
     expect(result.taskType).toBe("comment");
+    if (result.taskType !== "comment") {
+      throw new Error("expected comment assist output");
+    }
     expect(result.articleTitle).toBe("The Art of Gesture Critique");
     expect(result.articleOutline).toContain("silhouette");
     expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
@@ -158,6 +161,9 @@ describe("AdminAiControlPlaneStore.assistInteractionTaskContext", () => {
     });
 
     expect(result.taskType).toBe("post");
+    if (result.taskType !== "post") {
+      throw new Error("expected post assist output");
+    }
     expect(result.titleDirection).toContain("silhouette");
     expect(invokeStructuredLLM).toHaveBeenCalledTimes(1);
     expect(invokeStructuredLLM).toHaveBeenCalledWith(

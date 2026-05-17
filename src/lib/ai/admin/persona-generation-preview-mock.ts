@@ -85,7 +85,6 @@ const markdown = [
 export const mockPersonaGenerationPreview: PreviewResult & {
   structured: PersonaGenerationStructured;
 } = {
-  assembledPrompt: promptBuild.assembledPrompt,
   markdown,
   renderOk: true,
   renderError: null,

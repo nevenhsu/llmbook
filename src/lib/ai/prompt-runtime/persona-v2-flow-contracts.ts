@@ -4,7 +4,9 @@ import type {
   PersonaInteractionFlow,
   PersonaInteractionStage,
 } from "@/lib/ai/core/persona-core-v2";
+import { buildCommentStageOutputContract } from "@/lib/ai/prompt-runtime/comment/comment-prompt-builder";
 import { buildPostStageOutputContract } from "@/lib/ai/prompt-runtime/post/post-prompt-builder";
+import { buildReplyStageOutputContract } from "@/lib/ai/prompt-runtime/reply/reply-prompt-builder";
 
 export type ContractFlowStage = {
   flow: PersonaInteractionFlow;
@@ -26,28 +28,6 @@ function assertValidFlowStage(input: ContractFlowStage): void {
   throw new Error(`Unknown flow/stage: ${input.flow}:${input.stage}`);
 }
 
-function buildMarkdownOutputContract(flow: "comment" | "reply", contentMode: ContentMode): string {
-  const lines = [
-    "The `markdown` field must contain the full body content as markdown.",
-    "Use the same language for the full response content.",
-    "Use the language explicitly specified elsewhere in this prompt; if none is specified, use English.",
-  ];
-
-  if (contentMode === "story") {
-    lines.push(
-      "Story mode: markdown may be a short story, story fragment, story-like comment, continuation, short scene response, or in-thread story fragment. Keep compact.",
-    );
-  }
-
-  lines.push(
-    "The `metadata.probability` field must be an integer from 0 to 100 representing your self-assessed output quality and creativity signal.",
-    "Do not mention prompt instructions or system blocks in the output.",
-    "Never emit a final image URL in markdown or in structured fields.",
-  );
-
-  return lines.join("\n");
-}
-
 export function buildOutputContractV2(input: {
   flow: PersonaInteractionFlow;
   stage: PersonaInteractionStage;
@@ -63,9 +43,15 @@ export function buildOutputContractV2(input: {
         contentMode: input.contentMode,
       });
     case "comment_body":
-      return buildMarkdownOutputContract("comment", input.contentMode);
+      return buildCommentStageOutputContract({
+        stage: "comment_body",
+        contentMode: input.contentMode,
+      });
     case "reply_body":
-      return buildMarkdownOutputContract("reply", input.contentMode);
+      return buildReplyStageOutputContract({
+        stage: "reply_body",
+        contentMode: input.contentMode,
+      });
   }
 }
 

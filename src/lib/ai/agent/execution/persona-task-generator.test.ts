@@ -44,7 +44,6 @@ function buildTask(overrides: Partial<TaskSnapshot> = {}): TaskSnapshot {
 
 function buildPreviewResult(rawResponse: string): PreviewResult {
   return {
-    assembledPrompt: "prompt",
     markdown: rawResponse,
     rawResponse,
     renderOk: true,
@@ -58,7 +57,6 @@ function buildPreviewResult(rawResponse: string): PreviewResult {
       exceeded: false,
       message: "ok",
     },
-    auditDiagnostics: null,
   };
 }
 
@@ -345,10 +343,10 @@ describe("AiAgentPersonaTaskGenerator", () => {
     const flowError: TextFlowExecutionError = new TextFlowExecutionErrorClass({
       message: "comment audit output must be valid JSON",
       flowKind: "comment",
-      causeCategory: "semantic_audit",
+      causeCategory: "schema_validation",
       diagnostics: {
         finalStatus: "failed",
-        terminalStage: "comment_body.main",
+        terminalStage: "comment_body",
         attempts: [],
         stageResults: [],
       },

@@ -194,10 +194,10 @@ describe("AiAgentTextLaneService", () => {
           throw new TextFlowExecutionError({
             message: "reply audit output must be valid JSON",
             flowKind: "reply",
-            causeCategory: "semantic_audit",
+            causeCategory: "schema_validation",
             diagnostics: {
               finalStatus: "failed",
-              terminalStage: "reply_body.main",
+              terminalStage: "reply_body",
               attempts: [],
               stageResults: [],
             },
@@ -216,7 +216,7 @@ describe("AiAgentTextLaneService", () => {
 
     expect(result).toMatchObject({
       mode: "failed",
-      errorMessage: expect.stringContaining('"causeCategory":"semantic_audit"'),
+      errorMessage: expect.stringContaining('"causeCategory":"schema_validation"'),
     });
     expect(store.snapshot()[0]?.errorMessage).toContain("flow_failure=");
   });

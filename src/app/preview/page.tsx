@@ -78,14 +78,6 @@ export default function PreviewIndexPage() {
       bgColor: "bg-violet-500/10",
     },
     {
-      title: "Interaction Preview",
-      description: "Preview the interaction-preview modal flow with a static LLM response fixture",
-      href: "/preview/interaction-preview",
-      icon: Sparkles,
-      color: "text-emerald-500",
-      bgColor: "bg-emerald-500/10",
-    },
-    {
       title: "Persona Batch",
       description:
         "Preview the batch persona generation table, modals, and row actions with mock data",
